@@ -1,24 +1,20 @@
 <main x-data="{w: store.t('cup'), goal: store.kv('goal', 2000), get total() { return this.w.sum('volume', {since: 'day'}) },
-  add(v) { const id = this.w.add({volume: v}); ui.toast('Added ' + v, () => this.w.remove(id)) }}">
+  get y() { return 104 - 96 * this.total / (this.goal.v || 1) }}">
   <h1>Water</h1>
   <div class="row">
-    <svg class="ic muted" width="56" height="108">
-      <rect width="56" height="108" />
-      <rect x="4" :y="104 - 100 * Math.min(1, total / goal.v)" width="48" :height="100 * Math.min(1, total / goal.v)" fill="var(--accent)" />
+    <svg class="ic" width="56" height="108">
+      <clippath id="g">
+        <path d="M6 4h44l-6 100H12z" />
+      </clippath>
+      <path clip-path="url(#g)" :d="'M0 ' + y + 'Q14 ' + (y - 5) + ' 28 ' + y + 'T56 ' + y + 'V108H0z'" fill="var(--accent)" />
+      <path d="M3 4h50M6 4l6 100h32l6-100" />
     </svg>
     <div class="col grow">
-      <div class="row">
-        <bdi class="stat" x-text="total.toLocaleString()"></bdi>
-      </div>
-      <small class="muted">Goal <bdi x-edit="[goal, 'v']"></bdi> ml</small>
+      <bdi class="stat" x-text="total.toLocaleString() + ' ml'"></bdi>
+      <small class="muted">Goal <bdi x-edit="[goal, 'v', 1, 100000]"></bdi> ml</small>
     </div>
   </div>
-  <div class="row">
-    <template x-for="q in [250, 500]">
-      <button class="btn ghost grow" @click.throttle="add(q)" x-text="'+' + q"></button>
-    </template>
-  </div>
-  <m-form :table="w" min="1" max="5000"></m-form>
+  <m-form :table="w" quick="250,500" min="1" max="5000"></m-form>
   <m-chart :data="w.series('volume', {last: 7})"></m-chart>
   <m-list :table="w" title="volume" unit="ml"></m-list>
 </main>

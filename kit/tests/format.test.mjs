@@ -50,8 +50,11 @@ test('format.mjs: self-closing SVG children keep their slash and are idempotent'
   assert.equal(out, '<svg viewBox="0 0 8 8">\n  <circle cx="4" cy="4" r="2" />\n  <path d="M0 0" />\n  <g>\n    <rect width="1" height="1" />\n  </g>\n</svg>\n');
   assert.equal(format(out), out);
 });
-test('format.mjs: stray closers are dropped and the result is stable', () => {
-  const out = format('<div></span><p>x</p></div></div></p>'); assert.equal(out, '<div>\n  <p>x</p>\n</div>\n'); assert.equal(format(out), out);
+test('format.mjs: stray, mismatched and unclosed tags are FormatErrors with a line number, not repaired', () => {
+  for (const [src, re] of [['<div></span><p>x</p></div>', /stray closing tag <\/span>/], ['<p>x</p></div>', /stray/], ['<div>\n<span>a</div></span>', /mismatched closing tag <\/div>.*<span> \(line 2\)/], ['<div><p>x</div>', /mismatched/], ['<main><div>x</main>', /mismatched/], ['<div>x', /unclosed <div>/], ['<ul><li>a<li>b</ul>', /mismatched/], ['<br></br>', /stray/]]) {
+    assert.throws(() => format(src), (e) => e instanceof FormatError && re.test(e.message) && /line \d+/.test(e.message), src);
+  }
+  assert.equal(format('<div><p>x</p></div>'), '<div>\n  <p>x</p>\n</div>\n');
 });
 test('format.mjs: <pre> and <textarea> content is preserved byte for byte', () => {
   const src = '<div><pre class="a">  line 1\n    <b>x</b>   \n\nline 4</pre><textarea name="n">\n  keep   me\n</textarea></div>';

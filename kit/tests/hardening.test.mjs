@@ -18,18 +18,18 @@ test('focus survives updates: keyboard toggle on the habit grid (Alpine), remove
   await page.keyboard.press('Space'); a = await active(); assert.equal(a.label, label); assert.equal(a.pressed, was);
   await ctx.close(); noLog(log);
   const w = await open(browser, srv.base, 'water');
-  const x = w.page.locator('m-list .ibtn').first(); await x.focus(); await w.page.keyboard.press('Enter');
-  assert.equal(await w.page.evaluate(() => document.activeElement.className), 'ibtn', 'focus lands on a remove button, not <body>');
+  const x = w.page.locator('m-list .ibtn').first(); await x.focus(); await w.page.keyboard.press('Enter'); await w.page.keyboard.press('Enter');
+  assert.match(await w.page.evaluate(() => document.activeElement.className), /^ibtn/, 'focus lands on a row action, not <body>');
   await w.ctx.close(); noLog(w.log);
 });
 
 test('midnight: with a fake clock the check grid moves to the new day without a reload', async () => {
-  const t0 = new Date(2026, 10, 21, 23, 59, 40);
+  const t0 = new Date(2026, 10, 21, 23, 59, 58);
   const { page, ctx, log } = await open(browser, srv.base, 'habits', { real: true, before: (p) => p.clock.install({ time: t0 }) });
   const head = () => page.locator('.item.grid small').first().innerText();
   assert.match(await head(), /21/);
-  await page.clock.runFor(31000);
-  assert.match(await head(), /22/, 'first column is the new day');
+  await page.clock.runFor(6000);
+  assert.match(await head(), /22/, 'first column is the new day within 5 s of midnight');
   const first = page.locator('.item.wrap', { hasText: 'Read 20 pages' }).locator('.check').first();
   assert.equal(await first.getAttribute('aria-pressed'), 'false', 'nothing is checked on the new day');
   await ctx.close(); noLog(log);
@@ -149,7 +149,7 @@ test('x-edit: Enter commits (single line), Escape cancels, blur commits, empty r
   await ctx.close(); noLog(log);
   const w = await open(browser, srv.base, 'water'); const g = w.page.locator('small [contenteditable]');
   await g.click(); await w.page.keyboard.press('Control+A'); await w.page.keyboard.type('2,500'); await w.page.keyboard.press('Enter');
-  assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'the goal is a number'); assert.equal(await g.innerText(), '2500');
+  assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'the goal is a number'); assert.equal(await g.innerText(), '2,500');
   await g.click(); await w.page.keyboard.press('Control+A'); await w.page.keyboard.type('lots'); await w.page.keyboard.press('Enter'); assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'junk reverts');
   await w.ctx.close(); noLog(w.log);
 });

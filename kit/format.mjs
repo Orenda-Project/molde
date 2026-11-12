@@ -2,7 +2,8 @@
 // attributes unchanged (only the whitespace BETWEEN attributes is normalised, never inside one).
 // Whitespace is meaning: a line break is only ever put where whitespace already existed, and inline content that touches
 // ("$<b>5</b>kg") stays joined. Idempotent: format(format(x)) === format(x). Malformed input (an unterminated tag, quote,
-// comment or raw element) throws a FormatError with a line number instead of being rewritten into something else.
+// comment or raw element, a stray or mismatched closing tag, an unclosed element) throws a FormatError with a line number instead
+// of being repaired into something else.
 export class FormatError extends Error { constructor(msg, line) { super(msg + (line ? ' (line ' + line + ')' : '')); this.name = 'FormatError'; this.code = 'E_FORMAT'; this.line = line; } }
 
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
@@ -24,13 +25,13 @@ function tokenize(src) {
       if (body[0] === '/') {
         const cn = body.slice(1).trim().toLowerCase();
         if (!/^[a-z][a-z0-9:-]*$/.test(cn)) throw new FormatError('invalid closing tag </' + cn.slice(0, 20) + '>', lineOf(src, i));
-        toks.push({ t: 'close', name: cn });
+        toks.push({ t: 'close', name: cn, line: lineOf(src, i) });
       }
       else {
         const m = body.match(/^([A-Za-z][^\s/>]*)([\s\S]*?)\s*(\/?)$/);
         const name = m[1].toLowerCase();
         if (!/^[a-z][a-z0-9:-]*$/.test(name)) throw new FormatError('invalid tag name <' + name.slice(0, 20) + '>', lineOf(src, i));
-        toks.push({ t: 'open', name, attrs: attrList(m[2], lineOf(src, i)), selfClose: m[3] === '/' || VOID.has(name), slash: m[3] === '/' });
+        toks.push({ t: 'open', name, attrs: attrList(m[2], lineOf(src, i)), selfClose: m[3] === '/' || VOID.has(name), slash: m[3] === '/', line: lineOf(src, i) });
       }
       const open = i; i = j + 1;
       const last = toks[toks.length - 1];
@@ -59,8 +60,13 @@ function parse(toks) {
   const root = { kids: [] }, stack = [root];
   for (const t of toks) {
     const top = stack[stack.length - 1];
-    if (t.t === 'open') { const n = { name: t.name, attrs: t.attrs, kids: [], raw: null }; top.kids.push(n); if (!t.selfClose) stack.push(n); else n.void = true; if (t.slash) n.slash = true; }
-    else if (t.t === 'close') { for (let k = stack.length - 1; k > 0; k--) if (stack[k].name === t.name) { stack.length = k; break; } }
+    if (t.t === 'open') { const n = { name: t.name, attrs: t.attrs, kids: [], raw: null, line: t.line }; top.kids.push(n); if (!t.selfClose) stack.push(n); else n.void = true; if (t.slash) n.slash = true; }
+    else if (t.t === 'close') {
+      const open = stack[stack.length - 1];
+      if (stack.length > 1 && open.name === t.name) stack.pop();
+      else if (stack.some((n, k) => k > 0 && n.name === t.name)) throw new FormatError('mismatched closing tag </' + t.name + '>: <' + open.name + '> (line ' + open.line + ') is still open', t.line);
+      else throw new FormatError('stray closing tag </' + t.name + '> with no opening tag', t.line);
+    }
     else if (t.t === 'raw') top.raw = t.raw;
     else if (t.t === 'comment') top.kids.push({ comment: t.raw });
     else {
@@ -70,6 +76,7 @@ function parse(toks) {
       else top.kids.push({ text: body, lead: /^\s/.test(t.raw) || !!(prev && prev.ws), trail: /\s$/.test(t.raw) });
     }
   }
+  if (stack.length > 1) throw new FormatError('unclosed <' + stack[stack.length - 1].name + '>', stack[stack.length - 1].line);
   return root;
 }
 const isInline = (n) => n.text !== undefined || n.ws || (n.name && INLINE.has(n.name) && n.kids.every(isInline));

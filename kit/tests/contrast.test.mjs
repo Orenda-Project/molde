@@ -25,7 +25,11 @@ const probe = () => {
   if (roles.length) {
     for (const el of roles) {
       const cs = getComputedStyle(el);
-      if (el.id === 'r-input') { check(el, 'input text', 'text', cs.color); check(el, 'input edge', 'ui', cs.borderTopColor, bgOf(el.parentElement)); check(el, 'placeholder', 'text', getComputedStyle(el, '::placeholder').color); continue; }
+      if (el.id === 'r-input') {
+        check(el, 'input text', 'text', cs.color); check(el, 'placeholder', 'text', getComputedStyle(el, '::placeholder').color);
+        const sh = cs.boxShadow.match(/(rgba?\([^)]*\)|color\([^)]*\)|oklab\([^)]*\))/); // the filled input's edge is its bottom shadow
+        check(el, 'input edge', 'ui', sh ? sh[1] : cs.borderTopColor, bgOf(el)); continue;
+      }
       if (el.id === 'r-ghost') { check(el, 'ghost text', 'text', cs.color); check(el, 'ghost edge', 'ui', cs.borderTopColor, bgOf(el.parentElement)); continue; }
       if (el.id === 'r-danger') { check(el, 'danger text', 'text', cs.color); continue; }
       if (el.id === 'r-opt-off') { check(el, 'option text', 'text', cs.color); check(el, 'option edge', 'ui', cs.borderTopColor, bgOf(el.parentElement)); continue; }

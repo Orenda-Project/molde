@@ -47,7 +47,7 @@
     return e;
   }
   var ICON = {
-    x: '<path d="M6 6l12 12M18 6L6 18"/>', trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>', trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/>', more: '<g fill="currentColor" stroke="none"><circle cx="12" cy="5.5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="18.5" r="1.8"/></g>', plus: '<path d="M12 5v14M5 12h14"/>',
     
   };
   function icon(name) {
@@ -206,7 +206,18 @@
     if (def === 'bool') return h('span', { class: 'm-val', text: v ? 'Yes' : 'No' });
     return h('span', { class: 'm-val', text: String(v) });
   }
-  function removeBtn(t, r) { return h('button', { class: 'ibtn', type: 'button', 'aria-label': 'Remove', onclick: function () { t.remove(r.id); } }, icon('trash')); }
+  /* One quiet row action: a kebab (three dots). The first tap arms it ("Delete", for 4 s), the second tap does it. Undo comes with the toast. */
+  function kebab(el, del) {
+    var armed = false, tm = null;
+    var set = function (on) {
+      armed = on; el.replaceChildren(on ? document.createTextNode('Delete') : icon('more')); el.setAttribute('aria-label', on ? 'Delete' : 'More actions'); el.classList.toggle('arm', on);
+      clearTimeout(tm); if (on) tm = setTimeout(function () { set(false); }, 4000);
+    };
+    el.addEventListener('click', function () { if (armed) { set(false); del(); } else set(true); });
+    el.addEventListener('blur', function () { if (armed) set(false); });
+    set(false);
+  }
+  function removeBtn(t, r) { var b = h('button', { class: 'ibtn', type: 'button' }); kebab(b, function () { t.remove(r.id); }); return b; }
 
   /* inline editor for one row: inputs for every column, Save (t.set) / Cancel */
   function editor(el, t, r, defs, p) {
@@ -231,6 +242,12 @@
     return form;
   }
 
+  /* :glyph="r => 'M9 9h.4...'" draws a 40 px outline icon from an SVG path (24 x 24 units) at the start of each row */
+  function glyph(p, r) {
+    if (typeof p.glyph !== 'function') return null;
+    var d = p.glyph(r), g = s('svg', { viewBox: '0 0 24 24', width: 40, height: 40, class: 'ic m-glyph', 'aria-hidden': 'true' });
+    g.appendChild(s('path', { d: String(d) })); return g;
+  }
   function dayKey(r) { return r.at != null && isFinite(r.at) ? ymd(new Date(r.at)) : ''; }
   function mList(el, p) {
     var t = p.table; if (!t) return;
@@ -250,40 +267,53 @@
         var tv = r[p.title], titleNode = typeof tv === 'number' ? bdi(num(tv) + (p.unit && !p.sub ? ' ' + p.unit : '')) : String(tv == null ? '' : tv);
         var body = h('div', { class: 'grow' }, h('div', { class: 'm-title', dir: 'auto' }, titleNode), h('small', { class: 'muted', dir: 'auto', text: sub.join(' \u00b7 ') }));
         var main = edit ? h('button', { class: 'm-body grow', type: 'button', 'aria-label': 'Edit ' + String(tv).slice(0, 40), onclick: function () { el._m.editing = r.id; render(el); } }, body) : body;
-        box.appendChild(h('div', { class: 'item' }, main, p.sub ? cell(String(defs[p.sub]).indexOf('pick:') === 0 ? 'pick' : defs[p.sub], r[p.sub], p.unit) : null, removeBtn(t, r)));
+        box.appendChild(h('div', { class: 'item' }, glyph(p, r), main, p.sub ? cell(String(defs[p.sub]).indexOf('pick:') === 0 ? 'pick' : defs[p.sub], r[p.sub], p.unit) : null, removeBtn(t, r)));
       } catch (x) { box.appendChild(h('div', { class: 'item' }, h('small', { class: 'muted', text: 'This row could not be shown.' }))); }
     });
     if (shown < rows.length) box.appendChild(h('button', { class: 'btn ghost m-more', type: 'button', text: 'Show ' + Math.min(step, rows.length - shown) + ' more (' + (rows.length - shown) + ' left)', onclick: function () { el._m.pages = (el._m.pages || 0) + 1; render(el); } }));
     el.replaceChildren(box);
   }
 
-  /* ---- m-form: placeholders, not labels. attrs :table, fields, submit, min, max, seg (pick fields as a segmented control). A single text or number column becomes one inline row. ---- */
+  /* ---- m-form: placeholders, not labels. attrs :table, fields, submit, min, max, seg (pick fields as a segmented control), quick="250,500" (one-tap add buttons for the first number column). One filled input style kit-wide. A single text or number column becomes one inline row; text + number (+ picks) puts the Add button in the same row. ---- */
   function mForm(el, p) {
     var t = p.table; if (!t) return;
     var defs = meta(t).schema, cols = (p.fields ? String(p.fields).split(',').map(function (x) { return x.trim(); }) : Object.keys(defs)).filter(function (c) { return hasOwn.call(defs, c); });
-    var inline = cols.length === 1 && (defs[cols[0]] === 'text' || defs[cols[0]] === 'num');
-    var form = h('form', { class: 'm-form' + (inline ? ' m-inline' : '') + (p.look ? ' m-' + p.look : ''), novalidate: true }), grid = h('div', { class: 'm-fields' });
+    var kinds = cols.map(function (c) { return defs[c].indexOf('pick:') === 0 ? 'pick' : defs[c]; });
+    var inline = cols.length === 1 && (kinds[0] === 'text' || kinds[0] === 'num');
+    var compact = !inline && kinds[0] === 'text' && kinds[1] === 'num' && kinds.slice(2).every(function (k) { return k === 'pick'; }); /* text + number (+ picks): one row with the Add button */
+    var form = h('form', { class: 'm-form' + (inline ? ' m-inline' : '') + (compact ? ' m-compact' : ''), novalidate: true }), grid = h('div', { class: 'm-fields' }), rest = h('div', { class: 'm-rest' });
     var firstInput = null;
-    cols.forEach(function (c) {
+    cols.forEach(function (c, ci) {
       var d = defs[c], f;
       if (d.indexOf('pick:') === 0) {
         f = h('fieldset', { class: ('seg' in p ? 'seg' : 'm-pick') + ' m-wide' }, h('legend', { class: 'm-sr', text: human(c) }));
         d.slice(5).split('|').forEach(function (o, i) { f.appendChild(h('label', { class: 'seg' in p ? '' : 'm-opt' }, h('input', { type: 'radio', name: c, value: o, checked: i === 0 }), h('span', { text: human(o) }))); });
-        grid.appendChild(f); return;
+        (compact ? rest : grid).appendChild(f); return;
       }
       if (d === 'bool') f = h('label', { class: 'check m-wide' }, h('input', { type: 'checkbox', name: c }), h('span', { text: human(c) }));
       else {
         var input = inputFor(c, d, human(c), null, p);
         input.addEventListener('input', function () { clearErr(form); });
         if (!firstInput && d !== 'date') firstInput = input;
-        f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: d === 'long' || d === 'text' ? 'm-wide' : '' }, input);
+        f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: compact ? (ci === 0 ? 'm-tx' : 'm-nm') : d === 'long' || d === 'text' ? 'm-wide' : '' }, input);
         if (d === 'text' || d === 'long') counter(input, S.LIMITS[d], f);
       }
       grid.appendChild(f);
     });
-    grid.appendChild(inline ? h('button', { class: 'btn m-go', type: 'submit', 'aria-label': p.submit || 'Add' }, icon('plus')) : h('span', { class: 'm-wide m-end' }, h('button', { class: 'btn', type: 'submit', text: p.submit || 'Add' })));
-    form.appendChild(grid);
-    var last = 0;
+    var qn = p.quick ? cols.filter(function (c) { return defs[c] === 'num'; })[0] : null, quickRow = null, last = 0;
+    var undoAdd = function (id) { t[I.TX]().del(id); }; /* Undo of an add is quiet: the row just goes away */
+    if (qn) {
+      quickRow = h.apply(null, ['div', { class: 'm-quick' }].concat(String(p.quick).split(',').map(function (q) {
+        return h('button', { class: 'btn ghost', type: 'button', text: '+' + q.trim(), onclick: function () {
+          if (performance.now() - last < 400) return; last = performance.now(); /* a double tap adds once */
+          var row = {}; row[qn] = Number(q); var id; try { id = t.add(row); } catch (x) { ui.toast(x.message); return; }
+          ui.toast('Added ' + q.trim(), function () { undoAdd(id); });
+        } });
+      })));
+    }
+    grid.appendChild(inline ? h('button', { class: 'btn m-go', type: 'submit', 'aria-label': p.submit || 'Add' }, icon('plus')) : compact ? h('button', { class: 'btn m-add', type: 'submit', text: p.submit || 'Add' }) : h('span', { class: 'm-wide m-end' }, h('button', { class: 'btn', type: 'submit', text: p.submit || 'Add' })));
+    if (quickRow) form.appendChild(quickRow);
+    form.appendChild(grid); if (compact) form.appendChild(rest);
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (performance.now() - last < 500) return; /* double-click guard */
@@ -292,41 +322,50 @@
       last = performance.now();
       form.reset();
       var dt = form.querySelector('input[type=date]'); if (dt) dt.value = app.today();
-      ui.toast('Added', function () { t.remove(id); });
+      ui.toast('Added', function () { undoAdd(id); });
       if (firstInput) firstInput.focus();
     });
     el.replaceChildren(form);
   }
 
-  /* x-edit: editable text. x-edit="[table, row, 'col']" saves with t.set; x-edit="[box, 'v']" writes a store.kv box (numbers stay numbers).
-   * Enter commits (single line, no <div> is ever inserted), Escape cancels, blur commits, an empty or invalid value reverts. The element gets class tbtn (>= 44 px). */
+  /* x-edit: editable text. x-edit="[table, row, 'col']" saves with t.set; x-edit="[box, 'v', min, max]" writes a store.kv box (a number stays a
+   * number, shown with thousands separators; text that is not a number in min..max reverts with a toast).
+   * Enter commits (single line, no <div> is ever inserted), Escape cancels, blur commits, an empty value reverts. role=textbox, aria-label = the field name, class tbtn (>= 44 px). */
   A.directive('edit', function (el, d, u) {
     el.setAttribute('contenteditable', 'true'); el.setAttribute('role', 'textbox'); el.dir = 'auto'; el.classList.add('tbtn');
-    var cancel = false;
-    var cur = function () { var a = u.evaluate(d.expression); return a.length === 2 ? a[0][a[1]] : a[1][a[2]]; };
-    u.effect(function () { var v = cur(); if (document.activeElement !== el) el.textContent = String(v); });
+    var cancel = false, isT = function (a) { return typeof a[0].set === 'function'; };
+    var first = u.evaluate(d.expression); el.setAttribute('aria-label', human(isT(first) ? first[2] : first[1]));
+    var cur = function () { var a = u.evaluate(d.expression); return isT(a) ? a[1][a[2]] : a[0][a[1]]; };
+    var show = function () { var v = cur(); el.textContent = typeof v === 'number' ? v.toLocaleString(locale) : String(v); };
+    u.effect(function () { cur(); if (document.activeElement !== el) show(); });
     el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } else if (e.key === 'Escape') { cancel = true; el.blur(); } });
     el.addEventListener('beforeinput', function (e) { if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') e.preventDefault(); });
     el.addEventListener('paste', function (e) { e.preventDefault(); var tx = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, tx); });
     el.addEventListener('blur', function () {
       var a = u.evaluate(d.expression), v = el.textContent.trim(), old = cur(), c = cancel; cancel = false;
-      if (!c && v && v !== String(old)) {
+      if (!c && v && v !== (typeof old === 'number' ? old.toLocaleString(locale) : String(old))) {
         try {
-          if (a.length === 2) { var n = Number(v.replace(/[,\s]/g, '')); if (typeof old === 'number') { if (!isFinite(n) || n < 0) throw new Error('Enter a number'); a[0][a[1]] = n; } else a[0][a[1]] = v; }
-          else { var o = {}; o[a[2]] = v; a[0].set(a[1].id, o); }
+          if (!isT(a)) {
+            if (typeof old === 'number') {
+              var n = Number(v.replace(/[,\s]/g, '')), lo = a[2] == null ? 0 : a[2], hi = a[3] == null ? MAXN : a[3];
+              if (!isFinite(n) || n < lo || n > hi) throw new Error('Enter a number from ' + num(lo) + ' to ' + num(hi));
+              a[0][a[1]] = n;
+            } else a[0][a[1]] = v;
+          } else { var o = {}; o[a[2]] = v; a[0].set(a[1].id, o); }
         } catch (x) { ui.toast(x.message); }
       }
-      el.textContent = String(cur());
+      show();
     });
   });
-  /* x-remove="[table, row]", [table, row, beforeFn] or [table, row, childTable, 'col'] (cascade): a 44 px icon button that removes the row (Undo toast included). */
+  /* x-remove="[table, row]" or [table, row, beforeFn] or [table, row, childTable, 'col'] (cascade): one quiet kebab; the second tap removes the row
+   * (and, for a cascade, every child row that points at it) as ONE undoable step: one toast, one Undo that restores all of it. */
   A.directive('remove', function (el, d, u) {
-    el.setAttribute('type', 'button'); el.setAttribute('aria-label', 'Remove'); el.classList.add('ibtn'); el.appendChild(icon('trash'));
-    el.addEventListener('click', function () {
+    el.setAttribute('type', 'button'); el.classList.add('ibtn');
+    kebab(el, function () {
       var a = u.evaluate(d.expression), c = a[2];
-      if (typeof c === 'function') c(); /* [table, row, fn]: run fn first */
-      else if (c && c.rows) Array.prototype.slice.call(c.rows).filter(function (r) { return String(r[a[3]]) === String(a[1].id); }).forEach(function (r) { c.remove(r.id); }); /* [table, row, child, col]: also remove the child rows that point at it */
-      a[0].remove(a[1].id);
+      if (typeof c === 'function') { c(); a[0].remove(a[1].id); }
+      else if (c && c.rows) I.removeGroup([[c, c[I.TX]().ids(a[3], a[1].id)], [a[0], [a[1].id]]], 'Removed');
+      else a[0].remove(a[1].id);
     });
   });
   /* $day(n): the date n days from today as YYYY-MM-DD (reactive across midnight, no time zone surprises). */
@@ -348,7 +387,7 @@
     el._m = { tick: A.reactive({ n: 0 }) };
     queueMicrotask(function () {
       var ro = null, first = true;
-      var props = function () { var o = Object.assign({}, stat); for (var k in dyn) o[k] = A.evaluate(el, dyn[k]); return o; };
+      var props = function () { var o = Object.assign({}, stat); for (var k in dyn) o[k] = A.evaluate(el, k === 'glyph' ? '() => (' + dyn[k] + ')' : dyn[k]); /* Alpine calls a function result, so a function-valued prop is returned from a wrapper */ return o; };
       el._m.run = function () { keepFocus(el, function () { comp(el, props()); }); };
       var runner = A.effect(function () { void el._m.tick.n; el._m.run(); });
       el._x_cleanups = (el._x_cleanups || []).concat([function () { A.release(runner); if (ro) ro.disconnect(); }]);
@@ -362,7 +401,7 @@
 
   /* today() follows the clock past midnight: check on visibility change, on a slow timer, and on every table action (in the SDK) */
   document.addEventListener('visibilitychange', I.refresh);
-  setInterval(I.refresh, 30000);
+  setInterval(I.refresh, 5000); /* the day header is right within 5 s of midnight */
 
   /* ---- toast host (kit-owned) ---- */
   function toastHost() {

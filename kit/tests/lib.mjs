@@ -126,3 +126,6 @@ export const auditFn = () => {
   }
   return out;
 };
+
+/** Row actions are a kebab: the first tap arms "Delete", the second tap does it. */
+export async function del(loc) { await loc.click(); await loc.click(); }

@@ -23,6 +23,7 @@ function sqliteAdapter(db, appId) {
   const errors = [];
   return {
     errors,
+    batch: (fn) => db.transaction(fn)(), // one transaction for a grouped change (parent + children)
     // a row whose JSON is corrupt is skipped and recorded in `errors`; it never makes the whole table throw
     rows: (tbl) => {
       const out = [];

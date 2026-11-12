@@ -1,7 +1,7 @@
 // Browser tests: host hidden, RTL, root font scale, Urdu chart labels, exercise paging at 10k, at the 5 viewports.
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { startServer, launch, open, inject, FIXTURES, VIEWPORTS, auditFn } from './lib.mjs';
+import { startServer, launch, open, inject, FIXTURES, VIEWPORTS, auditFn, del } from './lib.mjs';
 
 let srv, browser;
 before(async () => { srv = await startServer(); browser = await launch(); });
@@ -20,7 +20,7 @@ test('window.moldeHost is deleted after boot: page code cannot read or write the
     return { host: typeof window.moldeHost, found, dunder: Object.getOwnPropertyNames(window).filter((k) => k.startsWith('__') && k !== '__pwClock'), alpine: Object.keys(window.Alpine || {}).filter((k) => /adapter|moldeHost/i.test(k)) };
   });
   assert.equal(r.host, 'undefined'); assert.deepEqual(r.found, [], 'no global holds the adapter'); assert.deepEqual(r.dunder, []); assert.deepEqual(r.alpine, []);
-  await page.locator('button', { hasText: '+250' }).click(); assert.equal(await page.locator('.stat').innerText(), '250', 'the app still works through the hidden adapter');
+  await page.locator('.m-quick button', { hasText: '+250' }).click(); assert.equal(await page.locator('.stat').innerText(), '250 ml', 'the app still works through the hidden adapter');
   await ctx.close(); noLog(log);
 });
 
@@ -58,7 +58,7 @@ test('root font scale 150%: no overflow and targets stay >= 44 px on 5 fixtures 
     await page.evaluate(() => { document.documentElement.style.fontSize = '150%'; }); await page.setViewportSize({ width: w + 1, height: h }); await page.setViewportSize({ width: w, height: h }); await page.waitForTimeout(350);
     const a = await page.evaluate(auditFn);
     const fs = await page.evaluate(() => [getComputedStyle(document.documentElement).fontSize, getComputedStyle(document.querySelector('small, .muted, .chip, .stat')).fontSize, getComputedStyle(document.querySelector('h1')).fontSize]);
-    assert.equal(fs[0], '24px'); assert.equal(fs[2], '30px', 'h1 follows the root size'); assert.ok(['21px', '60px'].includes(fs[1]), 'secondary text follows the root size: ' + fs[1]);
+    assert.equal(fs[0], '24px'); assert.equal(fs[2], '30px', 'h1 follows the root size'); assert.ok(['22.5px', '60px'].includes(fs[1]), 'secondary text follows the root size: ' + fs[1]);
     assert.deepEqual(a.overflow, [], `${f} ${w}x${h} @150% overflow`); assert.deepEqual(a.small, [], `${f} ${w}x${h} small targets`); assert.deepEqual(a.tiny, []);
     await ctx.close(); noLog(log);
   }
@@ -137,13 +137,13 @@ test('goals persist: a localStorage-backed host adapter keeps the edited goal an
   };
   const w = await open(browser, srv.base, 'water', { seed: false, before: (p) => p.addInitScript(init) }); const p = w.page;
   await p.locator('small [contenteditable]').click(); await p.keyboard.press('Control+A'); await p.keyboard.type('3000'); await p.keyboard.press('Enter');
-  await p.locator('button', { hasText: '+250' }).click();
+  await p.locator('.m-quick button', { hasText: '+250' }).click();
   await p.reload(); await p.waitForTimeout(500);
-  assert.equal(await p.locator('small [contenteditable]').innerText(), '3000', 'goal persisted'); assert.equal(await p.locator('.stat').innerText(), '250', 'rows persisted');
+  assert.equal(await p.locator('small [contenteditable]').innerText(), '3,000', 'goal persisted'); assert.equal(await p.locator('.stat').innerText(), '250 ml', 'rows persisted');
   await w.ctx.close(); noLog(w.log);
   const b = await open(browser, srv.base, 'budget', { seed: false, before: (q) => q.addInitScript(init) });
   await b.page.locator('small [contenteditable]').click(); await b.page.keyboard.press('Control+A'); await b.page.keyboard.type('50000'); await b.page.keyboard.press('Enter');
-  await b.page.reload(); await b.page.waitForTimeout(500); assert.equal(await b.page.locator('small [contenteditable]').innerText(), '50000', 'budget persisted');
+  await b.page.reload(); await b.page.waitForTimeout(500); assert.equal(await b.page.locator('small [contenteditable]').innerText(), '50,000', 'budget persisted');
   await b.ctx.close(); noLog(b.log);
 });
 
@@ -154,4 +154,49 @@ test('scale: journal and habits stay fast and cap what they render at 1,000 and 
     const n = await page.locator(sel).count(); console.log(`# ${f} ${big} rows: first paint ${ms} ms, ${n} rows in the DOM`);
     assert.ok(n <= cap + 1, `${f} renders at most a page: ${n}`); assert.ok(ms < 1000, `${f} ${big} rows first paint ${ms} ms`); noLog(errs); await c2.close();
   }
+});
+
+test('$day(n) (page magic): dates relative to today, month boundaries, reactive across midnight', async () => {
+  const { page, ctx, log } = await open(browser, srv.base, 'habits');
+  const r = await page.evaluate(() => { const el = document.querySelector('main'); const ev = (e) => Alpine.evaluate(el, e); return { t: ev('$day()'), t0: ev('$day(0)'), y: ev('$day(-1)'), oct: ev('$day(-21)'), dec: ev('$day(10)'), app: app.today(), n: ev('typeof $day(1 - 7)') }; });
+  assert.deepEqual(r, { t: '2026-11-21', t0: '2026-11-21', y: '2026-11-20', oct: '2026-10-31', dec: '2026-12-01', app: '2026-11-21', n: 'string' });
+  await ctx.close(); noLog(log);
+});
+
+test('segmented control wraps (no hidden options) and journal mood faces keep 44 px targets at 240 and 320 px', async () => {
+  for (const w of [240, 320]) {
+    const b = await open(browser, srv.base, 'budget', { w, h: 700 });
+    const seg = await b.page.$$eval('.seg label', (ls) => ls.map((l) => { const r = l.getBoundingClientRect(); return [r.left, r.right, r.width, r.height]; }));
+    assert.equal(seg.length, 5); assert.ok(seg.every((s) => s[0] >= 0 && s[1] <= w && s[3] >= 44), `all five options are visible and tappable at ${w}: ` + JSON.stringify(seg));
+    await b.ctx.close(); noLog(b.log);
+    const j = await open(browser, srv.base, 'journal', { w, h: 700 });
+    const faces = await j.page.$$eval('form label:has(input[type=radio])', (ls) => ls.map((l) => { const r = l.getBoundingClientRect(); return [r.left, r.right, r.width, r.height]; }));
+    assert.equal(faces.length, 5); assert.ok(faces.every((f) => f[2] >= 44 && f[3] >= 44 && f[0] >= 0 && f[1] <= w), `faces >= 44 px at ${w}: ` + JSON.stringify(faces));
+    await j.ctx.close(); noLog(j.log);
+  }
+});
+
+test('one input style kit-wide: every text, number and textarea field is the filled style; no mixed looks', async () => {
+  for (const f of FIXTURES) {
+    const { page, ctx } = await open(browser, srv.base, f);
+    const styles = await page.$$eval('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), textarea', (els) => els.filter((e) => e.getClientRects().length).map((e) => { const c = getComputedStyle(e); return [c.backgroundColor, c.boxShadow !== 'none', c.borderTopColor].join('|'); }));
+    assert.ok(new Set(styles).size <= 1, f + ' mixes input styles: ' + [...new Set(styles)].join(' // '));
+    await ctx.close();
+  }
+});
+
+test('the five fixtures use five different themes and secondary text is never below 15 px', async () => {
+  const themes = [];
+  for (const f of FIXTURES) { const { page, ctx } = await open(browser, srv.base, f); themes.push(await page.evaluate(() => document.documentElement.getAttribute('data-theme'))); const sizes = await page.$$eval('small, .muted, .chip', (els) => els.filter((e) => e.getClientRects().length).map((e) => parseFloat(getComputedStyle(e).fontSize))); assert.ok(Math.min(...sizes) >= 15, f + ' min ' + Math.min(...sizes)); await ctx.close(); }
+  assert.equal(new Set(themes).size, 5, themes.join());
+});
+
+test('the kebab: first tap arms Delete (4 s), a tap elsewhere disarms it, the second tap deletes with ONE Undo', async () => {
+  const { page, ctx, log } = await open(browser, srv.base, 'water');
+  const k = page.locator('m-list .ibtn').first(); assert.equal(await k.getAttribute('aria-label'), 'More actions'); const rows = () => page.evaluate(() => store.t('cup').rows.length); const n0 = await rows();
+  await k.click(); assert.equal(await k.getAttribute('aria-label'), 'Delete'); assert.equal(await rows(), n0, 'the first tap does not delete');
+  await page.locator('h1').click(); assert.equal(await k.getAttribute('aria-label'), 'More actions', 'blur disarms');
+  await k.click(); await page.waitForTimeout(4200); assert.equal(await k.getAttribute('aria-label'), 'More actions', 'it disarms by itself after 4 s');
+  await del(k); assert.equal(await rows(), n0 - 1); assert.equal(await page.locator('.m-toast').count(), 1);
+  await ctx.close(); noLog(log);
 });

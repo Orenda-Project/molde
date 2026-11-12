@@ -53,14 +53,14 @@ for (const [aname, mk] of Object.entries(adapters)) {
 
   test(`[${aname}] 3 t.add: coerces, clips, drops unknown columns, returns ids, persists`, () => {
     const a = sdk(); const t = a.store.t('log');
-    const id = t.add({ what: 'x'.repeat(1000), mins: '30', kind: 'nope', note: 'n'.repeat(20000), ok: 1 });
+    const id = t.add({ what: 'x'.repeat(1000), mins: '30', kind: 'swim', note: 'n'.repeat(20000), ok: 1 });
     typed(() => t.add({ what: 'x'.repeat(1001) }), 'E_ARG'); typed(() => t.add({ note: 'n'.repeat(20001) }), 'E_ARG'); typed(() => t.set(id, { what: 'y'.repeat(1001) }), 'E_ARG');
     assert.throws(() => t.add({ what: 'x'.repeat(1001) }), /1001 characters.*limit.*1000/, 'the message says what to do');
     assert.equal(t.rows.length, 1, 'a rejected write leaves nothing behind');
     typed(() => t.add({ zzz: 1 }), 'E_COL'); typed(() => t.add({ what: Symbol('s') }), 'E_ARG'); typed(() => t.add({ x: Symbol() }), 'E_COL'); typed(() => t.add({ what: {} }), 'E_ARG'); typed(() => t.add({ mins: () => 1 }), 'E_ARG'); typed(() => t.add({ mins: 10n }), 'E_ARG');
     assert.equal(id, 1); assert.equal(t.add({ what: 'b' }), 2);
     const r = t.rows[0];
-    assert.equal(r.what.length, 1000, 'never cut silently'); assert.equal(r.mins, 30); assert.equal(r.kind, 'run'); assert.equal(r.note.length, 20000); assert.equal(r.ok, true); assert.ok(!('zzz' in r));
+    assert.equal(r.what.length, 1000, 'never cut silently'); assert.equal(r.mins, 30); assert.equal(r.kind, 'swim'); assert.equal(r.note.length, 20000); assert.equal(r.ok, true); assert.ok(!('zzz' in r));
     assert.equal(r.at, T0); assert.equal(t.rows[1].mins, 0);
     assert.equal(createSDK({ adapter: a.ctx.reopen(a.adapter), manifest }).store.t('log').rows.length, 2);
     assert.equal(a.store.t('check').add({ habit: 'h' }) && a.store.t('check').rows[0].day, '2026-11-12'); // date defaults to today
@@ -225,7 +225,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 for (const [aname, mk] of Object.entries(adapters)) {
-  const sdk2 = (m = manifest, adapter) => { const ctx = mk(); return { ctx, s: createSDK({ adapter: adapter || ctx.make(), manifest: m, now: () => T0, locale: 'en-US' }) }; };
+  const sdk2 = (m = manifest, adapter) => { const ctx = mk(); const ad = adapter || ctx.make(); return { ctx, adapter: ad, s: createSDK({ adapter: ad, manifest: m, now: () => T0, locale: 'en-US' }) }; };
 
   test(`[${aname}] a column added later: old rows read with type defaults (no NaN, no undefined)`, () => {
     const ctx = mk(); const adapter = ctx.make();
@@ -253,16 +253,49 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.ok(evil.store.t('ok')); typed(() => evil.store.t('ok').sum('toString2'), 'E_COL'); typed(() => evil.store.t('ok').has({ hasOwnProperty: 1 }), 'E_COL');
   });
 
-  test(`[${aname}] huge, negative, NaN and Infinity numbers are clamped; series(last) is capped at 366`, () => {
+  test(`[${aname}] numbers: finite magnitudes are clamped, NaN / Infinity / text / null / booleans are E_ARG; series(last) is capped at 366`, () => {
     const { s } = sdk2(); const t = s.store.t('log');
-    t.add({ mins: 1e308 }); t.add({ mins: Infinity }); t.add({ mins: -Infinity }); t.add({ mins: NaN }); t.add({ mins: -5 }); t.add({ mins: 'abc' });
-    assert.deepEqual(t.rows.map((r) => r.mins), [1e12, 1e12, -1e12, 0, -5, 0]);
+    t.add({ mins: 1e308 }); t.add({ mins: -1e308 }); t.add({ mins: -5 }); t.add({ mins: '12.5' }); t.add({ mins: ' 7 ' });
+    assert.deepEqual(t.rows.map((r) => r.mins), [1e12, -1e12, -5, 12.5, 7]);
+    for (const bad of [NaN, Infinity, -Infinity, 'abc', '', '  ', '1e', null, true, false, {}, [], [1], () => 1, 10n]) typed(() => t.add({ mins: bad }), 'E_ARG');
+    assert.equal(t.rows.length, 5, 'a rejected write adds nothing');
     assert.equal(t.series('mins', { last: 100000 }).length, 366); assert.equal(t.series('mins', { last: 2.9 }).length, 2);
     for (const bad of [0, -5, '7', null, Infinity * 0]) typed(() => t.series('mins', { last: bad }), 'E_ARG');
-    typed(() => t.series('mins', { last: NaN }), 'E_ARG'); typed(() => t.series('mins', { last: 'x' }), 'E_ARG');
-    assert.ok(Number.isFinite(t.sum('mins')));
+    typed(() => t.series('mins', { last: NaN }), 'E_ARG'); typed(() => t.series('mins', { last: 'x' }), 'E_ARG'); assert.ok(Number.isFinite(t.sum('mins')));
   });
 
+  test(`[${aname}] wrong types never turn into defaults: pick, bool, text, date, null`, () => {
+    const { s } = sdk2(); const t = s.store.t('log'), c = s.store.t('check');
+    typed(() => t.add({ kind: 'nope' }), 'E_ARG'); typed(() => t.add({ kind: 3 }), 'E_ARG'); typed(() => t.add({ kind: '' }), 'E_ARG'); assert.throws(() => t.add({ kind: 'zzz' }), /not one of run, swim, lift/);
+    typed(() => t.add({ ok: 'yes' }), 'E_ARG'); typed(() => t.add({ ok: 2 }), 'E_ARG'); typed(() => t.add({ ok: null }), 'E_ARG');
+    typed(() => t.add({ what: true }), 'E_ARG'); typed(() => t.add({ what: {} }), 'E_ARG'); typed(() => t.add({ what: null }), 'E_ARG'); typed(() => t.add({ note: false }), 'E_ARG'); typed(() => c.add({ day: null }), 'E_ARG');
+    assert.equal(t.add({ what: 42, kind: 'lift', ok: 'false' }) > 0, true); assert.deepEqual([t.rows[0].what, t.rows[0].kind, t.rows[0].ok], ['42', 'lift', false]);
+    const id = t.rows[0].id; typed(() => t.set(id, { mins: 'abc' }), 'E_ARG'); typed(() => t.set(id, { kind: 'x' }), 'E_ARG'); assert.equal(t.rows[0].kind, 'lift', 'a rejected set changes nothing');
+    assert.equal(t.rows.length, 1);
+  });
+
+  test(`[${aname}] grouped removal: parent and children go in ONE step, one toast, one Undo restores all, streaks identical`, () => {
+    const { s, adapter } = sdk2(); const h = s.store.t('log'), c = s.store.t('check'); const day = (n) => { const d = new Date(T0); d.setDate(d.getDate() - n); return ymd(d); };
+    const a = h.add({ what: 'read' }), b = h.add({ what: 'walk' });
+    for (let n = 0; n < 45; n++) c.add({ habit: String(a), day: day(n) }); for (let n = 0; n < 5; n++) c.add({ habit: String(b), day: day(n) });
+    const streak = c.streak({ habit: String(a) }); assert.equal(streak, 45);
+    const kids = c.rows.filter((r) => r.habit === String(a)).map((r) => r.id);
+    assert.equal(s.internal.removeGroup([[c, kids], [h, [a]]]), 46);
+    assert.equal(h.rows.length, 1); assert.equal(c.rows.length, 5); assert.equal(s.internal.toasts().length, 1, 'one toast for the whole step');
+    s.ui.toast('later 1'); s.ui.toast('later 2'); s.ui.toast('later 3'); s.ui.toast('later 4');
+    assert.ok(s.internal.toasts().some((x) => x.msg === 'Removed' && x.undo), 'a pending Undo is never evicted by plain toasts');
+    s.internal.toasts().find((x) => x.undo).undo();
+    assert.equal(h.rows.length, 2); assert.equal(c.rows.length, 50); assert.equal(c.streak({ habit: String(a) }), streak, 'streak identical after Undo');
+    assert.deepEqual(h.rows.map((r) => r.what), ['read', 'walk']); assert.equal(adapter.rows('check').filter((r) => !r.deleted_at).length, 50);
+    assert.equal(s.internal.removeGroup([[c, []], [h, [999]]]), 0, 'nothing to remove: no toast');
+  });
+
+  test(`[${aname}] toasts: plain ones are capped at 3 and newest wins, Undo toasts survive a flood`, () => {
+    const tm = fakeTimers(); const a = createSDK({ manifest, timers: tm });
+    a.ui.toast('u1', () => {}); a.ui.toast('u2', () => {}); for (let i = 0; i < 10; i++) a.ui.toast('p' + i);
+    const msgs = a.internal.toasts().map((x) => x.msg); assert.ok(msgs.includes('u1') && msgs.includes('u2'), msgs.join()); assert.ok(msgs.includes('p9'), 'newest plain toast is visible'); assert.ok(msgs.length <= 3, msgs.join());
+    for (let i = 0; i < 4; i++) a.ui.toast('v' + i, () => {}); assert.ok(a.internal.toasts().length <= 5, 'Undo toasts are bounded too'); void tm;
+  });
   test(`[${aname}] bad arguments raise a typed MoldeError, never a raw TypeError, never silently act`, () => {
     const { s } = sdk2(); const t = s.store.t('log'), c = s.store.t('check');
     c.add({ habit: 'read' });
@@ -408,9 +441,9 @@ for (const [aname, mk] of Object.entries(adapters)) {
 
   test(`[${aname}] boolean coercion, pick fallback, date validity, at override, number clamps are exact at the boundary`, () => {
     const { s } = mkS(); const t = s.store.t('log'); const c = s.store.t('check');
-    t.add({ ok: 'false' }); t.add({ ok: 'true' }); t.add({ ok: 0 }); t.add({ ok: 1 }); t.add({ ok: '' }); t.add({ kind: 'swim' }); t.add({ kind: 'zzz' });
-    assert.deepEqual(t.rows.slice(0, 5).map((r) => r.ok), [false, true, false, true, false]); assert.deepEqual(t.rows.slice(5).map((r) => r.kind), ['swim', 'run']);
-    t.add({ mins: 1e12 }); t.add({ mins: 1e12 + 1 }); t.add({ mins: -1e12 - 1 }); assert.deepEqual(t.rows.slice(7).map((r) => r.mins), [1e12, 1e12, -1e12]);
+    t.add({ ok: 'false' }); t.add({ ok: 'true' }); t.add({ ok: 0 }); t.add({ ok: 1 }); t.add({ kind: 'swim' }); typed(() => t.add({ ok: '' }), 'E_ARG'); typed(() => t.add({ kind: 'zzz' }), 'E_ARG');
+    assert.deepEqual(t.rows.slice(0, 4).map((r) => r.ok), [false, true, false, true]); assert.equal(t.rows[4].kind, 'swim');
+    t.add({ mins: 1e12 }); t.add({ mins: 1e12 + 1 }); t.add({ mins: -1e12 - 1 }); assert.deepEqual(t.rows.slice(5).map((r) => r.mins), [1e12, 1e12, -1e12]);
     c.add({ day: '2024-02-29' }); typed(() => c.add({ day: '2025-02-29' }), 'E_ARG'); typed(() => c.add({ day: '2026-4-01' }), 'E_ARG'); typed(() => c.add({ day: '2026-00-10' }), 'E_ARG');
     assert.equal(t.rows[0].at, T0); const id = t.add({ at: 12345 }); assert.equal(t.rows.find((r) => r.id === id).at, 12345); typed(() => t.add({ at: 'x' }), 'E_ARG');
   });
@@ -502,5 +535,26 @@ for (const [aname, mk] of Object.entries(adapters)) {
     const deep = (n) => { let o = 1; for (let i = 0; i < n; i++) o = [o]; return o; }; s.store.kv('d6', deep(6)); typed(() => s.store.kv('d7', deep(7)), 'E_ARG');
     typed(() => t.remove(1.5), 'E_ARG'); typed(() => t.remove(NaN), 'E_ARG'); typed(() => t.remove('1'), 'E_ARG');
     const id = t.add({ ok: true }); assert.equal(t.rows.find((r) => r.id === id).ok, true); typed(() => t.add({ ok: {} }), 'E_ARG'); typed(() => t.add({ ok: [true] }), 'E_ARG');
+  });
+}
+
+test('sqlite: a grouped removal (parent + children) runs inside ONE transaction and Undo restores it in one too', { skip: !Database }, () => {
+  const db = new Database(':memory:'); ensureSchema(db); const base = sqliteAdapter(db, 'a'); let inTx = [], txs = 0;
+  const ad = { ...base, batch: (fn) => { txs++; return base.batch(fn); }, put: (tbl, rec) => { inTx.push(db.inTransaction); return base.put(tbl, rec); } };
+  const s = createSDK({ adapter: ad, manifest, now: () => T0 }); const h = s.store.t('log'), c = s.store.t('check');
+  const a = h.add({ what: 'x' }); for (let i = 0; i < 12; i++) c.add({ habit: String(a), day: ymd(new Date(T0 - i * 864e5)) });
+  inTx = []; txs = 0; assert.equal(s.internal.removeGroup([[c, c.rows.map((r) => r.id)], [h, [a]]]), 13);
+  assert.equal(txs, 1, 'one transaction'); assert.equal(inTx.length, 13); assert.ok(inTx.every(Boolean), 'every write happened inside it');
+  inTx = []; txs = 0; s.internal.toasts()[0].undo(); assert.equal(txs, 1); assert.ok(inTx.every(Boolean)); assert.equal(c.rows.length, 12);
+  assert.equal(new Database(':memory:').open, true);
+});
+
+for (const [aname, mk] of Object.entries(adapters)) {
+  test(`[${aname}] error messages say what to do; stored values beyond the clamp are clamped on read`, () => {
+    const ctx = mk(); const ad = ctx.make(); ad.put('log', { id: 1, at: T0, deleted_at: null, data: { mins: 1e30 } }); ad.put('log', { id: 2, at: T0, deleted_at: null, data: { mins: -1e30 } }); ad.put('log', { id: 3, at: T0, deleted_at: null, data: { mins: 'abc' } });
+    const t = createSDK({ adapter: ad, manifest, now: () => T0 }).store.t('log'); assert.deepEqual(t.rows.map((r) => r.mins), [1e12, -1e12, 0]);
+    assert.throws(() => t.add({ mins: null }), /null is not a value for a num column; leave the key out/); assert.throws(() => t.add({ mins: NaN }), /finite number, got null/);
+    assert.throws(() => t.add({ mins: 'abc' }), /finite number, got "abc"/); assert.throws(() => t.add({ kind: 'zzz' }), /"zzz" is not one of run, swim, lift/); assert.throws(() => t.add({ ok: 'yes' }), /true or false, not "yes"/);
+    assert.throws(() => t.add({ what: {} }), /must be text, a number or true\/false/);
   });
 }

@@ -13,7 +13,7 @@
   }
   const bad = (code, msg) => { throw new MoldeError(code, msg); };
   const isObj = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
-  const META = Symbol.for('molde.meta');
+  const META = Symbol.for('molde.meta'), TX = Symbol.for('molde.tx');
 
   /* ---- adapter -------------------------------------------------------------
    * Adapter interface (sync; the WebView bridge keeps a write-through cache):
@@ -59,26 +59,49 @@
     if (typeof type === 'string' && type.startsWith('pick:')) return { k: 'pick', opts: type.slice(5).split('|') };
     return { k: type };
   }
-  /* strict: used for writes. loose: used for reading stored data (never throws, fills defaults). */
-  function coerce(def, v, dflt, strict) {
-    const miss = v === undefined || v === null;
+  /* Writes are strict: a value that is not what the column holds raises E_ARG (a number column does not accept NaN, "abc", "", null,
+   * true or Infinity; a pick column only its options; text only text or a number). Finite numbers beyond +-1e12 are clamped (the one
+   * documented clip). Reads are lenient: stored data is filled with type defaults and never throws. */
+  function coerceStrict(def, v, dflt) {
+    if (v === undefined) return coerceLoose(def, v, dflt);
+    const shown = () => JSON.stringify(typeof v === 'string' ? v.slice(0, 20) : v);
+    if (v === null) bad('E_ARG', 'null is not a value for a ' + def.k + ' column; leave the key out to get the default');
     switch (def.k) {
       case 'text': case 'long': {
-        const max = def.k === 'text' ? TEXT_MAX : LONG_MAX, s = miss ? '' : String(v);
-        if (strict && s.length > max) bad('E_ARG', 'text is ' + s.length + ' characters; the limit for a ' + def.k + ' column is ' + max);
+        if (typeof v !== 'string' && !(typeof v === 'number' && Number.isFinite(v))) bad('E_ARG', 'a ' + def.k + ' column holds text, not ' + typeof v);
+        const max = def.k === 'text' ? TEXT_MAX : LONG_MAX, s = String(v);
+        if (s.length > max) bad('E_ARG', 'text is ' + s.length + ' characters; the limit for a ' + def.k + ' column is ' + max);
         return s;
       }
+      case 'num': {
+        const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+        if (!Number.isFinite(n)) bad('E_ARG', 'a number column holds a finite number, got ' + shown());
+        return Math.max(-NUM_MAX, Math.min(NUM_MAX, n));
+      }
+      case 'bool':
+        if (typeof v === 'boolean') return v; if (v === 1 || v === 0) return v === 1; if (v === 'true' || v === 'false') return v === 'true';
+        return bad('E_ARG', 'a bool column holds true or false, not ' + shown());
+      case 'date':
+        if (validYmd(v)) return v;
+        return bad('E_ARG', 'date must be a real YYYY-MM-DD, got ' + shown());
+      case 'pick':
+        if (def.opts.includes(v)) return v;
+        return bad('E_ARG', shown() + ' is not one of ' + def.opts.join(', '));
+      default: return v;
+    }
+  }
+  function coerceLoose(def, v, dflt) {
+    const miss = v === undefined || v === null;
+    switch (def.k) {
+      case 'text': case 'long': return miss ? '' : String(v);
       case 'num': return miss ? 0 : clampNum(v);
       case 'bool': return miss ? false : v === 'false' ? false : !!v;
-      case 'date':
-        if (miss) return dflt();
-        if (validYmd(v)) return v;
-        if (strict) bad('E_ARG', 'date must be a real YYYY-MM-DD, got ' + JSON.stringify(String(v).slice(0, 20)));
-        return dflt();
+      case 'date': return miss ? dflt() : validYmd(v) ? v : dflt();
       case 'pick': return def.opts.includes(v) ? v : def.opts[0];
       default: return v;
     }
   }
+  const coerce = (def, v, dflt, strict) => (strict ? coerceStrict(def, v, dflt) : coerceLoose(def, v, dflt));
 
   function createSDK(opts) {
     opts = opts || {};
@@ -160,7 +183,11 @@
         if (String(msg).length > NOTE_MAX) bad('E_ARG', 'ui.toast: msg is limited to ' + NOTE_MAX + ' characters');
         if (undo !== undefined && typeof undo !== 'function') bad('E_ARG', 'ui.toast: the second argument is an undo function');
         const id = ++toastId;
-        while (uiState.toasts.length >= 3) dismiss(uiState.toasts[0].id); /* at most 3 visible: the newest replaces the oldest */
+        while (uiState.toasts.length >= 3) { /* at most 3 plain toasts: the newest replaces the oldest; a pending Undo is evicted last (at 5) */
+          const i = uiState.toasts.findIndex((x) => !x.undo);
+          if (i < 0 && uiState.toasts.length < 5) break;
+          dismiss(uiState.toasts[i < 0 ? 0 : i].id);
+        }
         uiState.toasts.push({ id, msg: String(msg), undo: undo || null });
         toastTimers.set(id, timers.setTimeout(() => dismiss(id), undo ? 10000 : 3000));
         return () => dismiss(id);
@@ -250,6 +277,12 @@
         const f = from ? ymd(from) : null;
         return live().filter((r) => (!o.where || eq(r, o.where)) && (!f || day(r) >= f));
       }
+      function restore(id) {
+        const rec = record(id); if (!rec || !rec.deleted_at) return false;
+        rec.deleted_at = null; adapter.put(name, rec);
+        st.rows.push(toRow(rec)); st.rows.sort((a, b) => a.at - b.at || a.id - b.id); st.ver++;
+        return true;
+      }
       function softDelete(id) {
         const i = st.rows.findIndex((r) => r.id === id);
         if (i < 0) return false;
@@ -286,10 +319,7 @@
           if (!Number.isInteger(id)) bad('E_ARG', 't.remove(id): id is the number returned by t.add');
           refresh();
           if (!softDelete(id)) return false;
-          ui.toast('Removed', () => {
-            const rec = record(id); rec.deleted_at = null; adapter.put(name, rec);
-            st.rows.push(toRow(rec)); st.rows.sort((a, b) => a.at - b.at || a.id - b.id); st.ver++;
-          });
+          ui.toast('Removed', () => { restore(id); });
           return true;
         },
         /* #6 */ sum(col, o) { needCol(col, 't.sum'); needNum(col, 't.sum'); o = needOpts(o, 't.sum'); return window_(o).reduce((s, r) => s + val(r, col), 0); },
@@ -348,6 +378,7 @@
         toJSON: { value: () => name },
         cols: { get: () => cols.slice() },
         rows: { get: () => { const v = st.ver; if (snapVer !== v || !snap) { snap = Object.freeze(st.rows.map((r) => Object.freeze(Object.assign({}, r)))); snapVer = v; } return snap; } },
+        [TX]: { value: () => ({ del: softDelete, undel: restore, ids: (col, val) => st.rows.filter((r) => String(r[col]) === String(val)).map((r) => r.id) }) }, /* a function: a reactive proxy must not have to wrap the value */
         [META]: { value: () => ({ schema: JSON.parse(JSON.stringify(schema)), cols: cols.slice(), dateCol }) },
       });
       handles.set(name, h);
@@ -370,11 +401,20 @@
     };
 
     /* host/kit-only surface: NOT part of the 16 calls and not put on window by components.js */
-    const internal = { weekStart: ws, toasts: () => uiState.toasts, dismiss, refresh, notifications, locale, errors: () => adapter.errors || [], META };
+    /* One undoable step for a parent and the child rows that point at it: one toast, one Undo, one adapter transaction. Not a public call. */
+    const batch = (fn) => (adapter.batch ? adapter.batch(fn) : fn());
+    const removeGroup = (items, msg) => {
+      refresh(); const done = [];
+      batch(() => items.forEach(([tb, ids]) => { const x = tb[TX](); ids.forEach((id) => { if (x.del(id)) done.push([x, id]); }); }));
+      if (!done.length) return 0;
+      ui.toast(msg || 'Removed', () => batch(() => done.forEach(([x, id]) => x.undel(id))));
+      return done.length;
+    };
+    const internal = { removeGroup, TX, weekStart: ws, toasts: () => uiState.toasts, dismiss, refresh, notifications, locale, errors: () => adapter.errors || [], META };
     return { store, ui, app, MoldeError, internal };
   }
 
   const LIMITS = { text: TEXT_MAX, long: LONG_MAX, num: NUM_MAX, note: NOTE_MAX };
   const CALLS = ['store.t', 'store.kv', 't.add', 't.set', 't.remove', 't.sum', 't.series', 't.group', 't.has', 't.toggle', 't.streak', 'ui.toast', 'ui.timer', 'app.notify', 'app.fmt', 'app.today'];
-  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, META, LIMITS };
+  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, META, TX, LIMITS };
 });
