@@ -244,7 +244,6 @@ def body(i, t):
 
 ## Bar (named, fetchable, pinned)
 {bar}
-
 How A/B artifacts are produced: the builder posts the artifact; a SEPARATE critic agent gets A and B with labels stripped, judges both orders, names the single biggest gap. Protocol: `docs/plan/04-product-process.md` section 6. Verdict posted as a comment every round; cap 5 rounds, then `state:needs-human`.
 
 ## Needs

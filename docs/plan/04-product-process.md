@@ -102,7 +102,7 @@ Layout check at 360x640, 412x915, 600x960, 800x1280 and wide desktop from the pr
 7. Loop: builder fixes ONLY the named gap (and any failed machine check), then a new round. Cap 5 rounds; at round 5 without a win, label `needs-human`, post the best artifact and the remaining gap, stop. Never self-grade; the builder cannot post a verdict.
 8. Merge only when: last verdict is WIN in both orders, machine check green, issue acceptance boxes ticked by the critic's checklist, and the PR links the final verdict comment.
 
-**Labels.** Type: `type:sdk`, `type:kit`, `type:shell`, `type:model-data`, `type:eval`, `type:docs`. State: `state:ready` (has bar), `state:building`, `state:critic`, `state:won`, `state:needs-human`, `state:blocked`. Gate: `gate:1-prove` ... `gate:4-offline`. Flags: `needs:sdk-frozen`, `ui` (triggers 5-viewport check), `urdu-rtl`. Round counter via `round:1`..`round:5`.
+**Labels.** Type: `type:sdk`, `type:kit`, `type:shell`, `type:model-data`, `type:eval`, `type:docs`, `type:process`. State: `state:ready` (has bar), `state:building`, `state:critic`, `state:won`, `state:needs-human`, `state:blocked`. Gate: GitHub milestones (`Gate 1: Prove it` ... `Gate 4: Go offline`), not labels, as in `.github/labels.yml`. Flags: `needs:sdk-frozen`, `needs:device`, `ui` (triggers 5-viewport check), `urdu-rtl`. Round counter via `round:1`..`round:5`.
 
 **Issue template** (`.github/ISSUE_TEMPLATE/task.md`):
 ```
@@ -135,7 +135,7 @@ Bar: <name> @ <pin>
 Order A/B: <candidate|bar chosen> | Order B/A: <candidate|bar chosen>
 Result: WIN | LOSS | SPLIT
 Biggest gap: <one sentence, concrete, fixable>
-Acceptance: line 1 PASS/FAIL (evidence) ; line 2 ...
+Acceptance: line 1 "<criterion text>" PASS/FAIL score/5 (evidence) ; line 2 ...
 Machine check: PASS/FAIL (link to run)
 Other notes (max 3): ...
 Artifacts: <links>
