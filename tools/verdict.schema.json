@@ -1,43 +1,229 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Critic verdict",
+  "description": "Posted by tools/post-verdict.sh. WIN needs both orders = candidate, machine check PASS and every acceptance line PASS. Both orders = candidate with a failed check is a LOSS.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["round", "bar", "order_ab", "order_ba", "result", "biggest_gap", "acceptance", "machine_check", "artifacts", "next"],
+  "required": [
+    "round",
+    "bar",
+    "order_ab",
+    "order_ba",
+    "result",
+    "biggest_gap",
+    "acceptance",
+    "machine_check",
+    "artifacts",
+    "next"
+  ],
   "properties": {
-    "issue": {"type": "integer", "minimum": 1, "description": "Issue number; may instead be passed with --issue"},
-    "round": {"type": "integer", "minimum": 1, "maximum": 5},
-    "bar": {
-      "type": "object", "additionalProperties": false, "required": ["name", "pin"],
-      "properties": {"name": {"type": "string", "minLength": 1}, "pin": {"type": "string", "minLength": 1}}
+    "issue": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Issue number; may instead be passed with --issue"
     },
-    "order_ab": {"enum": ["candidate", "bar"], "description": "Winner when shown as A=candidate, B=bar"},
-    "order_ba": {"enum": ["candidate", "bar"], "description": "Winner when shown as A=bar, B=candidate"},
-    "result": {"enum": ["WIN", "LOSS", "SPLIT"]},
-    "biggest_gap": {"type": "string", "minLength": 1, "description": "One sentence, concrete, fixable"},
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "bar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "pin"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+          "maxLength": 300
+        },
+        "pin": {
+          "type": "string",
+          "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+          "maxLength": 300
+        }
+      }
+    },
+    "order_ab": {
+      "enum": [
+        "candidate",
+        "bar"
+      ],
+      "description": "Winner when shown as A=candidate, B=bar"
+    },
+    "order_ba": {
+      "enum": [
+        "candidate",
+        "bar"
+      ],
+      "description": "Winner when shown as A=bar, B=candidate"
+    },
+    "result": {
+      "enum": [
+        "WIN",
+        "LOSS",
+        "SPLIT"
+      ]
+    },
+    "biggest_gap": {
+      "type": "string",
+      "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+      "maxLength": 300
+    },
     "acceptance": {
-      "type": "array", "minItems": 1,
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
       "items": {
-        "type": "object", "additionalProperties": false, "required": ["status", "evidence"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "line",
+          "status",
+          "evidence"
+        ],
         "properties": {
-          "status": {"enum": ["PASS", "FAIL"]},
-          "score": {"type": "integer", "minimum": 1, "maximum": 5},
-          "evidence": {"type": "string", "minLength": 1}
+          "line": {
+            "type": "string",
+            "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+            "maxLength": 300
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "FAIL"
+            ]
+          },
+          "score": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "evidence": {
+            "type": "string",
+            "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+            "maxLength": 300
+          }
         }
       }
     },
     "machine_check": {
-      "type": "object", "additionalProperties": false, "required": ["status", "link"],
-      "properties": {"status": {"enum": ["PASS", "FAIL"]}, "link": {"type": "string", "minLength": 1}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "link"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL"
+          ]
+        },
+        "link": {
+          "type": "string",
+          "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+          "maxLength": 300
+        }
+      }
     },
-    "other_notes": {"type": "array", "maxItems": 3, "items": {"type": "string", "minLength": 1}},
-    "artifacts": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
-    "next": {"enum": ["builder fixes the biggest gap", "ready to merge", "needs-human"]}
+    "other_notes": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+        "maxLength": 300
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "pattern": "[^\\s\\u200b-\\u200d\\ufeff]",
+        "maxLength": 300
+      }
+    },
+    "next": {
+      "enum": [
+        "builder fixes the biggest gap",
+        "ready to merge",
+        "needs-human"
+      ]
+    }
   },
   "allOf": [
-    {"if": {"properties": {"result": {"const": "WIN"}}},
-     "then": {"properties": {"order_ab": {"const": "candidate"}, "order_ba": {"const": "candidate"}, "next": {"const": "ready to merge"}}}},
-    {"if": {"properties": {"result": {"enum": ["LOSS", "SPLIT"]}}},
-     "then": {"properties": {"next": {"enum": ["builder fixes the biggest gap", "needs-human"]}}}}
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "WIN"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "order_ab": {
+            "const": "candidate"
+          },
+          "order_ba": {
+            "const": "candidate"
+          },
+          "next": {
+            "const": "ready to merge"
+          },
+          "machine_check": {
+            "properties": {
+              "status": {
+                "const": "PASS"
+              }
+            }
+          },
+          "acceptance": {
+            "items": {
+              "properties": {
+                "status": {
+                  "const": "PASS"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "enum": [
+              "LOSS",
+              "SPLIT"
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "next": {
+            "enum": [
+              "builder fixes the biggest gap",
+              "needs-human"
+            ]
+          }
+        }
+      }
+    }
   ]
 }

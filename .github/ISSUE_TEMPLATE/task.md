@@ -2,10 +2,9 @@
 name: Task
 about: One unit of work for a builder agent and a separate critic agent
 title: "NN. Short task name"
-labels: ["state:ready"]
 ---
 
-<!-- Without a named, fetchable, pinned bar this issue is NOT state:ready. -->
+<!-- Without a named, fetchable, pinned bar this issue is NOT ready. A human or the planner adds the state:ready label once the bar exists; this template does not. -->
 
 ## Goal
 One sentence, user-visible outcome.
