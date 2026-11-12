@@ -1,7 +1,7 @@
-<main x-data="{t: store.t('tx')}">
+<main x-data="{t: store.t('spend'), cap: store.kv('budget', 60000)}">
   <h1>Budget</h1>
-  <m-stat label="Balance" :value="t.sum('amount',{where:{kind:'income'}}) - t.sum('amount',{where:{kind:'spend'}})" unit="PKR"></m-stat>
-  <m-chart type="pie" label="Spending by category" :data="t.group('category','amount',{where:{kind:'spend'}})"></m-chart>
+  <m-stat left label="Left this month" :value="t.sum('amount',{since:'month'})" :of="cap.v" unit="PKR"></m-stat>
+  <m-chart type="rows" :data="t.group('category','amount',{since:'month'})"></m-chart>
   <m-form :table="t"></m-form>
-  <m-list :table="t" title="what" sub="amount" meta="kind"></m-list>
+  <m-list :table="t" title="description" sub="amount" meta="category" by="day"></m-list>
 </main>

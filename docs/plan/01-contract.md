@@ -125,6 +125,29 @@ Classes (20): layout `row` `col` `grid2` `grow` `scroll` (horizontal) · surface
 
 Themes (set in `app.json` `theme`, never in code; contrast pre-verified light and dark, auto dark via `prefers-color-scheme`): `mint`, `ocean`, `plum`, `slate` (mono), `ink` (dark default). No brown/parchment (Kamal's no-brown rule). Variables: `--bg --fg --muted --card --accent --accent-fg --radius`. The model chooses a theme name; it cannot write color values (validator blocks `style=` colors and `<style>` entirely in v1).
 
+
+## 4b. As built in T1 (kit 1, sdk 1): everything the kit adds beyond the contract above
+
+The 16 calls and the 5 components are unchanged in number. Round 2 of the gauntlet (PR #33) added optional attributes and options, listed here so the validator (Task 3) and the prompt card (Task 8) can allowlist exactly these.
+
+SDK options (no new calls):
+- `t.group(col, valCol, opts)`: third argument takes `since` and `where`, like `t.sum`.
+- `t.series(col, {by, last, op, where})`: `where` filters rows; `last` is clamped to 1..366.
+- Dates: if a table has a `date` column, that column is the row's day for `since`, `series` and `streak`. `has`, `toggle` and `streak` default a missing date key to today.
+- Numbers are clamped to +-1e12 (NaN becomes 0). Dates must be real (`2026-02-31` is `E_ARG`). Unknown column or table names are `E_COL` / `E_TABLE`. Bad arguments always raise a `MoldeError` with `E_ARG`; nothing returns silently. `store.t` / `store.kv` with `constructor`, `__proto__`, `toString` or any `Object.prototype` name raise `E_TABLE`.
+- Rows read from storage are filled with type defaults for columns that did not exist when the row was written (num 0, pick first option, bool false, text empty, date the row's own day), so adding a column never shows NaN or undefined.
+- `t.rows` is a frozen read-only copy; generated code cannot mutate the store through it. `Object.keys(store|ui|app|t)` is exactly the 16 calls; `ui.toasts`, `_schema`, `_dismiss` and `_notifications` are kit-internal (`sdk.internal`) and not on the globals.
+- `today()` is reactive across midnight (refreshed on visibility change, every 30 s and on every table action).
+
+Component attributes:
+- `m-stat`: `label`, `:value`, `:of`, `unit`; `left` (lead shows `of - value`, "Over budget" when negative); `glass` (fill-level glass instead of the bar). Always flat (no card).
+- `m-chart`: `:data` or `:table` + `col` (+ `by`, `last`, `op`); `type` bar (default) | line | pie | rows; `label`. Pie keeps 4 slices and folds the rest into "Other"; percentages sum to 100. Categorical colours are `--c1..--c5` from the theme. Draws SVG (not canvas), values are sanitised, negative bars hang below a zero line.
+- `m-list`: `:table`, `title`, `sub` (a column, or a template such as `{kg} kg x {reps}`), `unit`, `meta` (comma list of columns), `order`, `max` (chunk size for "Show more", default 30), `by="day"` (day headers), `face="col"` (mood face + timeline rail), `group="col"` (groups with last-session line; needs `sub` template), `:log="table"` + `key="col"` (checklist grid: tap any recent day, streak lead; the number of day columns follows the width).
+- `m-form`: `:table`, `fields`, `submit`, `hint` (placeholder of the first text field), `quick="250,500"` (one-tap add buttons for the first number column), `faces` (a pick column named with great/good/okay/low/awful is shown as mood faces). Placeholders replace labels. Required: the first text column (whitespace-only is rejected) and every number column (an empty number is never stored as 0). A second submit within 500 ms is ignored.
+- `m-timer`: `sec`, `label`.
+
+Left to other tasks, on purpose (these are visible to generated code in this build): `window.Alpine`, `window.MoldeSDK` and the SDK module are reachable, `localStorage` is not blocked here, and the CSP does not stop navigating away. The sandbox (issue 10, section 7) must freeze or hide them and block navigation; the validator (issue 4, V2) must ban the identifiers. The kit does not rely on them being available to app code.
+
 ## 5. Patch format: search/replace blocks, whole-file fallback
 
 Compared:

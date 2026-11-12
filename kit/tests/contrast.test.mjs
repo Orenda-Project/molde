@@ -10,13 +10,8 @@ after(async () => { await browser.close(); srv.close(); });
 
 // runs in the page
 const probe = () => {
-  const parse = (c) => {
-    let m = c.match(/^rgba?\(([^)]+)\)$/);
-    if (m) { const p = m[1].split(/[ ,/]+/).map(Number); return [p[0], p[1], p[2], p[3] === undefined ? 1 : p[3]]; }
-    m = c.match(/^color\(srgb ([^)]+)\)$/);
-    if (m) { const p = m[1].split(/[ /]+/).map(Number); return [p[0] * 255, p[1] * 255, p[2] * 255, p[3] === undefined ? 1 : p[3]]; }
-    throw new Error('cannot parse ' + c);
-  };
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1; const cx = cv.getContext('2d', { willReadFrequently: true });
+  const parse = (c) => { cx.clearRect(0, 0, 1, 1); cx.fillStyle = '#000'; cx.fillStyle = c; cx.fillRect(0, 0, 1, 1); const d = cx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const over = (top, bot) => { const a = top[3] + bot[3] * (1 - top[3]); return [0, 1, 2].map((i) => (top[i] * top[3] + bot[i] * bot[3] * (1 - top[3])) / (a || 1)).concat([a]); };
   const bgOf = (el) => { const layers = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c[3] > 0) layers.push(c); if (c[3] === 1) break; } let acc = [255, 255, 255, 1]; for (const l of layers.reverse()) acc = over(l, acc); return acc; };
   const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
@@ -34,6 +29,9 @@ const probe = () => {
       if (el.id === 'r-ghost') { check(el, 'ghost text', 'text', cs.color); check(el, 'ghost edge', 'ui', cs.borderTopColor, bgOf(el.parentElement)); continue; }
       if (el.id === 'r-danger') { check(el, 'danger text', 'text', cs.color); continue; }
       if (el.id === 'r-opt-off') { check(el, 'option text', 'text', cs.color); check(el, 'option edge', 'ui', cs.borderTopColor, bgOf(el.parentElement)); continue; }
+      if (/^r-c\d+$/.test(el.id)) { check(el, 'categorical ' + el.id.slice(2), 'ui', cs.backgroundColor, bgOf(el.parentElement)); continue; }
+      if (/^r-cc\d+$/.test(el.id)) { check(el, 'mark on ' + el.id.slice(3), 'ui', cs.color, parse(cs.backgroundColor)); continue; }
+      if (/^r-fc\d$/.test(el.id)) { check(el, 'mood face ' + el.id.slice(4), 'ui', cs.color, parse(cs.backgroundColor)); continue; }
       if (el.id === 'r-check') { check(el, 'check ring', 'ui', getComputedStyle(el, '::before').borderTopColor, bgOf(el)); continue; }
       if (el.id === 'r-empty' || el.id === 'r-legend' || el.id.startsWith('r-')) check(el, el.id.slice(2), 'text', cs.color);
     }
@@ -41,7 +39,8 @@ const probe = () => {
   return res;
 };
 const fixtureProbe = () => {
-  const parse = (c) => { let m = c.match(/^rgba?\(([^)]+)\)$/); if (m) { const p = m[1].split(/[ ,/]+/).map(Number); return [p[0], p[1], p[2], p[3] === undefined ? 1 : p[3]]; } m = c.match(/^color\(srgb ([^)]+)\)$/); const p = m[1].split(/[ /]+/).map(Number); return [p[0] * 255, p[1] * 255, p[2] * 255, p[3] === undefined ? 1 : p[3]]; };
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1; const cx = cv.getContext('2d', { willReadFrequently: true });
+  const parse = (c) => { cx.clearRect(0, 0, 1, 1); cx.fillStyle = '#000'; cx.fillStyle = c; cx.fillRect(0, 0, 1, 1); const d = cx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const over = (t, b) => { const a = t[3] + b[3] * (1 - t[3]); return [0, 1, 2].map((i) => (t[i] * t[3] + b[i] * b[3] * (1 - t[3])) / (a || 1)).concat([a]); };
   const bgOf = (el) => { const layers = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c[3] > 0) layers.push(c); if (c[3] === 1) break; } let acc = [255, 255, 255, 1]; for (const l of layers.reverse()) acc = over(l, acc); return acc; };
   const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };

@@ -49,42 +49,51 @@ test('empty database (no seed): every fixture renders with no console output', a
   }
 });
 
-test('interaction: exercise add, stat updates, remove with Undo, timer', async () => {
+test('interaction: exercise set grouped with last session, remove with Undo, timer', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'exercise');
-  const stat = () => page.locator('m-stat .stat').innerText();
-  assert.equal(await stat(), '118');
-  await page.fill('input[name=what]', 'Yoga'); await page.fill('input[name=mins]', '20'); await page.click('button[type=submit]');
-  assert.equal(await stat(), '138');
-  assert.match(await page.locator('m-list .m-row').first().innerText(), /Yoga/);
-  await page.locator('m-list .m-x').first().click();
-  assert.equal(await stat(), '118'); await page.locator('.m-toast button', { hasText: 'Undo' }).click(); assert.equal(await stat(), '138');
+  const squat = () => page.locator('.m-gh', { hasText: 'Squat' });
+  assert.match(await squat().innerText(), /Mon|Tue|Wed|Thu|Fri|Sat|Sun/, 'old session is dated');
+  await page.fill('input[name=exercise]', 'Squat'); await page.fill('input[name=kg]', '62.5'); await page.fill('input[name=reps]', '5'); await page.click('button[type=submit]');
+  assert.match(await squat().innerText(), /Last time 60 kg × 7 · 3 sets/);
+  assert.match(await page.locator('.m-row', { hasText: '62.5 kg × 5' }).innerText(), /Set 1/);
+  await page.locator('.m-row', { hasText: '62.5 kg × 5' }).locator('.m-x').click();
+  assert.equal(await page.locator('.m-row', { hasText: '62.5 kg × 5' }).count(), 0);
+  await page.locator('.m-toast button', { hasText: 'Undo' }).click(); assert.equal(await page.locator('.m-row', { hasText: '62.5 kg × 5' }).count(), 1);
   await page.locator('m-timer button', { hasText: 'Start' }).click(); await page.waitForTimeout(1200);
-  assert.notEqual((await page.locator('.m-clock').innerText()), '1:30'); await page.locator('m-timer button', { hasText: 'Pause' }).click();
+  assert.notEqual(await page.locator('.m-clock').innerText(), '1:30'); await page.locator('m-timer button', { hasText: 'Pause' }).click();
   await ctx.close(); assert.deepEqual(log, []);
 });
-test('interaction: habits tick, streak, add habit', async () => {
+test('interaction: habits grid tap today and a past day, streak lead, add habit', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'habits');
-  const walk = page.locator('.m-row', { hasText: 'Walk 30 minutes' });
-  assert.equal(await walk.locator('.check').getAttribute('aria-pressed'), 'false');
-  await walk.locator('.check').click();
-  assert.equal(await walk.locator('.check').getAttribute('aria-pressed'), 'true');
-  assert.match(await walk.innerText(), /4 days in a row/); assert.equal(await page.locator('m-stat .stat').innerText(), '3');
+  const walk = page.locator('.m-hrow', { hasText: 'Walk 30 minutes' });
+  assert.match(await page.locator('.m-lead').innerText(), /7\s+day streak[\s\S]*Done today: 2 of 4/);
+  assert.equal(await walk.locator('.m-cell').first().getAttribute('aria-pressed'), 'false');
+  await walk.locator('.m-cell').first().click();
+  assert.equal(await walk.locator('.m-cell').first().getAttribute('aria-pressed'), 'true');
+  assert.match(await walk.innerText(), /4 days in a row/); assert.match(await page.locator('.m-lead').innerText(), /Done today: 3 of 4/);
+  await walk.locator('.m-cell').nth(4).click(); assert.equal(await walk.locator('.m-cell').nth(4).getAttribute('aria-pressed'), 'true');
   await page.fill('input[name=name]', 'Journal'); await page.click('button[type=submit]');
-  assert.equal(await page.locator('.m-row').count(), 5); assert.match(await page.locator('m-stat').innerText(), /\/ 5/);
+  assert.equal(await page.locator('.m-hrow').count(), 5); assert.match(await page.locator('.m-lead').innerText(), /of 5/);
   await ctx.close(); assert.deepEqual(log, []);
 });
-test('interaction: water quick add + undo, journal mood pick, budget add', async () => {
+test('interaction: water glass + quick add + undo, journal faces, budget lead', async () => {
   let r = await open(browser, srv.base, 'water');
+  assert.equal(await r.page.locator('m-stat .stat').innerText(), '1,250'); assert.equal(await r.page.locator('m-stat svg.m-glass').count(), 1);
+  const h0 = await r.page.locator('.g-fill').getAttribute('points');
   await r.page.locator('button', { hasText: '+500' }).click();
-  assert.equal(await r.page.locator('m-stat .stat').innerText(), '1,750');
+  assert.equal(await r.page.locator('m-stat .stat').innerText(), '1,750'); assert.notEqual(await r.page.locator('.g-fill').getAttribute('points'), h0);
   await r.page.locator('.m-toast button', { hasText: 'Undo' }).click(); assert.equal(await r.page.locator('m-stat .stat').innerText(), '1,250');
   await r.ctx.close(); assert.deepEqual(r.log, []);
   r = await open(browser, srv.base, 'journal');
-  await r.page.locator('label.m-opt', { hasText: 'Low' }).click(); await r.page.fill('textarea[name=note]', 'Tired but fine.'); await r.page.click('button[type=submit]');
-  assert.match(await r.page.locator('m-list .m-row').first().innerText(), /Tired but fine\.[\s\S]*Low/);
+  const before = await r.page.locator('m-list .m-row').count();
+  await r.page.fill('textarea[name=note]', 'Tired but fine.'); await r.page.click('button[type=submit]');
+  assert.equal(await r.page.locator('m-list .m-row').count(), before, 'no mood chosen: nothing is saved');
+  await r.page.locator('label.m-face', { hasText: 'Low' }).click(); await r.page.click('button[type=submit]');
+  assert.match(await r.page.locator('m-list .m-row').first().innerText(), /Tired but fine\./); assert.equal(await r.page.locator('m-list .m-row').count(), before + 1);
   await r.ctx.close(); assert.deepEqual(r.log, []);
   r = await open(browser, srv.base, 'budget');
-  await r.page.fill('input[name=what]', 'Tea'); await r.page.fill('input[name=amount]', '400'); await r.page.click('button[type=submit]');
-  assert.equal(await r.page.locator('m-stat .stat').innerText(), '56,000');
+  assert.equal(await r.page.locator('m-stat .stat').innerText(), '30,800');
+  await r.page.fill('input[name=description]', 'Tea'); await r.page.fill('input[name=amount]', '400'); await r.page.click('button[type=submit]');
+  assert.equal(await r.page.locator('m-stat .stat').innerText(), '30,400');
   await r.ctx.close(); assert.deepEqual(r.log, []);
 });

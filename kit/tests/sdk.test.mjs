@@ -73,10 +73,10 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.equal(t.remove(id), true); assert.equal(t.rows.length, 0);
     const rec = a.adapter.rows('log').find((r) => r.id === id);
     assert.ok(rec && rec.deleted_at, 'tombstone stays in storage');
-    assert.equal(a.ui.toasts.length, 1); assert.ok(a.ui.toasts[0].undo);
-    a.timers.advance(9000); assert.equal(a.ui.toasts.length, 1);
-    a.ui.toasts[0].undo(); assert.equal(t.rows.length, 1); assert.equal(a.adapter.rows('log')[0].deleted_at, null);
-    t.remove(id); a.timers.advance(10001); assert.equal(a.ui.toasts.length, 0, 'toast expires after 10 s');
+    assert.equal(a.internal.toasts().length, 1); assert.ok(a.internal.toasts()[0].undo);
+    a.timers.advance(9000); assert.equal(a.internal.toasts().length, 1);
+    a.internal.toasts()[0].undo(); assert.equal(t.rows.length, 1); assert.equal(a.adapter.rows('log')[0].deleted_at, null);
+    t.remove(id); a.timers.advance(10001); assert.equal(a.internal.toasts().length, 0, 'toast expires after 10 s');
     assert.equal(t.remove(99), false);
   });
 
@@ -130,7 +130,7 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.equal(c.toggle({ habit: 'read' }), false); assert.equal(c.rows.length, 0);
     assert.equal(a.adapter.rows('check').length, 1, 'tombstone, not hard delete');
     assert.equal(c.toggle({ habit: 'read' }), true); assert.equal(c.has({ habit: 'read' }), true);
-    assert.equal(a.ui.toasts.length, 0, 'toggle never shows the remove toast');
+    assert.equal(a.internal.toasts().length, 0, 'toggle never shows the remove toast');
   });
 
   test(`[${aname}] 11 t.streak: consecutive days, today may be pending, gaps break, needs a date column`, () => {
@@ -139,14 +139,16 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.equal(c.streak({ habit: 'read' }), 0);
     [0, 1, 2, 4].forEach((n) => c.add({ habit: 'read', day: day(n) })); assert.equal(c.streak({ habit: 'read' }), 3);
     [1, 2, 3].forEach((n) => c.add({ habit: 'walk', day: day(n) })); assert.equal(c.streak({ habit: 'walk' }), 3, 'today not done yet keeps yesterday streak');
+    for (let n = 0; n < 9; n++) c.add({ habit: 'long', day: day(n) }); assert.equal(c.streak({ habit: 'long' }), 9);
+    for (let n = 1; n < 6; n++) c.add({ habit: 'five', day: day(n) }); assert.equal(c.streak({ habit: 'five' }), 5);
     c.add({ habit: 'old', day: day(2) }); assert.equal(c.streak({ habit: 'old' }), 0);
     assert.throws(() => a.store.t('log').streak({ what: 'x' }), (e) => e.code === 'E_COL');
   });
 
   test(`[${aname}] 12 ui.toast: shows, auto-dismisses after 3 s, returns a dismiss function`, () => {
     const a = sdk(); const off = a.ui.toast('Saved');
-    assert.deepEqual(a.ui.toasts.map((t) => t.msg), ['Saved']); a.timers.advance(2999); assert.equal(a.ui.toasts.length, 1); a.timers.advance(2); assert.equal(a.ui.toasts.length, 0);
-    const off2 = a.ui.toast('Again'); off2(); assert.equal(a.ui.toasts.length, 0); off();
+    assert.deepEqual(a.internal.toasts().map((t) => t.msg), ['Saved']); a.timers.advance(2999); assert.equal(a.internal.toasts().length, 1); a.timers.advance(2); assert.equal(a.internal.toasts().length, 0);
+    const off2 = a.ui.toast('Again'); off2(); assert.equal(a.internal.toasts().length, 0); off();
   });
 
   test(`[${aname}] 13 ui.timer: counts down, fires cb once, stop and restart`, () => {
@@ -164,7 +166,7 @@ for (const [aname, mk] of Object.entries(adapters)) {
     const d = new Date(j.at); assert.deepEqual([d.getHours(), d.getMinutes(), d.getDate()], [7, 30, 13], 'next occurrence');
     assert.equal(j.text.length, 140);
     assert.throws(() => a.app.notify('tomorrow', 'x'), (e) => e.code === 'E_ARG');
-    const b = sdk(); b.app.notify(T0 + 5, 'x'); assert.equal(b.app._notifications.length, 1);
+    const b = sdk(); b.app.notify(T0 + 5, 'x'); assert.equal(b.internal.notifications.length, 1);
   });
 
   test(`[${aname}] 15 app.fmt: date, time, rel, and Urdu digits`, () => {
@@ -186,13 +188,19 @@ for (const [aname, mk] of Object.entries(adapters)) {
   });
 }
 
-test('the public surface is exactly the 16 contract calls', () => {
+test('the public surface is exactly the 16 contract calls (Object.keys), t.rows is a frozen copy', () => {
   assert.equal(CALLS.length, 16);
   const { store, ui, app } = createSDK({ manifest });
   const t = store.t('log');
-  const pub = (o, pre) => Object.keys(o).filter((k) => typeof o[k] === 'function' && !k.startsWith('_') && k !== 'toJSON').map((k) => pre + '.' + k);
-  const got = [...pub(store, 'store'), ...pub(t, 't'), ...pub(ui, 'ui'), ...pub(app, 'app')].sort();
-  assert.deepEqual(got, CALLS.map((c) => c).sort());
+  assert.deepEqual(Object.keys(store).sort(), ['kv', 't']);
+  assert.deepEqual(Object.keys(ui).sort(), ['timer', 'toast']);
+  assert.deepEqual(Object.keys(app).sort(), ['fmt', 'notify', 'today']);
+  assert.deepEqual(Object.keys(t).sort(), ['add', 'group', 'has', 'remove', 'series', 'set', 'streak', 'sum', 'toggle']);
+  const all = [...Object.keys(store).map((k) => 'store.' + k), ...Object.keys(t).map((k) => 't.' + k), ...Object.keys(ui).map((k) => 'ui.' + k), ...Object.keys(app).map((k) => 'app.' + k)];
+  assert.deepEqual(all.sort(), [...CALLS].sort());
+  t.add({ what: 'x' });
+  assert.throws(() => t.rows.push({}), TypeError); assert.throws(() => { t.rows[0].what = 'y'; }, TypeError);
+  assert.equal(t.rows[0].what, 'x'); assert.ok(Object.isFrozen(t.rows));
 });
 
 test('sqlite adapter issues no DDL for app tables and keeps apps apart', () => {
@@ -202,4 +210,109 @@ test('sqlite adapter issues no DDL for app tables and keeps apps apart', () => {
   A.store.t('log').add({ what: 'mine' });
   assert.equal(B.store.t('log').rows.length, 0);
   assert.deepEqual(db.prepare("select name from sqlite_master order by name").all(), before, 'schema unchanged by app activity');
+});
+
+
+/* ---- round 2: data and argument hardening ---- */
+const typed = (fn, code) => assert.throws(fn, (e) => e instanceof MoldeError && e.code === code && !(e instanceof TypeError), `expected MoldeError ${code}`);
+const { MoldeError } = require('../src/sdk.cjs');
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+for (const [aname, mk] of Object.entries(adapters)) {
+  const sdk2 = (m = manifest, adapter) => { const ctx = mk(); return { ctx, s: createSDK({ adapter: adapter || ctx.make(), manifest: m, now: () => T0, locale: 'en-US' }) }; };
+
+  test(`[${aname}] a column added later: old rows read with type defaults (no NaN, no undefined)`, () => {
+    const ctx = mk(); const adapter = ctx.make();
+    const old = { tables: { log: { what: 'text' } } };
+    const a = createSDK({ adapter, manifest: old, now: () => T0 }); a.store.t('log').add({ what: 'before', at: at(2) });
+    const grown = { tables: { log: { what: 'text', mins: 'num', kind: 'pick:run|swim', ok: 'bool', note: 'long', when: 'date', extra: 'text' } } };
+    const b = createSDK({ adapter: ctx.reopen(adapter), manifest: grown, now: () => T0 });
+    const r = b.store.t('log').rows[0];
+    assert.deepEqual([r.what, r.mins, r.kind, r.ok, r.note, r.extra], ['before', 0, 'run', false, '', '']);
+    assert.equal(r.when, ymd(new Date(at(2))), 'missing date column falls back to the row\'s own day');
+    assert.ok(Object.values(r).every((v) => v !== undefined && !(typeof v === 'number' && Number.isNaN(v))));
+    assert.equal(b.store.t('log').sum('mins'), 0); assert.equal(b.store.t('log').series('mins', { last: 3 }).length, 3);
+    const g = b.store.t('log').group('kind', 'mins'); assert.deepEqual(g, [{ k: 'run', v: 0 }]);
+  });
+
+  test(`[${aname}] reserved names: store.t / store.kv('constructor' | '__proto__' | 'toString') raise E_TABLE, prototype untouched`, () => {
+    const { s } = sdk2();
+    for (const k of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'prototype', '']) {
+      typed(() => s.store.t(k), 'E_TABLE'); typed(() => s.store.kv(k, 1), 'E_TABLE');
+    }
+    typed(() => s.store.t(undefined), 'E_TABLE'); typed(() => s.store.kv(null, 1), 'E_TABLE');
+    assert.equal(Object.keys(Object.prototype).length, 0); assert.equal({}.polluted, undefined);
+    const box = s.store.kv('good_key', 3); box.v = 4; assert.equal(box.v, 4);
+    const evil = createSDK({ manifest: { tables: { ['__proto__']: { a: 'text' }, ok: { constructor: 'text', toString: 'num' } } } });
+    assert.ok(evil.store.t('ok')); typed(() => evil.store.t('ok').sum('toString2'), 'E_COL'); typed(() => evil.store.t('ok').has({ hasOwnProperty: 1 }), 'E_COL');
+  });
+
+  test(`[${aname}] huge, negative, NaN and Infinity numbers are clamped; series(last) is capped at 366`, () => {
+    const { s } = sdk2(); const t = s.store.t('log');
+    t.add({ mins: 1e308 }); t.add({ mins: Infinity }); t.add({ mins: -Infinity }); t.add({ mins: NaN }); t.add({ mins: -5 }); t.add({ mins: 'abc' });
+    assert.deepEqual(t.rows.map((r) => r.mins), [1e12, 1e12, -1e12, 0, -5, 0]);
+    assert.equal(t.series('mins', { last: 100000 }).length, 366); assert.equal(t.series('mins', { last: 0 }).length, 1); assert.equal(t.series('mins', { last: 2.9 }).length, 2);
+    typed(() => t.series('mins', { last: NaN }), 'E_ARG'); typed(() => t.series('mins', { last: 'x' }), 'E_ARG');
+    assert.ok(Number.isFinite(t.sum('mins')));
+  });
+
+  test(`[${aname}] bad arguments raise a typed MoldeError, never a raw TypeError, never silently act`, () => {
+    const { s } = sdk2(); const t = s.store.t('log'), c = s.store.t('check');
+    c.add({ habit: 'read' });
+    typed(() => t.add('abc'), 'E_ARG'); typed(() => t.add(null), 'E_ARG'); typed(() => t.add([1]), 'E_ARG'); typed(() => t.add(), 'E_ARG');
+    typed(() => c.add({ habit: 'x', day: '2026-02-31' }), 'E_ARG'); typed(() => c.add({ day: 'tomorrow' }), 'E_ARG'); typed(() => c.add({ day: '2026-13-01' }), 'E_ARG');
+    typed(() => t.set('1', {}), 'E_ARG'); typed(() => t.set(1, 'x'), 'E_ARG'); typed(() => t.remove('a'), 'E_ARG'); typed(() => t.remove(undefined), 'E_ARG');
+    typed(() => s.app.fmt(undefined), 'E_ARG'); typed(() => s.app.fmt(null, 'date'), 'E_ARG'); typed(() => s.app.fmt('nope'), 'E_ARG'); typed(() => s.app.fmt(NaN), 'E_ARG'); typed(() => s.app.fmt('2026-02-31'), 'E_ARG'); typed(() => s.app.fmt(1, 'long'), 'E_ARG');
+    for (const bad of [NaN, -5, 0, Infinity, '3', undefined, null, 1e9]) typed(() => s.ui.timer(bad), 'E_ARG');
+    typed(() => s.ui.timer(5, 'cb'), 'E_ARG');
+    for (const w of ['25:99', '24:00', '12:60', 'noon', undefined, NaN, new Date('x')]) typed(() => s.app.notify(w, 'x'), 'E_ARG');
+    typed(() => s.app.notify('10:00', ''), 'E_ARG'); typed(() => s.app.notify('10:00'), 'E_ARG');
+    typed(() => s.ui.toast(undefined), 'E_ARG'); typed(() => s.ui.toast(''), 'E_ARG'); typed(() => s.ui.toast({}), 'E_ARG'); typed(() => s.ui.toast('x', 'undo'), 'E_ARG');
+    assert.equal(c.rows.length, 1);
+    typed(() => c.toggle(), 'E_ARG'); typed(() => c.toggle({}), 'E_ARG'); typed(() => c.toggle('read'), 'E_ARG'); typed(() => c.toggle({ nope: 1 }), 'E_COL');
+    assert.equal(c.rows.length, 1, 'toggle() without a key must not remove anything'); assert.equal(c.has({ habit: 'read' }), true);
+    typed(() => c.has(), 'E_ARG'); typed(() => c.streak(), 'E_ARG'); typed(() => c.streak({ nope: 1 }), 'E_COL');
+    typed(() => t.sum('nope'), 'E_COL'); typed(() => t.sum('mins', { where: { nope: 1 } }), 'E_COL'); typed(() => t.sum('mins', { since: 'year' }), 'E_ARG'); typed(() => t.sum('mins', 5), 'E_ARG');
+    typed(() => t.series('nope'), 'E_COL'); typed(() => t.series('mins', { by: 'hour' }), 'E_ARG'); typed(() => t.series('mins', { op: 'max' }), 'E_ARG');
+    typed(() => t.group('nope'), 'E_COL'); typed(() => t.group(), 'E_COL'); typed(() => t.group('kind', 'nope'), 'E_COL');
+    assert.equal(s.ui.toast('ok') instanceof Function, true);
+  });
+}
+
+test('midnight: today() follows the clock, and the reactive clock is bumped by refresh() and by every action', () => {
+  let nowMs = new Date(2026, 10, 12, 23, 59, 50).getTime(); const sets = [];
+  const reactive = (o) => new Proxy(o, { set(t, k, v) { sets.push(k + ':' + v); t[k] = v; return true; } });
+  const s = createSDK({ manifest, now: () => nowMs, reactive });
+  assert.equal(s.app.today(), '2026-11-12');
+  nowMs += 20000; assert.equal(s.app.today(), '2026-11-13', 'answers from the live clock');
+  s.internal.refresh(); assert.ok(sets.includes('d:2026-11-13'), 'reactive clock changed so effects re-run');
+  nowMs += 864e5; sets.length = 0; s.store.t('check').add({ habit: 'x' }); assert.ok(sets.includes('d:2026-11-14'), 'an action refreshes the clock');
+  assert.equal(s.store.t('check').rows[0].day, '2026-11-14');
+  nowMs += 864e5; sets.length = 0; s.store.t('check').toggle({ habit: 'x' }); assert.ok(sets.includes('d:2026-11-15'));
+});
+
+for (const tz of ['America/Los_Angeles', 'Asia/Karachi', 'UTC', 'Pacific/Kiritimati']) {
+  test(`timezone ${tz}: date-only strings never shift a day; today() is the local day`, () => {
+    const out = JSON.parse(execFileSync(process.execPath, [fileURLToPath(new URL('./tz-probe.cjs', import.meta.url))], { env: { ...process.env, TZ: tz } }).toString());
+    assert.deepEqual(out, { dateOnly: 'Nov 12', jan1: 'Jan 1', prevYear: 'Dec 31, 2025', rel: 'Yesterday, 12:00 PM', today: '2026-11-12', tz });
+  });
+}
+
+test('sqlite: a corrupt JSON row is skipped and recorded, the rest of the table still loads', () => {
+  const db = new Database(':memory:'); ensureSchema(db);
+  const ad = sqliteAdapter(db, 'a'); const s0 = createSDK({ adapter: ad, manifest, now: () => T0 });
+  s0.store.t('log').add({ what: 'one', mins: 1 }); s0.store.t('log').add({ what: 'two', mins: 2 });
+  db.prepare("insert into records(app_id,tbl,id,data,created_at,updated_at) values('a','log',50,'{not json',1,1)").run();
+  db.prepare("insert into kv(app_id,key,val) values('a','goal','{bad')").run();
+  const s = createSDK({ adapter: sqliteAdapter(db, 'a'), manifest, now: () => T0 });
+  assert.deepEqual(s.store.t('log').rows.map((r) => r.what), ['one', 'two']);
+  assert.equal(s.store.kv('goal', 7).v, 7, 'corrupt kv falls back to the default');
+  const errs = s.internal.errors(); assert.equal(errs.length, 2); assert.ok(errs.some((e) => e.tbl === 'log' && e.id === 50));
+  assert.equal(s.store.t('log').add({ what: 'three' }), 51, 'new ids still never collide with the unreadable row');
+});
+
+test('memory adapter parity: unreadable data in a row does not throw (loose read)', () => {
+  const ad = memoryAdapter(); ad.put('log', { id: 1, at: T0, deleted_at: null, data: null }); ad.put('log', { id: 2, at: T0, deleted_at: null, data: { mins: 'zzz', kind: 7 } });
+  const r = createSDK({ adapter: ad, manifest }).store.t('log').rows; assert.deepEqual([r[0].mins, r[1].mins, r[1].kind], [0, 0, 'run']);
 });

@@ -19,11 +19,21 @@ function sqliteAdapter(db, appId) {
   const nx = db.prepare('SELECT COALESCE(MAX(id),0)+1 AS n FROM records WHERE app_id=? AND tbl=?');
   const kg = db.prepare('SELECT val FROM kv WHERE app_id=? AND key=?');
   const ks = db.prepare('INSERT INTO kv(app_id,key,val) VALUES(?,?,?) ON CONFLICT(app_id,key) DO UPDATE SET val=excluded.val');
+  const errors = [];
   return {
-    rows: (tbl) => sel.all(appId, tbl).map((r) => ({ id: r.id, at: r.created_at, deleted_at: r.deleted_at, data: JSON.parse(r.data) })),
+    errors,
+    // a row whose JSON is corrupt is skipped and recorded in `errors`; it never makes the whole table throw
+    rows: (tbl) => {
+      const out = [];
+      for (const r of sel.all(appId, tbl)) {
+        try { out.push({ id: r.id, at: r.created_at, deleted_at: r.deleted_at, data: JSON.parse(r.data) }); }
+        catch (e) { errors.push({ tbl, id: r.id, msg: 'unreadable row skipped: ' + e.message }); }
+      }
+      return out;
+    },
     put: (tbl, rec) => { up.run(appId, tbl, rec.id, JSON.stringify(rec.data), rec.at, Date.now(), rec.deleted_at == null ? null : rec.deleted_at); },
     nextId: (tbl) => nx.get(appId, tbl).n,
-    kvGet: (k) => { const r = kg.get(appId, k); return r ? JSON.parse(r.val) : undefined; },
+    kvGet: (k) => { const r = kg.get(appId, k); if (!r) return undefined; try { return JSON.parse(r.val); } catch (e) { errors.push({ tbl: 'kv', id: k, msg: 'unreadable value skipped: ' + e.message }); return undefined; } },
     kvSet: (k, v) => { ks.run(appId, k, JSON.stringify(v)); },
   };
 }

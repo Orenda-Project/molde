@@ -26,12 +26,17 @@ export function seedFor(manifest, seed, now = new Date()) {
   return out;
 }
 
-export function pageHtml(name, { theme, seed = true } = {}) {
+export function pageHtml(name, { theme, seed = true, grow = false, big = 0 } = {}) {
   const dir = join(KIT, 'fixtures', name);
   const manifest = JSON.parse(readFileSync(join(dir, 'app.json'), 'utf8'));
   const html = readFileSync(join(dir, 'app.html'), 'utf8');
   const sp = join(dir, 'seed.json');
-  const s = seed && existsSync(sp) ? seedFor(manifest, JSON.parse(readFileSync(sp, 'utf8'))) : null;
+  let s = seed && existsSync(sp) ? seedFor(manifest, JSON.parse(readFileSync(sp, 'utf8'))) : null;
+  if (big && s) { // N generated rows in the first table (performance tests)
+    const tbl = Object.keys(manifest.tables)[0], cols = manifest.tables[tbl], now = Date.now();
+    s.tables[tbl] = Array.from({ length: big }, (_, i) => ({ id: i + 1, at: now - i * 60000, deleted_at: null, data: Object.fromEntries(Object.entries(cols).map(([c, ty]) => [c, ty === 'num' ? i % 500 : ty.startsWith('pick:') ? ty.slice(5).split('|')[i % 3] : ty === 'date' ? '2026-01-01' : 'Row ' + i])) }));
+  }
+  if (grow) Object.assign(manifest.tables[Object.keys(manifest.tables)[0]], { stars: 'num', mood2: 'pick:calm|busy', ok: 'bool', note2: 'text', on: 'date' }); // columns added after rows exist
   return `<!doctype html>
 <html lang="en" data-theme="${theme || manifest.theme}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${manifest.name}</title>
 <link rel="stylesheet" href="/themes.css"><link rel="stylesheet" href="/kit.css"></head><body>
@@ -49,7 +54,7 @@ export function startServer() {
     let m;
     if ((m = u.pathname.match(/^\/app\/(\w+)$/))) {
       res.writeHead(200, { ...h, 'content-type': 'text/html' });
-      return res.end(pageHtml(m[1], { theme: u.searchParams.get('theme'), seed: u.searchParams.get('seed') !== '0' }));
+      return res.end(pageHtml(m[1], { theme: u.searchParams.get('theme'), seed: u.searchParams.get('seed') !== '0', grow: u.searchParams.get('grow') === '1', big: +u.searchParams.get('big') || 0 }));
     }
     if (u.pathname === '/specimen') { res.writeHead(200, { ...h, 'content-type': 'text/html' }); return res.end(readFileSync(join(here, 'specimen.html'), 'utf8')); }
     const f = join(KIT, u.pathname.replace(/\.\./g, ''));
@@ -76,17 +81,25 @@ export async function launch() {
 }
 
 /** Open a fixture, collecting every console message, page error and failed request. */
-export async function open(browser, base, name, { w = 412, h = 915, theme, scheme = 'light', seed = true } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 1 });
+export async function open(browser, base, name, { w = 412, h = 915, theme, scheme = 'light', seed = true, q = '', ctxOpts = {}, before } = {}) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 1, ...ctxOpts });
   const page = await ctx.newPage();
   const log = [];
   page.on('console', (m) => log.push(`console.${m.type()}: ${m.text()}`));
   page.on('pageerror', (e) => log.push('pageerror: ' + e.message));
   page.on('requestfailed', (r) => log.push('requestfailed: ' + r.url()));
   page.on('response', (r) => { if (r.status() >= 400) log.push(`http ${r.status()}: ${r.url()}`); });
-  await page.goto(`${base}/app/${name}?seed=${seed ? 1 : 0}${theme ? '&theme=' + theme : ''}`);
+  if (before) await before(page);
+  await page.goto(`${base}/app/${name}?seed=${seed ? 1 : 0}${theme ? '&theme=' + theme : ''}${q}`);
   await page.waitForFunction(() => document.querySelectorAll('m-stat,m-chart,m-list,m-form,m-timer').length === 0 || Array.from(document.querySelectorAll('m-stat,m-chart,m-list,m-form,m-timer')).every((e) => e.firstElementChild));
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(450);
   return { page, ctx, log };
+}
+
+/** Add markup with its own Alpine scope to a running page and wait for the kit components inside it. */
+export async function inject(page, html, data = '{}') {
+  await page.evaluate(({ html, data }) => { const d = document.createElement('div'); d.id = 'inj'; d.setAttribute('x-data', data); d.innerHTML = html; document.querySelector('main').prepend(d); }, { html, data });
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('#inj m-chart,#inj m-stat,#inj m-list')).every((e) => e.firstElementChild));
+  await page.waitForTimeout(150);
 }

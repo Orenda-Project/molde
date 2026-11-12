@@ -23,7 +23,8 @@ ${r?'Expression: "'+r+`"
 ;
 /* Molde SDK, contract v1: 16 calls on three globals (store, ui, app).
  * UMD: a classic script in the WebView (window.MoldeSDK) and require() in node tests.
- * The host owns storage. This file only talks to an adapter (see memoryAdapter). */
+ * The host owns storage. This file only talks to an adapter (see memoryAdapter).
+ * Every bad argument raises a MoldeError with a code (E_ARG, E_TABLE, E_COL, E_ROW); nothing throws a raw TypeError. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.MoldeSDK = factory();
@@ -31,26 +32,32 @@ ${r?'Expression: "'+r+`"
   'use strict';
 
   class MoldeError extends Error {
-    constructor(code, msg) { super(code + ': ' + msg); this.code = code; }
+    constructor(code, msg) { super(code + ': ' + msg); this.name = 'MoldeError'; this.code = code; }
   }
+  const bad = (code, msg) => { throw new MoldeError(code, msg); };
+  const isObj = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
+  const META = Symbol.for('molde.meta');
 
   /* ---- adapter -------------------------------------------------------------
    * Adapter interface (sync; the WebView bridge keeps a write-through cache):
-   *   rows(tbl)        -> [{id, at, deleted_at, data:{...cols}}]  every record, tombstones included
+   *   rows(tbl)        -> [{id, at, deleted_at, data:{...cols}}]  every readable record, tombstones included
    *   put(tbl, rec)    -> insert or replace one record by id (rec has the same shape)
    *   nextId(tbl)      -> integer id not used before in this table
    *   kvGet(key)       -> stored value or undefined
    *   kvSet(key, val)  -> store a JSON-able value
+   *   errors           -> optional array; an adapter that skips unreadable rows pushes {tbl, id, msg} here
    * No call drops, truncates or hard-deletes anything (contract data-survival rule 1). */
   function memoryAdapter(seed) {
-    const tables = {}, kv = {};
-    const T = (n) => tables[n] || (tables[n] = new Map());
+    const tables = new Map(), kv = new Map(), errors = [];
+    const T = (n) => { if (!tables.has(n)) tables.set(n, new Map()); return tables.get(n); };
+    const clone = (x) => JSON.parse(JSON.stringify(x));
     const a = {
-      rows: (tbl) => Array.from(T(tbl).values()).map((r) => JSON.parse(JSON.stringify(r))),
-      put: (tbl, rec) => { T(tbl).set(rec.id, JSON.parse(JSON.stringify(rec))); },
+      errors,
+      rows: (tbl) => Array.from(T(tbl).values()).map(clone),
+      put: (tbl, rec) => { T(tbl).set(rec.id, clone(rec)); },
       nextId: (tbl) => { let m = 0; for (const id of T(tbl).keys()) if (id > m) m = id; return m + 1; },
-      kvGet: (k) => (k in kv ? JSON.parse(JSON.stringify(kv[k])) : undefined),
-      kvSet: (k, v) => { kv[k] = JSON.parse(JSON.stringify(v)); },
+      kvGet: (k) => (kv.has(k) ? clone(kv.get(k)) : undefined),
+      kvSet: (k, v) => { kv.set(k, clone(v)); },
     };
     if (seed) {
       for (const [tbl, list] of Object.entries(seed.tables || {})) list.forEach((r) => a.put(tbl, r));
@@ -60,29 +67,37 @@ ${r?'Expression: "'+r+`"
   }
 
   /* ---- schema --------------------------------------------------------------- */
-  const TEXT_MAX = 200, LONG_MAX = 2000;
+  const TEXT_MAX = 200, LONG_MAX = 2000, NUM_MAX = 1e12;
+  const p2 = (n) => String(n).padStart(2, '0');
+  const ymd = (d) => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+  const YMD = /^\d{4}-\d{2}-\d{2}$/;
+  const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+  const validYmd = (s) => typeof s === 'string' && YMD.test(s) && ymd(parseYmd(s)) === s;
+  const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; };
+  const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
+  const clampNum = (v) => { const n = Number(v); if (Number.isNaN(n)) return 0; return Math.max(-NUM_MAX, Math.min(NUM_MAX, n)); };
+
   function colDef(type) {
     if (typeof type === 'string' && type.startsWith('pick:')) return { k: 'pick', opts: type.slice(5).split('|') };
     return { k: type };
   }
-  function coerce(def, v, today) {
+  /* strict: used for writes. loose: used for reading stored data (never throws, fills defaults). */
+  function coerce(def, v, dflt, strict) {
+    const miss = v === undefined || v === null;
     switch (def.k) {
-      case 'text': return v == null ? '' : String(v).slice(0, TEXT_MAX);
-      case 'long': return v == null ? '' : String(v).slice(0, LONG_MAX);
-      case 'num': { const n = Number(v); return Number.isFinite(n) ? n : 0; }
-      case 'bool': return v === 'false' ? false : !!v;
-      case 'date': return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : today();
+      case 'text': return miss ? '' : String(v).slice(0, TEXT_MAX);
+      case 'long': return miss ? '' : String(v).slice(0, LONG_MAX);
+      case 'num': return miss ? 0 : clampNum(v);
+      case 'bool': return miss ? false : v === 'false' ? false : !!v;
+      case 'date':
+        if (miss) return dflt();
+        if (validYmd(v)) return v;
+        if (strict) bad('E_ARG', 'date must be a real YYYY-MM-DD, got ' + JSON.stringify(String(v).slice(0, 20)));
+        return dflt();
       case 'pick': return def.opts.includes(v) ? v : def.opts[0];
       default: return v;
     }
   }
-
-  /* ---- dates (all local time) ------------------------------------------------ */
-  const p2 = (n) => String(n).padStart(2, '0');
-  const ymd = (d) => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
-  const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d, 12); };
-  const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; };
-  const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
 
   function createSDK(opts) {
     opts = opts || {};
@@ -93,36 +108,55 @@ ${r?'Expression: "'+r+`"
     const timers = opts.timers || { setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h), setInterval: (f, ms) => setInterval(f, ms), clearInterval: (h) => clearInterval(h) };
     const host = opts.host || {};
     const locale = opts.locale || manifest.locale || (typeof navigator !== 'undefined' && navigator.language) || 'en';
+    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    const tableNames = () => Object.keys(manifest.tables || {});
 
-    const today = () => ymd(new Date(now()));
+    /* today() is reactive across midnight: it reads clock.d (so Alpine re-runs) and answers from the live clock. */
+    const clock = reactive({ d: ymd(new Date(now())) });
+    const refresh = () => { const d = ymd(new Date(now())); if (clock.d !== d) clock.d = d; };
+    const today = () => { void clock.d; return ymd(new Date(now())); };
 
-    /* ---- app (#15, #16, #14) ---- */
+    /* ---- app (#14, #15, #16) ---- */
+    const notifications = [];
+    const HOW = ['date', 'time', 'rel'];
     const app = {
       today,
       fmt(ts, how) {
-        const d = ts instanceof Date ? ts : new Date(ts);
-        if (how === 'time') return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(d);
+        let d;
+        if (ts instanceof Date) d = ts;
+        else if (typeof ts === 'string' && YMD.test(ts)) { if (!validYmd(ts)) bad('E_ARG', 'app.fmt: not a real date: ' + ts); d = parseYmd(ts); }
+        else if (typeof ts === 'number' || typeof ts === 'string') d = new Date(ts);
+        else bad('E_ARG', 'app.fmt(ts, how): ts is a ms timestamp, a Date or "YYYY-MM-DD"');
+        if (Number.isNaN(d.getTime())) bad('E_ARG', 'app.fmt: invalid time ' + String(ts).slice(0, 30));
+        how = how === undefined ? 'date' : how;
+        if (!HOW.includes(how)) bad('E_ARG', "app.fmt: how is one of 'date', 'time', 'rel'");
+        const tf = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+        if (how === 'time') return tf.format(d);
+        const t0 = new Date(now());
         if (how === 'rel') {
-          const t0 = new Date(now());
           const days = Math.round((parseYmd(ymd(t0)) - parseYmd(ymd(d))) / 864e5);
-          const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(d);
-          if (days === 0) return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(0, 'day').replace(/^./, (c) => c.toUpperCase()) + ', ' + time;
-          if (days === 1) return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(-1, 'day').replace(/^./, (c) => c.toUpperCase()) + ', ' + time;
-          if (days > 1 && days < 7) return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d) + ', ' + time;
+          const rt = (n) => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(n, 'day').replace(/^./, (c) => c.toUpperCase());
+          if (days === 0) return rt(0) + ', ' + tf.format(d);
+          if (days === 1) return rt(-1) + ', ' + tf.format(d);
+          if (days > 1 && days < 7) return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d) + ', ' + tf.format(d);
         }
-        return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: d.getFullYear() === new Date(now()).getFullYear() ? undefined : 'numeric' }).format(d);
+        return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: d.getFullYear() === t0.getFullYear() ? undefined : 'numeric' }).format(d);
       },
       notify(when, text) {
         let at;
         if (when instanceof Date) at = when.getTime();
         else if (typeof when === 'number') at = when;
         else if (typeof when === 'string' && /^\d{1,2}:\d{2}$/.test(when)) {
-          const [h, m] = when.split(':').map(Number); const d = new Date(now()); d.setHours(h, m, 0, 0);
+          const [h, m] = when.split(':').map(Number);
+          if (h > 23 || m > 59) bad('E_ARG', 'app.notify: "' + when + '" is not a time of day');
+          const d = new Date(now()); d.setHours(h, m, 0, 0);
           if (d.getTime() <= now()) d.setDate(d.getDate() + 1);
           at = d.getTime();
-        } else throw new MoldeError('E_ARG', 'app.notify(when, text): when is a Date, a ms timestamp or "HH:MM"');
+        } else bad('E_ARG', 'app.notify(when, text): when is a Date, a ms timestamp or "HH:MM"');
+        if (!Number.isFinite(at)) bad('E_ARG', 'app.notify: when is not a valid time');
+        if ((typeof text !== 'string' && typeof text !== 'number') || String(text).trim() === '') bad('E_ARG', 'app.notify: text must be a non-empty string');
         const job = { at, text: String(text).slice(0, 140) };
-        if (host.notify) host.notify(job); else (app._notifications = app._notifications || []).push(job);
+        if (host.notify) host.notify(job); else notifications.push(job);
         return job;
       },
     };
@@ -130,20 +164,24 @@ ${r?'Expression: "'+r+`"
     /* ---- ui (#12, #13) ---- */
     const uiState = reactive({ toasts: [] });
     let toastId = 0;
+    const dismiss = (id) => { const i = uiState.toasts.findIndex((t) => t.id === id); if (i >= 0) uiState.toasts.splice(i, 1); };
     const ui = {
-      get toasts() { return uiState.toasts; },
       toast(msg, undo) {
+        if ((typeof msg !== 'string' && typeof msg !== 'number') || String(msg).trim() === '') bad('E_ARG', 'ui.toast(msg): msg must be a non-empty string');
+        if (undo !== undefined && typeof undo !== 'function') bad('E_ARG', 'ui.toast: the second argument is an undo function');
         const id = ++toastId;
-        uiState.toasts.push({ id, msg: String(msg), undo: typeof undo === 'function' ? undo : null });
-        const h = timers.setTimeout(() => ui._dismiss(id), undo ? 10000 : 3000);
-        return () => { timers.clearTimeout(h); ui._dismiss(id); };
+        uiState.toasts.push({ id, msg: String(msg).slice(0, 140), undo: undo || null });
+        const h = timers.setTimeout(() => dismiss(id), undo ? 10000 : 3000);
+        return () => { timers.clearTimeout(h); dismiss(id); };
       },
-      _dismiss(id) { const i = uiState.toasts.findIndex((t) => t.id === id); if (i >= 0) uiState.toasts.splice(i, 1); },
       timer(sec, cb) {
+        if (typeof sec !== 'number' || !Number.isFinite(sec) || sec <= 0 || sec > 86400) bad('E_ARG', 'ui.timer(sec, cb): sec is a number from 1 to 86400');
+        if (cb !== undefined && typeof cb !== 'function') bad('E_ARG', 'ui.timer: cb must be a function');
+        sec = Math.ceil(sec);
         const s = reactive({ left: sec, running: false });
         let h = null;
         const stop = () => { if (h != null) timers.clearInterval(h); h = null; s.running = false; };
-        const tm = {
+        return {
           get left() { return s.left; },
           get running() { return s.running; },
           start() {
@@ -157,44 +195,60 @@ ${r?'Expression: "'+r+`"
           },
           stop,
         };
-        return tm;
       },
     };
 
     /* ---- store ---- */
-    const handles = {}, boxes = {};
+    const handles = new Map(), boxes = new Map();
     function table(name) {
-      if (handles[name]) return handles[name];
-      const schema = manifest.tables && manifest.tables[name];
-      if (!schema) throw new MoldeError('E_TABLE', "store.t('" + name + "') not in tables [" + Object.keys(manifest.tables || {}).join(', ') + ']. Use one of those');
-      const defs = {}; let dateCol = null;
+      if (typeof name !== 'string' || !own(manifest.tables || {}, name)) bad('E_TABLE', "store.t('" + String(name).slice(0, 40) + "') not in tables [" + tableNames().join(', ') + ']. Use one of those');
+      if (handles.has(name)) return handles.get(name);
+      const schema = manifest.tables[name];
+      const defs = Object.create(null); let dateCol = null;
       for (const [c, ty] of Object.entries(schema)) { defs[c] = colDef(ty); if (!dateCol && defs[c].k === 'date') dateCol = c; }
-      const toRow = (rec) => Object.assign({ id: rec.id, at: rec.at }, rec.data);
-      const all = adapter.rows(name);
-      const st = reactive({ rows: all.filter((r) => !r.deleted_at).sort((a, b) => a.at - b.at || a.id - b.id).map(toRow) });
+      const cols = Object.keys(defs);
+      const known = (k) => k === 'id' || k === 'at' || k in defs;
+      const needCol = (c, what) => { if (c != null && !(typeof c === 'string' && known(c) && !(c in Object.prototype))) bad('E_COL', "'" + String(c).slice(0, 40) + "' is not a column of '" + name + "' (" + what + '). Columns: ' + cols.join(', ')); };
+      const needKey = (k, what) => {
+        if (!isObj(k) || !Object.keys(k).length) bad('E_ARG', what + ': pass a key object like {habit: "Read"}');
+        Object.keys(k).forEach((c) => needCol(c, what));
+      };
+      const needOpts = (o, what) => {
+        if (o == null) return {};
+        if (!isObj(o)) bad('E_ARG', what + ': options must be an object');
+        if (o.since != null && !['day', 'week', 'month'].includes(o.since)) bad('E_ARG', what + ": since is 'day', 'week' or 'month'");
+        if (o.where != null) { if (!isObj(o.where)) bad('E_ARG', what + ': where must be an object'); Object.keys(o.where).forEach((c) => needCol(c, what + ' where')); }
+        return o;
+      };
+      const dflt = (rec) => () => ymd(new Date(rec ? rec.at : now()));
+      const toRow = (rec) => {
+        const row = { id: rec.id, at: rec.at };
+        const data = isObj(rec.data) ? rec.data : {};
+        for (const c of cols) row[c] = coerce(defs[c], data[c], dflt(rec), false);
+        return row;
+      };
+      const st = reactive({ rows: adapter.rows(name).filter((r) => !r.deleted_at).sort((a, b) => a.at - b.at || a.id - b.id).map(toRow) });
       const live = () => st.rows;
       const day = (r) => (dateCol && r[dateCol]) || ymd(new Date(r.at));
       const record = (id) => adapter.rows(name).find((r) => r.id === id);
 
-      function pickCols(obj, fillDefaults) {
+      function pickCols(obj, fill) {
         const data = {};
-        for (const [c, def] of Object.entries(defs)) {
-          if (obj && c in obj) data[c] = coerce(def, obj[c], today);
-          else if (fillDefaults) data[c] = coerce(def, undefined, today);
+        for (const c of cols) {
+          if (c in obj) data[c] = coerce(defs[c], obj[c], today, true);
+          else if (fill) data[c] = coerce(defs[c], undefined, today, true);
         }
         return data;
       }
       const eq = (r, o) => Object.entries(o).every(([k, v]) => r[k] === v);
       const keyOf = (k, withDay) => { const o = Object.assign({}, k); if (withDay && dateCol && !(dateCol in o)) o[dateCol] = today(); return o; };
+      const val = (r, col) => (col == null ? 1 : Number(r[col]) || 0);
       function window_(o) {
         const t0 = parseYmd(today());
-        const since = o && o.since;
-        const from = since === 'day' ? t0 : since === 'week' ? addDays(t0, -6) : since === 'month' ? addDays(t0, -29) : null;
+        const from = o.since === 'day' ? t0 : o.since === 'week' ? addDays(t0, -6) : o.since === 'month' ? addDays(t0, -29) : null;
         const f = from ? ymd(from) : null;
-        return live().filter((r) => (!o || !o.where || eq(r, o.where)) && (!f || day(r) >= f));
+        return live().filter((r) => (!o.where || eq(r, o.where)) && (!f || day(r) >= f));
       }
-      const val = (r, col) => (col == null ? 1 : Number(r[col]) || 0);
-
       function softDelete(id) {
         const i = st.rows.findIndex((r) => r.id === id);
         if (i < 0) return false;
@@ -204,28 +258,31 @@ ${r?'Expression: "'+r+`"
       }
 
       const h = {
-        name,
-        toJSON: () => name,
-        get rows() { return st.rows; },
-        get cols() { return Object.keys(defs); },
-        _schema: () => JSON.parse(JSON.stringify(schema)),
         /* #3 */ add(row) {
+          if (!isObj(row)) bad('E_ARG', 't.add(row): row is an object like {what: "Run", mins: 30}');
+          refresh();
+          const data = pickCols(row, true);
           const id = adapter.nextId(name);
-          const at = row && Number.isFinite(row.at) ? row.at : now();
-          const rec = { id, at, deleted_at: null, data: pickCols(row, true) };
+          const at = Number.isFinite(row.at) ? row.at : now();
+          const rec = { id, at, deleted_at: null, data };
           adapter.put(name, rec);
           st.rows.push(toRow(rec));
           return id;
         },
         /* #4 */ set(id, patch) {
+          if (!Number.isInteger(id)) bad('E_ARG', 't.set(id, patch): id is the number returned by t.add');
+          if (!isObj(patch)) bad('E_ARG', 't.set(id, patch): patch is an object');
+          refresh();
           const rec = record(id);
-          if (!rec || rec.deleted_at) throw new MoldeError('E_ROW', name + ' has no row ' + id);
+          if (!rec || rec.deleted_at) bad('E_ROW', name + ' has no row ' + id);
           const data = pickCols(patch, false);
           rec.data = Object.assign(rec.data, data); adapter.put(name, rec);
           Object.assign(st.rows.find((r) => r.id === id), data);
           return true;
         },
         /* #5 */ remove(id) {
+          if (!Number.isInteger(id)) bad('E_ARG', 't.remove(id): id is the number returned by t.add');
+          refresh();
           if (!softDelete(id)) return false;
           ui.toast('Removed', () => {
             const rec = record(id); rec.deleted_at = null; adapter.put(name, rec);
@@ -233,10 +290,15 @@ ${r?'Expression: "'+r+`"
           });
           return true;
         },
-        /* #6 */ sum(col, o) { return window_(o).reduce((s, r) => s + val(r, col), 0); },
+        /* #6 */ sum(col, o) { needCol(col, 't.sum'); o = needOpts(o, 't.sum'); return window_(o).reduce((s, r) => s + val(r, col), 0); },
         /* #7 */ series(col, o) {
-          o = o || {};
-          const by = o.by || 'day', last = o.last || 7, op = o.op || (col == null ? 'count' : 'sum');
+          needCol(col, 't.series'); o = needOpts(o, 't.series');
+          const by = o.by === undefined ? 'day' : o.by, op = o.op || (col == null ? 'count' : 'sum');
+          if (!['day', 'week', 'month'].includes(by)) bad('E_ARG', "t.series: by is 'day', 'week' or 'month'");
+          if (!['sum', 'count', 'avg'].includes(op)) bad('E_ARG', "t.series: op is 'sum', 'count' or 'avg'");
+          let last = o.last === undefined ? 7 : Number(o.last);
+          if (!Number.isFinite(last)) bad('E_ARG', 't.series: last is a number');
+          last = Math.min(366, Math.max(1, Math.floor(last)));
           const t0 = parseYmd(today());
           const keys = [];
           for (let i = last - 1; i >= 0; i--) {
@@ -244,10 +306,7 @@ ${r?'Expression: "'+r+`"
             else if (by === 'week') keys.push(ymd(addDays(mondayOf(t0), -7 * i)));
             else { const d = new Date(t0.getFullYear(), t0.getMonth() - i, 1, 12); keys.push(d.getFullYear() + '-' + p2(d.getMonth() + 1)); }
           }
-          const bucket = (r) => {
-            const d = parseYmd(day(r));
-            return by === 'day' ? ymd(d) : by === 'week' ? ymd(mondayOf(d)) : d.getFullYear() + '-' + p2(d.getMonth() + 1);
-          };
+          const bucket = (r) => { const d = parseYmd(day(r)); return by === 'day' ? ymd(d) : by === 'week' ? ymd(mondayOf(d)) : d.getFullYear() + '-' + p2(d.getMonth() + 1); };
           const acc = new Map(keys.map((k) => [k, { n: 0, s: 0 }]));
           for (const r of o.where ? live().filter((x) => eq(x, o.where)) : live()) {
             const a = acc.get(bucket(r));
@@ -256,19 +315,22 @@ ${r?'Expression: "'+r+`"
           return keys.map((k) => { const a = acc.get(k); return { k, v: op === 'count' ? a.n : op === 'avg' ? (a.n ? a.s / a.n : 0) : a.s }; });
         },
         /* #8 */ group(col, valCol, o) {
+          if (col == null) bad('E_COL', 't.group(col, valCol): col is required'); needCol(col, 't.group'); needCol(valCol, 't.group'); o = needOpts(o, 't.group');
           const m = new Map();
           for (const r of window_(o)) m.set(r[col], (m.get(r[col]) || 0) + val(r, valCol));
           return Array.from(m, ([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
         },
-        /* #9 */ has(k) { const o = keyOf(k, true); return live().some((r) => eq(r, o)); },
+        /* #9 */ has(k) { needKey(k, 't.has'); const o = keyOf(k, true); return live().some((r) => eq(r, o)); },
         /* #10 */ toggle(k) {
+          needKey(k, 't.toggle'); refresh();
           const o = keyOf(k, true);
           const hit = live().find((r) => eq(r, o));
           if (hit) { softDelete(hit.id); return false; }
           h.add(o); return true;
         },
         /* #11 */ streak(k) {
-          if (!dateCol) throw new MoldeError('E_COL', "t.streak needs a date column; table '" + name + "' has none");
+          needKey(k, 't.streak');
+          if (!dateCol) bad('E_COL', "t.streak needs a date column; table '" + name + "' has none");
           const o = keyOf(k, false); delete o[dateCol];
           const days = new Set(live().filter((r) => eq(r, o)).map((r) => r[dateCol]));
           let d = parseYmd(today()), n = 0;
@@ -277,54 +339,72 @@ ${r?'Expression: "'+r+`"
           return n;
         },
       };
-      return (handles[name] = h);
+      /* non-enumerable: Object.keys(handle) is exactly the 9 table calls. rows is a frozen read-only copy. */
+      Object.defineProperties(h, {
+        name: { value: name },
+        toJSON: { value: () => name },
+        cols: { get: () => cols.slice() },
+        rows: { get: () => Object.freeze(st.rows.map((r) => Object.freeze(Object.assign({}, r)))) },
+        [META]: { value: () => ({ schema: JSON.parse(JSON.stringify(schema)), cols: cols.slice(), dateCol }) },
+      });
+      handles.set(name, h);
+      return h;
     }
 
     const store = {
       /* #1 */ t: table,
-      /* #2 */ kv(key, dflt) {
-        if (boxes[key]) return boxes[key];
+      /* #2 */ kv(key, dfl) {
+        if (typeof key !== 'string' || !key || key.length > 60 || key in Object.prototype || key === 'prototype') bad('E_TABLE', "store.kv('" + String(key).slice(0, 40) + "'): key must be a plain name");
+        if (boxes.has(key)) return boxes.get(key);
         const got = adapter.kvGet(key);
-        const st = reactive({ v: got === undefined ? dflt : got });
-        return (boxes[key] = { get v() { return st.v; }, set v(x) { st.v = x; adapter.kvSet(key, x); } });
+        const st = reactive({ v: got === undefined ? dfl : got });
+        const box = { get v() { return st.v; }, set v(x) { st.v = x; adapter.kvSet(key, x); } };
+        boxes.set(key, box);
+        return box;
       },
     };
 
-    return { store, ui, app, MoldeError };
+    /* host/kit-only surface: NOT part of the 16 calls and not put on window by components.js */
+    const internal = { toasts: () => uiState.toasts, dismiss, refresh, notifications, locale, errors: () => adapter.errors || [], META };
+    return { store, ui, app, MoldeError, internal };
   }
 
   const CALLS = ['store.t', 'store.kv', 't.add', 't.set', 't.remove', 't.sum', 't.series', 't.group', 't.has', 't.toggle', 't.streak', 'ui.toast', 'ui.timer', 'app.notify', 'app.fmt', 'app.today'];
-  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd };
+  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, META };
 });
 
 /* Molde kit components: m-stat, m-chart, m-list, m-form, m-timer, plus boot and the toast host.
  * Attributes are the API. A `:name="expr"` attribute is evaluated in the page's Alpine scope and re-evaluated when its
- * data changes; plain `name="text"` is a string. Rendering is plain DOM (textContent only, no innerHTML of data). */
+ * data changes; plain `name="text"` is a string. Rendering is plain DOM (textContent only, no innerHTML of data).
+ * Only store, ui and app go on window (the 16 calls). Kit-only helpers stay in sdk.internal. */
 (function () {
   'use strict';
   var A = window.Alpine, S = window.MoldeSDK;
   var host = window.moldeHost || {};
   var manifest = host.manifest;
-  if (!manifest) {
-    var mEl = document.getElementById('molde-manifest');
-    manifest = mEl ? JSON.parse(mEl.textContent) : { tables: {} };
-  }
+  if (!manifest) { var mEl = document.getElementById('molde-manifest'); manifest = mEl ? JSON.parse(mEl.textContent) : { tables: {} }; }
   var seed = host.seed;
   if (!seed) { var sEl = document.getElementById('molde-seed'); seed = sEl ? JSON.parse(sEl.textContent) : null; }
   var sdk = S.createSDK({ adapter: host.adapter || S.memoryAdapter(seed), manifest: manifest, reactive: A.reactive, locale: host.locale, host: host.bridge });
-  var store = sdk.store, ui = sdk.ui, app = sdk.app;
-  window.store = store; window.ui = ui; window.app = app;
-  var locale = host.locale || manifest.locale || document.documentElement.lang || navigator.language || 'en';
+  var I = sdk.internal, ui = sdk.ui, app = sdk.app;
+  window.store = sdk.store; window.ui = ui; window.app = app;
+  var locale = I.locale;
+  var MAXN = 1e12, hasOwn = Object.prototype.hasOwnProperty;
   var nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
-  var num = function (n) { return nf.format(n); };
+  var nfc = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
+  function san(v) { v = Number(v); if (v !== v) return 0; return Math.max(-MAXN, Math.min(MAXN, v)); }
+  function num(n) { n = san(n); return Math.abs(n) >= 1e9 ? nfc.format(n) : nf.format(n); }
+  function sgn(n) { return n < 0 ? '−' + num(-n) : num(n); }
+  var meta = function (t) { return t[S.META](); };
 
   /* ---- tiny DOM helper ---- */
+  function setStyle(e, v) { for (var k in v) { if (k.charAt(0) === '-') e.style.setProperty(k, v[k]); else e.style[k] = v[k]; } }
   function h(tag, attrs) {
     var e = document.createElement(tag);
     if (attrs) for (var k in attrs) {
       var v = attrs[k];
       if (v == null || v === false) continue;
-      if (k === 'text') e.textContent = v; else if (k === 'class') e.className = v; else if (k === 'style') Object.assign(e.style, v); else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+      if (k === 'text') e.textContent = v; else if (k === 'class') e.className = v; else if (k === 'style') setStyle(e, v); else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
     }
     for (var i = 2; i < arguments.length; i++) { var c = arguments[i]; if (c != null) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); }
     return e;
@@ -332,14 +412,12 @@ ${r?'Expression: "'+r+`"
   var SVG = 'http://www.w3.org/2000/svg';
   function s(tag, attrs, text) {
     var e = document.createElementNS(SVG, tag);
-    for (var k in attrs) { if (k === 'style') Object.assign(e.style, attrs[k]); else e.setAttribute(k, attrs[k]); }
+    for (var k in attrs) { if (k === 'style') setStyle(e, attrs[k]); else e.setAttribute(k, attrs[k]); }
     if (text != null) e.textContent = text;
     return e;
   }
   var ICON = {
-    x: '<path d="M6 6l12 12M18 6L6 18"/>',
-    play: '<path d="M8 5.5v13l11-6.5z"/>',
-    pause: '<path d="M8 5v14M16 5v14"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>', play: '<path d="M8 5.5v13l11-6.5z"/>', pause: '<path d="M8 5v14M16 5v14"/>',
     reset: '<path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5"/>',
   };
   function icon(name) {
@@ -347,173 +425,272 @@ ${r?'Expression: "'+r+`"
     e.innerHTML = ICON[name];
     return e;
   }
-  var human = function (c) { c = c.replace(/_/g, ' '); return c.charAt(0).toUpperCase() + c.slice(1); };
+  var MOUTH = { great: 'M7.5 13.5 Q12 19.5 16.5 13.5 Z', good: 'M8 14.5 Q12 18.5 16 14.5', okay: 'M8.5 16 H15.5', low: 'M8 17.5 Q12 13.5 16 17.5', awful: 'M7.5 18.5 Q12 12 16.5 18.5' };
+  function face(name) {
+    if (!hasOwn.call(MOUTH, name)) return null;
+    var e = s('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    e.appendChild(s('circle', { cx: 8.8, cy: 9.5, r: 1.1, fill: 'currentColor', stroke: 'none' }));
+    e.appendChild(s('circle', { cx: 15.2, cy: 9.5, r: 1.1, fill: 'currentColor', stroke: 'none' }));
+    e.appendChild(s('path', { d: MOUTH[name], fill: name === 'great' ? 'currentColor' : 'none' }));
+    return e;
+  }
+  var human = function (c) { c = String(c).replace(/_/g, ' '); return c.charAt(0).toUpperCase() + c.slice(1); };
   var arr = function (v) { return Array.isArray(v) ? v : []; };
+  var ymd = S.ymd;
+  function dayLabel(ts) {
+    var d = new Date(ts), t = app.today().split('-'), k = ymd(d);
+    if (k === app.today()) return 'Today';
+    if (k === ymd(new Date(+t[0], +t[1] - 2 + 1, +t[2] - 1, 12))) return 'Yesterday';
+    return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(d);
+  }
+  function keepFocus(el, fn) {
+    var a = document.activeElement, path = null;
+    if (a && a !== el && el.contains(a)) { path = []; for (var n = a; n !== el; n = n.parentNode) path.unshift(Array.prototype.indexOf.call(n.parentNode.children, n)); }
+    fn();
+    if (path) { var q = el; for (var i = 0; i < path.length && q; i++) q = q.children[path[i]]; if (q && q !== document.activeElement && q.focus) q.focus({ preventScroll: true }); }
+  }
+  function tpl(spec, row, defs) {
+    return String(spec).replace(/\{(\w+)\}/g, function (m, c) { return hasOwn.call(defs, c) && defs[c] === 'num' ? num(row[c]) : String(row[c] == null ? '' : row[c]); });
+  }
 
-  /* ---- m-stat ---- */
+  /* ---- m-stat: flat lead number. Attributes: label :value :of unit, `left` (shows of - value), `glass` (fill-level glass) ---- */
+  function glassSvg(pct) {
+    var y = 100 - 90 * pct / 100, xl = 10 + (y - 6) * 8 / 94, xr = 62 - (y - 6) * 8 / 94;
+    var svg = s('svg', { viewBox: '0 0 72 108', class: 'm-glass', 'aria-hidden': 'true' });
+    if (pct > 0) svg.appendChild(s('polygon', { points: (xl + 1) + ',' + y + ' ' + (xr - 1) + ',' + y + ' 53,99 19,99', class: 'g-fill' }));
+    svg.appendChild(s('path', { d: 'M10 6 H62 L54 100 H18 Z', class: 'g-edge' }));
+    return svg;
+  }
   function mStat(el, p) {
-    var v = Number(p.value) || 0, of = p.of != null && p.of !== '' ? Number(p.of) : 0, u = p.unit || '';
-    var pct = of > 0 ? Math.min(100, Math.round(v / of * 100)) : 0;
-    var num_ = h('span', { class: 'stat', text: num(v) });
-    var tail = of > 0 ? h('span', { class: 'muted', text: '/ ' + num(of) + (u ? ' ' + u : '') }) : (u ? h('span', { class: 'muted', text: u }) : null);
-    var kids = [h('small', { class: 'muted', text: p.label || '' }), h('div', { class: 'm-num' }, num_, tail)];
-    if (of > 0) {
-      kids.push(h('div', { class: 'm-bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': of, 'aria-valuenow': v, 'aria-label': p.label || 'Progress' }, h('i', { style: { transform: 'scaleX(' + pct / 100 + ')' } })));
-      kids.push(h('small', { class: v >= of ? 'ok' : 'muted', text: v >= of ? 'Goal reached' : pct + '% of goal' }));
-    }
-    el.replaceChildren(h.apply(null, ['div', { class: 'm-stat card' }].concat(kids)));
+    var v = san(p.value), of = p.of != null && p.of !== '' ? san(p.of) : 0, u = p.unit || '', left = 'left' in p, glass = 'glass' in p;
+    var pct = of > 0 ? Math.max(0, Math.min(100, Math.round(v / of * 100))) : 0;
+    var big = left && of > 0 ? Math.abs(of - v) : v, over = left && of > 0 && v > of;
+    var tail = left ? u : of > 0 ? '/ ' + num(of) + (u ? ' ' + u : '') : u;
+    var kids = [h('small', { class: 'muted', text: p.label || '' }), h('div', { class: 'm-num' }, h('span', { class: 'stat', text: num(big) }), tail ? h('span', { class: 'muted', text: tail }) : null)];
+    if (of > 0 && !glass) kids.push(h('div', { class: 'm-bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': of, 'aria-valuenow': Math.min(v, of), 'aria-label': p.label || 'Progress' }, h('i', { style: { transform: 'scaleX(' + (left ? (over ? 1 : Math.max(0, 1 - pct / 100)) : pct / 100) + ')' } })));
+    if (of > 0) kids.push(h('small', { class: over ? 'warn' : !left && v >= of ? 'ok' : 'muted', text: left ? (over ? 'Over budget' : 'of ' + num(of) + (u ? ' ' + u : '')) : v >= of ? 'Goal reached' : pct + '% of goal' }));
+    el.replaceChildren(h('div', { class: 'm-stat' }, glass ? glassSvg(pct) : null, h.apply(null, ['div', { class: 'm-body' }].concat(kids))));
   }
 
-  /* ---- m-chart ---- */
-  function dots(data) {
-    var wd = data.length * 15 - 5;
-    var svg = s('svg', { width: wd, height: 10, viewBox: '0 0 ' + wd + ' 10', role: 'img', 'aria-label': 'Last ' + data.length + ' days: ' + data.filter(function (d) { return d.v > 0; }).length + ' done' });
-    data.forEach(function (d, i) { svg.appendChild(s('circle', { cx: i * 15 + 5, cy: 5, r: d.v > 0 ? 5 : 4, class: d.v > 0 ? 'm-dot on' : 'm-dot' })); });
-    return h('span', { class: 'm-dots' }, svg);
-  }
-  var PIE_MIX = [100, 68, 46, 30, 18];
+  /* ---- m-chart: type bar (default) | line | pie | rows. :data=[{k,v}] or :table + col [by last op] ---- */
   function label(k, by, n) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(k)) {
       var d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8), 12);
-      return new Intl.DateTimeFormat(locale, by === 'week' ? { day: 'numeric', month: 'short' } : { weekday: n > 8 ? 'narrow' : 'short' }).format(d);
+      return new Intl.DateTimeFormat(locale, by === 'week' || n > 14 ? { day: 'numeric', month: 'short' } : { weekday: n > 8 ? 'narrow' : 'short' }).format(d);
     }
     if (/^\d{4}-\d{2}$/.test(k)) return new Intl.DateTimeFormat(locale, { month: 'short' }).format(new Date(+k.slice(0, 4), +k.slice(5) - 1, 1, 12));
     return String(k);
   }
+  function clean(raw) { return arr(raw).slice(0, 366).map(function (d) { return { k: d && d.k != null ? String(d.k) : '', v: san(d && d.v) }; }); }
+  function percents(vals, total) {
+    var raw = vals.map(function (v) { return v / total * 100; }), fl = raw.map(Math.floor), left = 100 - fl.reduce(function (a, b) { return a + b; }, 0);
+    raw.map(function (r, i) { return [r - fl[i], i]; }).sort(function (a, b) { return b[0] - a[0]; }).slice(0, left).forEach(function (x) { fl[x[1]]++; });
+    return fl;
+  }
+  function slices(data, keep) {
+    var pos = data.filter(function (d) { return d.v > 0; }).sort(function (a, b) { return b.v - a.v; });
+    if (pos.length > keep) { var rest = pos.slice(keep - 1).reduce(function (a, d) { return a + d.v; }, 0); pos = pos.slice(0, keep - 1).concat([{ k: 'Other', v: rest, other: true }]); }
+    return pos;
+  }
   function mChart(el, p) {
-    var data = arr(p.data || (p.table ? p.table.series(p.col || null, { by: p.by, last: p.last ? +p.last : undefined, op: p.op }) : []));
     var type = p.type || 'bar';
-    var w = Math.max(160, Math.floor((el.clientWidth || 340) - 34)); /* 34 = card padding + border, see kit.css .card */
-    var by = data.length && /^\d{4}-\d{2}-\d{2}$/.test(data[0].k) && data.length > 1 && (new Date(data[1].k) - new Date(data[0].k)) > 864e5 * 2 ? 'week' : 'day';
-    var total = data.reduce(function (a, d) { return a + d.v; }, 0);
+    var data = clean(p.data || (p.table ? p.table.series(p.col || null, { by: p.by, last: p.last ? +p.last : undefined, op: p.op }) : []));
+    var w = Math.max(160, Math.floor(el.clientWidth || 340));
+    var by = data.length > 1 && /^\d{4}-\d{2}-\d{2}$/.test(data[0].k) && (new Date(data[1].k) - new Date(data[0].k)) > 864e5 * 2 ? 'week' : 'day';
     var kids = [];
     if (p.label) kids.push(h('small', { class: 'muted', text: p.label }));
-    var summary = data.map(function (d) { return label(d.k, by, data.length) + ' ' + num(d.v); }).join(', ');
-    var svg;
-    if (type === 'dots') { el.replaceChildren(dots(data)); return; }
-    if (type === 'pie') {
-      var size = 128, r = 50, sw = 22, C = 2 * Math.PI * r;
-      svg = s('svg', { viewBox: '0 0 ' + size + ' ' + size, width: size, height: size, role: 'img', 'aria-label': summary, class: 'm-pie' });
-      svg.appendChild(s('circle', { cx: 64, cy: 64, r: r, class: 'm-ring' }));
-      var off = 0, legend = h('ul', { class: 'm-legend' });
-      data.slice(0, 5).forEach(function (d, i) {
-        var frac = total > 0 ? d.v / total : 0, col = 'color-mix(in srgb, var(--accent) ' + PIE_MIX[i] + '%, var(--card))';
-        if (frac > 0) svg.appendChild(s('circle', { cx: 64, cy: 64, r: r, class: 'm-ring', style: { stroke: col }, 'stroke-dasharray': Math.max(0, frac * C - 2) + ' ' + C, 'stroke-dashoffset': -off * C, transform: 'rotate(-90 64 64)' }));
-        off += frac;
-        legend.appendChild(h('li', null, h('i', { style: { background: col } }), h('span', { class: 'grow', text: human(label(d.k, by, 9)) }), h('span', { class: 'muted', text: num(d.v) + (total ? ' · ' + Math.round(frac * 100) + '%' : '') })));
-      });
-      kids.push(h('div', { class: 'row' }, svg, legend));
-      legend.classList.add('grow');
-      el.replaceChildren(h.apply(null, ['div', { class: 'm-chart card' }].concat(data.length ? kids : [h('div', { class: 'empty', text: 'No data yet' })])));
-      return;
-    }
-    var H = 136, top = 20, bot = 24, base = H - bot, ch = base - top;
-    svg = s('svg', { viewBox: '0 0 ' + w + ' ' + H, width: w, height: H, role: 'img', 'aria-label': summary });
-    var max = Math.max.apply(null, data.map(function (d) { return d.v; }).concat([1]));
-    var n = data.length || 1, gap = 8, bw = Math.min(40, (w - gap * (n - 1)) / n), x0 = (w - (bw * n + gap * (n - 1))) / 2;
-    svg.appendChild(s('line', { x1: 0, x2: w, y1: base + .5, y2: base + .5, class: 'm-base' }));
-    var pts = [];
-    var hiIdx = data.reduce(function (b, d, i) { return d.v > data[b].v ? i : b; }, 0);
-    data.forEach(function (d, i) {
-      var bh = d.v > 0 ? Math.max(4, d.v / max * ch) : 2, x = x0 + i * (bw + gap), last = i === data.length - 1;
-      if (type === 'line') {
-        var cx = x + bw / 2, cy = base - (d.v / max) * ch; pts.push([cx, cy]);
-      } else {
-        svg.appendChild(s('rect', { x: x, y: base - bh, width: bw, height: bh, rx: Math.min(6, bw / 2), class: last ? 'm-b on' : 'm-b' }));
+    var empty = h('div', { class: 'empty', text: 'No data yet' });
+    var root = function () { el.replaceChildren(h.apply(null, ['div', { class: 'm-chart' }].concat(kids))); };
+    if (type === 'pie' || type === 'rows') {
+      var keep = type === 'pie' ? 5 : 7, sl = slices(data, keep), total = sl.reduce(function (a, d) { return a + d.v; }, 0);
+      if (!sl.length) { kids.push(empty); return root(); }
+      var pc = percents(sl.map(function (d) { return d.v; }), total);
+      var cls = function (d, i) { return 'm-c' + (d.other ? 0 : (i % 5) + 1); };
+      var nm = function (d) { return d.other ? 'Other' : human(label(d.k, by, 9)); };
+      if (type === 'rows') {
+        var mx = sl[0].v, list = h('div', { class: 'm-rows' });
+        sl.forEach(function (d, i) { list.appendChild(h('div', { class: 'm-rrow ' + cls(d, i) }, h('div', { class: 'm-rtop' }, h('span', { class: 'm-sw' }), h('span', { class: 'm-n', text: nm(d) }), h('span', { class: 'm-v', text: num(d.v) })), h('div', { class: 'm-rbar' }, h('i', { style: { width: Math.max(2, d.v / mx * 100) + '%' } })))); });
+        kids.push(list); return root();
       }
-      if (d.v > 0 && (last || i === hiIdx)) svg.appendChild(s('text', { x: x + bw / 2, y: (type === 'line' ? pts[i][1] : base - bh) - 6, 'text-anchor': 'middle', class: 'm-hi' }, num(d.v)));
-      svg.appendChild(s('text', { x: x + bw / 2, y: H - 6, 'text-anchor': 'middle' }, label(d.k, by, n)));
-    });
-    if (type === 'line' && pts.length) {
-      svg.insertBefore(s('polyline', { points: pts.map(function (q) { return q.join(','); }).join(' '), class: 'm-line' }), svg.children[1]);
-      var lp = pts[pts.length - 1]; svg.appendChild(s('circle', { cx: lp[0], cy: lp[1], r: 4, class: 'm-b on' }));
+      var size = 128, r = 50, C = 2 * Math.PI * r, off = 0, legend = h('ul', { class: 'm-legend' });
+      var svg = s('svg', { viewBox: '0 0 128 128', class: 'm-pie', role: 'img', 'aria-label': sl.map(function (d, i) { return nm(d) + ' ' + pc[i] + '%'; }).join(', ') });
+      svg.appendChild(s('circle', { cx: 64, cy: 64, r: r, class: 'm-ring' }));
+      sl.forEach(function (d, i) {
+        var frac = d.v / total;
+        svg.appendChild(s('circle', { cx: 64, cy: 64, r: r, class: 'm-ring ' + cls(d, i), 'stroke-dasharray': Math.max(0.5, frac * C - 2) + ' ' + C, 'stroke-dashoffset': -off * C, transform: 'rotate(-90 64 64)' }));
+        off += frac;
+        legend.appendChild(h('li', { class: cls(d, i) }, h('span', { class: 'm-sw' }), h('span', { class: 'm-n', text: nm(d) }), h('span', { class: 'm-v muted', text: num(d.v) + ' · ' + pc[i] + '%' })));
+      });
+      kids.push(h('div', { class: 'm-pierow' }, svg, legend)); return root();
     }
-    kids.push(svg);
-    el.replaceChildren(h.apply(null, ['div', { class: 'm-chart card' }].concat(kids)));
+    var H = 128, top = 20, bot = 24, n = data.length;
+    if (!n) { kids.push(empty); return root(); }
+    var vals = data.map(function (d) { return d.v; });
+    var mn = Math.min.apply(null, vals.concat([0])), mxv = Math.max.apply(null, vals.concat([0]));
+    if (mxv === mn) mxv = mn + 1;
+    var scale = (H - top - bot) / (mxv - mn), zero = top + mxv * scale;
+    var gap = n > 24 ? 2 : 8, bw = Math.max(1, Math.min(28, (w - gap * (n - 1)) / n)), x0 = Math.max(0, (w - (bw * n + gap * (n - 1))) / 2);
+    var hiIdx = 0; vals.forEach(function (v, i) { if (Math.abs(v) > Math.abs(vals[hiIdx])) hiIdx = i; });
+    var loIdx = -1; if (mn < 0) vals.forEach(function (v, i) { if (v === mn && loIdx < 0) loIdx = i; });
+    var step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(w / 36))));
+    var summary = n > 14 ? n + ' values, largest ' + sgn(vals[hiIdx]) + ', latest ' + sgn(vals[n - 1]) : data.map(function (d) { return label(d.k, by, n) + ' ' + sgn(d.v); }).join(', ');
+    var sv = s('svg', { viewBox: '0 0 ' + w + ' ' + H, width: w, height: H, role: 'img', 'aria-label': summary });
+    sv.appendChild(s('line', { x1: 0, x2: w, y1: zero + .5, y2: zero + .5, class: 'm-base' }));
+    var pts = [];
+    data.forEach(function (d, i) {
+      var x = x0 + i * (bw + gap), cx = x + bw / 2, bh = Math.max(d.v !== 0 ? 3 : 2, Math.abs(d.v) * scale), y = d.v >= 0 ? zero - bh : zero;
+      if (type === 'line') pts.push([cx, d.v >= 0 ? zero - Math.abs(d.v) * scale : zero + Math.abs(d.v) * scale]);
+      else sv.appendChild(s('rect', { x: x, y: y, width: bw, height: bh, rx: Math.min(4, bw / 2), class: 'm-b' }));
+      if (d.v !== 0 && (i === n - 1 || i === hiIdx || i === loIdx)) sv.appendChild(s('text', { x: Math.min(w - 12, Math.max(12, cx)), y: d.v >= 0 ? (type === 'line' ? pts[i][1] : y) - 6 : y + bh + 14, 'text-anchor': 'middle', class: 'm-hi' }, sgn(d.v)));
+      if ((n - 1 - i) % step === 0) sv.appendChild(s('text', { x: Math.min(w - 10, Math.max(10, cx)), y: H - 6, 'text-anchor': 'middle' }, label(d.k, by, n)));
+    });
+    if (type === 'line') {
+      sv.insertBefore(s('polyline', { points: pts.map(function (q) { return q.join(','); }).join(' '), class: 'm-line' }), sv.children[1]);
+      var lp = pts[pts.length - 1]; sv.appendChild(s('circle', { cx: lp[0], cy: lp[1], r: 4, class: 'm-b' }));
+    }
+    kids.push(sv); root();
   }
 
   /* ---- m-list ---- */
   function cell(def, v, unit) {
     if (def === 'pick') return h('span', { class: 'chip', text: human(String(v)) });
-    if (def === 'num') return h('span', { class: 'm-val', text: num(v) + (unit ? ' ' + unit : '') });
+    if (def === 'num') return h('span', { class: 'm-val', text: sgn(v) + (unit ? ' ' + unit : '') });
     if (def === 'bool') return h('span', { class: 'm-val', text: v ? 'Yes' : 'No' });
     return h('span', { class: 'm-val', text: String(v) });
   }
-  function mList(el, p) {
-    var t = p.table; if (!t) return;
-    var defs = t._schema(), rows = t.rows.slice();
-    if (p.order !== 'old' && !p.log) rows.reverse();
-    var max = Number(p.max) || 30, shown = el._m.more ? rows.length : Math.min(rows.length, max);
-    var meta = p.meta ? String(p.meta).split(',') : null;
-    var typeOf = function (c) { var d = defs[c]; return d && d.indexOf('pick:') === 0 ? 'pick' : d; };
-    var box = h('div', { class: 'm-list card' }), log = p.log;
-    var key = log ? (p.key || log.cols.filter(function (c) { return log._schema()[c] === 'text'; })[0]) : null;
-    if (!rows.length) { box.appendChild(h('div', { class: 'empty', text: 'Nothing here yet. Add the first one above.' })); }
-    rows.slice(0, shown).forEach(function (r) {
-      if (log) {
-        var k = {}; k[key] = r[p.title];
-        var run = log.streak(k), on = log.has(k);
-        box.appendChild(h('div', { class: 'm-row' },
-          h('button', { class: 'check', type: 'button', 'aria-pressed': on ? 'true' : 'false', 'aria-label': String(r[p.title]), onclick: function () { log.toggle(k); } }),
-          h('div', { class: 'grow' }, h('div', { class: 'm-title', text: String(r[p.title]) }), h('small', { class: 'muted', text: run ? run + (run === 1 ? ' day' : ' days') + ' in a row' : 'No streak yet' })),
-          dots(log.series(null, { last: 7, where: k })),
-          h('button', { class: 'm-x', type: 'button', 'aria-label': 'Remove', onclick: function () { t.remove(r.id); } }, icon('x'))));
-        return;
-      }
-      var sub = [app.fmt(r.at, 'rel')];
-      if (meta) sub = meta.map(function (c) { return human(String(r[c])); }).concat(sub);
-      box.appendChild(h('div', { class: 'm-row' },
-        h('div', { class: 'grow' }, h('div', { class: 'm-title', text: String(r[p.title] == null ? '' : r[p.title]) }), h('small', { class: 'muted', text: sub.join(' · ') })),
-        p.sub ? cell(typeOf(p.sub), r[p.sub], p.unit) : null,
-        h('button', { class: 'm-x', type: 'button', 'aria-label': 'Remove', onclick: function () { t.remove(r.id); } }, icon('x'))));
+  function subOf(p, r, defs) { return !p.sub ? null : p.sub.indexOf('{') >= 0 ? h('span', { class: 'm-val', text: tpl(p.sub, r, defs) }) : cell(String(defs[p.sub]).indexOf('pick:') === 0 ? 'pick' : defs[p.sub], r[p.sub], p.unit); }
+  function removeBtn(t, r) { return h('button', { class: 'm-x', type: 'button', 'aria-label': 'Remove', onclick: function () { t.remove(r.id); } }, icon('x')); }
+
+  function habitGrid(el, p, t, rows) {
+    var log = p.log, lm = meta(log), key = p.key || lm.cols.filter(function (c) { return lm.schema[c] === 'text'; })[0], dcol = lm.dateCol;
+    var w = el.clientWidth || 340, N = Math.max(3, Math.min(7, Math.floor((w - 8 - 12 - 120) / 44)));
+    var t0 = app.today().split('-'), days = [];
+    for (var i = 0; i < N; i++) { var d = new Date(+t0[0], +t0[1] - 1, +t0[2] - i, 12); days.push({ k: ymd(d), d: d }); }
+    var best = 0, done = 0;
+    var body = rows.map(function (r, idx) {
+      var name = r[p.title], k0 = {}; k0[key] = name;
+      var run = log.streak(k0); best = Math.max(best, run);
+      var kt = Object.assign({}, k0); kt[dcol] = days[0].k; if (log.has(kt)) done++;
+      var cells = days.map(function (dd) {
+        var k = Object.assign({}, k0); k[dcol] = dd.k;
+        return h('button', { class: 'm-cell', type: 'button', 'aria-pressed': log.has(k) ? 'true' : 'false', 'aria-label': name + ', ' + new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(dd.d), onclick: function () { log.toggle(k); } });
+      });
+      return h.apply(null, ['div', { class: 'm-hrow', style: { '--hc': 'var(--c' + (idx % 5 + 1) + ')' } }, h('div', { class: 'grow' }, h('div', { class: 'm-title', text: String(name) }), h('small', { class: 'muted', text: run ? run + (run === 1 ? ' day' : ' days') + ' in a row' : 'No streak yet' }))].concat(cells));
     });
-    if (shown < rows.length) box.appendChild(h('button', { class: 'btn ghost m-more', type: 'button', text: 'Show all ' + rows.length, onclick: function () { el._m.more = true; render(el); } }));
+    var head = h.apply(null, ['div', { class: 'm-hhead' }, h('div', { class: 'grow' })].concat(days.map(function (dd, i) {
+      return h('div', { class: 'm-hd' + (i === 0 ? ' today' : '') }, new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(dd.d), h('br'), String(dd.d.getDate()));
+    })));
+    var lead = h('div', { class: 'm-lead' }, h('span', { class: 'stat', text: num(best) }), h('span', { class: 'muted', text: best === 1 ? 'day streak' : 'day streak' }), h('small', { class: 'muted m-lsub', text: 'Done today: ' + done + ' of ' + rows.length }));
+    var card = h.apply(null, ['div', { class: 'm-list card' }, head].concat(body.length ? body : [h('div', { class: 'empty', text: 'No habits yet. Add the first one below.' })]));
+    el.replaceChildren(h('div', null, lead, card));
+  }
+
+  function groupList(el, p, t, rows, defs) {
+    var by = new Map();
+    rows.forEach(function (r) { var k = r[p.group]; if (!by.has(k)) by.set(k, []); by.get(k).push(r); });
+    var list = Array.from(by, function (e) { return { k: e[0], rs: e[1] }; }).sort(function (a, b) { return b.rs[b.rs.length - 1].at - a.rs[a.rs.length - 1].at; });
+    var box = h('div', { class: 'm-list card' });
+    if (!list.length) box.appendChild(h('div', { class: 'empty', text: 'Nothing here yet. Add the first one above.' }));
+    list.forEach(function (g) {
+      var dk = function (r) { return ymd(new Date(r.at)); }, days = [];
+      g.rs.forEach(function (r) { if (days.indexOf(dk(r)) < 0) days.push(dk(r)); });
+      var cur = days[days.length - 1], prev = days[days.length - 2];
+      var curRows = g.rs.filter(function (r) { return dk(r) === cur; }), prevRows = prev ? g.rs.filter(function (r) { return dk(r) === prev; }) : [];
+      var gh = h('div', { class: 'm-gh' }, h('b', { text: human(g.k) }));
+      if (cur !== app.today()) gh.appendChild(h('small', { class: 'muted', text: dayLabel(curRows[0].at) }));
+      if (prevRows.length) gh.appendChild(h('small', { class: 'muted', text: 'Last time ' + tpl(p.sub, prevRows[prevRows.length - 1], defs) + (prevRows.length > 1 ? ' · ' + prevRows.length + ' sets' : '') }));
+      box.appendChild(gh);
+      curRows.forEach(function (r, i) {
+        box.appendChild(h('div', { class: 'm-row' }, h('div', { class: 'grow' }, h('div', { class: 'm-title', text: tpl(p.sub, r, defs) }), h('small', { class: 'muted', text: 'Set ' + (i + 1) + ' · ' + app.fmt(r.at, 'time') })), removeBtn(t, r)));
+      });
+    });
     el.replaceChildren(box);
   }
 
-  /* ---- m-form ---- */
+  function mList(el, p) {
+    var t = p.table; if (!t) return;
+    var defs = meta(t).schema, rows = Array.prototype.slice.call(t.rows);
+    if (p.log) return habitGrid(el, p, t, rows);
+    if (p.group && p.sub) return groupList(el, p, t, rows, defs);
+    if (p.order !== 'old') rows.reverse();
+    var step = Math.max(1, Math.min(200, Number(p.max) || 30)), shown = Math.min(rows.length, step * (1 + (el._m.pages || 0)));
+    var meta_ = p.meta ? String(p.meta).split(',') : null, faces = !!p.face;
+    var box = h('div', { class: 'm-list card' + (faces ? ' m-tl' : '') });
+    if (!rows.length) box.appendChild(h('div', { class: 'empty', text: 'Nothing here yet. Add the first one above.' }));
+    var lastDay = null;
+    rows.slice(0, shown).forEach(function (r) {
+      if (p.by === 'day') { var dk = ymd(new Date(r.at)); if (dk !== lastDay) { box.appendChild(h('div', { class: 'm-dh', text: dayLabel(r.at) })); lastDay = dk; } }
+      var sub = [p.by === 'day' ? app.fmt(r.at, 'time') : app.fmt(r.at, 'rel')];
+      if (meta_) sub = meta_.map(function (c) { return human(String(r[c])); }).concat(sub);
+      var fc = null;
+      if (faces) { var fs = face(r[p.face]); fc = h('span', { class: 'm-fcs m-m' + (Object.keys(MOUTH).indexOf(r[p.face]) + 1) }, fs || h('span', { class: 'chip', text: human(String(r[p.face])) })); }
+      var tv = r[p.title];
+      box.appendChild(h('div', { class: 'm-row' }, fc,
+        h('div', { class: 'grow' }, h('div', { class: 'm-title', text: typeof tv === 'number' ? num(tv) : String(tv == null ? '' : tv) }), h('small', { class: 'muted', text: sub.join(' · ') })),
+        subOf(p, r, defs), removeBtn(t, r)));
+    });
+    if (shown < rows.length) box.appendChild(h('button', { class: 'btn ghost m-more', type: 'button', text: 'Show ' + Math.min(step, rows.length - shown) + ' more (' + (rows.length - shown) + ' left)', onclick: function () { el._m.pages = (el._m.pages || 0) + 1; render(el); } }));
+    el.replaceChildren(box);
+  }
+
+  /* ---- m-form: placeholders, not labels. attrs :table fields submit hint quick faces ---- */
   function mForm(el, p) {
     var t = p.table; if (!t) return;
-    var defs = t._schema(), cols = p.fields ? String(p.fields).split(',').map(function (x) { return x.trim(); }) : Object.keys(defs);
-    var form = h('form', { class: 'm-form', novalidate: false }), grid = h('div', { class: 'm-fields' }), first = true, firstInput = null;
+    var defs = meta(t).schema, cols = (p.fields ? String(p.fields).split(',').map(function (x) { return x.trim(); }) : Object.keys(defs)).filter(function (c) { return hasOwn.call(defs, c); });
+    var inline = cols.length === 1 && defs[cols[0]] === 'text';
+    var form = h('form', { class: 'm-form' + (inline ? ' m-inline' : '') }), grid = h('div', { class: 'm-fields' });
+    var textInput = null, firstText = true, firstPick = true;
     cols.forEach(function (c) {
-      var d = defs[c]; if (!d) return;
-      var f, input;
+      var d = defs[c], f, input;
       if (d.indexOf('pick:') === 0) {
-        f = h('fieldset', { class: 'm-pick m-wide' }, h('legend', { text: human(c) }));
-        d.slice(5).split('|').forEach(function (o, i) { f.appendChild(h('label', { class: 'm-opt' }, h('input', { type: 'radio', name: c, value: o, checked: i === 0 }), h('span', { text: human(o) }))); });
+        var opts = d.slice(5).split('|'), asFaces = 'faces' in p && firstPick && opts.every(function (o) { return hasOwn.call(MOUTH, o); });
+        f = h('fieldset', { class: (asFaces ? 'm-faces' : 'm-pick') + ' m-wide' }, h('legend', { class: 'm-sr', text: human(c) }));
+        opts.forEach(function (o, i) {
+          var r = h('input', { type: 'radio', name: c, value: o, checked: !asFaces && i === 0, required: asFaces && i === 0 });
+          f.appendChild(asFaces ? h('label', { class: 'm-face' }, r, h('span', { class: 'm-fc m-m' + (Object.keys(MOUTH).indexOf(o) + 1) }, face(o)), human(o)) : h('label', { class: 'm-opt' }, r, h('span', { text: human(o) })));
+        });
+        if (asFaces) firstPick = false;
+        if (!asFaces) firstPick = false;
       } else if (d === 'bool') {
         f = h('label', { class: 'check m-wide' }, h('input', { type: 'checkbox', name: c }), h('span', { text: human(c) }));
       } else {
-        var attrs = { name: c, autocomplete: 'off' };
-        if (d === 'long') input = h('textarea', Object.assign(attrs, { rows: 3, maxlength: 2000 }));
-        else if (d === 'num') input = h('input', Object.assign(attrs, { type: 'number', inputmode: 'decimal', step: 'any' }));
-        else if (d === 'date') input = h('input', Object.assign(attrs, { type: 'date', value: app.today() }));
-        else input = h('input', Object.assign(attrs, { type: 'text', maxlength: 200, enterkeyhint: 'done' }));
-        if (first && (d === 'text' || d === 'long')) { input.required = true; }
-        first = false;
-        f = h('label', { class: 'field' + (d === 'long' || d === 'text' ? ' m-wide' : '') }, h('span', { text: human(c) }), input);
-        if (!firstInput) firstInput = input;
+        var attrs = { name: c, autocomplete: 'off', 'aria-label': human(c) };
+        var ph = firstText && (d === 'text' || d === 'long') && p.hint ? p.hint : human(c);
+        if (d === 'long') input = h('textarea', Object.assign(attrs, { rows: 3, maxlength: 2000, placeholder: ph }));
+        else if (d === 'num') input = h('input', Object.assign(attrs, { type: 'number', inputmode: 'decimal', step: 'any', placeholder: ph, required: true }));
+        else if (d === 'date') input = h('input', Object.assign(attrs, { type: 'date', value: app.today(), required: true }));
+        else input = h('input', Object.assign(attrs, { type: 'text', maxlength: 200, enterkeyhint: 'done', placeholder: ph }));
+        if (firstText && (d === 'text' || d === 'long')) { input.required = true; textInput = input; firstText = false; input.addEventListener('input', function () { input.setCustomValidity(''); }); }
+        f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: d === 'long' || d === 'text' ? 'm-wide' : '' }, input);
       }
       grid.appendChild(f);
     });
     if (p.quick) {
       var nc = cols.filter(function (c) { return defs[c] === 'num'; })[0];
-      form.appendChild(h.apply(null, ['div', { class: 'grid2' }].concat(String(p.quick).split(',').map(function (q) {
+      if (nc) form.appendChild(h.apply(null, ['div', { class: 'm-quick' }].concat(String(p.quick).split(',').map(function (q) {
         return h('button', { class: 'btn ghost', type: 'button', text: '+' + q.trim(), onclick: function () { var row = {}; row[nc] = Number(q); var id = t.add(row); ui.toast('Added ' + q.trim(), function () { t.remove(id); }); } });
       }))));
     }
+    grid.appendChild(inline ? h('button', { class: 'btn', type: 'submit', 'aria-label': p.submit || 'Add' }, icon('plus')) : h('button', { class: 'btn', type: 'submit', text: p.submit || 'Add' }));
     form.appendChild(grid);
-    form.appendChild(h('button', { class: 'btn', type: 'submit', text: p.submit || 'Add' }));
+    var last = 0;
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      if (Date.now() - last < 500) return; /* double-click guard */
+      if (textInput && !textInput.value.trim()) { textInput.setCustomValidity('Enter some text'); textInput.reportValidity(); return; }
       var fd = new FormData(form), row = {};
-      cols.forEach(function (c) { if (defs[c] === 'bool') row[c] = fd.has(c); else if (fd.has(c)) row[c] = fd.get(c); });
-      t.add(row);
+      cols.forEach(function (c) {
+        if (defs[c] === 'bool') row[c] = fd.has(c);
+        else if (!fd.has(c)) return;
+        else if (defs[c] === 'num') row[c] = Number(fd.get(c));
+        else row[c] = defs[c] === 'text' || defs[c] === 'long' ? String(fd.get(c)).trim() : fd.get(c);
+      });
+      try { t.add(row); } catch (err) { ui.toast(err.message); return; }
+      last = Date.now();
       form.reset();
       var dt = form.querySelector('input[type=date]'); if (dt) dt.value = app.today();
       ui.toast('Added');
-      if (firstInput) firstInput.focus();
+      var fi = form.querySelector('input[type=text],input[type=number],textarea'); if (fi) fi.focus();
     });
     el.replaceChildren(form);
   }
@@ -524,7 +701,7 @@ ${r?'Expression: "'+r+`"
     var st = el._m.t || (el._m.t = ui.timer(sec, function () { ui.toast('Time is up'); if (navigator.vibrate) navigator.vibrate(200); }));
     var fmt = function (s_) { return Math.floor(s_ / 60) + ':' + String(s_ % 60).padStart(2, '0'); };
     var run = st.running;
-    el.replaceChildren(h('div', { class: 'm-time card' },
+    el.replaceChildren(h('div', { class: 'm-time' },
       h('div', { class: 'grow' }, h('small', { class: 'muted', text: p.label || 'Timer' }), h('div', { class: 'm-clock', text: fmt(st.left) })),
       st.left !== sec && !run ? h('button', { class: 'btn ghost', type: 'button', 'aria-label': 'Reset', onclick: function () { el._m.t = null; render(el); } }, icon('reset')) : null,
       h('button', { class: 'btn ghost', type: 'button', onclick: function () { run ? st.stop() : st.start(); } }, icon(run ? 'pause' : 'play'), run ? 'Pause' : 'Start')));
@@ -545,13 +722,12 @@ ${r?'Expression: "'+r+`"
     el.removeAttribute('title');
     el._m = { tick: A.reactive({ n: 0 }) };
     queueMicrotask(function () {
-      var ro = null;
+      var ro = null, first = true;
       var props = function () { var o = Object.assign({}, stat); for (var k in dyn) o[k] = A.evaluate(el, dyn[k]); return o; };
-      var first = true;
-      el._m.run = function () { comp(el, props()); };
-      var runner = A.effect(function () { el._m.tick.n; el._m.run(); });
+      el._m.run = function () { keepFocus(el, function () { comp(el, props()); }); };
+      var runner = A.effect(function () { void el._m.tick.n; el._m.run(); });
       el._x_cleanups = (el._x_cleanups || []).concat([function () { A.release(runner); if (ro) ro.disconnect(); }]);
-      if (comp === mChart && window.ResizeObserver) {
+      if ((comp === mChart || comp === mList) && window.ResizeObserver) {
         var w0 = el.clientWidth;
         ro = new ResizeObserver(function () { if (first) { first = false; return; } if (el.clientWidth !== w0) { w0 = el.clientWidth; el._m.run(); } });
         ro.observe(el);
@@ -559,13 +735,17 @@ ${r?'Expression: "'+r+`"
     });
   });
 
-  /* ---- toast host (kit-owned, reads ui.toasts) ---- */
+  /* today() follows the clock past midnight: check on visibility change, on a slow timer, and on every table action (in the SDK) */
+  document.addEventListener('visibilitychange', I.refresh);
+  setInterval(I.refresh, 30000);
+
+  /* ---- toast host (kit-owned) ---- */
   function toastHost() {
     var box = h('div', { class: 'm-toasts', role: 'status', 'aria-live': 'polite' });
     document.body.appendChild(box);
     A.effect(function () {
-      box.replaceChildren.apply(box, ui.toasts.map(function (t) {
-        return h('div', { class: 'm-toast' }, h('span', { text: t.msg }), t.undo ? h('button', { type: 'button', text: 'Undo', onclick: function () { t.undo(); ui._dismiss(t.id); } }) : null);
+      box.replaceChildren.apply(box, I.toasts().map(function (t) {
+        return h('div', { class: 'm-toast' }, h('span', { text: t.msg }), t.undo ? h('button', { type: 'button', text: 'Undo', onclick: function () { t.undo(); I.dismiss(t.id); } }) : null);
       }));
     });
   }
