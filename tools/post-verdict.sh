@@ -70,12 +70,12 @@ BODY=$(jq -r '
   "Artifacts: \([.artifacts[] | c] | join(", "))\n" +
   "Next: \(.next)"' "$FILE")
 
-# 4. label moves: WIN -> state:won; LOSS/SPLIT -> state:building; round 5 without a win -> state:needs-human
+# 4. label moves: WIN -> state:won; LOSS/SPLIT -> state:building; a LOSS that says next=needs-human -> state:needs-human (no round cap)
 ADD_LIST=("round:$ROUND"); REM_LIST=()
-for n in 1 2 3 4 5; do [ "$n" = "$ROUND" ] || REM_LIST+=("round:$n"); done
+for n in $(seq 1 12); do [ "$n" = "$ROUND" ] || REM_LIST+=("round:$n"); done
 if [ "$RESULT" = WIN ]; then
   ADD_LIST+=(state:won); REM_LIST+=(state:building state:critic state:needs-human)
-elif [ "$ROUND" = 5 ]; then
+elif [ "$(jq -r .next "$FILE")" = needs-human ]; then
   ADD_LIST+=(state:needs-human); REM_LIST+=(state:building state:critic state:won)
 else
   ADD_LIST+=(state:building); REM_LIST+=(state:critic state:won state:needs-human)

@@ -118,10 +118,9 @@ if d["result"] == "WIN" and d["next"] != "ready to merge":
     bad.append("next: a WIN must say 'ready to merge'")
 if d["result"] != "WIN" and d["next"] == "ready to merge":
     bad.append("next: only a WIN may say 'ready to merge'")
-if d["round"] == 5 and d["result"] != "WIN" and d["next"] != "needs-human":
-    bad.append("next: round 5 without a win must be 'needs-human'")
-if d["next"] == "needs-human" and d["round"] != 5:
-    bad.append("next: 'needs-human' is only valid at round 5 (rounds 1-4 without a win must say 'builder fixes the biggest gap')")
+# no round cap: the loop ends when the critic picks the candidate (gauntlet rule). 'needs-human' is optional, for a loop that is truly stuck.
+if d["next"] == "needs-human" and d["result"] == "WIN":
+    bad.append("next: a WIN cannot say 'needs-human'")
 for b in bad:
     print("error: " + b, file=sys.stderr)
 sys.exit(1 if bad else 0)

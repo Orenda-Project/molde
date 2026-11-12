@@ -17,7 +17,7 @@ bash tools/sync-labels.sh --dry-run        # preview
 bash tools/sync-labels.sh                  # labels + gate milestones; safe to re-run
 ```
 `post-verdict.sh` uses `$PYTHON`, else `./.venv/bin/python`, else `python3`. With no jsonschema it prints `jsonschema not installed, see docs/process/gauntlet.md` and exits 3. Scripts default to repo `Orenda-Project/molde`; in a fork add `--repo OWNER/NAME` to `sync-labels.sh` and `post-verdict.sh`.
-Labels: `type:*`, `state:ready|building|critic|won|needs-human|blocked`, `needs:*`, `ui`, `urdu-rtl`, `round:1`..`round:5`. Gates are milestones (`Gate 1: Prove it` to `Gate 4`), not labels.
+Labels: `type:*`, `state:ready|building|critic|won|needs-human|blocked`, `needs:*`, `ui`, `urdu-rtl`, `round:N` (created on demand). Gates are milestones (`Gate 1: Prove it` to `Gate 4`), not labels.
 
 ## One round
 1. **Issue** from `.github/ISSUE_TEMPLATE/task.md`. The Bar needs a name, a fetchable URL or repo path pinned to a commit or date, the aspect compared, and how the A/B artifacts are made. When it has all of that, the dispatcher adds `state:ready`.
@@ -69,7 +69,7 @@ done
 bash tools/post-verdict.sh --dry-run --issue 7 verdict.json             # + cross-field rules; prints the comment and label commands
 bash tools/post-verdict.sh --issue 7 verdict.json                       # posts, creates missing labels, sets round:N, moves state labels
 ```
-The cross-field rules (result matches the orders and checks, `next` matches the result, `needs-human` only at round 5, visible text of at least 8 characters for `biggest_gap`, whole-number `round` and `issue`) live in `tools/check-verdict.py`, which `post-verdict.sh` calls; the schema alone does not enforce them. WIN -> `state:won`. LOSS or SPLIT -> `state:building`. Round 5 without a win -> `state:needs-human`. The script refuses to post a second comment for the same round (exit 6) unless you pass `--force-repost`. Labels it has to remove that do not exist in the repo are skipped, and labels it has to add are created on demand. If the comment posts but the label edit fails, the script prints `COMMENT POSTED, LABELS NOT MOVED: run <command>` and exits 4.
+The cross-field rules (result matches the orders and checks, `next` matches the result, `needs-human` never on a WIN, visible text of at least 8 characters for `biggest_gap`, whole-number `round` and `issue`) live in `tools/check-verdict.py`, which `post-verdict.sh` calls; the schema alone does not enforce them. WIN -> `state:won`. LOSS or SPLIT -> `state:building`. A LOSS with `next` = `needs-human` -> `state:needs-human`. There is no round cap: the loop ends when the critic picks the candidate in both orders. The script refuses to post a second comment for the same round (exit 6) unless you pass `--force-repost`. Labels it has to remove that do not exist in the repo are skipped, and labels it has to add are created on demand. If the comment posts but the label edit fails, the script prints `COMMENT POSTED, LABELS NOT MOVED: run <command>` and exits 4.
 8. **Fix only the named gap** (plus failed checks), set `state:critic`, repeat from step 3 with the next round (`state:critic` again with the `gh issue edit` above). Round 5 without a win: `state:needs-human`, post the best artifact and the remaining gap, stop. Merge only when the last verdict is WIN, the PR links its comment, and the machine check is green.
 
 ## Verdict fields (`tools/verdict.schema.json`)
@@ -87,7 +87,7 @@ Text fields need visible characters (max 300; `biggest_gap` at least 8). When po
 | `machine_check` | `status` PASS/FAIL, `link` to the run |
 | `other_notes` | optional, max 3 |
 | `artifacts` | links or paths |
-| `next` | `ready to merge` (WIN only), `builder fixes the biggest gap`, or `needs-human` (only valid, and required, at round 5 without a win) |
+| `next` | `ready to merge` (WIN only), `builder fixes the biggest gap`, or `needs-human` (optional, only for a loop that is truly stuck; never on a WIN) |
 
 Samples: `tools/samples/verdict.valid.json` (a SPLIT), `verdict.win.json` (a WIN), `verdict.invalid.json` (rejected: no `biggest_gap`, bad status).
 
