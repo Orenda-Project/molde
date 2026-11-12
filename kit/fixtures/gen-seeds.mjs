@@ -13,10 +13,15 @@ const check = [];
 habits.forEach(([name, p], hi) => { for (let d = 59; d >= 0; d--) { let on = rnd() < p; if (hi === 0) on = d < 12 || (d > 12 && rnd() < 0.8); if (hi === 0 && d === 12) on = false; if (hi === 3 && d < 5) on = true; if (on) check.push({ d, h: 7 + hi, m: (d * 7) % 60, habit: String(hi + 1) }); } });
 out('habits', { tables: { habit: habits.map(([name], i) => ({ d: 60, h: 8, m: i, habit: name })), check } });
 
-// exercise: ~3 weeks, A/B split
+// exercise: ~3 weeks, A/B split with progressive overload (weights and reps change from session to session)
 const A = [['Bench press', 40, 8], ['Barbell row', 45, 10], ['Overhead press', 27.5, 8]], B = [['Squat', 60, 8], ['Deadlift', 80, 5], ['Leg press', 90, 12]];
 const set = [], sessions = [[20, 'A'], [18, 'B'], [15, 'A'], [13, 'B'], [11, 'A'], [8, 'B'], [6, 'A'], [4, 'B'], [1, 'A'], [0, 'B']];
-sessions.forEach(([d, kind], si) => { (kind === 'A' ? A : B).forEach(([ex, kg0, reps], ei) => { const prog = Math.floor(si / 2) * (ex === 'Deadlift' ? 5 : 2.5); const kg = kg0 + prog; for (let k = 0; k < 3; k++) set.push({ d, h: 17, m: ei * 12 + k * 3, exercise: ex, kg, reps: Math.max(4, reps - (k === 2 ? 1 + (si % 2) : 0)) }); }); });
+const seen = {};
+sessions.forEach(([d, kind]) => { (kind === 'A' ? A : B).forEach(([ex, kg0, reps0], ei) => {
+  const n = (seen[ex] = (seen[ex] || 0) + 1) - 1, step = ex === 'Deadlift' ? 5 : 2.5, kg = kg0 + step * Math.floor(n * 0.8);
+  const sets = n % 2 === 0 ? [reps0, reps0 - 1, reps0 - 1] : [reps0 + 1, reps0, reps0 - 2];
+  sets.forEach((reps, k) => set.push({ d, h: 17, m: ei * 12 + k * 3, exercise: ex, kg: k === 2 && n % 3 === 1 ? kg - step : kg, reps: Math.max(4, reps + (rnd() < 0.3 ? 1 : 0)) }));
+}); });
 out('exercise', { tables: { set } });
 
 // water: 7 days
@@ -30,9 +35,10 @@ const E = [[0, 8, 20, 'good', 'Quiet morning, chai on the balcony before work.']
   [9, 9, 10, 'okay', 'Slow start. Answered emails until ten.'], [11, 20, 30, 'good', 'ماں کے ہاتھ کی کھچڑی کھائی، بچپن یاد آ گیا۔'], [13, 17, 15, 'low', 'Ghar ki yaad aa rahi thi, phone par ammi se baat ki.'], [15, 19, 0, 'good', 'Long walk after Maghrib. Legs sore but the head is clear.']].map(([d, h, m, mood, note]) => ({ d, h, m, mood, note }));
 out('journal', { tables: { entry: E } });
 
-// budget: 45 days
-const cats = [['Groceries', 'Food', 1800, 6500, 0.18], ['Petrol', 'Travel', 3000, 4800, 0.09], ['Rickshaw', 'Travel', 300, 900, 0.13], ['Dinner out', 'Fun', 1800, 4200, 0.06], ['Cinema', 'Fun', 1200, 2400, 0.03], ['Phone top-up', 'Bills', 500, 1500, 0.05], ['Pharmacy', 'Other', 400, 2600, 0.04], ['Tea and snacks', 'Food', 200, 700, 0.2]];
-const spend = [{ d: 40, h: 19, m: 10, description: 'Electricity bill', amount: 8400, category: 'Bills' }, { d: 14, h: 18, m: 5, description: 'Electricity bill', amount: 9150, category: 'Bills' }, { d: 12, h: 10, m: 30, description: 'Internet bill', amount: 3500, category: 'Bills' }, { d: 6, h: 15, m: 0, description: 'Refund: shoes (wrong size)', amount: -2800, category: 'Fun' }, { d: 7, h: 16, m: 20, description: 'Running shoes', amount: 7200, category: 'Fun' }];
-for (let d = 44; d >= 0; d--) for (const [desc, cat, lo, hi, pr] of cats) if (rnd() < pr) spend.push({ d, h: 9 + Math.floor(rnd() * 11), m: Math.floor(rnd() * 60), description: desc, amount: Math.round((lo + rnd() * (hi - lo)) / 50) * 50, category: cat });
+// budget: 45 days, varied descriptions and categories, one refund
+const shops = { Food: [['Groceries at Imtiaz', 2400, 7800], ['Fruit and vegetables', 350, 1400], ['Chai and samosas', 150, 650], ['Lunch at the office canteen', 300, 700], ['Bakery', 220, 900]], Travel: [['Petrol', 2500, 5200], ['Rickshaw', 250, 900], ['Careem to the airport', 1400, 2600]], Fun: [['Dinner out', 1800, 4600], ['Cinema tickets', 1200, 2600], ['Book from the bazaar', 600, 1800]], Health: [['Pharmacy', 380, 2900], ['Doctor visit', 1500, 3000]], Bills: [['Phone top-up', 500, 1500], ['Gas bill', 1100, 2800]] };
+const pr = { Food: 0.9, Travel: 0.42, Fun: 0.16, Health: 0.1, Bills: 0.05 };
+const spend = [{ d: 40, h: 19, m: 10, description: 'Electricity bill', amount: 8400, category: 'Bills' }, { d: 14, h: 18, m: 5, description: 'Electricity bill', amount: 9150, category: 'Bills' }, { d: 12, h: 10, m: 30, description: 'Internet bill', amount: 3500, category: 'Bills' }, { d: 9, h: 15, m: 0, description: 'Refund: shoes (wrong size)', amount: -2800, category: 'Fun' }, { d: 10, h: 16, m: 20, description: 'Running shoes', amount: 7200, category: 'Fun' }];
+for (let d = 44; d >= 0; d--) for (const [cat, list] of Object.entries(shops)) if (rnd() < pr[cat] * 0.55) { const [desc, lo, hi] = pick(list); spend.push({ d, h: 8 + Math.floor(rnd() * 12), m: Math.floor(rnd() * 60), description: desc, amount: Math.round((lo + rnd() * (hi - lo)) / 10) * 10, category: cat }); }
 out('budget', { tables: { spend }, kv: { budget: 80000 } });
 console.log('habit checks', check.length, 'sets', set.length, 'cups', cup.length, 'journal', E.length, 'spend', spend.length);

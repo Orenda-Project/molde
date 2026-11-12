@@ -46,7 +46,7 @@
   }
 
   /* ---- schema --------------------------------------------------------------- */
-  const TEXT_MAX = 200, LONG_MAX = 2000, NUM_MAX = 1e12;
+  const TEXT_MAX = 1000, LONG_MAX = 20000, NUM_MAX = 1e12, NOTE_MAX = 200; /* limits are errors, never silent cuts */
   const p2 = (n) => String(n).padStart(2, '0');
   const ymd = (d) => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
   const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -63,8 +63,11 @@
   function coerce(def, v, dflt, strict) {
     const miss = v === undefined || v === null;
     switch (def.k) {
-      case 'text': return miss ? '' : String(v).slice(0, TEXT_MAX);
-      case 'long': return miss ? '' : String(v).slice(0, LONG_MAX);
+      case 'text': case 'long': {
+        const max = def.k === 'text' ? TEXT_MAX : LONG_MAX, s = miss ? '' : String(v);
+        if (strict && s.length > max) bad('E_ARG', 'text is ' + s.length + ' characters; the limit for a ' + def.k + ' column is ' + max);
+        return s;
+      }
       case 'num': return miss ? 0 : clampNum(v);
       case 'bool': return miss ? false : v === 'false' ? false : !!v;
       case 'date':
@@ -139,7 +142,8 @@
         } else bad('E_ARG', 'app.notify(when, text): when is a Date, a ms timestamp or "HH:MM"');
         if (!Number.isFinite(at)) bad('E_ARG', 'app.notify: when is not a valid time');
         if ((typeof text !== 'string' && typeof text !== 'number') || String(text).trim() === '') bad('E_ARG', 'app.notify: text must be a non-empty string');
-        const job = { at, text: String(text).slice(0, 140) };
+        if (String(text).length > NOTE_MAX) bad('E_ARG', 'app.notify: text is limited to ' + NOTE_MAX + ' characters');
+        const job = { at, text: String(text) };
         if (host.notify) host.notify(job); else notifications.push(job);
         return job;
       },
@@ -153,10 +157,11 @@
     const ui = {
       toast(msg, undo) {
         if ((typeof msg !== 'string' && typeof msg !== 'number') || String(msg).trim() === '') bad('E_ARG', 'ui.toast(msg): msg must be a non-empty string');
+        if (String(msg).length > NOTE_MAX) bad('E_ARG', 'ui.toast: msg is limited to ' + NOTE_MAX + ' characters');
         if (undo !== undefined && typeof undo !== 'function') bad('E_ARG', 'ui.toast: the second argument is an undo function');
         const id = ++toastId;
         while (uiState.toasts.length >= 3) dismiss(uiState.toasts[0].id); /* at most 3 visible: the newest replaces the oldest */
-        uiState.toasts.push({ id, msg: String(msg).slice(0, 140), undo: undo || null });
+        uiState.toasts.push({ id, msg: String(msg), undo: undo || null });
         toastTimers.set(id, timers.setTimeout(() => dismiss(id), undo ? 10000 : 3000));
         return () => dismiss(id);
       },
@@ -175,7 +180,7 @@
             if (s.left <= 0) s.left = sec;
             s.running = true;
             h = timers.setInterval(() => {
-              s.left = Math.max(0, s.left - 1);
+              s.left -= 1; /* the interval stops at 0, so it never goes below */
               if (s.left === 0) { stop(); if (cb) cb(); }
             }, 1000);
           },
@@ -194,7 +199,7 @@
       for (const [c, ty] of Object.entries(schema)) { defs[c] = colDef(ty); if (!dateCol && defs[c].k === 'date') dateCol = c; }
       const cols = Object.keys(defs);
       const known = (k) => k === 'id' || k === 'at' || k in defs;
-      const needCol = (c, what) => { if (c != null && !(typeof c === 'string' && known(c) && !(c in Object.prototype))) bad('E_COL', "'" + String(c).slice(0, 40) + "' is not a column of '" + name + "' (" + what + '). Columns: ' + cols.join(', ')); };
+      const needCol = (c, what) => { if (c != null && !(typeof c === 'string' && known(c))) bad('E_COL', "'" + String(c).slice(0, 40) + "' is not a column of '" + name + "' (" + what + '). Columns: ' + cols.join(', ')); };
       const needNum = (c, what) => { if (c != null && !(defs[c] ? defs[c].k === 'num' : c === 'id' || c === 'at')) bad('E_COL', "'" + c + "' is not a number column of '" + name + "' (" + what + ')'); };
       const needKey = (k, what) => {
         if (!isObj(k) || !Object.keys(k).length) bad('E_ARG', what + ': pass a key object like {name: "Read"}');
@@ -214,7 +219,7 @@
         const data = isObj(rec.data) ? rec.data : {};
         for (const c of cols) {
           const d = defs[c], v = data[c], k = d.k; /* fast path for well-formed stored values, full coercion otherwise */
-          row[c] = (k === 'text' || k === 'long') && typeof v === 'string' ? v : k === 'num' && typeof v === 'number' && v === v && v <= NUM_MAX && v >= -NUM_MAX ? v : k === 'bool' && typeof v === 'boolean' ? v : k === 'date' && typeof v === 'string' && DATE.test(v) ? v : coerce(d, v, dflt(rec), false);
+          row[c] = (k === 'text' || k === 'long') && typeof v === 'string' ? v : k === 'num' && typeof v === 'number' && v === v && v <= NUM_MAX && v >= -NUM_MAX ? v : k === 'bool' && typeof v === 'boolean' ? v : k === 'date' && typeof v === 'string' && DATE.test(v) && validYmd(v) ? v : coerce(d, v, dflt(rec), false);
         }
         return row;
       };
@@ -259,6 +264,7 @@
           refresh();
           const data = pickCols(row, true, true);
           const id = adapter.nextId(name);
+          if ('at' in row && row.at !== undefined && !Number.isFinite(row.at)) bad('E_ARG', 't.add: at is a ms timestamp');
           const at = Number.isFinite(row.at) ? row.at : now();
           const rec = { id, at, deleted_at: null, data };
           adapter.put(name, rec);
@@ -368,6 +374,7 @@
     return { store, ui, app, MoldeError, internal };
   }
 
+  const LIMITS = { text: TEXT_MAX, long: LONG_MAX, num: NUM_MAX, note: NOTE_MAX };
   const CALLS = ['store.t', 'store.kv', 't.add', 't.set', 't.remove', 't.sum', 't.series', 't.group', 't.has', 't.toggle', 't.streak', 'ui.toast', 'ui.timer', 'app.notify', 'app.fmt', 'app.today'];
-  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, META };
+  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, META, LIMITS };
 });

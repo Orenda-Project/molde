@@ -2,26 +2,24 @@
   get cats() { return this.t.group('category', 'amount', {since: 'month'}) }}">
   <h1>Budget</h1>
   <div class="col">
-    <small class="muted">Left this month</small>
     <div class="row">
-      <bdi class="stat" x-text="(cap.v - spent).toLocaleString()"></bdi>
-      <bdi class="muted">PKR</bdi>
+      <bdi class="stat" x-text="Math.abs(cap.v - spent).toLocaleString()"></bdi><bdi :class="spent > cap.v ? 'warn' : 'muted'" x-text="'PKR ' + (spent > cap.v ? 'over budget' : 'left')"></bdi>
     </div>
     <div class="bar">
-      <i :style="{width: Math.max(0, 100 - spent / cap.v * 100) + '%'}"></i>
+      <i :style="{width: Math.max(0, spent) / cap.v * 100 + '%'}"></i>
     </div>
+    <small class="muted">Budget <bdi x-edit="[cap, 'v']"></bdi></small>
   </div>
   <template x-for="x in cats">
     <div class="col">
       <div class="row">
-        <span class="grow" x-text="x.k"></span>
-        <bdi x-text="x.v.toLocaleString()"></bdi>
+        <span class="grow" x-text="x.k"></span><bdi x-text="x.v.toLocaleString()"></bdi>
       </div>
       <div class="bar">
         <i :style="{width: Math.abs(x.v / cats[0].v) * 100 + '%'}"></i>
       </div>
     </div>
   </template>
-  <m-form :table="t" seg></m-form>
-  <m-list :table="t" title="description" sub="amount" meta="category" edit></m-list>
+  <m-form :table="t" seg look="filled"></m-form>
+  <m-list :table="t" title="description" sub="amount" by="day" edit></m-list>
 </main>

@@ -1,40 +1,56 @@
-// Canonical formatter for mini-app body fragments (contract section 2): 2-space indent, one element per line,
-// attributes unchanged (only the whitespace between them is normalised). Elements whose only content is text stay
-// on one line. Idempotent: format(format(x)) === format(x). Pure function, no dependencies.
+// Canonical formatter for mini-app body fragments (contract section 2): 2-space indent, block elements on their own lines,
+// attributes unchanged (only the whitespace BETWEEN attributes is normalised, never inside one).
+// Whitespace is meaning: a line break is only ever put where whitespace already existed, and inline content that touches
+// ("$<b>5</b>kg") stays joined. Idempotent: format(format(x)) === format(x). Malformed input (an unterminated tag, quote,
+// comment or raw element) throws a FormatError with a line number instead of being rewritten into something else.
+export class FormatError extends Error { constructor(msg, line) { super(msg + (line ? ' (line ' + line + ')' : '')); this.name = 'FormatError'; this.code = 'E_FORMAT'; this.line = line; } }
+
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
 const RAW = new Set(['script', 'style', 'textarea', 'pre']);
 const VERBATIM = new Set(['textarea', 'pre']);
+const INLINE = new Set(['a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'button', 'cite', 'code', 'data', 'del', 'em', 'i', 'img', 'input', 'ins', 'kbd', 'label', 'mark', 'output', 'q', 's', 'samp', 'select', 'small', 'span', 'strong', 'sub', 'sup', 'textarea', 'time', 'u', 'var', 'wbr']);
+const isMarkup = (src, i) => /^(?:[A-Za-z]|\/[A-Za-z]|!--)/.test(src.slice(i + 1, i + 4));
+const lineOf = (src, i) => src.slice(0, i).split('\n').length;
 
 function tokenize(src) {
   const toks = []; let i = 0;
   while (i < src.length) {
-    if (src[i] === '<' && /^(?:[A-Za-z]|\/[A-Za-z]|!--)/.test(src.slice(i + 1, i + 4))) {
-      if (src.startsWith('<!--', i)) { const e = src.indexOf('-->', i); const end = e < 0 ? src.length : e + 3; toks.push({ t: 'comment', raw: src.slice(i, end) }); i = end; continue; }
+    if (src[i] === '<' && isMarkup(src, i)) {
+      if (src.startsWith('<!--', i)) { const e = src.indexOf('-->', i + 4); if (e < 0) throw new FormatError('unterminated comment', lineOf(src, i)); toks.push({ t: 'comment', raw: src.slice(i, e + 3) }); i = e + 3; continue; }
       let j = i + 1, q = null;
       while (j < src.length) { const c = src[j]; if (q) { if (c === q) q = null; } else if (c === '"' || c === "'") q = c; else if (c === '>') break; j++; }
+      if (j >= src.length) throw new FormatError(q ? 'unterminated quote in a tag' : 'unterminated tag', lineOf(src, i));
       const body = src.slice(i + 1, j);
-      if (body[0] === '/') toks.push({ t: 'close', name: body.slice(1).trim().toLowerCase() });
+      if (body[0] === '/') {
+        const cn = body.slice(1).trim().toLowerCase();
+        if (!/^[a-z][a-z0-9:-]*$/.test(cn)) throw new FormatError('invalid closing tag </' + cn.slice(0, 20) + '>', lineOf(src, i));
+        toks.push({ t: 'close', name: cn });
+      }
       else {
         const m = body.match(/^([A-Za-z][^\s/>]*)([\s\S]*?)\s*(\/?)$/);
         const name = m[1].toLowerCase();
-        toks.push({ t: 'open', name, attrs: attrList(m[2]), selfClose: m[3] === '/' || VOID.has(name), slash: m[3] === '/' });
+        if (!/^[a-z][a-z0-9:-]*$/.test(name)) throw new FormatError('invalid tag name <' + name.slice(0, 20) + '>', lineOf(src, i));
+        toks.push({ t: 'open', name, attrs: attrList(m[2], lineOf(src, i)), selfClose: m[3] === '/' || VOID.has(name), slash: m[3] === '/' });
       }
-      i = j + 1;
+      const open = i; i = j + 1;
       const last = toks[toks.length - 1];
       if (last.t === 'open' && RAW.has(last.name) && !last.selfClose) {
-        const re = new RegExp('</' + last.name + '\\s*>', 'i'); const rest = src.slice(i); const m2 = rest.match(re);
-        const idx = m2 ? m2.index : rest.length; toks.push({ t: 'raw', raw: rest.slice(0, idx) }); i += idx;
+        const m2 = src.slice(i).match(new RegExp('</' + last.name + '\\s*>', 'i'));
+        if (!m2) throw new FormatError('unterminated <' + last.name + '>', lineOf(src, open));
+        toks.push({ t: 'raw', raw: src.slice(i, i + m2.index) }); i += m2.index;
       }
     } else {
-      let j = i + 1; while (j < src.length && !(src[j] === '<' && /^(?:[A-Za-z]|\/[A-Za-z]|!--)/.test(src.slice(j + 1, j + 4)))) j++;
+      let j = i + 1; while (j < src.length && !(src[j] === '<' && isMarkup(src, j))) j++;
       toks.push({ t: 'text', raw: src.slice(i, j) }); i = j;
     }
   }
   return toks;
 }
-function attrList(s) {
+function attrList(s, line) {
   const out = []; const re = /([^\s=/"'>]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?/g; let m;
   while ((m = re.exec(s))) out.push(m[0]);
+  const left = s.replace(re, '').replace(/[\s/]+/g, '');
+  if (left) throw new FormatError('malformed attribute near ' + JSON.stringify(left.slice(0, 12)), line);
   return out;
 }
 const openTag = (n) => '<' + n.name + (n.attrs.length ? ' ' + n.attrs.join(' ') : '') + '>';
@@ -47,16 +63,48 @@ function parse(toks) {
     else if (t.t === 'close') { for (let k = stack.length - 1; k > 0; k--) if (stack[k].name === t.name) { stack.length = k; break; } }
     else if (t.t === 'raw') top.raw = t.raw;
     else if (t.t === 'comment') top.kids.push({ comment: t.raw });
-    else { const txt = t.raw.replace(/\s+/g, ' ').trim(); if (txt) top.kids.push({ text: txt }); }
+    else {
+      const body = t.raw.replace(/\s+/g, ' ').trim(), prev = top.kids[top.kids.length - 1];
+      if (!body) { if (prev && prev.text !== undefined) prev.trail = true; else if (!prev || !prev.ws) top.kids.push({ ws: true }); }
+      else if (prev && prev.text !== undefined) { prev.text += (prev.trail || /^\s/.test(t.raw) ? ' ' : '') + body; prev.trail = /\s$/.test(t.raw); } /* text split by a dropped tag is one text */
+      else top.kids.push({ text: body, lead: /^\s/.test(t.raw) || !!(prev && prev.ws), trail: /\s$/.test(t.raw) });
+    }
   }
   return root;
 }
+const isInline = (n) => n.text !== undefined || n.ws || (n.name && INLINE.has(n.name) && n.kids.every(isInline));
+const voidTag = (n) => (n.slash ? openTag(n).slice(0, -1) + ' />' : openTag(n));
+
+/** An inline element on one line. Spaces appear only where the source had whitespace. */
+function inl(n) {
+  if (n.void) return voidTag(n);
+  if (n.raw !== null && n.raw !== undefined) return openTag(n) + n.raw + '</' + n.name + '>';
+  let s = '';
+  for (const k of n.kids) {
+    if (k.ws) { if (!s.endsWith(' ')) s += ' '; }
+    else if (k.text !== undefined) { if (k.lead && !s.endsWith(' ')) s += ' '; s += k.text; if (k.trail) s += ' '; }
+    else if (k.comment) s += k.comment;
+    else s += inl(k);
+  }
+  return openTag(n) + s + '</' + n.name + '>';
+}
+
+function emitKids(kids, depth, out) {
+  const pad = '  '.repeat(depth); let cur = '', gap = false;
+  const flush = () => { if (cur) out.push(pad + cur); cur = ''; };
+  const add = (s) => { if (cur && gap) flush(); cur += s; gap = false; };
+  for (const k of kids) {
+    if (k.ws) { gap = true; continue; }
+    if (k.text !== undefined) { if (k.lead) gap = true; add(k.text); if (k.trail) gap = true; continue; }
+    if (k.comment) { flush(); out.push(pad + k.comment); gap = false; continue; }
+    if (isInline(k)) { add(inl(k)); continue; }
+    flush(); emit(k, depth, out); gap = false;
+  }
+  flush();
+}
 function emit(n, depth, out) {
-  const pad = '  '.repeat(depth);
-  if (n.comment) { out.push(pad + n.comment); return; }
-  if (n.text !== undefined) { out.push(pad + n.text); return; }
-  if (n.void) { out.push(pad + (n.slash ? openTag(n).slice(0, -1) + (n.attrs.length ? ' ' : ' ') + '/>' : openTag(n))); return; }
-  const close = '</' + n.name + '>';
+  const pad = '  '.repeat(depth), close = '</' + n.name + '>';
+  if (n.void) { out.push(pad + voidTag(n)); return; }
   if (n.raw !== null && n.raw !== undefined && VERBATIM.has(n.name)) { out.push(pad + openTag(n) + n.raw + close); return; }
   if (n.raw !== null && n.raw !== undefined) {
     const lines = n.raw.replace(/\s+$/, '').replace(/^\s*\n/, '').split('\n');
@@ -65,16 +113,17 @@ function emit(n, depth, out) {
     if (!body.join('').trim()) { out.push(pad + openTag(n) + close); return; }
     out.push(pad + openTag(n)); body.forEach((l) => out.push(l ? pad + '  ' + l : '')); out.push(pad + close); return;
   }
-  if (!n.kids.length) { out.push(pad + openTag(n) + close); return; }
-  if (n.kids.length === 1 && n.kids[0].text !== undefined) { out.push(pad + openTag(n) + n.kids[0].text + close); return; }
-  out.push(pad + openTag(n)); n.kids.forEach((k) => emit(k, depth + 1, out)); out.push(pad + close);
+  const kids = n.kids.filter((k, i, a) => !(k.ws && (i === 0 || i === a.length - 1)));
+  if (!kids.length) { out.push(pad + openTag(n) + close); return; }
+  if (kids.length === 1 && kids[0].text !== undefined) { out.push(pad + openTag(n) + kids[0].text + close); return; }
+  out.push(pad + openTag(n)); emitKids(kids, depth + 1, out); out.push(pad + close);
 }
 export function format(src) {
   const root = parse(tokenize(String(src)));
-  const out = []; root.kids.forEach((k) => emit(k, 0, out));
+  const out = []; emitKids(root.kids, 0, out);
   return out.join('\n') + '\n';
 }
 if (process.argv[1] && import.meta.url === new URL(process.argv[1], 'file://').href) {
   const { readFileSync } = await import('node:fs');
-  process.stdout.write(format(readFileSync(process.argv[2] || 0, 'utf8')));
+  try { process.stdout.write(format(readFileSync(process.argv[2] || 0, 'utf8'))); } catch (e) { if (e instanceof FormatError) { process.stderr.write(e.message + '\n'); process.exit(1); } throw e; }
 }

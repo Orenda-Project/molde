@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { format } from '../format.mjs';
+import { format, FormatError } from '../format.mjs';
 import { FIXTURES, KIT } from './lib.mjs';
 
 for (const f of FIXTURES) {
@@ -26,8 +26,7 @@ test('format.mjs: messy input becomes canonical, attributes untouched, idempoten
   assert.equal(out, `<main x-data="{a: store.t('log')}">
   <h1>Title here</h1>
   <div class="row">
-    <input type=text name='n' x-model.number = "a.v">
-    <button @click="a.add({x:1})">Go</button>
+    <input type=text name='n' x-model.number = "a.v"><button @click="a.add({x:1})">Go</button>
   </div>
   <m-stat :value="a.sum('x',{since:'week'})" label="W"></m-stat>
   <script>
@@ -41,8 +40,9 @@ test('format.mjs: messy input becomes canonical, attributes untouched, idempoten
 });
 
 test('format.mjs: a literal < in text does not throw, and text survives', () => {
-  const out = format('<p>a < b and 3<5 and x<</p><p>if (a<b) {}</p>');
+  const out = format('<p>a < b and 3<5 and x<</p>');
   assert.match(out, /a < b and 3<5 and x</); assert.equal(format(out), out);
+  assert.throws(() => format('<p>if (a<b) {}</p>'), FormatError, 'a<b is a tag start in HTML: reported, not rewritten');
   assert.doesNotThrow(() => format('<')); assert.doesNotThrow(() => format('<<<>>> < <3 </ ></'));
 });
 test('format.mjs: self-closing SVG children keep their slash and are idempotent', () => {
@@ -67,7 +67,7 @@ test('format.mjs: spacing inside an attribute is not rewritten', () => {
 // fuzz: 3000 random well-formed documents
 function prng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 const ATTRS = ['class="card"', 'x-data="{a: 1, b: [1,2]}"', ":v = \"a > 1 && b < 2\"", "@click='f(1, 2)'", 'hidden', 'x-model.number="a.v"', 'data-k = v', 'title="a  b"', 'aria-label="x"'];
-const TEXTS = ['Hello', 'a < b', '3<5', 'x<', 'Total: 5 > 3', 'Rock &amp; roll', 'line one line two', '  padded  ', 'ok'];
+const TEXTS = ['Hello', 'a < b', '3<5', 'x <3', 'Total: 5 > 3', 'Rock &amp; roll', 'line one line two', '  padded  ', 'ok'];
 function gen(r, depth) {
   const pick = (a) => a[Math.floor(r() * a.length)], ws = () => pick(['', ' ', '\n', '\n  ', '\t']);
   const attrs = () => Array.from({ length: Math.floor(r() * 3) }, () => pick(ATTRS)).join(pick([' ', '  ', '\n ']));
@@ -97,4 +97,39 @@ test('format.mjs fuzz: 3000 random well-formed documents never throw and are ide
     if (a !== b) { bad++; first = first || { src, a, b }; }
   }
   assert.equal(bad, 0, JSON.stringify(first, null, 1));
+});
+
+test('format.mjs: inline boundaries are never split or padded ($<b>5</b>kg stays $5kg)', () => {
+  const out = format('<p>$<b>5</b>kg and <i>x</i>y<span>a</span><span>b</span> <span>c</span></p>');
+  assert.ok(out.includes('$<b>5</b>kg and'), out); assert.ok(out.includes('<i>x</i>y'), out); assert.ok(out.includes('<span>a</span><span>b</span>'), out);
+  assert.ok(!out.includes('<span>b</span><span>c</span>'), 'a real space may become a line break');
+  assert.equal(format(out), out);
+  const flat = (s) => s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  assert.equal(flat(out), flat('<p>$<b>5</b>kg and <i>x</i>y<span>a</span><span>b</span> <span>c</span></p>'));
+});
+test('format.mjs: malformed input is a FormatError with a line number, never rewritten', () => {
+  for (const [src, re] of [['<div class="a>x</div>', /quote/], ['<p>\n<!-- oops <b>x</b></p>', /comment.*line 2/], ["<p title='x>y</p>", /quote/], ['<script>let a = 1', /unterminated <script>/], ['<div', /unterminated tag/], ['<textarea>abc', /textarea/]]) {
+    assert.throws(() => format(src), (e) => e instanceof FormatError && e.code === 'E_FORMAT' && re.test(e.message), src);
+  }
+});
+test('format.mjs fuzz: inline-only documents keep their exact visible text spacing (3,000 cases)', () => {
+  const r = prng(77); const pick = (a) => a[Math.floor(r() * a.length)];
+  const flat = (s) => s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  let bad = null;
+  for (let i = 0; i < 3000 && !bad; i++) {
+    let src = '<p>'; const n = 1 + Math.floor(r() * 6);
+    for (let k = 0; k < n; k++) src += pick(['$', 'kg', ' ', 'a b', '5', '<b>5</b>', '<i> x </i>', '<span>y</span>', '<bdi>1</bdi>', '\n', '<button>Go</button>']) + pick(['', '', ' ', '\n']);
+    src += '</p>';
+    const a = format(src); if (format(a) !== a || flat(a) !== flat(src)) bad = { src, a };
+  }
+  assert.equal(bad, null, JSON.stringify(bad));
+});
+test('format.mjs fuzz: malformed documents (3,000 mutations) either throw FormatError or are stable, never garbage', () => {
+  const r = prng(5); let thrown = 0;
+  for (let i = 0; i < 3000; i++) {
+    const src = gen(r, 0); const k = Math.floor(r() * src.length);
+    const bad = [src.slice(0, k) + '"' + src.slice(k), src.slice(0, k) + '<!--' + src.slice(k), src.slice(0, k) + "<a href='" + src.slice(k)][i % 3];
+    try { const a = format(bad); assert.equal(format(a), a, 'stable'); } catch (e) { if (e instanceof FormatError) thrown++; else throw e; }
+  }
+  assert.ok(thrown > 500, 'most mutations are rejected: ' + thrown);
 });

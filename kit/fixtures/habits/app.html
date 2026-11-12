@@ -1,37 +1,33 @@
-<main x-data="{h: store.t('habit'), c: store.t('check'), n: innerWidth > 500 ? 7 : 4,
-  k(i) { return new Date(Date.parse(app.today()) - (i - 1) * 864e5).toISOString().slice(0, 10) },
-  get best() { return Math.max(0, ...this.h.rows.map(x => this.c.streak({habit: x.id + ''}))) },
-  get heat() { const s = this.c.series(null, {last: 84}); return [...Array(new Date(s[0].k).getUTCDay()), ...s] }}">
+<main x-data="{h: store.t('habit'), c: store.t('check'), get shown() { return this.h.rows.slice(0, 40) },
+  d(i) { return this.$day(1 - i) },
+  k(x, i) { return {habit: x.id + '', day: this.d(i)} }}">
   <h1>Habits</h1>
   <div class="row">
-    <b class="stat" x-text="best"></b>
-    <span class="muted">day streak</span>
+    <b class="stat" x-text="Math.max(0, ...shown.map(x => c.streak(k(x, 1))))"></b><span class="muted">day best streak</span>
   </div>
   <div class="list">
-    <div class="item slim">
-      <span class="grow"></span>
-      <template x-for="i in n">
-        <small class="ibtn" x-text="k(i).slice(8)"></small>
+    <div class="item grid fit">
+      <template x-for="i in 7">
+        <small x-text="new Date(d(i) + 'T12:00').toLocaleDateString(undefined, {weekday: 'narrow', day: 'numeric'})"></small>
       </template>
-      <span class="ibtn"></span>
     </div>
-    <template x-for="x in h.rows" :key="x.id">
-      <div class="item">
-        <div class="tbtn grow" x-edit="[h, x, 'habit']"></div>
-        <template x-for="i in n">
-          <button class="check" :aria-pressed="c.has({habit: x.id + '', day: k(i)})" :aria-label="x.habit" @click="c.toggle({habit: x.id + '', day: k(i)})"></button>
-        </template>
-        <button class="ibtn" aria-label="Remove" @click="h.remove(x.id)">×</button>
+    <template x-for="x in shown">
+      <div class="item wrap">
+        <div class="grow" x-edit="[h, x, 'habit']"></div>
+        <button x-remove="[h, x, c, 'habit']"></button>
+        <div class="grid fit">
+          <template x-for="i in 7">
+            <button class="check" :aria-pressed="c.has(k(x, i))" :aria-label="d(i)" @click="c.toggle(k(x, i))"></button>
+          </template>
+        </div>
       </div>
     </template>
   </div>
-  <div class="col">
-    <small class="muted">Last 12 weeks</small>
-    <div class="grid" :style="{'--rows': 7, '--cols': Math.ceil(heat.length / 7), '--flow': 'column'}">
-      <template x-for="d in heat">
-        <i class="cell" :class="d && d.v ? 'lv' + Math.ceil(d.v / h.rows.length * 4) : ''"></i>
-      </template>
-    </div>
+  <small class="muted">Last 12 weeks, darker is more</small>
+  <div class="grid flow" :style="{'--rows': 7, '--cols': 12}">
+    <template x-for="d in c.series(null, {last: 84})">
+      <i class="cell" :class="'lv' + Math.min(4, d.v)"></i>
+    </template>
   </div>
   <m-form :table="h"></m-form>
 </main>

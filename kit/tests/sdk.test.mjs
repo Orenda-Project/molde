@@ -3,16 +3,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { createSDK, memoryAdapter, CALLS, ymd } = require('../src/sdk.cjs');
+const { createSDK, memoryAdapter, CALLS, ymd } = require(process.env.MOLDE_SDK || '../src/sdk.cjs');
 const { sqliteAdapter, ensureSchema } = require('../adapters/sqlite.cjs');
-const Database = require('better-sqlite3');
+let Database = null; try { Database = require('better-sqlite3'); new Database(':memory:').close(); } catch (e) { console.log('# better-sqlite3 not available (' + e.message.split('\n')[0] + '): SQLite tests are skipped. Run `npm rebuild better-sqlite3`, see kit/README.md'); Database = null; }
 
 const manifest = { tables: {
   log: { what: 'text', mins: 'num', kind: 'pick:run|swim|lift', note: 'long', ok: 'bool' },
   check: { habit: 'text', day: 'date' },
 } };
 const typed = (fn, code) => assert.throws(fn, (e) => e instanceof MoldeError && e.code === code && !(e instanceof TypeError), `expected MoldeError ${code}`);
-const { MoldeError } = require('../src/sdk.cjs');
+const { MoldeError } = require(process.env.MOLDE_SDK || '../src/sdk.cjs');
 const DAY = 864e5;
 const T0 = new Date(2026, 10, 12, 20, 30).getTime(); // Thu 12 Nov 2026, 20:30 local
 const at = (daysAgo, h = 9) => { const d = new Date(T0); d.setDate(d.getDate() - daysAgo); d.setHours(h, 0, 0, 0); return d.getTime(); };
@@ -30,7 +30,7 @@ function fakeTimers() {
 
 const adapters = {
   memory: () => ({ make: () => memoryAdapter(), reopen: (a) => a }),
-  sqlite: () => { const db = new Database(':memory:'); ensureSchema(db); return { make: () => sqliteAdapter(db, 'app1'), reopen: () => sqliteAdapter(db, 'app1'), db }; },
+  ...(Database ? { sqlite: () => { const db = new Database(':memory:'); ensureSchema(db); return { make: () => sqliteAdapter(db, 'app1'), reopen: () => sqliteAdapter(db, 'app1'), db }; } } : {}),
 };
 
 for (const [aname, mk] of Object.entries(adapters)) {
@@ -53,11 +53,14 @@ for (const [aname, mk] of Object.entries(adapters)) {
 
   test(`[${aname}] 3 t.add: coerces, clips, drops unknown columns, returns ids, persists`, () => {
     const a = sdk(); const t = a.store.t('log');
-    const id = t.add({ what: 'x'.repeat(500), mins: '30', kind: 'nope', note: 'n'.repeat(3000), ok: 1 });
+    const id = t.add({ what: 'x'.repeat(1000), mins: '30', kind: 'nope', note: 'n'.repeat(20000), ok: 1 });
+    typed(() => t.add({ what: 'x'.repeat(1001) }), 'E_ARG'); typed(() => t.add({ note: 'n'.repeat(20001) }), 'E_ARG'); typed(() => t.set(id, { what: 'y'.repeat(1001) }), 'E_ARG');
+    assert.throws(() => t.add({ what: 'x'.repeat(1001) }), /1001 characters.*limit.*1000/, 'the message says what to do');
+    assert.equal(t.rows.length, 1, 'a rejected write leaves nothing behind');
     typed(() => t.add({ zzz: 1 }), 'E_COL'); typed(() => t.add({ what: Symbol('s') }), 'E_ARG'); typed(() => t.add({ x: Symbol() }), 'E_COL'); typed(() => t.add({ what: {} }), 'E_ARG'); typed(() => t.add({ mins: () => 1 }), 'E_ARG'); typed(() => t.add({ mins: 10n }), 'E_ARG');
     assert.equal(id, 1); assert.equal(t.add({ what: 'b' }), 2);
     const r = t.rows[0];
-    assert.equal(r.what.length, 200); assert.equal(r.mins, 30); assert.equal(r.kind, 'run'); assert.equal(r.note.length, 2000); assert.equal(r.ok, true); assert.ok(!('zzz' in r));
+    assert.equal(r.what.length, 1000, 'never cut silently'); assert.equal(r.mins, 30); assert.equal(r.kind, 'run'); assert.equal(r.note.length, 20000); assert.equal(r.ok, true); assert.ok(!('zzz' in r));
     assert.equal(r.at, T0); assert.equal(t.rows[1].mins, 0);
     assert.equal(createSDK({ adapter: a.ctx.reopen(a.adapter), manifest }).store.t('log').rows.length, 2);
     assert.equal(a.store.t('check').add({ habit: 'h' }) && a.store.t('check').rows[0].day, '2026-11-12'); // date defaults to today
@@ -165,10 +168,10 @@ for (const [aname, mk] of Object.entries(adapters)) {
 
   test(`[${aname}] 14 app.notify: Date, ms and HH:MM; goes to the host bridge; rejects other input`, () => {
     const got = []; const a = sdk({ host: { notify: (j) => got.push(j) } });
-    a.app.notify(new Date(T0 + 1000), 'a'); a.app.notify(T0 + 2000, 'b'); const j = a.app.notify('07:30', 'c'.repeat(300));
+    a.app.notify(new Date(T0 + 1000), 'a'); a.app.notify(T0 + 2000, 'b'); const j = a.app.notify('07:30', 'c'.repeat(200)); typed(() => a.app.notify('07:30', 'c'.repeat(201)), 'E_ARG');
     assert.deepEqual(got.map((x) => x.at).slice(0, 2), [T0 + 1000, T0 + 2000]);
     const d = new Date(j.at); assert.deepEqual([d.getHours(), d.getMinutes(), d.getDate()], [7, 30, 13], 'next occurrence');
-    assert.equal(j.text.length, 140);
+    assert.equal(j.text.length, 200);
     assert.throws(() => a.app.notify('tomorrow', 'x'), (e) => e.code === 'E_ARG');
     const b = sdk(); b.app.notify(T0 + 5, 'x'); assert.equal(b.internal.notifications.length, 1);
   });
@@ -207,7 +210,7 @@ test('the public surface is exactly the 16 contract calls (Object.keys), t.rows 
   assert.equal(t.rows[0].what, 'x'); assert.ok(Object.isFrozen(t.rows));
 });
 
-test('sqlite adapter issues no DDL for app tables and keeps apps apart', () => {
+test('sqlite adapter issues no DDL for app tables and keeps apps apart', { skip: !Database }, () => {
   const db = new Database(':memory:'); ensureSchema(db);
   const before = db.prepare("select name from sqlite_master order by name").all();
   const A = createSDK({ adapter: sqliteAdapter(db, 'a'), manifest }), B = createSDK({ adapter: sqliteAdapter(db, 'b'), manifest });
@@ -304,7 +307,7 @@ for (const tz of ['America/Los_Angeles', 'Asia/Karachi', 'UTC', 'Pacific/Kiritim
   });
 }
 
-test('sqlite: a corrupt JSON row is skipped and recorded, the rest of the table still loads', () => {
+test('sqlite: a corrupt JSON row is skipped and recorded, the rest of the table still loads', { skip: !Database }, () => {
   const db = new Database(':memory:'); ensureSchema(db);
   const ad = sqliteAdapter(db, 'a'); const s0 = createSDK({ adapter: ad, manifest, now: () => T0 });
   s0.store.t('log').add({ what: 'one', mins: 1 }); s0.store.t('log').add({ what: 'two', mins: 2 });
@@ -374,7 +377,7 @@ for (const [aname, mk] of Object.entries(adapters)) {
   });
 }
 
-test('sqlite kv: writing a key twice keeps the last value, across a re-open, and apps stay apart', () => {
+test('sqlite kv: writing a key twice keeps the last value, across a re-open, and apps stay apart', { skip: !Database }, () => {
   const db = new Database(':memory:'); ensureSchema(db);
   const a = createSDK({ adapter: sqliteAdapter(db, 'a'), manifest }), b = createSDK({ adapter: sqliteAdapter(db, 'b'), manifest });
   const box = a.store.kv('goal', 1); box.v = 2; box.v = { n: 3 }; box.v = 4; b.store.kv('goal', 9).v = 10;
@@ -382,3 +385,122 @@ test('sqlite kv: writing a key twice keeps the last value, across a re-open, and
   assert.equal(createSDK({ adapter: sqliteAdapter(db, 'b'), manifest }).store.kv('goal', 0).v, 10);
   assert.equal(db.prepare("select count(*) c from kv where key='goal'").get().c, 2, 'one row per app and key (upsert, not insert)');
 });
+
+/* ---- round 4: boundaries and data integrity (written to kill mutants, see kit/tests/mutate.mjs) ---- */
+for (const [aname, mk] of Object.entries(adapters)) {
+  const mkS = (m = manifest, extra = {}) => { const ctx = mk(); const adapter = ctx.make(); return { ctx, adapter, s: createSDK({ adapter, manifest: m, now: () => T0, locale: 'en-US', timers: fakeTimers(), ...extra }) }; };
+
+  test(`[${aname}] t.remove removes exactly one row, undo restores order by time then id, a removed row stays removed after a reopen`, () => {
+    const { ctx, adapter, s } = mkS(); const t = s.store.t('log');
+    const ids = [t.add({ what: 'a', at: at(3) }), t.add({ what: 'b', at: at(2) }), t.add({ what: 'c', at: at(2) }), t.add({ what: 'd', at: at(1) })];
+    t.remove(ids[1]); assert.deepEqual(t.rows.map((r) => r.what), ['a', 'c', 'd'], 'one row only');
+    s.internal.toasts()[0].undo(); assert.deepEqual(t.rows.map((r) => r.what), ['a', 'b', 'c', 'd'], 'same time: by id');
+    t.remove(ids[0]); s.internal.toasts().at(-1).undo(); assert.deepEqual(t.rows.map((r) => r.what), ['a', 'b', 'c', 'd'], 'oldest back in front');
+    t.remove(ids[2]); const again = createSDK({ adapter: ctx.reopen(adapter), manifest, now: () => T0 }); assert.deepEqual(again.store.t('log').rows.map((r) => r.what), ['a', 'b', 'd'], 'a tombstone is not read back');
+  });
+
+  test(`[${aname}] ids are never reused after a delete, set on a removed row is E_ROW, a missing id removes nothing`, () => {
+    const { s } = mkS(); const t = s.store.t('log'); const a = t.add({ what: 'a' }), b = t.add({ what: 'b' });
+    t.remove(b); assert.equal(t.add({ what: 'c' }), b + 1 === a + 2 ? b + 1 : b + 1, 'next id continues past the removed row'); assert.ok(t.add({ what: 'd' }) > b + 1);
+    typed(() => t.set(b, { what: 'x' }), 'E_ROW'); assert.equal(t.remove(12345), false); assert.equal(t.rows.length, 3);
+    typed(() => t.set(a + 0.5, {}), 'E_ARG');
+  });
+
+  test(`[${aname}] boolean coercion, pick fallback, date validity, at override, number clamps are exact at the boundary`, () => {
+    const { s } = mkS(); const t = s.store.t('log'); const c = s.store.t('check');
+    t.add({ ok: 'false' }); t.add({ ok: 'true' }); t.add({ ok: 0 }); t.add({ ok: 1 }); t.add({ ok: '' }); t.add({ kind: 'swim' }); t.add({ kind: 'zzz' });
+    assert.deepEqual(t.rows.slice(0, 5).map((r) => r.ok), [false, true, false, true, false]); assert.deepEqual(t.rows.slice(5).map((r) => r.kind), ['swim', 'run']);
+    t.add({ mins: 1e12 }); t.add({ mins: 1e12 + 1 }); t.add({ mins: -1e12 - 1 }); assert.deepEqual(t.rows.slice(7).map((r) => r.mins), [1e12, 1e12, -1e12]);
+    c.add({ day: '2024-02-29' }); typed(() => c.add({ day: '2025-02-29' }), 'E_ARG'); typed(() => c.add({ day: '2026-4-01' }), 'E_ARG'); typed(() => c.add({ day: '2026-00-10' }), 'E_ARG');
+    assert.equal(t.rows[0].at, T0); const id = t.add({ at: 12345 }); assert.equal(t.rows.find((r) => r.id === id).at, 12345); typed(() => t.add({ at: 'x' }), 'E_ARG');
+  });
+
+  test(`[${aname}] series: default length 7, clamp at 366, avg of an empty bucket is 0, week buckets, ties`, () => {
+    const { s } = mkS(); const t = s.store.t('log'); t.add({ mins: 10, at: at(0) }); t.add({ mins: 20, at: at(0) });
+    assert.equal(t.series('mins').length, 7); assert.equal(t.series('mins', { last: 366 }).length, 366); assert.equal(t.series('mins', { last: 367 }).length, 366); assert.equal(t.series('mins', { last: 1 }).length, 1);
+    const avg = t.series('mins', { op: 'avg', last: 3 }); assert.deepEqual(avg.map((x) => x.v), [0, 0, 15]); assert.ok(avg.every((x) => Number.isFinite(x.v)));
+    assert.deepEqual(t.series(null, { op: 'count', last: 2 }).map((x) => x.v), [0, 2]); assert.deepEqual(t.series('mins', { by: 'month', last: 1 }), [{ k: '2026-11', v: 30 }]);
+  });
+
+  test(`[${aname}] since windows are exact at their edges (day, calendar week, calendar month, last7, last30)`, () => {
+    const { s } = mkS(); const t = s.store.t('log'); // T0 = Thu 12 Nov 2026
+    const days = { day: 0, monday: 3, sunday: 4, first: 11, lastOct: 12, d6: 6, d7: 7, d29: 29, d30: 30 };
+    for (const [k, d] of Object.entries(days)) t.add({ what: k, mins: 1, at: at(d) });
+    const names = (since) => t.rows.filter((r) => t.sum('mins', { since, where: { what: r.what } }) > 0).map((r) => r.what).sort();
+    assert.deepEqual(names('day'), ['day']); assert.deepEqual(names('week'), ['day', 'monday']); assert.deepEqual(names('month'), ['d6', 'd7', 'day', 'first', 'monday', 'sunday'].sort());
+    assert.deepEqual(names('last7'), ['d6', 'day', 'monday', 'sunday'].sort()); assert.deepEqual(names('last30'), ['d29', 'd6', 'd7', 'day', 'first', 'lastOct', 'monday', 'sunday'].sort());
+  });
+
+  test(`[${aname}] streak counts every consecutive day (long runs), starts from yesterday, stops at a gap, needs the exact key`, () => {
+    const { s } = mkS(); const c = s.store.t('check'); const day = (n) => { const d = new Date(T0); d.setDate(d.getDate() - n); return ymd(d); };
+    for (let n = 1; n <= 12; n++) c.add({ habit: 'a', day: day(n) }); assert.equal(c.streak({ habit: 'a' }), 12);
+    for (let n = 0; n <= 6; n++) c.add({ habit: 'b', day: day(n) }); c.add({ habit: 'b', day: day(8) }); assert.equal(c.streak({ habit: 'b' }), 7);
+    c.add({ habit: 'c', day: day(2) }); assert.equal(c.streak({ habit: 'c' }), 0); assert.equal(c.streak({ habit: 'zzz' }), 0);
+  });
+
+  test(`[${aname}] toggle and has default the date to today and match every given key`, () => {
+    const { s } = mkS(); const c = s.store.t('check');
+    assert.equal(c.toggle({ habit: 'a' }), true); assert.equal(c.rows[0].day, '2026-11-12'); assert.equal(c.has({ habit: 'a' }), true); assert.equal(c.has({ habit: 'a', day: '2026-11-11' }), false);
+    assert.equal(c.toggle({ habit: 'b', day: '2026-11-11' }), true); assert.equal(c.has({ habit: 'b' }), false, 'b is checked yesterday, not today'); assert.equal(c.has({ habit: 'a', day: '2026-11-12' }), true);
+    assert.equal(c.toggle({ habit: 'a' }), false); assert.equal(c.has({ habit: 'a' }), false); assert.equal(c.rows.length, 1);
+  });
+
+  test(`[${aname}] group: sorted by total, count mode, window and where`, () => {
+    const { s } = mkS(); const t = s.store.t('log');
+    [['run', 5], ['swim', 50], ['run', 40], ['lift', 7]].forEach(([k, m]) => t.add({ kind: k, mins: m }));
+    assert.deepEqual(t.group('kind', 'mins'), [{ k: 'swim', v: 50 }, { k: 'run', v: 45 }, { k: 'lift', v: 7 }]); assert.deepEqual(t.group('kind').map((x) => x.v), [2, 1, 1]);
+    assert.deepEqual(t.group('kind', 'mins', { where: { kind: 'run' } }), [{ k: 'run', v: 45 }]);
+  });
+
+  test(`[${aname}] kv: falsy values persist, key and depth limits are exact`, () => {
+    const { ctx, adapter, s } = mkS(); const b = s.store.kv('zero', 5); b.v = 0; b.v = false; b.v = '';
+    const again = createSDK({ adapter: ctx.reopen(adapter), manifest }); assert.equal(again.store.kv('zero', 5).v, '', 'a stored empty string is not replaced by the default');
+    s.store.kv('k'.repeat(60), 1); typed(() => s.store.kv('k'.repeat(61), 1), 'E_TABLE'); typed(() => s.store.kv('', 1), 'E_TABLE');
+    const deep = (n) => { let o = 1; for (let i = 0; i < n; i++) o = [o]; return o; }; s.store.kv('d6', deep(6)); typed(() => s.store.kv('d8', deep(8)), 'E_ARG'); typed(() => { s.store.kv('d6').v = deep(8); }, 'E_ARG');
+    const z = s.store.kv('z', 1); z.v = 0; assert.equal(z.v, 0); assert.equal(createSDK({ adapter: ctx.reopen(adapter), manifest }).store.kv('z', 9).v, 0);
+  });
+
+  test(`[${aname}] notify: time-of-day bounds, text bound, next occurrence is strictly in the future`, () => {
+    const { s } = mkS();
+    for (const ok of ['00:00', '23:59', '9:05', '12:59']) assert.ok(s.app.notify(ok, 'x').at > T0, ok);
+    for (const bad of ['24:00', '23:60', '99:99', '1:5', '12:345', '']) typed(() => s.app.notify(bad, 'x'), 'E_ARG');
+    s.app.notify('20:30', 'x'); const sameMinute = s.app.notify('20:30', 'x'); assert.equal(new Date(sameMinute.at).getDate(), 13, 'the same minute rolls to tomorrow');
+    s.app.notify('c'.repeat(200).slice(0, 200) && '10:00', 'c'.repeat(200)); typed(() => s.app.notify('10:00', 'c'.repeat(201)), 'E_ARG'); typed(() => s.app.notify(Infinity, 'x'), 'E_ARG'); assert.ok(s.app.notify(5, 'x').at === 5);
+  });
+
+  test(`[${aname}] toast and timer: exact durations, limits and restart`, () => {
+    const tmr = fakeTimers(); const a = createSDK({ manifest, timers: tmr }); a.timers = tmr;
+    a.ui.toast('plain'); a.timers.advance(2999); assert.equal(a.internal.toasts().length, 1); a.timers.advance(1); assert.equal(a.internal.toasts().length, 0, 'a plain toast lasts 3000 ms');
+    a.ui.toast('undo', () => {}); a.timers.advance(9999); assert.equal(a.internal.toasts().length, 1); a.timers.advance(1); assert.equal(a.internal.toasts().length, 0, 'an Undo toast lasts 10000 ms');
+    a.ui.toast('x'.repeat(200)); typed(() => a.ui.toast('x'.repeat(201)), 'E_ARG');
+    for (const sec of [1, 86400, 0.5]) assert.ok(a.ui.timer(sec)); for (const bad of [0, -1, 86401]) typed(() => a.ui.timer(bad), 'E_ARG');
+    let n = 0; const tm = a.ui.timer(2, () => n++); tm.start(); tm.start(); a.timers.advance(1000); assert.equal(tm.left, 1, 'a second start() does not add a second interval'); a.timers.advance(1000); assert.equal(tm.left, 0); a.timers.advance(5000); assert.equal(tm.left, 0, 'never below zero'); assert.equal(n, 1);
+    tm.start(); assert.equal(tm.left, 2); assert.equal(a.ui.timer(0.5).left, 1, 'fractions round up');
+  });
+
+  test(`[${aname}] fmt: all three forms, boundaries of the relative window`, () => {
+    const { s } = mkS(); const f = (d, h) => s.app.fmt(at(d, h), 'rel');
+    assert.match(f(0, 7), /^Today, 7:00/); assert.match(f(1, 7), /^Yesterday, 7:00/); assert.match(f(2, 7), /^Tuesday, 7:00/); assert.match(f(6, 7), /^Friday, 7:00/); assert.equal(f(7, 7), 'Nov 5'); assert.equal(f(30, 7), 'Oct 13');
+    assert.equal(s.app.fmt(at(0, 7)), 'Nov 12'); assert.equal(s.app.fmt(new Date(2025, 10, 12)), 'Nov 12, 2025'); typed(() => s.app.fmt(at(0), 'other'), 'E_ARG'); assert.equal(s.app.fmt(T0 + 5 * 864e5, 'rel'), 'Nov 17');
+  });
+
+  test(`[${aname}] reads: each column type keeps well-formed stored values, and today() is the live local day`, () => {
+    const ctx = mk(); const ad = ctx.make(); ad.put('check', { id: 1, at: T0, deleted_at: null, data: { habit: 'h', day: '2026-01-05' } }); ad.put('check', { id: 2, at: T0, deleted_at: null, data: { habit: 7, day: '2026-02-31' } });
+    const c = createSDK({ adapter: ad, manifest, now: () => T0 }).store.t('check'); assert.deepEqual(c.rows.map((r) => [r.habit, r.day]), [['h', '2026-01-05'], ['7', '2026-11-12']]);
+  });
+}
+
+for (const [aname, mk] of Object.entries(adapters)) {
+  const mkS = (m = manifest, extra = {}) => { const ctx = mk(); const adapter = ctx.make(); return { ctx, adapter, s: createSDK({ adapter, manifest: m, now: () => T0, locale: 'en-US', timers: fakeTimers(), ...extra }) }; };
+  test(`[${aname}] more boundaries: week start 6, whitespace-only notify text, count vs sum, kv depth 7, integer ids, boolean values`, () => {
+    const sat = mkS({ ...manifest, weekStart: 6 }).s.store.t('log'); sat.add({ what: 'fri', mins: 1, at: at(6) }); sat.add({ what: 'sat', mins: 2, at: at(5) }); // T0 is Thu 12 Nov; Sat 7 Nov
+    assert.equal(sat.sum('mins', { since: 'week' }), 2, 'weeks start on Saturday when weekStart is 6'); assert.equal(sat.series('mins', { by: 'week', last: 1 })[0].k, '2026-11-07');
+    const bad = mkS({ ...manifest, weekStart: 7 }); assert.equal(bad.s.internal.weekStart, 1, 'an invalid weekStart falls back to Monday');
+    const { s } = mkS(); typed(() => s.app.notify('10:00', '   '), 'E_ARG'); typed(() => s.app.notify('10:00', ' \n '), 'E_ARG');
+    const t = s.store.t('log'); t.add({ mins: 10, at: at(0) }); t.add({ mins: 20, at: at(0) });
+    assert.deepEqual(t.series('mins', { op: 'count', last: 1 }), [{ k: '2026-11-12', v: 2 }], 'count counts rows, it does not add the column');
+    const deep = (n) => { let o = 1; for (let i = 0; i < n; i++) o = [o]; return o; }; s.store.kv('d6', deep(6)); typed(() => s.store.kv('d7', deep(7)), 'E_ARG');
+    typed(() => t.remove(1.5), 'E_ARG'); typed(() => t.remove(NaN), 'E_ARG'); typed(() => t.remove('1'), 'E_ARG');
+    const id = t.add({ ok: true }); assert.equal(t.rows.find((r) => r.id === id).ok, true); typed(() => t.add({ ok: {} }), 'E_ARG'); typed(() => t.add({ ok: [true] }), 'E_ARG');
+  });
+}

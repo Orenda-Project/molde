@@ -1,24 +1,26 @@
 <main x-data="{s: store.t('set'), page: 1, get blocks() {
-  const m = {}, last = {};
-  for (const r of this.s.rows.slice().reverse()) (m[new Date(r.at).toDateString() + r.exercise] ??= {at: r.at, ex: r.exercise, sets: []}).sets.unshift(r);
+  const m = {}, last = {}, tot = {};
+  for (const r of this.s.rows.slice().reverse()) { const d = new Date(r.at).toLocaleDateString('en-CA'); tot[d] = (tot[d] || 0) + 1; (m[d + r.exercise] ??= {d, ex: r.exercise, sets: []}).sets.unshift(r) }
   const all = Object.values(m);
   for (const b of all.slice().reverse()) { b.delta = last[b.ex] && b.sets[0].kg - last[b.ex].sets[0].kg; last[b.ex] = b }
-  return all
+  return all.map((b, i) => ({...b, n: (!i || all[i - 1].d != b.d) && tot[b.d]}))
 }}">
   <h1>Exercise</h1>
-  <m-chart :data="s.series(null, {by: 'week', last: 8})"></m-chart>
-  <m-form :table="s" submit="Log set"></m-form>
+  <m-form :table="s" submit="Log set" look="filled"></m-form>
   <div class="list">
     <template x-for="b in blocks.slice(0, page * 8)">
       <div>
+        <div class="m-dh" x-show="b.n">
+          <b class="grow" :class="b.d == app.today() && 'hi'" x-text="app.fmt(b.d, 'rel')"></b><span class="muted" x-text="b.n + ' sets'"></span>
+        </div>
         <div class="item slim">
-          <b class="grow" x-text="b.ex + ' · ' + app.fmt(b.at, 'date')"></b>
+          <b class="grow" x-text="b.ex"></b>
           <bdi class="chip" x-show="b.delta != null" x-text="(b.delta > 0 ? '+' : '') + b.delta + ' kg'"></bdi>
         </div>
         <template x-for="r in b.sets">
           <div class="item">
             <bdi class="grow" x-text="r.kg + ' kg × ' + r.reps"></bdi>
-            <button class="ibtn" aria-label="Remove" @click="s.remove(r.id)">×</button>
+            <button x-remove="[s, r]"></button>
           </div>
         </template>
       </div>

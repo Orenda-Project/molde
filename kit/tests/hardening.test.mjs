@@ -26,11 +26,11 @@ test('focus survives updates: keyboard toggle on the habit grid (Alpine), remove
 test('midnight: with a fake clock the check grid moves to the new day without a reload', async () => {
   const t0 = new Date(2026, 10, 21, 23, 59, 40);
   const { page, ctx, log } = await open(browser, srv.base, 'habits', { real: true, before: (p) => p.clock.install({ time: t0 }) });
-  const head = () => page.locator('.item.slim small').first().innerText();
-  assert.equal(await head(), '21');
+  const head = () => page.locator('.item.grid small').first().innerText();
+  assert.match(await head(), /21/);
   await page.clock.runFor(31000);
-  assert.equal(await head(), '22', 'first column is the new day');
-  const first = page.locator('.item', { hasText: 'Read 20 pages' }).locator('.check').first();
+  assert.match(await head(), /22/, 'first column is the new day');
+  const first = page.locator('.item.wrap', { hasText: 'Read 20 pages' }).locator('.check').first();
   assert.equal(await first.getAttribute('aria-pressed'), 'false', 'nothing is checked on the new day');
   await ctx.close(); noLog(log);
 });
@@ -132,10 +132,24 @@ test('public surface in the page: Object.keys(window.store/ui/app) is exactly th
   await ctx.close(); noLog(log);
 });
 
-test('x-edit: editable text saves with t.set on blur, empty reverts, other fields are untouched', async () => {
-  const { page, ctx, log } = await open(browser, srv.base, 'journal');
-  const first = page.locator('.list [contenteditable]').first(); const mood = await page.locator('.list .item').first().locator('svg path').getAttribute('d');
-  await first.click(); await page.keyboard.press('Control+A'); await page.keyboard.type('Changed text'); await page.keyboard.press('Tab');
-  assert.equal(await first.innerText(), 'Changed text'); assert.equal(await page.locator('.list .item').first().locator('svg path').getAttribute('d'), mood);
+test('x-edit: Enter commits (single line), Escape cancels, blur commits, empty reverts, paste is one line, kv numbers stay numbers', async () => {
+  const { page, ctx, log } = await open(browser, srv.base, 'habits');
+  const edit = page.locator('.item.wrap [contenteditable]').first(); const name0 = await edit.innerText();
+  const set = async (txt, key) => { await edit.click(); await page.keyboard.press('Control+A'); await page.keyboard.type(txt); if (key) await page.keyboard.press(key); };
+  await set('Read 30 pages', 'Enter'); assert.equal(await edit.innerText(), 'Read 30 pages'); assert.equal(await page.evaluate(() => document.activeElement === document.body || document.activeElement.getAttribute('contenteditable') !== 'true'), true, 'Enter leaves the field');
+  assert.equal(await edit.evaluate((e) => e.innerHTML.includes('<div') || e.innerHTML.includes('<br')), false, 'no <div> or <br> is ever inserted');
+  await edit.click(); await page.keyboard.press('Control+A'); await page.keyboard.type('line one'); await page.keyboard.press('Shift+Enter'); await page.keyboard.type('line two'); await page.keyboard.press('Enter');
+  assert.ok(!/\n/.test(await edit.innerText()) && (await edit.innerText()).startsWith('line one'), 'a newline is never inserted: ' + JSON.stringify(await edit.innerText()));
+  await set('Throw this away', 'Escape'); assert.notEqual(await edit.innerText(), 'Throw this away', 'Escape cancels'); const kept = await edit.innerText();
+  await set('Saved by blur'); await page.keyboard.press('Tab'); assert.equal(await edit.innerText(), 'Saved by blur');
+  await edit.click(); await page.keyboard.press('Control+A'); await page.keyboard.press('Delete'); await page.keyboard.press('Enter'); assert.equal(await edit.innerText(), 'Saved by blur', 'empty reverts');
+  await edit.evaluate((e) => { e.focus(); document.getSelection().selectAllChildren(e); const dt = new DataTransfer(); dt.setData('text', 'pasted\nacross\nlines'); e.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });
+  await page.keyboard.press('Enter'); assert.equal(await edit.innerText(), 'pasted across lines');
+  assert.equal(await page.evaluate(() => typeof store.t('habit').rows[0].habit), 'string'); void name0; void kept;
   await ctx.close(); noLog(log);
+  const w = await open(browser, srv.base, 'water'); const g = w.page.locator('small [contenteditable]');
+  await g.click(); await w.page.keyboard.press('Control+A'); await w.page.keyboard.type('2,500'); await w.page.keyboard.press('Enter');
+  assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'the goal is a number'); assert.equal(await g.innerText(), '2500');
+  await g.click(); await w.page.keyboard.press('Control+A'); await w.page.keyboard.type('lots'); await w.page.keyboard.press('Enter'); assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'junk reverts');
+  await w.ctx.close(); noLog(w.log);
 });

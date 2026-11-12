@@ -27,7 +27,7 @@ export function seedFor(manifest, seed, now = new Date(FIXED_NOW)) {
   return out;
 }
 
-export function pageHtml(name, { theme, seed = true, grow = false, big = 0, locale = '', dir: dirArg = '' } = {}) {
+export function pageHtml(name, { theme, seed = true, grow = false, big = 0, locale = '', dir: dirArg = '', long: longArg = false } = {}) {
   const dir = join(KIT, 'fixtures', name), dirAttr = dirArg;
   const manifest = JSON.parse(readFileSync(join(dir, 'app.json'), 'utf8'));
   const html = readFileSync(join(dir, 'app.html'), 'utf8');
@@ -37,6 +37,10 @@ export function pageHtml(name, { theme, seed = true, grow = false, big = 0, loca
   if (big && s) { // N generated rows in the first table (performance tests)
     const tbl = Object.keys(manifest.tables)[0], cols = manifest.tables[tbl], now = Date.now();
     s.tables[tbl] = Array.from({ length: big }, (_, i) => ({ id: i + 1, at: now - i * 60000, deleted_at: null, data: Object.fromEntries(Object.entries(cols).map(([c, ty]) => [c, ty === 'num' ? i % 500 : ty.startsWith('pick:') ? ty.slice(5).split('|')[i % 3] : ty === 'date' ? '2026-01-01' : 'Row ' + i])) }));
+  }
+  if (longArg && s) { // 400-character unbroken text in every text column of the first rows (URL, one word, Urdu without spaces)
+    const L = ['https://example.com/' + 'a'.repeat(380), 'W'.repeat(400), 'کھانا'.repeat(80)];
+    for (const [tbl, rows] of Object.entries(s.tables)) rows.slice(0, 3).forEach((r, i) => { for (const [c, ty] of Object.entries(manifest.tables[tbl])) if (ty === 'text' || ty === 'long') r.data[c] = L[i % 3]; });
   }
   if (grow) Object.assign(manifest.tables[Object.keys(manifest.tables)[0]], { stars: 'num', mood2: 'pick:calm|busy', ok: 'bool', note2: 'text', on: 'date' }); // columns added after rows exist
   return `<!doctype html>
@@ -56,7 +60,7 @@ export function startServer() {
     let m;
     if ((m = u.pathname.match(/^\/app\/(\w+)$/))) {
       res.writeHead(200, { ...h, 'content-type': 'text/html' });
-      return res.end(pageHtml(m[1], { theme: u.searchParams.get('theme'), seed: u.searchParams.get('seed') !== '0', grow: u.searchParams.get('grow') === '1', big: +u.searchParams.get('big') || 0, locale: u.searchParams.get('locale') || '', dir: u.searchParams.get('dir') || '' }));
+      return res.end(pageHtml(m[1], { theme: u.searchParams.get('theme'), seed: u.searchParams.get('seed') !== '0', grow: u.searchParams.get('grow') === '1', big: +u.searchParams.get('big') || 0, long: u.searchParams.get('long') === '1', locale: u.searchParams.get('locale') || '', dir: u.searchParams.get('dir') || '' }));
     }
     if (u.pathname === '/specimen') { res.writeHead(200, { ...h, 'content-type': 'text/html' }); return res.end(readFileSync(join(here, 'specimen.html'), 'utf8')); }
     const f = join(KIT, u.pathname.replace(/\.\./g, ''));
@@ -116,8 +120,8 @@ export const auditFn = () => {
     const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || (r.width === 0 && r.height === 0)) continue;
     if (el.closest('svg') && el.localName !== 'svg') { if (el.localName === 'text' && parseFloat(cs.fontSize) * (el.ownerSVGElement.getBoundingClientRect().width / (el.ownerSVGElement.viewBox.baseVal.width || 1)) < 11.9) out.tiny.push('svg text'); continue; }
-    if (el.closest('.m-toasts') === null && (r.right > vw + 0.5 || r.left < -0.5) && !el.closest('.scroll, .m-seg')) out.overflow.push(`${el.localName}.${el.className} [${Math.round(r.left)},${Math.round(r.right)}] vs ${vw}`);
-    if (!el.classList.contains('sr') && el.matches('button, a[href], select, textarea, input:not([type=hidden]), [role=button], summary') && Math.min(r.width, r.height) < 43.99) out.small.push(`${el.localName}${el.name ? '[' + el.name + ']' : ''}.${el.className} ${Math.round(r.width)}x${Math.round(r.height)}`);
+    if (el.closest('.m-toasts') === null && (r.right > vw + 0.5 || r.left < -0.5) && !el.closest('.scroll, .seg')) out.overflow.push(`${el.localName}.${el.className} [${Math.round(r.left)},${Math.round(r.right)}] vs ${vw}`);
+    if (!el.classList.contains('sr') && el.matches('button, a[href], select, textarea, input:not([type=hidden]), [role=button], [role=textbox], [contenteditable=true], summary') && Math.min(r.width, r.height) < 43.99) out.small.push(`${el.localName}${el.name ? '[' + el.name + ']' : ''}.${el.className} ${Math.round(r.width)}x${Math.round(r.height)}`);
     for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim() && parseFloat(cs.fontSize) < 11.9) out.tiny.push(`${el.localName} ${cs.fontSize}`);
   }
   return out;

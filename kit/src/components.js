@@ -47,11 +47,11 @@
     return e;
   }
   var ICON = {
-    x: '<path d="M6 6l12 12M18 6L6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>', trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
     
   };
   function icon(name) {
-    var e = s('svg', { viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    var e = s('svg', { viewBox: '0 0 24 24', width: 22, height: 22, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
     e.innerHTML = ICON[name];
     return e;
   }
@@ -144,13 +144,13 @@
     data.forEach(function (d, i) {
       var x = x0 + i * (bw + gap), cx = x + bw / 2, bh = Math.max(d.v !== 0 ? 3 : 2, Math.abs(d.v) * sc), y = d.v >= 0 ? zero - bh : zero;
       if (type === 'line') pts.push([cx, d.v >= 0 ? zero - Math.abs(d.v) * sc : zero + Math.abs(d.v) * sc]);
-      else sv.appendChild(s('rect', { x: x, y: y, width: bw, height: bh, rx: Math.min(4, bw / 2), class: 'm-b' }));
+      else sv.appendChild(s('rect', { x: x, y: y, width: bw, height: bh, rx: Math.min(4, bw / 2), class: i === n - 1 || i === hiIdx ? 'm-b on' : 'm-b' }));
       if (d.v !== 0 && (i === n - 1 || i === hiIdx || i === loIdx)) sv.appendChild(s('text', { x: Math.min(w - 12, Math.max(12, cx)), y: d.v >= 0 ? (type === 'line' ? pts[i][1] : y) - 6 : y + bh + fs, 'text-anchor': 'middle', class: 'm-hi' }, sgn(d.v)));
       if ((n - 1 - i) % step === 0) sv.appendChild(s('text', { x: Math.min(w - 10, Math.max(10, cx)), y: H - 6, 'text-anchor': 'middle', class: 'm-xl' }, labs[i]));
     });
     if (type === 'line') {
       sv.insertBefore(s('polyline', { points: pts.map(function (q) { return q.join(','); }).join(' '), class: 'm-line' }), sv.children[1]);
-      var lp = pts[pts.length - 1]; sv.appendChild(s('circle', { cx: lp[0], cy: lp[1], r: 4, class: 'm-b' }));
+      var lp = pts[pts.length - 1]; sv.appendChild(s('circle', { cx: lp[0], cy: lp[1], r: 4, class: 'm-b on' }));
     }
     kids.push(sv); root();
   }
@@ -186,12 +186,17 @@
     }
     return row;
   }
+  /* a small "n / max" counter appears once the text is within 20% of the limit (the input also has a maxlength) */
+  function counter(input, max, wrap) {
+    var c = h('small', { class: 'muted m-count', 'aria-live': 'polite' }); c.hidden = true; wrap.appendChild(c);
+    input.addEventListener('input', function () { var n = input.value.length; c.hidden = n < max * 0.8; c.textContent = n + ' / ' + max; });
+  }
   function inputFor(c, d, ph, value, p) {
     var attrs = { name: c, autocomplete: 'off', 'aria-label': human(c) };
-    if (d === 'long') { var ta = h('textarea', Object.assign(attrs, { rows: 3, maxlength: 2000, placeholder: ph })); ta.value = value == null ? '' : value; return ta; }
+    if (d === 'long') { var ta = h('textarea', Object.assign(attrs, { rows: 3, maxlength: S.LIMITS.long, placeholder: ph })); ta.value = value == null ? '' : value; return ta; }
     if (d === 'num') { var ni = h('input', Object.assign(attrs, { type: 'number', inputmode: 'decimal', step: 'any', placeholder: ph })); if (p.min != null) ni.min = p.min; if (p.max != null) ni.max = p.max; if (value != null) ni.value = value; return ni; }
     if (d === 'date') return h('input', Object.assign(attrs, { type: 'date', value: value || app.today() }));
-    var ti = h('input', Object.assign(attrs, { type: 'text', maxlength: 200, enterkeyhint: 'done', placeholder: ph, dir: 'auto' })); if (value != null) ti.value = value; return ti;
+    var ti = h('input', Object.assign(attrs, { type: 'text', maxlength: S.LIMITS.text, enterkeyhint: 'done', placeholder: ph, dir: 'auto' })); if (value != null) ti.value = value; return ti;
   }
 
   /* ---- m-list: rows of a table. attrs :table, :rows (optional array to show instead of all rows), title, sub, unit, meta, order, max (page size), edit ---- */
@@ -201,7 +206,7 @@
     if (def === 'bool') return h('span', { class: 'm-val', text: v ? 'Yes' : 'No' });
     return h('span', { class: 'm-val', text: String(v) });
   }
-  function removeBtn(t, r) { return h('button', { class: 'ibtn', type: 'button', 'aria-label': 'Remove', onclick: function () { t.remove(r.id); } }, icon('x')); }
+  function removeBtn(t, r) { return h('button', { class: 'ibtn', type: 'button', 'aria-label': 'Remove', onclick: function () { t.remove(r.id); } }, icon('trash')); }
 
   /* inline editor for one row: inputs for every column, Save (t.set) / Cancel */
   function editor(el, t, r, defs, p) {
@@ -226,22 +231,27 @@
     return form;
   }
 
+  function dayKey(r) { return r.at != null && isFinite(r.at) ? ymd(new Date(r.at)) : ''; }
   function mList(el, p) {
     var t = p.table; if (!t) return;
     var defs = meta(t).schema, rows = Array.prototype.slice.call(Array.isArray(p.rows) ? p.rows : t.rows);
     if (p.order !== 'old') rows.reverse();
     var step = Math.max(1, Math.min(200, Number(p.max) || 30)), shown = Math.min(rows.length, step * (1 + (el._m.pages || 0)));
-    var meta_ = p.meta ? String(p.meta).split(',') : null, edit = 'edit' in p;
-    var box = h('div', { class: 'list' });
+    var meta_ = p.meta ? String(p.meta).split(',') : null, edit = 'edit' in p, byDay = p.by === 'day', sums = {};
+    if (byDay && p.sub && defs[p.sub] === 'num') rows.forEach(function (r) { var k = dayKey(r); sums[k] = (sums[k] || 0) + (Number(r[p.sub]) || 0); });
+    var box = h('div', { class: 'list' }), last = null;
     if (!rows.length) box.appendChild(h('div', { class: 'empty', text: 'Nothing here yet.' }));
     rows.slice(0, shown).forEach(function (r) {
-      if (edit && el._m.editing === r.id) { box.appendChild(editor(el, t, r, defs, p)); return; }
-      var sub = [app.fmt(r.at, 'rel')];
-      if (meta_) sub = meta_.map(function (c) { return String(r[c]); }).concat(sub);
-      var tv = r[p.title], titleNode = typeof tv === 'number' ? bdi(num(tv) + (p.unit && !p.sub ? ' ' + p.unit : '')) : String(tv == null ? '' : tv);
-      var body = h('div', { class: 'grow' }, h('div', { class: 'm-title', dir: 'auto' }, titleNode), h('small', { class: 'muted', dir: 'auto', text: sub.join(' \u00b7 ') }));
-      var main = edit ? h('button', { class: 'm-body grow', type: 'button', 'aria-label': 'Edit ' + String(tv).slice(0, 40), onclick: function () { el._m.editing = r.id; render(el); } }, body) : body;
-      box.appendChild(h('div', { class: 'item' }, main, p.sub ? cell(String(defs[p.sub]).indexOf('pick:') === 0 ? 'pick' : defs[p.sub], r[p.sub], p.unit) : null, removeBtn(t, r)));
+      try {
+        if (byDay) { var k = dayKey(r); if (k !== last) { last = k; box.appendChild(h('div', { class: 'm-dh' }, h('b', { class: 'grow' + (k === app.today() ? ' hi' : ''), text: k ? app.fmt(k, 'rel') : 'No date' }), k in sums ? bdi(sgn(sums[k]) + (p.unit ? ' ' + p.unit : ''), 'muted') : null)); } }
+        if (edit && el._m.editing === r.id) { box.appendChild(editor(el, t, r, defs, p)); return; }
+        var when = r.at != null && isFinite(r.at) ? (byDay ? app.fmt(r.at, 'time') : app.fmt(r.at, 'rel')) : '', sub = when ? [when] : [];
+        if (meta_) sub = meta_.map(function (c) { return String(r[c]); }).concat(sub);
+        var tv = r[p.title], titleNode = typeof tv === 'number' ? bdi(num(tv) + (p.unit && !p.sub ? ' ' + p.unit : '')) : String(tv == null ? '' : tv);
+        var body = h('div', { class: 'grow' }, h('div', { class: 'm-title', dir: 'auto' }, titleNode), h('small', { class: 'muted', dir: 'auto', text: sub.join(' \u00b7 ') }));
+        var main = edit ? h('button', { class: 'm-body grow', type: 'button', 'aria-label': 'Edit ' + String(tv).slice(0, 40), onclick: function () { el._m.editing = r.id; render(el); } }, body) : body;
+        box.appendChild(h('div', { class: 'item' }, main, p.sub ? cell(String(defs[p.sub]).indexOf('pick:') === 0 ? 'pick' : defs[p.sub], r[p.sub], p.unit) : null, removeBtn(t, r)));
+      } catch (x) { box.appendChild(h('div', { class: 'item' }, h('small', { class: 'muted', text: 'This row could not be shown.' }))); }
     });
     if (shown < rows.length) box.appendChild(h('button', { class: 'btn ghost m-more', type: 'button', text: 'Show ' + Math.min(step, rows.length - shown) + ' more (' + (rows.length - shown) + ' left)', onclick: function () { el._m.pages = (el._m.pages || 0) + 1; render(el); } }));
     el.replaceChildren(box);
@@ -252,7 +262,7 @@
     var t = p.table; if (!t) return;
     var defs = meta(t).schema, cols = (p.fields ? String(p.fields).split(',').map(function (x) { return x.trim(); }) : Object.keys(defs)).filter(function (c) { return hasOwn.call(defs, c); });
     var inline = cols.length === 1 && (defs[cols[0]] === 'text' || defs[cols[0]] === 'num');
-    var form = h('form', { class: 'm-form' + (inline ? ' m-inline' : ''), novalidate: true }), grid = h('div', { class: 'm-fields' });
+    var form = h('form', { class: 'm-form' + (inline ? ' m-inline' : '') + (p.look ? ' m-' + p.look : ''), novalidate: true }), grid = h('div', { class: 'm-fields' });
     var firstInput = null;
     cols.forEach(function (c) {
       var d = defs[c], f;
@@ -267,6 +277,7 @@
         input.addEventListener('input', function () { clearErr(form); });
         if (!firstInput && d !== 'date') firstInput = input;
         f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: d === 'long' || d === 'text' ? 'm-wide' : '' }, input);
+        if (d === 'text' || d === 'long') counter(input, S.LIMITS[d], f);
       }
       grid.appendChild(f);
     });
@@ -287,12 +298,39 @@
     el.replaceChildren(form);
   }
 
-  /* x-edit="[table, row, 'col']": the element becomes editable text for one field; blur saves with t.set (empty reverts). Generic, used by app code. */
+  /* x-edit: editable text. x-edit="[table, row, 'col']" saves with t.set; x-edit="[box, 'v']" writes a store.kv box (numbers stay numbers).
+   * Enter commits (single line, no <div> is ever inserted), Escape cancels, blur commits, an empty or invalid value reverts. The element gets class tbtn (>= 44 px). */
   A.directive('edit', function (el, d, u) {
-    el.setAttribute('contenteditable', 'true'); el.setAttribute('role', 'textbox'); el.dir = 'auto';
-    u.effect(function () { var a = u.evaluate(d.expression); if (document.activeElement !== el) el.textContent = String(a[1][a[2]]); });
-    el.addEventListener('blur', function () { var a = u.evaluate(d.expression), v = el.textContent.trim(), o = {}; o[a[2]] = v; if (v && v !== a[1][a[2]]) a[0].set(a[1].id, o); else el.textContent = a[1][a[2]]; });
+    el.setAttribute('contenteditable', 'true'); el.setAttribute('role', 'textbox'); el.dir = 'auto'; el.classList.add('tbtn');
+    var cancel = false;
+    var cur = function () { var a = u.evaluate(d.expression); return a.length === 2 ? a[0][a[1]] : a[1][a[2]]; };
+    u.effect(function () { var v = cur(); if (document.activeElement !== el) el.textContent = String(v); });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } else if (e.key === 'Escape') { cancel = true; el.blur(); } });
+    el.addEventListener('beforeinput', function (e) { if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') e.preventDefault(); });
+    el.addEventListener('paste', function (e) { e.preventDefault(); var tx = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, tx); });
+    el.addEventListener('blur', function () {
+      var a = u.evaluate(d.expression), v = el.textContent.trim(), old = cur(), c = cancel; cancel = false;
+      if (!c && v && v !== String(old)) {
+        try {
+          if (a.length === 2) { var n = Number(v.replace(/[,\s]/g, '')); if (typeof old === 'number') { if (!isFinite(n) || n < 0) throw new Error('Enter a number'); a[0][a[1]] = n; } else a[0][a[1]] = v; }
+          else { var o = {}; o[a[2]] = v; a[0].set(a[1].id, o); }
+        } catch (x) { ui.toast(x.message); }
+      }
+      el.textContent = String(cur());
+    });
   });
+  /* x-remove="[table, row]", [table, row, beforeFn] or [table, row, childTable, 'col'] (cascade): a 44 px icon button that removes the row (Undo toast included). */
+  A.directive('remove', function (el, d, u) {
+    el.setAttribute('type', 'button'); el.setAttribute('aria-label', 'Remove'); el.classList.add('ibtn'); el.appendChild(icon('trash'));
+    el.addEventListener('click', function () {
+      var a = u.evaluate(d.expression), c = a[2];
+      if (typeof c === 'function') c(); /* [table, row, fn]: run fn first */
+      else if (c && c.rows) Array.prototype.slice.call(c.rows).filter(function (r) { return String(r[a[3]]) === String(a[1].id); }).forEach(function (r) { c.remove(r.id); }); /* [table, row, child, col]: also remove the child rows that point at it */
+      a[0].remove(a[1].id);
+    });
+  });
+  /* $day(n): the date n days from today as YYYY-MM-DD (reactive across midnight, no time zone surprises). */
+  A.magic('day', function () { return function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1, +q[2] + (n || 0), 12)); }; });
 
   var COMP = { 'm-stat': mStat, 'm-chart': mChart, 'm-list': mList, 'm-form': mForm };
 

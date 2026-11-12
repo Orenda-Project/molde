@@ -56,7 +56,11 @@ const fixtureProbe = () => {
     if (r < (large ? 3 : 4.5)) bad.push(`${el.localName}.${el.className} "${t.textContent.trim().slice(0, 24)}" ${r.toFixed(2)}`);
   }
   // non-text parts that carry meaning: input edges, selected bar vs card
-  for (const i of document.querySelectorAll('input:not([type=radio]):not([type=checkbox]), textarea')) { const r = ratio(over(parse(getComputedStyle(i).borderTopColor), bgOf(i.parentElement)), bgOf(i.parentElement)); n++; if (r < 3) bad.push(`input edge ${r.toFixed(2)}`); }
+  for (const i of document.querySelectorAll('input:not([type=radio]):not([type=checkbox]), textarea')) {
+    const cs = getComputedStyle(i), bg = bgOf(i.parentElement), cands = [cs.borderTopColor, cs.borderBottomColor];
+    const sh = cs.boxShadow.match(/(rgba?\([^)]*\)|color\([^)]*\)|oklab\([^)]*\))/); if (sh) cands.push(sh[1]);
+    const r = Math.max(1, ...cands.map((c) => { const f = over(parse(c), bg); return f[3] === 0 ? 1 : ratio(f, bg); })); n++; if (r < 3) bad.push(`input edge ${r.toFixed(2)}`);
+  }
   return { n, bad };
 };
 
