@@ -6,6 +6,7 @@
 # Creates:  <outdir>/critic1/{A,B}.<ext> (+ ISSUE.md)   <outdir>/critic2/{A,B}.<ext> (+ ISSUE.md)
 #           <outdir>.KEY.private.txt   <- NEXT TO the pack folder, never inside it
 # In one pack A is ours, in the other A is the bar; which pack is critic1 is a coin flip.
+# Symlinks are copied as the files they point to (cp -RL); a broken symlink is refused.
 # File names are normalised: same extension is kept; two different text types both become .txt;
 # anything else mixed (e.g. .png vs .jpg) is refused so the extension cannot reveal which is ours.
 # Run it as the dispatcher, put <outdir> OUTSIDE the repo (so no repo CLAUDE.md loads), and hand each
@@ -24,8 +25,10 @@ while [ $# -gt 0 ]; do
 done
 [ ${#ARGS[@]} -eq 3 ] || die "usage: make-blind.sh [--issue-file ISSUE.md] [--force] <ours> <bar> <outdir>"
 OURS="${ARGS[0]}"; BAR="${ARGS[1]}"; OUT="${ARGS[2]%/}"
-[ -e "$OURS" ] || die "not found: $OURS"
-[ -e "$BAR" ] || die "not found: $BAR"
+for x in "$OURS" "$BAR"; do
+  if [ -L "$x" ] && [ ! -e "$x" ]; then die "broken symlink (target missing): $x"; fi
+  [ -e "$x" ] || die "not found: $x"
+done
 [ -z "$ISSUE_FILE" ] || [ -f "$ISSUE_FILE" ] || die "not found: $ISSUE_FILE"
 KEY="$OUT.KEY.private.txt"
 [ ! -e "$KEY" ] || die "$KEY already exists; remove it or pick a new outdir"
@@ -53,7 +56,7 @@ esac
 mkdir -p "$OUT/critic1" "$OUT/critic2"
 if [ $(( $(od -An -N1 -tu1 /dev/urandom) % 2 )) -eq 0 ]; then FIRST=ab; else FIRST=ba; fi
 mk() { # $1 dir, $2 ab|ba      ab: A = ours, B = bar     ba: A = bar, B = ours
-  if [ "$2" = ab ]; then cp -R "$OURS" "$1/A$EO"; cp -R "$BAR" "$1/B$EB"; else cp -R "$BAR" "$1/A$EB"; cp -R "$OURS" "$1/B$EO"; fi
+  if [ "$2" = ab ]; then cp -RL "$OURS" "$1/A$EO"; cp -RL "$BAR" "$1/B$EB"; else cp -RL "$BAR" "$1/A$EB"; cp -RL "$OURS" "$1/B$EO"; fi
   [ -z "$ISSUE_FILE" ] || cp "$ISSUE_FILE" "$1/ISSUE.md"
 }
 if [ "$FIRST" = ab ]; then mk "$OUT/critic1" ab; mk "$OUT/critic2" ba; else mk "$OUT/critic1" ba; mk "$OUT/critic2" ab; fi

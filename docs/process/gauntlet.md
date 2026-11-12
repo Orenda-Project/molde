@@ -3,7 +3,7 @@
 A builder agent does the issue. A different critic agent judges the result against a real reference, blind. They loop until the critic picks our work in both orders. Nobody grades their own work. Source: `docs/plan/04-product-process.md` section 6.
 
 ## Roles
-- **Builder**: works one issue on a branch, opens a draft PR (`Refs #N`, never `Closes #N`), runs the machine check, sets `state:critic`. Cannot post a verdict.
+- **Builder**: works one issue on a branch, opens a draft PR (`Refs #N`, never `Closes #N`), runs the machine check, moves the issue to `state:critic` when the work is ready. Cannot post a verdict.
 - **Critic**: a separate agent, fresh context. Sees the issue text, the acceptance lines and two artifacts, A and B. Never the builder's reasoning. Cheap model for mechanical checks, stronger one where taste decides.
 - **Dispatcher** (a human or the planner): creates issues, adds `state:ready` once the bar exists, runs `make-blind.sh`, starts the critics, merges their replies into `verdict.json`, posts it.
 - **Machine check**: the commands in the issue's Acceptance list. They must pass BEFORE the critic runs.
@@ -21,9 +21,17 @@ Labels: `type:*`, `state:ready|building|critic|won|needs-human|blocked`, `needs:
 
 ## One round
 1. **Issue** from `.github/ISSUE_TEMPLATE/task.md`. The Bar needs a name, a fetchable URL or repo path pinned to a commit or date, the aspect compared, and how the A/B artifacts are made. When it has all of that, the dispatcher adds `state:ready`.
-2. **Build**: `git checkout -b task-NN-name`, set `state:building`, do the work, run every Acceptance command and paste the real output in the PR. Fix failures, then set `state:critic`.
+2. **Build**: start work and open the draft PR early, then do the work, run every Acceptance command and paste the real output in the PR. Fix failures, then hand over.
+```bash
+gh issue edit 7 -R Orenda-Project/molde --add-label state:building --remove-label state:ready
+git checkout -b task-07-short-name && git push -u origin HEAD
+gh pr create -R Orenda-Project/molde --draft --base main --title "Task 07: short name" --body "Refs #7"
+# ... build, run the Acceptance commands, commit, push ...
+gh issue edit 7 -R Orenda-Project/molde --add-label state:critic --remove-label state:building
+```
+Use `Refs #7`, never `Closes #7`: the issue closes only after a WIN. The dispatcher marks the issue ready with `gh issue edit 7 --add-label state:ready` once the bar exists.
 3. **Fetch the bar fresh** on the day of the round, never from memory. Git: `git -C <clone> show <sha>:<path> > bar.md`, or `gh api "repos/OWNER/REPO/contents/PATH?ref=SHA" --jq .content | base64 -d > bar.md`. Web page or file: `curl -L <url> -o bar.html`. Live site or app: screenshot it at the same viewport as ours. Put the date or commit in `bar.pin` of the verdict.
-4. **Blind packs.** Each artifact must be ONE file (folders are refused). Save the issue text, then build the packs in a folder OUTSIDE the repo so no repo `CLAUDE.md` loads:
+4. **Blind packs.** Each artifact must be ONE file (folders are refused). Save the issue text, then build the packs in a temp folder OUTSIDE the repo so no repo `CLAUDE.md` loads. `ISSUE.md` includes the Bar section, which names the reference; if you do not want the critic to be able to recognise the bar from it, delete that section from the copy first.
 ```bash
 gh issue view 7 -R Orenda-Project/molde --json title,body -q '"# " + .title + "\n\n" + .body' > /tmp/issue7.md
 OUT="$(mktemp -d)/pack"
@@ -57,15 +65,15 @@ done
 ```
 7. **Check and post.** Plain schema check, then the full check that `post-verdict.sh` runs for you:
 ```bash
-python3 -I -m jsonschema -i verdict.json tools/verdict.schema.json     # structure only
+"${PYTHON:-python3}" -I -m jsonschema -i verdict.json tools/verdict.schema.json     # structure only
 bash tools/post-verdict.sh --dry-run --issue 7 verdict.json             # + cross-field rules; prints the comment and label commands
 bash tools/post-verdict.sh --issue 7 verdict.json                       # posts, creates missing labels, sets round:N, moves state labels
 ```
-The cross-field rules (result matches the orders and checks, `next` matches the result, round 5, visible text of at least 8 characters for `biggest_gap`, whole-number `round` and `issue`) live in `tools/check-verdict.py`, which `post-verdict.sh` calls; the schema alone does not enforce them. WIN -> `state:won`. LOSS or SPLIT -> `state:building`. Round 5 without a win -> `state:needs-human`. If the comment posts but the label edit fails, the script prints `COMMENT POSTED, LABELS NOT MOVED: run <command>` and exits 4.
-8. **Fix only the named gap** (plus failed checks), set `state:critic`, repeat from step 3 with the next round. Round 5 without a win: `state:needs-human`, post the best artifact and the remaining gap, stop. Merge only when the last verdict is WIN, the PR links its comment, and the machine check is green.
+The cross-field rules (result matches the orders and checks, `next` matches the result, `needs-human` only at round 5, visible text of at least 8 characters for `biggest_gap`, whole-number `round` and `issue`) live in `tools/check-verdict.py`, which `post-verdict.sh` calls; the schema alone does not enforce them. WIN -> `state:won`. LOSS or SPLIT -> `state:building`. Round 5 without a win -> `state:needs-human`. The script refuses to post a second comment for the same round (exit 6) unless you pass `--force-repost`. Labels it has to remove that do not exist in the repo are skipped, and labels it has to add are created on demand. If the comment posts but the label edit fails, the script prints `COMMENT POSTED, LABELS NOT MOVED: run <command>` and exits 4.
+8. **Fix only the named gap** (plus failed checks), set `state:critic`, repeat from step 3 with the next round (`state:critic` again with the `gh issue edit` above). Round 5 without a win: `state:needs-human`, post the best artifact and the remaining gap, stop. Merge only when the last verdict is WIN, the PR links its comment, and the machine check is green.
 
 ## Verdict fields (`tools/verdict.schema.json`)
-Text fields need visible characters (max 300; `biggest_gap` at least 8). When posted, newlines are flattened and `@`, `#123`, links and images are defused.
+Text fields need visible characters (max 300; `biggest_gap` at least 8). When posted, newlines are flattened, and `@`, `#123`, `GH-123`, markdown links and images, and bare `http://`, `https://`, `ftp://` and `www.` URLs are defused with an invisible character. Other forms (for example `mailto:` or bare domain names) are not.
 
 | Field | Meaning |
 |---|---|
@@ -79,7 +87,7 @@ Text fields need visible characters (max 300; `biggest_gap` at least 8). When po
 | `machine_check` | `status` PASS/FAIL, `link` to the run |
 | `other_notes` | optional, max 3 |
 | `artifacts` | links or paths |
-| `next` | `ready to merge` (WIN only), `builder fixes the biggest gap`, or `needs-human` (required at round 5 without a win) |
+| `next` | `ready to merge` (WIN only), `builder fixes the biggest gap`, or `needs-human` (only valid, and required, at round 5 without a win) |
 
 Samples: `tools/samples/verdict.valid.json` (a SPLIT), `verdict.win.json` (a WIN), `verdict.invalid.json` (rejected: no `biggest_gap`, bad status).
 
