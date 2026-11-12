@@ -102,7 +102,7 @@ Layout check at 360x640, 412x915, 600x960, 800x1280 and wide desktop from the pr
 7. Loop: builder fixes ONLY the named gap (and any failed machine check), then a new round. Cap 5 rounds; at round 5 without a win, label `needs-human`, post the best artifact and the remaining gap, stop. Never self-grade; the builder cannot post a verdict.
 8. Merge only when: last verdict is WIN in both orders, machine check green, issue acceptance boxes ticked by the critic's checklist, and the PR links the final verdict comment.
 
-**Labels.** Type: `type:sdk`, `type:kit`, `type:shell`, `type:model-data`, `type:eval`, `type:docs`. State: `state:ready` (has bar), `state:building`, `state:critic`, `state:won`, `state:needs-human`, `state:blocked`. Gate: GitHub milestones (`Gate 1: Prove it` ... `Gate 4: Go offline`), not labels, as in `.github/labels.yml`. Flags: `needs:sdk-frozen`, `ui` (triggers 5-viewport check), `urdu-rtl`. Round counter via `round:1`..`round:5`.
+**Labels.** Type: `type:sdk`, `type:kit`, `type:shell`, `type:model-data`, `type:eval`, `type:docs`, `type:process`. State: `state:ready` (has bar), `state:building`, `state:critic`, `state:won`, `state:needs-human`, `state:blocked`. Gate: GitHub milestones (`Gate 1: Prove it` ... `Gate 4: Go offline`), not labels, as in `.github/labels.yml`. Flags: `needs:sdk-frozen`, `needs:device`, `ui` (triggers 5-viewport check), `urdu-rtl`. Round counter via `round:1`..`round:5`.
 
 **Issue template** (`.github/ISSUE_TEMPLATE/task.md`):
 ```

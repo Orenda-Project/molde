@@ -15,7 +15,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[[ "$REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || die "--repo must look like OWNER/NAME, got: $REPO"
+[[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && [ "${REPO%%/*}" != . ] && [ "${REPO%%/*}" != .. ] \
+  && [ "${REPO##*/}" != . ] && [ "${REPO##*/}" != .. ] || die "--repo must look like OWNER/NAME, got: $REPO"
 EXISTING=""
 if [ "$DRY" = 0 ]; then
   EXISTING=$(gh api "repos/$REPO/milestones?state=all&per_page=100" --paginate --jq '.[].title')
