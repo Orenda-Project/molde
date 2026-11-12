@@ -104,7 +104,7 @@ Globals `store`, `ui`, `app`. `t` = a table handle from `store.t(name)`. `t.rows
 | 15 | `app.fmt(ts, how)` | `'date'/'time'/'rel'` in the user's locale (incl. Urdu digits) |
 | 16 | `app.today()` | `YYYY-MM-DD` in local time |
 
-Components (kit, not SDK; attributes are the API): `<m-form :table fields>` auto-builds inputs from the schema (so adding a column in `app.json` adds an input, zero code), `<m-list :table title sub order>`, `<m-stat label :value :of unit>`, `<m-chart :data type>` (bar default, `line`, `pie`; canvas, ~2 KB), `<m-timer>` wraps #13. This is where the 124-token mean comes from.
+Components (kit, not SDK; attributes are the API, see 4b): `<m-form :table>` builds inputs from the schema, `<m-list :table>`, `<m-stat label :value :of unit>`, `<m-chart :data type>` (bar default, `line`, `pie`; SVG). The timer is the SDK call `ui.timer`; apps draw their own countdown.
 
 ### Data survival rules (enforced in host code, not in the prompt)
 1. There is no SDK call that drops a table, drops a column, truncates, or hard-deletes. Not exposed = cannot be emitted.
@@ -121,32 +121,37 @@ Components (kit, not SDK; attributes are the API): `<m-form :table fields>` auto
 
 One stylesheet `kit.css` plus element defaults (so `h1`, `p`, `small`, `button`, `input`, `progress` look right with zero class tokens). House rules from `.claude/rules/ui-design.md` are built into the CSS, not left to the model: 4 px spacing scale, one gap per kind of thing, nested radius, text contrast >= 4.5:1, touch targets >= 44 px, visible focus, no state by color alone, logical properties so Urdu/RTL mirrors for free.
 
-Classes (20): layout `row` `col` `grid2` `grow` `scroll` (horizontal) · surfaces `card` `sheet` · actions `btn` `btn ghost` `btn danger` `fab` · inputs `field` `check` · info `chip` `stat` `muted` `ok` `warn` · nav `tabs` `tab` · empty `empty`. Anything not in this list fails validator check V2 (class allowlist). Elements: `main` root only once.
+Classes (kit 1, allowlist for validator V2): layout `row` `col` `grid2` `grid` `grow` `scroll` · surfaces `card` `sheet` `list` `item` `slim` · actions `btn` `btn ghost` `btn danger` `fab` `ibtn` `tbtn` · inputs `field` `check` `seg` `sr` · info `chip` `stat` `muted` `ok` `warn` `bar` `cell` `lv1`..`lv4` · nav `tabs` `tab` · empty `empty`. `grid` takes `--cols`, `--rows`, `--flow` through `:style` (custom properties only); `cell` + `lv1..lv4` are a generic square and a 4-step accent intensity scale (heat maps, bars). Anything not in this list fails V2. Elements: `main` root only once; `h1` directly in `main` is the quiet sticky app bar. Type sizes are in `rem` (root font scale works), secondary text is 14 px at 100%.
+
+**Split: kit = standard library, app code = model-written.** The kit holds only (1) the SDK data layer (16 calls), (2) tokens, themes and the generic classes above, (3) four generic components: `m-stat`, `m-chart` (bar, line, pie), `m-list`, `m-form`, and one generic directive `x-edit`. Everything app-specific (habit grids, a water glass, mood faces, per-exercise cards with a delta, category bars) is written by the model in `app.html` with Alpine, SDK calls, SVG attributes and those classes. The five fixtures are the examples it is trained on; none of them needs a kit change. SVG colours go through attributes that reference theme variables (`fill="var(--accent)"`, `stroke="hsl(... var(--ml))"`), never through `style=` colours.
 
 Themes (set in `app.json` `theme`, never in code; contrast pre-verified light and dark, auto dark via `prefers-color-scheme`): `mint`, `ocean`, `plum`, `slate` (mono), `ink` (dark default). No brown/parchment (Kamal's no-brown rule). Variables: `--bg --fg --muted --card --accent --accent-fg --radius`. The model chooses a theme name; it cannot write color values (validator blocks `style=` colors and `<style>` entirely in v1).
 
 
-## 4b. As built in T1 (kit 1, sdk 1): everything the kit adds beyond the contract above
+## 4b. As built in T1 (kit 1, sdk 1): every attribute and option beyond the contract
 
-The 16 calls and the 5 components are unchanged in number. Round 2 of the gauntlet (PR #33) added optional attributes and options, listed here so the validator (Task 3) and the prompt card (Task 8) can allowlist exactly these.
+The 16 calls are unchanged. App-specific attributes added in earlier rounds (`m-list log/key/group/face/by/today`, `m-chart :table/col/type=heat|mood|rows|dots`, `m-stat left/glass`, `m-form quick/faces/compact/hint`, `m-timer`) were removed: they belong in app code.
 
 SDK options (no new calls):
-- `t.group(col, valCol, opts)`: third argument takes `since` and `where`, like `t.sum`.
-- `t.series(col, {by, last, op, where})`: `where` filters rows; `last` is clamped to 1..366.
-- Dates: if a table has a `date` column, that column is the row's day for `since`, `series` and `streak`. `has`, `toggle` and `streak` default a missing date key to today.
-- Numbers are clamped to +-1e12 (NaN becomes 0). Dates must be real (`2026-02-31` is `E_ARG`). Unknown column or table names are `E_COL` / `E_TABLE`. Bad arguments always raise a `MoldeError` with `E_ARG`; nothing returns silently. `store.t` / `store.kv` with `constructor`, `__proto__`, `toString` or any `Object.prototype` name raise `E_TABLE`.
-- Rows read from storage are filled with type defaults for columns that did not exist when the row was written (num 0, pick first option, bool false, text empty, date the row's own day), so adding a column never shows NaN or undefined.
-- `t.rows` is a frozen read-only copy; generated code cannot mutate the store through it. `Object.keys(store|ui|app|t)` is exactly the 16 calls; `ui.toasts`, `_schema`, `_dismiss` and `_notifications` are kit-internal (`sdk.internal`) and not on the globals.
-- `today()` is reactive across midnight (refreshed on visibility change, every 30 s and on every table action).
+- `t.group(col, valCol, opts)` takes `since` and `where` like `t.sum`. `t.series(col, {by, last, op, where})`: `last` is a number from 1 to 366 (`0`, negatives, strings, `null` raise `E_ARG`; larger is clamped to 366).
+- `since: 'day' | 'week' | 'month'` are **calendar-aligned**: today, the week since the week start, the month since the 1st. `'last7'` and `'last30'` are the rolling windows. The week starts on Monday by default; `weekStart` in `app.json` is a number (0 Sunday .. 6) or `'locale'`. `series by 'week'` uses the same start and `by 'month'` the same calendar month, so `series` and `sum` agree (tested across a month boundary in Los_Angeles, Karachi, UTC, Kiritimati).
+- If a table has a `date` column, that column is the row's day for `since`, `series` and `streak`; `has`, `toggle`, `streak` default a missing date key to today.
+- Writes: `t.add/t.set` accept only known columns (`E_COL`), values must be text, number or boolean (`E_ARG`), dates must be real (`2026-02-31` is `E_ARG`), numbers are clamped to +-1e12 (NaN becomes 0). Reads fill type defaults for columns added after a row was written (num 0, pick first option, bool false, text empty, date the row's own day). `sum`, `series` (except `op:'count'`) and `group` value columns must be number columns (`E_COL`). `where: null` or `since: null` is `E_ARG`. `store.kv` values must be JSON data (`E_ARG`). Unknown names are `E_TABLE`/`E_COL`; `constructor`, `__proto__`, `toString` and every `Object.prototype` name raise `E_TABLE`. `app.fmt('YYYY-MM-DD', 'rel')` never invents a time; `app.fmt(date-only, 'time')` is `E_ARG`. Every bad argument is a `MoldeError` with a code, never a raw TypeError.
+- `t.rows` is a frozen read-only copy (cached until the table changes). `Object.keys(store|ui|app|t)` is exactly the 16 calls; `ui.toasts`, `_schema`, `_dismiss`, `_notifications` are kit-internal (`sdk.internal`). At most 3 toasts are visible, the newest replaces the oldest. `today()` is reactive across midnight (visibility change, every 30 s, every table action).
+- Adapter interface: `rows`, `put`, `nextId`, `kvGet`, `kvSet`, optional `get(tbl, id)` and `errors`. A SQLite row whose JSON is unreadable is skipped and recorded in `errors`.
+- `window.moldeHost` (adapter, bridge, locale) is read once at boot and deleted; tests prove page code cannot reach the adapter.
 
-Component attributes:
-- `m-stat`: `label`, `:value`, `:of`, `unit`; `left` (lead shows `of - value`, "Over budget" when negative); `glass` (fill-level glass instead of the bar). Always flat (no card).
-- `m-chart`: `:data` or `:table` + `col` (+ `by`, `last`, `op`); `type` bar (default) | line | pie | rows; `label`. Pie keeps 4 slices and folds the rest into "Other"; percentages sum to 100. Categorical colours are `--c1..--c5` from the theme. Draws SVG (not canvas), values are sanitised, negative bars hang below a zero line.
-- `m-list`: `:table`, `title`, `sub` (a column, or a template such as `{kg} kg x {reps}`), `unit`, `meta` (comma list of columns), `order`, `max` (chunk size for "Show more", default 30), `by="day"` (day headers), `face="col"` (mood face + timeline rail), `group="col"` (groups with last-session line; needs `sub` template), `:log="table"` + `key="col"` (checklist grid: tap any recent day, streak lead; the number of day columns follows the width).
-- `m-form`: `:table`, `fields`, `submit`, `hint` (placeholder of the first text field), `quick="250,500"` (one-tap add buttons for the first number column), `faces` (a pick column named with great/good/okay/low/awful is shown as mood faces). Placeholders replace labels. Required: the first text column (whitespace-only is rejected) and every number column (an empty number is never stored as 0). A second submit within 500 ms is ignored.
-- `m-timer`: `sec`, `label`.
+Component attributes (generic only):
+- `m-stat`: `label`, `:value`, `:of`, `unit`. Flat lead number with an optional progress `bar`.
+- `m-chart`: `:data` (an array of `{k, v}`, usually a `series` or `group` result), `type` bar | line | pie, `label`. Values are sanitised (NaN 0, +-1e12), negative bars hang below a zero line and are labelled with a minus sign, long series thin their labels (script-aware width estimate) and never produce negative widths, a pie shows positive values only, keeps four slices and folds the rest into "Other" (percentages sum to 100 by largest remainder), legends wrap.
+- `m-list`: `:table`, `:rows` (optional array to show instead of all rows), `title`, `sub` (a column), `unit` (applied to a numeric title or to `sub`), `meta` (comma list of columns shown in the second line), `order`, `max` (page size, "Show more"), `edit` (tap a row to edit every column with `t.set`; Save / Cancel).
+- `m-form`: `:table`, `fields`, `submit`, `min`, `max` (numeric bounds), `seg` (pick fields as a segmented control). Placeholders replace labels; a single text or number column becomes one inline row. Validation shows a visible message (`role=alert`, `aria-invalid`): the first text column must not be blank, every number must be present and within bounds (an empty number is never stored as 0), a second submit within 500 ms is ignored, adding shows an Undo toast.
+- `x-edit="[table, row, 'col']"` (directive): editable text for one field, saved with `t.set` on blur, empty input reverts.
+- All numbers and units the kit prints are wrapped in `<bdi>` so `42.5 kg x 8` and `/ 2000 ml` stay in order under `dir=rtl`; apps should do the same.
 
-Left to other tasks, on purpose (these are visible to generated code in this build): `window.Alpine`, `window.MoldeSDK` and the SDK module are reachable, `localStorage` is not blocked here, and the CSP does not stop navigating away. The sandbox (issue 10, section 7) must freeze or hide them and block navigation; the validator (issue 4, V2) must ban the identifiers. The kit does not rely on them being available to app code.
+Contrast: text roles are tested at >= 4.5:1 on every theme x light/dark; graphics (categorical `--c1..--c5`, generated hues `hsl(h 60% var(--ml))`, input and button edges) at >= 3:1. `--ml` is the mid lightness token (34% light, 62% dark). Generated mood hues are graphics only (strokes), covered by the 3:1 test, not text.
+
+Left to other tasks, on purpose (visible to generated code in this build): `window.Alpine`, `window.MoldeSDK`, `localStorage`, `document.cookie`, `window.open` and navigating away are not blocked by the kit. The sandbox (issue 10, section 7) must freeze or hide them and block navigation and new windows; the validator (issue 4, V2) must ban the identifiers. The kit does not rely on them being available to app code.
 
 ## 5. Patch format: search/replace blocks, whole-file fallback
 
@@ -204,10 +209,10 @@ Error `msg` is written for the model: short, names the line and the fix ("L3: `s
 
 Bars: "blind critic" = an independent haiku critic with both orders against the named reference, plus the machine check, per `.claude/rules/ui-design.md` item 5. Do not self-grade.
 
-**T1. Runtime + kit + themes** (no model, no phone)
+**T1. Runtime + kit + themes** (no model, no phone; kit = standard library, app code = model-written)
 - Goal: `molde.js` (Alpine + SDK with in-memory/SQLite adapters + the 5 components) and `kit.css` with 5 themes, in a plain HTML test page.
 - Deliverable: `kit/molde.js`, `kit/kit.css`, `kit/themes.css`, `kit/format.mjs` (canonical formatter), `kit/fixtures/{exercise,journal,water,habits,budget}/{app.html,app.json}` (the 5 apps above), `kit/tests/`.
-- Accept (machine): all 5 fixtures render with no console output at 360x640, 412x915, 600x960, 800x1280, 1440x900; zero horizontal overflow; all targets >= 44 px; computed contrast >= 4.5:1 for every theme x text role (script); bundle <= 60 KB gzip; SDK unit tests cover all 16 calls; `format.mjs` is idempotent on all fixtures; Qwen3.5 token count per fixture <= 210 (A2 mean <= 130).
+- Accept (machine): all 5 fixtures render with no console output at 360x640, 412x915, 600x960, 800x1280, 1440x900; zero horizontal overflow; all targets >= 44 px; computed contrast >= 4.5:1 for every theme x text role (script); bundle <= 60 KB gzip; SDK unit tests cover all 16 calls; `format.mjs` is idempotent on all fixtures; Qwen3.5 token count per fixture <= 600, median <= 450 (fixtures now carry their own signature visuals).
 - Bar: screenshots of the 5 fixtures vs the same apps as polished real apps (Daylio-style journal, Strong-style workout log, Loop-style habit tracker); critic must not rank the fixtures last on 4 of 5 and must find no unslop-ui "signs" violations.
 
 **T2. Store, migration and history layer** (depends on T1 SDK interface)

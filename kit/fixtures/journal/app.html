@@ -1,5 +1,36 @@
-<main x-data="{j: store.t('entry')}">
+<main x-data="{j: store.t('entry'), mood: '', note: '', m: {great: 5, good: 2.5, okay: 0, low: -2.5, awful: -5},
+  f(q) { return 'M9 9h.4M15 9h.4M8 15Q12 ' + (15 + q) + ' 16 15' },
+  c(q) { return 'hsl(' + (230 - 23 * q) + ' 60% var(--ml))' }}">
   <h1>Journal</h1>
-  <m-form :table="j" faces></m-form>
-  <m-list :table="j" title="note" face="mood" by="day"></m-list>
+  <form class="card col" @submit.prevent="j.add({mood, note: note.trim()}); mood = note = ''">
+    <div class="grid" :style="{'--cols': 5}">
+      <template x-for="(q, n) in m">
+        <label class="col">
+          <input type="radio" class="sr" :value="n" x-model="mood">
+          <svg viewBox="6 7 12 12" width="48" fill="none" stroke-linecap="round" :stroke="c(q)" :stroke-width="mood == n ? 1.4 : .8">
+            <path :d="f(q)" />
+          </svg>
+          <small x-text="n"></small>
+        </label>
+      </template>
+    </div>
+    <label class="field">
+      <textarea x-model="note" placeholder="Note"></textarea>
+    </label>
+    <button class="btn ghost" :disabled="!mood || !note.trim()">Save entry</button>
+  </form>
+  <div class="list">
+    <template x-for="r in j.rows.slice().reverse()">
+      <div class="item">
+        <svg viewBox="6 7 12 12" width="40" fill="none" stroke-width="1" stroke-linecap="round" :stroke="c(m[r.mood])">
+          <path :d="f(m[r.mood])" />
+        </svg>
+        <div class="grow">
+          <div class="tbtn" x-edit="[j, r, 'note']"></div>
+          <small class="muted" x-text="app.fmt(r.at, 'rel')"></small>
+        </div>
+        <button class="ibtn" aria-label="Remove" @click="j.remove(r.id)">×</button>
+      </div>
+    </template>
+  </div>
 </main>

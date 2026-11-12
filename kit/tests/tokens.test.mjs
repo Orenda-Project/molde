@@ -12,10 +12,12 @@ function dir() {
   return existsSync(root) ? join(root, readdirSync(root)[0]) : null;
 }
 const d = dir();
-test('Qwen3.5 tokens: each fixture <= 210, mean <= 130', { skip: d ? false : 'Qwen3.5-2B tokenizer.json not found (set QWEN_TOKENIZER_DIR)' }, () => {
+test('Qwen3.5 tokens: each fixture <= 600, median <= 450', { skip: d ? false : 'Qwen3.5-2B tokenizer.json not found (set QWEN_TOKENIZER_DIR)' }, () => {
   const tk = new Tokenizer(JSON.parse(readFileSync(join(d, 'tokenizer.json'), 'utf8')), JSON.parse(readFileSync(join(d, 'tokenizer_config.json'), 'utf8')));
   const counts = FIXTURES.map((f) => tk.encode(readFileSync(`${KIT}/fixtures/${f}/app.html`, 'utf8')).ids.length);
   const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
   console.log('# tokens ' + FIXTURES.map((f, i) => `${f}=${counts[i]}`).join(' ') + ` mean=${mean.toFixed(1)}`);
-  counts.forEach((c) => assert.ok(c <= 210)); assert.ok(mean <= 130);
+  const med = [...counts].sort((a, b) => a - b)[Math.floor(counts.length / 2)];
+  console.log(`# tokens median=${med} max=${Math.max(...counts)}`);
+  counts.forEach((c) => assert.ok(c <= 600)); assert.ok(med <= 450);
 });

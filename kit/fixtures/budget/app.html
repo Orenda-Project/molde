@@ -1,7 +1,27 @@
-<main x-data="{t: store.t('spend'), cap: store.kv('budget', 60000)}">
+<main x-data="{t: store.t('spend'), cap: store.kv('budget', 80000), get spent() { return this.t.sum('amount', {since: 'month'}) },
+  get cats() { return this.t.group('category', 'amount', {since: 'month'}) }}">
   <h1>Budget</h1>
-  <m-stat left label="Left this month" :value="t.sum('amount',{since:'month'})" :of="cap.v" unit="PKR"></m-stat>
-  <m-chart type="rows" :data="t.group('category','amount',{since:'month'})"></m-chart>
-  <m-form :table="t"></m-form>
-  <m-list :table="t" title="description" sub="amount" meta="category" by="day"></m-list>
+  <div class="col">
+    <small class="muted">Left this month</small>
+    <div class="row">
+      <bdi class="stat" x-text="(cap.v - spent).toLocaleString()"></bdi>
+      <bdi class="muted">PKR</bdi>
+    </div>
+    <div class="bar">
+      <i :style="{width: Math.max(0, 100 - spent / cap.v * 100) + '%'}"></i>
+    </div>
+  </div>
+  <template x-for="x in cats">
+    <div class="col">
+      <div class="row">
+        <span class="grow" x-text="x.k"></span>
+        <bdi x-text="x.v.toLocaleString()"></bdi>
+      </div>
+      <div class="bar">
+        <i :style="{width: Math.abs(x.v / cats[0].v) * 100 + '%'}"></i>
+      </div>
+    </div>
+  </template>
+  <m-form :table="t" seg></m-form>
+  <m-list :table="t" title="description" sub="amount" meta="category" edit></m-list>
 </main>

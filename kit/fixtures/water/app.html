@@ -1,6 +1,25 @@
-<main x-data="{w: store.t('cup'), goal: store.kv('goal', 2000)}">
+<main x-data="{w: store.t('cup'), goal: store.kv('goal', 2000), get total() { return this.w.sum('volume', {since: 'day'}) },
+  add(v) { const id = this.w.add({volume: v}); ui.toast('Added ' + v, () => this.w.remove(id)) }}">
   <h1>Water</h1>
-  <m-stat glass label="Today" :value="w.sum('volume',{since:'day'})" :of="goal.v" unit="ml"></m-stat>
-  <m-form :table="w" quick="250,500"></m-form>
-  <m-chart label="Last 7 days" :table="w" col="volume"></m-chart>
+  <div class="row">
+    <svg width="56" height="108">
+      <rect x="2" y="2" width="52" height="104" fill="none" stroke="var(--edge)" stroke-width="2" />
+      <rect x="4" :y="104 - 100 * Math.min(1, total / goal.v)" width="48" :height="100 * Math.min(1, total / goal.v)" fill="var(--accent)" />
+    </svg>
+    <div class="col grow">
+      <small class="muted">Today</small>
+      <div class="row">
+        <bdi class="stat" x-text="total"></bdi>
+        <bdi class="muted" x-text="'/ ' + goal.v + ' ml'"></bdi>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <template x-for="q in [250, 500]">
+      <button class="btn ghost grow" @click="add(q)" x-text="'+' + q"></button>
+    </template>
+  </div>
+  <m-form :table="w" min="1" max="5000"></m-form>
+  <m-chart :data="w.series('volume', {last: 7})"></m-chart>
+  <m-list :table="w" title="volume" unit="ml" max="5"></m-list>
 </main>

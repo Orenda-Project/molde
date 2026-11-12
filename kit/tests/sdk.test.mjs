@@ -11,6 +11,8 @@ const manifest = { tables: {
   log: { what: 'text', mins: 'num', kind: 'pick:run|swim|lift', note: 'long', ok: 'bool' },
   check: { habit: 'text', day: 'date' },
 } };
+const typed = (fn, code) => assert.throws(fn, (e) => e instanceof MoldeError && e.code === code && !(e instanceof TypeError), `expected MoldeError ${code}`);
+const { MoldeError } = require('../src/sdk.cjs');
 const DAY = 864e5;
 const T0 = new Date(2026, 10, 12, 20, 30).getTime(); // Thu 12 Nov 2026, 20:30 local
 const at = (daysAgo, h = 9) => { const d = new Date(T0); d.setDate(d.getDate() - daysAgo); d.setHours(h, 0, 0, 0); return d.getTime(); };
@@ -51,7 +53,8 @@ for (const [aname, mk] of Object.entries(adapters)) {
 
   test(`[${aname}] 3 t.add: coerces, clips, drops unknown columns, returns ids, persists`, () => {
     const a = sdk(); const t = a.store.t('log');
-    const id = t.add({ what: 'x'.repeat(500), mins: '30', kind: 'nope', note: 'n'.repeat(3000), ok: 1, zzz: 1 });
+    const id = t.add({ what: 'x'.repeat(500), mins: '30', kind: 'nope', note: 'n'.repeat(3000), ok: 1 });
+    typed(() => t.add({ zzz: 1 }), 'E_COL'); typed(() => t.add({ what: Symbol('s') }), 'E_ARG'); typed(() => t.add({ x: Symbol() }), 'E_COL'); typed(() => t.add({ what: {} }), 'E_ARG'); typed(() => t.add({ mins: () => 1 }), 'E_ARG'); typed(() => t.add({ mins: 10n }), 'E_ARG');
     assert.equal(id, 1); assert.equal(t.add({ what: 'b' }), 2);
     const r = t.rows[0];
     assert.equal(r.what.length, 200); assert.equal(r.mins, 30); assert.equal(r.kind, 'run'); assert.equal(r.note.length, 2000); assert.equal(r.ok, true); assert.ok(!('zzz' in r));
@@ -62,7 +65,7 @@ for (const [aname, mk] of Object.entries(adapters)) {
 
   test(`[${aname}] 4 t.set: patches and coerces, E_ROW for a missing row`, () => {
     const a = sdk(); const t = a.store.t('log'); const id = t.add({ what: 'run', mins: 10 });
-    t.set(id, { mins: '45', what: 'long run', zzz: 9 });
+    t.set(id, { mins: '45', what: 'long run' }); typed(() => t.set(id, { zzz: 9 }), 'E_COL');
     assert.equal(t.rows[0].mins, 45); assert.equal(t.rows[0].what, 'long run');
     assert.equal(createSDK({ adapter: a.ctx.reopen(a.adapter), manifest }).store.t('log').rows[0].mins, 45);
     assert.throws(() => t.set(99, { mins: 1 }), (e) => e.code === 'E_ROW');
@@ -90,10 +93,11 @@ for (const [aname, mk] of Object.entries(adapters)) {
     const { t } = filled();
     assert.equal(t.sum(null), 7); assert.equal(t.sum('mins'), 219);
     assert.equal(t.sum('mins', { since: 'day' }), 45);
-    assert.equal(t.sum('mins', { since: 'week' }), 30 + 15 + 20 + 40 + 10);
-    assert.equal(t.sum('mins', { since: 'month' }), 219);
+    assert.equal(t.sum('mins', { since: 'week' }), 30 + 15 + 20 + 40, 'calendar week from Monday 9 Nov');
+    assert.equal(t.sum('mins', { since: 'month' }), 30 + 15 + 20 + 40 + 10 + 99, 'calendar month from 1 Nov');
+    assert.equal(t.sum('mins', { since: 'last7' }), 30 + 15 + 20 + 40 + 10); assert.equal(t.sum('mins', { since: 'last30' }), 219);
     assert.equal(t.sum('mins', { where: { kind: 'run' } }), 30 + 20 + 10 + 99);
-    assert.equal(t.sum(null, { since: 'week', where: { kind: 'run' } }), 3);
+    assert.equal(t.sum(null, { since: 'week', where: { kind: 'run' } }), 2);
   });
 
   test(`[${aname}] 7 t.series: zero-filled buckets by day/week/month, ops, where`, () => {
@@ -214,8 +218,6 @@ test('sqlite adapter issues no DDL for app tables and keeps apps apart', () => {
 
 
 /* ---- round 2: data and argument hardening ---- */
-const typed = (fn, code) => assert.throws(fn, (e) => e instanceof MoldeError && e.code === code && !(e instanceof TypeError), `expected MoldeError ${code}`);
-const { MoldeError } = require('../src/sdk.cjs');
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -252,7 +254,8 @@ for (const [aname, mk] of Object.entries(adapters)) {
     const { s } = sdk2(); const t = s.store.t('log');
     t.add({ mins: 1e308 }); t.add({ mins: Infinity }); t.add({ mins: -Infinity }); t.add({ mins: NaN }); t.add({ mins: -5 }); t.add({ mins: 'abc' });
     assert.deepEqual(t.rows.map((r) => r.mins), [1e12, 1e12, -1e12, 0, -5, 0]);
-    assert.equal(t.series('mins', { last: 100000 }).length, 366); assert.equal(t.series('mins', { last: 0 }).length, 1); assert.equal(t.series('mins', { last: 2.9 }).length, 2);
+    assert.equal(t.series('mins', { last: 100000 }).length, 366); assert.equal(t.series('mins', { last: 2.9 }).length, 2);
+    for (const bad of [0, -5, '7', null, Infinity * 0]) typed(() => t.series('mins', { last: bad }), 'E_ARG');
     typed(() => t.series('mins', { last: NaN }), 'E_ARG'); typed(() => t.series('mins', { last: 'x' }), 'E_ARG');
     assert.ok(Number.isFinite(t.sum('mins')));
   });
@@ -295,7 +298,9 @@ test('midnight: today() follows the clock, and the reactive clock is bumped by r
 for (const tz of ['America/Los_Angeles', 'Asia/Karachi', 'UTC', 'Pacific/Kiritimati']) {
   test(`timezone ${tz}: date-only strings never shift a day; today() is the local day`, () => {
     const out = JSON.parse(execFileSync(process.execPath, [fileURLToPath(new URL('./tz-probe.cjs', import.meta.url))], { env: { ...process.env, TZ: tz } }).toString());
-    assert.deepEqual(out, { dateOnly: 'Nov 12', jan1: 'Jan 1', prevYear: 'Dec 31, 2025', rel: 'Yesterday, 12:00 PM', today: '2026-11-12', tz });
+    assert.deepEqual(out.boundary, { month: 10, week: 11, last7: 11, series: ['2026-02:101', '2026-03:10'], today: '2026-03-01' }, 'month boundary, ' + tz);
+    delete out.boundary;
+    assert.deepEqual(out, { dateOnly: 'Nov 12', jan1: 'Jan 1', prevYear: 'Dec 31, 2025', rel: 'Yesterday', today: '2026-11-12', tz });
   });
 }
 
@@ -315,4 +320,65 @@ test('sqlite: a corrupt JSON row is skipped and recorded, the rest of the table 
 test('memory adapter parity: unreadable data in a row does not throw (loose read)', () => {
   const ad = memoryAdapter(); ad.put('log', { id: 1, at: T0, deleted_at: null, data: null }); ad.put('log', { id: 2, at: T0, deleted_at: null, data: { mins: 'zzz', kind: 7 } });
   const r = createSDK({ adapter: ad, manifest }).store.t('log').rows; assert.deepEqual([r[0].mins, r[1].mins, r[1].kind], [0, 0, 'run']);
+});
+
+
+/* ---- round 3 ---- */
+for (const [aname, mk] of Object.entries(adapters)) {
+  const mkS = (m = manifest, extra = {}) => { const ctx = mk(); return { ctx, s: createSDK({ adapter: ctx.make(), manifest: m, now: () => T0, locale: 'en-US', timers: fakeTimers(), ...extra }) }; };
+
+  test(`[${aname}] more bad arguments: sum/series/group need number columns, where/since null, kv values, set on a null row`, () => {
+    const { s, ctx } = mkS(); const t = s.store.t('log');
+    t.add({ what: 'a', mins: 5 });
+    typed(() => t.sum('what'), 'E_COL'); typed(() => t.sum('kind'), 'E_COL'); typed(() => t.series('what'), 'E_COL'); typed(() => t.group('kind', 'what'), 'E_COL');
+    assert.equal(t.series('what', { op: 'count', last: 2 }).length, 2, 'count may use any column');
+    typed(() => t.sum('mins', { where: null }), 'E_ARG'); typed(() => t.sum('mins', { since: null }), 'E_ARG'); typed(() => t.series('mins', { where: null }), 'E_ARG'); typed(() => t.group('kind', 'mins', { where: [] }), 'E_ARG');
+    const box = s.store.kv('k', 1);
+    for (const bad of [() => 1, Symbol('x'), 10n, undefined, NaN, Infinity, { f() {} }, [() => 1], new Date(), new Map(), { a: { b: () => 1 } }]) typed(() => { box.v = bad; }, 'E_ARG');
+    typed(() => s.store.kv('k2', () => 1), 'E_ARG'); assert.equal(box.v, 1);
+    box.v = { a: [1, 'x', null, true] }; assert.deepEqual(box.v, { a: [1, 'x', null, true] });
+  });
+
+  test(`[${aname}] t.set on a stored row whose data is null does not throw a raw TypeError`, () => {
+    const ctx = mk(); const ad = ctx.make(); ad.put('log', { id: 1, at: T0, deleted_at: null, data: null });
+    const s = createSDK({ adapter: ad, manifest, now: () => T0 }); const t = s.store.t('log');
+    assert.equal(t.set(1, { what: 'fixed', mins: 3 }), true); assert.deepEqual([t.rows[0].what, t.rows[0].mins], ['fixed', 3]);
+  });
+
+  test(`[${aname}] ui.toast: at most 3 visible, the newest replaces the oldest, and removed timers do not fire late`, () => {
+    const a = createSDK({ manifest, timers: fakeTimers() }); const dismissers = [1, 2, 3, 4, 5].map((i) => a.ui.toast('m' + i));
+    assert.deepEqual(a.internal.toasts().map((x) => x.msg), ['m3', 'm4', 'm5']); dismissers[0](); assert.equal(a.internal.toasts().length, 3);
+  });
+
+  test(`[${aname}] calendar-aligned since: week starts Monday by default, month starts on the 1st, last7/last30 stay explicit, series agree`, () => {
+    const m = { tables: { x: { n: 'num' } } }; const at2 = (y, mo, d, h = 12) => new Date(y, mo, d, h).getTime();
+    const now = at2(2026, 2, 1, 9); // Sunday 1 March 2026
+    const ctx = mk(); const s = createSDK({ adapter: ctx.make(), manifest: m, now: () => now }); const t = s.store.t('x');
+    t.add({ n: 100, at: at2(2026, 1, 20) }); t.add({ n: 1, at: at2(2026, 1, 28, 23) }); t.add({ n: 10, at: at2(2026, 2, 1, 0) });
+    assert.equal(t.sum('n', { since: 'month' }), 10, 'only March'); assert.equal(t.sum('n', { since: 'week' }), 11, 'Mon 23 Feb .. Sun 1 Mar');
+    assert.equal(t.sum('n', { since: 'day' }), 10); assert.equal(t.sum('n', { since: 'last7' }), 11); assert.equal(t.sum('n', { since: 'last30' }), 111);
+    const mon = t.series('n', { by: 'month', last: 2 }); assert.deepEqual(mon, [{ k: '2026-02', v: 101 }, { k: '2026-03', v: 10 }]);
+    assert.equal(mon[1].v, t.sum('n', { since: 'month' }), 'series by month and since month agree');
+    const wk = t.series('n', { by: 'week', last: 2 }); assert.equal(wk[1].k, '2026-02-23'); assert.equal(wk[1].v, t.sum('n', { since: 'week' }), 'series by week and since week agree');
+    const sun = createSDK({ adapter: mk().make(), manifest: { ...m, weekStart: 0 }, now: () => now }); const t2 = sun.store.t('x'); t2.add({ n: 1, at: at2(2026, 1, 28) }); t2.add({ n: 5, at: at2(2026, 2, 1, 0) });
+    assert.equal(t2.sum('n', { since: 'week' }), 5, 'Sunday-start week begins today'); assert.equal(t2.series('n', { by: 'week', last: 1 })[0].k, '2026-03-01');
+    const loc = createSDK({ manifest: { ...m, weekStart: 'locale' }, now: () => now, locale: 'en-US' }); assert.equal(loc.internal.weekStart, 0, 'en-US weeks start on Sunday');
+    typed(() => t.sum('n', { since: 'year' }), 'E_ARG');
+  });
+
+  test(`[${aname}] app.fmt: a date-only string never invents a time of day`, () => {
+    const { s } = mkS();
+    assert.equal(s.app.fmt('2026-11-12', 'rel'), 'Today'); assert.equal(s.app.fmt('2026-11-11', 'rel'), 'Yesterday'); assert.equal(s.app.fmt('2026-11-09', 'rel'), 'Monday');
+    assert.equal(s.app.fmt('2026-11-01', 'rel'), 'Nov 1'); typed(() => s.app.fmt('2026-11-12', 'time'), 'E_ARG');
+    assert.match(s.app.fmt(new Date(2026, 10, 12, 7), 'rel'), /Today, 7:00/);
+  });
+}
+
+test('sqlite kv: writing a key twice keeps the last value, across a re-open, and apps stay apart', () => {
+  const db = new Database(':memory:'); ensureSchema(db);
+  const a = createSDK({ adapter: sqliteAdapter(db, 'a'), manifest }), b = createSDK({ adapter: sqliteAdapter(db, 'b'), manifest });
+  const box = a.store.kv('goal', 1); box.v = 2; box.v = { n: 3 }; box.v = 4; b.store.kv('goal', 9).v = 10;
+  assert.equal(createSDK({ adapter: sqliteAdapter(db, 'a'), manifest }).store.kv('goal', 0).v, 4);
+  assert.equal(createSDK({ adapter: sqliteAdapter(db, 'b'), manifest }).store.kv('goal', 0).v, 10);
+  assert.equal(db.prepare("select count(*) c from kv where key='goal'").get().c, 2, 'one row per app and key (upsert, not insert)');
 });

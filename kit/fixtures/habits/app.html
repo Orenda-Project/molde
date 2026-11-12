@@ -1,5 +1,37 @@
-<main x-data="{h: store.t('habit'), c: store.t('check')}">
+<main x-data="{h: store.t('habit'), c: store.t('check'), n: innerWidth > 500 ? 7 : 4,
+  k(i) { return new Date(Date.parse(app.today()) - (i - 1) * 864e5).toISOString().slice(0, 10) },
+  get best() { return Math.max(0, ...this.h.rows.map(x => this.c.streak({habit: x.id + ''}))) },
+  get heat() { const s = this.c.series(null, {last: 84}); return [...Array(new Date(s[0].k).getUTCDay()), ...s] }}">
   <h1>Habits</h1>
-  <m-list :table="h" title="name" :log="c" key="habit"></m-list>
-  <m-form :table="h" hint="New habit"></m-form>
+  <div class="row">
+    <b class="stat" x-text="best"></b>
+    <span class="muted">day streak</span>
+  </div>
+  <div class="list">
+    <div class="item slim">
+      <span class="grow"></span>
+      <template x-for="i in n">
+        <small class="ibtn" x-text="k(i).slice(8)"></small>
+      </template>
+      <span class="ibtn"></span>
+    </div>
+    <template x-for="x in h.rows" :key="x.id">
+      <div class="item">
+        <div class="tbtn grow" x-edit="[h, x, 'habit']"></div>
+        <template x-for="i in n">
+          <button class="check" :aria-pressed="c.has({habit: x.id + '', day: k(i)})" :aria-label="x.habit" @click="c.toggle({habit: x.id + '', day: k(i)})"></button>
+        </template>
+        <button class="ibtn" aria-label="Remove" @click="h.remove(x.id)">×</button>
+      </div>
+    </template>
+  </div>
+  <div class="col">
+    <small class="muted">Last 12 weeks</small>
+    <div class="grid" :style="{'--rows': 7, '--cols': Math.ceil(heat.length / 7), '--flow': 'column'}">
+      <template x-for="d in heat">
+        <i class="cell" :class="d && d.v ? 'lv' + Math.ceil(d.v / h.rows.length * 4) : ''"></i>
+      </template>
+    </div>
+  </div>
+  <m-form :table="h"></m-form>
 </main>

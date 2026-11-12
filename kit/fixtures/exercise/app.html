@@ -1,7 +1,28 @@
-<main x-data="{s: store.t('set')}">
+<main x-data="{s: store.t('set'), page: 1, get blocks() {
+  const m = {}, last = {};
+  for (const r of this.s.rows.slice().reverse()) (m[new Date(r.at).toDateString() + r.exercise] ??= {at: r.at, ex: r.exercise, sets: []}).sets.unshift(r);
+  const all = Object.values(m);
+  for (const b of all.slice().reverse()) { b.delta = last[b.ex] && b.sets[0].kg - last[b.ex].sets[0].kg; last[b.ex] = b }
+  return all
+}}">
   <h1>Exercise</h1>
-  <m-chart label="Sets this week" :table="s"></m-chart>
-  <m-form :table="s"></m-form>
-  <m-timer sec="90" label="Rest"></m-timer>
-  <m-list :table="s" group="exercise" sub="{kg} kg × {reps}"></m-list>
+  <m-chart :data="s.series(null, {by: 'week', last: 8})"></m-chart>
+  <m-form :table="s" submit="Log set"></m-form>
+  <div class="list">
+    <template x-for="b in blocks.slice(0, page * 8)">
+      <div>
+        <div class="item slim">
+          <b class="grow" x-text="b.ex + ' · ' + app.fmt(b.at, 'date')"></b>
+          <bdi class="chip" x-show="b.delta != null" x-text="(b.delta > 0 ? '+' : '') + b.delta + ' kg'"></bdi>
+        </div>
+        <template x-for="r in b.sets">
+          <div class="item">
+            <bdi class="grow" x-text="r.kg + ' kg × ' + r.reps"></bdi>
+            <button class="ibtn" aria-label="Remove" @click="s.remove(r.id)">×</button>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+  <button class="btn ghost" x-show="blocks.length > page * 8" @click="page++">Show more history</button>
 </main>

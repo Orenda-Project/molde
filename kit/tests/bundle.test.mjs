@@ -16,3 +16,9 @@ test('molde.js has no runtime CDN or network code paths of its own', () => {
   const own = readFileSync(`${KIT}/src/sdk.cjs`, 'utf8') + readFileSync(`${KIT}/src/components.js`, 'utf8');
   assert.ok(!/\bfetch\s*\(|XMLHttpRequest|WebSocket|importScripts|https?:\/\/(?!www\.w3\.org)/.test(own));
 });
+
+test('the kit stays generic: no app-specific words or widgets in molde.js sources, kit.css or themes.css', () => {
+  const src = ['src/sdk.cjs', 'src/components.js', 'kit.css', 'themes.css'].map((f) => readFileSync(`${KIT}/${f}`, 'utf8')).join('\n').toLowerCase();
+  for (const w of ['habit', 'mood', 'glass', 'water', 'exercise', 'budget', 'journal', 'm-timer', 'heat']) assert.ok(!src.includes(w), 'app-specific word in the kit: ' + w);
+  const comps = readFileSync(`${KIT}/src/components.js`, 'utf8'); assert.match(comps, /var COMP = \{ 'm-stat': mStat, 'm-chart': mChart, 'm-list': mList, 'm-form': mForm \};/);
+});
