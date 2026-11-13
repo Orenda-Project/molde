@@ -55,10 +55,10 @@ button, input, select, textarea { font:inherit; color:inherit; }
 ::placeholder { color:var(--muted); opacity:1; }
 .check { position:relative; display:inline-flex; align-items:center; gap:var(--s3); min-block-size:var(--hit); min-inline-size:var(--hit); cursor:pointer; background:none; border:0; padding:0; }
 .check::before { content:""; flex:none; inline-size:28px; block-size:28px; border:2px solid var(--muted); border-radius:50%; transition:background-color .12s, border-color .12s; }
-.check::after { content:""; position:absolute; inset-inline-start:11px; inset-block-start:50%; inline-size:7px; block-size:12px; border:solid var(--accent-fg); border-width:0 2px 2px 0;
+.check::after { content:""; position:absolute; inset-inline-start:11px; inset-block-start:50%; inline-size:7px; block-size:12px; border:solid var(--hue-fg,var(--accent-fg)); border-width:0 2px 2px 0;
   transform:translateY(-62%) rotate(45deg); opacity:0; }
-.check[aria-pressed=true]::before, .check:has(input:checked)::before { background:var(--accent); border-color:var(--accent); }
-.check[aria-pressed=true]::after, .check:has(input:checked)::after { opacity:1; }
+.check[aria-pressed=true]::before, .check[aria-checked=true]::before, .check:has(input:checked)::before { background:var(--hue,var(--accent)); border-color:var(--hue,var(--accent)); }
+.check[aria-pressed=true]::after, .check[aria-checked=true]::after, .check:has(input:checked)::after { opacity:1; }
 label.check input { position:absolute; opacity:0; inset:0; margin:0; inline-size:100%; block-size:100%; cursor:pointer; }
 label.check:has(input:focus-visible)::before { outline:2px solid var(--accent); outline-offset:2px; }
 button.check:not(:has(*)) { inline-size:var(--hit); padding:0; justify-content:center; } button.check:not(:has(*))::before { margin:0; }
@@ -91,12 +91,12 @@ button.check:not(:has(*))::after { inset-inline-start:calc(50% - 4px); }
 .grid > .check { justify-self:center; }
 .grid.flow { grid-auto-flow:column; }
 .grid.auto { grid-template-columns:repeat(auto-fit, minmax(52px, 1fr)); grid-template-rows:none; }
-.grid.fit { grid-template-columns:repeat(auto-fit, minmax(48px, 1fr)); grid-template-rows:none; grid-auto-rows:44px; block-size:44px; overflow:hidden; } /* as many 48 px columns as fit, one row; the rest is clipped */
+.grid.fit { grid-template-columns:repeat(auto-fit, minmax(48px, 1fr)); grid-template-rows:auto; grid-auto-rows:0; row-gap:0; overflow:hidden; min-block-size:0; align-content:start; } /* as many 48 px columns as fit, one row; the rest is clipped */
 .m-fields > * { min-inline-size:0; }
 .ibtn { font-size:1.25rem; flex:none; inline-size:var(--hit); block-size:var(--hit); display:grid; place-items:center; border:0; border-radius:12px; background:transparent; color:var(--muted); cursor:pointer; padding:0; }
 .ibtn:hover { background:var(--tint); color:var(--fg); }
 .bar { block-size:8px; border-radius:4px; background:var(--tint); overflow:hidden; }
-.bar > i { display:block; max-inline-size:100%; block-size:100%; background:var(--accent); transition:width .3s ease-out; }
+.bar > i { display:block; max-inline-size:100%; block-size:100%; background:var(--hue,var(--accent)); transition:width .3s ease-out; }
 .seg { display:flex; flex-wrap:wrap; gap:var(--s1); padding:var(--s1); margin:0; border:0; background:var(--tint); border-radius:var(--radius); min-inline-size:0; }
 .seg label { position:relative; flex:1 0 auto; display:inline-flex; align-items:center; justify-content:center; min-block-size:var(--hit); padding-inline:var(--s3); border-radius:12px; cursor:pointer; color:var(--muted); }
 .seg input { position:absolute; inset:0; opacity:0; margin:0; inline-size:100%; block-size:100%; cursor:pointer; }
@@ -108,7 +108,7 @@ button.check:not(:has(*))::after { inset-inline-start:calc(50% - 4px); }
 .slim { min-block-size:32px; padding-block:var(--s1); }
 .grid { display:grid; gap:var(--s1); grid-template-columns:repeat(var(--cols,1), minmax(0,1fr)); grid-template-rows:repeat(var(--rows,1), auto); grid-auto-flow:var(--flow,row); }
 .cell { aspect-ratio:1; border-radius:4px; background:var(--tint); }
-.lv1 { background:color-mix(in srgb, var(--accent) 30%, var(--card)); } .lv2 { background:color-mix(in srgb, var(--accent) 55%, var(--card)); }
+.lv1 { background:color-mix(in srgb, var(--accent) 38%, var(--card)); } .lv2 { background:color-mix(in srgb, var(--accent) 60%, var(--card)); }
 .lv3 { background:color-mix(in srgb, var(--accent) 78%, var(--card)); } .lv4 { background:var(--accent); }
 label:has(.sr:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; border-radius:12px; }
 /* ---- the four components (built by molde.js) ---- */
@@ -168,7 +168,31 @@ m-stat, m-chart, m-list, m-form { display:block; min-inline-size:0; }
 /* round 5 */
 .ibtn.arm { inline-size:auto; padding-inline:var(--s3); color:var(--danger); font-size:.9375rem; font-weight:500; }
 .m-glyph { flex:none; color:var(--accent); stroke-width:1.5; }
-.m-compact .m-fields { display:flex; align-items:stretch; gap:var(--s2); } .m-compact .m-tx { flex:1 1 120px; } .m-compact .m-nm { flex:0 0 140px; } .m-compact .m-add { flex:none; }
+.m-compact .m-fields { display:flex; flex-wrap:wrap; align-items:stretch; gap:var(--s2); } .m-compact .m-tx { flex:1 1 140px; } .m-compact .m-nm { flex:1 1 112px; } .m-compact .m-add { flex:1 0 auto; } /* under about 320 px the inputs stack instead of collapsing */
 .m-compact .m-rest { margin-block-start:var(--s2); }
-.ring { border:1.5px solid var(--edge); border-radius:50%; } .m-glyph { border:1.5px solid currentColor; border-radius:50%; padding:2px; }
+.ring { border:2px solid var(--hue,var(--edge)); border-radius:50%; } .m-glyph { border:1.5px solid currentColor; border-radius:50%; padding:2px; }
 .m-quick { display:flex; gap:var(--s2); } .m-quick .btn { flex:1 1 0; min-block-size:48px; font-size:1.0625rem; }
+
+/* round 6: toasts and the Undo tray (a pending Undo is never evicted; three or more collapse into one tray) */
+.m-toasts { position:fixed; inset-inline:var(--s4); inset-block-end:calc(var(--s4) + env(safe-area-inset-bottom)); display:flex; flex-direction:column; align-items:center; gap:var(--s2); pointer-events:none; z-index:10; }
+.m-toast span { min-inline-size:0; overflow-wrap:anywhere; }
+.m-tray { pointer-events:auto; inline-size:min(100%,26rem); border-radius:12px; background:var(--fg); color:var(--bg); display:flex; flex-direction:column; animation:m-in .16s ease-out; }
+.m-tray .m-toast { inline-size:100%; border-radius:0; animation:none; } .m-tray .m-toast > span { flex:1 1 0; }
+.m-tray-h { display:flex; align-items:center; gap:var(--s2); padding:var(--s1) var(--s1) var(--s1) var(--s4); } .m-tray-h b { flex:1 1 0; font-weight:500; }
+.m-tray-h button, .m-tray .m-toast button { min-block-size:var(--hit); padding-inline:var(--s3); border:0; border-radius:8px; background:transparent; color:inherit; font-weight:500; text-decoration:underline; cursor:pointer; }
+.m-tray-l { max-block-size:min(40vh,13rem); overflow-y:auto; border-block-start:1px solid color-mix(in srgb,var(--bg) 30%,transparent); }
+
+/* round 6: per-item colour identity (--hue), a round day button, a thin cell, the selected radio ring */
+.c1 { --hue:var(--c1); --hue-fg:var(--accent-fg); } .c2 { --hue:var(--c2); } .c3 { --hue:var(--c3); } .c4 { --hue:var(--c4); } .c5 { --hue:var(--c5); } .c2, .c3, .c4, .c5 { --hue-fg:var(--on-c); }
+.ibtn.ring { color:var(--fg); font-size:.9375rem; font-weight:500; } .ibtn.ring:hover { background:var(--tint); }
+.ibtn.ring[aria-pressed=true] { background:var(--hue,var(--accent)); color:var(--hue-fg,var(--accent-fg)); }
+.day { display:grid; place-items:center; justify-self:center; inline-size:min(100%,var(--hit)); block-size:var(--hit); padding:0; border:2px solid transparent; border-radius:50%; background:none; color:var(--fg); cursor:pointer; }
+.day[aria-checked=true] { background:var(--hue,var(--accent)); color:var(--hue-fg,var(--accent-fg)); font-weight:500; }
+.day[aria-current=date] { border-color:var(--edge); } .day:disabled { color:var(--muted); cursor:default; }
+.cell.wide { aspect-ratio:auto; block-size:16px; }
+.sr:checked + .ring { background:var(--tint); border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); color:var(--accent); }
+.sr:checked ~ small { color:var(--fg); font-weight:500; }
+.sr:focus-visible + .ring { outline:2px solid var(--accent); outline-offset:3px; }
+.grid:has(> .day) { grid-template-columns:repeat(var(--cols),minmax(var(--hit),1fr)); gap:0; min-inline-size:calc(var(--cols) * var(--hit)); } .scroll > .grid { flex:1 0 auto; } /* a calendar never squeezes a day below 44 px: it scrolls instead */
+.item.grid.fit { padding-block:0; } /* the clipped overflow row must not show in the item's padding */
+.grid.fit > * { align-self:start; }

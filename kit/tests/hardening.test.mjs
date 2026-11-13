@@ -11,10 +11,10 @@ const noLog = (log) => assert.deepEqual(log, [], 'console output: ' + log.join('
 test('focus survives updates: keyboard toggle on the habit grid (Alpine), remove button in m-list (kit)', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'habits');
   const cell = page.locator('.item', { hasText: 'Stretch' }).locator('.check').first();
-  await cell.focus(); const label = await cell.getAttribute('aria-label'); const was = await cell.getAttribute('aria-pressed');
+  await cell.focus(); const label = await cell.getAttribute('aria-label'); const was = await cell.getAttribute('aria-checked'); assert.match(label, /^Stretch, .+, (done|not done)$/, 'name, date and state in the accessible name');
   await page.keyboard.press('Enter');
-  const active = () => page.evaluate(() => { const a = document.activeElement; return a && { label: a.getAttribute('aria-label'), cls: a.className, pressed: a.getAttribute('aria-pressed') }; });
-  let a = await active(); assert.equal(a.label, label); assert.equal(a.cls, 'check'); assert.notEqual(a.pressed, was);
+  const active = () => page.evaluate(() => { const a = document.activeElement; return a && { label: a.getAttribute('aria-label'), cls: a.className, pressed: a.getAttribute('aria-checked') }; });
+  let a = await active(); assert.notEqual(a.label, label, 'the name says the new state'); assert.equal(a.cls, 'check'); assert.notEqual(a.pressed, was);
   await page.keyboard.press('Space'); a = await active(); assert.equal(a.label, label); assert.equal(a.pressed, was);
   await ctx.close(); noLog(log);
   const w = await open(browser, srv.base, 'water');
@@ -31,7 +31,7 @@ test('midnight: with a fake clock the check grid moves to the new day without a 
   await page.clock.runFor(6000);
   assert.match(await head(), /22/, 'first column is the new day within 5 s of midnight');
   const first = page.locator('.item.wrap', { hasText: 'Read 20 pages' }).locator('.check').first();
-  assert.equal(await first.getAttribute('aria-pressed'), 'false', 'nothing is checked on the new day');
+  assert.equal(await first.getAttribute('aria-checked'), 'false', 'nothing is checked on the new day');
   await ctx.close(); noLog(log);
 });
 
@@ -95,8 +95,8 @@ test('m-form: whitespace-only text rejected with a visible message, empty number
   const n = (txt) => page.locator('.item', { hasText: txt }).count();
   await page.fill('input[name=exercise]', '   '); await page.fill('input[name=kg]', '20'); await page.fill('input[name=reps]', '5'); await page.click('button[type=submit]');
   assert.equal(await n('20 kg × 5'), 0); assert.match(await page.locator('.m-err').innerText(), /Enter some text/); assert.ok(await page.locator('.m-err').isVisible());
-  await page.fill('input[name=exercise]', 'Press'); await page.fill('input[name=kg]', ''); await page.click('button[type=submit]');
-  assert.equal(await n('20 kg × 5'), 0); assert.match(await page.locator('.m-err').innerText(), /number/); assert.equal(await page.$eval('input[name=kg]', (i) => i.getAttribute('aria-invalid')), 'true');
+  await page.fill('input[name=exercise]', 'Press'); await page.fill('input[name=kg]', '20'); await page.fill('input[name=reps]', ''); await page.click('button[type=submit]');
+  assert.equal(await n('20 kg × 5'), 0); assert.match(await page.locator('.m-err').innerText(), /number/); assert.equal(await page.$eval('input[name=reps]', (i) => i.getAttribute('aria-invalid')), 'true');
   await page.fill('input[name=kg]', '20'); await page.fill('input[name=reps]', '5'); await page.dblclick('button[type=submit]');
   assert.equal(await n('20 kg × 5'), 1, 'double click inserts one row'); assert.equal(await page.locator('.m-err').count(), 0);
   await ctx.close(); noLog(log);

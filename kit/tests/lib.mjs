@@ -128,4 +128,4 @@ export const auditFn = () => {
 };
 
 /** Row actions are a kebab: the first tap arms "Delete", the second tap does it. */
-export async function del(loc) { await loc.click(); await loc.click(); }
+export async function del(loc) { await loc.click(); await loc.page().waitForTimeout(350); await loc.click(); } /* two separate taps: a double tap (< 300 ms) only arms */

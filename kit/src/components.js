@@ -24,6 +24,12 @@
   function num(n) { n = san(n); return Math.abs(n) >= 1e9 ? nfc.format(n) : nf.format(n); }
   function sgn(n) { return n < 0 ? '−' + num(-n) : num(n); }
   var meta = function (t) { return t[S.META](); };
+  /* say(error): the message a person reads. No E_ARG codes; a long text says how long and how much is allowed. */
+  function say(x) {
+    var m = x && x.message ? String(x.message) : 'Something went wrong', q = /text is (\d+) characters; the limit for a \w+ column is (\d+)/.exec(m);
+    if (q) return 'That is too long: ' + num(q[1]) + ' characters, the most is ' + num(q[2]);
+    m = m.replace(/^E_\w+: /, ''); return m.charAt(0).toUpperCase() + m.slice(1);
+  }
   var scale = function () { return (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16; };
 
   /* ---- tiny DOM helper ---- */
@@ -130,6 +136,7 @@
     if (!n) { kids.push(empty); return root(); }
     var vals = data.map(function (d) { return d.v; });
     var mn = Math.min.apply(null, vals.concat([0])), mxv = Math.max.apply(null, vals.concat([0]));
+    if (type === 'line' && vals.length > 1) { mn = Math.min.apply(null, vals); mxv = Math.max.apply(null, vals); var pad = (mxv - mn || Math.abs(mxv) || 1) * 0.2; mn -= pad; mxv += pad; } /* a line shows its own range, not zero to max */
     if (mxv === mn) mxv = mn + 1;
     var sc = (H - top - bot) / (mxv - mn), zero = top + mxv * sc;
     var gap = n > 24 ? 2 : 8; if (w / n < gap + 1.5) gap = 0; var bw = Math.max(0.3, Math.min(28, (w - gap * (n - 1)) / n)), x0 = Math.max(0, (w - (bw * n + gap * (n - 1))) / 2);
@@ -139,7 +146,7 @@
     var step = Math.max(1, Math.ceil((maxLen * 0.62 * fs + 8) / Math.max(0.3, bw + gap)));
     var summary = n > 14 ? n + ' values, largest ' + sgn(vals[hiIdx]) + ', latest ' + sgn(vals[n - 1]) : data.map(function (d, i) { return labs[i] + ' ' + sgn(d.v); }).join(', ');
     var sv = s('svg', { viewBox: '0 0 ' + w + ' ' + H, width: w, height: H, role: 'img', 'aria-label': summary });
-    sv.appendChild(s('line', { x1: 0, x2: w, y1: zero + .5, y2: zero + .5, class: 'm-base' }));
+    var by0 = type === 'line' && mn > 0 ? H - bot : zero; sv.appendChild(s('line', { x1: 0, x2: w, y1: by0 + .5, y2: by0 + .5, class: 'm-base' }));
     var pts = [];
     data.forEach(function (d, i) {
       var x = x0 + i * (bw + gap), cx = x + bw / 2, bh = Math.max(d.v !== 0 ? 3 : 2, Math.abs(d.v) * sc), y = d.v >= 0 ? zero - bh : zero;
@@ -177,9 +184,10 @@
         if (isReq && !val.trim()) { err(form, el, 'Enter some text in ' + human(c).toLowerCase()); return null; }
         row[c] = val.trim();
       } else if (d === 'num') {
-        var n = val === '' ? NaN : Number(val);
-        if (!isFinite(n)) { err(form, el, 'Enter a number for ' + human(c).toLowerCase()); return null; }
         var mn = p.min != null && p.min !== '' ? Number(p.min) : null, mx = p.max != null && p.max !== '' ? Number(p.max) : null;
+        if (!val.trim() && p.opt && p.opt.indexOf(c) >= 0) { row[c] = null; continue; } /* an optional number may stay empty */
+        var n = I.parseNum(val, mx);
+        if (!isFinite(n)) { err(form, el, 'Enter a number for ' + human(c).toLowerCase() + ', like 82.5'); return null; }
         if ((mn != null && n < mn) || (mx != null && n > mx)) { err(form, el, 'Enter a number ' + (mn != null && mx != null ? 'from ' + num(mn) + ' to ' + num(mx) : mn != null ? 'of at least ' + num(mn) : 'of at most ' + num(mx))); return null; }
         row[c] = n;
       } else { if (!val) { err(form, el, 'Pick a ' + human(c).toLowerCase()); return null; } row[c] = val; }
@@ -194,7 +202,7 @@
   function inputFor(c, d, ph, value, p) {
     var attrs = { name: c, autocomplete: 'off', 'aria-label': human(c) };
     if (d === 'long') { var ta = h('textarea', Object.assign(attrs, { rows: 3, maxlength: S.LIMITS.long, placeholder: ph })); ta.value = value == null ? '' : value; return ta; }
-    if (d === 'num') { var ni = h('input', Object.assign(attrs, { type: 'number', inputmode: 'decimal', step: 'any', placeholder: ph })); if (p.min != null) ni.min = p.min; if (p.max != null) ni.max = p.max; if (value != null) ni.value = value; return ni; }
+    if (d === 'num') { var ni = h('input', Object.assign(attrs, { type: 'text', inputmode: 'decimal', enterkeyhint: 'done', placeholder: ph })); if (value != null) ni.value = String(value); return ni; } /* text, not type=number: '82,5' and Arabic-Indic digits are read by I.parseNum */
     if (d === 'date') return h('input', Object.assign(attrs, { type: 'date', value: value || app.today() }));
     var ti = h('input', Object.assign(attrs, { type: 'text', maxlength: S.LIMITS.text, enterkeyhint: 'done', placeholder: ph, dir: 'auto' })); if (value != null) ti.value = value; return ti;
   }
@@ -202,25 +210,34 @@
   /* ---- m-list: rows of a table. attrs :table, :rows (optional array to show instead of all rows), title, sub, unit, meta, order, max (page size), edit ---- */
   function cell(def, v, unit) {
     if (def === 'pick') return h('span', { class: 'chip', text: human(String(v)) });
-    if (def === 'num') return h('span', { class: 'm-val' }, bdi(sgn(v) + (unit ? ' ' + unit : '')));
+    if (def === 'num') return h('span', { class: 'm-val' }, v == null ? '\u2014' : bdi(sgn(v) + (unit ? ' ' + unit : '')));
     if (def === 'bool') return h('span', { class: 'm-val', text: v ? 'Yes' : 'No' });
     return h('span', { class: 'm-val', text: String(v) });
   }
   /* One quiet row action: a kebab (three dots). The first tap arms it ("Delete", for 4 s), the second tap does it. Undo comes with the toast. */
-  function kebab(el, del) {
-    var armed = false, tm = null;
+  var live = null; /* one polite-assertive region for things that happen without a visible change of focus */
+  function announce(text) {
+    if (!live) { live = h('div', { class: 'm-sr', role: 'status', 'aria-live': 'assertive' }); document.body.appendChild(live); }
+    live.textContent = ''; setTimeout(function () { live.textContent = text; }, 30);
+  }
+  function kebab(el, del, nameFn) {
+    var armed = false, tm = null, at = 0;
     var set = function (on) {
-      armed = on; el.replaceChildren(on ? document.createTextNode('Delete') : icon('more')); el.setAttribute('aria-label', on ? 'Delete' : 'More actions'); el.classList.toggle('arm', on);
-      clearTimeout(tm); if (on) tm = setTimeout(function () { set(false); }, 4000);
+      var name = typeof nameFn === 'function' ? nameFn() : nameFn;
+      armed = on; el.replaceChildren(on ? document.createTextNode('Delete') : icon('more')); el.setAttribute('aria-label', on ? 'Delete' + (name ? ' ' + name : '') : 'More actions' + (name ? ' for ' + name : '')); el.classList.toggle('arm', on);
+      clearTimeout(tm); if (on) { at = performance.now(); tm = setTimeout(function () { set(false); }, 4000); announce('Delete ' + (name || 'this') + '? Tap Delete again to confirm.'); }
     };
-    el.addEventListener('click', function () { if (armed) { set(false); del(); } else set(true); });
+    /* the second tap must be a separate tap: a double tap (two taps within 300 ms) only arms it */
+    el.addEventListener('click', function () { if (!armed) set(true); else if (performance.now() - at >= 300) { set(false); del(); } });
     el.addEventListener('blur', function () { if (armed) set(false); });
     set(false);
   }
-  function removeBtn(t, r) { var b = h('button', { class: 'ibtn', type: 'button' }); kebab(b, function () { t.remove(r.id); }); return b; }
+  function nameOf(r) { for (var k in r) if (typeof r[k] === 'string' && k !== 'id' && r[k].trim()) return r[k].trim().slice(0, 30); return ''; } /* the first text column names the row in toasts */
+  function removeBtn(t, r) { var b = h('button', { class: 'ibtn', type: 'button' }); kebab(b, function () { t.remove(r.id); }, function () { return nameOf(r); }); return b; }
 
   /* inline editor for one row: inputs for every column, Save (t.set) / Cancel */
   function editor(el, t, r, defs, p) {
+    p.opt = meta(t).opt;
     var cols = Object.keys(defs).filter(function (c) { return defs[c] !== 'date'; });
     var form = h('form', { class: 'm-edit', novalidate: true }), grid = h('div', { class: 'm-fields' });
     cols.forEach(function (c) {
@@ -235,7 +252,7 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var row = collect(form, cols, defs, p, true); if (!row) return;
-      try { t.set(r.id, row); } catch (x) { err(form, null, x.message); return; }
+      try { t.set(r.id, row); } catch (x) { err(form, null, say(x)); return; }
       el._m.editing = null; ui.toast('Saved'); render(el);
     });
     setTimeout(function () { var f = form.querySelector('input,textarea,select'); if (f) f.focus(); }, 0);
@@ -275,8 +292,10 @@
   }
 
   /* ---- m-form: placeholders, not labels. attrs :table, fields, submit, min, max, seg (pick fields as a segmented control), quick="250,500" (one-tap add buttons for the first number column). One filled input style kit-wide. A single text or number column becomes one inline row; text + number (+ picks) puts the Add button in the same row. ---- */
+  var dlN = 0;
   function mForm(el, p) {
     var t = p.table; if (!t) return;
+    p.opt = meta(t).opt;
     var defs = meta(t).schema, cols = (p.fields ? String(p.fields).split(',').map(function (x) { return x.trim(); }) : Object.keys(defs)).filter(function (c) { return hasOwn.call(defs, c); });
     var kinds = cols.map(function (c) { return defs[c].indexOf('pick:') === 0 ? 'pick' : defs[c]; });
     var inline = cols.length === 1 && (kinds[0] === 'text' || kinds[0] === 'num');
@@ -292,11 +311,15 @@
       }
       if (d === 'bool') f = h('label', { class: 'check m-wide' }, h('input', { type: 'checkbox', name: c }), h('span', { text: human(c) }));
       else {
-        var input = inputFor(c, d, human(c), null, p);
+        var input = inputFor(c, d, human(c) + (p.opt && p.opt.indexOf(c) >= 0 ? ' (optional)' : ''), null, p);
         input.addEventListener('input', function () { clearErr(form); });
         if (!firstInput && d !== 'date') firstInput = input;
         f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: compact ? (ci === 0 ? 'm-tx' : 'm-nm') : d === 'long' || d === 'text' ? 'm-wide' : '' }, input);
         if (d === 'text' || d === 'long') counter(input, S.LIMITS[d], f);
+        if (d === 'text') { /* earlier values of this column are offered as suggestions (read when the field is focused, so typing never rebuilds the form) */
+          var dl = h('datalist', { id: 'm-dl-' + (++dlN) }); input.setAttribute('list', dl.id); f.appendChild(dl);
+          input.addEventListener('focus', function () { var seen = {}, rs = t.rows; dl.replaceChildren(); for (var i = rs.length - 1; i >= 0 && dl.children.length < 12; i--) { var v = rs[i][c]; if (v && !seen[v]) { seen[v] = 1; dl.appendChild(h('option', { value: v })); } } });
+        }
       }
       grid.appendChild(f);
     });
@@ -306,7 +329,7 @@
       quickRow = h.apply(null, ['div', { class: 'm-quick' }].concat(String(p.quick).split(',').map(function (q) {
         return h('button', { class: 'btn ghost', type: 'button', text: '+' + q.trim(), onclick: function () {
           if (performance.now() - last < 400) return; last = performance.now(); /* a double tap adds once */
-          var row = {}; row[qn] = Number(q); var id; try { id = t.add(row); } catch (x) { ui.toast(x.message); return; }
+          var row = {}; row[qn] = Number(q); var id; try { id = t.add(row); } catch (x) { ui.toast(say(x)); return; }
           ui.toast('Added ' + q.trim(), function () { undoAdd(id); });
         } });
       })));
@@ -314,13 +337,21 @@
     grid.appendChild(inline ? h('button', { class: 'btn m-go', type: 'submit', 'aria-label': p.submit || 'Add' }, icon('plus')) : compact ? h('button', { class: 'btn m-add', type: 'submit', text: p.submit || 'Add' }) : h('span', { class: 'm-wide m-end' }, h('button', { class: 'btn', type: 'submit', text: p.submit || 'Add' })));
     if (quickRow) form.appendChild(quickRow);
     form.appendChild(grid); if (compact) form.appendChild(rest);
+    /* keep="name,qty": those fields keep their value after Add, and start from the last row when first focused (nothing retyped every set) */
+    var keep = p.keep ? String(p.keep).split(',').map(function (x) { return x.trim(); }).filter(function (c) { return hasOwn.call(defs, c) && form.elements[c]; }) : [];
+    if (keep.length) setTimeout(function () { /* once, outside any effect, so the form is never rebuilt by a row change */
+      var rs = t.rows, lr = rs[rs.length - 1]; if (!lr) return;
+      keep.forEach(function (c) { if (!form.elements[c].value && lr[c] != null) form.elements[c].value = String(lr[c]); });
+    }, 0);
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (performance.now() - last < 500) return; /* double-click guard */
       var row = collect(form, cols, defs, p, false); if (!row) return;
-      var id; try { id = t.add(row); } catch (x) { err(form, null, x.message); return; }
+      var id; try { id = t.add(row); } catch (x) { err(form, null, say(x)); return; }
       last = performance.now();
+      var kept = keep.map(function (c) { return form.elements[c].value; });
       form.reset();
+      keep.forEach(function (c, i) { form.elements[c].value = kept[i]; });
       var dt = form.querySelector('input[type=date]'); if (dt) dt.value = app.today();
       ui.toast('Added', function () { undoAdd(id); });
       if (firstInput) firstInput.focus();
@@ -334,7 +365,8 @@
   A.directive('edit', function (el, d, u) {
     el.setAttribute('contenteditable', 'true'); el.setAttribute('role', 'textbox'); el.dir = 'auto'; el.classList.add('tbtn');
     var cancel = false, isT = function (a) { return typeof a[0].set === 'function'; };
-    var first = u.evaluate(d.expression); el.setAttribute('aria-label', human(isT(first) ? first[2] : first[1]));
+    var first = u.evaluate(d.expression), lab = isT(first) ? first[3] : first[4]; /* the label: the element's own aria-label, else a last string argument, else the field name */
+    if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', typeof lab === 'string' && lab ? lab : human(isT(first) ? first[2] : first[1]));
     var cur = function () { var a = u.evaluate(d.expression); return isT(a) ? a[1][a[2]] : a[0][a[1]]; };
     var show = function () { var v = cur(); el.textContent = typeof v === 'number' ? v.toLocaleString(locale) : String(v); };
     u.effect(function () { cur(); if (document.activeElement !== el) show(); });
@@ -347,12 +379,12 @@
         try {
           if (!isT(a)) {
             if (typeof old === 'number') {
-              var n = Number(v.replace(/[,\s]/g, '')), lo = a[2] == null ? 0 : a[2], hi = a[3] == null ? MAXN : a[3];
+              var n = I.parseNum(v, a[3] == null ? MAXN : a[3]), lo = a[2] == null ? 0 : a[2], hi = a[3] == null ? MAXN : a[3];
               if (!isFinite(n) || n < lo || n > hi) throw new Error('Enter a number from ' + num(lo) + ' to ' + num(hi));
               a[0][a[1]] = n;
             } else a[0][a[1]] = v;
           } else { var o = {}; o[a[2]] = v; a[0].set(a[1].id, o); }
-        } catch (x) { ui.toast(x.message); }
+        } catch (x) { ui.toast(say(x)); }
       }
       show();
     });
@@ -364,12 +396,17 @@
     kebab(el, function () {
       var a = u.evaluate(d.expression), c = a[2];
       if (typeof c === 'function') { c(); a[0].remove(a[1].id); }
-      else if (c && c.rows) I.removeGroup([[c, c[I.TX]().ids(a[3], a[1].id)], [a[0], [a[1].id]]], 'Removed');
+      else if (c && c.rows) I.removeGroup([[c, c[I.TX]().ids(a[3], a[1].id)], [a[0], [a[1].id]]], 'Removed ' + nameOf(a[1]));
       else a[0].remove(a[1].id);
-    });
+    }, function () { return nameOf(u.evaluate(d.expression)[1]); });
   });
   /* $day(n): the date n days from today as YYYY-MM-DD (reactive across midnight, no time zone surprises). */
-  A.magic('day', function () { return function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1, +q[2] + (n || 0), 12)); }; });
+  var dayAt = function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1, +q[2] + (n || 0), 12)); };
+  A.magic('day', function () { return dayAt; });
+  /* $month(n): the first day of the month n months from this one (YYYY-MM-01), for app.fmt(d, 'month') */
+  A.magic('month', function () { return function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1 + (n || 0), 1, 12)); }; });
+  /* $days(n): the last n dates, today first (YYYY-MM-DD) */
+  A.magic('days', function () { return function (n) { var o = []; for (var i = 0; i < Math.min(366, n); i++) o.push(dayAt(-i)); return o; }; });
 
   var COMP = { 'm-stat': mStat, 'm-chart': mChart, 'm-list': mList, 'm-form': mForm };
 
@@ -407,10 +444,14 @@
   function toastHost() {
     var box = h('div', { class: 'm-toasts', role: 'status', 'aria-live': 'polite' });
     document.body.appendChild(box);
+    var row = function (t) { return h('div', { class: 'm-toast' }, h('span', { text: t.msg }), t.undo ? h('button', { type: 'button', text: 'Undo', 'aria-label': 'Undo: ' + t.msg, onclick: function () { t.undo(); I.dismiss(t.id); } }) : null); };
     A.effect(function () {
-      box.replaceChildren.apply(box, I.toasts().map(function (t) {
-        return h('div', { class: 'm-toast' }, h('span', { text: t.msg }), t.undo ? h('button', { type: 'button', text: 'Undo', onclick: function () { t.undo(); I.dismiss(t.id); } }) : null);
-      }));
+      var all = I.toasts().slice(), undos = all.filter(function (t) { return t.undo; }), out = all.filter(function (t) { return !t.undo; }).map(row);
+      if (undos.length < 3) out = out.concat(undos.map(row));
+      else out.push(h('div', { class: 'm-tray' }, /* three or more pending Undos: one tray, each with its own Undo, plus Undo all */
+        h('div', { class: 'm-tray-h' }, h('b', { text: undos.length + ' undos' }), h('button', { type: 'button', text: 'Undo all', onclick: function () { undos.slice().reverse().forEach(function (t) { t.undo(); I.dismiss(t.id); }); } })),
+        h.apply(null, ['div', { class: 'm-tray-l' }].concat(undos.slice().reverse().map(row)))));
+      box.replaceChildren.apply(box, out);
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', toastHost); else toastHost();

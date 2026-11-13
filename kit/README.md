@@ -10,7 +10,7 @@ components (`m-stat`, `m-chart`, `m-list`, `m-form`) + the `x-edit` / `x-remove`
 ```bash
 npm ci                 # installs dev dependencies (playwright-core, better-sqlite3, esbuild, alpinejs, a tokenizer)
 npm run build          # kit/src/*  ->  kit/molde.js (our code minified, Alpine as vendored)
-npm test               # 180+ tests: SDK (memory + SQLite) and the formatter again under America/Los_Angeles and Asia/Karachi, contrast, 5 fixtures x 5 viewports, hardening, tokens
+npm test               # CI=1 makes a missing SQLite native module a failure (fix: npm rebuild better-sqlite3), not a skip; 180+ tests: SDK (memory + SQLite) and the formatter again under America/Los_Angeles and Asia/Karachi, contrast, 5 fixtures x 5 viewports, hardening, tokens
 npm run shots          # re-shoot kit/shots/ (production molde.js, deterministic demo data at 21 Nov 2026)
 node kit/tests/mutate.mjs   # SDK mutation check (about 100 mutants, run under America/Los_Angeles, needs >= 90% killed)
 node kit/fixtures/gen-seeds.mjs   # regenerate the demo data (deterministic)
@@ -18,7 +18,7 @@ node kit/fixtures/gen-seeds.mjs   # regenerate the demo data (deterministic)
 
 ## Requirements and known snags
 
-- CI: `npm ci && npm test` on Node 20 or 22 with a C++ toolchain (or a prebuilt better-sqlite3), a Chromium (`npx playwright install chromium` or `MOLDE_CHROME`), and optionally the Qwen tokenizer; a failed native build prints how to fix it and skips only the SQLite tests.
+- CI: `npm ci && npm test` on Node 20 or 22 with a C++ toolchain (or a prebuilt better-sqlite3), a Chromium (`npx playwright install chromium` or `MOLDE_CHROME`), and optionally the Qwen tokenizer; a failed native build prints how to fix it and skips only the SQLite tests locally; with `CI=1` the missing module FAILS the run.
 - Node 20 or newer. The tests that open pages need a Chromium: Playwright 1.65 wants its own build, so `kit/tests/lib.mjs`
   uses the newest `~/.cache/ms-playwright/chromium-*` it finds (override with `MOLDE_CHROME=/path/to/chrome`).
 - **better-sqlite3 is a native module.** `npm ci` installs a prebuilt binary when one exists for your Node and platform.

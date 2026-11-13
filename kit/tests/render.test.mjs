@@ -47,17 +47,18 @@ test('exercise: day headers with totals, set numbers, PR marker and delta chip, 
   const cnt = (txt) => page.locator('.item', { hasText: txt }).count();
   const head = page.locator('.m-dh').first();
   assert.match(await head.innerText(), /Today[\s\S]*9 sets/); assert.equal(await head.locator('b.hi').count(), 1, 'Today is emphasised');
-  const sq = page.locator('.item.slim', { hasText: 'Squat' }).first(); assert.match(await sq.innerText(), /PR|\+2\.5 kg/); assert.match(await page.locator('.chip', { hasText: /kg$/ }).first().innerText(), /^[+-]?\d+(\.\d+)? kg$/, 'delta chip');
+  const sq = page.locator('.item.slim', { hasText: 'Squat' }).first(); assert.match(await sq.innerText(), /PR|\+2\.5 kg/); assert.match(await page.locator('.item.slim small', { hasText: /kg$/ }).first().innerText(), /^[+-]?\d+(\.\d+)? kg$/, 'delta as small text');
+  const prs = await page.$$eval('.item.slim', (els) => els.filter((e) => e.querySelector('.chip') && getComputedStyle(e.querySelector('.chip')).display !== 'none').map((e) => e.querySelector('button').innerText)); assert.equal(new Set(prs).size, prs.length, 'one PR chip per exercise: ' + prs);
   assert.ok((await page.locator('.chip', { hasText: 'PR' }).count()) >= 1, 'a PR marker'); assert.match(await page.locator('.list .item bdi.grow').first().innerText(), /^1\. \d/, 'sets are numbered');
-  assert.equal(await page.locator('m-chart svg rect.m-b').count(), 8, 'sets per week chart'); assert.equal(await page.locator('m-chart svg rect.m-b.on').count() >= 1, true);
+  assert.equal(await page.locator('m-chart svg polyline.m-line').count(), 1, 'a progress line'); await page.locator('.item.slim button', { hasText: 'Squat' }).first().click(); assert.match(await page.locator('m-chart small').innerText(), /^Squat, top weight/);
   await page.fill('input[name=exercise]', 'Squat'); await page.fill('input[name=kg]', '72.5'); await page.fill('input[name=reps]', '5'); await page.click('button[type=submit]');
   assert.equal(await cnt('72.5 kg × 5'), 1); assert.match(await head.innerText(), /10 sets/);
   await del(page.locator('.item', { hasText: '72.5 kg × 5' }).locator('.ibtn')); assert.equal(await cnt('72.5 kg × 5'), 0); assert.match(await head.innerText(), /9 sets/);
   await page.locator('.m-toast button', { hasText: 'Undo' }).last().click(); assert.equal(await cnt('72.5 kg × 5'), 1);
   const n0 = await page.locator('.list .item').count(); await page.locator('button', { hasText: 'Show more history' }).click();
   assert.ok((await page.locator('.list .item').count()) > n0, 'more history appears');
-  const buttons = await page.locator('.list .item .ibtn').all(); assert.ok(buttons.length > 20); await buttons[20].click(); assert.equal(await buttons[20].getAttribute('aria-label'), 'Delete', 'first tap arms'); await buttons[20].click();
-  assert.equal(await page.locator('.ibtn').first().getAttribute('aria-label'), 'More actions', 'every row action has an accessible name');
+  const buttons = await page.locator('.list .item .ibtn').all(); assert.ok(buttons.length > 20); await buttons[20].click(); assert.match(await buttons[20].getAttribute('aria-label'), /^Delete/, 'first tap arms'); await page.waitForTimeout(350); await buttons[20].click();
+  assert.match(await page.locator('.ibtn').first().getAttribute('aria-label'), /^More actions/, 'every row action has an accessible name');
   const t1 = await page.locator('.stat').innerText(); assert.equal(t1, '1:30');
   await page.locator('button', { hasText: 'Rest' }).click(); await page.waitForTimeout(1200); assert.notEqual(await page.locator('.stat').innerText(), '1:30');
   const notified = await page.evaluate(() => 1); assert.equal(notified, 1); await page.locator('button', { hasText: 'Pause' }).click();
@@ -69,18 +70,17 @@ test('habits: names above full-width check rows, weekday + date header, toggle a
   assert.equal(await page.locator('.stat').innerText(), '12');
   const vis = (sel) => page.$$eval(sel, (els) => els.filter((e) => e.offsetTop === els[0].offsetTop).length);
   const cols = await vis('.item.grid small'); assert.ok(cols >= 5, 'columns at 412: ' + cols); assert.equal(await page.$$eval('.item.wrap .grid .check', (els) => els.slice(0, 7).filter((e) => e.offsetTop === els[0].offsetTop).length), cols, 'one check per header column');
-  assert.match(await page.locator('.item.grid small').first().innerText(), /^[A-Za-z\u0600-\u06ff]\s?\d+$|^\d+\s?[A-Za-z]$/, 'weekday initial and date');
+  assert.match(await page.locator('.item.grid small').first().innerText(), /^[A-Za-z\u0600-\u06ff]{2,}\s*\d+$/, 'weekday name and date');
   const name = await row('Read 20').locator('[contenteditable]').boundingBox(), first = await row('Read 20').locator('.check').first().boundingBox(); assert.ok(name.y + name.height <= first.y + 1 && name.width > 150, 'the name sits on its own line, wide');
   assert.equal(await row('Read 20').locator('[contenteditable]').getAttribute('role'), 'textbox'); assert.equal(await row('Read 20').locator('[contenteditable]').getAttribute('aria-label'), 'Habit', 'x-edit has an accessible name');
-  assert.ok((await page.locator('.grid.flow .cell.lv3, .grid.flow .cell.lv4').count()) > 3 && (await page.locator('.grid.flow .cell').count()) === 84, 'heat map has 84 cells and an accent ramp');
-  const st = row('Stretch').locator('.check').first(); const was = await st.getAttribute('aria-pressed'); await st.click();
-  assert.notEqual(await row('Stretch').locator('.check').first().getAttribute('aria-pressed'), was);
+  const st = row('Stretch').locator('.check').first(); const was = await st.getAttribute('aria-checked'); await st.click();
+  assert.notEqual(await row('Stretch').locator('.check').first().getAttribute('aria-checked'), was);
   const walk = row('Walk 30').locator('[contenteditable]'); await walk.click(); await page.keyboard.press('Control+A'); await page.keyboard.type('Walk 45 minutes'); await page.keyboard.press('Enter');
   assert.equal(await row('Walk 45 minutes').count(), 1); assert.equal(await row('Walk 30').count(), 0);
   const w2 = row('Walk 45').locator('[contenteditable]'); await w2.click(); await page.keyboard.press('Control+A'); await page.keyboard.type('Nope'); await page.keyboard.press('Escape'); assert.equal(await w2.innerText(), 'Walk 45 minutes', 'Escape cancels');
   const snap = () => page.evaluate(() => { const h = store.t('habit').rows.find((x) => x.habit === 'Write in journal'); const c = store.t('check'); return { habits: store.t('habit').rows.length, checks: c.rows.length, mine: h ? c.rows.filter((r) => r.habit === String(h.id)).length : 0, streak: h ? c.streak({ habit: String(h.id) }) : null, orphans: c.rows.filter((r) => !store.t('habit').rows.some((x) => String(x.id) === r.habit)).length }; });
   const before = await snap(); assert.ok(before.mine > 20);
-  await del(row('Write in journal').locator('.ibtn'));
+  await del(row('Write in journal').locator('.ibtn').last());
   const mid = await snap(); assert.equal(mid.habits, before.habits - 1); assert.equal(mid.checks, before.checks - before.mine); assert.equal(mid.orphans, 0, 'no orphan check rows');
   assert.equal(await page.locator('.m-toast').count(), 1, 'one toast for the whole removal'); await page.locator('.m-toast button', { hasText: 'Undo' }).click();
   const after = await snap(); assert.deepEqual([after.habits, after.checks, after.mine, after.streak], [before.habits, before.checks, before.mine, before.streak], 'one Undo restores the habit and every check');
@@ -106,8 +106,10 @@ test('water: glass fills, formatted goal, double tap adds once, recent list remo
   const g = p.locator('small [contenteditable]');
   for (const bad of ['0', '100001', '-5', 'many']) { await g.click(); await p.keyboard.press('Control+A'); await p.keyboard.type(bad); await p.keyboard.press('Enter'); assert.equal(await g.innerText(), '2,000', 'goal rejects ' + bad); }
   await g.click(); await p.keyboard.press('Control+A'); await p.keyboard.type('100000'); await p.keyboard.press('Enter'); assert.equal(await g.innerText(), '100,000');
+  const u0 = await p.locator('.m-toast button').count();
   for (let i = 0; i < 6; i++) { await p.locator('.m-quick button', { hasText: '+250' }).click(); await p.waitForTimeout(450); }
-  assert.ok((await p.locator('.m-toast').count()) <= 5, 'Undo toasts are bounded (plain ones are capped at 3)'); assert.match(await p.locator('.m-toast').last().innerText(), /Added 250/);
+  const n = parseInt(await p.locator('.m-tray-h b').innerText(), 10); assert.ok(n >= 6, 'six rapid adds keep six pending Undos in one tray, none is lost: ' + n); assert.equal(await p.locator('.m-tray .m-toast button').count(), n, 'each one has its own Undo');
+  await p.locator('.m-tray .m-toast button').nth(2).click(); assert.equal(await p.locator('.m-tray-h b').innerText(), `${n - 1} undos`); await p.locator('.m-tray-h button', { hasText: 'Undo all' }).click(); assert.equal(await p.locator('.m-toast').count(), 0, 'Undo all restores everything'); assert.ok(['1,800 ml', '1,500 ml'].includes(await big()), 'Undo all restores the total from before the six adds (an older 300 ml Undo may or may not have expired)');
   await r.ctx.close(); assert.deepEqual(r.log, []);
   const e = await open(browser, srv.base, 'water', { seed: false }); await e.page.waitForTimeout(200); assert.equal(await e.page.locator('.stat').innerText(), '0 ml'); assert.deepEqual(e.log, [], 'an empty table is clean');
   await e.page.evaluate(() => { store.kv('goal', 2000).v = 1; }); await e.page.waitForTimeout(100); assert.deepEqual(e.log, []); await e.ctx.close();

@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { createSDK, memoryAdapter, CALLS, ymd } = require(process.env.MOLDE_SDK || '../src/sdk.cjs');
 const { sqliteAdapter, ensureSchema } = require('../adapters/sqlite.cjs');
 let Database = null; try { Database = require('better-sqlite3'); new Database(':memory:').close(); } catch (e) { console.log('# better-sqlite3 not available (' + e.message.split('\n')[0] + '): SQLite tests are skipped. Run `npm rebuild better-sqlite3`, see kit/README.md'); Database = null; }
+if (!Database && process.env.CI) test('the SQLite native module is installed (required when CI is set: the SQLite tests may not be skipped in CI)', () => { assert.fail('better-sqlite3 is missing or not built for this Node. Fix it locally with `npm rebuild better-sqlite3` (needs a C++ toolchain; see kit/README.md). CI must not skip the SQLite tests.'); });
 
 const manifest = { tables: {
   log: { what: 'text', mins: 'num', kind: 'pick:run|swim|lift', note: 'long', ok: 'bool' },
@@ -290,11 +291,20 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.equal(s.internal.removeGroup([[c, []], [h, [999]]]), 0, 'nothing to remove: no toast');
   });
 
-  test(`[${aname}] toasts: plain ones are capped at 3 and newest wins, Undo toasts survive a flood`, () => {
+  test(`[${aname}] toasts: plain ones are capped at 3 and newest wins; a pending Undo is NEVER evicted, however many`, () => {
     const tm = fakeTimers(); const a = createSDK({ manifest, timers: tm });
     a.ui.toast('u1', () => {}); a.ui.toast('u2', () => {}); for (let i = 0; i < 10; i++) a.ui.toast('p' + i);
-    const msgs = a.internal.toasts().map((x) => x.msg); assert.ok(msgs.includes('u1') && msgs.includes('u2'), msgs.join()); assert.ok(msgs.includes('p9'), 'newest plain toast is visible'); assert.ok(msgs.length <= 3, msgs.join());
-    for (let i = 0; i < 4; i++) a.ui.toast('v' + i, () => {}); assert.ok(a.internal.toasts().length <= 5, 'Undo toasts are bounded too'); void tm;
+    let msgs = a.internal.toasts().map((x) => x.msg); assert.ok(msgs.includes('u1') && msgs.includes('u2'), msgs.join()); assert.ok(msgs.includes('p9'), 'newest plain toast is visible');
+    assert.equal(msgs.filter((m) => m[0] === 'p').length, 3, msgs.join());
+    for (let i = 0; i < 6; i++) a.ui.toast('v' + i, () => {}); /* the 6th and 7th rapid removals keep a working Undo */
+    msgs = a.internal.toasts().map((x) => x.msg); for (const m of ['u1', 'u2', 'v0', 'v1', 'v2', 'v3', 'v4', 'v5']) assert.ok(msgs.includes(m), m + ' still has its Undo: ' + msgs.join());
+  });
+  test(`[${aname}] six rapid removals: every one keeps a working Undo and the toast names the row`, () => {
+    const { s } = sdk2(); const t = s.store.t('log'); const ids = [];
+    for (let i = 0; i < 7; i++) ids.push(t.add({ what: 'Item ' + i, mins: i }));
+    for (let i = 0; i < 7; i++) t.remove(ids[i]);
+    const ts = s.internal.toasts(); assert.equal(ts.length, 7); assert.equal(ts[0].msg, 'Removed Item 0'); assert.ok(ts.every((x) => typeof x.undo === 'function'));
+    ts[6].undo(); assert.equal(t.rows.length, 1); assert.equal(t.rows[0].what, 'Item 6');
   });
   test(`[${aname}] bad arguments raise a typed MoldeError, never a raw TypeError, never silently act`, () => {
     const { s } = sdk2(); const t = s.store.t('log'), c = s.store.t('check');
@@ -556,5 +566,49 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.throws(() => t.add({ mins: null }), /null is not a value for a num column; leave the key out/); assert.throws(() => t.add({ mins: NaN }), /finite number, got null/);
     assert.throws(() => t.add({ mins: 'abc' }), /finite number, got "abc"/); assert.throws(() => t.add({ kind: 'zzz' }), /"zzz" is not one of run, swim, lift/); assert.throws(() => t.add({ ok: 'yes' }), /true or false, not "yes"/);
     assert.throws(() => t.add({ what: {} }), /must be text, a number or true\/false/);
+  });
+}
+
+/* ---- round 6: number parsing, optional numbers, clamp on every write path, friendly names ---- */
+test('parseNum: decimal comma, Arabic-Indic and Persian digits, grouping only when unambiguous, NaN otherwise', () => {
+  const f = createSDK({ manifest }).internal.parseNum;
+  assert.equal(f('82,5'), 82.5, 'a decimal comma is NOT thousands'); assert.equal(f('82.5'), 82.5); assert.equal(f('۸۰'), 80); assert.equal(f('٨٢٫٥'), 82.5); assert.equal(f('۱٬۲۰۰'), 1200);
+  assert.equal(f('1,500'), 1500, 'exactly three digits after one comma and no limit in the way: grouping'); assert.equal(f('1,500', 500), 1.5, 'the same text above the field limit is the decimal 1.5');
+  assert.equal(f('1,234,567'), 1234567); assert.equal(f('1.234,5'), 1234.5); assert.equal(f('1,234.5'), 1234.5); assert.equal(f('0,500'), 0.5, 'a leading zero cannot be grouping');
+  assert.equal(f('-3,5'), -3.5); assert.equal(f('1 500'), 1500); assert.equal(f(' 12 '), 12);
+  for (const bad of ['', '  ', 'abc', '1,2,3', '12,34.5', '1.2.3', '--1', '1e5', 'Infinity', '٨٢٫٥٫١', null, undefined]) assert.ok(Number.isNaN(f(bad)), String(bad));
+});
+for (const [aname, mk] of Object.entries(adapters)) {
+  const m6 = { tables: { set: { what: 'text', kg: 'num?', reps: 'num' }, spend: { amount: 'num' } } };
+  test(`[${aname}] an optional number column ("num?") stores null when empty, still rejects junk, and sums ignore it`, () => {
+    const ctx = mk(); const s = createSDK({ adapter: ctx.make(), manifest: m6, now: () => T0 });
+    const t = s.store.t('set'); const a = t.add({ what: 'Pull-ups', reps: 8 }), b = t.add({ what: 'Bench', kg: 60, reps: 5 }), c = t.add({ what: 'Dips', kg: null, reps: 6 });
+    const r = Object.fromEntries(t.rows.map((x) => [x.what, x])); assert.equal(r['Pull-ups'].kg, null); assert.equal(r.Bench.kg, 60); assert.equal(r.Dips.kg, null);
+    assert.equal(t.sum('kg'), 60); t.set(b, { kg: null }); assert.equal(t.rows.find((x) => x.id === b).kg, null); void a; void c;
+    for (const bad of ['abc', NaN, Infinity, true]) assert.throws(() => t.add({ what: 'x', kg: bad, reps: 1 }), (e) => e.code === 'E_ARG');
+    assert.throws(() => t.add({ what: 'x', reps: null }), (e) => e.code === 'E_ARG', 'a plain number column still rejects null');
+    assert.equal(t[Symbol.for('molde.meta')]().schema.kg, 'num'); assert.deepEqual(t[Symbol.for('molde.meta')]().opt, ['kg']);
+  });
+  test(`[${aname}] the +-1e12 clamp holds on add, set and the kv path`, () => {
+    const ctx = mk(); const s = createSDK({ adapter: ctx.make(), manifest: m6, now: () => T0 }); const t = s.store.t('spend');
+    const id = t.add({ amount: -1e13 }); assert.equal(t.rows[0].amount, -1e12); t.set(id, { amount: 5e20 }); assert.equal(t.rows[0].amount, 1e12); t.set(id, { amount: -1e12 }); assert.equal(t.rows[0].amount, -1e12);
+    assert.equal(t.sum('amount'), -1e12); assert.throws(() => t.add({ amount: Infinity }), (e) => e.code === 'E_ARG');
+  });
+  test(`[${aname}] a removal toast names the row ("Removed Stretch") and a long name is cut for the toast only`, () => {
+    const ctx = mk(); const s = createSDK({ adapter: ctx.make(), manifest: m6, now: () => T0 }); const t = s.store.t('set');
+    const id = t.add({ what: 'Stretch', reps: 1 }); t.remove(id); assert.equal(s.internal.toasts()[0].msg, 'Removed Stretch');
+    const id2 = t.add({ what: 'x'.repeat(200), reps: 1 }); t.remove(id2); assert.ok(s.internal.toasts()[1].msg.length <= 40);
+  });
+  test(`[${aname}] app.fmt: wd, day, dm and month`, () => {
+    const s = createSDK({ adapter: mk().make(), manifest: m6, now: () => T0, locale: 'en-US' });
+    assert.equal(s.app.fmt('2026-11-17', 'wd'), 'Tue'); assert.equal(s.app.fmt('2026-11-17', 'day'), '17'); assert.equal(s.app.fmt('2026-11-17', 'dm'), 'Tue, Nov 17'); assert.equal(s.app.fmt('2026-11-17', 'month'), 'November 2026');
+  });
+  test(`[${aname}] t.series weeks: whole weeks from the first weekday, and sum/group take month: 0, -1`, () => {
+    const ctx = mk(); const mf = { tables: { c: { day: 'date', n: 'num' } } }; const s = createSDK({ adapter: ctx.make(), manifest: mf, now: () => T0, locale: 'en-US' }); const t = s.store.t('c');
+    const today = ymd(new Date(T0)); const w = t.series(null, { weeks: 3 }); assert.equal(w.length % 7 === 0 || w.length > 14, true); assert.equal(w[w.length - 1].k, today);
+    assert.equal(new Date(w[0].k + 'T12:00').getDay(), 1, 'the first day is a Monday (default week start)');
+    assert.throws(() => t.series(null, { weeks: 0 }), (e) => e.code === 'E_ARG'); assert.throws(() => t.sum('n', { month: 1 }), (e) => e.code === 'E_ARG');
+    const d = new Date(T0); const prev = ymd(new Date(d.getFullYear(), d.getMonth() - 1, 15, 12)); t.add({ day: prev, n: 7 }); t.add({ day: today, n: 3 });
+    assert.equal(t.sum('n', { month: 0 }), 3); assert.equal(t.sum('n', { month: -1 }), 7);
   });
 }

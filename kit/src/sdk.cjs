@@ -55,8 +55,37 @@
   const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; };
   const clampNum = (v) => { const n = Number(v); if (Number.isNaN(n)) return 0; return Math.max(-NUM_MAX, Math.min(NUM_MAX, n)); };
 
+  /* parseNum(text, max): the typed number in the reader's own notation, or NaN. Digits may be Latin, Arabic-Indic (U+0660..9) or Persian (U+06F0..9).
+   * '.' is always a decimal point. ',' (or the Arabic comma/decimal mark) is a decimal comma ('82,5' = 82.5) except when it is unambiguous
+   * grouping: '1,234' and '1,234,567' (groups of exactly 3 digits, no leading 0) are read as 1234 and 1234567 UNLESS that exceeds `max` and
+   * the decimal reading ('1.234') fits, so a weight field that stops at 500 reads '1,500' as 1.5. Spaces and apostrophes are ignored. */
+  function parseNum(text, max) {
+    let t = String(text == null ? '' : text).trim();
+    if (!t) return NaN;
+    t = t.replace(/[\u0660-\u0669]/g, (c) => c.charCodeAt(0) - 0x660).replace(/[\u06f0-\u06f9]/g, (c) => c.charCodeAt(0) - 0x6f0)
+      .replace(/[\u066b\u060c]/g, ',').replace(/\u066c/g, ',').replace(/[\s\u00a0\u202f'\u2019]/g, '').replace(/\u2212/g, '-');
+    const sign = t[0] === '-' || t[0] === '+' ? t[0] : ''; if (sign) t = t.slice(1);
+    const lim = typeof max === 'number' && Number.isFinite(max) ? max : Infinity;
+    let dec;
+    if (t.includes(',') && t.includes('.')) { /* the last mark is the decimal one, the other must be grouping */
+      const d = Math.max(t.lastIndexOf(','), t.lastIndexOf('.')), head = t.slice(0, d), seps = head.replace(/\d/g, '');
+      if (!/^[1-9]\d{0,2}(?:[.,]\d{3})*$/.test(head) || seps.includes(t[d]) || new Set(seps).size > 1) return NaN;
+      dec = head.replace(/[.,]/g, '') + '.' + t.slice(d + 1);
+    } else if (t.includes(',')) {
+      const parts = t.split(',');
+      const group = /^[1-9]\d{0,2}(,\d{3})+$/.test(t);
+      const asGroup = group ? Number(t.replace(/,/g, '')) : NaN;
+      if (group && (asGroup <= lim || parts.length > 2)) dec = t.replace(/,/g, '');
+      else if (parts.length === 2) dec = parts[0] + '.' + parts[1];
+      else return NaN;
+    } else dec = t;
+    if (!/^(\d+\.?\d*|\.\d+)$/.test(dec)) return NaN;
+    const n = Number(dec); if (!Number.isFinite(n)) return NaN;
+    return sign === '-' ? -n : n;
+  }
   function colDef(type) {
     if (typeof type === 'string' && type.startsWith('pick:')) return { k: 'pick', opts: type.slice(5).split('|') };
+    if (type === 'num?') return { k: 'num', opt: true }; /* optional number: empty is allowed and stored as null */
     return { k: type };
   }
   /* Writes are strict: a value that is not what the column holds raises E_ARG (a number column does not accept NaN, "abc", "", null,
@@ -65,6 +94,7 @@
   function coerceStrict(def, v, dflt) {
     if (v === undefined) return coerceLoose(def, v, dflt);
     const shown = () => JSON.stringify(typeof v === 'string' ? v.slice(0, 20) : v);
+    if (v === null && def.opt) return null;
     if (v === null) bad('E_ARG', 'null is not a value for a ' + def.k + ' column; leave the key out to get the default');
     switch (def.k) {
       case 'text': case 'long': {
@@ -94,7 +124,7 @@
     const miss = v === undefined || v === null;
     switch (def.k) {
       case 'text': case 'long': return miss ? '' : String(v);
-      case 'num': return miss ? 0 : clampNum(v);
+      case 'num': return miss ? (def.opt ? null : 0) : clampNum(v);
       case 'bool': return miss ? false : v === 'false' ? false : !!v;
       case 'date': return miss ? dflt() : validYmd(v) ? v : dflt();
       case 'pick': return def.opts.includes(v) ? v : def.opts[0];
@@ -127,7 +157,8 @@
 
     /* ---- app (#14, #15, #16) ---- */
     const notifications = [];
-    const HOW = ['date', 'time', 'rel'];
+    const fm = new Map(); const dtf = (o) => { const k = JSON.stringify(o); if (!fm.has(k)) fm.set(k, new Intl.DateTimeFormat(locale, o)); return fm.get(k); }; /* formatters are costly to build: one per option set */
+    const HOW = ['date', 'time', 'rel', 'wd', 'day', 'dm', 'month']; /* wd: Mon, day: 17, dm: Mon 17 Nov, month: November 2026 */
     const app = {
       today,
       fmt(ts, how) {
@@ -138,8 +169,10 @@
         else bad('E_ARG', 'app.fmt(ts, how): ts is a ms timestamp, a Date or "YYYY-MM-DD"');
         if (Number.isNaN(d.getTime())) bad('E_ARG', 'app.fmt: invalid time ' + String(ts).slice(0, 30));
         how = how === undefined ? 'date' : how;
-        if (!HOW.includes(how)) bad('E_ARG', "app.fmt: how is one of 'date', 'time', 'rel'");
-        const tf = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+        if (!HOW.includes(how)) bad('E_ARG', "app.fmt: how is one of " + HOW.map((x) => "'" + x + "'").join(', '));
+        const part = { wd: { weekday: 'short' }, day: { day: 'numeric' }, dm: { weekday: 'short', day: 'numeric', month: 'short' }, month: { month: 'long', year: 'numeric' } }[how];
+        if (part) return dtf(part).format(d);
+        const tf = dtf({ hour: 'numeric', minute: '2-digit' });
         if (how === 'time') { if (dateOnly) bad('E_ARG', 'app.fmt: a date-only string has no time of day'); return tf.format(d); }
         const withTime = (s) => (dateOnly ? s : s + ', ' + tf.format(d));
         const t0 = new Date(now());
@@ -148,9 +181,9 @@
           const rt = (n) => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(n, 'day').replace(/^./, (c) => c.toUpperCase());
           if (days === 0) return withTime(rt(0));
           if (days === 1) return withTime(rt(-1));
-          if (days > 1 && days < 7) return withTime(new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d));
+          if (days > 1 && days < 7) return withTime(dtf({ weekday: 'long' }).format(d));
         }
-        return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: d.getFullYear() === t0.getFullYear() ? undefined : 'numeric' }).format(d);
+        return dtf({ day: 'numeric', month: 'short', year: d.getFullYear() === t0.getFullYear() ? undefined : 'numeric' }).format(d);
       },
       notify(when, text) {
         let at;
@@ -183,10 +216,10 @@
         if (String(msg).length > NOTE_MAX) bad('E_ARG', 'ui.toast: msg is limited to ' + NOTE_MAX + ' characters');
         if (undo !== undefined && typeof undo !== 'function') bad('E_ARG', 'ui.toast: the second argument is an undo function');
         const id = ++toastId;
-        while (uiState.toasts.length >= 3) { /* at most 3 plain toasts: the newest replaces the oldest; a pending Undo is evicted last (at 5) */
-          const i = uiState.toasts.findIndex((x) => !x.undo);
-          if (i < 0 && uiState.toasts.length < 5) break;
-          dismiss(uiState.toasts[i < 0 ? 0 : i].id);
+        for (;;) { /* at most 3 plain toasts: the newest replaces the oldest plain one. A pending Undo is NEVER evicted: it leaves only when used or when its own timer ends */
+          const plain = uiState.toasts.filter((x) => !x.undo);
+          if (plain.length < 3) break;
+          dismiss(plain[0].id);
         }
         uiState.toasts.push({ id, msg: String(msg), undo: undo || null });
         toastTimers.set(id, timers.setTimeout(() => dismiss(id), undo ? 10000 : 3000));
@@ -236,6 +269,7 @@
         if (o == null) return {};
         if (!isObj(o)) bad('E_ARG', what + ': options must be an object');
         if ('since' in o && !['day', 'week', 'month', 'last7', 'last30'].includes(o.since)) bad('E_ARG', what + ": since is 'day', 'week', 'month' (calendar-aligned) or 'last7', 'last30'");
+        if ('month' in o && !(Number.isInteger(o.month) && o.month <= 0 && o.month >= -1200)) bad('E_ARG', what + ': month is 0 (this month), -1 (last month) and so on');
         if ('where' in o) { if (!isObj(o.where)) bad('E_ARG', what + ': where must be an object'); Object.keys(o.where).forEach((c) => needCol(c, what + ' where')); }
         return o;
       };
@@ -274,8 +308,9 @@
       function window_(o) {
         const t0 = parseYmd(today());
         const from = o.since === 'day' ? t0 : o.since === 'week' ? startOfWeek(t0) : o.since === 'month' ? new Date(t0.getFullYear(), t0.getMonth(), 1, 12) : o.since === 'last7' ? addDays(t0, -6) : o.since === 'last30' ? addDays(t0, -29) : null;
-        const f = from ? ymd(from) : null;
-        return live().filter((r) => (!o.where || eq(r, o.where)) && (!f || day(r) >= f));
+        let f = from ? ymd(from) : null, to = null;
+        if (o.month !== undefined) { f = ymd(new Date(t0.getFullYear(), t0.getMonth() + o.month, 1, 12)); to = ymd(new Date(t0.getFullYear(), t0.getMonth() + o.month + 1, 1, 12)); } /* one whole calendar month */
+        return live().filter((r) => (!o.where || eq(r, o.where)) && (!f || day(r) >= f) && (!to || day(r) < to));
       }
       function restore(id) {
         const rec = record(id); if (!rec || !rec.deleted_at) return false;
@@ -319,7 +354,8 @@
           if (!Number.isInteger(id)) bad('E_ARG', 't.remove(id): id is the number returned by t.add');
           refresh();
           if (!softDelete(id)) return false;
-          ui.toast('Removed', () => { restore(id); });
+          const rec = record(id), nm = rec && isObj(rec.data) ? Object.entries(rec.data).find(([c, v]) => defs[c] && (defs[c].k === 'text' || defs[c].k === 'long') && typeof v === 'string' && v.trim()) : null;
+          ui.toast('Removed' + (nm ? ' ' + nm[1].trim().slice(0, 30) : ''), () => { restore(id); });
           return true;
         },
         /* #6 */ sum(col, o) { needCol(col, 't.sum'); needNum(col, 't.sum'); o = needOpts(o, 't.sum'); return window_(o).reduce((s, r) => s + val(r, col), 0); },
@@ -329,6 +365,11 @@
           if (!['day', 'week', 'month'].includes(by)) bad('E_ARG', "t.series: by is 'day', 'week' or 'month'");
           if (!['sum', 'count', 'avg'].includes(op)) bad('E_ARG', "t.series: op is 'sum', 'count' or 'avg'");
           let last = o.last === undefined ? 7 : o.last;
+          if (o.weeks !== undefined) { /* whole weeks: from the first day of the week (weeks - 1) weeks ago through today, so rows of seven line up with the weekday */
+            if (typeof o.weeks !== 'number' || !Number.isFinite(o.weeks) || o.weeks < 1 || o.weeks > 52) bad('E_ARG', 't.series: weeks is a number from 1 to 52');
+            if (by !== 'day') bad('E_ARG', "t.series: weeks goes with by 'day'");
+            const t = parseYmd(today()); last = Math.round((t - addDays(startOfWeek(t), -7 * (Math.floor(o.weeks) - 1))) / 864e5) + 1;
+          }
           if (typeof last !== 'number' || !Number.isFinite(last) || last < 1) bad('E_ARG', 't.series: last is a number from 1 to 366');
           last = Math.min(366, Math.floor(last));
           if (op !== 'count') needNum(col, 't.series');
@@ -379,7 +420,7 @@
         cols: { get: () => cols.slice() },
         rows: { get: () => { const v = st.ver; if (snapVer !== v || !snap) { snap = Object.freeze(st.rows.map((r) => Object.freeze(Object.assign({}, r)))); snapVer = v; } return snap; } },
         [TX]: { value: () => ({ del: softDelete, undel: restore, ids: (col, val) => st.rows.filter((r) => String(r[col]) === String(val)).map((r) => r.id) }) }, /* a function: a reactive proxy must not have to wrap the value */
-        [META]: { value: () => ({ schema: JSON.parse(JSON.stringify(schema)), cols: cols.slice(), dateCol }) },
+        [META]: { value: () => ({ schema: JSON.parse(JSON.stringify(schema, (k, v) => (v === 'num?' ? 'num' : v))), cols: cols.slice(), dateCol, opt: cols.filter((c) => defs[c].opt) }) },
       });
       handles.set(name, h);
       return h;
@@ -410,7 +451,7 @@
       ui.toast(msg || 'Removed', () => batch(() => done.forEach(([x, id]) => x.undel(id))));
       return done.length;
     };
-    const internal = { removeGroup, TX, weekStart: ws, toasts: () => uiState.toasts, dismiss, refresh, notifications, locale, errors: () => adapter.errors || [], META };
+    const internal = { parseNum, removeGroup, TX, weekStart: ws, toasts: () => uiState.toasts, dismiss, refresh, notifications, locale, errors: () => adapter.errors || [], META };
     return { store, ui, app, MoldeError, internal };
   }
 

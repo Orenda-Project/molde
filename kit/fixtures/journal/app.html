@@ -1,13 +1,14 @@
-<main x-data="{j: store.t('entry'), mood: '', note: '', m: {great: 5, good: 2.5, okay: 0, low: -2.5, awful: -5},
-  f(q) { return 'M9 ' + (10 - q / 5) + 'h.01M15 ' + (10 - q / 5) + 'h.01M8 15Q12 ' + (15 + q) + ' 16 15' }}">
+<main x-data="{j: store.t('entry'), mood: '', note: '', m: {
+    great: 'M7 10.5q1.5-3 3 0M14 10.5q1.5-3 3 0M7.5 14h9q-1 5-4.5 5t-4.5-5z', good: 'M9 10h.01M15 10h.01M8 14.5q4 4 8 0', okay: 'M9 10h.01M15 10h.01M9 16h6',
+    low: 'M9 10h.01M15 10h.01M8 17q4-3.5 8 0', awful: 'M7.5 8.5l3 3M10.5 8.5l-3 3M13.5 8.5l3 3M16.5 8.5l-3 3M8 18q4-5 8 0'}}">
   <h1>Journal</h1>
-  <form class="card col" @submit.prevent="j.add({mood, note: note.trim()}); mood = note = ''">
+  <form class="card col" @submit.prevent="j.add({mood, score: 5 - Object.keys(m).indexOf(mood), note: note.trim()}); mood = note = ''">
     <div class="grid auto">
-      <template x-for="(q, n) in m">
+      <template x-for="(d, n) in m">
         <label class="col">
           <input type="radio" class="sr" :value="n" x-model="mood">
-          <svg class="ic ring" viewBox="0 0 24 24" width="48" :stroke="mood == n ? 'var(--accent)' : 'var(--edge)'">
-            <path :d="f(q)" />
+          <svg class="ic ring" viewBox="0 0 24 24" width="48">
+            <path :d="d" />
           </svg>
           <small x-text="n"></small>
         </label>
@@ -16,5 +17,6 @@
     <label class="field"><textarea x-model="note" maxlength="20000" placeholder="Note"></textarea></label>
     <button class="btn ghost" :disabled="!mood || !note.trim()">Save entry</button>
   </form>
-  <m-list :table="j" title="note" by="day" edit :glyph="r => f(m[r.mood])"></m-list>
+  <m-chart :data="j.series('score', {op: 'avg', last: 14})" label="Mood, last 14 days (5 great, 1 awful)"></m-chart>
+  <m-list :table="j" title="note" by="day" edit :glyph="r => m[r.mood]"></m-list>
 </main>

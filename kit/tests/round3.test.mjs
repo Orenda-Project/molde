@@ -191,12 +191,15 @@ test('the five fixtures use five different themes and secondary text is never be
   assert.equal(new Set(themes).size, 5, themes.join());
 });
 
-test('the kebab: first tap arms Delete (4 s), a tap elsewhere disarms it, the second tap deletes with ONE Undo', async () => {
+test('the kebab: first tap arms Delete (4 s) and announces it, a double tap does not delete, a tap elsewhere disarms, a separate second tap deletes with ONE Undo', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'water');
-  const k = page.locator('m-list .ibtn').first(); assert.equal(await k.getAttribute('aria-label'), 'More actions'); const rows = () => page.evaluate(() => store.t('cup').rows.length); const n0 = await rows();
-  await k.click(); assert.equal(await k.getAttribute('aria-label'), 'Delete'); assert.equal(await rows(), n0, 'the first tap does not delete');
-  await page.locator('h1').click(); assert.equal(await k.getAttribute('aria-label'), 'More actions', 'blur disarms');
-  await k.click(); await page.waitForTimeout(4200); assert.equal(await k.getAttribute('aria-label'), 'More actions', 'it disarms by itself after 4 s');
+  const k = page.locator('m-list .ibtn').first(); assert.match(await k.getAttribute('aria-label'), /^More actions/); const rows = () => page.evaluate(() => store.t('cup').rows.length); const n0 = await rows();
+  await k.click(); assert.match(await k.getAttribute('aria-label'), /^Delete/); assert.equal(await rows(), n0, 'the first tap does not delete');
+  await page.waitForTimeout(100); assert.match(await page.locator('.m-sr[aria-live=assertive]').innerText(), /Tap Delete again to confirm/, 'arming is announced');
+  await k.click(); await page.waitForTimeout(60); assert.equal(await rows(), n0, 'a double tap (two taps < 300 ms apart) only arms: nothing is deleted');
+  await page.locator('h1').click(); assert.match(await k.getAttribute('aria-label'), /^More actions/, 'blur disarms');
+  await k.click(); await page.waitForTimeout(4200); assert.match(await k.getAttribute('aria-label'), /^More actions/, 'it disarms by itself after 4 s');
   await del(k); assert.equal(await rows(), n0 - 1); assert.equal(await page.locator('.m-toast').count(), 1);
+  assert.match(await page.locator('.m-toast span').innerText(), /^Removed/);
   await ctx.close(); noLog(log);
 });

@@ -8,19 +8,19 @@ const pick = (a) => a[Math.floor(rnd() * a.length)];
 const out = (name, o) => writeFileSync(join(here, name, 'seed.json'), JSON.stringify(o).replace(/\},\{/g, '},\n{').replace('"tables":{', '"tables":{\n') + '\n');
 
 // habits: 6 habits x 60 days
-const habits = [['Read 20 pages', 0.8], ['Walk 30 minutes', 0.62], ['Stretch', 0.5], ['No sugar in tea', 0.7], ['Drink 2 L of water', 0.75], ['Write in journal', 0.45]];
+const habits = [['Read 20 pages', 0.7], ['Walk 30 minutes', 0.62], ['Stretch', 0.5], ['No sugar in tea', 0.7], ['Drink 2 L of water', 0.75], ['Write in journal', 0.45]];
 const check = [];
 habits.forEach(([name, p], hi) => { for (let d = 59; d >= 0; d--) { let on = rnd() < p; if (hi === 0) on = d < 12 || (d > 12 && rnd() < 0.8); if (hi === 0 && d === 12) on = false; if (hi === 3 && d < 5) on = true; if (on) check.push({ d, h: 7 + hi, m: (d * 7) % 60, habit: String(hi + 1) }); } });
 out('habits', { tables: { habit: habits.map(([name], i) => ({ d: 60, h: 8, m: i, habit: name })), check } });
 
 // exercise: ~3 weeks, A/B split with progressive overload (weights and reps change from session to session)
-const A = [['Bench press', 40, 8], ['Barbell row', 45, 10], ['Overhead press', 27.5, 8]], B = [['Squat', 60, 8], ['Deadlift', 80, 5], ['Leg press', 90, 12]];
+const A = [['Bench press', 40, 8], ['Barbell row', 45, 10], ['Overhead press', 27.5, 8], ['Pull-ups', null, 6]], B = [['Squat', 60, 8], ['Deadlift', 80, 5], ['Leg press', 90, 12]];
 const set = [], sessions = [[20, 'A'], [18, 'B'], [15, 'A'], [13, 'B'], [11, 'A'], [8, 'B'], [6, 'A'], [4, 'B'], [1, 'A'], [0, 'B']];
 const seen = {};
 sessions.forEach(([d, kind]) => { (kind === 'A' ? A : B).forEach(([ex, kg0, reps0], ei) => {
-  const n = (seen[ex] = (seen[ex] || 0) + 1) - 1, step = ex === 'Deadlift' ? 5 : 2.5, kg = kg0 + step * Math.floor(n * 0.8);
+  const n = (seen[ex] = (seen[ex] || 0) + 1) - 1, step = ex === 'Deadlift' ? 5 : 2.5, kg = kg0 == null ? null : kg0 + step * Math.floor(n * 0.8);
   const sets = n % 2 === 0 ? [reps0, reps0 - 1, reps0 - 1] : [reps0 + 1, reps0, reps0 - 2];
-  sets.forEach((reps, k) => set.push({ d, h: 17, m: ei * 12 + k * 3, exercise: ex, kg: k === 2 && n % 3 === 1 ? kg - step : kg, reps: Math.max(4, reps + (rnd() < 0.3 ? 1 : 0)) }));
+  sets.forEach((reps, k) => set.push({ d, h: 17, m: ei * 12 + k * 3, exercise: ex, kg: kg == null ? null : k === 2 && n % 3 === 1 ? kg - step : kg, reps: Math.max(4, reps + (rnd() < 0.3 ? 1 : 0)) }));
 }); });
 out('exercise', { tables: { set } });
 
@@ -33,7 +33,7 @@ const E = [[0, 8, 20, 'good', 'Quiet morning, chai on the balcony before work.']
   [2, 19, 45, 'good', 'Cooked dinner with Amna. The daal came out right for once.'], [3, 22, 0, 'low', 'Neend nahi aayi, shaam ko chai zyada pi li thi.'], [4, 20, 10, 'good', 'Finished the quarterly report early and walked home through the park.'],
   [5, 12, 30, 'okay', 'میٹنگ لمبی ہو گئی اور دوپہر کا کھانا رہ گیا۔'], [6, 18, 20, 'great', 'Abbu ke saath bazaar gaya, unhone naye jootay dilaye.'], [8, 21, 0, 'awful', 'Bad day. Missed the bus, spilled tea on my notes, and the printer jammed twice.'],
   [9, 9, 10, 'okay', 'Slow start. Answered emails until ten.'], [11, 20, 30, 'good', 'ماں کے ہاتھ کی کھچڑی کھائی، بچپن یاد آ گیا۔'], [13, 17, 15, 'low', 'Ghar ki yaad aa rahi thi, phone par ammi se baat ki.'], [15, 19, 0, 'good', 'Long walk after Maghrib. Legs sore but the head is clear.']].map(([d, h, m, mood, note]) => ({ d, h, m, mood, note }));
-out('journal', { tables: { entry: E } });
+out('journal', { tables: { entry: E.map((r) => ({ ...r, score: 5 - ['great', 'good', 'okay', 'low', 'awful'].indexOf(r.mood) })) } });
 
 // budget: 45 days, varied descriptions and categories, one refund
 const shops = { Food: [['Groceries at Imtiaz', 2400, 7800], ['Fruit and vegetables', 350, 1400], ['Chai and samosas', 150, 650], ['Lunch at the office canteen', 300, 700], ['Bakery', 220, 900]], Travel: [['Petrol', 2500, 5200], ['Rickshaw', 250, 900], ['Careem to the airport', 1400, 2600]], Fun: [['Dinner out', 1800, 4600], ['Cinema tickets', 1200, 2600], ['Book from the bazaar', 600, 1800]], Health: [['Pharmacy', 380, 2900], ['Doctor visit', 1500, 3000]], Bills: [['Phone top-up', 500, 1500], ['Gas bill', 1100, 2800]] };
