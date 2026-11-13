@@ -1,29 +1,22 @@
-<main x-data="{h: store.t('habit'), c: store.t('check'), page: 1, sel: 0,
-  get shown() { return this.h.rows.slice(0, this.page * 40) },
-  get cur() { return this.h.rows.find(x => x.id === this.sel) || this.h.rows[0] },
-  get cal() { return this.c.series(null, {weeks: 5}) },
-  get best() { return Math.max(0, ...[...new Set(this.c.rows.filter(r => r.day >= this.$day(-1)).map(r => r.habit))].map(id => this.c.streak({habit: id, day: this.$day(0)}))) },
-  get hist() { let s = 0; return this.c.series(null, {where: {habit: this.cur.id + ''}, last: 90}).map(d => ({k: d.k, v: Math.round(s = s * .93 + d.v * 7)})).slice(-30) },
-  k(x, day) { return {habit: x.id + '', day} },
-  lab(x, day) { return x.habit + ', ' + app.fmt(day, 'dm') + (this.c.has(this.k(x, day)) ? ', done' : ', not done') }}">
+<main x-data="{h: store.t('habit'), c: store.t('check'), page: 1, sel: 0, get cur() { return this.h.rows.find(x => x.id === this.sel) || this.h.rows[0] }}">
   <h1>Habits</h1>
   <div class="row">
-    <b class="stat" x-text="best"></b><span class="muted">Longest current streak, days</span>
+    <b class="stat" x-text="$streaks(c, 'habit').max"></b><span class="muted">Longest current streak, days</span>
   </div>
   <div class="list">
     <div class="item grid fit">
-      <template x-for="d in $days(7)">
-        <small class="col"><span x-text="app.fmt(d, 'wd')"></span><b x-text="app.fmt(d, 'day')"></b></small>
+      <template x-for="d in $days($fit(48))">
+        <small x-text="app.fmt(d, 'wdd')"></small>
       </template>
     </div>
-    <template x-for="x in shown">
-      <div class="item wrap" :class="'c' + (x.id % 5 + 1)">
-        <button class="ibtn ring" :aria-pressed="cur.id === x.id" :aria-label="'History of ' + x.habit" @click="sel = x.id" x-text="c.streak(k(x, $day(0)))"></button>
+    <template x-for="x in h.rows.slice(0, page * 40)">
+      <div class="item wrap" :class="$hue(x.id)">
+        <button class="ibtn ring" :aria-pressed="cur?.id === x.id" :aria-label="'History of ' + x.habit" @click="sel = x.id" x-text="$streaks(c, 'habit')[x.id]"></button>
         <div class="grow" x-edit="[h, x, 'habit']"></div>
         <button x-remove="[h, x, c, 'habit']"></button>
-        <div class="grid fit">
-          <template x-for="d in $days(7)">
-            <button class="check" role="checkbox" :aria-checked="c.has(k(x, d))" :aria-label="lab(x, d)" @click="c.toggle(k(x, d))"></button>
+        <div class="grid fit" x-roving>
+          <template x-for="d in $days($fit(48))">
+            <button class="check" x-toggle="[c, {habit: x.id + ''}, d, x.habit]"></button>
           </template>
         </div>
       </div>
@@ -32,19 +25,16 @@
   <button class="btn ghost" x-show="h.rows.length > page * 40" @click="page++">Show more habits</button>
   <m-form :table="h"></m-form>
   <template x-if="cur">
-    <section class="col" :class="'c' + (cur.id % 5 + 1)">
-      <h2 x-text="cur.habit"></h2>
-      <div class="scroll">
-        <div class="grid" :style="{'--cols': 7}">
-          <template x-for="d in cal.slice(0, 7)">
-            <small x-text="app.fmt(d.k, 'wd')"></small>
-          </template>
-          <template x-for="d in cal">
-            <button class="day" role="checkbox" :aria-checked="c.has(k(cur, d.k))" :aria-current="d.k == $day(0) && 'date'" :disabled="d.k > $day(0)" :aria-label="lab(cur, d.k)" @click="c.toggle(k(cur, d.k))" x-text="app.fmt(d.k, 'day')"></button>
-          </template>
-        </div>
+    <section class="col" :class="$hue(cur?.id)">
+      <div class="grid" x-roving="7">
+        <template x-for="d in c.series(null, {weeks: 5}).slice(0, 7)">
+          <small x-text="app.fmt(d.k, 'wd')"></small>
+        </template>
+        <template x-for="d in c.series(null, {weeks: 5})">
+          <button class="day" x-toggle="[c, {habit: cur?.id + ''}, d.k, cur?.habit]" x-text="app.fmt(d.k, 'day')"></button>
+        </template>
       </div>
-      <m-chart type="line" :data="hist" :label="'Score ' + hist[29].v + '%, last 30 days'"></m-chart>
+      <m-chart type="line" :data="$ema(c.series(null, {where: {habit: cur?.id + ''}, last: 90}), .07, 100)" :label="cur?.habit + ': score, last 90 days'"></m-chart>
     </section>
   </template>
 </main>

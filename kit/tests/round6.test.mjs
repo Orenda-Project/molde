@@ -66,14 +66,14 @@ test('habits: accessible names say habit, date and state; the calendar is weekda
   const cb = page.locator('.item.wrap').first().locator('[role=checkbox]').first();
   assert.match(await cb.getAttribute('aria-label'), /^.+, .+ \d+|^.+, \w+, \w+ \d+, (done|not done)$/); assert.match(await cb.getAttribute('aria-label'), /(done|not done)$/);
   const was = await cb.getAttribute('aria-checked'); await cb.click(); assert.notEqual(await cb.getAttribute('aria-checked'), was);
-  const head = await page.$$eval('.item.grid small', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')).slice(0, 3)); assert.ok(head.every((t) => /^\S{2,}\s\d+$/.test(t)), head.join('|'));
+  const head = await page.$$eval('.item.grid small', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')).slice(0, 3)); assert.ok(head.every((t) => /^(\S{2,}\s\d+|\d+\s\S{2,})$/.test(t)), head.join('|'));
   const hdr = await page.$$eval('section .grid > small', (els) => els.map((e) => e.innerText)); assert.equal(hdr.length, 7); assert.equal(new Set(hdr).size, 7, 'seven different weekday names: ' + hdr);
   const cells = await page.$$eval('section .grid > .day', (els) => els.map((e) => ({ l: e.getAttribute('aria-label'), col: Math.round((e.getBoundingClientRect().left - els[0].parentElement.getBoundingClientRect().left) / (els[0].getBoundingClientRect().width))})));
   assert.ok(cells.length >= 28 && cells.length <= 35, 'five weeks ending today: ' + cells.length);
   const hdrX = await page.$$eval('section .grid > small', (els) => els.map((e) => e.getBoundingClientRect().left)); const dayX = await page.$$eval('section .grid > .day', (els) => els.slice(0, 7).map((e) => e.getBoundingClientRect().left + e.getBoundingClientRect().width / 2));
   hdrX.forEach((x, i) => assert.ok(Math.abs(x - dayX[i]) < 40, 'the first week lines up under the weekday headers: ' + [x, dayX[i]]));
   const wd = hdr[0]; assert.match(cells[0].l, new RegExp(', ' + wd.slice(0, 2)), 'the first cell is on the first header weekday: ' + cells[0].l + ' / ' + wd);
-  const h2 = await page.locator('section h2').innerText(); await page.locator('.item.wrap').nth(2).locator('button.ring').click(); assert.notEqual(await page.locator('section h2').innerText(), h2, 'tap a habit to see its history');
+  const h2 = await page.locator('section m-chart small').innerText(); await page.locator('.item.wrap').nth(2).locator('button.ring').click(); assert.notEqual(await page.locator('section m-chart small').innerText(), h2, 'tap a habit to see its history');
   assert.equal(await page.locator('.item.wrap').nth(2).locator('button.ring').getAttribute('aria-pressed'), 'true'); assert.equal(await page.locator('m-chart svg polyline.m-line').count(), 1, 'a score line');
   // the best streak is over every habit, not only the first 40
   const best0 = Number(await page.locator('.stat').innerText());

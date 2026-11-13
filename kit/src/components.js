@@ -13,7 +13,7 @@
   if (!manifest) { var mEl = document.getElementById('molde-manifest'); manifest = mEl ? JSON.parse(mEl.textContent) : { tables: {} }; }
   var seed = host.seed;
   if (!seed) { var sEl = document.getElementById('molde-seed'); seed = sEl ? JSON.parse(sEl.textContent) : null; }
-  var sdk = S.createSDK({ adapter: host.adapter || S.memoryAdapter(seed), manifest: manifest, reactive: A.reactive, locale: host.locale, host: host.bridge });
+  var sdk = S.createSDK({ adapter: host.adapter || S.memoryAdapter(seed), manifest: manifest, reactive: A.reactive, unwrap: A.raw, locale: host.locale, host: host.bridge });
   var I = sdk.internal, ui = sdk.ui, app = sdk.app;
   window.store = sdk.store; window.ui = ui; window.app = app;
   var locale = I.locale;
@@ -23,7 +23,7 @@
   function san(v) { v = Number(v); if (v !== v) return 0; return Math.max(-MAXN, Math.min(MAXN, v)); }
   function num(n) { n = san(n); return Math.abs(n) >= 1e9 ? nfc.format(n) : nf.format(n); }
   function sgn(n) { return n < 0 ? '−' + num(-n) : num(n); }
-  var meta = function (t) { return t[S.META](); };
+  var meta = function (t) { return I.meta(t); };
   /* say(error): the message a person reads. No E_ARG codes; a long text says how long and how much is allowed. */
   function say(x) {
     var m = x && x.message ? String(x.message) : 'Something went wrong', q = /text is (\d+) characters; the limit for a \w+ column is (\d+)/.exec(m);
@@ -95,7 +95,7 @@
     if (/^\d{4}-\d{2}$/.test(k)) return new Intl.DateTimeFormat(locale, { month: 'short' }).format(new Date(+k.slice(0, 4), +k.slice(5) - 1, 1, 12));
     return String(k);
   }
-  function clean(raw) { return arr(raw).slice(0, 366).map(function (d) { return { k: d && d.k != null ? String(d.k) : '', v: san(d && d.v) }; }); }
+  function clean(raw) { return arr(raw).filter(function (d) { return !(d && d.v == null); }).slice(0, 366).map(function (d) { return { k: d && d.k != null ? String(d.k) : '', v: san(d && d.v) }; }); }
   function percents(vals, total) {
     var raw = vals.map(function (v) { return v / total * 100; }), fl = raw.map(Math.floor), left = 100 - fl.reduce(function (a, b) { return a + b; }, 0);
     raw.map(function (r, i) { return [r - fl[i], i]; }).sort(function (a, b) { return b[0] - a[0]; }).slice(0, left).forEach(function (x) { fl[x[1]]++; });
@@ -108,13 +108,19 @@
   }
   function mChart(el, p) {
     var type = p.type || 'bar';
-    var data = clean(p.data);
+    var data = clean(p.x || p.y ? arr(p.data).map(function (d) { return { k: d && d[p.x || 'k'], v: d && d[p.y || 'v'] }; }) : p.data); /* x="day" y="top": read the key and value from other fields */
     var w = Math.max(160, Math.floor(el.clientWidth || 340));
     var by = data.length > 1 && /^\d{4}-\d{2}-\d{2}$/.test(data[0].k) && (new Date(data[1].k) - new Date(data[0].k)) > 864e5 * 2 ? 'week' : 'day';
     var kids = [];
     if (p.label) kids.push(h('small', { class: 'muted', text: p.label }));
     var empty = h('div', { class: 'empty', text: 'No data yet' });
     var root = function () { el.replaceChildren(h.apply(null, ['div', { class: 'm-chart' }].concat(kids))); };
+    if (type === 'hbar') { /* labelled horizontal bars: name, amount, share; the largest in the accent, the rest quiet */
+      var hp = data.filter(function (d) { return d.v > 0; }), ht = hp.reduce(function (a, d) { return a + d.v; }, 0), hm = hp.reduce(function (a, d) { return Math.max(a, d.v); }, 0);
+      if (!hp.length) { kids.push(empty); return root(); }
+      var ul = h('ul', { class: 'm-hbar' }); hp.forEach(function (d, i) { ul.appendChild(h('li', null, h('div', { class: 'row' }, h('span', { class: 'grow', dir: 'auto', text: d.k }), bdi(num(d.v)), bdi(Math.round(d.v / ht * 100) + '%', 'muted')), h('div', { class: 'bar' + (i ? ' soft' : '') }, h('i', { style: { width: Math.min(100, Math.max(0, d.v / hm * 100)).toFixed(1) + '%' } })))); });
+      kids.push(ul); return root();
+    }
     if (type === 'pie') {
       var sl = slices(data, 5, false), total = sl.reduce(function (a, d) { return a + d.v; }, 0);
       if (!sl.length) { kids.push(empty); return root(); }
@@ -132,7 +138,7 @@
       });
       kids.push(h('div', { class: 'm-pierow' }, svg, legend)); return root();
     }
-    var fs = 14 * scale(), H = Math.round(112 + fs), top = 20, bot = Math.round(fs + 10), n = data.length;
+    var fs = 15 * scale(), H = Math.round(112 + fs), top = 20, bot = Math.round(fs + 10), n = data.length;
     if (!n) { kids.push(empty); return root(); }
     var vals = data.map(function (d) { return d.v; });
     var mn = Math.min.apply(null, vals.concat([0])), mxv = Math.max.apply(null, vals.concat([0]));
@@ -202,7 +208,7 @@
   function inputFor(c, d, ph, value, p) {
     var attrs = { name: c, autocomplete: 'off', 'aria-label': human(c) };
     if (d === 'long') { var ta = h('textarea', Object.assign(attrs, { rows: 3, maxlength: S.LIMITS.long, placeholder: ph })); ta.value = value == null ? '' : value; return ta; }
-    if (d === 'num') { var ni = h('input', Object.assign(attrs, { type: 'text', inputmode: 'decimal', enterkeyhint: 'done', placeholder: ph })); if (value != null) ni.value = String(value); return ni; } /* text, not type=number: '82,5' and Arabic-Indic digits are read by I.parseNum */
+    if (d === 'num') { var ni = h('input', Object.assign(attrs, { type: 'text', inputmode: 'decimal', enterkeyhint: 'done', placeholder: ph })); if (value != null) ni.value = value.toLocaleString(locale, { useGrouping: false, maximumFractionDigits: 20 }); return ni; } /* text, not type=number: '82,5' and Arabic-Indic digits are read by I.parseNum */
     if (d === 'date') return h('input', Object.assign(attrs, { type: 'date', value: value || app.today() }));
     var ti = h('input', Object.assign(attrs, { type: 'text', maxlength: S.LIMITS.text, enterkeyhint: 'done', placeholder: ph, dir: 'auto' })); if (value != null) ti.value = value; return ti;
   }
@@ -228,7 +234,7 @@
       clearTimeout(tm); if (on) { at = performance.now(); tm = setTimeout(function () { set(false); }, 4000); announce('Delete ' + (name || 'this') + '? Tap Delete again to confirm.'); }
     };
     /* the second tap must be a separate tap: a double tap (two taps within 300 ms) only arms it */
-    el.addEventListener('click', function () { if (!armed) set(true); else if (performance.now() - at >= 300) { set(false); del(); } });
+    el.addEventListener('click', function (e) { if (!armed) set(true); else if (performance.now() - at >= 300) { var kb = e.detail === 0, from = el.closest('m-list') || el.closest('.list') || el.closest('main'); set(false); if (kb) kbDelete = from; del(); setTimeout(function () { kbDelete = null; }, 0); } }); /* detail 0 = keyboard: the Undo that appears takes focus */
     el.addEventListener('blur', function () { if (armed) set(false); });
     set(false);
   }
@@ -269,6 +275,7 @@
   function mList(el, p) {
     var t = p.table; if (!t) return;
     var defs = meta(t).schema, rows = Array.prototype.slice.call(Array.isArray(p.rows) ? p.rows : t.rows);
+    if (p.month != null && p.month !== '') { var q = app.today().split('-'), mk = ymd(new Date(+q[0], +q[1] - 1 + Number(p.month), 1, 12)).slice(0, 7); rows = rows.filter(function (r) { return dayKey(r).slice(0, 7) === mk; }); } /* month="0" this calendar month, -1 last month */
     if (p.order !== 'old') rows.reverse();
     var step = Math.max(1, Math.min(200, Number(p.max) || 30)), shown = Math.min(rows.length, step * (1 + (el._m.pages || 0)));
     var meta_ = p.meta ? String(p.meta).split(',') : null, edit = 'edit' in p, byDay = p.by === 'day', sums = {};
@@ -324,13 +331,13 @@
       grid.appendChild(f);
     });
     var qn = p.quick ? cols.filter(function (c) { return defs[c] === 'num'; })[0] : null, quickRow = null, last = 0;
-    var undoAdd = function (id) { t[I.TX]().del(id); }; /* Undo of an add is quiet: the row just goes away */
+    var undoAdd = function (id) { I.tx(t).del(id); }; /* Undo of an add is quiet: the row just goes away */
     if (qn) {
       quickRow = h.apply(null, ['div', { class: 'm-quick' }].concat(String(p.quick).split(',').map(function (q) {
         return h('button', { class: 'btn ghost', type: 'button', text: '+' + q.trim(), onclick: function () {
           if (performance.now() - last < 400) return; last = performance.now(); /* a double tap adds once */
           var row = {}; row[qn] = Number(q); var id; try { id = t.add(row); } catch (x) { ui.toast(say(x)); return; }
-          ui.toast('Added ' + q.trim(), function () { undoAdd(id); });
+          ui.toast('Added ' + q.trim(), function () { undoAdd(id); }); el.dispatchEvent(new CustomEvent('added', { bubbles: true, detail: { id: id } }));
         } });
       })));
     }
@@ -354,6 +361,7 @@
       keep.forEach(function (c, i) { form.elements[c].value = kept[i]; });
       var dt = form.querySelector('input[type=date]'); if (dt) dt.value = app.today();
       ui.toast('Added', function () { undoAdd(id); });
+      el.dispatchEvent(new CustomEvent('added', { bubbles: true, detail: { id: id } }));
       if (firstInput) firstInput.focus();
     });
     el.replaceChildren(form);
@@ -396,7 +404,7 @@
     kebab(el, function () {
       var a = u.evaluate(d.expression), c = a[2];
       if (typeof c === 'function') { c(); a[0].remove(a[1].id); }
-      else if (c && c.rows) I.removeGroup([[c, c[I.TX]().ids(a[3], a[1].id)], [a[0], [a[1].id]]], 'Removed ' + nameOf(a[1]));
+      else if (c && c.rows) I.removeGroup([[c, I.tx(c).ids(a[3], a[1].id)], [a[0], [a[1].id]]], 'Removed ' + nameOf(a[1]));
       else a[0].remove(a[1].id);
     }, function () { return nameOf(u.evaluate(d.expression)[1]); });
   });
@@ -407,6 +415,44 @@
   A.magic('month', function () { return function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1 + (n || 0), 1, 12)); }; });
   /* $days(n): the last n dates, today first (YYYY-MM-DD) */
   A.magic('days', function () { return function (n) { var o = []; for (var i = 0; i < Math.min(366, n); i++) o.push(dayAt(-i)); return o; }; });
+
+  var shift = function (day, n) { var q = day.split('-'); return ymd(new Date(+q[0], +q[1] - 1, +q[2] + n, 12)); };
+  /* $group(rows, 'day' | col, ...): rows grouped by the given keys ('day' = the local day of `at`), in first-seen order: [{day, <col>, rows}] */
+  A.magic('group', function () { return function (rows) { var ks = [].slice.call(arguments, 1), seen = {}, out = []; arr(rows).forEach(function (r) { var kv = ks.map(function (k) { return k === 'day' ? dk(r.at) : r[k]; }), id = kv.join('\u0001'), g = seen[id]; if (!g) { g = seen[id] = { rows: [] }; ks.forEach(function (k, i) { g[k] = kv[i]; }); out.push(g); } g.rows.push(r); }); return out; }; });
+  /* $streaks(table, col): { value of col: current streak in days } for every value, from the table's date column (today or yesterday counts as the start, like t.streak) */
+  A.magic('streaks', function () { return function (t, col) { var dc = meta(t).dateCol, td = app.today(), by = {}, out = {}; t.rows.forEach(function (r) { (by[r[col]] = by[r[col]] || {})[r[dc]] = 1; }); var best = 0; Object.keys(by).forEach(function (k) { var d = by[k][td] ? td : shift(td, -1), n = 0; while (by[k][d]) { n++; d = shift(d, -1); } out[k] = n; best = Math.max(best, n); }); Object.defineProperty(out, 'max', { value: best }); return out; }; }); /* out.max is the longest of them */
+  /* $hue(n): the colour-identity class c1..c5 for any number, so each item keeps its own colour */
+  A.magic('hue', function () { return function (n) { return 'c' + (Math.abs(Math.floor(Number(n) || 0)) % 5 + 1); }; });
+  /* $ema(series, a, scale): an exponentially smoothed copy of a {k, v} series (each point keeps 1 - a of the running value and adds a * scale * v), rounded: a score that decays */
+  A.magic('ema', function () { return function (series, a, scale) { var run = 0; return arr(series).map(function (d) { run = run * (1 - a) + a * (scale == null ? 1 : scale) * d.v; return { k: d.k, v: Math.round(run) }; }); }; });
+  /* $aria(text, day, on, words): "Text, Sat, Nov 21, done" for a button that toggles a date (words: ['done', 'not done']) */
+  A.magic('aria', function () { return function (text, day, on, words) { var w = words || ['done', 'not done']; return text + ', ' + app.fmt(day, 'dm') + ', ' + (on ? w[0] : w[1]); }; });
+  /* $clock(sec): 1:30 */
+  A.magic('clock', function () { return function (sec) { sec = Math.max(0, Math.floor(Number(sec) || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }; });
+  /* $fit(px): how many columns of at least px fit the parent's width, reactive to the window size (so no clipped, still-focusable columns exist) */
+  var vw = A.reactive({ w: window.innerWidth }); window.addEventListener('resize', function () { vw.w = window.innerWidth; });
+  A.magic('fit', function (el) { return function (px) { void vw.w; var p = el.parentElement; if (!p) return 1; var c = getComputedStyle(p), w = p.clientWidth - parseFloat(c.paddingLeft) - parseFloat(c.paddingRight); return Math.max(1, Math.floor((w + 4) / (px + 4))); }; });
+  /* x-toggle="[table, key, day, label]": a button that toggles the row {...key, day} of a table (t.toggle / t.has): role=checkbox, aria-checked, and a name like "Label, Sat, Nov 21, done" */
+  A.directive('toggle', function (el, d, u) {
+    el.setAttribute('role', 'checkbox'); if (!el.getAttribute('type')) el.setAttribute('type', 'button');
+    var args = function () { var a = u.evaluate(d.expression); a.k = Object.assign({}, a[1], { day: a[2] }); return a; };
+    u.effect(function () { var a = args(), on = a[0].has(a.k); el.setAttribute('aria-checked', on ? 'true' : 'false'); el.setAttribute('aria-label', a[3] + ', ' + app.fmt(a[2], 'dm') + ', ' + (on ? 'done' : 'not done')); });
+    el.addEventListener('click', function () { var a = args(); a[0].toggle(a.k); });
+  });
+  /* x-roving: one tab stop for a group of buttons; arrows move (Up/Down by the number given, else by one), Home/End jump. x-roving or x-roving="7" for a calendar. */
+  A.directive('roving', function (el, d, u) {
+    var step = d.expression ? Number(u.evaluate(d.expression)) || 1 : 1, cur = null;
+    var items = function () { return Array.prototype.slice.call(el.querySelectorAll('button,[role=checkbox],[role=radio]')).filter(function (x) { return !x.disabled; }); };
+    var apply = function () { var it = items(); if (!it.length) return; if (!cur || !el.contains(cur)) cur = it.filter(function (x) { return x.getAttribute('aria-checked') === 'true'; })[0] || it[0]; it.forEach(function (x) { x.tabIndex = x === cur ? 0 : -1; }); };
+    new MutationObserver(apply).observe(el, { childList: true, subtree: true }); setTimeout(apply, 0);
+    el.addEventListener('focusin', function (e) { if (items().indexOf(e.target) >= 0) { cur = e.target; apply(); } });
+    el.addEventListener('keydown', function (e) {
+      var it = items(), i = it.indexOf(document.activeElement), rtl = getComputedStyle(el).direction === 'rtl', to = null;
+      if (i < 0) return;
+      if (e.key === 'ArrowRight') to = i + (rtl ? -1 : 1); else if (e.key === 'ArrowLeft') to = i + (rtl ? 1 : -1); else if (e.key === 'ArrowDown') to = i + step; else if (e.key === 'ArrowUp') to = i - step; else if (e.key === 'Home') to = 0; else if (e.key === 'End') to = it.length - 1; else return;
+      e.preventDefault(); if (to >= 0 && to < it.length) { cur = it[to]; apply(); cur.focus(); }
+    });
+  });
 
   var COMP = { 'm-stat': mStat, 'm-chart': mChart, 'm-list': mList, 'm-form': mForm };
 
@@ -440,18 +486,38 @@
   document.addEventListener('visibilitychange', I.refresh);
   setInterval(I.refresh, 5000); /* the day header is right within 5 s of midnight */
 
-  /* ---- toast host (kit-owned) ---- */
+  /* ---- toast host (kit-owned). Rows are patched by id, never rebuilt, so focus and screen-reader position survive every change; only a NEW row is announced.
+   * Pending Undos live in one list (a tray with "Undo all" from three up). A keyboard delete moves focus to the new Undo; Escape drops a toast; hover or focus on an
+   * Undo pauses its expiry. ---- */
+  var kbDelete = null; /* set by a keyboard-driven delete: the list to give focus back to */
   function toastHost() {
-    var box = h('div', { class: 'm-toasts', role: 'status', 'aria-live': 'polite' });
+    var rows = {}, back = null;
+    var count = h('b'), head = h('div', { class: 'm-tray-h', 'aria-live': 'off' }, count, h('button', { type: 'button', text: 'Undo all', onclick: function () { I.toasts().filter(function (t) { return t.undo; }).reverse().forEach(function (t) { t.undo(); I.dismiss(t.id); }); giveBack(); } }));
+    var plain = h('div', { class: 'm-plain' }), list = h('div', { class: 'm-tray-l' }), tray = h('div', { class: 'm-tray' }, head, list);
+    var box = h('div', { class: 'm-toasts', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'false' }, plain, tray);
     document.body.appendChild(box);
-    var row = function (t) { return h('div', { class: 'm-toast' }, h('span', { text: t.msg }), t.undo ? h('button', { type: 'button', text: 'Undo', 'aria-label': 'Undo: ' + t.msg, onclick: function () { t.undo(); I.dismiss(t.id); } }) : null); };
+    function giveBack() { var c = back; back = null; if (c && c.isConnected) { var f = c.querySelector('button,[tabindex]'); if (f) f.focus(); } }
+    function make(t) {
+      var el = h('div', { class: 'm-toast' }, h('span', { text: t.msg }));
+      if (t.undo) {
+        var ub = h('button', { type: 'button', text: 'Undo', 'aria-label': 'Undo: ' + t.msg, onclick: function () { t.undo(); I.dismiss(t.id); giveBack(); } });
+        el.appendChild(ub);
+        el.addEventListener('mouseenter', function () { I.hold(t.id, true); }); el.addEventListener('mouseleave', function () { if (!el.contains(document.activeElement)) I.hold(t.id, false); });
+        el.addEventListener('focusin', function () { I.hold(t.id, true); }); el.addEventListener('focusout', function (e) { if (!el.contains(e.relatedTarget) && !el.matches(':hover')) I.hold(t.id, false); });
+      }
+      el.addEventListener('keydown', function (e) { if (e.key === 'Escape') { I.dismiss(t.id); giveBack(); } });
+      return el;
+    }
     A.effect(function () {
-      var all = I.toasts().slice(), undos = all.filter(function (t) { return t.undo; }), out = all.filter(function (t) { return !t.undo; }).map(row);
-      if (undos.length < 3) out = out.concat(undos.map(row));
-      else out.push(h('div', { class: 'm-tray' }, /* three or more pending Undos: one tray, each with its own Undo, plus Undo all */
-        h('div', { class: 'm-tray-h' }, h('b', { text: undos.length + ' undos' }), h('button', { type: 'button', text: 'Undo all', onclick: function () { undos.slice().reverse().forEach(function (t) { t.undo(); I.dismiss(t.id); }); } })),
-        h.apply(null, ['div', { class: 'm-tray-l' }].concat(undos.slice().reverse().map(row)))));
-      box.replaceChildren.apply(box, out);
+      var all = I.toasts().slice(), ids = {}, undos = 0;
+      all.forEach(function (t) { ids[t.id] = 1; if (t.undo) undos++; });
+      Object.keys(rows).forEach(function (id) { if (!ids[id]) { rows[id].remove(); delete rows[id]; } });
+      tray.hidden = !undos; tray.toggleAttribute('data-many', undos >= 3); head.hidden = undos < 3; count.textContent = undos + ' undos'; /* before any focus() below: a hidden tray cannot take focus */
+      all.forEach(function (t) {
+        if (rows[t.id]) return;
+        var el = rows[t.id] = make(t);
+        if (t.undo) { list.insertBefore(el, list.firstChild); if (kbDelete) { back = kbDelete; kbDelete = null; el.querySelector('button').focus(); } } else plain.appendChild(el);
+      });
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', toastHost); else toastHost();

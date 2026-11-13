@@ -13,7 +13,7 @@
   }
   const bad = (code, msg) => { throw new MoldeError(code, msg); };
   const isObj = (o) => o !== null && typeof o === 'object' && !Array.isArray(o);
-  const META = Symbol.for('molde.meta'), TX = Symbol.for('molde.tx');
+  const HIDDEN = new WeakMap(); /* handle -> {tx, meta}: held in this closure, so page code cannot reach del/undel/ids by symbol or property */
 
   /* ---- adapter -------------------------------------------------------------
    * Adapter interface (sync; the WebView bridge keeps a write-through cache):
@@ -55,30 +55,42 @@
   const addDays = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; };
   const clampNum = (v) => { const n = Number(v); if (Number.isNaN(n)) return 0; return Math.max(-NUM_MAX, Math.min(NUM_MAX, n)); };
 
-  /* parseNum(text, max): the typed number in the reader's own notation, or NaN. Digits may be Latin, Arabic-Indic (U+0660..9) or Persian (U+06F0..9).
-   * '.' is always a decimal point. ',' (or the Arabic comma/decimal mark) is a decimal comma ('82,5' = 82.5) except when it is unambiguous
-   * grouping: '1,234' and '1,234,567' (groups of exactly 3 digits, no leading 0) are read as 1234 and 1234567 UNLESS that exceeds `max` and
-   * the decimal reading ('1.234') fits, so a weight field that stops at 500 reads '1,500' as 1.5. Spaces and apostrophes are ignored. */
-  function parseNum(text, max) {
-    let t = String(text == null ? '' : text).trim();
+  /* parseNum(text, max, locale): the typed number in the reader's own notation, or NaN. Digits may be Latin, Arabic-Indic (U+0660..9) or Persian (U+06F0..9).
+   * The locale's own marks win, so what the kit displays reads back exactly (en-US 1,234.5; de-DE/tr-TR 1.234,5; fr-FR 1 234,5; hi-IN 1,50,000):
+   *  - the locale's decimal mark is always a decimal point, once ('1,234' is 1.234 in de-DE);
+   *  - the locale's grouping mark (',' or '.') groups when the text is valid grouping (groups of three, or 2-digit lakh groups, first group 1-3 digits without a
+   *    leading 0): '1,500' is 1500 in en-US and '80.000' is 80000 in de-DE, UNLESS that is above the field's max and the decimal reading fits ('1,500' with max 500 is 1.5);
+   *    otherwise a single such mark is read as a decimal ('82,5' is 82.5 even in en-US);
+   *  - the other mark is a decimal point, once; with both marks present the last is the decimal and the first must be valid grouping.
+   * Spaces, no-break spaces and apostrophes are ignored. */
+  const marks = (locale) => {
+    try { const p = new Intl.NumberFormat(locale).formatToParts(12345.6); const g = (p.find((x) => x.type === 'group') || {}).value, d = (p.find((x) => x.type === 'decimal') || {}).value; return { d: d === ',' ? ',' : '.', g: g === ',' || g === '.' ? g : null }; } catch (e) { return { d: '.', g: ',' }; }
+  };
+  const GROUP = /^[1-9]\d{0,2}(?:,\d{3})+$|^[1-9]\d{0,2}(?:,\d{2})*,\d{3}$/;
+  function parseNum(text, max, locale) {
+    let t = String(text == null ? '' : text).replace(/[\u200e\u200f\u061c\u202a-\u202e\u2066-\u2069]/g, '').trim(); /* bidi marks that some locales put around a minus sign */
     if (!t) return NaN;
     t = t.replace(/[\u0660-\u0669]/g, (c) => c.charCodeAt(0) - 0x660).replace(/[\u06f0-\u06f9]/g, (c) => c.charCodeAt(0) - 0x6f0)
-      .replace(/[\u066b\u060c]/g, ',').replace(/\u066c/g, ',').replace(/[\s\u00a0\u202f'\u2019]/g, '').replace(/\u2212/g, '-');
+      .replace(/\u066b/g, '.').replace(/[\u060c\u066c]/g, ',').replace(/[\s\u00a0\u202f'\u2019]/g, '').replace(/\u2212/g, '-');
     const sign = t[0] === '-' || t[0] === '+' ? t[0] : ''; if (sign) t = t.slice(1);
-    const lim = typeof max === 'number' && Number.isFinite(max) ? max : Infinity;
+    const lim = typeof max === 'number' && Number.isFinite(max) ? max : Infinity, { d, g } = marks(locale || 'en');
+    const norm = (x) => (d === ',' ? x.replace(/\./g, '\u0001').replace(/,/g, '.').replace(/\u0001/g, ',') : x); /* swap so grouping is always ',' and decimal '.' */
+    const u = norm(t);
     let dec;
-    if (t.includes(',') && t.includes('.')) { /* the last mark is the decimal one, the other must be grouping */
-      const d = Math.max(t.lastIndexOf(','), t.lastIndexOf('.')), head = t.slice(0, d), seps = head.replace(/\d/g, '');
-      if (!/^[1-9]\d{0,2}(?:[.,]\d{3})*$/.test(head) || seps.includes(t[d]) || new Set(seps).size > 1) return NaN;
-      dec = head.replace(/[.,]/g, '') + '.' + t.slice(d + 1);
-    } else if (t.includes(',')) {
-      const parts = t.split(',');
-      const group = /^[1-9]\d{0,2}(,\d{3})+$/.test(t);
-      const asGroup = group ? Number(t.replace(/,/g, '')) : NaN;
-      if (group && (asGroup <= lim || parts.length > 2)) dec = t.replace(/,/g, '');
-      else if (parts.length === 2) dec = parts[0] + '.' + parts[1];
+    if (u.includes(',') && u.includes('.')) {
+      const i = Math.max(u.lastIndexOf(','), u.lastIndexOf('.')), head = u.slice(0, i), seps = head.replace(/\d/g, '');
+      if (!GROUP.test(head.replace(/\./g, ',')) || seps.includes(u[i]) || new Set(seps).size > 1) return NaN;
+      dec = head.replace(/[.,]/g, '') + '.' + u.slice(i + 1);
+    } else if (u.includes(',')) { /* the grouping mark of the locale (swapped to ',') */
+      const asGroup = GROUP.test(u) ? Number(u.replace(/,/g, '')) : NaN, one = u.split(',').length === 2;
+      if (!Number.isNaN(asGroup) && (asGroup <= lim || !one)) dec = u.replace(/,/g, '');
+      else if (one && g !== null) dec = u.replace(',', '.');
+      else if (one) dec = u.replace(',', '.');
       else return NaN;
-    } else dec = t;
+    } else if (u.includes('.')) { /* the decimal mark of the locale, or a foreign mark: one decimal point */
+      if (u.split('.').length !== 2) return NaN;
+      dec = u;
+    } else dec = u;
     if (!/^(\d+\.?\d*|\.\d+)$/.test(dec)) return NaN;
     const n = Number(dec); if (!Number.isFinite(n)) return NaN;
     return sign === '-' ? -n : n;
@@ -158,7 +170,7 @@
     /* ---- app (#14, #15, #16) ---- */
     const notifications = [];
     const fm = new Map(); const dtf = (o) => { const k = JSON.stringify(o); if (!fm.has(k)) fm.set(k, new Intl.DateTimeFormat(locale, o)); return fm.get(k); }; /* formatters are costly to build: one per option set */
-    const HOW = ['date', 'time', 'rel', 'wd', 'day', 'dm', 'month']; /* wd: Mon, day: 17, dm: Mon 17 Nov, month: November 2026 */
+    const HOW = ['date', 'time', 'rel', 'wd', 'day', 'dm', 'month', 'wdd']; /* wd: Mon, day: 17, dm: Mon 17 Nov, month: November 2026 */
     const app = {
       today,
       fmt(ts, how) {
@@ -170,7 +182,7 @@
         if (Number.isNaN(d.getTime())) bad('E_ARG', 'app.fmt: invalid time ' + String(ts).slice(0, 30));
         how = how === undefined ? 'date' : how;
         if (!HOW.includes(how)) bad('E_ARG', "app.fmt: how is one of " + HOW.map((x) => "'" + x + "'").join(', '));
-        const part = { wd: { weekday: 'short' }, day: { day: 'numeric' }, dm: { weekday: 'short', day: 'numeric', month: 'short' }, month: { month: 'long', year: 'numeric' } }[how];
+        const part = { wd: { weekday: 'short' }, day: { day: 'numeric' }, dm: { weekday: 'short', day: 'numeric', month: 'short' }, month: { month: 'long', year: 'numeric' }, wdd: { weekday: 'short', day: 'numeric' } }[how];
         if (part) return dtf(part).format(d);
         const tf = dtf({ hour: 'numeric', minute: '2-digit' });
         if (how === 'time') { if (dateOnly) bad('E_ARG', 'app.fmt: a date-only string has no time of day'); return tf.format(d); }
@@ -209,7 +221,11 @@
     const uiState = reactive({ toasts: [] });
     let toastId = 0;
     const toastTimers = new Map();
-    const dismiss = (id) => { const i = uiState.toasts.findIndex((t) => t.id === id); if (i >= 0) uiState.toasts.splice(i, 1); if (toastTimers.has(id)) { timers.clearTimeout(toastTimers.get(id)); toastTimers.delete(id); } };
+    const undoMs = Math.max(3000, Math.min(120000, Number.isFinite(opts.undoMs) ? opts.undoMs : Number.isFinite(manifest.undoMs) ? manifest.undoMs : 10000)); /* how long an Undo stays: manifest.undoMs, 3 s to 2 min, default 10 s */
+    const dismiss = (id) => { const i = uiState.toasts.findIndex((t) => t.id === id); if (i >= 0) uiState.toasts.splice(i, 1); if (toastTimers.has(id)) { timers.clearTimeout(toastTimers.get(id).h); toastTimers.delete(id); } };
+    const arm = (id, ms) => { const t = toastTimers.get(id) || {}; t.left = ms; t.at = now(); t.h = timers.setTimeout(() => dismiss(id), ms); toastTimers.set(id, t); };
+    /* hold(id, true) pauses a toast's expiry (hover or focus on its Undo); hold(id, false) restarts it with the time that was left */
+    const hold = (id, on) => { const t = toastTimers.get(id); if (!t) return; if (on && t.h != null) { timers.clearTimeout(t.h); t.h = null; t.left = Math.max(1000, t.left - (now() - t.at)); } else if (!on && t.h == null) arm(id, t.left); };
     const ui = {
       toast(msg, undo) {
         if ((typeof msg !== 'string' && typeof msg !== 'number') || String(msg).trim() === '') bad('E_ARG', 'ui.toast(msg): msg must be a non-empty string');
@@ -222,7 +238,7 @@
           dismiss(plain[0].id);
         }
         uiState.toasts.push({ id, msg: String(msg), undo: undo || null });
-        toastTimers.set(id, timers.setTimeout(() => dismiss(id), undo ? 10000 : 3000));
+        arm(id, undo ? undoMs : 3000);
         return () => dismiss(id);
       },
       timer(sec, cb) {
@@ -381,12 +397,12 @@
             else { const d = new Date(t0.getFullYear(), t0.getMonth() - i, 1, 12); keys.push(d.getFullYear() + '-' + p2(d.getMonth() + 1)); }
           }
           const bucket = (r) => { const d = parseYmd(day(r)); return by === 'day' ? ymd(d) : by === 'week' ? ymd(startOfWeek(d)) : d.getFullYear() + '-' + p2(d.getMonth() + 1); };
-          const acc = new Map(keys.map((k) => [k, { n: 0, s: 0 }]));
+          const acc = new Map(keys.map((k) => [k, { n: 0, k: 0, s: 0 }]));
           for (const r of o.where ? live().filter((x) => eq(x, o.where)) : live()) {
             const a = acc.get(bucket(r));
-            if (a) { a.n += 1; a.s += val(r, col); }
+            if (a) { a.n += 1; if (col == null || r[col] != null) { a.k += 1; a.s += val(r, col); } } /* an optional number that is empty is not a value: avg skips it */
           }
-          return keys.map((k) => { const a = acc.get(k); return { k, v: op === 'count' ? a.n : op === 'avg' ? (a.n ? a.s / a.n : 0) : a.s }; });
+          return keys.map((k) => { const a = acc.get(k); return { k, v: op === 'count' ? a.n : op === 'avg' ? (a.k ? a.s / a.k : 0) : a.s }; });
         },
         /* #8 */ group(col, valCol, o) {
           if (col == null) bad('E_COL', 't.group(col, valCol): col is required'); needCol(col, 't.group'); needCol(valCol, 't.group'); needNum(valCol, 't.group'); o = needOpts(o, 't.group');
@@ -419,9 +435,8 @@
         toJSON: { value: () => name },
         cols: { get: () => cols.slice() },
         rows: { get: () => { const v = st.ver; if (snapVer !== v || !snap) { snap = Object.freeze(st.rows.map((r) => Object.freeze(Object.assign({}, r)))); snapVer = v; } return snap; } },
-        [TX]: { value: () => ({ del: softDelete, undel: restore, ids: (col, val) => st.rows.filter((r) => String(r[col]) === String(val)).map((r) => r.id) }) }, /* a function: a reactive proxy must not have to wrap the value */
-        [META]: { value: () => ({ schema: JSON.parse(JSON.stringify(schema, (k, v) => (v === 'num?' ? 'num' : v))), cols: cols.slice(), dateCol, opt: cols.filter((c) => defs[c].opt) }) },
       });
+      HIDDEN.set(h, { tx: { del: softDelete, undel: restore, ids: (col, val) => st.rows.filter((r) => String(r[col]) === String(val)).map((r) => r.id) }, meta: { schema: JSON.parse(JSON.stringify(schema, (k, v) => (v === 'num?' ? 'num' : v))), cols: cols.slice(), dateCol, opt: cols.filter((c) => defs[c].opt) } });
       handles.set(name, h);
       return h;
     }
@@ -446,16 +461,17 @@
     const batch = (fn) => (adapter.batch ? adapter.batch(fn) : fn());
     const removeGroup = (items, msg) => {
       refresh(); const done = [];
-      batch(() => items.forEach(([tb, ids]) => { const x = tb[TX](); ids.forEach((id) => { if (x.del(id)) done.push([x, id]); }); }));
+      batch(() => items.forEach(([tb, ids]) => { const x = txOf(tb); ids.forEach((id) => { if (x.del(id)) done.push([x, id]); }); }));
       if (!done.length) return 0;
       ui.toast(msg || 'Removed', () => batch(() => done.forEach(([x, id]) => x.undel(id))));
       return done.length;
     };
-    const internal = { parseNum, removeGroup, TX, weekStart: ws, toasts: () => uiState.toasts, dismiss, refresh, notifications, locale, errors: () => adapter.errors || [], META };
+    const unwrap = opts.unwrap || ((x) => x); const hid = (t) => { const r = HIDDEN.get(unwrap(t)); if (!r) bad('E_ARG', 'not a table handle'); return r; }; const txOf = (t) => hid(t).tx;
+    const internal = { parseNum: (t, m) => parseNum(t, m, locale), tx: txOf, meta: (t) => hid(t).meta, removeGroup, weekStart: ws, toasts: () => uiState.toasts, dismiss, hold, undoMs, refresh, notifications, locale, errors: () => adapter.errors || [] };
     return { store, ui, app, MoldeError, internal };
   }
 
   const LIMITS = { text: TEXT_MAX, long: LONG_MAX, num: NUM_MAX, note: NOTE_MAX };
   const CALLS = ['store.t', 'store.kv', 't.add', 't.set', 't.remove', 't.sum', 't.series', 't.group', 't.has', 't.toggle', 't.streak', 'ui.toast', 'ui.timer', 'app.notify', 'app.fmt', 'app.today'];
-  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, META, TX, LIMITS };
+  return { createSDK, memoryAdapter, MoldeError, CALLS, colDef, ymd, LIMITS };
 });

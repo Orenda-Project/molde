@@ -35,6 +35,8 @@ const probe = () => {
       if (el.id === 'r-opt-off') { check(el, 'option text', 'text', cs.color); check(el, 'option edge', 'ui', cs.borderTopColor, bgOf(el.parentElement)); continue; }
       if (/^r-c\d+$/.test(el.id)) { check(el, 'categorical ' + el.id.slice(2), 'ui', cs.fill, bgOf(document.getElementById('r-input'))); continue; }
       if (/^r-cc\d+$/.test(el.id)) { check(el, 'mark on ' + el.id.slice(4), 'ui', cs.fill, parse(getComputedStyle(document.getElementById(el.dataset.on)).fill)); continue; }
+      if (el.id === 'r-mb') { check(el, 'chart bar', 'ui', cs.fill, bgOf(document.getElementById('r-input'))); continue; }
+      if (el.id === 'r-soft') { check(el, 'quiet bar', 'ui', cs.backgroundColor, bgOf(document.getElementById('r-input'))); continue; }
       if (el.id === 'r-check') { check(el, 'check ring', 'ui', getComputedStyle(el, '::before').borderTopColor, bgOf(el)); continue; }
       if (el.id === 'r-empty' || el.id === 'r-legend' || el.id.startsWith('r-')) check(el, el.id.slice(2), 'text', cs.color);
     }

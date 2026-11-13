@@ -120,7 +120,7 @@ export const auditFn = () => {
     const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || (r.width === 0 && r.height === 0)) continue;
     if (el.closest('svg') && el.localName !== 'svg') { if (el.localName === 'text' && parseFloat(cs.fontSize) * (el.ownerSVGElement.getBoundingClientRect().width / (el.ownerSVGElement.viewBox.baseVal.width || 1)) < 11.9) out.tiny.push('svg text'); continue; }
-    if (el.closest('.m-toasts') === null && (r.right > vw + 0.5 || r.left < -0.5) && !el.closest('.scroll, .seg')) out.overflow.push(`${el.localName}.${el.className} [${Math.round(r.left)},${Math.round(r.right)}] vs ${vw}`);
+    if (el.closest('.m-toasts') === null && (r.right > vw + 0.5 || r.left < -0.5) && !el.closest('.scroll, .seg') && !(() => { for (let e = el.parentElement; e; e = e.parentElement) { const o = getComputedStyle(e).overflowX; if (o === 'auto' || o === 'scroll') return true; } return false; })()) out.overflow.push(`${el.localName}.${el.className} [${Math.round(r.left)},${Math.round(r.right)}] vs ${vw}`);
     if (!el.classList.contains('sr') && el.matches('button, a[href], select, textarea, input:not([type=hidden]), [role=button], [role=textbox], [contenteditable=true], summary') && Math.min(r.width, r.height) < 43.99) out.small.push(`${el.localName}${el.name ? '[' + el.name + ']' : ''}.${el.className} ${Math.round(r.width)}x${Math.round(r.height)}`);
     for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim() && parseFloat(cs.fontSize) < 11.9) out.tiny.push(`${el.localName} ${cs.fontSize}`);
   }

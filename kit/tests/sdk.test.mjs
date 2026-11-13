@@ -587,7 +587,7 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.equal(t.sum('kg'), 60); t.set(b, { kg: null }); assert.equal(t.rows.find((x) => x.id === b).kg, null); void a; void c;
     for (const bad of ['abc', NaN, Infinity, true]) assert.throws(() => t.add({ what: 'x', kg: bad, reps: 1 }), (e) => e.code === 'E_ARG');
     assert.throws(() => t.add({ what: 'x', reps: null }), (e) => e.code === 'E_ARG', 'a plain number column still rejects null');
-    assert.equal(t[Symbol.for('molde.meta')]().schema.kg, 'num'); assert.deepEqual(t[Symbol.for('molde.meta')]().opt, ['kg']);
+    assert.equal(s.internal.meta(t).schema.kg, 'num'); assert.deepEqual(s.internal.meta(t).opt, ['kg']);
   });
   test(`[${aname}] the +-1e12 clamp holds on add, set and the kv path`, () => {
     const ctx = mk(); const s = createSDK({ adapter: ctx.make(), manifest: m6, now: () => T0 }); const t = s.store.t('spend');
@@ -612,3 +612,43 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.equal(t.sum('n', { month: 0 }), 3); assert.equal(t.sum('n', { month: -1 }), 7);
   });
 }
+
+/* ---- round 7: Undo expiry (configurable, paused while held), avg skips null, parse/format round-trip for every locale, no way to reach the tx handle ---- */
+for (const [aname, mk] of Object.entries(adapters)) {
+  test(`[${aname}] an Undo lasts manifest.undoMs (3 s to 2 min, default 10 s) and hold() pauses its expiry`, () => {
+    const mkSdk = (extra) => { const tm = fakeTimers(); let t = T0; const s = createSDK({ adapter: mk().make(), manifest: { tables: { a: { x: 'text' } }, ...extra }, timers: tm, now: () => t }); return { s, tm, tick: (ms) => { t += ms; tm.advance(ms); } }; };
+    let { s, tick } = mkSdk({}); s.ui.toast('x', () => {}); tick(9999); assert.equal(s.internal.toasts().length, 1, 'default 10 s'); tick(2); assert.equal(s.internal.toasts().length, 0);
+    ({ s, tick } = mkSdk({ undoMs: 30000 })); s.ui.toast('x', () => {}); tick(29000); assert.equal(s.internal.toasts().length, 1); tick(1100); assert.equal(s.internal.toasts().length, 0);
+    ({ s, tick } = mkSdk({ undoMs: 1 })); assert.equal(s.internal.undoMs, 3000, 'clamped up to 3 s'); ({ s } = mkSdk({ undoMs: 1e9 })); assert.equal(s.internal.undoMs, 120000, 'clamped down to 2 min');
+    ({ s, tick } = mkSdk({})); s.ui.toast('hold me', () => {}); const id = s.internal.toasts()[0].id; tick(4000); s.internal.hold(id, true); tick(60000); assert.equal(s.internal.toasts().length, 1, 'held: it does not expire');
+    s.internal.hold(id, false); tick(5900); assert.equal(s.internal.toasts().length, 1, 'released: the time that was left (6 s) starts again'); tick(200); assert.equal(s.internal.toasts().length, 0);
+  });
+  test(`[${aname}] series avg ignores empty optional numbers: avg of [null, 10, null, null] is 10, and a day with only nulls is 0`, () => {
+    const s = createSDK({ adapter: mk().make(), manifest: { tables: { w: { kg: 'num?' } } }, now: () => T0 }); const t = s.store.t('w');
+    t.add({}); t.add({ kg: 10 }); t.add({ kg: null }); t.add({});
+    assert.equal(t.series('kg', { op: 'avg', last: 1 })[0].v, 10); assert.equal(t.series('kg', { op: 'sum', last: 1 })[0].v, 10); assert.equal(t.series('kg', { op: 'count', last: 1 })[0].v, 4);
+    const u = createSDK({ adapter: mk().make(), manifest: { tables: { w: { kg: 'num?' } } }, now: () => T0 }).store.t('w'); u.add({}); assert.equal(u.series('kg', { op: 'avg', last: 1 })[0].v, 0);
+  });
+  test(`[${aname}] the table handle exposes no symbol, no tx and no meta: page code cannot reach del / undel / ids`, () => {
+    const s = createSDK({ adapter: mk().make(), manifest: { tables: { w: { kg: 'num' } } }, now: () => T0 }); const t = s.store.t('w');
+    assert.deepEqual(Reflect.ownKeys(t).filter((k) => typeof k === 'symbol'), []); assert.deepEqual(Object.getOwnPropertySymbols(t), []);
+    assert.equal(typeof t[Symbol.for('molde.tx')], 'undefined'); assert.equal(typeof t[Symbol.for('molde.meta')], 'undefined');
+    assert.deepEqual(Reflect.ownKeys(t).sort(), ['add', 'cols', 'group', 'has', 'name', 'remove', 'rows', 'series', 'set', 'streak', 'sum', 'toJSON', 'toggle'].sort());
+    assert.throws(() => s.internal.tx({}), (e) => e.code === 'E_ARG');
+  });
+}
+test('parse and format round-trip for every supported locale (en-US, ur-PK, fr-FR, de-DE, tr-TR, hi-IN lakh grouping, plus ar-EG, en-IN, pt-BR, de-CH)', () => {
+  for (const loc of ['en-US', 'ur-PK', 'fr-FR', 'de-DE', 'tr-TR', 'hi-IN', 'ar-EG', 'en-IN', 'pt-BR', 'de-CH']) {
+    const f = createSDK({ manifest, locale: loc }).internal.parseNum; let seed = 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const nums = [0, 1, 5, 80, 999, 1000, 1234, 1500, 80000, 150000, 1234567, 999999999, 0.5, 1.5, 1.234, 82.5, 1234.5, 0.001, 99999.9, -7, -1234.5];
+    for (let i = 0; i < 200; i++) nums.push(Math.round(rnd() * 1e9 * rnd() ** 3) / (rnd() < 0.5 ? 1 : 100));
+    for (const n of nums) for (const o of [{ maximumFractionDigits: 20 }, { maximumFractionDigits: 20, useGrouping: false }]) {
+      const text = new Intl.NumberFormat(loc, o).format(n); assert.equal(f(text), n, `${loc} ${JSON.stringify(o)} "${text}"`);
+    }
+    for (const n of [1.5, 82.5, 1234.5, 99999.9]) assert.equal(f(new Intl.NumberFormat(loc, { maximumFractionDigits: 1 }).format(n)), n, `${loc} display format ${n}`);
+  }
+  const de = createSDK({ manifest, locale: 'de-DE' }).internal.parseNum, hi = createSDK({ manifest, locale: 'hi-IN' }).internal.parseNum, en = createSDK({ manifest, locale: 'en-US' }).internal.parseNum;
+  assert.equal(de('80.000'), 80000, 'de-DE shows 80.000 for eighty thousand'); assert.equal(de('1,234'), 1.234, 'a de-DE comma is always a decimal'); assert.equal(de('82.5'), 82.5, 'typed with a point is still understood');
+  assert.equal(hi('1,50,000'), 150000); assert.equal(en('1,50,000'), 150000, 'lakh grouping is read in any locale'); assert.ok(Number.isNaN(en('1,23,45')), 'not a valid grouping');
+  assert.equal(en('1,500', 500), 1.5);
+});

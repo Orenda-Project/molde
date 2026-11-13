@@ -1,8 +1,4 @@
-<main x-data="{t: store.t('spend'), cap: store.kv('budget', 80000), mo: 0,
-  get rows() { return this.t.rows.filter(r => app.fmt(r.at, 'month') == app.fmt($month(this.mo), 'month')) },
-  get spent() { return this.t.sum('amount', {month: this.mo}) },
-  pc(x) { return this.spent > 0 ? Math.max(0, Math.min(100, Math.round(x.v / this.spent * 100))) : 0 },
-  get cats() { return this.t.group('category', 'amount', {month: this.mo}) }}">
+<main x-data="{t: store.t('spend'), cap: store.kv('budget', 80000), mo: 0, get spent() { return this.t.sum('amount', {month: this.mo}) }}">
   <h1>Budget</h1>
   <div class="row">
     <button class="ibtn" aria-label="Previous month" @click="mo--">&lsaquo;</button>
@@ -18,16 +14,7 @@
     </div>
     <small class="muted">Budget <bdi x-edit="[cap, 'v', 1, 1e9, 'Monthly budget']"></bdi></small>
   </div>
-  <template x-for="(x, n) in cats">
-    <div class="col" :class="'c' + (n % 5 + 1)">
-      <div class="row">
-        <span class="grow" x-text="x.k"></span><bdi x-text="x.v.toLocaleString()"></bdi><bdi class="muted" x-text="pc(x) + '%'"></bdi>
-      </div>
-      <div class="bar">
-        <i :style="{width: pc(x) + '%'}"></i>
-      </div>
-    </div>
-  </template>
-  <m-form :table="t" seg></m-form>
-  <m-list :table="t" :rows="rows" title="description" sub="amount" by="day" edit></m-list>
+  <m-chart type="hbar" :data="t.group('category', 'amount', {month: mo})"></m-chart>
+  <m-form :table="t" seg @added="mo = 0"></m-form>
+  <m-list :table="t" :month="mo" title="description" sub="amount" by="day" edit></m-list>
 </main>
