@@ -1,40 +1,49 @@
-<main x-data="{h: store.t('habit'), c: store.t('check'), page: 1, sel: 0, get cur() { return this.h.rows.find(x => x.id === this.sel) || this.h.rows[0] }}">
+<main x-data="{h: store.t('habit'), c: store.t('check'), page: 1,
+  get M() { return this.h.rows.length },
+  get done() { return new Set(this.c.rows.filter(r => r.day == this.$day(0)).map(r => r.habit)).size },
+  get best() { const t = this.$day(-1), ids = new Set(this.c.rows.filter(r => r.day >= t).map(r => r.habit)); return this.h.rows.filter(x => ids.has(x.id + '')).map(x => [this.c.streak(this.k(x)), x.habit]).sort((a, b) => b[0] - a[0])[0] || [0, ''] },
+  on(x, day) { return this.c.has(this.k(x, day)) },
+  k(x, day) { return {habit: x?.id + '', day: day ?? this.$day(0)} },
+  pct(n, x) { return Math.round(this.c.series(null, {...(x && {where: {habit: x.id + ''}}), last: n}).reduce((a, d) => a + d.v, 0) / ((x ? 1 : this.M) * n) * 100) }}">
   <h1>Habits</h1>
-  <div class="row">
-    <b class="stat" x-text="$streaks(c, 'habit').max"></b><span class="muted">Longest current streak, days</span>
-  </div>
-  <div class="list">
-    <div class="item grid fit">
-      <template x-for="d in $days($fit(48))">
-        <small x-text="app.fmt(d, 'wdd')"></small>
-      </template>
-    </div>
-    <template x-for="x in h.rows.slice(0, page * 40)">
-      <div class="item wrap" :class="$hue(x.id)">
-        <button class="ibtn ring" :aria-pressed="cur?.id === x.id" :aria-label="'History of ' + x.habit" @click="sel = x.id" x-text="$streaks(c, 'habit')[x.id]"></button>
-        <div class="grow" x-edit="[h, x, 'habit']"></div>
-        <button x-remove="[h, x, c, 'habit']"></button>
-        <div class="grid fit" x-roving>
-          <template x-for="d in $days($fit(48))">
-            <button class="check" x-toggle="[c, {habit: x.id + ''}, d, x.habit]"></button>
-          </template>
+  <div class="empty" x-show="!M">Nothing to track yet. Add one.</div>
+  <div class="cols" x-show="M">
+    <section class="card col">
+      <h2 x-text="done + ' of ' + M + ' done today'"></h2>
+      <template x-for="x in h.rows.slice(0, page * 40)">
+        <div class="item wrap">
+          <span class="ibtn ring" role="img" :aria-label="c.streak(k(x)) + ' day streak'" x-text="c.streak(k(x))"></span>
+          <div class="col grow">
+            <div x-edit="[h, x, 'habit']"></div>
+            <small class="muted" x-text="pct(30, x) + '% in 30 days'"></small>
+          </div>
+          <button x-remove="[h, x, c, 'habit']"></button>
+          <div class="grid" :style="{'--cols': 7}">
+            <template x-for="d in c.series(null, {where: {habit: x.id + ''}, last: 7})">
+              <i class="cell wide" :class="d.v && 'lv4'" role="img" :aria-label="app.fmt(d.k, 'dm') + (d.v ? ', done' : ', not done')"></i>
+            </template>
+          </div>
+          <button class="btn big" :class="on(x) || 'ghost'" :aria-pressed="on(x)" :aria-label="x.habit + ', today'" @click="c.toggle(k(x))" x-text="on(x) ? 'Done' : 'Mark done'"></button>
         </div>
-      </div>
-    </template>
-  </div>
-  <button class="btn ghost" x-show="h.rows.length > page * 40" @click="page++">Show more habits</button>
-  <m-form :table="h"></m-form>
-  <template x-if="cur">
-    <section class="col" :class="$hue(cur?.id)">
-      <div class="grid" x-roving="7">
-        <template x-for="d in c.series(null, {weeks: 5}).slice(0, 7)">
-          <small x-text="app.fmt(d.k, 'wd')"></small>
-        </template>
-        <template x-for="d in c.series(null, {weeks: 5})">
-          <button class="day" x-toggle="[c, {habit: cur?.id + ''}, d.k, cur?.habit]" x-text="app.fmt(d.k, 'day')"></button>
-        </template>
-      </div>
-      <m-chart type="line" :data="$ema(c.series(null, {where: {habit: cur?.id + ''}, last: 90}), .07, 100)" :label="cur?.habit + ': score, last 90 days'"></m-chart>
+      </template>
     </section>
-  </template>
+    <section class="card col">
+      <div class="grid" :style="{'--cols': 3}">
+        <m-stat label="This week" :value="pct(7)" unit="%"></m-stat>
+        <m-stat label="30 days" :value="pct(30)" unit="%"></m-stat>
+        <m-stat :label="'Best streak: ' + best[1]" :value="best[0]" unit="d"></m-stat>
+      </div>
+    </section>
+    <section class="card col">
+      <h2>Last 10 weeks</h2>
+      <small class="muted">Monday at the top. Darker means more habits done.</small>
+      <div class="grid flow" :style="{'--rows': 7, '--cols': 10}">
+        <template x-for="d in c.series(null, {weeks: 10})">
+          <i class="cell" :class="'lv' + Math.min(4, Math.ceil(d.v / M * 4))" role="img" :aria-label="app.fmt(d.k, 'dm') + ': ' + d.v"></i>
+        </template>
+      </div>
+    </section>
+  </div>
+  <button class="btn ghost" x-show="M > page * 40" @click="page++">Show more habits</button>
+  <m-form class="card" :table="h"></m-form>
 </main>

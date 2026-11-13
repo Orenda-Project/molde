@@ -13,7 +13,8 @@
   if (!manifest) { var mEl = document.getElementById('molde-manifest'); manifest = mEl ? JSON.parse(mEl.textContent) : { tables: {} }; }
   var seed = host.seed;
   if (!seed) { var sEl = document.getElementById('molde-seed'); seed = sEl ? JSON.parse(sEl.textContent) : null; }
-  var sdk = S.createSDK({ adapter: host.adapter || S.memoryAdapter(seed), manifest: manifest, reactive: A.reactive, unwrap: A.raw, locale: host.locale, host: host.bridge });
+  var standalone = function () { try { if (window.MoldeLocal && window.localStorage) return window.MoldeLocal.localAdapter(window.localStorage, 'molde:' + (manifest.name || '') + location.pathname, seed); } catch (e) { /* storage blocked */ } return S.memoryAdapter(seed); }; /* no host adapter: the standalone page keeps its data in localStorage */
+  var sdk = S.createSDK({ adapter: host.adapter || standalone(), manifest: manifest, reactive: A.reactive, unwrap: A.raw, locale: host.locale, host: host.bridge });
   var I = sdk.internal, ui = sdk.ui, app = sdk.app;
   window.store = sdk.store; window.ui = ui; window.app = app;
   var locale = I.locale;
@@ -115,12 +116,6 @@
     if (p.label) kids.push(h('small', { class: 'muted', text: p.label }));
     var empty = h('div', { class: 'empty', text: 'No data yet' });
     var root = function () { el.replaceChildren(h.apply(null, ['div', { class: 'm-chart' }].concat(kids))); };
-    if (type === 'hbar') { /* labelled horizontal bars: name, amount, share; the largest in the accent, the rest quiet */
-      var hp = data.filter(function (d) { return d.v > 0; }), ht = hp.reduce(function (a, d) { return a + d.v; }, 0), hm = hp.reduce(function (a, d) { return Math.max(a, d.v); }, 0);
-      if (!hp.length) { kids.push(empty); return root(); }
-      var ul = h('ul', { class: 'm-hbar' }); hp.forEach(function (d, i) { ul.appendChild(h('li', null, h('div', { class: 'row' }, h('span', { class: 'grow', dir: 'auto', text: d.k }), bdi(num(d.v)), bdi(Math.round(d.v / ht * 100) + '%', 'muted')), h('div', { class: 'bar' + (i ? ' soft' : '') }, h('i', { style: { width: Math.min(100, Math.max(0, d.v / hm * 100)).toFixed(1) + '%' } })))); });
-      kids.push(ul); return root();
-    }
     if (type === 'pie') {
       var sl = slices(data, 5, false), total = sl.reduce(function (a, d) { return a + d.v; }, 0);
       if (!sl.length) { kids.push(empty); return root(); }
@@ -176,6 +171,8 @@
   }
   function clearErr(form) { var e = form.querySelector('.m-err'); if (e) e.remove(); Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (i) { i.removeAttribute('aria-invalid'); }); }
   /* validate + collect. firstText is required; every number is required and within min/max; dates required. Returns row or null (after showing a visible message). */
+  /* min="1" for every number field, or min="kg:0,reps:1" per column */
+  function bound(a, c) { if (a == null || a === '') return null; a = String(a); if (a.indexOf(':') < 0) return Number(a); var m = {}; a.split(',').forEach(function (x) { var kv = x.split(':'); m[kv[0].trim()] = Number(kv[1]); }); return m[c] == null || isNaN(m[c]) ? null : m[c]; }
   function collect(form, cols, defs, p, requireAllText) {
     var row = {}, firstText = true;
     clearErr(form);
@@ -190,7 +187,7 @@
         if (isReq && !val.trim()) { err(form, el, 'Enter some text in ' + human(c).toLowerCase()); return null; }
         row[c] = val.trim();
       } else if (d === 'num') {
-        var mn = p.min != null && p.min !== '' ? Number(p.min) : null, mx = p.max != null && p.max !== '' ? Number(p.max) : null;
+        var mn = bound(p.min, c), mx = bound(p.max, c);
         if (!val.trim() && p.opt && p.opt.indexOf(c) >= 0) { row[c] = null; continue; } /* an optional number may stay empty */
         var n = I.parseNum(val, mx);
         if (!isFinite(n)) { err(form, el, 'Enter a number for ' + human(c).toLowerCase() + ', like 82.5'); return null; }
@@ -271,11 +268,11 @@
     var d = p.glyph(r), g = s('svg', { viewBox: '0 0 24 24', width: 40, height: 40, class: 'ic m-glyph', 'aria-hidden': 'true' });
     g.appendChild(s('path', { d: String(d) })); return g;
   }
+  function marked(text, q) { q = q.trim(); if (!q) return text; var out = h('span'), lo = text.toLowerCase(), ql = q.toLowerCase(), i = 0, j; while ((j = lo.indexOf(ql, i)) >= 0) { if (j > i) out.appendChild(document.createTextNode(text.slice(i, j))); out.appendChild(h('mark', { text: text.slice(j, j + q.length) })); i = j + q.length; } out.appendChild(document.createTextNode(text.slice(i))); return out; }
   function dayKey(r) { return r.at != null && isFinite(r.at) ? ymd(new Date(r.at)) : ''; }
   function mList(el, p) {
     var t = p.table; if (!t) return;
     var defs = meta(t).schema, rows = Array.prototype.slice.call(Array.isArray(p.rows) ? p.rows : t.rows);
-    if (p.month != null && p.month !== '') { var q = app.today().split('-'), mk = ymd(new Date(+q[0], +q[1] - 1 + Number(p.month), 1, 12)).slice(0, 7); rows = rows.filter(function (r) { return dayKey(r).slice(0, 7) === mk; }); } /* month="0" this calendar month, -1 last month */
     if (p.order !== 'old') rows.reverse();
     var step = Math.max(1, Math.min(200, Number(p.max) || 30)), shown = Math.min(rows.length, step * (1 + (el._m.pages || 0)));
     var meta_ = p.meta ? String(p.meta).split(',') : null, edit = 'edit' in p, byDay = p.by === 'day', sums = {};
@@ -289,6 +286,7 @@
         var when = r.at != null && isFinite(r.at) ? (byDay ? app.fmt(r.at, 'time') : app.fmt(r.at, 'rel')) : '', sub = when ? [when] : [];
         if (meta_) sub = meta_.map(function (c) { return String(r[c]); }).concat(sub);
         var tv = r[p.title], titleNode = typeof tv === 'number' ? bdi(num(tv) + (p.unit && !p.sub ? ' ' + p.unit : '')) : String(tv == null ? '' : tv);
+        if (typeof titleNode === 'string' && p.highlight) titleNode = marked(titleNode, String(p.highlight)); /* highlight="text": matches of a search are <mark>ed (data stays textContent) */
         var body = h('div', { class: 'grow' }, h('div', { class: 'm-title', dir: 'auto' }, titleNode), h('small', { class: 'muted', dir: 'auto', text: sub.join(' \u00b7 ') }));
         var main = edit ? h('button', { class: 'm-body grow', type: 'button', 'aria-label': 'Edit ' + String(tv).slice(0, 40), onclick: function () { el._m.editing = r.id; render(el); } }, body) : body;
         box.appendChild(h('div', { class: 'item' }, glyph(p, r), main, p.sub ? cell(String(defs[p.sub]).indexOf('pick:') === 0 ? 'pick' : defs[p.sub], r[p.sub], p.unit) : null, removeBtn(t, r)));
@@ -318,10 +316,11 @@
       }
       if (d === 'bool') f = h('label', { class: 'check m-wide' }, h('input', { type: 'checkbox', name: c }), h('span', { text: human(c) }));
       else {
-        var input = inputFor(c, d, human(c) + (p.opt && p.opt.indexOf(c) >= 0 ? ' (optional)' : ''), null, p);
+        var lab = 'labels' in p, optx = p.opt && p.opt.indexOf(c) >= 0 ? ' (optional)' : '';
+        var input = inputFor(c, d, lab ? '' : human(c) + optx, null, p); /* labels: a visible label above each field that stays when the field is filled (placeholders vanish) */
         input.addEventListener('input', function () { clearErr(form); });
         if (!firstInput && d !== 'date') firstInput = input;
-        f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: compact ? (ci === 0 ? 'm-tx' : 'm-nm') : d === 'long' || d === 'text' ? 'm-wide' : '' }, input);
+        f = d === 'date' ? h('label', { class: 'm-datef' }, h('span', { text: human(c) }), input) : h('label', { class: (lab ? 'field ' : '') + (compact ? (ci === 0 ? 'm-tx' : 'm-nm') : d === 'long' || d === 'text' ? 'm-wide' : '') }, lab ? h('span', { text: human(c) + optx }) : null, input);
         if (d === 'text' || d === 'long') counter(input, S.LIMITS[d], f);
         if (d === 'text') { /* earlier values of this column are offered as suggestions (read when the field is focused, so typing never rebuilds the form) */
           var dl = h('datalist', { id: 'm-dl-' + (++dlN) }); input.setAttribute('list', dl.id); f.appendChild(dl);
@@ -370,6 +369,9 @@
   /* x-edit: editable text. x-edit="[table, row, 'col']" saves with t.set; x-edit="[box, 'v', min, max]" writes a store.kv box (a number stays a
    * number, shown with thousands separators; text that is not a number in min..max reverts with a toast).
    * Enter commits (single line, no <div> is ever inserted), Escape cancels, blur commits, an empty value reverts. role=textbox, aria-label = the field name, class tbtn (>= 44 px). */
+  /* a rejected x-edit says why next to the field (role=alert), until the next edit or 6 s; the toast says it too */
+  function clearInlineErr(el) { if (el._xerr) { el._xerr.remove(); el._xerr = null; el.removeAttribute('aria-invalid'); } }
+  function inlineErr(el, msg) { clearInlineErr(el); var e = h('small', { class: 'warn m-xerr', role: 'alert', text: msg }); el.after(e); el._xerr = e; el.setAttribute('aria-invalid', 'true'); setTimeout(function () { if (el._xerr === e) clearInlineErr(el); }, 6000); }
   A.directive('edit', function (el, d, u) {
     el.setAttribute('contenteditable', 'true'); el.setAttribute('role', 'textbox'); el.dir = 'auto'; el.classList.add('tbtn');
     var cancel = false, isT = function (a) { return typeof a[0].set === 'function'; };
@@ -384,6 +386,7 @@
     el.addEventListener('blur', function () {
       var a = u.evaluate(d.expression), v = el.textContent.trim(), old = cur(), c = cancel; cancel = false;
       if (!c && v && v !== (typeof old === 'number' ? old.toLocaleString(locale) : String(old))) {
+        clearInlineErr(el);
         try {
           if (!isT(a)) {
             if (typeof old === 'number') {
@@ -392,8 +395,8 @@
               a[0][a[1]] = n;
             } else a[0][a[1]] = v;
           } else { var o = {}; o[a[2]] = v; a[0].set(a[1].id, o); }
-        } catch (x) { ui.toast(say(x)); }
-      }
+        } catch (x) { ui.toast(say(x)); inlineErr(el, say(x)); }
+      } else if (!c) clearInlineErr(el);
       show();
     });
   });
@@ -411,48 +414,10 @@
   /* $day(n): the date n days from today as YYYY-MM-DD (reactive across midnight, no time zone surprises). */
   var dayAt = function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1, +q[2] + (n || 0), 12)); };
   A.magic('day', function () { return dayAt; });
-  /* $month(n): the first day of the month n months from this one (YYYY-MM-01), for app.fmt(d, 'month') */
-  A.magic('month', function () { return function (n) { var q = app.today().split('-'); return ymd(new Date(+q[0], +q[1] - 1 + (n || 0), 1, 12)); }; });
   /* $days(n): the last n dates, today first (YYYY-MM-DD) */
+  /* $fmt(n, digits): a number in the app's locale (grouping and decimal mark), 1 decimal by default; the same format the kit prints everywhere */
+  A.magic('fmt', function () { return function (n, d) { return new Intl.NumberFormat(locale, { maximumFractionDigits: d == null ? 1 : d }).format(san(n)); }; });
   A.magic('days', function () { return function (n) { var o = []; for (var i = 0; i < Math.min(366, n); i++) o.push(dayAt(-i)); return o; }; });
-
-  var shift = function (day, n) { var q = day.split('-'); return ymd(new Date(+q[0], +q[1] - 1, +q[2] + n, 12)); };
-  /* $group(rows, 'day' | col, ...): rows grouped by the given keys ('day' = the local day of `at`), in first-seen order: [{day, <col>, rows}] */
-  A.magic('group', function () { return function (rows) { var ks = [].slice.call(arguments, 1), seen = {}, out = []; arr(rows).forEach(function (r) { var kv = ks.map(function (k) { return k === 'day' ? dk(r.at) : r[k]; }), id = kv.join('\u0001'), g = seen[id]; if (!g) { g = seen[id] = { rows: [] }; ks.forEach(function (k, i) { g[k] = kv[i]; }); out.push(g); } g.rows.push(r); }); return out; }; });
-  /* $streaks(table, col): { value of col: current streak in days } for every value, from the table's date column (today or yesterday counts as the start, like t.streak) */
-  A.magic('streaks', function () { return function (t, col) { var dc = meta(t).dateCol, td = app.today(), by = {}, out = {}; t.rows.forEach(function (r) { (by[r[col]] = by[r[col]] || {})[r[dc]] = 1; }); var best = 0; Object.keys(by).forEach(function (k) { var d = by[k][td] ? td : shift(td, -1), n = 0; while (by[k][d]) { n++; d = shift(d, -1); } out[k] = n; best = Math.max(best, n); }); Object.defineProperty(out, 'max', { value: best }); return out; }; }); /* out.max is the longest of them */
-  /* $hue(n): the colour-identity class c1..c5 for any number, so each item keeps its own colour */
-  A.magic('hue', function () { return function (n) { return 'c' + (Math.abs(Math.floor(Number(n) || 0)) % 5 + 1); }; });
-  /* $ema(series, a, scale): an exponentially smoothed copy of a {k, v} series (each point keeps 1 - a of the running value and adds a * scale * v), rounded: a score that decays */
-  A.magic('ema', function () { return function (series, a, scale) { var run = 0; return arr(series).map(function (d) { run = run * (1 - a) + a * (scale == null ? 1 : scale) * d.v; return { k: d.k, v: Math.round(run) }; }); }; });
-  /* $aria(text, day, on, words): "Text, Sat, Nov 21, done" for a button that toggles a date (words: ['done', 'not done']) */
-  A.magic('aria', function () { return function (text, day, on, words) { var w = words || ['done', 'not done']; return text + ', ' + app.fmt(day, 'dm') + ', ' + (on ? w[0] : w[1]); }; });
-  /* $clock(sec): 1:30 */
-  A.magic('clock', function () { return function (sec) { sec = Math.max(0, Math.floor(Number(sec) || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }; });
-  /* $fit(px): how many columns of at least px fit the parent's width, reactive to the window size (so no clipped, still-focusable columns exist) */
-  var vw = A.reactive({ w: window.innerWidth }); window.addEventListener('resize', function () { vw.w = window.innerWidth; });
-  A.magic('fit', function (el) { return function (px) { void vw.w; var p = el.parentElement; if (!p) return 1; var c = getComputedStyle(p), w = p.clientWidth - parseFloat(c.paddingLeft) - parseFloat(c.paddingRight); return Math.max(1, Math.floor((w + 4) / (px + 4))); }; });
-  /* x-toggle="[table, key, day, label]": a button that toggles the row {...key, day} of a table (t.toggle / t.has): role=checkbox, aria-checked, and a name like "Label, Sat, Nov 21, done" */
-  A.directive('toggle', function (el, d, u) {
-    el.setAttribute('role', 'checkbox'); if (!el.getAttribute('type')) el.setAttribute('type', 'button');
-    var args = function () { var a = u.evaluate(d.expression); a.k = Object.assign({}, a[1], { day: a[2] }); return a; };
-    u.effect(function () { var a = args(), on = a[0].has(a.k); el.setAttribute('aria-checked', on ? 'true' : 'false'); el.setAttribute('aria-label', a[3] + ', ' + app.fmt(a[2], 'dm') + ', ' + (on ? 'done' : 'not done')); });
-    el.addEventListener('click', function () { var a = args(); a[0].toggle(a.k); });
-  });
-  /* x-roving: one tab stop for a group of buttons; arrows move (Up/Down by the number given, else by one), Home/End jump. x-roving or x-roving="7" for a calendar. */
-  A.directive('roving', function (el, d, u) {
-    var step = d.expression ? Number(u.evaluate(d.expression)) || 1 : 1, cur = null;
-    var items = function () { return Array.prototype.slice.call(el.querySelectorAll('button,[role=checkbox],[role=radio]')).filter(function (x) { return !x.disabled; }); };
-    var apply = function () { var it = items(); if (!it.length) return; if (!cur || !el.contains(cur)) cur = it.filter(function (x) { return x.getAttribute('aria-checked') === 'true'; })[0] || it[0]; it.forEach(function (x) { x.tabIndex = x === cur ? 0 : -1; }); };
-    new MutationObserver(apply).observe(el, { childList: true, subtree: true }); setTimeout(apply, 0);
-    el.addEventListener('focusin', function (e) { if (items().indexOf(e.target) >= 0) { cur = e.target; apply(); } });
-    el.addEventListener('keydown', function (e) {
-      var it = items(), i = it.indexOf(document.activeElement), rtl = getComputedStyle(el).direction === 'rtl', to = null;
-      if (i < 0) return;
-      if (e.key === 'ArrowRight') to = i + (rtl ? -1 : 1); else if (e.key === 'ArrowLeft') to = i + (rtl ? 1 : -1); else if (e.key === 'ArrowDown') to = i + step; else if (e.key === 'ArrowUp') to = i - step; else if (e.key === 'Home') to = 0; else if (e.key === 'End') to = it.length - 1; else return;
-      e.preventDefault(); if (to >= 0 && to < it.length) { cur = it[to]; apply(); cur.focus(); }
-    });
-  });
 
   var COMP = { 'm-stat': mStat, 'm-chart': mChart, 'm-list': mList, 'm-form': mForm };
 
@@ -492,7 +457,8 @@
   var kbDelete = null; /* set by a keyboard-driven delete: the list to give focus back to */
   function toastHost() {
     var rows = {}, back = null;
-    var count = h('b'), head = h('div', { class: 'm-tray-h', 'aria-live': 'off' }, count, h('button', { type: 'button', text: 'Undo all', onclick: function () { I.toasts().filter(function (t) { return t.undo; }).reverse().forEach(function (t) { t.undo(); I.dismiss(t.id); }); giveBack(); } }));
+    var closed = false, undosN = 0, toggle = h('button', { type: 'button', text: 'Show', onclick: function () { closed = !closed; sync(); } });
+    var count = h('b'), head = h('div', { class: 'm-tray-h', 'aria-live': 'off' }, count, toggle, h('button', { type: 'button', text: 'Undo all', onclick: function () { I.toasts().filter(function (t) { return t.undo; }).reverse().forEach(function (t) { t.undo(); I.dismiss(t.id); }); giveBack(); } }));
     var plain = h('div', { class: 'm-plain' }), list = h('div', { class: 'm-tray-l' }), tray = h('div', { class: 'm-tray' }, head, list);
     var box = h('div', { class: 'm-toasts', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'false' }, plain, tray);
     document.body.appendChild(box);
@@ -505,14 +471,15 @@
         el.addEventListener('mouseenter', function () { I.hold(t.id, true); }); el.addEventListener('mouseleave', function () { if (!el.contains(document.activeElement)) I.hold(t.id, false); });
         el.addEventListener('focusin', function () { I.hold(t.id, true); }); el.addEventListener('focusout', function (e) { if (!el.contains(e.relatedTarget) && !el.matches(':hover')) I.hold(t.id, false); });
       }
-      el.addEventListener('keydown', function (e) { if (e.key === 'Escape') { I.dismiss(t.id); giveBack(); } });
+      el.addEventListener('keydown', function (e) { if (e.key === 'Escape' && t.undo) { closed = true; sync(); toggle.focus(); } else if (e.key === 'Escape') I.dismiss(t.id); }); /* Escape on an Undo only collapses the tray: it never discards an undo */
       return el;
     }
+    function sync() { tray.hidden = !undosN; tray.toggleAttribute('data-many', undosN >= 3 || closed); tray.toggleAttribute('data-closed', closed && undosN > 0); head.hidden = undosN < 3 && !closed; count.textContent = undosN + ' undos'; toggle.textContent = closed ? 'Show' : 'Hide'; toggle.setAttribute('aria-expanded', closed ? 'false' : 'true'); }
     A.effect(function () {
       var all = I.toasts().slice(), ids = {}, undos = 0;
       all.forEach(function (t) { ids[t.id] = 1; if (t.undo) undos++; });
       Object.keys(rows).forEach(function (id) { if (!ids[id]) { rows[id].remove(); delete rows[id]; } });
-      tray.hidden = !undos; tray.toggleAttribute('data-many', undos >= 3); head.hidden = undos < 3; count.textContent = undos + ' undos'; /* before any focus() below: a hidden tray cannot take focus */
+      if (undos > undosN) closed = false; undosN = undos; sync(); /* before any focus() below: a hidden tray cannot take focus */
       all.forEach(function (t) {
         if (rows[t.id]) return;
         var el = rows[t.id] = make(t);

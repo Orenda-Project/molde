@@ -18,7 +18,7 @@ test('journal: the selected face is clearly different in computed style (ring, f
   assert.notEqual(after.bg, before.bg, 'a fill'); assert.notEqual(after.border, before.border);
   assert.equal(await page.locator('form input[type=radio][value=good]').isChecked(), true);
   assert.equal(await page.locator('form small', { hasText: 'good' }).evaluate((e) => getComputedStyle(e).fontWeight), '500', 'the label gets heavier');
-  assert.equal(await page.locator('m-chart svg rect.m-b').count(), 14, 'a 14-day mood strip');
+  assert.equal(await page.locator('m-chart svg polyline.m-line').count(), 1, 'a mood line');
   await ctx.close(); noLog(log);
 });
 
@@ -32,7 +32,7 @@ test('faces differ in eyes and mouth: five distinct shapes', async () => {
 test('numbers: inputs are text with a decimal keypad; "82,5" is 82.5, Arabic-Indic digits work, junk shows a visible error, optional kg may stay empty', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'exercise');
   assert.equal(await page.$eval('input[name=kg]', (i) => i.type + '/' + i.inputMode), 'text/decimal');
-  assert.match(await page.$eval('input[name=kg]', (i) => i.placeholder), /optional/i);
+  assert.match(await page.locator('m-form .field span', { hasText: 'Kg' }).innerText(), /optional/i);
   const last = () => page.evaluate(() => { const r = store.t('set').rows; return r[r.length - 1]; });
   await page.fill('input[name=exercise]', 'Row'); await page.fill('input[name=kg]', '82,5'); await page.fill('input[name=reps]', '5'); await page.click('button[type=submit]');
   let r = await last(); assert.equal(r.kg, 82.5, 'a decimal comma is a decimal');
@@ -49,7 +49,7 @@ test('x-edit: a real label for goal fields, a pasted newline becomes a space, a 
   const w = await open(browser, srv.base, 'water');
   assert.equal(await w.page.locator('small [contenteditable]').getAttribute('aria-label'), 'Daily goal (ml)'); await w.ctx.close(); noLog(w.log);
   const b = await open(browser, srv.base, 'budget');
-  assert.equal(await b.page.locator('small [contenteditable]').getAttribute('aria-label'), 'Monthly budget'); await b.ctx.close(); noLog(b.log);
+  assert.equal(await b.page.locator('[contenteditable]').first().getAttribute('aria-label'), 'Monthly budget'); await b.ctx.close(); noLog(b.log);
   const j = await open(browser, srv.base, 'habits');
   const name = j.page.locator('.item.wrap [contenteditable]').first();
   assert.equal(await name.getAttribute('aria-label'), 'Habit');
@@ -59,28 +59,6 @@ test('x-edit: a real label for goal fields, a pasted newline becomes a space, a 
   await name.click(); await j.page.keyboard.press('Control+A'); await name.evaluate((el) => { el.textContent = 'y'.repeat(1200); }); await j.page.keyboard.press('Enter');
   const toast = await j.page.locator('.m-toast span').first().innerText(); assert.match(toast, /too long/i); assert.ok(!/E_ARG|E_/.test(toast), toast);
   await j.ctx.close(); noLog(j.log);
-});
-
-test('habits: accessible names say habit, date and state; the calendar is weekday-aligned; tapping a habit shows its history; the lead covers ALL habits', async () => {
-  const { page, ctx, log } = await open(browser, srv.base, 'habits', { q: '&big=100' });
-  const cb = page.locator('.item.wrap').first().locator('[role=checkbox]').first();
-  assert.match(await cb.getAttribute('aria-label'), /^.+, .+ \d+|^.+, \w+, \w+ \d+, (done|not done)$/); assert.match(await cb.getAttribute('aria-label'), /(done|not done)$/);
-  const was = await cb.getAttribute('aria-checked'); await cb.click(); assert.notEqual(await cb.getAttribute('aria-checked'), was);
-  const head = await page.$$eval('.item.grid small', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')).slice(0, 3)); assert.ok(head.every((t) => /^(\S{2,}\s\d+|\d+\s\S{2,})$/.test(t)), head.join('|'));
-  const hdr = await page.$$eval('section .grid > small', (els) => els.map((e) => e.innerText)); assert.equal(hdr.length, 7); assert.equal(new Set(hdr).size, 7, 'seven different weekday names: ' + hdr);
-  const cells = await page.$$eval('section .grid > .day', (els) => els.map((e) => ({ l: e.getAttribute('aria-label'), col: Math.round((e.getBoundingClientRect().left - els[0].parentElement.getBoundingClientRect().left) / (els[0].getBoundingClientRect().width))})));
-  assert.ok(cells.length >= 28 && cells.length <= 35, 'five weeks ending today: ' + cells.length);
-  const hdrX = await page.$$eval('section .grid > small', (els) => els.map((e) => e.getBoundingClientRect().left)); const dayX = await page.$$eval('section .grid > .day', (els) => els.slice(0, 7).map((e) => e.getBoundingClientRect().left + e.getBoundingClientRect().width / 2));
-  hdrX.forEach((x, i) => assert.ok(Math.abs(x - dayX[i]) < 40, 'the first week lines up under the weekday headers: ' + [x, dayX[i]]));
-  const wd = hdr[0]; assert.match(cells[0].l, new RegExp(', ' + wd.slice(0, 2)), 'the first cell is on the first header weekday: ' + cells[0].l + ' / ' + wd);
-  const h2 = await page.locator('section m-chart small').innerText(); await page.locator('.item.wrap').nth(2).locator('button.ring').click(); assert.notEqual(await page.locator('section m-chart small').innerText(), h2, 'tap a habit to see its history');
-  assert.equal(await page.locator('.item.wrap').nth(2).locator('button.ring').getAttribute('aria-pressed'), 'true'); assert.equal(await page.locator('m-chart svg polyline.m-line').count(), 1, 'a score line');
-  // the best streak is over every habit, not only the first 40
-  const best0 = Number(await page.locator('.stat').innerText());
-  await page.evaluate(() => { const hs = store.t('habit').rows; const id = hs[hs.length - 1].id; const c = store.t('check'); const el = document.querySelector('main'); for (let i = 0; i < 30; i++) c.add({ habit: String(id), day: Alpine.evaluate(el, '$day(-' + i + ')') }); });
-  assert.ok(Number(await page.locator('.stat').innerText()) >= 30, 'habit #100 (not on the first page) sets the longest current streak');
-  assert.match(await page.locator('.row', { has: page.locator('.stat') }).innerText(), /Longest current streak/);
-  await ctx.close(); noLog(log);
 });
 
 test('midnight: list day headers and relative labels move on (Today becomes Yesterday) without a reload', async () => {

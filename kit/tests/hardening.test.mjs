@@ -8,33 +8,6 @@ before(async () => { srv = await startServer(); browser = await launch(); });
 after(async () => { await browser.close(); srv.close(); });
 const noLog = (log) => assert.deepEqual(log, [], 'console output: ' + log.join(' | '));
 
-test('focus survives updates: keyboard toggle on the habit grid (Alpine), remove button in m-list (kit)', async () => {
-  const { page, ctx, log } = await open(browser, srv.base, 'habits');
-  const cell = page.locator('.item', { hasText: 'Stretch' }).locator('.check').first();
-  await cell.focus(); const label = await cell.getAttribute('aria-label'); const was = await cell.getAttribute('aria-checked'); assert.match(label, /^Stretch, .+, (done|not done)$/, 'name, date and state in the accessible name');
-  await page.keyboard.press('Enter');
-  const active = () => page.evaluate(() => { const a = document.activeElement; return a && { label: a.getAttribute('aria-label'), cls: a.className, pressed: a.getAttribute('aria-checked') }; });
-  let a = await active(); assert.notEqual(a.label, label, 'the name says the new state'); assert.equal(a.cls, 'check'); assert.notEqual(a.pressed, was);
-  await page.keyboard.press('Space'); a = await active(); assert.equal(a.label, label); assert.equal(a.pressed, was);
-  await ctx.close(); noLog(log);
-  const w = await open(browser, srv.base, 'water');
-  const x = w.page.locator('m-list .ibtn').first(); await x.focus(); await w.page.keyboard.press('Enter'); await w.page.keyboard.press('Enter');
-  assert.match(await w.page.evaluate(() => document.activeElement.className), /^ibtn/, 'focus lands on a row action, not <body>');
-  await w.ctx.close(); noLog(w.log);
-});
-
-test('midnight: with a fake clock the check grid moves to the new day without a reload', async () => {
-  const t0 = new Date(2026, 10, 21, 23, 59, 58);
-  const { page, ctx, log } = await open(browser, srv.base, 'habits', { real: true, before: (p) => p.clock.install({ time: t0 }) });
-  const head = () => page.locator('.item.grid small').first().innerText();
-  assert.match(await head(), /21/);
-  await page.clock.runFor(6000);
-  assert.match(await head(), /22/, 'first column is the new day within 5 s of midnight');
-  const first = page.locator('.item.wrap', { hasText: 'Read 20 pages' }).locator('.check').first();
-  assert.equal(await first.getAttribute('aria-checked'), 'false', 'nothing is checked on the new day');
-  await ctx.close(); noLog(log);
-});
-
 test('a column added after rows exist: m-list and m-stat show type defaults, never NaN or undefined', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'exercise', { q: '&grow=1' });
   await inject(page, '<m-list :table="s" title="exercise" sub="stars" meta="mood2,note2,ok,on"></m-list><m-chart :data="s.series(\'stars\', {last: 7})"></m-chart><m-stat :value="s.sum(\'stars\')" label="Stars"></m-stat>', "{s: store.t('set')}");
@@ -152,4 +125,25 @@ test('x-edit: Enter commits (single line), Escape cancels, blur commits, empty r
   assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'the goal is a number'); assert.equal(await g.innerText(), '2,500');
   await g.click(); await w.page.keyboard.press('Control+A'); await w.page.keyboard.type('lots'); await w.page.keyboard.press('Enter'); assert.equal(await w.page.evaluate(() => store.kv('goal', 0).v), 2500, 'junk reverts');
   await w.ctx.close(); noLog(w.log);
+});
+
+test('focus survives updates: a keyboard toggle of the big Today button keeps focus on it; the remove button of an m-list keeps focus on a row action', async () => {
+  const { page, ctx, log } = await open(browser, srv.base, 'habits');
+  const b = page.locator('.item.wrap', { hasText: 'Stretch' }).locator('.btn.big'); await b.focus(); const was = await b.getAttribute('aria-pressed');
+  await page.keyboard.press('Enter'); const a = () => page.evaluate(() => { const e = document.activeElement; return { label: e.getAttribute('aria-label'), cls: e.className, p: e.getAttribute('aria-pressed') }; });
+  let x = await a(); assert.match(x.label, /^Stretch, today$/); assert.match(x.cls, /btn/); assert.notEqual(x.p, was);
+  await page.keyboard.press('Space'); x = await a(); assert.equal(x.p, was); await ctx.close(); noLog(log);
+  const w = await open(browser, srv.base, 'water');
+  const k = w.page.locator('m-list .ibtn').first(); await k.focus(); await w.page.keyboard.press('Enter'); await w.page.waitForTimeout(350); await w.page.keyboard.press('Enter');
+  assert.equal(await w.page.evaluate(() => document.activeElement.tagName), 'BUTTON', 'focus lands on a button (the Undo), not <body>');
+  await w.ctx.close(); noLog(w.log);
+});
+
+test('midnight: with a fake clock the Today buttons and the day lists move to the new day without a reload', async () => {
+  const t0 = new Date(2026, 10, 21, 23, 59, 58);
+  const { page, ctx, log } = await open(browser, srv.base, 'habits', { real: true, before: (p) => p.clock.install({ time: t0 }) });
+  const first = page.locator('.item.wrap', { hasText: 'Read 20 pages' }).locator('.btn.big');
+  assert.equal(await first.getAttribute('aria-pressed'), 'true'); await page.clock.runFor(6000);
+  assert.equal(await first.getAttribute('aria-pressed'), 'false', 'nothing is checked on the new day'); assert.equal(await first.innerText(), 'Mark done');
+  await ctx.close(); noLog(log);
 });

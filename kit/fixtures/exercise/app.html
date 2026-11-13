@@ -1,32 +1,53 @@
-<main x-data="{s: store.t('set'), page: 1, ex: '', rest: ui.timer(90, () => ui.toast('Rest is over')), get cur() { return this.ex || this.s.rows.at(-1)?.exercise },
-  get blocks() {
-    const last = {}, best = {}, seen = {}, g = this.$group(this.s.rows, 'day', 'exercise');
-    for (const b of g) { b.top = Math.max(...b.rows.map(r => r.kg ?? r.reps)); b.delta = b.top - (last[b.exercise] ?? b.top); last[b.exercise] = b.top; best[b.exercise] = Math.max(best[b.exercise] ?? 0, b.top) }
-    return g.reverse().map((b, i, a) => ({...b, first: !i || a[i - 1].day != b.day, pr: b.top == best[b.exercise] && !seen[b.exercise] && (seen[b.exercise] = 1)}))
-  }}">
+<main x-data="{s: store.t('set'), page: 1, ex: '', rest: ui.timer(90),
+  get cur() { return this.ex || this.s.rows.at(-1)?.exercise },
+  get today() { const t0 = new Date(app.today() + 'T00:00').getTime(); return this.s.rows.filter(r => r.at >= t0) },
+  get days() { const m = {}; for (const r of this.s.rows) { const d = new Date(r.at - new Date(r.at).getTimezoneOffset() * 6e4).toISOString().slice(0, 10); ((m[d] ??= {})[r.exercise] ??= []).push(r) } return Object.entries(m).reverse() },
+  get blocks() { return this.days.flatMap(([d, g]) => Object.entries(g).map(([n, rs], i) => [d, n, rs, !i])) },
+  get prog() { const c = this.cur; return this.blocks.filter(b => b[1] == c).reverse().map(([d, n, rs]) => ({k: d, v: this.top(rs)})) },
+  top(rs) { return Math.max(...rs.map(r => r.kg ?? r.reps)) },
+  repeat() { const r = this.s.rows.at(-1); if (r) { const id = this.s.add({exercise: r.exercise, kg: r.kg, reps: r.reps}); ui.toast('Repeated ' + r.exercise, () => this.s.remove(id)) } }}">
   <h1>Exercise</h1>
-  <m-form :table="s" keep="exercise,kg,reps"></m-form>
-  <div class="card row">
-    <div class="stat grow" x-text="$clock(rest.left)"></div>
-    <button class="btn ghost" @click="rest.running ? rest.stop() : (rest.start(), app.notify(Date.now() + rest.left * 1000, 'Rest is over'))" x-text="rest.running ? 'Pause' : 'Rest'"></button>
-  </div>
-  <m-chart type="line" :data="blocks.filter(b => b.exercise == cur).reverse()" x="day" y="top" :label="cur"></m-chart>
-  <div class="list">
-    <template x-for="b in blocks.slice(0, page * 8)">
-      <div>
-        <div class="m-dh" x-show="b.first" x-text="app.fmt(b.day, 'rel')"></div>
-        <div class="item slim">
-          <button class="tbtn" @click="ex = b.exercise" x-text="b.exercise"></button><bdi class="chip" x-show="b.pr">PR</bdi>
-          <small class="muted grow" x-show="b.delta" x-text="(b.delta > 0 ? '+' : '') + b.delta"></small>
-        </div>
-        <template x-for="(r, i) in b.rows">
-          <div class="item">
-            <bdi class="grow" x-text="(i + 1) + '. ' + (r.kg == null ? r.reps + ' reps' : r.kg + ' kg × ' + r.reps)"></bdi>
-            <button x-remove="[s, r]"></button>
-          </div>
-        </template>
+  <div class="cols">
+    <section class="card col">
+      <h2 x-text="today.length + ' sets today'"></h2>
+      <small class="muted" x-text="$fmt(today.reduce((a, r) => a + (r.kg ?? 0) * r.reps, 0)) + ' kg moved'"></small>
+      <m-chart :data="s.series(null, {last: 7})" label="Sets per day"></m-chart>
+      <m-form :table="s" labels keep="exercise,kg,reps" min="kg:0,reps:1"></m-form>
+      <button class="btn ghost" @click="repeat()">Repeat last set</button>
+    </section>
+    <section class="card row" role="timer" aria-label="Rest timer">
+      <div class="col grow">
+        <b class="stat" x-text="Math.floor(rest.left / 60) + ':' + String(rest.left % 60).padStart(2, '0')"></b><small class="muted" aria-live="polite" x-text="rest.running ? 'Resting' : 'Rest timer'"></small>
       </div>
-    </template>
+      <button class="btn ghost" @click="rest.running ? rest.stop() : (rest.start(), app.notify(Date.now() + rest.left * 1000, 'Rest is over'))" x-text="rest.running ? 'Pause' : 'Start rest'"></button>
+    </section>
+    <section class="card col">
+      <label class="field">
+        <span>Progress</span>
+        <select x-model="ex">
+          <option value="">Latest</option>
+          <template x-for="n in [...new Set(s.rows.map(r => r.exercise))]">
+            <option :value="n" x-text="n"></option>
+          </template>
+        </select>
+      </label>
+      <m-chart type="line" :data="prog" :label="cur + ': best set per day'"></m-chart>
+    </section>
+    <section class="card col wide">
+      <template x-for="[d, n, rs, first] in blocks.slice(0, page * 8)">
+        <div class="col">
+          <b x-show="first" x-text="app.fmt(d, 'rel')"></b>
+          <div class="list">
+            <b class="item slim" x-text="n + ': top ' + top(rs) + (rs[0].kg == null ? ' reps' : ' kg')"></b>
+            <template x-for="(r, i) in rs">
+              <div class="item">
+                <bdi class="grow" x-text="(i + 1) + '. ' + (r.kg == null ? r.reps + ' reps' : r.kg + ' kg × ' + r.reps)"></bdi><button x-remove="[s, r]"></button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+      <button class="btn ghost" x-show="blocks.length > page * 8" @click="page++">Show more history</button>
+    </section>
   </div>
-  <button class="btn ghost" x-show="blocks.length > page * 8" @click="page++">Show more history</button>
 </main>

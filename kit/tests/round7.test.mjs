@@ -9,34 +9,6 @@ before(async () => { srv = await startServer(); browser = await launch(); });
 after(async () => { await browser.close(); srv.close(); });
 const noLog = (log) => assert.deepEqual(log, [], 'console output: ' + log.join(' | '));
 
-test('habits: deleting every habit (and the last one) leaves the console clean, then adding works again', async () => {
-  const { page, ctx, log } = await open(browser, srv.base, 'habits');
-  const rows = () => page.locator('.item.wrap').count();
-  while ((await rows()) > 0) await del(page.locator('.item.wrap .ibtn:not(.ring)').last());
-  await page.waitForTimeout(200); assert.equal(await rows(), 0); assert.equal(await page.locator('section').count(), 0, 'no history section without a habit');
-  assert.equal(await page.locator('.stat').innerText(), '0'); noLog(log);
-  await page.fill('input[name=habit]', 'Stretch'); await page.click('button[type=submit]'); await page.waitForTimeout(200);
-  assert.equal(await rows(), 1); assert.equal(await page.locator('section').count(), 1); assert.equal(await page.locator('section .day').count() >= 28, true);
-  await page.locator('.item.wrap [role=checkbox]').first().click(); assert.equal(await page.locator('.stat').innerText(), '1');
-  await ctx.close(); noLog(log);
-});
-
-for (const [w, h] of [[360, 640], [412, 915]]) test(`habits @${w}: no clipped controls, one tab stop per row, arrows/Home/End move inside a row, Space toggles`, async () => {
-  const { page, ctx, log } = await open(browser, srv.base, 'habits', { w, h });
-  const info = await page.$$eval('.item.wrap', (rows) => rows.map((r) => { const cs = [...r.querySelectorAll('[role=checkbox]')]; return { n: cs.length, inside: cs.every((c) => c.getBoundingClientRect().right <= innerWidth + 0.5), stops: cs.filter((c) => c.tabIndex === 0).length }; }));
-  assert.ok(info.length >= 6); for (const r of info) { assert.ok(r.n >= 4 && r.n <= 7, 'columns that fit: ' + r.n); assert.ok(r.inside, 'every day button is inside the viewport'); assert.equal(r.stops, 1, 'one tab stop per row'); }
-  assert.equal(new Set(info.map((r) => r.n)).size, 1, 'every row has the same number of columns');
-  const hdr = await page.locator('.item.grid small').count(); assert.equal(hdr, info[0].n, 'header and rows agree on the columns');
-  const first = page.locator('.item.wrap').nth(0).locator('[role=checkbox]'), second = page.locator('.item.wrap').nth(1).locator('[role=checkbox]');
-  await first.nth(0).focus(); await page.keyboard.press('Tab'); // leaves the row: the next stop is not the 2nd button of the same row
-  assert.equal(await page.evaluate(() => document.activeElement.closest('.item.wrap') === document.querySelectorAll('.item.wrap')[0]), false, 'Tab leaves the row');
-  await first.nth(0).focus(); await page.keyboard.press('ArrowRight'); assert.equal(await first.nth(1).evaluate((e) => e === document.activeElement), true);
-  await page.keyboard.press('End'); assert.equal(await first.nth(info[0].n - 1).evaluate((e) => e === document.activeElement), true); await page.keyboard.press('Home'); assert.equal(await first.nth(0).evaluate((e) => e === document.activeElement), true);
-  const was = await first.nth(0).getAttribute('aria-checked'); await page.keyboard.press('Space'); assert.notEqual(await first.nth(0).getAttribute('aria-checked'), was);
-  assert.equal(await first.nth(0).evaluate((e) => e === document.activeElement), true, 'focus stays on the toggled day'); void second;
-  await ctx.close(); noLog(log);
-});
-
 test('the Undo tray: rows are patched not rebuilt (focus and nodes survive), a keyboard delete lands on Undo, Escape drops it, a live region announces only new rows', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'water');
   assert.equal(await page.locator('.m-toasts').getAttribute('aria-live'), 'polite'); assert.equal(await page.locator('.m-toasts').getAttribute('aria-atomic'), 'false');
@@ -51,12 +23,15 @@ test('the Undo tray: rows are patched not rebuilt (focus and nodes survive), a k
   await k.focus(); await page.keyboard.press('Enter'); await page.waitForTimeout(350); await page.keyboard.press('Enter'); await page.waitForTimeout(100);
   assert.equal(await page.evaluate(() => store.t('cup').rows.length), n0 - 1);
   assert.equal(await page.evaluate(() => document.activeElement.textContent + '|' + !!document.activeElement.closest('.m-toast')), 'Undo|true', 'focus moved to the Undo');
-  await page.keyboard.press('Escape'); assert.equal(await page.locator('.m-toast').count() >= 0, true); await page.waitForTimeout(50);
-  assert.equal(await page.locator('.m-toast', { hasText: 'Removed' }).count(), 0, 'Escape drops the toast'); assert.equal(await page.evaluate(() => store.t('cup').rows.length), n0 - 1, 'the removal stays');
-  assert.equal(await page.evaluate(() => !!document.activeElement.closest('m-list, .list')), true, 'focus goes back to the list');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(50);
+  assert.equal(await page.locator('.m-toast', { hasText: 'Removed' }).count(), 1, 'Escape does NOT discard the undo'); assert.equal(await page.locator('.m-tray').getAttribute('data-closed'), '', 'it only collapses the tray');
+  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Show', 'focus moves to the Show button'); assert.equal(await page.locator('.m-tray .m-toast').first().isHidden(), true);
+  await page.keyboard.press('Enter'); assert.equal(await page.locator('.m-tray').getAttribute('data-closed'), null, 'Show opens the tray again'); assert.equal(await page.locator('.m-toast button', { hasText: 'Undo' }).first().isVisible(), true);
+  await page.locator('.m-toast button', { hasText: 'Undo' }).first().click(); assert.equal(await page.evaluate(() => store.t('cup').rows.length), n0, 'and the undo still works');
+  await page.evaluate(() => document.querySelector('m-list .ibtn').focus());
   // Enter on Undo restores
   const k2 = page.locator('m-list .ibtn').first(); await k2.focus(); await page.keyboard.press('Enter'); await page.waitForTimeout(350); await page.keyboard.press('Enter'); await page.waitForTimeout(100);
-  await page.keyboard.press('Enter'); assert.equal(await page.evaluate(() => store.t('cup').rows.length), n0 - 1, 'Enter on Undo brings the row back (one removed earlier stays removed)');
+  await page.keyboard.press('Enter'); assert.equal(await page.evaluate(() => store.t('cup').rows.length), n0, 'Enter on Undo brings the row back');
   await ctx.close(); noLog(log);
 });
 
@@ -72,19 +47,6 @@ test('an Undo does not expire while it is hovered or focused, and then gets the 
   await ctx.close(); noLog(log);
 });
 
-test('generic helpers ($group $streaks $ema $aria $clock $hue $fit), none of them named after an app', async () => {
-  const { page, ctx, log } = await open(browser, srv.base, 'habits');
-  const r = await page.evaluate(() => { const el = document.querySelector('main'); const ev = (e) => Alpine.evaluate(el, e);
-    return { clock: ev('$clock(90)'), clock0: ev('$clock(-5)'), hue: [ev('$hue(0)'), ev('$hue(7)'), ev('$hue(-1)')], aria: ev("$aria('Read', '2026-11-21', true)"), ariaOff: ev("$aria('Read', '2026-11-21', false, ['yes', 'no'])"),
-      ema: ev("$ema([{k: 'a', v: 1}, {k: 'b', v: 0}], .5, 100)"), max: ev("$streaks(c, 'habit').max"), keys: ev("Object.keys($streaks(c, 'habit')).length"), maxHidden: ev("Object.keys($streaks(c, 'habit')).includes('max')"),
-      group: ev("$group([{at: new Date(2026, 10, 21, 9).getTime(), n: 'a'}, {at: new Date(2026, 10, 21, 10).getTime(), n: 'b'}, {at: new Date(2026, 10, 20, 10).getTime(), n: 'a'}], 'day', 'n').map(g => g.day + g.n + g.rows.length)"),
-      fit: ev('$fit(48)') }; });
-  assert.deepEqual([r.clock, r.clock0], ['1:30', '0:00']); assert.deepEqual(r.hue, ['c1', 'c3', 'c2']); assert.match(r.aria, /^Read, .+, done$/); assert.match(r.ariaOff, /, no$/);
-  assert.deepEqual(r.ema, [{ k: 'a', v: 50 }, { k: 'b', v: 25 }]); assert.equal(r.max, 12); assert.equal(r.keys, 6); assert.equal(r.maxHidden, false, 'max is not an enumerable habit');
-  assert.deepEqual(r.group, ['2026-11-21a1', '2026-11-21b1', '2026-11-20a1']); assert.ok(Number.isInteger(r.fit) && r.fit >= 1);
-  await ctx.close(); noLog(log);
-});
-
 test('page code cannot reach the transaction handle: no symbols on a table, no internal on window', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'water');
   const r = await page.evaluate(() => { const t = store.t('cup'); return { syms: Object.getOwnPropertySymbols(t).length, keys: Reflect.ownKeys(t).filter((k) => typeof k === 'symbol').length, reg: typeof t[Symbol.for('molde.tx')] + typeof t[Symbol.for('molde.meta')], win: ['sdk', 'internal', 'moldeHost', '__molde'].map((k) => typeof window[k]) }; });
@@ -96,17 +58,16 @@ test('charts skip empty values instead of plotting 0, and the exercise progress 
   const { page, ctx, log } = await open(browser, srv.base, 'exercise');
   await inject(page, '<m-chart :data="[{k: \'2026-11-18\', v: null}, {k: \'2026-11-19\', v: 5}, {k: \'2026-11-20\', v: 7}, {k: \'2026-11-21\', v: undefined}]"></m-chart>', '{}');
   assert.equal(await page.locator('#inj m-chart svg rect.m-b').count(), 2, 'two real values, two bars, nothing at 0');
-  await page.locator('.item.slim button', { hasText: 'Pull-ups' }).first().click();
-  assert.match(await page.locator('main > m-chart small').first().innerText(), /^Pull-ups/);
-  const pts = await page.locator('main > m-chart polyline.m-line').first().getAttribute('points'); const ys = pts.trim().split(/\s+/).map((p) => Number(p.split(',')[1]));
+  await page.locator('select').selectOption('Pull-ups'); assert.match(await page.locator('main > .cols > section m-chart small', { hasText: 'Pull-ups' }).innerText(), /^Pull-ups/);
+  const pts = await page.locator('section m-chart polyline.m-line').first().getAttribute('points'); const ys = pts.trim().split(/\s+/).map((p) => Number(p.split(',')[1]));
   assert.ok(ys.length >= 4, 'a point per bodyweight session: ' + pts); assert.ok(new Set(ys).size > 1, 'the line moves (reps), it is not a flat 0 kg');
-  const labels = await page.$$eval('main > m-chart svg text.m-hi', (ts) => ts.map((t) => t.textContent)); assert.ok(labels.every((t) => Number(t) > 0), 'no 0 kg label: ' + labels);
+  const labels = await page.$$eval('section m-chart svg text.m-hi', (ts) => ts.map((t) => t.textContent)); assert.ok(labels.every((t) => Number(t) > 0), 'no 0 kg label: ' + labels);
   await ctx.close(); noLog(log);
 });
 
 test('budget: adding an expense while a past month is shown jumps to the current month (the new row is visible)', async () => {
   const { page, ctx, log } = await open(browser, srv.base, 'budget');
-  const label = () => page.locator('main > .row b').first().innerText(); const now = await label();
+  const label = () => page.locator('main section').first().locator('b.grow').innerText(); const now = await label();
   await page.locator('button[aria-label="Previous month"]').click(); assert.notEqual(await label(), now);
   await page.fill('input[name=description]', 'Tea'); await page.fill('input[name=amount]', '400'); await page.click('button[type=submit]');
   assert.equal(await label(), now, 'back on the current month'); assert.match(await page.locator('m-list .item').first().innerText(), /Tea/);

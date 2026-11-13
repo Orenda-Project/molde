@@ -37,6 +37,7 @@
       nextId: (tbl) => { let m = 0; for (const id of T(tbl).keys()) if (id > m) m = id; return m + 1; },
       kvGet: (k) => (kv.has(k) ? clone(kv.get(k)) : undefined),
       kvSet: (k, v) => { kv.set(k, clone(v)); },
+      dump: () => ({ tables: Object.fromEntries(Array.from(tables, ([n, m]) => [n, Array.from(m.values())])), kv: Object.fromEntries(kv) }), /* for adapters that persist the whole state (adapters/local.cjs) */
     };
     if (seed) {
       for (const [tbl, list] of Object.entries(seed.tables || {})) list.forEach((r) => T(tbl).set(r.id, r)); /* trusted seed: no copy */
@@ -391,7 +392,12 @@
           if (op !== 'count') needNum(col, 't.series');
           const t0 = parseYmd(today());
           const keys = [];
-          for (let i = last - 1; i >= 0; i--) {
+          if (o.month !== undefined) { /* every day of one whole calendar month (month: 0 this month, -1 last month) */
+            if (by !== 'day') bad('E_ARG', "t.series: month goes with by 'day'");
+            const m1 = new Date(t0.getFullYear(), t0.getMonth() + o.month, 1, 12), n = new Date(m1.getFullYear(), m1.getMonth() + 1, 0).getDate();
+            for (let i = 0; i < n; i++) keys.push(ymd(addDays(m1, i)));
+          }
+          else for (let i = last - 1; i >= 0; i--) {
             if (by === 'day') keys.push(ymd(addDays(t0, -i)));
             else if (by === 'week') keys.push(ymd(addDays(startOfWeek(t0), -7 * i)));
             else { const d = new Date(t0.getFullYear(), t0.getMonth() - i, 1, 12); keys.push(d.getFullYear() + '-' + p2(d.getMonth() + 1)); }

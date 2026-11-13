@@ -1,24 +1,47 @@
-<main x-data="{j: store.t('entry'), mood: '', note: '', get m() {
+<main x-data="{j: store.t('entry'), mood: '', note: '', q: '',
+  get m() {
     const e = 'M9 10h.01M15 10h.01';
     return {great: 'M7 10q1.5-3 3 0M14 10q1.5-3 3 0M7 14h10q-1 5-5 5t-5-5z', good: e + 'M8 14q4 4 8 0', okay: e + 'M9 16h6', low: e + 'M8 17q4-3 8 0', awful: 'M7 8l3 3M10 8l-3 3M14 8l3 3M17 8l-3 3M8 18q4-5 8 0'}
-  }}">
+  },
+  get avg() { const r = this.j.rows.filter(r => r.at > Date.now() - 2592e6); return r.length ? r.reduce((a, r) => a + r.score, 0) / r.length : 0 },
+  get streak() { const s = this.j.series(null, {last: 90}).reverse(); if (!s[0].v) s.shift(); const i = s.findIndex(d => !d.v); return i < 0 ? s.length : i }}">
   <h1>Journal</h1>
-  <form class="card col" @submit.prevent="j.add({mood, score: 5 - Object.keys(m).indexOf(mood), note: note.trim()}); mood = note = ''">
-    <fieldset class="grid auto">
-      <legend class="sr">Mood</legend>
-      <template x-for="(d, n) in m">
-        <label class="col">
-          <input type="radio" class="sr" :value="n" x-model="mood">
-          <svg class="ic ring" viewBox="0 0 24 24" width="48">
-            <path :d="d" />
-          </svg>
-          <small x-text="n"></small>
-        </label>
-      </template>
-    </fieldset>
-    <label class="field"><textarea x-model="note" maxlength="20000" placeholder="Note"></textarea></label>
-    <button class="btn ghost" :disabled="!mood || !note.trim()">Save entry</button>
-  </form>
-  <m-chart :data="j.series('score', {op: 'avg', last: 14})" label="Mood, last 14 days"></m-chart>
-  <m-list :table="j" title="note" by="day" edit :glyph="r => m[r.mood]"></m-list>
+  <div class="cols">
+    <form class="card col" @submit.prevent="j.add({mood, score: 5 - Object.keys(m).indexOf(mood), note: note.trim()}); mood = note = ''">
+      <fieldset class="grid auto">
+        <legend class="sr">Mood</legend>
+        <template x-for="(d, n) in m">
+          <label class="col">
+            <input type="radio" class="sr" :value="n" x-model="mood">
+            <svg class="ic ring" viewBox="0 0 24 24" width="48">
+              <path :d="d" />
+            </svg>
+            <small x-text="n"></small>
+          </label>
+        </template>
+      </fieldset>
+      <label class="field"><textarea x-model="note" maxlength="20000" placeholder="Note"></textarea></label>
+      <button class="btn" :disabled="!mood || !note.trim()">Save entry</button>
+    </form>
+    <section class="card col">
+      <div class="row">
+        <b class="stat" x-text="streak"></b><span class="muted">day streak</span>
+      </div>
+      <small class="muted" x-text="j.series(null, {last: 7}).reduce((a, d) => a + d.v, 0) + ' entries in the last 7 days'"></small>
+      <div class="grid" :style="{'--cols': 7}">
+        <template x-for="d in $days(7).reverse()">
+          <div class="col">
+            <small x-text="app.fmt(d, 'wd')"></small><i class="cell" :class="j.series(null, {last: 7}).find(x => x.k == d)?.v && 'lv4'" role="img" :aria-label="app.fmt(d, 'dm')"></i>
+          </div>
+        </template>
+      </div>
+    </section>
+    <section class="card col wide">
+      <m-chart type="line" :data="j.series('score', {op: 'avg', last: 30}).filter(d => d.v)" :label="'Mood from 1 (awful) to 5 (great), last 30 days. Average ' + $fmt(avg)"></m-chart>
+    </section>
+    <section class="card col wide">
+      <label class="field"><span class="sr">Search entries</span><input type="search" x-model="q" placeholder="Search entries"></label>
+      <m-list :table="j" :rows="j.rows.filter(r => r.note.toLowerCase().includes(q.trim().toLowerCase()))" :highlight="q" title="note" by="day" edit :glyph="r => m[r.mood]"></m-list>
+    </section>
+  </div>
 </main>

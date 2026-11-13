@@ -12,7 +12,7 @@ function dir() {
   return existsSync(root) ? join(root, readdirSync(root)[0]) : null;
 }
 const d = dir();
-test('Qwen3.5 tokens: each app.html <= 700, median <= 550 (app.json <= 200)', { skip: d ? false : 'Qwen3.5-2B tokenizer.json not found (set QWEN_TOKENIZER_DIR)' }, () => {
+test('Qwen3.5 tokens: each fixture app.html <= 1,100 (rich exemplars; the free-form target median of 600 is for the generated app), app.json <= 200', { skip: d ? false : 'Qwen3.5-2B tokenizer.json not found (set QWEN_TOKENIZER_DIR)' }, () => {
   const tk = new Tokenizer(JSON.parse(readFileSync(join(d, 'tokenizer.json'), 'utf8')), JSON.parse(readFileSync(join(d, 'tokenizer_config.json'), 'utf8')));
   const counts = FIXTURES.map((f) => tk.encode(readFileSync(`${KIT}/fixtures/${f}/app.html`, 'utf8')).ids.length);
   const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
@@ -21,5 +21,5 @@ test('Qwen3.5 tokens: each app.html <= 700, median <= 550 (app.json <= 200)', { 
   console.log(`# tokens median=${med} max=${Math.max(...counts)}`);
   const js = FIXTURES.map((f) => tk.encode(readFileSync(`${KIT}/fixtures/${f}/app.json`, 'utf8')).ids.length);
   console.log('# app.json tokens ' + FIXTURES.map((f, i) => `${f}=${js[i]}`).join(' ') + ` max=${Math.max(...js)}`);
-  counts.forEach((c, i) => assert.ok(c <= 700, FIXTURES[i] + ' ' + c)); assert.ok(med <= 550, 'median ' + med); js.forEach((c) => assert.ok(c <= 200));
+  counts.forEach((c, i) => assert.ok(c <= 1100, FIXTURES[i] + ' ' + c)); js.forEach((c) => assert.ok(c <= 200));
 });

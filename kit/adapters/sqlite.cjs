@@ -12,6 +12,9 @@ function ensureSchema(db) {
   CREATE TABLE IF NOT EXISTS kv(app_id TEXT NOT NULL, key TEXT NOT NULL, val TEXT NOT NULL, PRIMARY KEY(app_id, key));`);
 }
 
+/* a row's data must be a JSON object: valid JSON of another kind ('null', '[1,2]', '"str"') is skipped and recorded like corrupt JSON */
+function asObject(text) { const v = JSON.parse(text); if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new Error('row data is not an object'); return v; }
+
 function sqliteAdapter(db, appId) {
   const sel = db.prepare('SELECT id, data, created_at, deleted_at FROM records WHERE app_id=? AND tbl=? ORDER BY id');
   const up = db.prepare(`INSERT INTO records(app_id,tbl,id,data,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?)
@@ -28,12 +31,12 @@ function sqliteAdapter(db, appId) {
     rows: (tbl) => {
       const out = [];
       for (const r of sel.all(appId, tbl)) {
-        try { out.push({ id: r.id, at: r.created_at, deleted_at: r.deleted_at, data: JSON.parse(r.data) }); }
+        try { out.push({ id: r.id, at: r.created_at, deleted_at: r.deleted_at, data: asObject(r.data) }); }
         catch (e) { errors.push({ tbl, id: r.id, msg: 'unreadable row skipped: ' + e.message }); }
       }
       return out;
     },
-    get: (tbl, id) => { const r = one.get(appId, tbl, id); if (!r) return undefined; try { return { id: r.id, at: r.created_at, deleted_at: r.deleted_at, data: JSON.parse(r.data) }; } catch (e) { errors.push({ tbl, id, msg: 'unreadable row skipped: ' + e.message }); return undefined; } },
+    get: (tbl, id) => { const r = one.get(appId, tbl, id); if (!r) return undefined; try { return { id: r.id, at: r.created_at, deleted_at: r.deleted_at, data: asObject(r.data) }; } catch (e) { errors.push({ tbl, id, msg: 'unreadable row skipped: ' + e.message }); return undefined; } },
     put: (tbl, rec) => { up.run(appId, tbl, rec.id, JSON.stringify(rec.data), rec.at, Date.now(), rec.deleted_at == null ? null : rec.deleted_at); },
     nextId: (tbl) => nx.get(appId, tbl).n,
     kvGet: (k) => { const r = kg.get(appId, k); if (!r) return undefined; try { return JSON.parse(r.val); } catch (e) { errors.push({ tbl: 'kv', id: k, msg: 'unreadable value skipped: ' + e.message }); return undefined; } },

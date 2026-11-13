@@ -388,6 +388,7 @@ for (const [aname, mk] of Object.entries(adapters)) {
   test(`[${aname}] t.set on a stored row whose data is null does not throw a raw TypeError`, () => {
     const ctx = mk(); const ad = ctx.make(); ad.put('log', { id: 1, at: T0, deleted_at: null, data: null });
     const s = createSDK({ adapter: ad, manifest, now: () => T0 }); const t = s.store.t('log');
+    if (aname === 'sqlite') { assert.equal(t.rows.length, 0, 'sqlite: a stored row whose data is not an object is skipped'); assert.throws(() => t.set(1, { what: 'x' }), (e) => e.code === 'E_ROW'); return; }
     assert.equal(t.set(1, { what: 'fixed', mins: 3 }), true); assert.deepEqual([t.rows[0].what, t.rows[0].mins], ['fixed', 3]);
   });
 
@@ -610,6 +611,8 @@ for (const [aname, mk] of Object.entries(adapters)) {
     assert.throws(() => t.series(null, { weeks: 0 }), (e) => e.code === 'E_ARG'); assert.throws(() => t.sum('n', { month: 1 }), (e) => e.code === 'E_ARG');
     const d = new Date(T0); const prev = ymd(new Date(d.getFullYear(), d.getMonth() - 1, 15, 12)); t.add({ day: prev, n: 7 }); t.add({ day: today, n: 3 });
     assert.equal(t.sum('n', { month: 0 }), 3); assert.equal(t.sum('n', { month: -1 }), 7);
+    const dim = (y, m) => new Date(y, m + 1, 0).getDate(); const dd = new Date(T0); const ms = t.series('n', { month: 0 }); assert.equal(ms.length, dim(dd.getFullYear(), dd.getMonth()), 'every day of the month'); assert.equal(ms[0].k.slice(8), '01'); assert.equal(ms.at(-1).k.slice(8), String(dim(dd.getFullYear(), dd.getMonth())));
+    assert.equal(t.series('n', { month: -1 }).length, dim(new Date(dd.getFullYear(), dd.getMonth() - 1, 1).getFullYear(), new Date(dd.getFullYear(), dd.getMonth() - 1, 1).getMonth())); assert.equal(ms.find((x) => x.k === today).v, 3);
   });
 }
 
@@ -651,4 +654,24 @@ test('parse and format round-trip for every supported locale (en-US, ur-PK, fr-F
   assert.equal(de('80.000'), 80000, 'de-DE shows 80.000 for eighty thousand'); assert.equal(de('1,234'), 1.234, 'a de-DE comma is always a decimal'); assert.equal(de('82.5'), 82.5, 'typed with a point is still understood');
   assert.equal(hi('1,50,000'), 150000); assert.equal(en('1,50,000'), 150000, 'lakh grouping is read in any locale'); assert.ok(Number.isNaN(en('1,23,45')), 'not a valid grouping');
   assert.equal(en('1,500', 500), 1.5);
+});
+
+test('sqlite: valid JSON that is not an object ("null", "[1,2]", "\"str\"", "7", "true") is skipped and recorded like corrupt JSON; objects still load', { skip: !Database }, () => {
+  const db = new Database(':memory:'); ensureSchema(db); const ad = sqliteAdapter(db, 'a');
+  const ins = db.prepare('INSERT INTO records(app_id,tbl,id,data,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,NULL)');
+  ['null', '[1,2]', '"str"', '7', 'true', '{"what":"ok","mins":2}', '{bad'].forEach((d, i) => ins.run('a', 'log', i + 1, d, T0, T0));
+  const s = createSDK({ adapter: ad, manifest, now: () => T0 }); const rows = s.store.t('log').rows;
+  assert.deepEqual(rows.map((r) => r.what), ['ok']); assert.equal(ad.errors.length, 6, 'five valid-but-wrong JSON values and one corrupt row are recorded: ' + JSON.stringify(ad.errors.map((e) => e.id)));
+  assert.ok(ad.errors.every((e) => e.tbl === 'log' && /skipped/.test(e.msg)));
+  assert.equal(ad.get('log', 1), undefined); assert.equal(ad.get('log', 6).data.what, 'ok');
+});
+test('the localStorage adapter saves after every write, reloads what was saved, ignores the seed once data exists, and survives a storage that throws', () => {
+  const { localAdapter } = require('../adapters/local.cjs'); const mem = new Map(); const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => { mem.set(k, v); } };
+  const seed = { tables: { log: [{ id: 1, at: T0, deleted_at: null, data: { what: 'seed', mins: 1 } }] }, kv: { goal: 5 } };
+  const a = localAdapter(storage, 'k', seed); assert.equal(a.rows('log').length, 1); const s = createSDK({ adapter: a, manifest, now: () => T0 }); s.store.t('log').add({ what: 'mine', mins: 2 }); s.store.kv('goal', 1).v = 9;
+  return Promise.resolve().then(() => {
+    assert.ok(mem.has('k')); const b = localAdapter(storage, 'k', seed); assert.deepEqual(b.rows('log').map((r) => r.data.what), ['seed', 'mine']); assert.equal(b.kvGet('goal'), 9);
+    const bad = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('quota'); } }; const c = localAdapter(bad, 'k', seed); assert.equal(c.rows('log').length, 1, 'falls back to the seed');
+    c.put('log', { id: 5, at: T0, deleted_at: null, data: { what: 'x', mins: 1 } }); return Promise.resolve().then(() => { assert.equal(c.errors.length, 1); assert.match(c.errors[0].msg, /not saved/); assert.equal(c.rows('log').length, 2, 'memory still works'); });
+  });
 });

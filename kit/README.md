@@ -1,7 +1,7 @@
 # Molde kit
 
 `kit/molde.js` is the runtime a mini-app page loads: Alpine 3.17.5 (vendored, no CDN) + the Molde SDK (16 calls) + four generic
-components (`m-stat`, `m-chart` bar | line | pie | hbar, `m-list`, `m-form`) + the `x-edit` / `x-remove` / `x-toggle` / `x-roving` directives and the generic magics `$day` `$days` `$month` `$group` `$streaks` `$ema` `$aria` `$clock` `$hue` `$fit` (contract 4b).
+components (`m-stat`, `m-chart` bar | line | pie, `m-list`, `m-form`) + the `x-edit` / `x-remove` directives and the magics `$day` `$days` `$fmt`. `.cols` lays cards out in 1, 2 or 3 columns by screen width. Without a host adapter the page keeps its data in localStorage (`kit/adapters/local.cjs`).
 `kit/kit.css` and `kit/themes.css` are the design tokens and generic classes. Everything app-specific lives in each
 `kit/fixtures/<app>/app.html`, written the way the model should write it. Contract: `docs/plan/01-contract.md` (sections 4 and 4b).
 

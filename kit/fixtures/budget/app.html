@@ -1,20 +1,44 @@
-<main x-data="{t: store.t('spend'), cap: store.kv('budget', 80000), mo: 0, get spent() { return this.t.sum('amount', {month: this.mo}) }}">
+<main x-data="{t: store.t('spend'), cap: store.kv('budget', 80000), mo: 0, cat: '',
+  get d0() { const q = app.today().split('-'); return new Date(+q[0], +q[1] - 1 + this.mo, 1, 12) },
+  get dim() { return new Date(this.d0.getFullYear(), this.d0.getMonth() + 1, 0).getDate() },
+  get day() { return this.mo ? this.dim : +app.today().slice(8) },
+  get title() { return app.fmt(this.d0, 'month') },
+  get spent() { return this.t.sum('amount', {month: this.mo}) },
+  get cats() { return this.t.group('category', 'amount', {month: this.mo}) },
+  get rows() { return this.t.rows.filter(r => app.fmt(r.at, 'month') == this.title && (!this.cat || r.category == this.cat)) },
+  get cum() { let s = 0; return this.t.series('amount', {month: this.mo}).slice(0, this.day).map(d => s += d.v) },  xy(v, n = this.dim) { return v.map((y, i) => i / (n - 1) * 300 + ',' + (110 - y / Math.max(this.cap.v, ...this.cum, 1) * 100)).join(' ') }}">
   <h1>Budget</h1>
-  <div class="row">
-    <button class="ibtn" aria-label="Previous month" @click="mo--">&lsaquo;</button>
-    <b class="grow" x-text="app.fmt($month(mo), 'month')"></b>
-    <button class="ibtn" aria-label="Next month" :disabled="!mo" @click="mo++">&rsaquo;</button>
+  <div class="cols">
+    <section class="card col">
+      <div class="row">
+        <button class="ibtn" aria-label="Previous month" @click="mo--">&lsaquo;</button><b class="grow" x-text="title"></b><button class="ibtn" aria-label="Next month" :disabled="!mo" @click="mo++">&rsaquo;</button>
+      </div>
+      <small class="muted" x-text="spent > cap.v ? 'Over budget by' : 'Left to spend'"></small>
+      <div class="row">
+        <bdi class="stat" x-text="$fmt(Math.abs(cap.v - spent), 0)"></bdi><bdi class="muted">of <span x-edit="[cap, 'v', 1, 1e9, 'Monthly budget']"></span></bdi>
+      </div>
+      <div class="bar">
+        <i :style="{width: Math.min(100, Math.max(0, spent) / cap.v * 100) + '%'}"></i>
+      </div>
+      <small x-show="!mo && spent < cap.v" x-text="'Safe to spend ' + $fmt((cap.v - spent) / (dim - day + 1), 0) + ' a day'"></small>
+      <small class="muted" x-text="'Last month: ' + $fmt(t.sum('amount', {month: mo - 1}), 0) + '. Biggest: ' + (cats[0]?.k ?? 'none')"></small>
+    </section>
+    <section class="card col">
+      <h2>Spending vs an even pace</h2>
+      <svg viewBox="0 0 300 120" role="img" aria-label="Cumulative spending against an even pace to the budget">
+        <polyline fill="none" stroke="var(--edge)" stroke-dasharray="4 4" :points="xy([0, cap.v], 2)" />
+        <polyline fill="none" stroke="var(--accent)" stroke-width="2" :points="xy(cum)" />
+      </svg>
+    </section>
+    <section class="card col">
+      <h2>By category</h2>
+      <template x-for="(x, n) in cats">
+        <button class="col tbtn" :aria-pressed="cat == x.k" @click="cat = cat == x.k ? '' : x.k"> <span class="row"><span class="grow" x-text="x.k"></span><bdi x-text="$fmt(x.v, 0)"></bdi></span> <span class="bar" :class="n && 'soft'"><i :style="{width: Math.max(0, x.v / cats[0].v * 100) + '%'}"></i></span> </button>
+      </template>
+    </section>
+    <section class="card wide">
+      <m-form :table="t" seg @added="mo = 0"></m-form>
+    </section>
+    <m-list class="wide" :table="t" :rows="rows" title="description" sub="amount" by="day" edit></m-list>
   </div>
-  <div class="col">
-    <div class="row">
-      <bdi class="stat" x-text="Math.abs(cap.v - spent).toLocaleString()"></bdi><bdi class="muted" x-text="'PKR ' + (spent > cap.v ? 'over budget' : 'left')"></bdi>
-    </div>
-    <div class="bar">
-      <i :style="{width: Math.min(100, Math.max(0, spent) / cap.v * 100) + '%'}"></i>
-    </div>
-    <small class="muted">Budget <bdi x-edit="[cap, 'v', 1, 1e9, 'Monthly budget']"></bdi></small>
-  </div>
-  <m-chart type="hbar" :data="t.group('category', 'amount', {month: mo})"></m-chart>
-  <m-form :table="t" seg @added="mo = 0"></m-form>
-  <m-list :table="t" :month="mo" title="description" sub="amount" by="day" edit></m-list>
 </main>
