@@ -211,7 +211,7 @@ class App {
     OFF = this.off;
     const before = this.source, ver = this.ever.versions.length - 1; // the version Undo goes back to, by index (texts can repeat)
     const r = this.setProgram(source);
-    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), { src: before, ver, settings: r.settingWrites || {} }]; this.screen = null; }
+    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), { src: before, ver, settings: r.settingWrites || {} }]; this.screen = null; if (r.changes && r.changes.length) this.touch(); }
     return r;
   }
   // Chat undo: go back to the previous program; data entered since stays.
@@ -242,14 +242,17 @@ class App {
       const up = upgradeSnapshot(snap);
       if (up.error) return { ok: false, reason: up.error };
       bE = up.ever && up.ever.versions.length ? JSON.parse(JSON.stringify(up.ever)) : null;
-      const fresh = this.ever.versions.length <= 1 && !Object.values(this.data.tables).some(t => t.length); // a new install with nothing in it yet
-      if (bE && bE.app && this.ever.app && bE.app !== this.ever.app && !fresh) return { ok: false, reason: 'this backup belongs to another app' };
+      // a new install (no stored value ever changed by a person, no edit applied) may adopt any backup;
+      // otherwise the backup must carry this app's id
+      if (bE && this.ever.touched && bE.app !== this.ever.app) return { ok: false, reason: bE.app ? 'this backup belongs to another app' : 'this backup does not say which app it belongs to, and this app already has data' };
       if (bE && opts.keepProgram) {
         keepAt = bE.versions.map(v => v.src).lastIndexOf(this.source);
         if (keepAt < 0) return { ok: false, reason: 'the running program is not one of the versions in this backup, so its names cannot be matched to the backup\'s data; restore the backup with its own program instead' };
       }
     }
     const s = JSON.parse(JSON.stringify(snap));
+    const count = d => ({ rows: Object.values(d.tables || {}).reduce((a, t) => a + t.filter(r => !r.deleted).length, 0), settings: Object.keys(d.settings || {}).length, states: Object.keys(d.state || {}).length });
+    const before = count(this.data);
     this.data = { tables: {}, settings: {}, state: {}, ...s.data };
     this.seq = Math.max(s.seq ?? 0, ...Object.values(this.data.tables).flat().map(r => r.id || 0), this.seq || 0);
     if (s.clock) this.clock = s.clock;
@@ -261,12 +264,14 @@ class App {
         if (keepAt >= 0) this.setProgram(this.source, { restore: true, version: keepAt });
         else this.setProgram(bE.versions[bE.versions.length - 1].src);
         this.versionsUndo = []; // Undo steps belonged to the program that was running
+        this.ever = { ...this.ever, touched: true };
       } else convertOptionRows(this.data, this.ever); // data only: read with the running program's history
       this.annotateOptions();
       this.initData();
       this.screen = null;
+      this.undoStack = []; // data Undo steps belonged to the data that was replaced
     }
-    return { ok: true, program: this.source };
+    return { ok: true, program: this.source, replaced: { before, after: count(this.data) } };
   }
   // pick fields: rows store option slot ids; the program's types learn id -> name (shown) and name -> id
   annotateOptions() {
@@ -280,16 +285,21 @@ class App {
       }
     };
     for (const [tn, td] of this.env.tables || []) for (const [fn, f] of td.fields || []) learn(f.type, this.ever.tables[this.tk(tn)]?.fields[this.fk(tn, fn)]);
-    for (const st of this.prog.body || []) {
+    const body = this.prog.body || [];
+    for (const st of [...body, ...body.filter(x => x.kind === 'screen').flatMap(x => x.children || [])]) {
       if (st.kind === 'setting') learn(st.type, this.ever.settings[this.sk(st.name)]);
       if (st.kind === 'state' && !st.draft) learn(st.type, this.ever.states[this.stk(st.name)]);
     }
   }
   pushUndo() { this.undoStack.push(JSON.stringify({ data: this.data, seq: this.seq })); if (this.undoStack.length > 50) this.undoStack.shift(); }
-  undo() { const s = this.undoStack.pop(); if (!s) return false; const o = JSON.parse(s); this.data = o.data; this.seq = o.seq; this.log.push({ kind: 'undo', at: this.clock }); return true; }
+  undo() { const s = this.undoStack.pop(); if (!s) return false; const o = JSON.parse(s); this.data = o.data; this.seq = o.seq; this.initData(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
+  // an app whose stored values a person (or an edit) has changed is no longer a new install
+  touch() { if (this.ever && !this.ever.touched) this.ever = { ...this.ever, touched: true }; }
   rows(table) { return (this.data.tables[this.tk(table)] || []).filter(r => !r.deleted); }
-  // a stored cell as the program reads it (an option slot id gives its name)
-  cell(table, row, f) { const fd = this.fieldDef(table, f); return fd && fd.type.t === 'pick' ? this.wrap(row[this.fk(table, f)], fd.type) : row[this.fk(table, f)]; }
+  // THE boundary out: a stored option reference leaves the evaluator as the option's name, never as {o}
+  ext(raw, type) { return isOptRef(raw) ? (type && type.ids && raw.o in type.ids ? type.ids[raw.o] : raw.o.slice(1)) : raw; }
+  // a stored cell as the program reads it; {raw: true} gives the stored form
+  cell(table, row, f, opts = {}) { const fd = this.fieldDef(table, f); const v = row[this.fk(table, f)]; return opts.raw ? v : this.ext(v, fd && fd.type); }
   fieldDef(table, f) { return this.env.tables.get(table)?.fields.get(f) || null; }
   emptyOf(type) { return type && type.t === 'bool' ? false : null; }
 
@@ -308,11 +318,14 @@ class App {
     }
   }
   // value -> stored (JSON), coerced to the field type
+  // value -> stored. THE boundary in: a plain object (an option reference included) never enters, and a
+  // name that is no option of a pick is rejected; REJECT means "leave the stored value as it is".
   unwrap(v, type) {
     if (v === null || v === undefined) return null;
+    if (typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) return REJECT;
     if (type && type.t === 'pick' && type.oid) { // a name is stored as a reference to its option slot; a stale name to the slot last seen under it
       const n = String(v), ok = type.oid[n] ?? type.seenOid?.[n]?.ok;
-      return ok ? { o: ok } : null; // a name no option ever had is not stored
+      return ok ? { o: ok } : REJECT;
     }
     switch (type && type.t) {
       case 'num': { const n = num(v); return n === null ? null : n; }
@@ -336,7 +349,7 @@ class App {
   litValue(l, type) {
     switch (l.k) {
       case 'num': return type && type.t === 'money' ? l.v : l.v;
-      case 'str': case 'word': return type && type.t === 'pick' && type.oid ? this.unwrap(l.v, type) : l.v;
+      case 'str': case 'word': { if (!(type && type.t === 'pick' && type.oid)) return l.v; const u = this.unwrap(l.v, type); return u === REJECT ? null : u; }
       case 'bool': return l.v;
       case 'time': return parseTime(l.v);
       case 'date': return type && type.t === 'when' ? msOfLocal(l.v) : l.v;
@@ -364,12 +377,14 @@ class App {
     for (const [name, f] of tb.fields) {
       let v = values[name];
       if (v === undefined && f.dflt) v = this.wrap(this.litValue(f.dflt, f.type), f.type);
-      r[this.fk(table, name)] = v === undefined ? (f.type.t === 'bool' ? false : null) : this.clampTo(this.unwrap(v, f.type), f);
+      const u = v === undefined ? (f.type.t === 'bool' ? false : null) : this.unwrap(v, f.type);
+      if (u === REJECT) { this.log.push({ kind: 'error', text: `${table}.${name}: not a value of this field`, at: this.clock }); return null; }
+      r[this.fk(table, name)] = this.clampTo(u, f);
     }
     if (values.at !== undefined) r.at = this.unwrap(values.at, { t: 'when' });
     const missing = [...tb.fields].filter(([n, f]) => !f.optional && f.type.t !== 'bool' && (r[this.fk(table, n)] === null || r[this.fk(table, n)] === '')).map(([n]) => n);
     if (missing.length) { this.log.push({ kind: 'error', text: `${table} needs ${missing.join(', ')}`, at: this.clock }); return null; }
-    (this.data.tables[this.tk(table)] ||= []).push(r);
+    (this.data.tables[this.tk(table)] ||= []).push(r); this.touch();
     return r;
   }
 
@@ -425,8 +440,10 @@ class App {
     // typing into one input is one undo step: consecutive changes of the same node share it
     if (!(event === 'change' && this.lastChange === id)) this.pushUndo();
     this.lastChange = event === 'change' ? id : null;
+    const before = JSON.stringify(this.data);
     h[event](payload);
     this.runWhen();
+    if (JSON.stringify(this.data) !== before) this.touch();
     return true;
   }
   find(pred, node = this.tree()) {
@@ -543,7 +560,7 @@ class App {
     const key = this.stateKey(env, s.name);
     if (!(key in this.data.state)) {
       if (s.draft) this.data.state[key] = this.newDraft(s.draft);
-      else this.data.state[key] = s.init ? this.unwrap(this.evalIn(s.init, env), s.type) : (s.type.t === 'bool' ? false : null);
+      else { const u = s.init ? this.unwrap(this.evalIn(s.init, env), s.type) : (s.type.t === 'bool' ? false : null); this.data.state[key] = u === REJECT ? null : u; }
     }
     env.vars.set(s.name, { state: key, type: s.draft ? { t: 'draft', table: s.draft } : s.type, keep: s.keep });
   }
@@ -711,7 +728,7 @@ class App {
     const tb = this.env.tables.get(target.table);
     const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
     if (!tb || !row) return [];
-    return [...tb.fields].map(([n, f]) => ({ ...this.inputDesc(`${target.table}:${target.id}:${n}`, f.label || n, f, f.type.t === 'pick' ? this.wrap(row[this.fk(target.table, n)], f.type) : row[this.fk(target.table, n)]), name: n })).concat([{ id: `${target.table}:${target.id}:at`, t: 'input', kind: 'when', label: 'added', value: row.at, name: 'at' }]);
+    return [...tb.fields].map(([n, f]) => ({ ...this.inputDesc(`${target.table}:${target.id}:${n}`, f.label || n, f, row[this.fk(target.table, n)]), name: n })).concat([{ id: `${target.table}:${target.id}:at`, t: 'input', kind: 'when', label: 'added', value: row.at, name: 'at' }]);
   }
   // setField({table, id}, field, value) or setField('settingName', null, value); one undo step per call
   setField(target, field, value) {
@@ -720,16 +737,20 @@ class App {
     if (typeof target === 'string') {
       const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === target);
       if (!sd) return false;
+      const key = this.sk(target);
+      if (value === this.ext(this.data.settings[key], sd.type)) { this.undoStack.pop(); return true; } // its own value back: nothing changes
       const v = this.unwrap(this.fromInput(value, sd.type), sd.type);
-      if (v === null && value !== null && value !== undefined && sd.type.t === 'pick') { this.undoStack.pop(); return false; } // not an option of this pick
-      this.data.settings[this.sk(target)] = this.clampTo(v, sd);
+      if (v === REJECT) { this.undoStack.pop(); return false; }
+      this.data.settings[key] = this.clampTo(v, sd); this.touch();
     } else {
       const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
       const f = field === 'at' ? { type: { t: 'when' } } : this.fieldDef(target.table, field);
       if (!row || !f) return false;
+      const key = field === 'at' ? 'at' : this.fk(target.table, field);
+      if (value === this.ext(row[key], f.type)) { this.undoStack.pop(); return true; }
       const v = this.unwrap(this.fromInput(value, f.type), f.type);
-      if (v === null && value !== null && value !== undefined && f.type.t === 'pick') { this.undoStack.pop(); return false; } // not an option of this pick
-      row[field === 'at' ? 'at' : this.fk(target.table, field)] = this.clampTo(v, f);
+      if (v === REJECT) { this.undoStack.pop(); return false; }
+      row[key] = this.clampTo(v, f); this.touch();
     }
     this.runWhen();
     return true;
@@ -753,7 +774,7 @@ class App {
   }
   inputDesc(id, label, f, raw) {
     const t = f.type.t;
-    const o = { id, t: 'input', kind: t, label: label.replace(/_/g, ' '), value: raw ?? null };
+    const o = { id, t: 'input', kind: t, label: label.replace(/_/g, ' '), value: this.ext(raw, f.type) ?? null };
     if (t === 'pick') o.options = f.type.options;
     if (t === 'ref') { o.options = this.rows(f.type.table).map(r => r.id); o.labels = o.options.map(i => this.summary(new Row(f.type.table, this.rows(f.type.table).find(r => r.id === i)))); }
     if (f.range) { o.min = f.range.lo; if (f.range.hi !== null) o.max = f.range.hi; }
@@ -826,11 +847,11 @@ class App {
     const self = this;
     if (!p.parts.length && p.head !== 'it') {
       const v = this.lookup(p.head, env);
-      if (v && v.state) return { type: v.type || { t: 'text' }, raw: () => self.data.state[v.state], set: x => { self.data.state[v.state] = self.unwrap(x, v.type); } };
+      if (v && v.state) return { type: v.type || { t: 'text' }, raw: () => self.ext(self.data.state[v.state], v.type), set: x => { if (x === self.ext(self.data.state[v.state], v.type)) return; const u = self.unwrap(x, v.type); if (u !== REJECT) self.data.state[v.state] = u; } };
       const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === p.head);
       if (sd) {
         const key = this.sk(p.head);
-        return { type: sd.type, label: sd.label, range: sd.range, raw: () => self.data.settings[key], set: x => { self.data.settings[key] = self.clampTo(self.unwrap(x, sd.type), sd); } };
+        return { type: sd.type, label: sd.label, range: sd.range, raw: () => self.ext(self.data.settings[key], sd.type), set: x => { if (x === self.ext(self.data.settings[key], sd.type)) return; const u = self.unwrap(x, sd.type); if (u !== REJECT) self.data.settings[key] = self.clampTo(u, sd); } };
       }
       throw new Error(`cannot change ${p.head}`);
     }
@@ -838,13 +859,14 @@ class App {
     const f = p.parts[p.parts.length - 1];
     if (base instanceof Draft) {
       const fd = this.fieldDef(base.table, f);
-      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.data.state[base.key][f], set: x => { self.data.state[base.key][f] = self.clampTo(self.unwrap(x, fd.type), fd); } };
+      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(self.data.state[base.key][f], fd.type), set: x => { if (x === self.ext(self.data.state[base.key][f], fd.type)) return; const u = self.unwrap(x, fd.type); if (u !== REJECT) self.data.state[base.key][f] = self.clampTo(u, fd); } };
     }
     if (base instanceof Row) {
       const fd = this.fieldDef(base.table, f) || (f === 'at' ? { type: { t: 'when' } } : null);
       const row = this.data.tables[this.tk(base.table)].find(r => r.id === base.r.id);
       const key = f === 'at' ? 'at' : this.fk(base.table, f);
-      return { type: fd.type, label: fd.label, range: fd.range, raw: () => fd.type.t === 'pick' ? self.wrap(row[key], fd.type) : row[key], set: x => { row[key] = self.clampTo(self.unwrap(x, fd.type), fd); } };
+      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(row[key], fd.type), set: x => { if (x === self.ext(row[key], fd.type)) return; // its own value back changes nothing
+        const u = self.unwrap(x, fd.type); if (u === REJECT) return; row[key] = self.clampTo(u, fd); } };
     }
     throw new Error(`cannot change ${p.head}.${p.parts.join('.')}`);
   }
@@ -874,7 +896,7 @@ class App {
         for (const r of this.rows(table)) {
           const e2 = this.child(env, { it: new Row(table, r), where: { table, row: r } });
           if (a.where && !this.truthy(this.evalIn(a.where, e2))) continue;
-          r[this.fk(table, f)] = this.clampTo(this.unwrap(this.evalIn(a.e, e2, true), fd.type), fd);
+          const u = this.unwrap(this.evalIn(a.e, e2, true), fd.type); if (u !== REJECT) r[this.fk(table, f)] = this.clampTo(u, fd);
         }
         return;
       }
@@ -1054,8 +1076,9 @@ class App {
         return out;
       }
       case 'options': {
-        const fd = this.fieldDef(s.path.head, s.path.parts[0]);
-        return (fd?.type.options || []).map(o => ({ key: o, v: o }));
+        const fd = s.path.parts.length ? this.fieldDef(s.path.head, s.path.parts[0]) : null;
+        const st = !fd && !s.path.parts.length ? this.prog.body.find(x => (x.kind === 'setting' || x.kind === 'state') && x.name === s.path.head) : null; // the options of a pick setting or state
+        return ((fd || st)?.type.options || []).map(o => ({ key: o, v: o }));
       }
       case 'list': return s.items.map((l, i) => ({ key: i, v: this.wrap(this.litValue(l), { t: { time: 'time', dur: 'dur', today: 'date', now: 'when' }[l.k] }) }));
       case 'range': {
@@ -1310,10 +1333,32 @@ function badSnapshot(d) {
         const m = v.map;
         if (!m || typeof m !== 'object' || !m.tables || typeof m.tables !== 'object' || !m.fields || typeof m.fields !== 'object' || (m.settings !== undefined && typeof m.settings !== 'object')) return `version ${i + 1} of the schema history has no usable name map`;
         for (const [n, k] of Object.entries(m.tables)) if (!e.tables[k]) return `version ${i + 1} names a table ${n} that the schema history does not have`;
+        for (const [tk, fm] of Object.entries(m.fields)) { if (!e.tables[tk] || !fm || typeof fm !== 'object') return `version ${i + 1} maps fields of a table the schema history does not have`; for (const [n, fk] of Object.entries(fm)) if (!e.tables[tk].fields[fk]) return `version ${i + 1} names a field ${n} that the schema history does not have`; }
+        if (!m.options || typeof m.options !== 'object') return `version ${i + 1} has no option map`;
+        for (const [tk, of] of Object.entries(m.options)) for (const [fk, om] of Object.entries(of || {})) { const f = e.tables[tk]?.fields[fk]; if (!f || !f.opts || !om || typeof om !== 'object') return `version ${i + 1} maps options of a field the schema history does not have`; for (const [n, ok] of Object.entries(om)) if (!f.opts[ok]) return `version ${i + 1} names an option ${n} that the schema history does not have`; }
+        for (const [g, og] of [['settings', 'settingOptions'], ['states', 'stateOptions']]) {
+          if (m[g] !== undefined) for (const [n, k] of Object.entries(m[g])) { const sl = e[g]?.[k]; if (!sl) return `version ${i + 1} names a ${g === 'settings' ? 'setting' : 'state'} ${n} that the schema history does not have`; if (sl.opts && !(m[og] && m[og][k])) return `version ${i + 1} has no option map for ${n}`; }
+          if (m[og] !== undefined) for (const [k, om] of Object.entries(m[og] || {})) { const sl = e[g]?.[k]; if (!sl || !sl.opts || !om || typeof om !== 'object') return `version ${i + 1} maps options the schema history does not have`; for (const [n, ok] of Object.entries(om)) if (!sl.opts[ok]) return `version ${i + 1} names an option ${n} that the schema history does not have`; }
+        }
         if (v.from !== undefined && !(Number.isInteger(v.from) && v.from >= 0 && v.from < i)) return `version ${i + 1} says it restores a version that does not exist`;
       }
     }
     const used = Object.keys(d.data?.tables || {}).filter(k => (d.data.tables[k] || []).length);
+    if (e.format !== undefined && e.format !== FORMAT) return 'it was saved by a newer version of the app';
+    if (e.format !== undefined) for (const [g, key] of [['settings', k => k], ['states', k => `|${k}`]]) for (const [k, sl] of Object.entries(e[g] || {})) {
+      const v = g === 'settings' ? d.data?.settings?.[key(k)] : d.data?.state?.[key(k)];
+      if (isOptRef(v) && !(sl.opts && sl.opts[v.o])) return `the saved value of ${k} names an option the schema history does not have`;
+      if (v && typeof v === 'object' && !isOptRef(v) && !(sl.type && sl.type.t === 'draft')) return `the saved value of ${k} has an unknown shape`;
+    }
+    if (e.format !== undefined) for (const [tk, rows] of Object.entries(d.data?.tables || {})) {
+      const t = e.tables[tk]; if (!t) continue;
+      for (const r of rows) for (const [k, v] of Object.entries(r)) {
+        if (['id', 'at', '_rnd', 'deleted'].includes(k)) continue;
+        if (!t.fields[k]) return `a row of ${tk} has a value for ${k}, which the schema history does not have`;
+        if (isOptRef(v) && !(t.fields[k].opts && t.fields[k].opts[v.o])) return `a row of ${tk} names an option the schema history does not have`;
+        if (v && typeof v === 'object' && !isOptRef(v)) return `a row of ${tk} holds a value of an unknown shape in ${k}`;
+      }
+    }
     if (used.length && !e.versions.length) return 'the schema history has no versions but there are rows';
     for (const k of used) if (!e.tables[k]) return `rows of ${k} have no entry in the schema history`;
   }
@@ -1363,6 +1408,7 @@ export function upgradeSnapshot(snap) {
     prev = v.src;
   }
   if (e.app) E.app = e.app;
+  if (e.touched) E.touched = true;
   for (const k of Object.keys(snap.data?.tables || {})) if ((snap.data.tables[k] || []).length && !E.tables[k]) return { error: `an older backup cannot be rebuilt: rows of ${k} belong to no table of its history` };
   return { ever: E };
 }
@@ -1386,6 +1432,7 @@ export function convertOptionRows(data, ever) {
   for (const [k, sl] of Object.entries(ever.states || {})) if (data.state && `|${k}` in data.state) conv(sl, () => data.state[`|${k}`], x => { data.state[`|${k}`] = x; });
 }
 // a stored reference to a pick option: an object, so no typed text can ever look like one
+const REJECT = Symbol('reject');
 export const isOptRef = v => v !== null && typeof v === 'object' && !Array.isArray(v) && typeof v.o === 'string' && Object.keys(v).length === 1;
 
 // small seeded random, so tests are repeatable

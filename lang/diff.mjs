@@ -40,7 +40,8 @@ function programModel(src) {
     header: h,
     tables: r.ast.body.filter(s => s.kind === 'table'),
     settings: r.ast.body.filter(s => s.kind === 'setting'),
-    states: r.ast.body.filter(s => s.kind === 'state' && !s.draft),
+    // top-level states and the states of a screen are stored (both live at the app's top scope)
+    states: [...r.ast.body, ...r.ast.body.filter(s => s.kind === 'screen').flatMap(s => s.children || [])].filter(s => s.kind === 'state' && !s.draft),
     ast: r.ast,
   };
 }

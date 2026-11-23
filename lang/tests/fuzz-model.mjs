@@ -48,6 +48,7 @@ export function runModelFuzz(chains = 1000, seed = 5, steps = 10) {
     S.dflt0 = S.dflt; // the stored value is set from the first default and then only by the user or `set`
     const check = (st) => {
       stats.checks++;
+      { const leak = boundaryLeak(app); if (leak) stats.violations.push({ c, st, why: 'a stored form left the evaluator: ' + leak }); const echo = echoChanges(app); if (echo) stats.violations.push({ c, st, why: 'echo changed data: ' + echo }); }
       const texts = app.findAll(x => x.t === 'text').map(x => x.text);
       const got = Object.fromEntries(texts.map(t => t.split(' ')).filter(x => x.length >= 2).map(([k, ...v]) => [k, v.join(' ')]));
       for (const [k, v] of Object.entries(expected())) if (String(got[k]) !== String(v)) stats.violations.push({ c, st, why: `${k} shows ${got[k]} but the data says ${v}`, src: app.source });
@@ -101,6 +102,32 @@ export function runModelFuzz(chains = 1000, seed = 5, steps = 10) {
   return stats;
 }
 
+// The boundary (round 8): nothing that leaves the evaluator is an option reference {o} or the text
+// "[object Object]": the tree, fields() of every row and setting, cell(). And sending an input or
+// a choice its own current value never changes stored data.
+export function boundaryLeak(A) {
+  const bad = v => (v && typeof v === 'object' && !Array.isArray(v) && 'o' in v) || v === '[object Object]';
+  const walk = (x, path) => {
+    if (bad(x)) return path;
+    if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) { const r = walk(v, path + '.' + k); if (r) return r; }
+    return null;
+  };
+  const t = walk(A.tree(), 'tree'); if (t) return t;
+  for (const [tn] of A.env.tables || []) for (const r of A.rows(tn)) { const f = walk(A.fields({ table: tn, id: r.id }), `fields(${tn}:${r.id})`); if (f) return f; }
+  for (const st of A.prog.body) if (st.kind === 'setting') { const f = walk(A.fields(st.name), `fields(${st.name})`); if (f) return f; }
+  return null;
+}
+export function echoChanges(A) {
+  const nodes = A.findAll(n => (n.t === 'input' || n.t === 'choice') && n.value !== undefined).slice(0, 4);
+  for (const n of nodes) {
+    const before = JSON.stringify(A.data);
+    A.dispatch(n.id, 'change', n.value);
+    A.undoStack.pop();
+    if (JSON.stringify(A.data) !== before) return `${n.id} (${JSON.stringify(n.value)})`;
+  }
+  return null;
+}
+
 // Rename fuzz (rounds 6-7). The oracle is a reference model that keeps values by slot: three number
 // fields, a pick field (O), a text field holding texts that start with #, a pick setting (M), a pick
 // state (Z) and two number settings. Names move; options can also be dropped (a dropped option keeps
@@ -139,7 +166,8 @@ export function runRenameFuzz(chains = 1000, seed = 7, steps = 12) {
         `state z pick ${opts('Z')} = ${first('Z')}`,
         ...S.F.map((n, i) => `"s${i}" sum(p.${n})`), ...S.O.map((n, i) => listed(S, 'O', i) ? `"k${i}" count(p where k = ${n})` : null).filter(Boolean),
         ...S.G.map((n, i) => `"g${i}" ${n}`), '"m" m', '"z" z', '"h" count(p where t = "#A")',
-        ...S.Z.map((n, i) => listed(S, 'Z', i) ? `button "z${i}" tap set z = ${n}` : null).filter(Boolean)].join('\n') + '\n';
+        ...S.Z.map((n, i) => listed(S, 'Z', i) ? `button "z${i}" tap set z = ${n}` : null).filter(Boolean),
+        'field m', 'choice z', 'each p', '  choice it.k', '  field it.t'].join('\n') + '\n';
     };
     let D = { rows: [], G: [0, 0], m: 0, z: 0 }; // the data, by slot
     let app = load(prog(S));
@@ -158,6 +186,10 @@ export function runRenameFuzz(chains = 1000, seed = 7, steps = 12) {
     const check = (A, S, D, st, what) => {
       stats.checks++;
       if (!A.ok) { stats.violations.push({ c, st, what, why: 'not ok: ' + A.errors[0], trace: trace.slice(-5) }); return; }
+      const leak = boundaryLeak(A);
+      if (leak) { stats.violations.push({ c, st, what, why: 'a stored form left the evaluator: ' + leak }); return; }
+      const echo = echoChanges(A);
+      if (echo) { stats.violations.push({ c, st, what, why: 'sending a node its own value changed data: ' + echo }); return; }
       const got = Object.fromEntries(A.findAll(x => x.t === 'text').map(x => x.text.split(' ')).filter(x => x.length === 2));
       for (const [k, v] of Object.entries(expected(S, D))) if (String(got[k]) !== String(v)) { stats.violations.push({ c, st, what, why: `${k} shows ${got[k]} but the data says ${v}`, trace: trace.slice(-5) }); return; }
     };
@@ -248,7 +280,7 @@ export function runRenameFuzz(chains = 1000, seed = 7, steps = 12) {
         check(A2, b.S, b.D, st, 'old backup + newer program without history');
       } else if (op === 13) { // a backup of another app is refused
         const other = load(prog(S)); other.addRow('p', { [S.F[0]]: 1, [S.F[1]]: 1, [S.F[2]]: 1, k: S.O[S.L.O.indexOf(1)] });
-        if (app.ever.versions.length > 1 || D.rows.length) { if (app.restore(other.snapshot()).ok) stats.violations.push({ c, st, why: 'a backup of another app was restored' }); } // a new empty install may adopt any backup
+        if (app.ever.touched) { if (app.restore(other.snapshot()).ok) stats.violations.push({ c, st, why: 'a backup of another app was restored' }); } // a new empty install may adopt any backup
       }
       trace.push(op + ': ' + app.source.split('\n').slice(1, 5).join(' / '));
       check(app, S, D, st, 'step ' + op);

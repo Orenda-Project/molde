@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { load } from '../eval.mjs';
+import { readFileSync } from 'node:fs';
 import { runEvalFuzz } from './fuzz-eval.mjs';
 
 const texts = a => a.findAll(n => ['text', 'button', 'label'].includes(n.t)).map(n => n.text);
@@ -377,4 +378,67 @@ test('round 7 S3: a missing or wrong version map is refused with a plain reason'
     const b = load(a.source, { data: snap });
     assert.equal(b.ok, false); assert.match(b.errors[0], /schema history|restores a version/); assert.ok(!/undefined|null|Cannot read/.test(b.errors[0]));
   }
+});
+
+// ---- round 8: the stored form never leaves the evaluator; foreign backups; Undo around restore and edits ----
+import { boundaryLeak, echoChanges } from './fuzz-model.mjs';
+test('round 8 S1: an app with only settings or states changed refuses another app\'s backup; touched is recorded, not inferred', () => {
+  const src = readFileSync(new URL('../examples/29-zakat-tip.mo', import.meta.url), 'utf8');
+  const a = load(src);
+  assert.ok(!a.ever.touched);
+  const inp = a.find(n => n.t === 'input');
+  a.dispatch(inp.id, 'change', 12345);
+  assert.equal(a.ever.touched, true);
+  const other = load('app "To do" list ink\ntable task title text\nlist task\n'); other.addRow('task', { title: 'x' });
+  const before = JSON.stringify(a.snapshot().data);
+  const r = a.restore(other.snapshot());
+  assert.equal(r.ok, false); assert.match(r.reason, /another app/);
+  assert.equal(JSON.stringify(a.snapshot().data), before);
+  const noId = other.snapshot(); delete noId.ever.app;
+  assert.match(a.restore(noId).reason, /does not say which app/);
+  const fresh = load(src); assert.equal(fresh.restore(noId).ok, true, 'an untouched install may adopt any backup');
+});
+
+test('round 8 S2a: option references never leave the evaluator; echoing a value changes nothing; objects and unknown names are rejected', () => {
+  const S = 'app "T"\ntable s c pick a|b, n text?\nsetting sp pick p|q = p\nstate st pick x|y = x\n"v" st\nfield sp\nchoice st\nform s\neach s\n  choice it.c\n  field it.n\n';
+  const a = load(S); a.addRow('s', { c: 'b', n: '#b' });
+  assert.equal(boundaryLeak(a), null); assert.equal(echoChanges(a), null);
+  for (const f of a.fields({ table: 's', id: 1 })) assert.ok(typeof f.value !== 'object' || f.value === null, JSON.stringify(f));
+  assert.equal(a.cell('s', a.rows('s')[0], 'c'), 'b'); assert.deepEqual(a.cell('s', a.rows('s')[0], 'c', { raw: true }), { o: '#b' });
+  const raw = JSON.stringify(a.data);
+  assert.equal(a.setField({ table: 's', id: 1 }, 'c', { o: '#a' }), false);
+  assert.equal(a.setField({ table: 's', id: 1 }, 'c', 'nope'), false);
+  assert.equal(a.setField('sp', null, { o: '#q' }), false);
+  assert.equal(a.addRow('s', { c: { o: '#a' } }), null);
+  const ch = a.find(n => n.t === 'choice' && n.label !== undefined && n.value === 'x');
+  if (ch) a.dispatch(ch.id, 'change', { o: '#y' });
+  assert.equal(JSON.stringify(a.data), raw, 'nothing stored changed');
+  // widened from pick to text: the old choice reads as its name, and echoing it changes nothing
+  a.applyEdit('app "T"\ntable s c text, n text?\neach s\n  field it.c\n  it.c\n');
+  assert.equal(boundaryLeak(a), null); assert.equal(echoChanges(a), null);
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === 'b'));
+});
+
+test('round 8 S2b/S2c: restore clears data Undo; Undo after an edit that added a setting leaves the setting at its default', () => {
+  const a = load('app "T"\ntable s n num\nbutton "add" tap add s n = 1\n"n" count(s)\n');
+  const snap = a.snapshot();
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap'); a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  const r = a.restore(snap);
+  assert.deepEqual(r.replaced.before.rows, 2); assert.deepEqual(r.replaced.after.rows, 0);
+  assert.equal(a.undo(), false, 'no data Undo across a restore');
+  const b = load('app "T"\nstate n num = 0\nbutton "go" tap set n = n + 1\n"n" n\n');
+  b.dispatch(b.find(x => x.t === 'button').id, 'tap');
+  b.applyEdit('app "T"\nstate n num = 0\nsetting goal num = 100\nbutton "go" tap set n = n + 1\n"n" n\n"left" goal - n\n');
+  b.undo();
+  assert.deepEqual(texts(b).slice(1), ['n 0', 'left 100']);
+});
+
+test('round 8 S3: screen-level state picks have option slots; unknown slots in a map or row are refused plainly', () => {
+  const S1 = 'app "T"\nscreen one "One"\n  state f pick a|b = a\n  button "b" tap set f = b\n  "f" f\n', S2 = 'app "T"\nscreen one "One"\n  state f pick a|z was b = a\n  button "b" tap set f = z\n  "f" f\n';
+  const a = load(S1); a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  a.applyEdit(S2);
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === 'f z'));
+  const snap = a.snapshot(); snap.data.state['|f'] = { o: '#nope' };
+  const b = load(a.source, { data: snap });
+  assert.equal(b.ok, false); assert.match(b.errors[0], /names an option the schema history does not have/);
 });
