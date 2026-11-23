@@ -17,7 +17,9 @@ stack gap 4 align center
     each 1..9 as c
       if count(move where game = cur and cell = c) = 0 and not xw and not ow
         box height 96 radius 12 fill soft tap add move game = cur, cell = c, mark = turn
+          "Row" floor((c - 1) / 3) + 1 ", column" (c - 1) % 3 + 1 ", empty" opacity 0
       else
         box height 96 radius 12 fill surface
           last(move.mark where game = cur and cell = c) size huge align center color if(last(move.mark where game = cur and cell = c) = X, accent, ink)
+          "Row" floor((c - 1) / 3) + 1 ", column" (c - 1) % 3 + 1 "," last(move.mark where game = cur and cell = c) opacity 0
   button "New game" fill accent tap set cur = cur + 1

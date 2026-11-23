@@ -1,10 +1,11 @@
 // The demo page: pick a program, see the screen it makes and the MoldeScript beside it.
-// Inside the phone frame there is only the user's app and one chat button (the product shell).
+// Inside the phone frame there is only the user's app and one chat button (the product shell),
+// in a strip of its own at the bottom so it never sits on the app.
 // The chat is scripted: there is no trained model yet, so it offers requests whose program
-// changes were written by hand (requests.mjs). The change itself is real: the new program is
-// diffed against the old one (lang/diff.mjs), swapped in live with the data kept, and undoable.
+// changes were written by hand (requests.mjs). The change itself is real: the evaluator applies
+// it (app.applyEdit, data kept by storage slot) and chat Undo goes back a program (app.revert),
+// keeping everything entered since.
 import { load } from '../../../lang/eval.mjs';
-import { diff } from '../../../lang/diff.mjs';
 import { describe } from '../../../lang/describe.mjs';
 import { mount } from '../render.mjs';
 import { ICONS } from '../icons.mjs';
@@ -15,6 +16,7 @@ import { requestsFor, newAppsFor } from './requests.mjs';
 const $ = (tag, cls, attrs) => { const e = document.createElement(tag); if (cls) e.className = cls; if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
 const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const INSET = 80;   // the strip at the bottom of the phone that holds the chat button
 
 function readHash() {
   const q = new URLSearchParams(location.hash.slice(1));
@@ -22,17 +24,6 @@ function readHash() {
 }
 function systemMode() { try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'light'; } }
 
-// load a program and give it existing data; tables and settings that are new get their
-// empty or default values (the evaluator's restore() replaces data wholesale)
-export function loadWithData(src, snap) {
-  const app = load(src, { now: NOW });
-  if (!snap) return app;
-  const fresh = app.data;
-  app.restore(snap);
-  for (const t in fresh.tables) if (!(t in app.data.tables)) app.data.tables[t] = [];
-  for (const s in fresh.settings) if (!(s in app.data.settings)) app.data.settings[s] = fresh.settings[s];
-  return app;
-}
 export function seeded(id, src) {
   const app = load(src, { now: NOW });
   if (SEEDS[id]) SEEDS[id](app);
@@ -46,8 +37,12 @@ export function start(root, sources) {
     view: h.view === 'app' ? 'app' : 'demo',
     frame: h.frame === 'full' ? 'full' : 'phone',
     mode: h.mode === 'dark' || h.mode === 'light' ? h.mode : systemMode(),
-    renderer: null, app: null, src: '', prevSrc: '', history: [], chat: [], versions: [],
+    renderer: null,
+    apps: {},        // id -> { app, base, changed }: every app keeps its own data for the session
+    history: [],     // chat changes, newest last: { kind: 'edit'|'app', ex, from, msg }
+    chat: [],        // { who, html, change?: index into history, undone? }
   };
+  const cur = () => S.apps[S.ex];
   document.documentElement.setAttribute('data-mode', S.mode);
   root.textContent = '';
   root.className = 'dm' + (S.view === 'app' ? ' dm-apponly' : '');
@@ -74,7 +69,7 @@ export function start(root, sources) {
   }
   nav.append(list);
 
-  // the phone: the app, the chat button and the chat sheet
+  // the phone: the app, and a strip at the bottom with the chat button
   const stage = $('section', 'dm-stage', { 'aria-label': 'Live app' });
   const phone = $('div', 'dm-phone');
   const appEl = $('div', 'dm-appmount');
@@ -100,13 +95,13 @@ export function start(root, sources) {
   phone.append(appEl, fab, chatWrap);
   stage.append(phone);
 
-  // source (outside the phone)
+  // source and data controls (outside the phone)
   const code = $('section', 'dm-code', { 'aria-label': 'MoldeScript source' });
   const codeHead = $('div', 'dm-code-head');
   const codeTitle = $('div');
   const reset = $('button', 'dm-btn', { type: 'button' });
-  reset.innerHTML = icon('_undo') + '<span>Reset</span>';
-  reset.setAttribute('aria-label', 'Reset this app and its data');
+  reset.innerHTML = icon('_undo') + '<span>Reset demo data</span>';
+  reset.setAttribute('aria-label', 'Reset demo data for this app');
   codeHead.append(codeTitle, reset);
   const pre = $('pre', 'dm-pre', { tabindex: '0', 'aria-label': 'Program source' });
   const note = $('p', 'dm-note');
@@ -116,25 +111,27 @@ export function start(root, sources) {
   main.append(nav, stage, code);
   root.append(top, main);
 
-  function mountApp(app) {
+  function mountApp() {
     if (S.renderer) S.renderer.destroy();
-    S.app = app;
-    S.renderer = mount(appEl, app, { mode: S.mode, onAsk: a => S.renderer.toast('Answer: ' + a) });
+    S.renderer = mount(appEl, cur().app, { mode: S.mode, insetBottom: INSET, onAsk: a => S.renderer.toast('Answer: ' + a) });
+    for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === S.ex));
+    paintSource(); paintChat(); writeHash();
+  }
+  // open an app; one opened before keeps the data it had (nothing is reseeded behind the user)
+  function open(id) {
+    S.ex = id;
+    if (!S.apps[id]) S.apps[id] = { app: seeded(id, sources[id]), base: sources[id], prev: [] };
+    mountApp();
   }
   function paintSource() {
     const c = CATALOG.find(x => x.id === S.ex);
-    const lines = S.src.trim().split('\n');
-    const old = new Set((S.prevSrc || S.src).trim().split('\n'));
-    codeTitle.innerHTML = `<p class="dm-code-t">${esc(c.title.toLowerCase().replace(/\s+/g, '-'))}.mo</p><p class="dm-code-n">${lines.length} lines, ${S.src.length.toLocaleString('en-US')} characters</p>`;
+    const src = cur().app.source;
+    const lines = src.trim().split('\n');
+    const prev = cur().prev.length ? cur().prev[cur().prev.length - 1] : null;
+    const old = new Set((prev || src).trim().split('\n'));
+    codeTitle.innerHTML = `<p class="dm-code-t">${esc(c.title.toLowerCase().replace(/\s+/g, '-'))}.mo</p><p class="dm-code-n">${lines.length} lines, ${src.length.toLocaleString('en-US')} characters${prev ? ' · changed lines marked' : ''}</p>`;
     note.textContent = c.note;
     pre.innerHTML = lines.map(l => `<span class="dm-ln${old.has(l) ? '' : ' dm-new'}">${highlight(l)}</span>`).join('\n');
-  }
-  function show(id, keepScroll) {
-    S.ex = id; S.src = sources[id]; S.prevSrc = ''; S.history = []; S.chat = []; S.versions = [S.src];
-    mountApp(seeded(id, S.src));
-    for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === id));
-    paintSource(); paintChat(); writeHash();
-    if (!keepScroll) pre.scrollTop = 0;
   }
   function writeHash() {
     const q = new URLSearchParams({ ex: S.ex });
@@ -151,28 +148,33 @@ export function start(root, sources) {
   }
 
   // ----- chat -----
-  function openChat() { chatWrap.hidden = false; fab.hidden = true; paintChat(); const f = sugg.querySelector('button'); (f || input).focus(); }
-  function closeChat() { chatWrap.hidden = true; fab.hidden = false; fab.focus(); }
+  function openChat() { chatWrap.hidden = false; phone.classList.add('dm-chat-open'); paintChat(); const f = sugg.querySelector('button'); (f || input).focus(); }
+  function closeChat() { chatWrap.hidden = true; phone.classList.remove('dm-chat-open'); fab.focus(); }
+  // the newest change not yet undone carries the Undo button; after it is undone, the one
+  // before it gets the button, so every change can be stepped back in turn
+  function undoable() { for (let i = S.chat.length - 1; i >= 0; i--) { const m = S.chat[i]; if (m.change !== undefined && !m.undone) return i; } return -1; }
   function paintChat() {
     msgs.textContent = '';
     if (!S.chat.length) {
       const m = $('div', 'dm-msg dm-bot');
-      m.innerHTML = `<p>This is <strong>${esc(appName(S.src))}</strong>. Ask me to change it, or to make a new app. In this demo, pick one of the requests below.</p>`;
+      m.innerHTML = `<p>This is <strong>${esc(appName(cur().app.source))}</strong>. Ask me to change it, or to make a new app. In this demo, pick one of the requests below.</p>`;
       msgs.append(m);
     }
+    const u = undoable();
     S.chat.forEach((c, i) => {
       const m = $('div', 'dm-msg ' + (c.who === 'you' ? 'dm-you' : 'dm-bot'));
       m.innerHTML = c.html;
-      if (c.undo && i === S.chat.length - 1 && S.history.length) {
-        const u = $('button', 'dm-btn dm-undo', { type: 'button' });
-        u.innerHTML = icon('_undo') + '<span>Undo</span>';
-        u.addEventListener('click', undo);
-        m.append(u);
+      if (c.undone) m.append(Object.assign($('p', 'dm-small'), { textContent: 'Undone' }));
+      if (i === u) {
+        const b = $('button', 'dm-btn dm-undo', { type: 'button' });
+        b.innerHTML = icon('_undo') + '<span>Undo</span>';
+        b.addEventListener('click', () => undo(i));
+        m.append(b);
       }
       msgs.append(m);
     });
     sugg.textContent = '';
-    const reqs = requestsFor(S.ex, S.src, sources), apps = newAppsFor(S.ex);
+    const reqs = requestsFor(S.ex, cur().app.source, sources), apps = newAppsFor(S.ex);
     const lab = $('p', 'dm-sugg-t'); lab.textContent = 'Try a request'; sugg.append(lab);
     for (const r of reqs) sugg.append(chip(r.text, () => runEdit(r)));
     for (const a of apps) sugg.append(chip(a.text, () => runNewApp(a), true));
@@ -184,58 +186,60 @@ export function start(root, sources) {
     b.addEventListener('click', fn);
     return b;
   }
-  function say(who, html, undoable) { S.chat.push({ who, html, undo: !!undoable }); }
+  function say(who, html, change) { S.chat.push({ who, html, change }); }
   function runEdit(r) {
-    const oldSrc = S.src, newSrc = r.apply(oldSrc);
+    const a = cur();
+    const oldSrc = a.app.source, newSrc = r.apply(oldSrc);
     say('you', `<p>${esc(r.text)}</p>`);
-    const d = diff(S.versions, newSrc);   // checked against every earlier version of this app
-    if (d.verdict !== 'safe') { say('bot', `<p>I could not make that change safely.</p><ul>${d.refused.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`); paintChat(); return; }
-    S.history.push({ kind: 'edit', ex: S.ex, src: oldSrc, prevSrc: S.prevSrc });
-    mountApp(loadWithData(newSrc, S.app.snapshot()));
-    S.prevSrc = oldSrc; S.src = newSrc; S.versions.push(newSrc);
-    const data = touchesData(d);
-    say('bot', `<p>${esc(r.says || 'Done.')}</p>${data ? '<p class="dm-small">Everything you saved is still here.</p>' : ''}`, true);
-    paintSource(); paintChat();
+    const before = new Map([...a.app.env.tables].map(([t, tb]) => [t, new Set(tb.fields.keys())]));
+    const d = a.app.applyEdit(newSrc);       // the evaluator checks it against every earlier version
+    if (d.verdict === 'refused') { say('bot', `<p>I could not make that change safely.</p><ul>${(d.refused || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>`); paintChat(); return; }
+    a.prev.push(oldSrc);
+    S.history.push({ kind: 'edit', ex: S.ex });
+    const data = storesNew(before, a.app);
+    say('bot', `<p>${esc(r.says || 'Done.')}</p>${data ? '<p class="dm-small">Everything you saved is still here.</p>' : ''}`, S.history.length - 1);
+    mountApp();
   }
   function runNewApp(a) {
     say('you', `<p>${esc(a.text)}</p>`);
-    S.history.push({ kind: 'app', ex: S.ex, src: S.src, prevSrc: S.prevSrc, versions: S.versions, snap: S.app.snapshot() });
-    S.ex = a.to; S.src = sources[a.to]; S.prevSrc = ''; S.versions = [S.src];
-    mountApp(seeded(a.to, S.src));
-    for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === a.to));
+    S.history.push({ kind: 'app', from: S.ex, ex: a.to });
     const c = CATALOG.find(x => x.id === a.to);
-    say('bot', `<p>Here is a new app: <strong>${esc(appName(S.src))}</strong>. ${esc(c.about || '')}</p><p class="dm-small">${esc(plainSummary(S.src))} It opens with sample data so you can try it.</p>`, true);
-    paintSource(); paintChat(); writeHash();
+    const known = !!S.apps[a.to];
+    open(a.to);
+    say('bot', `<p>Here is ${known ? 'your' : 'a new app:'} <strong>${esc(appName(cur().app.source))}</strong>${known ? ', as you left it' : ''}. ${esc(c.about || '')}</p>${known ? '' : `<p class="dm-small">${esc(plainSummary(cur().app.source))} It opens with sample data so you can try it.</p>`}`, S.history.length - 1);
+    paintChat();
   }
-  // chat Undo puts back the previous PROGRAM. Data is never rolled back by it: every row and
-  // setting entered since stays, and values in fields the older program does not have stay
-  // stored (hidden) and come back if those fields return.
-  function undo() {
-    const p = S.history.pop();
-    if (!p) return;
+  // chat Undo: a change goes back to the previous PROGRAM (app.revert keeps every row and setting
+  // entered since); a new-app request goes back to the app before it, which kept its own data
+  function undo(i) {
+    const m = S.chat[i];
+    const hst = S.history[m.change];
     let msg;
-    if (p.kind === 'app') {
-      S.ex = p.ex; S.src = p.src; S.prevSrc = p.prevSrc; S.versions = p.versions;
-      mountApp(loadWithData(p.src, p.snap));
-      msg = `Back to ${appName(p.src)}, as you left it.`;
+    if (hst.kind === 'app') {
+      S.ex = hst.from;
+      msg = `Back to ${appName(S.apps[hst.from].app.source)}, as you left it. ${appName(S.apps[hst.ex].app.source)} keeps what you entered; ask for it again to open it.`;
+      mountApp();
     } else {
-      const hidden = hiddenData(S.app, p.src);
-      mountApp(loadWithData(p.src, S.app.snapshot()));
-      S.src = p.src; S.prevSrc = p.prevSrc;
+      S.ex = hst.ex;
+      const a = cur();
+      const newer = new Map([...a.app.env.tables].map(([t, tb]) => [t, [...tb.fields.keys()]]));
+      a.app.revert();
+      a.prev.pop();
+      const hidden = hiddenValues(a.app, newer);
       msg = 'The app is back to the earlier version. Everything you added since is still here.' +
         (hidden.length ? ` What you wrote in ${hidden.join(' and ')} is kept but hidden; it shows again if you ask for it back.` : '');
+      mountApp();
     }
-    for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === S.ex));
-    S.chat.forEach(c => { c.undo = false; });
+    m.undone = true;
     say('bot', `<p>${esc(msg)}</p>`);
-    paintSource(); paintChat(); writeHash();
+    paintChat();
   }
   form.addEventListener('submit', e => {
     e.preventDefault();
     const t = input.value.trim();
     if (!t) return;
     input.value = '';
-    const all = [...requestsFor(S.ex, S.src, sources), ...newAppsFor(S.ex)];
+    const all = [...requestsFor(S.ex, cur().app.source, sources), ...newAppsFor(S.ex)];
     const hit = all.find(r => r.text.toLowerCase() === t.toLowerCase());
     if (hit) return hit.to ? runNewApp(hit) : runEdit(hit);
     say('you', `<p>${esc(t)}</p>`);
@@ -243,16 +247,6 @@ export function start(root, sources) {
     paintChat();
   });
   fab.addEventListener('click', openChat);
-  // the chat button steps aside while the user scrolls down a long screen and comes back on the way up
-  let lastTop = 0;
-  appEl.addEventListener('scroll', e => {
-    const t = e.target;
-    if (!t.classList || !t.classList.contains('mo-scrollarea')) return;
-    const y = t.scrollTop, atEnd = y + t.clientHeight >= t.scrollHeight - 4;
-    if (y > lastTop + 6 && y > 80 && !atEnd) phone.classList.add('dm-fab-away');
-    else if (y < lastTop - 6 || y <= 80) phone.classList.remove('dm-fab-away');
-    lastTop = y;
-  }, true);
   chatClose.addEventListener('click', closeChat);
   chatWrap.addEventListener('click', e => { if (e.target === chatWrap) closeChat(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !chatWrap.hidden) closeChat(); });
@@ -263,28 +257,40 @@ export function start(root, sources) {
     document.documentElement.setAttribute('data-mode', S.mode);
     S.renderer.setMode(S.mode); paintTools();
   });
-  reset.addEventListener('click', () => show(S.ex, true));
-  list.addEventListener('click', e => { const b = e.target.closest('[data-ex]'); if (b) show(b.getAttribute('data-ex')); });
-  addEventListener('hashchange', () => { const n = readHash(); if (n.ex && n.ex !== S.ex && CATALOG.some(c => c.id === n.ex)) show(n.ex); });
+  // the only way the demo puts sample data back: an explicit control, outside the phone
+  reset.addEventListener('click', () => {
+    S.apps[S.ex] = undefined;
+    S.history.forEach((x, i) => { if (x.ex === S.ex || x.from === S.ex) S.chat.forEach(m => { if (m.change === i) m.undone = true; }); });
+    open(S.ex);
+    S.renderer.toast('Demo data put back for this app');
+  });
+  list.addEventListener('click', e => { const b = e.target.closest('[data-ex]'); if (b) open(b.getAttribute('data-ex')); });
+  addEventListener('hashchange', () => { const n = readHash(); if (n.ex && n.ex !== S.ex && CATALOG.some(c => c.id === n.ex)) open(n.ex); });
   paintTools();
-  show(S.ex);
-  S.showBlank = id => { show(id); mountApp(load(sources[id], { now: NOW })); };   // tests: the app with no data
-  S.runEdit = runEdit; S.runNewApp = runNewApp; S.undo = undo; S.openChat = openChat;
-  window.__molde = S;   // for tests: the running app, renderer and chat actions
+  open(S.ex);
+  S.showBlank = id => { S.ex = id; S.apps[id] = { app: load(sources[id], { now: NOW }), base: sources[id], prev: [] }; mountApp(); };   // tests: the app with no data
+  S.mountSource = src => { S.apps[S.ex] = { app: load(src, { now: NOW }), base: src, prev: [] }; mountApp(); };   // tests: any program in place of the current one
+  S.runEdit = runEdit; S.runNewApp = runNewApp; S.undoLatest = () => { const i = undoable(); if (i >= 0) undo(i); }; S.openChat = openChat;
+  Object.defineProperty(S, 'app', { get: () => cur().app });
+  window.__molde = S;   // for tests: the running apps, renderer and chat actions
   return S;
 }
 
-// a change that adds or changes stored data (not only the screen)
-function touchesData(d) { return d.changes.some(c => /\b(field|table|setting|options?)\b/.test(c) && !/^(adds|removes from the screen): /.test(c)); }
-// fields (and tables) holding values in the running app that the older program does not declare
-function hiddenData(app, olderSrc) {
-  const older = load(olderSrc, { now: NOW });
+function appName(src) { const m = /^app "([^"]*)"/.exec(src); return m ? m[1] : 'this app'; }
+// did the change add a table or a field (stored data), not only screen lines?
+function storesNew(before, app) {
+  for (const [t, tb] of app.env.tables) { const b = before.get(t); if (!b) return true; for (const f of tb.fields.keys()) if (!b.has(f)) return true; }
+  return false;
+}
+// fields that hold values but the program now running does not show
+function hiddenValues(app, newer) {
   const out = [];
-  for (const [t, tb] of app.env.tables) {
-    const ot = older.env.tables.get(t);
-    for (const [f] of tb.fields) {
-      if (ot && ot.fields.has(f)) continue;
-      if (app.rows(t).some(r => r[f] !== null && r[f] !== undefined && r[f] !== '' && r[f] !== false)) out.push(ot ? `"${f.replace(/_/g, ' ')}"` : `the ${t.replace(/_/g, ' ')} list`);
+  for (const [t, fields] of newer) {
+    const tb = app.env.tables.get(t);
+    for (const f of fields) {
+      if (tb && tb.fields.has(f)) continue;
+      const rows = app.data.tables[app.tk ? app.tk(t) : t] || [];
+      if (rows.some(r => !r.deleted && r[f] !== null && r[f] !== undefined && r[f] !== '' && r[f] !== false)) out.push(tb ? `"${f.replace(/_/g, ' ')}"` : `the ${t.replace(/_/g, ' ')} list`);
     }
   }
   return [...new Set(out)];
@@ -297,7 +303,6 @@ function plainSummary(src) {
   for (const l of lines) { if (/^Keeps:/.test(l)) on = true; else if (/^[A-Z]/.test(l)) on = false; else if (on && /^- /.test(l)) keeps.push(l.slice(2).split(':')[0].replace(/_/g, ' ')); }
   return keeps.length ? `It keeps a list of ${keeps.join(' and ')}.` : '';
 }
-function appName(src) { const m = /^app "([^"]*)"/.exec(src); return m ? m[1] : 'this app'; }
 
 // light syntax colouring: statement word, strings, numbers, keywords after the first word
 const KW = new Set(['tap', 'swipe', 'then', 'fill', 'stroke', 'color', 'thick', 'radius', 'opacity', 'width', 'height', 'grow', 'pad', 'gap', 'span', 'align', 'card', 'big', 'head', 'faint', 'bold', 'size', 'where', 'by', 'sort', 'desc', 'top', 'as', 'of', 'on', 'today', 'week', 'month', 'last', 'prev', 'days', 'all', 'set', 'add', 'remove', 'edit', 'save', 'toggle', 'go', 'notify', 'keep', 'new', 'unit', 'and', 'or', 'not', 'if', 'yes', 'no']);

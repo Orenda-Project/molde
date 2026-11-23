@@ -5,6 +5,7 @@ state adding bool = no
 state d new deposit
 let total = sum(deposit.amount)
 let p = clamp(total / goal, 0, 1)
+let mon(d date) = if(month(d) = 1, "Jan", if(month(d) = 2, "Feb", if(month(d) = 3, "Mar", if(month(d) = 4, "Apr", if(month(d) = 5, "May", if(month(d) = 6, "Jun", if(month(d) = 7, "Jul", if(month(d) = 8, "Aug", if(month(d) = 9, "Sep", if(month(d) = 10, "Oct", if(month(d) = 11, "Nov", "Dec")))))))))))
 row gap 4 align center
   draw 40, 120 width 72
     rect 14, 6, 12, 92 fill soft radius 6
@@ -38,7 +39,8 @@ stack card gap 2
         draw 10, 56
           rect 0, 0, 10, 56 fill soft radius 3
           rect 0, 56 - 56 * clamp(sum(deposit.amount month of addmonths(today, 0 - it)) / maxof([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))), 0, 1), 10, 56 * clamp(sum(deposit.amount month of addmonths(today, 0 - it)) / maxof([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))), 0, 1) fill if(it = 0, accent, muted) radius 3
-  "Thousands of rupees per month," monthname(addmonths(today, -5)) "to" monthname(today) faint
+        mon(addmonths(today, 0 - it)) size tiny color if(it = 0, ink, muted)
+  "Thousands of rupees saved each month" faint
 "Deposits" head
 if count(deposit) = 0
   "Nothing saved yet. Tap + 1,000 to make the first deposit." color muted

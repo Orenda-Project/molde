@@ -210,20 +210,20 @@ await scenario('edit sheet: tapping a row opens it and a change is saved', 'ex=r
 });
 
 await scenario('form: saving a new row adds it to the list', 'ex=todo&view=app', async page => {
-  const open0 = await page.$eval('.mo-head-t', e => e.textContent);
-  await page.fill('.mo-form input[type=text] >> nth=0', 'Buy milk');
-  await page.click('button.mo-btn:has-text("Add")');
+  const open0 = await page.$eval('.mo-screen .mo-head-t', e => e.textContent);
+  await page.click('button.mo-btn:has-text("Add task")');
+  await page.fill('.mo-card input[type=text] >> nth=0', 'Buy milk');
+  await page.click('button.mo-btn:has-text("Save task")');
   await page.waitForSelector('text=Buy milk');
-  const open1 = await page.$eval('.mo-head-t', e => e.textContent);
+  const open1 = await page.$eval('.mo-screen .mo-head-t', e => e.textContent);
   expect(open0 !== open1, `count text unchanged: ${open1}`);
 });
 
-await scenario('tabs: switching screens in a two-screen app', 'ex=medicine&view=app', async page => {
-  await page.click('.dm-fab');
-  await page.click('.dm-chip:has-text("History")');
-  await page.keyboard.press('Escape');
-  await page.click('.mo-tab:has-text("History")');
-  await page.waitForSelector('.mo-tab[aria-selected="true"]:has-text("History")');
+await scenario('tabs: switching screens in a two-screen app', 'ex=water&view=app', async page => {
+  const zakat = readFileSync(join(WEB, '../../lang/examples/29-zakat-tip.mo'), 'utf8');
+  await page.evaluate(src => window.__molde.mountSource(src), zakat);
+  await page.click('.mo-tab:has-text("Tip")');
+  await page.waitForSelector('.mo-tab[aria-selected="true"]:has-text("Tip")');
 });
 
 await scenario('chat: a request swaps the program live, keeps data, and undoes', 'ex=water', async page => {
@@ -260,7 +260,7 @@ await scenario('every scripted request produces a program that checks and is saf
         await new Promise(r => setTimeout(r, 20));
         const last = S.chat[S.chat.length - 1];
         if (last.who !== 'bot' || /could not|lines? added|lines? removed/.test(last.html) || !S.app.ok || S.app.findAll(n => n.t === 'error').length) out.push(`${S.ex}: "${text}" ${last.html.slice(0, 80)} ${S.app.errors.join('; ')}`);
-        S.undo();
+        S.undoLatest();
       }
       document.querySelector('.dm-chatwrap').click();
     }
@@ -280,7 +280,7 @@ await scenario('sandboxed iframe with a strict CSP runs the demo', 'ex=water', a
 });
 
 // ---------- 4. round 2 checks ----------
-const MINE = ['water', 'habits', 'budget', 'exercise', 'journal', 'tasbeeh', 'cricket', 'tictactoe', 'quiz', 'savings', 'pomodoro'];
+const MINE = CATALOG.map(c => c.id);
 const total = page => page.$eval('.mo-big', e => +e.textContent.replace(/[^\d]/g, ''));
 
 await scenario('S1: chat Undo keeps data added after the change', 'ex=water', async page => {
@@ -340,19 +340,33 @@ await scenario('chat button: hidden under the edit sheet; Done works at its righ
   await page.waitForSelector('.mo-sheet', { state: 'detached' });
 });
 
-await scenario('chat button: steps aside on scroll down, returns on scroll up; hidden while typing', 'ex=budget&view=app', async page => {
-  const op = () => page.$eval('.dm-fab', e => getComputedStyle(e).opacity);
-  await page.$eval('.mo-scrollarea', e => { e.scrollTop = 0; });
-  await page.mouse.move(200, 400);
-  await page.mouse.wheel(0, 600); await page.waitForTimeout(300);
-  expect(await op() === '0', 'still visible while scrolling down');
-  await page.mouse.wheel(0, -300); await page.waitForTimeout(300);
-  expect(await op() === '1', 'not back on scroll up');
-  await page.$eval('.mo-scrollarea', e => { e.scrollTop = 0; });
-  await page.click('button.mo-btn:has-text("Add expense")');
-  await page.click('.mo-app input[type=text] >> nth=0');
-  await page.waitForTimeout(250);
-  expect(await op() === '0', 'visible while typing');
+await scenario('chat button: never over any control at the top, middle or end of every app', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    for (const where of [0, 0.5, 1]) {
+      const hits = await page.evaluate(f => {
+        const sc = document.querySelector('.mo-scrollarea');
+        sc.scrollTop = (sc.scrollHeight - sc.clientHeight) * f;
+        const fab = document.querySelector('.dm-fab');
+        const vis = sc.getBoundingClientRect();
+        const out = [];
+        for (const el of document.querySelectorAll('.mo-app button, .mo-app input, .mo-app textarea, .mo-app [role=button], .mo-app [role=checkbox], .mo-app .mo-text, .mo-app .mo-row')) {
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          for (const [x, y] of [[r.left + r.width / 2, r.top + r.height / 2], [r.right - 2, r.bottom - 2]]) {
+            if (y < vis.top || y >= vis.bottom || x < vis.left || x >= vis.right) continue;   // only what is visible
+            const hit = document.elementFromPoint(x, y);
+            if (hit && fab.contains(hit)) out.push((el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 24));
+          }
+        }
+        return out;
+      }, where);
+      for (const x of hits) bad.push(`${c.id}@${where}: ${x}`);
+    }
+  }
+  expect(!bad.length, bad.slice(0, 6).join(' | '));
 });
 
 await scenario('undo toast: one line, beside the chat button, Undo never wraps', 'ex=water&view=app', async page => {
@@ -368,7 +382,7 @@ await scenario('undo toast: one line, beside the chat button, Undo never wraps',
 
 await scenario('primary action: one accent button on each app that has one', 'ex=water&view=app', async page => {
   const bad = [];
-  for (const id of ['water', 'habits', 'budget', 'exercise', 'journal', 'savings', 'pomodoro', 'tictactoe']) {
+  for (const id of ['water', 'habits', 'budget', 'exercise', 'journal', 'savings', 'pomodoro', 'tictactoe', 'reading', 'todo', 'medicine']) {
     await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
     await page.waitForFunction(i => window.__molde.ex === i, id);
     const n = await page.$$eval('.mo-app .mo-btn.mo-primary', els => els.filter(e => e.getBoundingClientRect().height > 0).map(e => e.textContent));
@@ -383,9 +397,12 @@ await scenario('empty states: every demo program says what to do when it has no 
     await page.evaluate(i => window.__molde.showBlank(i), id);
     const txt = await page.$eval('.mo-app', e => e.innerText);
     const errs = await page.$$('.mo-error');
-    if (!/(Nothing|No [a-z]+ yet|Add a|Write on|Log )/.test(txt) && !['tictactoe', 'cricket', 'tasbeeh'].includes(id)) bad.push(`${id}: no empty message`);
+    if (!/(Nothing|No [a-z ]+yet|Add a|Write on|Log )/.test(txt) && !['tictactoe', 'cricket', 'tasbeeh'].includes(id)) bad.push(`${id}: no empty message`);
     if (errs.length) bad.push(`${id}: error node`);
     if (/\bNaN\b|undefined|Infinity/.test(txt)) bad.push(`${id}: ${txt.match(/\bNaN\b|undefined|Infinity/)[0]}`);
+    const noise = txt.match(/\b0 of 0\b|\b0 t moved|^\s*[–-]\s*$|Best streak\s*\n\s*\n/m);
+    if (noise) bad.push(`${id}: noise "${noise[0].trim()}"`);
+    if (id !== 'tictactoe' && await page.$eval('.mo-screen', e => e.classList.contains('mo-single'))) bad.push(`${id}: empty state floats mid-screen`);
     const a = await page.evaluate(audit);
     for (const k of ['overflow', 'small', 'tiny', 'contrast']) if (a[k].length) bad.push(`${id} empty ${k}: ${a[k][0]}`);
   }
@@ -398,7 +415,7 @@ await scenario('copy: plurals, the quiz shows the right answer, budget stays in 
     await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
     await page.waitForFunction(i => window.__molde.ex === i, id);
     const txt = await page.$eval('.mo-app', e => e.innerText);
-    const m = txt.match(/\b1 (days|drinks|exercises|sessions|questions|rounds|habits)\b/);
+    const m = txt.match(/\b1 (days|drinks|exercises|sessions|questions|rounds|habits|tasks|books|doses)\b/);
     if (m) bad.push(`${id}: "${m[0]}"`);
   }
   await page.evaluate(() => { location.hash = 'ex=quiz&view=app'; });
@@ -410,6 +427,7 @@ await scenario('copy: plurals, the quiz shows the right answer, budget stays in 
 });
 
 await scenario('dates and times read as text, never mm/dd/yyyy', 'ex=todo&view=app', async page => {
+  await page.click('button.mo-btn:has-text("Add task")');
   const shown = await page.$$eval('.mo-dt-v', els => els.map(e => e.textContent));
   expect(shown.length && shown.every(t => t === 'Pick a date' || /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d{4}/.test(t)), JSON.stringify(shown));
   await page.click('.mo-row.mo-card.mo-tap >> nth=0');
@@ -426,15 +444,18 @@ await scenario('sideways chips show a fade cue when there is more', 'ex=tasbeeh&
   expect(await page.$eval('.mo-scroll', e => !e.classList.contains('mo-more-end')), 'cue stays at the end');
 });
 
-await scenario('custom screens are centred, not stuck top-left', 'ex=tasbeeh&view=app', async page => {
+await scenario('centring: only a one-block screen is centred; lists and forms start at the top', 'ex=tictactoe&view=app', async page => {
   const bad = [];
-  for (const id of ['tasbeeh', 'tictactoe', 'pomodoro']) {
-    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
-    await page.waitForFunction(i => window.__molde.ex === i, id);
-    await page.waitForTimeout(80);
-    const r = await page.evaluate(() => { const d = document.querySelector('.mo-draw, .mo-grid'); const b = d.getBoundingClientRect(); return { l: b.left, r: innerWidth - b.right }; });
-    if (Math.abs(r.l - r.r) > 4) bad.push(`${id}: left ${r.l} right ${r.r}`);
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    const single = await page.$eval('.mo-screen', e => e.classList.contains('mo-single'));
+    if (single !== (c.id === 'tictactoe')) bad.push(`${c.id}: single=${single}`);
   }
+  const r = await page.evaluate(() => { location.hash = 'ex=tictactoe&view=app'; return null; });
+  await page.waitForFunction(() => window.__molde.ex === 'tictactoe');
+  const g = await page.evaluate(() => { const b = document.querySelector('.mo-grid').getBoundingClientRect(); const a = document.querySelector('.mo-scrollarea').getBoundingClientRect(); return { l: b.left - a.left, r: a.right - b.right }; });
+  if (Math.abs(g.l - g.r) > 4) bad.push(`board off centre ${g.l} vs ${g.r}`);
   expect(!bad.length, bad.join(' | '));
 });
 
@@ -448,7 +469,7 @@ function audit200() {
   for (let t = walker.nextNode(); t; t = walker.nextNode()) {
     const s = t.textContent.trim();
     const el = t.parentElement;
-    if (!s || !el || el.closest('svg') || !el.getClientRects().length) continue;
+    if (!s || !el || el.closest('svg, .mo-sr') || !el.getClientRects().length) continue;
     const fs = parseFloat(getComputedStyle(el).fontSize);
     const r = el.getBoundingClientRect();
     if (r.width > 0 && s.replace(/\s/g, '').length >= 4 && /[A-Za-z]{3}/.test(s) && r.width < 1.6 * fs) out.push(`letter per line: "${s.slice(0, 20)}" ${Math.round(r.width)}px`);
@@ -484,6 +505,180 @@ await scenario('narrow 300 px still works (no page overflow)', 'ex=water&view=ap
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) bad.push(c.id);
   }
   expect(!bad.length, bad.join(', '));
+});
+
+// ---------- 5. round 3 checks ----------
+await scenario('S1: Done closes on the first real mouse click after typing a value', 'ex=water&view=app', async page => {
+  await page.click('.mo-head [aria-label="Settings"]');
+  const inp = page.locator('.mo-sheet input').first();
+  await inp.fill('2500');
+  const b = await (await page.$('.mo-sheet button:has-text("Done")')).boundingBox();
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
+  await page.waitForSelector('.mo-app :text("of 2,500 ml today")');
+});
+
+await scenario('S1: Tab then Enter closes the sheet and keeps the value', 'ex=water&view=app', async page => {
+  await page.click('.mo-head [aria-label="Settings"]');
+  const inp = page.locator('.mo-sheet input').first();
+  await inp.fill('3000');
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement.textContent) === 'Done', 'Tab did not reach Done');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
+  await page.waitForSelector('.mo-app :text("of 3,000 ml today")');
+});
+
+await scenario('S1: a row editor closes on the first click too', 'ex=budget&view=app', async page => {
+  await page.click('.mo-row.mo-card.mo-tap >> nth=0');
+  const inp = page.locator('.mo-sheet input[type=text]').first();
+  await inp.fill('Weekly shop');
+  const b = await (await page.$('.mo-sheet button:has-text("Done")')).boundingBox();
+  await page.mouse.click(b.x + b.width - 4, b.y + b.height / 2);
+  await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
+  await page.waitForSelector('.mo-app :text("Weekly shop")');
+});
+
+await scenario('data: undoing a new-app request keeps what was entered in that app', 'ex=water', async page => {
+  await page.click('.dm-fab');
+  await page.click('.dm-chip:has-text("count my zikr")');
+  await page.keyboard.press('Escape');
+  const n0 = await page.$eval('.mo-draw.mo-tap .mo-lbl.mo-size-huge', e => +e.textContent);
+  for (let i = 0; i < 3; i++) await page.click('.mo-draw.mo-tap');
+  await page.click('.dm-fab');
+  await page.click('.dm-undo');
+  await page.waitForSelector('.dm-bot:has-text("Back to Water")');
+  await page.click('.dm-chip:has-text("count my zikr")');
+  await page.keyboard.press('Escape');
+  const n1 = await page.$eval('.mo-draw.mo-tap .mo-lbl.mo-size-huge', e => +e.textContent);
+  expect(n1 === (n0 + 3) % 33, `tasbeeh count ${n1}, expected ${(n0 + 3) % 33}`);
+});
+
+await scenario('data: the picker never reseeds a changed app; Reset demo data does', 'ex=water', async page => {
+  const t0 = await total(page);
+  await page.click('button.mo-btn:has-text("+ 500 ml")');
+  await page.click('.dm-item[data-ex="habits"]');
+  await page.click('.dm-item[data-ex="water"]');
+  expect(await total(page) === t0 + 500, 'water was reseeded by the picker');
+  await page.click('.dm-btn:has-text("Reset demo data")');
+  expect(await total(page) === t0, 'reset did not put the demo data back');
+});
+
+await scenario('data: every change keeps its own Undo, so a second Undo is reachable', 'ex=water', async page => {
+  const src0 = await page.evaluate(() => window.__molde.app.source);
+  await page.click('.dm-fab');
+  await page.click('.dm-chip:has-text("quick buttons")');
+  await page.click('.dm-chip:has-text("Make it")');
+  await page.click('.dm-undo');
+  expect(await page.$$eval('.dm-undo', e => e.length) === 1, 'no Undo for the first change after undoing the second');
+  await page.click('.dm-undo');
+  expect(await page.evaluate(() => window.__molde.app.source) === src0, 'program not back to the start');
+});
+
+await scenario('medicine: doses taken never exceed doses due', 'ex=medicine&view=app', async page => {
+  const t = await page.$eval('.mo-screen .mo-head-t', e => e.textContent);
+  const m = /^(\d+)\s+of\s+(\d+)/.exec(t);
+  expect(m && +m[1] <= +m[2], t);
+  for (let i = 0; i < 2; i++) await page.click('.mo-toggle >> nth=0');
+  const t2 = await page.$eval('.mo-screen .mo-head-t', e => e.textContent);
+  const m2 = /^(\d+)\s+of\s+(\d+)/.exec(t2);
+  expect(m2 && +m2[1] <= +m2[2], t2);
+});
+
+await scenario('header: title left, the app bar holds the month switcher or the main action', 'ex=budget&view=app', async page => {
+  const prev = await page.$('.mo-head .mo-head-bar button[aria-label="Previous"] svg');
+  expect(prev, 'no chevron in the budget app bar');
+  const same = await page.evaluate(() => { const t = document.querySelector('.mo-title').getBoundingClientRect(); const b = document.querySelector('.mo-head-bar').getBoundingClientRect(); return Math.abs((t.top + t.bottom) / 2 - (b.top + b.bottom) / 2); });
+  expect(same < 6, `title and month not on one line (${same}px apart)`);
+  for (const [id, label] of [['habits', 'Add habit'], ['exercise', 'Log exercise'], ['reading', 'Add book'], ['todo', 'Add task'], ['medicine', 'Add medicine']]) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    expect(await page.$(`.mo-head .mo-head-bar button:has-text("${label}")`), `${id}: "${label}" not in the app bar`);
+  }
+});
+
+await scenario('act first: habits Today list before the heat grid; workouts log near the top', 'ex=habits&view=app', async page => {
+  const y = await page.evaluate(() => [document.querySelector('.mo-toggle').getBoundingClientRect().top, document.querySelector('.mo-grid').getBoundingClientRect().top]);
+  expect(y[0] < y[1], 'heat grid above today\'s habits');
+  expect(y[0] < 915, 'first habit tick box below the fold');
+});
+
+await scenario('heat grid: one tab stop, arrow keys, named cells, ring selection, true legend', 'ex=habits&view=app', async page => {
+  const g = await page.$('.mo-grid[data-rove]');
+  expect(g, 'grid is not one tab stop');
+  expect(await page.$$eval('.mo-grid[data-rove] > [tabindex="0"]', e => e.length) === 1, 'more than one tab stop');
+  await page.focus('.mo-grid[data-rove] > [tabindex="0"]');
+  const a = await page.evaluate(() => document.activeElement.textContent);
+  await page.keyboard.press('ArrowLeft');
+  const b = await page.evaluate(() => document.activeElement.textContent);
+  expect(a !== b && /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, \d of \d habits done$/.test(b.replace(/\s+/g, ' ').trim()), `cell name "${b}"`);
+  await page.keyboard.press('Enter');
+  const sel = await page.$eval('.mo-grid[data-rove] > [tabindex="0"]', e => ({ ring: getComputedStyle(e).boxShadow, swatch: getComputedStyle(e.firstElementChild).backgroundColor, ink: getComputedStyle(document.querySelector('.mo-app')).color }));
+  expect(/inset/.test(sel.ring), 'selection is not a ring');
+  expect(sel.swatch !== sel.ink, 'selection painted as an ink fill');
+  const legend = await page.$eval('.mo-app', e => /Less[\s\S]*More/.test(e.innerText));
+  expect(legend, 'no legend');
+});
+
+await scenario('pickers: the exercise chips are one sideways row with a cue', 'ex=exercise&view=app', async page => {
+  const tops = await page.$$eval('.mo-scroll .mo-btn', e => [...new Set(e.map(x => Math.round(x.getBoundingClientRect().top)))]);
+  expect(tops.length === 1, `chips on ${tops.length} lines`);
+  expect(await page.$eval('.mo-scroll', e => e.classList.contains('mo-more-end') || e.scrollWidth <= e.clientWidth), 'no cue');
+});
+
+await scenario('numbers: one format (thousands separators from 1,000; money with Rs)', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    const txt = await page.$eval('.mo-app', e => e.innerText);
+    for (const m of txt.matchAll(/(^|[^\d,.:\/-])(\d{4})(?![\d,:\/-])/g)) {
+      const before = txt.slice(Math.max(0, m.index - 12), m.index + m[1].length);
+      if (!/(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s$/.test(before)) bad.push(`${c.id}: ${m[2]}`);
+    }
+  }
+  expect(!bad.length, bad.slice(0, 6).join(' | '));
+});
+
+await scenario('charts: three y ticks, month names under savings bars, reached bars marked', 'ex=budget&view=app', async page => {
+  const ticks = await page.$$eval('.mo-draw .mo-lbl', e => e.filter(x => parseFloat(x.style.left) < 12).length);
+  expect(ticks >= 3, `budget y ticks: ${ticks}`);
+  await page.evaluate(() => { location.hash = 'ex=savings&view=app'; });
+  await page.waitForFunction(() => window.__molde.ex === 'savings');
+  const months = await page.$eval('.mo-app', e => e.innerText);
+  expect(/Jun[\s\S]*Jul[\s\S]*Aug[\s\S]*Sep[\s\S]*Oct[\s\S]*Nov/.test(months), 'no month names under the bars');
+  await page.evaluate(() => { location.hash = 'ex=water&view=app'; });
+  await page.waitForFunction(() => window.__molde.ex === 'water');
+  expect(/Reached/.test(await page.$eval('.mo-app', e => e.innerText)), 'no legend for reached bars');
+});
+
+await scenario('warnings carry words; board cells are named', 'ex=todo&view=app', async page => {
+  expect(/Late/.test(await page.$eval('.mo-app', e => e.innerText)), 'late tasks only shown by colour');
+  await page.evaluate(() => { location.hash = 'ex=tictactoe&view=app'; });
+  await page.waitForFunction(() => window.__molde.ex === 'tictactoe');
+  const names = await page.$$eval('.mo-grid > [role=button]', e => e.map(x => x.textContent.replace(/\s+/g, ' ').trim()));
+  expect(names.length && names.every(n => /^Row \d, column \d, empty$/.test(n)), JSON.stringify(names));
+});
+
+await scenario('toast: a removed row reads as a phrase', 'ex=budget&view=app', async page => {
+  await (await page.$('[data-swipe]')).focus();
+  await page.keyboard.press('Delete');
+  const t = await (await page.waitForSelector('.mo-toast span')).textContent();
+  expect(/^Removed [A-Z][^·]*, Rs\s[\d,]+$/.test(t.replace(/\s+/g, ' ')), `toast "${t}"`);
+});
+
+await scenario('200%: drawing labels stay inside their drawings', 'ex=tasbeeh&view=app', async page => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const bad = [];
+  for (const id of ['tasbeeh', 'cricket', 'habits', 'pomodoro']) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await page.waitForTimeout(60);
+    const out = await page.evaluate(() => [...document.querySelectorAll('.mo-lbl')].filter(l => { const d = l.closest('.mo-draw').getBoundingClientRect(), r = l.getBoundingClientRect(); return r.left < d.left - 2 || r.right > d.right + 2; }).map(l => l.textContent));
+    for (const x of out) bad.push(`${id}: "${x}"`);
+  }
+  expect(!bad.length, bad.join(' | '));
 });
 
 await browser.close();

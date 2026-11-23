@@ -18,19 +18,6 @@ row gap 1
   button "+ 250 ml" fill accent grow tap add drink ml = 250
   button "+ 150 ml" grow tap add drink ml = 150
   button "+ 500 ml" grow tap add drink ml = 500
-stack card gap 3
-  row
-    "Last 7 days" head grow
-    "Goal met" countof(days last 7 days, sum(drink.ml on it) >= goal) "of 7" faint
-  row gap 1 align end
-    each days last 7 days
-      stack grow gap 1 align center
-        round(sum(drink.ml on it) / 100) / 10 size tiny color muted
-        draw 10, 64
-          rect 0, 0, 10, 64 fill soft radius 3
-          rect 0, 64 - 64 * clamp(sum(drink.ml on it) / goal, 0, 1), 10, 64 * clamp(sum(drink.ml on it) / goal, 0, 1) fill if(sum(drink.ml on it) >= goal, accent, muted) radius 3 opacity if(sum(drink.ml on it) >= goal, 1, 0.55)
-        dayname(it) size tiny color if(it = today, ink, muted)
-  "Litres per day. A full bar is the goal; blue bars reached it." faint
 stack card gap 2
   row
     "Today" head grow
@@ -41,3 +28,22 @@ stack card gap 2
     row tap edit d swipe remove d
       d.kind grow
       d.ml "ml" bold
+stack card gap 3
+  row
+    "Last 7 days" head grow
+    "Goal met on" countof(days last 7 days, sum(drink.ml on it) >= goal) "of 7 days" faint
+  row gap 1 align end
+    each days last 7 days
+      stack grow gap 1 align center
+        sum(drink.ml on it) size tiny color if(sum(drink.ml on it) >= goal, ink, muted) bold
+        draw 10, 64
+          rect 0, 0, 10, 64 fill soft radius 3
+          rect 0, 64 - 64 * clamp(sum(drink.ml on it) / goal, 0, 1), 10, 64 * clamp(sum(drink.ml on it) / goal, 0, 1) fill if(sum(drink.ml on it) >= goal, accent, muted) radius 3 opacity if(sum(drink.ml on it) >= goal, 1, 0.5)
+        dayname(it) size tiny color if(it = today, ink, muted)
+  row gap 3
+    row gap 1
+      box width 14 height 14 radius 4 fill accent
+      "Reached" goal "ml" faint
+    row gap 1
+      box width 14 height 14 radius 4 fill muted opacity 0.5
+      "Not yet" faint

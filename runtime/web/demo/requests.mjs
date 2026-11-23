@@ -4,19 +4,12 @@
 // Each request carries the sentence the reply shows (`says`); tests/check.mjs checks that every
 // result type-checks, is data-safe and gets its sentence.
 
-// real pairs: request.txt + after.mo, applied when the current program equals before.mo
-export const EDIT_PAIRS = {
-  todo: ['08-add-pick-field', '20-add-filter'],
-  reading: ['09-add-search'],
-  medicine: ['11-add-screen'],
-};
+// Real edit pairs from lang/examples/edits apply only when the running program equals their
+// before.mo. Every demo program is now the demo's own, so none match and none are offered; the
+// mechanism stays for programs that are the language's examples.
+export const EDIT_PAIRS = {};
 export const EDIT_FILES = Object.values(EDIT_PAIRS).flat();
-const PAIR_SAYS = {
-  '08-add-pick-field': 'Each task now has a priority: low, normal or high.',
-  '20-add-filter': 'You can now filter your tasks by tag.',
-  '09-add-search': 'You can now search your books by title.',
-  '11-add-screen': 'There is a new History tab that lists every dose you took.',
-};
+const PAIR_SAYS = {};
 
 // patches: [find, replace] pairs applied in order to the current source; the request is offered
 // only while every `find` is still present
@@ -33,7 +26,7 @@ export const PATCHES = {
     { text: 'Show the last 4 weeks instead of 6', says: 'The grid now shows the last 4 weeks.',
       ops: [['"Last 6 weeks"', '"Last 4 weeks"'], ['count(check last 42 days) * 100 / (n * 42)', 'count(check last 28 days) * 100 / (n * 28)'], ['dayname(today - 42 + it)', 'dayname(today - 28 + it)'], ['each days last 42 days', 'each days last 28 days']] },
     { text: 'Let me write why each habit matters', says: 'Each habit can now have a reason. It shows under its name.',
-      ops: [['table habit name text', 'table habit name text, why text?'], ['        h.name bold\n', '        h.name bold\n        h.why faint\n']] },
+      ops: [['table habit name text', 'table habit name text, why text?'], ['          h.name bold\n', '          h.name bold\n          h.why faint\n']] },
   ],
   budget: [
     { text: 'Add a Rent category', says: 'Rent is now one of the categories.', ops: [['Health|Other = Groceries', 'Health|Rent|Other = Groceries']] },
@@ -65,7 +58,19 @@ export const PATCHES = {
       ops: [['  button "Reset" width 120 tap set going = no then set left = work\n', '  button "Reset" width 120 tap set going = no then set left = work\ntimer 5m, "Break"\n']] },
   ],
   attendance: [
-    { text: 'Show the class in 3 columns', says: 'The class now shows in 3 columns.', ops: [['grid 4 gap 1', 'grid 3 gap 1']] },
+    { text: 'Show the class in 4 columns', says: 'The class now shows in 4 columns.', ops: [['  grid 3 gap 1\n', '  grid 4 gap 1\n']] },
+  ],
+  reading: [
+    { text: 'Let me search my books by title', says: 'You can now search your books by title.',
+      ops: [['state d new book\n', 'state d new book\nstate q text = ""\n'], ['each book where status = tab sort title as b', 'field q "Search titles"\neach book where status = tab and has(title, q) sort title as b']] },
+  ],
+  todo: [
+    { text: 'Add a priority: low, normal or high', says: 'Each task now has a priority: low, normal or high.',
+      ops: [['tag pick Home|Work|Other = Home', 'tag pick Home|Work|Other = Home, priority pick Low|Normal|High = Normal'], ['    choice d.tag\n', '    choice d.tag\n    choice d.priority\n']] },
+  ],
+  medicine: [
+    { text: 'Show how many days I took each one this week', says: 'Each medicine now shows how many days you took it this week.',
+      ops: [['          m.time m.dose faint\n', '          m.time m.dose faint\n          text "Taken on" count(m.taken week) "days this week" faint\n']] },
   ],
 };
 

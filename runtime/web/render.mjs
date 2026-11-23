@@ -22,6 +22,7 @@ const iconSvg = (name, label) => {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" ${label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"'}>${body}</svg>`;
 };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pt = n => (n / 16).toFixed(4) + 'rem';   // screen points follow the system text size
 const sc = n => SCALE[Math.max(0, Math.min(6, Math.round(n)))] + 'px';
 const fin = n => typeof n === 'number' && isFinite(n);
 const pad2 = n => String(n).padStart(2, '0');
@@ -86,6 +87,8 @@ class Renderer {
     this.toastEl = h('div', 'mo-toasts', { 'aria-live': 'polite' });
     this.sheetEl = null;
     shell.append(this.scroller, this.tabs, this.toastEl);
+    // space the host keeps for its own controls (the demo's chat button): nothing of the app is under it
+    if (this.opts.insetBottom) { const f = h('div', 'mo-inset', { 'aria-hidden': 'true' }); f.style.height = this.opts.insetBottom + 'px'; shell.insertBefore(f, this.toastEl); shell.style.setProperty('--inset', this.opts.insetBottom + 'px'); }
     this.scroller.prepend(this.head);
     this.root.append(shell);
   }
@@ -111,7 +114,19 @@ class Renderer {
     else if (!this.app.ok && this.app.errors && this.app.errors.length) {
       this.screenEl.textContent = '';
       this.screenEl.append(Object.assign(h('p', 'mo-error'), { textContent: this.app.errors.join('\n') }));
-    } else this.patchChildren(this.screenEl, this.screenChildren(t), { top: true });
+    } else {
+      let kids = this.screenChildren(t);
+      // a first row made only of small controls (a month switcher, the app's one main button)
+      // joins the app bar, to the right of the title
+      const bar = (!t.screens || t.screens.length < 2) && kids.length > 1 && isToolbar(kids[0]) ? kids[0] : null;
+      if (bar) kids = kids.slice(1);
+      this.patchChildren(this.headTools, bar ? [bar] : [], {});
+      this.head.classList.toggle('mo-head-tools', !!bar);
+      // a screen that is one block (a board, one drawing) sits in the middle of the free height;
+      // anything else starts at the top
+      this.screenEl.classList.toggle('mo-single', kids.length === 1 && isBoard(kids[0]));
+      this.patchChildren(this.screenEl, kids, { top: true });
+    }
     this.renderTabs(t);
     this.renderSheet();
     this.shell.classList.toggle('mo-sheet-open', !!this.sheetEl);
@@ -142,7 +157,8 @@ class Renderer {
     this.head.textContent = '';
     const title = h('h1', 'mo-title');
     title.textContent = t.name || 'App';
-    this.head.append(title);
+    this.headTools = h('div', 'mo-head-bar');
+    this.head.append(title, this.headTools);
     if (this.hasSettings()) {
       const b = h('button', 'mo-iconbtn', { type: 'button', 'aria-label': 'Settings', 'data-ui': 'settings' });
       b.innerHTML = iconSvg('_settings');
@@ -301,11 +317,16 @@ class Renderer {
       if (fin(st.gap)) style.gap = sc(st.gap);
       if (fin(st.pad)) style.padding = sc(st.pad);
       if (fin(st.span)) style.gridColumn = `span ${Math.max(1, Math.round(st.span))}`;
-      if (fin(st.width)) { style.width = st.width + 'px'; style.maxWidth = '100%'; style.flex = 'none'; }
+      if (fin(st.width)) { style.width = pt(st.width); style.maxWidth = '100%'; style.flex = 'none'; }
       else if (n.t === 'box') style.alignSelf = 'stretch';   // a box with no width fills its column
-      if (fin(st.height)) style.height = st.height + 'px';
+      if (fin(st.height)) style.height = pt(st.height);
       if (fin(st.radius)) style.borderRadius = Math.max(0, st.radius) + 'px';
-      if (fin(st.opacity)) style.opacity = String(Math.max(0, Math.min(1, st.opacity)));
+      if (n.t === 'text' && st.opacity === 0) cls.push('mo-sr');   // invisible text is read aloud only
+      else if (fin(st.opacity)) style.opacity = String(Math.max(0, Math.min(1, st.opacity)));
+      if (st.stroke && n.t !== 'text' && n.t !== 'button' && colorClass(st.stroke)) {   // an outline ring on a block
+        const c = normColor(st.stroke);
+        style.boxShadow = `inset 0 0 0 ${fin(st.thick) ? Math.max(1, Math.min(6, st.thick)) : 2}px ${colorClass(c) === 'hue' ? `hsl(${/\d+/.exec(c)[0]} var(--hue-s) var(--hue-l))` : `var(--${c === 'accent' ? 'accent-ink' : c})`}`;
+      }
       if (st.fill) { applyFill(el, st.fill); if (n.t !== 'button') cls.push('mo-filled'); } else el.removeAttribute('data-fill');
       const cc = colorClass(st.color);
       if (cc === 'hue') { el.setAttribute('data-color', 'hue'); el.style.setProperty('--hue', /\d+/.exec(normColor(st.color))[0]); }
@@ -327,7 +348,15 @@ class Renderer {
 
     switch (n.t) {
       case 'text': this.fillText(el, n); break;
-      case 'button': el.textContent = n.text || ''; break;
+      case 'button': {
+        const tx = (n.text || '').trim();
+        if (tx === '<' || tx === '>') {   // arrows written as < and > are drawn as chevrons
+          el.innerHTML = iconSvg(tx === '<' ? '_left' : '_right');
+          el.classList.add('mo-chev');
+          el.setAttribute('aria-label', tx === '<' ? 'Previous' : 'Next');
+        } else { el.textContent = typo(n.text || ''); el.removeAttribute('aria-label'); }
+        break;
+      }
       case 'icon': el.innerHTML = iconSvg(n.name, null); break;
       case 'image': if (typeof n.src === 'string' && /^data:image\//.test(n.src)) el.src = n.src; else el.removeAttribute('src'); break;
       case 'space': el.style.height = sc(fin(n.size) ? n.size : 2); break;
@@ -339,27 +368,39 @@ class Renderer {
       case 'form': this.patchChildren(el, (n.fields || []).map(f => ({ ...f, inForm: true })), cx); break;
     }
     if (n.children && n.t !== 'form') this.patchChildren(el, n.children, cx);
+    if (n.t === 'grid') this.rove(el);
     if (n.tap && el.getAttribute('role') === 'button' && !el.hasAttribute('aria-label')) {
       const label = (el.textContent || '').trim();
       if (!label) el.setAttribute('aria-label', 'Open');
     }
   }
 
+  // a grid with more than 12 tappable cells is one tab stop; arrow keys move between cells
+  rove(el) {
+    const cells = [...el.children].filter(c => c.getAttribute('role') === 'button');
+    if (cells.length <= 12) { el.removeAttribute('data-rove'); return; }
+    el.setAttribute('data-rove', '1');
+    el.setAttribute('role', 'group');
+    const cur = cells.find(c => c.getAttribute('tabindex') === '0' && c._roved) || cells[cells.length - 1];
+    for (const c of cells) { c.setAttribute('tabindex', c === cur ? '0' : '-1'); c._roved = true; }
+  }
   // accessible name for a tick box: the nearest text in the same row
   nearLabel(n) { return null; }
 
   fillText(el, n) {
-    const text = n.text ?? '';
+    const text = typo(n.text ?? '');
     const big = n.style && (n.style.role === 'big' || n.style.size === 'huge');
     const m = big && /^(-?[\d][\d,.:]*)\s([A-Za-z%]{1,5})$/.exec(text);
     if (n.tap) {
       let b = el.firstElementChild;
       if (!b || b.tagName !== 'SPAN') { el.textContent = ''; b = h('span', 'mo-textbtn'); el.append(b); }
-      b.textContent = text;
+      b.innerHTML = esc(text).replace(/\d[\d,.:]*\d/g, x => `<span class="mo-num">${x}</span>`);
       el.classList.add('mo-tapped-text');
       return;
     }
-    if (m) el.innerHTML = `${esc(m[1])} <span class="mo-unit">${esc(m[2])}</span>`;
+    // numbers never break inside (1,480 stays whole); a unit after a big number is set smaller
+    if (m) el.innerHTML = `<span class="mo-num">${esc(m[1])}</span> <span class="mo-unit">${esc(m[2])}</span>`;
+    else if (/\d[\d,.:]*\d/.test(text)) el.innerHTML = esc(text).replace(/\d[\d,.:]*\d/g, x => `<span class="mo-num">${x}</span>`);
     else el.textContent = text;
   }
 
@@ -469,12 +510,12 @@ class Renderer {
     el.className = 'mo-draw' + (st.grow ? ' mo-grow' : '');
     const s = el.style;
     s.aspectRatio = `${W} / ${H}`;
-    if (fin(st.width) && fin(st.height)) { s.width = st.width + 'px'; s.height = st.height + 'px'; s.aspectRatio = ''; }
-    else if (fin(st.width)) { s.width = st.width + 'px'; s.maxWidth = '100%'; s.flex = 'none'; }
-    else if (fin(st.height)) { s.width = (st.height * W / H) + 'px'; s.maxWidth = '100%'; s.flex = 'none'; }
+    if (fin(st.width) && fin(st.height)) { s.width = pt(st.width); s.height = pt(st.height); s.aspectRatio = ''; }
+    else if (fin(st.width)) { s.width = pt(st.width); s.maxWidth = '100%'; s.flex = 'none'; }
+    else if (fin(st.height)) { s.width = pt(st.height * W / H); s.maxWidth = '100%'; s.flex = 'none'; }
     else {
       const cap = H > W ? 120 : 280;           // a tall canvas in a column (a bar) or a wide one (a chart)
-      s.width = `min(100%, ${Math.round(cap * W / H)}px)`;
+      s.width = `min(100%, ${(cap * W / H / 16).toFixed(3)}rem)`;
     }
     if (fin(st.opacity)) s.opacity = String(st.opacity);
     if (n.tap) {
@@ -503,7 +544,7 @@ class Renderer {
       if (st2.bold) d.classList.add('mo-bold');
       d.style.left = (100 * l.x / W) + '%';
       d.style.top = (100 * l.y / H) + '%';
-      d.textContent = l.text ?? '';
+      d.textContent = typo(l.text ?? '');
       const under = colorClass(st2.color) ? null : underFill(shapes, l.x, l.y);
       const lc = colorClass(st2.color);
       if (lc === 'hue') { d.setAttribute('data-color', 'hue'); d.style.setProperty('--hue', /\d+/.exec(normColor(st2.color))[0]); }
@@ -635,9 +676,14 @@ class Renderer {
     }
     s._head.textContent = spec.title;
     this.patchChildren(s._body, spec.fields, {});
-    s._acts.textContent = '';
-    if (spec.removable) s._acts.append(Object.assign(h('button', 'mo-btn mo-danger', { type: 'button', 'data-ui': 'sheet-remove' }), { textContent: 'Remove' }));
-    s._acts.append(Object.assign(h('button', 'mo-btn mo-primary', { type: 'button', 'data-ui': 'sheet-done' }), { textContent: 'Done' }));
+    // the action buttons are made once and patched in place: a re-render caused by the blur of a
+    // field must never replace the button the pointer or the keyboard is on
+    if (!s._done) {
+      s._remove = Object.assign(h('button', 'mo-btn mo-danger', { type: 'button', 'data-ui': 'sheet-remove' }), { textContent: 'Remove' });
+      s._done = Object.assign(h('button', 'mo-btn mo-primary', { type: 'button', 'data-ui': 'sheet-done' }), { textContent: 'Done' });
+      s._acts.append(s._remove, s._done);
+    }
+    s._remove.hidden = !spec.removable;
     if (this.sheetEl._new) { this.sheetEl._new = false; const f = s.querySelector('input, textarea, button'); if (f) f.focus(); }
   }
   sheetSpec(sh) { return bridge.sheetSpec(this.app, sh); }
@@ -670,6 +716,15 @@ class Renderer {
     });
     S.addEventListener('keydown', e => {
       const t = e.target;
+      const g = t instanceof Element && t.parentElement && t.parentElement.getAttribute('data-rove') ? t.parentElement : null;
+      if (g && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+        const cells = [...g.children].filter(c => c.getAttribute('role') === 'button');
+        const cols = getComputedStyle(g).gridTemplateColumns.split(' ').length || 1;
+        let i = cells.indexOf(t);
+        i = e.key === 'ArrowLeft' ? i - 1 : e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowUp' ? i - cols : e.key === 'ArrowDown' ? i + cols : e.key === 'Home' ? 0 : cells.length - 1;
+        if (i >= 0 && i < cells.length) { e.preventDefault(); for (const c of cells) c.setAttribute('tabindex', '-1'); cells[i].setAttribute('tabindex', '0'); cells[i].focus(); }
+        return;
+      }
       if (e.key === 'Escape' && this.sheet) { this.closeSheet(); return; }
       if (!(t instanceof Element) || !t.hasAttribute('data-id')) return;
       if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
@@ -688,8 +743,8 @@ class Renderer {
         if (e.type === 'input' && !live) return;
         clearTimeout(t._deb);
         t._sent = t.value;
-        if (e.type === 'input') t._deb = setTimeout(() => this.send(id, 'change', v, true), 120);
-        else this.send(id, 'change', v, true);
+        if (e.type === 'input') t._deb = setTimeout(() => { t._deb = null; this.send(id, 'change', v, true); }, 120);
+        else { t._deb = null; this.send(id, 'change', v, true); }
       } else if (ev === 'change-image' && e.type === 'change' && t.files && t.files[0]) {
         const r = new FileReader();
         r.onload = () => this.send(id, 'change', r.result);
@@ -742,6 +797,9 @@ class Renderer {
     } else if (k === 'ask') { if (this.opts.onAsk) this.opts.onAsk(el.getAttribute('data-answer')); }
   }
   closeSheet() {
+    // send a value still waiting in a field's debounce before the sheet goes
+    const a = document.activeElement;
+    if (a && this.sheetEl && this.sheetEl.contains(a) && a._deb) { clearTimeout(a._deb); a._deb = null; a.dispatchEvent(new Event('change', { bubbles: true })); }
     this.sheet = null;
     this.render();
     const back = this.sheetReturn && this.sheetReturn.isConnected ? this.sheetReturn : null;
@@ -775,6 +833,29 @@ class Renderer {
 }
 
 // ---------- helpers ----------
+// a first row of compact controls only: buttons, short texts, icons, empty boxes, tick boxes
+// one block that is a board or a drawing: a draw or a grid, or a plain (not card) stack around one
+function isBoard(n) {
+  if (n.t === 'draw' || n.t === 'grid') return true;
+  return n.t === 'stack' && !(n.style && n.style.card) && (n.children || []).some(c => c.t === 'draw' || c.t === 'grid');
+}
+function isToolbar(n) {
+  if (!n || n.t !== 'row' || (n.style && n.style.card) || !n.children || !n.children.length || n.children.length > 4) return false;
+  return n.children.every(c => c.t === 'button' || c.t === 'icon' || c.t === 'toggle' || (c.t === 'text' && (c.text || '').length <= 24) || (c.t === 'box' && !(c.children || []).length));
+}
+// the runtime's number typography (SPEC 12: numbers in the user's locale): thousands separators
+// for 4-digit numbers too (the evaluator groups from 10,000), but never in a year after a month
+// name, a time or a date; a short word before a number and a short unit after it do not wrap away
+const MONTHW = 'January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec';
+const YEAR_AFTER_MONTH = new RegExp(`(${MONTHW}) $`);
+function typo(t) {
+  t = String(t).replace(/(^|[^\d.,:\/\-])(\d)(\d{3})(?=(\.\d+)?(?![\d:,\-\/]))/g, (all, pre, a, b, dec, off, str) => {
+    const before = str.slice(0, off + pre.length);
+    if (YEAR_AFTER_MONTH.test(before) || /\d{4}$/.test(before)) return all;
+    return `${pre}${a},${b}`;
+  });
+  return t.replace(/\b([A-Za-z]{1,3}) (?=[\d–-])/g, '$1\u00a0').replace(/(\d) ([A-Za-z%]{1,3})\b/g, '$1\u00a0$2');
+}
 function hasText(n) { return (n.children || []).some(c => ((c.t === 'text' || c.t === 'button') && /[A-Za-z]{4}/.test(c.text || '')) || hasText(c)); }
 function unq(s) { return typeof s === 'string' ? s.replace(/^"|"$/g, '') : String(s); }
 function cap(s) { s = String(s); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -844,6 +925,11 @@ function fromInputValue(kind, s) {
 // evaluator logs `edit` with a target but has no public "describe this row's fields" call, so
 // these functions read the program's declarations from the App object. See README, contract gaps.
 export const bridge = {
+  // storage slots (lang/SEMANTICS.md "Storage and edits"): program names map to slot ids
+  T(app, t) { return app.tk ? app.tk(t) : t; },
+  F(app, t, f) { return app.fk ? app.fk(t, f) : f; },
+  S(app, n) { return app.sk ? app.sk(n) : n; },
+  rowOf(app, table, id) { return (app.data.tables[this.T(app, table)] || []).find(r => r.id === id); },
   settingsList(app) {
     return (app.prog && app.prog.body || []).filter(s => s.kind === 'setting');
   },
@@ -853,17 +939,17 @@ export const bridge = {
       if (!list.length) return null;
       return {
         title: sh.kind === 'settings' ? 'Settings' : cap(unq(list[0].label || list[0].name).replace(/_/g, ' ')),
-        fields: list.map(s => ({ id: 'sheet:set:' + s.name, t: 'input', kind: s.type.t, label: unq(s.label || s.name).replace(/_/g, ' '), value: app.data.settings[s.name], options: s.type.options, ...(s.range ? { min: s.range.lo, max: s.range.hi ?? undefined } : {}) })),
+        fields: list.map(s => ({ id: 'sheet:set:' + s.name, t: 'input', kind: s.type.t, label: unq(s.label || s.name).replace(/_/g, ' '), value: app.data.settings[this.S(app, s.name)], options: s.type.options, ...(s.range ? { min: s.range.lo, max: s.range.hi ?? undefined } : {}) })),
       };
     }
     if (sh.kind === 'row') {
       const { table, id } = sh.target || {};
       const tb = app.env && app.env.tables && app.env.tables.get(table);
-      const row = (app.data.tables[table] || []).find(r => r.id === id && !r.deleted);
-      if (!tb || !row) return null;
+      const row = this.rowOf(app, table, id);
+      if (!tb || !row || row.deleted) return null;
       const fields = [];
       for (const [name, f] of tb.fields) {
-        const o = { id: `sheet:row:${table}:${id}:${name}`, t: 'input', kind: f.type.t, label: unq(f.label || name).replace(/_/g, ' '), value: row[name], unit: f.unit ? unq(f.unit) : undefined };
+        const o = { id: `sheet:row:${table}:${id}:${name}`, t: 'input', kind: f.type.t, label: unq(f.label || name).replace(/_/g, ' '), value: row[this.F(app, table, name)], unit: f.unit ? unq(f.unit) : undefined };
         if (f.type.t === 'pick') o.options = f.type.options;
         if (f.type.t === 'ref') { const rs = app.rows(f.type.table); o.options = rs.map(r => r.id); o.labels = rs.map(r => app.summary({ table: f.type.table, r })); }
         if (f.range) { o.min = f.range.lo; if (f.range.hi !== null) o.max = f.range.hi; }
@@ -882,38 +968,54 @@ export const bridge = {
       app.pushUndo();
       let val = coerce(s.type, v);
       if (s.range && typeof val === 'number') { if (val < s.range.lo) val = s.range.lo; if (s.range.hi !== null && val > s.range.hi) val = s.range.hi; }
-      app.data.settings[s.name] = val;
+      app.data.settings[this.S(app, s.name)] = val;
       app.runWhen && app.runWhen();
     } else if (p[1] === 'row') {
       const [, , table, rid, field] = p;
-      const row = (app.data.tables[table] || []).find(r => r.id === +rid);
+      const row = this.rowOf(app, table, +rid);
       if (!row) return;
       const f = field === 'at' ? { type: { t: 'when' } } : app.env.tables.get(table).fields.get(field);
       let val = coerce(f.type, v);
       if (val === null && field === 'at') return;
       if (f.range && typeof val === 'number') { if (val < f.range.lo) val = f.range.lo; if (f.range.hi !== null && val > f.range.hi) val = f.range.hi; }
       app.pushUndo();
-      row[field] = val;
+      row[field === 'at' ? 'at' : this.F(app, table, field)] = val;
       app.runWhen && app.runWhen();
     }
   },
   removeRow(app, sh) {
     if (!sh || sh.kind !== 'row') return;
     const { table, id } = sh.target;
-    const row = (app.data.tables[table] || []).find(r => r.id === id);
+    const row = this.rowOf(app, table, id);
     if (!row) return;
     app.pushUndo();
     row.deleted = true;
     app.log.push({ kind: 'removed', table, id, at: app.clock });
   },
+  // "Removed Petrol, Rs 5,740": the row's words first, then its amounts, in the runtime's formats
   removedText(app, l) {
     const tb = app.env && app.env.tables && app.env.tables.get(l.table);
-    const row = (app.data.tables[l.table] || []).find(r => r.id === l.id);
-    let what = '';
-    try { what = row && app.summary ? app.summary({ table: l.table, r: row }) : ''; } catch { what = ''; }
-    return 'Removed ' + (what || (tb && unq(tb.label || '')) || l.table.replace(/_/g, ' '));
+    const row = this.rowOf(app, l.table, l.id);
+    if (!tb || !row) return 'Removed';
+    const words = [], amounts = [];
+    for (const [name, f] of tb.fields) {
+      const v = row[this.F(app, l.table, name)];
+      if (v === null || v === undefined || v === '' || v === false) continue;
+      const t = f.type.t;
+      if (t === 'text' || t === 'long') words.push(String(v).length > 40 ? String(v).slice(0, 38) + '…' : String(v));
+      else if (t === 'pick') words.push(String(v).replace(/_/g, ' '));
+      else if (t === 'money') amounts.push(money(v));
+      else if (t === 'num') amounts.push(group(v) + (f.unit ? ' ' + unq(f.unit) : ''));
+      else if (t === 'ref') { const r = app.rows(f.type.table).find(x => x.id === v); if (r) { try { words.push(app.summary({ table: f.type.table, r }).split(' · ')[0]); } catch { /* skip */ } } }
+    }
+    const parts = [...words.slice(0, 2), ...amounts.slice(0, 2)];
+    return 'Removed ' + (parts.length ? parts.join(', ') : (unq(tb.label || '') || l.table.replace(/_/g, ' ')));
   },
 };
+// the runtime's number and money formats (SPEC section 12: the runtime formats numbers and
+// money in the user's locale; the demo locale is English, Pakistan)
+export function group(n) { return typeof n === 'number' && isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(n); }
+export function money(n) { return 'Rs\u00a0' + group(n); }
 function coerce(type, v) {
   if (v === null || v === undefined || v === '') return type.t === 'bool' ? false : null;
   switch (type.t) {

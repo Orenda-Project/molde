@@ -4,6 +4,10 @@ table answer item ref item, chose pick A|B|C
 state adding bool = no
 let score = countof(answer, it.chose = it.item.right)
 let todo = countof(item, count(it.answer) = 0)
+row
+  button if(adding, "Close", "Add question") tap set adding = not adding
+if adding
+  form item, "Save question"
 stack gap 1
   text score "of" count(answer) "right" big
   draw 100, 3
@@ -31,8 +35,3 @@ each answer sort at desc as r
       "Right" color good
     else
       "Not quite. The answer is" if(r.item.right = A, r.item.a, if(r.item.right = B, r.item.b, r.item.c)) color bad
-row gap 2 align center
-  "Questions" head grow
-  button if(adding, "Close", "Add question") tap set adding = not adding
-if adding
-  form item, "Save question"
