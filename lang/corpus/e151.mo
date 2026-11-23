@@ -3,7 +3,7 @@ table flight route text, day date, cost money
 table hotel name text, nights num 1.., cost money
 table pack item text, packed bool
 table doc name text, ready bool
-setting trip_days num = 7 "Trip days"
+setting trip_days num = 7
 setting budget money = 200000 "Total budget"
 let spent = sum(flight.cost) + sum(hotel.cost)
 screen plan "Plan" plane

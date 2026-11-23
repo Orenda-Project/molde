@@ -1,6 +1,6 @@
 app "Cricket" ball ocean
 table ball runs num 0..6 = 0, wide bool, out bool
-setting overs num = 20 "Overs"
+setting overs num = 20
 let legal = count(ball today where wide = no)
 let runs = sum(ball.runs today) + count(ball today where wide = yes)
 let wkts = count(ball today where out = yes)

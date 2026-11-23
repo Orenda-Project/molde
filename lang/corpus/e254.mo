@@ -1,6 +1,6 @@
 app "Marriage fund" gift plum
 table deposit amount money, note text?
-setting goal money = 2000000 "Goal"
+setting goal money = 2000000
 setting monthly money = 10000 "Monthly saving"
 let total = sum(deposit.amount)
 let p = clamp(total / goal, 0, 1)

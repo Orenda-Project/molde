@@ -61,7 +61,7 @@ test('tree: toggles and choices carry a label; buttons say what they do', () => 
 });
 
 test('editor API: fields() and setField(), one undo per field edit', () => {
-  const a = run('app "E" list mint\ntable item name text, qty num 0..10\nsetting goal num = 3 "Goal"\nbutton "add" tap add item name = "a", qty = 1\n');
+  const a = run('app "E" list mint\ntable item name text, qty num 0..10\nsetting goal num = 3\nbutton "add" tap add item name = "a", qty = 1\n');
   tapText(a, 'add');
   const row = a.data.tables.item[0];
   const fs = a.fields({ table: 'item', id: row.id });
