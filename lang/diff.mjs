@@ -20,9 +20,11 @@
 //   and widened values stay readable (the evaluator reads them with the old declared type).
 import { check } from './check.mjs';
 import { typeWords } from './describe.mjs';
+import { strip } from './format.mjs';
+export const FORMAT = 6; // round 6: stored text without was, option slots, maps per version
 
 const clone = x => JSON.parse(JSON.stringify(x));
-export const emptySchema = () => ({ v: 0, tables: {}, settings: {}, states: {}, versions: [] });
+export const emptySchema = () => ({ format: FORMAT, v: 0, tables: {}, settings: {}, states: {}, versions: [] });
 
 const WIDER = { text: ['long'], pick: ['text', 'long'], num: ['money'], money: ['num'], date: ['when'] };
 // may values stored as `a` be read as `b`?
@@ -65,49 +67,24 @@ function newKey(slots, name) {
   return `${name}~${i}`;
 }
 
-// Assign declarations to slots (one group: the tables, the fields of one table, the settings, or
-// the states). decl: {name, was, type (stored form), shape (for tables)}. Returns claims or problems.
-// A `was` that the stored data already went through: the slot now called NAME got that name by
-// its last rename, from OLD, and the current version (as recorded in the schema history) still
-// declares that same `was`. Decided from recorded storage state (slot.renamed and the version's
-// list of `was` clauses), so a program that keeps saying `b was a` (reloaded, re-submitted, or
-// edited elsewhere) does not move the values again; this matters for swaps and rotations. A `was`
-// written again after a version without it is a new rename.
-export function appliedRename(slots, d, scope, lastWas) {
-  if (!lastWas || !lastWas.has(`${scope}|${d.name}<${d.was}`)) return null;
-  for (const [k, s] of Object.entries(slots)) if (s.visible === d.name && s.renamed && s.renamed.from === d.was && s.renamed.to === d.name) return k;
-  return null;
-}
-function assign(slots, decls, what, scope, lastWas, wasList) {
-  for (const d of decls) if (d.was && d.was !== d.name) wasList.push(`${scope}|${d.name}<${d.was}`);
-  // read the clauses kept from the current version as already applied; if that reading does not
-  // fit (two names claim one slot), the edit means them as new renames
-  const kept = assignOnce(slots, decls, what, scope, lastWas);
-  if (!kept.problems.length || !kept.usedDone) return kept;
-  const fresh = assignOnce(slots, decls, what, scope, null);
-  return fresh.problems.length < kept.problems.length ? fresh : kept;
-}
-function assignOnce(slots, decls, what, scope, lastWas) {
+// Assign declarations to slots (one group: the tables, the fields of one table, the options of one
+// pick field, the settings, or the states). decl: {name, was}. `was` is an instruction of THIS edit
+// only: `X was Y` takes the slot the previous program calls Y (all clauses at once, so swaps and
+// rotations work). A Y the previous program does not have makes the clause a no-op. Names without
+// `was` resolve to the slot last seen under that name (a hidden slot comes back).
+function assign(slots, decls, what, lenient = false) {
   const claims = new Map(); // decl -> key
-  const problems = [];
-  const fresh = [];
-  const wasTaken = new Set();
-  const done = new Map(); // decl -> slot, for renames already applied
-  for (const d of decls) if (d.was && d.was !== d.name) { const a = appliedRename(slots, d, scope, lastWas); if (a) { done.set(d, a); wasTaken.add(a); } }
-  for (const d of decls) if (d.was && d.was !== d.name && !done.has(d)) { const r = resolve(slots, d.was); if (r && r.key) wasTaken.add(r.key); }
+  const problems = [], fresh = [], noop = [];
+  const wasKey = new Map();
+  for (const d of decls) if (d.was && d.was !== d.name) {
+    const k = Object.keys(slots).find(x => slots[x].visible === d.was);
+    if (k) wasKey.set(d, k); else noop.push(d);
+  }
+  const wasTaken = new Set(wasKey.values());
   for (const d of decls) {
     let k = null;
-    if (done.has(d)) k = done.get(d);
-    else if (d.was && d.was !== d.name) {
-      const r = resolve(slots, d.was);
-      if (r && r.ambiguous) { problems.push(`${what} ${d.name} was ${d.was}: more than one earlier set of values was last called ${d.was}; it is unclear which to move.`); continue; }
-      if (r) k = r.key;
-      else {
-        const self = resolve(slots, d.name);
-        if (self && self.key && slots[self.key].visible === d.name) k = self.key; // rename already done earlier
-        else { problems.push(`${what} ${d.name} says it was ${d.was}, but there never was ${what === 'option' ? 'an option' : 'a ' + what} called ${d.was}.`); continue; }
-      }
-    } else {
+    if (wasKey.has(d)) k = wasKey.get(d);
+    else {
       const r = resolve(slots, d.name);
       if (r && r.ambiguous) { problems.push(`more than one earlier ${what} was last called ${d.name}; write "${d.name} ... was OLD" with the name it had before to say which one to show.`); continue; }
       if (r && !wasTaken.has(r.key)) k = r.key; // its old values moved to another name with was: this is a new one
@@ -119,22 +96,12 @@ function assignOnce(slots, decls, what, scope, lastWas) {
   for (const [d, k] of claims) {
     if (!by.has(k)) { by.set(k, d); continue; }
     const a = by.get(k);
-    const viaOld = [a, d].find(x => !x.was && slots[k].visible !== x.name && slots[k].visible !== null);
+    if (lenient) { const x = [a, d].find(y => slots[k].visible !== y.name) || d; claims.delete(x); fresh.push(x); if (x === a) by.set(k, d); continue; } // loading: the other one starts empty
+    const viaOld = [a, d].find(x => !wasKey.has(x) && slots[k].visible !== x.name && slots[k].visible !== null);
     if (viaOld) problems.push(`${viaOld.name} is an earlier name of the ${what} now called ${slots[k].visible}, so a new ${what} cannot use it; pick another name (for example ${viaOld.name}2).`);
     else problems.push(`${what}s ${a.name} and ${d.name} both claim the values last called ${slots[k].visible || lastName(slots[k])}; only one can.`);
   }
-  return { claims, fresh, problems, usedDone: done.size > 0 };
-}
-// option -> the option it was renamed from by its last rename, replaying the option log of one field
-export function optionFrom(log, table, field) {
-  let from = {};
-  for (const x of (log || []).filter(x => x.table === table && x.field === field).sort((a, b) => a.v - b.v)) {
-    const nx = { ...from };
-    for (const ol of Object.keys(x.map)) delete nx[ol];
-    for (const [ol, nw] of Object.entries(x.map)) nx[nw] = ol;
-    from = nx;
-  }
-  return from;
+  return { claims, fresh, problems, noop };
 }
 const lastName = s => Object.entries(s.seen || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
 
@@ -151,55 +118,53 @@ function unreachable(slots) {
 const sigOf = fields => fields.map(f => f.name + ':' + f.type.t).sort().join(',');
 
 export function evolve(ever, src, opts = {}) {
-  const changes = [], refused = [], notes = [];
+  const loadOpt = opts.load;
+  const changes = [], refused = [], notes = [], warnings = [];
   const m = programModel(src);
   if (m.errors) return { verdict: 'refused', changes, refused: m.errors.map(e => `the new program does not check: ${e}`), notes, ever, moves: [] };
   if (m.ask) return { verdict: 'ask', changes: ['asks a question instead of building'], refused, notes, ever, moves: [] };
-  ever = { ...emptySchema(), ...ever };
-  // going back to an earlier version: use that version's own map
-  // going back to an earlier version is an explicit restore (chat Undo), not an edit that happens to match
+  ever = { ...emptySchema(), ...ever, format: FORMAT };
+  const stored = strip(src);
+  // going back (or forward) to a recorded version: that version's own text and map; nothing is recomputed
   if (opts.restore) {
-    // the version to go back to is named by its index (chat Undo knows it); the text alone can match several versions
-    const byIndex = Number.isInteger(opts.version) && ever.versions[opts.version]?.src === src ? opts.version : -1;
-    const old = byIndex >= 0 ? byIndex : ever.versions.map(x => x.src).lastIndexOf(src);
-    if (old >= 0) return restoreVersion(ever, old, m);
-    return { verdict: 'refused', changes, refused: ['restore: this program text is not an earlier version.'], notes, ever, moves: [] };
+    const byIndex = Number.isInteger(opts.version) && ever.versions[opts.version]?.src === stored ? opts.version : -1;
+    const old = byIndex >= 0 ? byIndex : ever.versions.map(x => x.src).lastIndexOf(stored);
+    if (old >= 0) return restoreVersion(ever, old);
+    return { verdict: 'refused', changes, refused: ['restore: this program text is not a recorded version.'], notes, ever, moves: [] };
   }
-  // the current version's own text again (a reload, a re-submit): nothing changes
+  // the stored text again (a reload, a re-submit): nothing changes
   const cur = ever.versions[ever.versions.length - 1];
   if (cur && cur.src === src) return { verdict: 'safe', changes, refused, notes, ever, moves: [] };
   const E = clone(ever);
   E.v = (E.v || 0) + 1;
   const V = E.v;
-  const moves = [];
-  const edit = !opts.restore;
-  const lastV = (ever.versions || [])[ever.versions.length - 1];
-  const lastWas = new Set(lastV && lastV.was || []), wasList = [];
+  const edit = !opts.replay && !opts.load; // replaying history or loading a newer program into an old backup never refuses a rename-like change
+  const unsure = (what, a, b) => { if (opts.load) warnings.push(`${what} ${a} is gone and ${b} is new; without the edit that made this change it is not known whether ${b} is ${a} renamed, so ${b} starts empty and ${a}'s values are kept hidden.`); };
+  const noopNote = (what, d, fresh) => (fresh ? warnings : notes).push(`${what} ${d.name} was ${d.was} changes nothing: the program before this edit has no ${what} ${d.was}${fresh ? `, so ${d.name} starts empty` : ''}.`);
 
   // ---- tables ----
   const tdecl = m.tables.map(t => ({ name: t.name, was: t.was, t }));
-  const ta = assign(E.tables, tdecl, 'table', 'table', lastWas, wasList);
+  const ta = assign(E.tables, tdecl, 'table', !!opts.load);
   refused.push(...ta.problems);
+  for (const d of ta.noop) noopNote('table', d, ta.fresh.includes(d));
   const tkey = new Map();
   for (const [d, k] of ta.claims) tkey.set(d.name, k);
   for (const d of ta.fresh) { const k = newKey(E.tables, d.name); E.tables[k] = { seen: {}, visible: null, fields: {} }; tkey.set(d.name, k); changes.push(`adds table ${d.name}`); }
   const keyOf = name => tkey.get(name) || resolve(E.tables, name)?.key || name;
-  const stype = type => type.t === 'ref' ? { t: 'ref', table: keyOf(type.table) } : type.t === 'pick' ? { t: 'pick', options: [...type.options] } : { t: type.t };
+  const stype = type => type.t === 'ref' ? { t: 'ref', table: keyOf(type.table) } : type.t === 'pick' ? { t: 'pick' } : { t: type.t };
   const claimedT = new Set(tkey.values());
   for (const [k, s] of Object.entries(E.tables)) {
     if (s.visible === null || claimedT.has(k)) continue;
     const twin = ta.fresh.find(d => sigOf(d.t.fields) === sigOf(Object.values(s.fields).filter(f => f.visible !== null).map(f => ({ name: f.visible, type: f.decl || f.type }))) && d.t.fields.length);
     if (twin && edit) refused.push(`table ${s.visible} disappears and table ${twin.name} with the same fields appears: this looks like a rename. Write "table ${twin.name} was ${s.visible}" to move the rows, or remove ${s.visible} in a separate change.`);
-    else changes.push(`hides table ${s.visible} (its rows are kept and come back if it returns)`);
+    else { if (twin) unsure('table', s.visible, twin.name); changes.push(`hides table ${s.visible} (its rows are kept and come back if it returns)`); }
     s.visible = null;
   }
-  const warnings = [];
   for (const [d, k] of ta.claims) {
     const s = E.tables[k];
     if (s.visible !== d.name) {
       changes.push(s.visible ? `renames table ${s.visible} to ${d.name} (its rows move with it)` : `shows table ${d.name} again (its old rows come back)`);
-      if (!s.visible && !d.was) warnings.push(`table ${d.name} was removed earlier; its old rows come back with it. If this is a new table, give it another name.`);
-      if (d.was && d.was !== d.name) { s.renamed = { from: d.was, to: d.name, v: V }; s.renames = [...(s.renames || []), s.renamed]; }
+      if (!s.visible) warnings.push(`table ${d.name} was removed earlier; its old rows come back with it. If this is a new table, give it another name.`);
     }
   }
 
@@ -210,14 +175,15 @@ export function evolve(ever, src, opts = {}) {
     const T = E.tables[k];
     const wasVisible = ever.tables[k] && ever.tables[k].visible !== null;
     const fdecl = t.fields.map(f => ({ name: f.name, was: f.was, f, type: stype(f.type) }));
-    const fa = assign(T.fields, fdecl, 'field', 'field:' + k, lastWas, wasList);
+    const fa = assign(T.fields, fdecl, 'field', !!opts.load);
     refused.push(...fa.problems.map(p => `${t.name}: ${p}`));
+    for (const d of fa.noop) noopNote('field', { ...d, name: `${t.name}.${d.name}`, was: `${t.name}.${d.was}` }, fa.fresh.includes(d));
     const claimed = new Set(fa.claims.values());
     for (const [fk, s] of Object.entries(T.fields)) {
       if (s.visible === null || claimed.has(fk)) continue;
       const twin = fa.fresh.find(d => d.type.t === s.type.t);
       if (twin && edit && wasVisible) refused.push(`${t.name}.${s.visible} disappears and ${t.name}.${twin.name} of the same type appears: this looks like a rename. Write "${twin.name} ${twin.f.type.t === 'ref' ? 'ref ' + twin.f.type.table : twin.f.type.t === 'pick' ? 'pick ...' : twin.f.type.t} was ${s.visible}" to move the values, or remove the old field in a separate change.`);
-      else changes.push(`hides field ${t.name}.${s.visible} (values are kept, not deleted)`);
+      else { if (twin) unsure('field', `${t.name}.${s.visible}`, `${t.name}.${twin.name}`); changes.push(`hides field ${t.name}.${s.visible} (values are kept, not deleted)`); }
       s.visible = null;
     }
     for (const d of fa.fresh) {
@@ -238,40 +204,31 @@ export function evolve(ever, src, opts = {}) {
       if (!widens(st, ty)) {
         if (edit) { refused.push(`${t.name}.${d.name} would change from ${tw(st)} to ${tw(ty)}${s.visible === null && Object.keys(s.seen).length ? ' (it was hidden, with values stored as ' + tw(st) + ')' : ''}; stored values could be lost. Add a field with a new name instead.`); continue; }
       } else if (st.t !== ty.t) changes.push(`widens ${t.name}.${d.name} from ${tw(st)} to ${tw(ty)}`);
-      // pick options: renames and drops
-      let newType = widens(st, ty) && st.t !== ty.t ? ty : st;
-      const renamedNow = d.was && d.was !== d.name && s.visible !== d.name ? { from: d.was, to: d.name, v: V } : s.renamed;
-      if (st.t === 'pick' && ty.t === 'pick') {
+      const newType = widens(st, ty) && st.t !== ty.t ? ty : st;
+      // pick options are slots too: rows store the option's slot id, so a rename moves no row
+      let opts = s.opts ? clone(s.opts) : undefined;
+      if (d.f.type.t === 'pick') {
+        opts = opts || {};
         const ren = d.f.type.renames || {};
-        const ever0 = st.options;
-        const olds = Object.values(ren);
-        const dupOld = olds.find((o, i) => olds.indexOf(o) !== i);
-        if (dupOld) { refused.push(`${t.name}.${d.name}: two options say they were ${dupOld}; only one can.`); continue; }
-        const map = {};
-        let bad = false;
-        const from = optionFrom(E.optionLog, k, fk); // option -> the name it had before its last rename
-        for (const [nw, ol] of Object.entries(ren)) {
-          const okey = `option:${k}:${fk}|${nw}<${ol}`; wasList.push(okey);
-          if (from[nw] === ol && lastWas.has(okey)) continue; // this rename is already in the stored rows
-          if (!ever0.includes(ol)) {
-            if (ever0.includes(nw)) continue; // rename already done
-            refused.push(`${t.name}.${d.name}: option ${nw} says it was ${ol}, but there never was an option ${ol}.`); bad = true; continue;
-          }
-          const declared = (s.decl && s.decl.options) || ever0;
-          if (declared.includes(nw) && !olds.includes(nw)) { refused.push(`${t.name}.${d.name}: option ${nw} was ${ol} would merge ${ol} into the existing option ${nw}; rename ${nw} too or pick another name.`); bad = true; continue; }
-          map[ol] = nw;
+        const oa = assign(opts, d.f.type.options.map(o => ({ name: o, was: ren[o] })), 'option', !!loadOpt);
+        refused.push(...oa.problems.map(p => `${t.name}.${d.name}: ${p}`));
+        // a rename onto a name another listed option still has would mix two options under one name
+        const renamedTo = new Set([...oa.claims].filter(([od, ok]) => opts[ok].visible !== od.name && opts[ok].visible !== null).map(([od]) => od.name));
+        for (const [od, ok] of oa.claims) if (renamedTo.has(od.name)) { const other = Object.entries(opts).find(([k2, o]) => k2 !== ok && o.visible === od.name && ![...oa.claims.values()].includes(k2)); if (other) refused.push(`${t.name}.${d.name}: option ${od.name} was ${opts[ok].visible} would merge ${opts[ok].visible} into the existing option ${od.name}; rename ${od.name} too or pick another name.`); }
+        for (const od of oa.noop) noopNote('option', { name: od.name, was: od.was }, oa.fresh.includes(od));
+        const oclaimed = new Set(oa.claims.values());
+        for (const [ok, os] of Object.entries(opts)) {
+          if (os.visible === null || oclaimed.has(ok)) continue;
+          warnings.push(`${t.name}.${d.name}: option ${os.visible} is no longer listed. Rows that have it keep it and still show it, but it is not offered for new rows and formulas cannot name it. To rename it write "NEW was ${os.visible}"; to keep it, list it again.`);
+          os.visible = null;
         }
-        if (bad) continue;
-        if (Object.keys(map).length) {
-          moves.push({ table: k, field: fk, map });
-          E.optionLog = [...(E.optionLog || []), { v: V, table: k, field: fk, map }];
-          for (const [ol, nw] of Object.entries(map)) changes.push(`renames option ${ol} of ${t.name}.${d.name} to ${nw} (rows move with it)`);
+        for (const od of oa.fresh) { const ok = '#' + newKey(Object.fromEntries(Object.keys(opts).map(x => [x.slice(1), 1])), od.name); opts[ok] = { seen: {}, visible: null }; oa.claims.set(od, ok); if (wasVisible || ever.tables[k]) changes.push(`adds option ${od.name} to ${t.name}.${d.name}`); }
+        for (const [od, ok] of oa.claims) {
+          const os = opts[ok];
+          if (os.visible !== null && os.visible !== od.name) changes.push(`renames option ${os.visible} of ${t.name}.${d.name} to ${od.name} (rows keep their choice)`);
+          else if (os.visible === null && Object.keys(os.seen).length) changes.push(`lists option ${od.name} of ${t.name}.${d.name} again`);
+          opts[ok] = { ...os, visible: od.name, seen: { ...os.seen, [od.name]: V } };
         }
-        const mapped = ever0.map(o => map[o] || o);
-        const added = ty.options.filter(o => !mapped.includes(o));
-        if (added.length) changes.push(`adds options ${added.join(', ')} to ${t.name}.${d.name}`);
-        for (const o of mapped) if (!ty.options.includes(o)) notes.push(`${t.name}.${d.name}: option ${o} is no longer listed. Rows that have it keep it and still show it, but it is not offered for new rows and formulas cannot name it. To rename it write "NEW was ${o}"; to keep it, list it again.`);
-        newType = { t: 'pick', options: [...new Set([...ty.options, ...mapped])] };
       }
       if (prevDecl && s.visible !== null) {
         if (prevDecl.optional && !d.f.optional) notes.push(`${t.name}.${d.name} is now required; old empty values stay empty.`);
@@ -281,10 +238,9 @@ export function evolve(ever, src, opts = {}) {
           if (r && (!p || r.lo > p.lo || (r.hi !== null && (p.hi === null || r.hi < p.hi)))) notes.push(`${t.name}.${d.name}: the range is narrower now; old values outside it are kept as they are.`);
         }
       }
-      T.fields[fk] = { ...s, renamed: renamedNow, renames: renamedNow !== s.renamed ? [...(s.renames || []), renamedNow] : s.renames, type: newType, visible: d.name, seen: { ...s.seen, [d.name]: V }, decl: { t: d.f.type.t, optional: !!d.f.optional, range: d.f.range ?? null, ...(d.f.type.t === 'pick' ? { options: [...d.f.type.options] } : {}) } };
+      T.fields[fk] = { ...s, ...(opts ? { opts } : {}), type: newType, visible: d.name, seen: { ...s.seen, [d.name]: V }, decl: { t: d.f.type.t, optional: !!d.f.optional, range: d.f.range ?? null } };
     }
-    if (T.visible !== t.name) T.seen = { ...T.seen };
-    T.visible = t.name; T.seen[t.name] = V;
+    T.visible = t.name; T.seen = { ...T.seen, [t.name]: V };
     const lost = unreachable(T.fields);
     if (lost.length) refused.push(`${t.name}: this would leave the old values of ${lost.map(x => lastName(T.fields[x])).join(', ')} with no name to bring them back (another field now owns that name). Pick another name, or bring the old field back first.`);
   }
@@ -295,14 +251,15 @@ export function evolve(ever, src, opts = {}) {
   for (const [group, list, what] of [['settings', m.settings, 'setting'], ['states', m.states, 'state']]) {
     const G = E[group];
     const decl = list.map(s => ({ name: s.name, was: s.was, s, type: stype(s.type) }));
-    const ga = assign(G, decl, what, what, lastWas, wasList);
+    const ga = assign(G, decl, what, !!opts.load);
     refused.push(...ga.problems);
+    for (const d of ga.noop) noopNote(what, d, ga.fresh.includes(d));
     const claimed = new Set(ga.claims.values());
     for (const [k, s] of Object.entries(G)) {
       if (s.visible === null || claimed.has(k)) continue;
       const twin = ga.fresh.find(d => d.type.t === s.type.t);
       if (twin && edit) refused.push(`${what} ${s.visible} disappears and ${what} ${twin.name} of the same type appears: this looks like a rename, and the saved value would be reset. Write "${what} ${twin.name} ... was ${s.visible}" to keep it, or remove ${s.visible} in a separate change.`);
-      else changes.push(`hides ${what} ${s.visible} (its value is kept)`);
+      else { if (twin) unsure(what, s.visible, twin.name); changes.push(`hides ${what} ${s.visible} (its value is kept)`); }
       s.visible = null;
     }
     for (const d of ga.fresh) { const k = newKey(G, d.name); G[k] = { seen: {}, visible: null, type: d.type }; ga.claims.set(d, k); changes.push(`adds ${what} ${d.name}`); }
@@ -314,72 +271,70 @@ export function evolve(ever, src, opts = {}) {
       if (what === 'setting' && s.visible === d.name && s.label !== undefined && (s.label ?? null) !== (d.s.label ?? null)) changes.push(`renames the label of setting ${d.name}`);
       if (what === 'setting' && d.s.force && JSON.stringify(s.force ?? null) !== JSON.stringify(d.s.dflt)) changes.push(`sets the saved value of setting ${d.name} to ${d.s.dflt.v} (written on purpose with "set"; undo brings the old value back)`);
       else if (what === 'setting' && !d.s.force && s.visible === d.name && JSON.stringify(s.dflt ?? null) !== JSON.stringify(d.s.dflt ?? null)) notes.push(`setting ${d.name}: a new starting value only fills an empty setting; a value the user saved is kept. Add "set" to change it.`);
-      const rn = d.was && d.was !== d.name && s.visible !== d.name ? { from: d.was, to: d.name, v: V } : s.renamed;
-      G[k] = { ...s, renamed: rn, renames: rn !== s.renamed ? [...(s.renames || []), rn] : s.renames, type: widens(s.type, d.type) && s.type.t !== d.type.t ? d.type : s.type, visible: d.name, seen: { ...s.seen, [d.name]: V }, label: d.s.label ?? null, dflt: d.s.dflt ?? null, force: d.s.force ? d.s.dflt : null };
+      G[k] = { ...s, type: widens(s.type, d.type) && s.type.t !== d.type.t ? d.type : s.type, visible: d.name, seen: { ...s.seen, [d.name]: V }, label: d.s.label ?? null, dflt: d.s.dflt ?? null, force: d.s.force ? d.s.dflt : null };
     }
     const lost = unreachable(G);
     if (lost.length) refused.push(`this would leave the saved value of ${what} ${lost.map(x => lastName(G[x])).join(', ')} with no name to bring it back. Pick another name.`);
   }
 
   if (refused.length) return { verdict: 'refused', changes, refused, notes, ever, moves: [] };
-  E.versions = [...(ever.versions || []), { src, map: mapOf(E), v: V, was: wasList }];
-  if (warnings.length) return { verdict: 'warn', warnings, changes, refused, notes, ever: E, moves };
-  return { verdict: 'safe', changes, refused, notes, ever: E, moves };
+  // the text as written is kept too (edit), so an older-shaped backup can be rebuilt by replaying it
+  E.versions = [...(ever.versions || []), { src: stored, ...(src !== stored ? { edit: src } : {}), map: mapOf(E), v: V }];
+  if (warnings.length) return { verdict: 'warn', warnings, changes, refused, notes, ever: E, moves: [], stored };
+  return { verdict: 'safe', changes, refused, notes, ever: E, moves: [], stored };
 }
 
-// name -> slot map of the current visible schema
+// name -> slot map of the current visible schema (options: name -> option slot, per field)
 export function mapOf(E) {
-  const tables = {}, fields = {};
+  const tables = {}, fields = {}, options = {};
   for (const [k, s] of Object.entries(E.tables)) if (s.visible !== null) {
     tables[s.visible] = k;
     fields[k] = {};
-    for (const [fk, f] of Object.entries(s.fields)) if (f.visible !== null) fields[k][f.visible] = fk;
+    for (const [fk, f] of Object.entries(s.fields)) if (f.visible !== null) {
+      fields[k][f.visible] = fk;
+      if (f.opts) (options[k] ||= {})[fk] = Object.fromEntries(Object.entries(f.opts).filter(([, o]) => o.visible !== null).map(([ok, o]) => [o.visible, ok]));
+    }
   }
   const g = G => Object.fromEntries(Object.entries(G).filter(([, s]) => s.visible !== null).map(([k, s]) => [s.visible, k]));
-  return { tables, fields, settings: g(E.settings), states: g(E.states) };
+  return { tables, fields, options, settings: g(E.settings), states: g(E.states) };
 }
 
-function restoreVersion(ever, i, m) {
+// Undo / restore-to-version: that version's text and its name -> slot map, as recorded
+function restoreVersion(ever, i) {
   const E = clone(ever);
   E.v += 1;
   const map = ever.versions[i].map;
-  // undo every option rename made since that version, newest first, so rows read under the old options
-  const since = ever.versions[i].v ?? 0;
-  const moves = [];
-  const log = (ever.optionLog || []).filter(x => x.v > since).reverse();
-  for (const x of log) {
-    const inv = Object.fromEntries(Object.entries(x.map).map(([a, b]) => [b, a]));
-    moves.push({ table: x.table, field: x.field, map: inv });
-    const f = E.tables[x.table]?.fields[x.field];
-    if (f && f.type.t === 'pick') {
-      f.type.options = [...new Set([...f.type.options, ...Object.keys(x.map)])];
-      // the restored version declared the old names, not the new ones
-      if (f.decl) f.decl.options = [...new Set([...(f.decl.options || f.type.options).filter(o => !(o in inv)), ...Object.keys(x.map)])];
-    }
-  }
-  if (log.length) E.optionLog = (ever.optionLog || []).filter(x => x.v <= since);
-  // renames made after that version are undone: each slot's last rename is the last one up to it
-  const back = s => { if (!s) return; s.renames = (s.renames || []).filter(x => x.v <= since); if (s.renames.length) s.renamed = s.renames[s.renames.length - 1]; else delete s.renamed; };
-  for (const t of Object.values(E.tables)) { back(t); for (const f of Object.values(t.fields)) back(f); }
-  for (const g of ['settings', 'states']) for (const x of Object.values(E[g] || {})) back(x);
-  const changes = [`restores version ${i + 1} of ${ever.versions.length} (data entered since stays; fields it does not know are hidden)`];
+  const changes = [`restores version ${i + 1} of ${ever.versions.length} (data entered since stays; what it does not name is hidden)`];
+  const nameIn = (m, key) => Object.keys(m || {}).find(n => m[n] === key) ?? null;
   for (const [k, s] of Object.entries(E.tables)) {
-    const name = Object.keys(map.tables).find(n => map.tables[n] === k) ?? null;
+    const name = nameIn(map.tables, k);
     if (s.visible !== null && name === null) changes.push(`hides table ${s.visible}`);
     s.visible = name; if (name) s.seen[name] = E.v;
     for (const [fk, f] of Object.entries(s.fields)) {
-      const fn = name ? (Object.keys(map.fields[k] || {}).find(n => map.fields[k][n] === fk) ?? null) : null;
+      const fn = name ? nameIn(map.fields[k], fk) : null;
       if (f.visible !== null && fn === null && name) changes.push(`hides field ${name}.${f.visible}`);
       f.visible = fn; if (fn) f.seen[fn] = E.v;
+      if (f.opts) for (const [ok, o] of Object.entries(f.opts)) {
+        const on = fn ? nameIn(map.options?.[k]?.[fk], ok) : null;
+        o.visible = on; if (on) o.seen[on] = E.v;
+      }
     }
   }
   for (const g of ['settings', 'states']) for (const [k, s] of Object.entries(E[g])) {
-    const n = Object.keys(map[g]).find(x => map[g][x] === k) ?? null;
+    const n = nameIn(map[g], k);
     s.visible = n; if (n) s.seen[n] = E.v;
   }
-  E.versions = [...ever.versions, { src: ever.versions[i].src, map, v: E.v, was: ever.versions[i].was || [] }];
-  if (moves.length) changes.push(`moves rows back to the option names of that version (${moves.map(mv => Object.entries(mv.map).map(([a, b]) => `${a} to ${b}`).join(', ')).join('; ')})`);
-  return { verdict: 'restore', changes, refused: [], notes: [], ever: E, moves, restoredFrom: i };
+  E.versions = [...ever.versions, { src: ever.versions[i].src, map, v: E.v, from: i }];
+  return { verdict: 'restore', changes, refused: [], notes: [], ever: E, moves: [], restoredFrom: i };
+}
+
+// The schema history of a list of programs, oldest first, each applied as an edit of the one before
+// (rule 1). Refused ones are skipped. Used to rebuild a backup that has no maps, and for diff.
+export function everOf(history) {
+  let ever = emptySchema();
+  const used = [];
+  for (const h of history) { const r = evolve(ever, h); if (r.verdict === 'safe' || r.verdict === 'warn' || r.verdict === 'restore') { ever = r.ever; used.push(true); } else used.push(false); }
+  return { ever, used };
 }
 
 function uiLines(prog) {
@@ -391,14 +346,6 @@ function uiLines(prog) {
   };
   prog.body.forEach(s => walk(s, 0));
   return out;
-}
-
-// the ever-schema after a list of accepted programs (oldest first); refused ones are skipped
-export function everOf(history) {
-  let ever = emptySchema();
-  const used = [];
-  for (const h of history) { const r = evolve(ever, h); if (r.verdict === 'safe' || r.verdict === 'warn' || r.verdict === 'restore') { ever = r.ever; used.push(true); } else used.push(false); }
-  return { ever, used };
 }
 
 // history: the previous program text, or the list of every earlier accepted program (oldest first).

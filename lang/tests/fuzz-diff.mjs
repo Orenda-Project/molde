@@ -78,7 +78,7 @@ export function runFuzz(chains = 5000, seed = 7, steps = 8) {
       ever = r.ever;
       model = m;
       // the same text again (a reload, a re-submit) changes nothing: no rename, no move, same name -> slot map
-      const again = evolve(ever, src);
+      const again = evolve(ever, ever.versions[ever.versions.length - 1].src); // the stored text (no was)
       const mapNow = JSON.stringify(ever.versions[ever.versions.length - 1].map);
       if (again.verdict === 'refused' || again.moves.length || again.changes.some(x => /renames/.test(x)) || JSON.stringify(again.ever.versions[again.ever.versions.length - 1].map) !== mapNow)
         stats.violations.push({ c, st, why: 'the same text again changed something', r: [again.verdict, again.changes, again.refused, again.moves], src });

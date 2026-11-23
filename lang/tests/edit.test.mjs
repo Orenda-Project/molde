@@ -39,7 +39,7 @@ test('pick option rename with was moves the rows; a dropped option stays readabl
   tapText(a, 'f'); tapText(a, 'f'); tapText(a, 'b');
   assert.equal(a.applyEdit('app "C"\ntable s cat pick Meals was Food|Bills\n"Meals" count(s where cat = Meals)\n').verdict, 'safe');
   assert.ok(texts(a).includes('Meals 2'), JSON.stringify(texts(a)));
-  assert.equal(a.applyEdit('app "C"\ntable s cat pick Meals|Rent\neach s\n  it.cat\n').verdict, 'safe');
+  assert.equal(a.applyEdit('app "C"\ntable s cat pick Meals|Rent\neach s\n  it.cat\n').verdict, 'warn'); // round 6: dropping an option that rows still use is a warning
   assert.ok(texts(a).includes('Bills'));
 });
 
@@ -148,15 +148,16 @@ test('program-level model fuzz: 150 chains, what the program shows matches the d
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
 });
 
-test('rename fuzz: 200 chains of swaps, rotations, renames back, re-submits, Undo and re-apply, restores of any backup, reload after every step', async () => {
+test('rename fuzz: 200 chains of swaps, rotations, renames back, repeated swaps, re-submits, Undo, restore to any version, restores of any backup, legacy and old-backup reloads', async () => {
   const { runRenameFuzz } = await import('./fuzz-model.mjs');
   const r = runRenameFuzz(200, 13);
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
-  assert.ok(r.reloads >= 2000 && r.restores > 20 && r.reapplies > 10);
+  assert.ok(r.reloads >= 2000 && r.versionRestores > 20 && r.repeats > 10 && r.legacyReloads > 500);
 });
 
 // ---- round 5: a `was` already applied to the stored data is never applied again ----
 import { diff } from '../diff.mjs';
+import { strip } from '../format.mjs';
 const swapCases = [
   ['field swap', 'table s a num, b num\n"x" sum(s.a) sum(s.b)', 'table s b num was a, a num was b\n"x" sum(s.a) sum(s.b)', a => a.addRow('s', { a: 1, b: 20 }), 'x 20 1'],
   ['field 3-cycle', 'table s a num, b num, c num\n"x" sum(s.a) sum(s.b) sum(s.c)', 'table s b num was a, c num was b, a num was c\n"x" sum(s.a) sum(s.b) sum(s.c)', a => a.addRow('s', { a: 1, b: 20, c: 300 }), 'x 300 1 20'],
@@ -164,19 +165,26 @@ const swapCases = [
   ['option swap', 'table s c pick A|B\n"x" count(s where c = A) count(s where c = B)', 'table s c pick B was A|A was B\n"x" count(s where c = A) count(s where c = B)', a => { a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'B' }); }, 'x 1 2'],
 ];
 for (const [name, b1, b2, fill, want] of swapCases) {
-  test(`a ${name} is applied once: reload, re-submit, a later edit and diff leave it`, () => {
+  test(`a ${name}: was acts once, the stored text has none; reload, re-submit and later edits keep it; writing it again swaps again`, () => {
     const S1 = `app "T"\n${b1}\n`, S2 = `app "T"\n${b2}\n`;
     const a = load(S1); fill(a);
+    const before = texts(a);
     assert.equal(a.applyEdit(S2).verdict, 'safe');
     assert.deepEqual(texts(a), [want]);
-    assert.deepEqual(texts(load(S2, { data: a.snapshot() })), [want], 'reload with the snapshot');
-    assert.deepEqual(texts(load(S2, { data: a.snapshot(), history: [S1, S2] })), [want], 'reload with history too');
-    const again = a.applyEdit(S2);
-    assert.deepEqual([again.verdict, again.changes.filter(c => /renames/.test(c)), texts(a)], ['safe', [], [want]], 're-submit');
-    a.applyEdit(S2 + '"hi"\n');
+    assert.equal(a.source, strip(S2), 'the stored program has no was');
+    assert.deepEqual(texts(load(a.source, { data: a.snapshot() })), [want], 'reload with the snapshot');
+    assert.deepEqual(texts(load(S2, { data: a.snapshot() })), [want], 'loading never renames, even given the was text');
+    assert.deepEqual(texts(load(a.source, { data: a.snapshot(), history: [S1, S2] })), [want], 'reload with history too');
+    const again = a.applyEdit(a.source);
+    assert.deepEqual([again.verdict, again.changes, texts(a)], ['safe', [], [want]], 're-submitting the stored text');
+    a.applyEdit(a.source + '"hi"\n');
     assert.deepEqual(texts(a), [want, 'hi'], 'a later unrelated edit');
-    const d = diff([S1, S2], S2);
-    assert.deepEqual(d.changes.filter(c => /renames/.test(c)), [], 'diff reports no rename');
+    assert.deepEqual(diff([S1, S2], strip(S2)).changes.filter(c => /renames/.test(c)), [], 'diff of the stored text reports no rename');
+    if (name !== 'field 3-cycle') { // a swap written again swaps back (a 3-cycle written again rotates on)
+      const back = a.applyEdit(S2 + '"hi"\n');
+      assert.ok(back.changes.some(c => /renames/.test(c)), 'the swap written again is a rename');
+      assert.deepEqual(texts(a), [...before, 'hi'], 'swapped back');
+    }
   });
 }
 
@@ -217,4 +225,75 @@ test('a damaged option log is refused at load with a message, data untouched', (
     const b = load('app "T"\ntable s c pick A|B\nlist s\n', { data: snap });
     assert.equal(b.ok, false); assert.match(b.errors[0], /option rename log/); assert.equal(b.rawData, snap);
   }
+});
+
+// ---- round 6: was acts once (the stored text has none), rows hold option slots, versions carry maps ----
+const SW1 = 'app "T"\ntable s a num, b num\n"x" sum(s.a) sum(s.b)\n', SW2 = 'app "T"\ntable s b num was a, a num was b\n"x" sum(s.a) sum(s.b)\n';
+test('round 6 S1: swap, Undo, restore forward to the swap, then an unrelated edit of the stored text: no flip', () => {
+  const a = load(SW1); a.addRow('s', { a: 1, b: 20 });
+  a.applyEdit(SW2); a.revert();
+  assert.deepEqual(texts(a), ['x 1 20']);
+  assert.equal(a.setProgram(strip(SW2), { restore: true, version: 1 }).verdict, 'restore');
+  assert.deepEqual(texts(a), ['x 20 1']);
+  a.applyEdit(a.source + '"hi"\n');
+  assert.deepEqual(texts(a), ['x 20 1', 'hi']);
+  assert.deepEqual(texts(load(a.source, { data: a.snapshot() })), ['x 20 1', 'hi']);
+});
+
+test('round 6 S1: an older-shaped backup (format, option slots, maps and round 5 bookkeeping removed) is rebuilt, no flip', () => {
+  const a = load(SW1); a.addRow('s', { a: 1, b: 20 });
+  a.applyEdit(SW2);
+  const snap = a.snapshot();
+  delete snap.ever.format; for (const v of snap.ever.versions) delete v.map;
+  const b = load(a.source, { data: snap });
+  assert.deepEqual(texts(b), ['x 20 1']);
+  b.applyEdit(b.source + '"hi"\n');
+  assert.deepEqual(texts(b), ['x 20 1', 'hi']);
+  const bad = a.snapshot(); delete bad.ever.format; bad.ever.versions[1] = { v: 2 };
+  const c = load(a.source, { data: bad });
+  assert.equal(c.ok, false); assert.match(c.errors[0], /cannot be rebuilt|without its program text/);
+});
+
+const O1 = 'app "T"\ntable s c pick A|X\n"x" count(s where c = A)\n', O2 = 'app "T"\ntable s c pick B was A|X\n"x" count(s where c = B)\n';
+test('round 6 S2: an option rename moves no row; Undo and restore to any version read rows by option slot', () => {
+  const a = load(O1); a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'X' });
+  const raw = () => a.rows('s').map(r => r[a.fk('s', 'c')]);
+  const before = raw();
+  a.applyEdit(O2);
+  assert.deepEqual(raw(), before, 'rows untouched by the rename');
+  assert.deepEqual([texts(a), a.cell('s', a.rows('s')[0], 'c')], [['x 1'], 'B']);
+  a.setProgram(a.ever.versions[0].src, { restore: true, version: 0 });
+  assert.deepEqual([texts(a), a.cell('s', a.rows('s')[0], 'c')], [['x 1'], 'A']);
+  a.setProgram(a.ever.versions[1].src, { restore: true, version: 1 });
+  assert.deepEqual(texts(a), ['x 1']);
+});
+
+test('round 6 S2: an old backup with the newest program; history is always used when given, even with a schema in the backup', () => {
+  const O3 = 'app "T"\ntable s c pick B|X|Y\n"x" count(s where c = B)\n';
+  const a = load(O1); a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'A' });
+  const old = a.snapshot();
+  a.applyEdit(O2); a.applyEdit(O3);
+  const withH = load(a.source, { data: old, history: [O1, O2, O3] });
+  assert.deepEqual(texts(withH), ['x 2'], 'the skipped rename is replayed from history');
+  const noH = load(a.source, { data: old });
+  assert.equal(noH.ok, true, 'without history it still loads');
+  assert.equal(noH.edit.verdict, 'warn');
+});
+
+test('round 6 S2: the same swap written again swaps again and says so', () => {
+  const a = load(SW1); a.addRow('s', { a: 1, b: 20 });
+  a.applyEdit(SW2);
+  const r = a.applyEdit(SW2);
+  assert.ok(r.changes.some(c => /renames/.test(c)));
+  assert.deepEqual(texts(a), ['x 1 20']);
+});
+
+test('round 6 S3: a pick option renamed without was is a warning; a was that changes nothing says so', () => {
+  const a = load(O1); a.addRow('s', { c: 'A' });
+  const r = a.applyEdit('app "T"\ntable s c pick B|X\n"x" count(s where c = B)\n');
+  assert.equal(r.verdict, 'warn');
+  assert.match(r.warnings.join(' '), /option A is no longer listed/);
+  assert.equal(a.cell('s', a.rows('s')[0], 'c'), 'A', 'the row keeps A');
+  const n = diff([O1], 'app "T"\ntable s c pick A|X|Y was Q\n"x" count(s where c = A)\n');
+  assert.match([...n.notes, ...(n.warnings || [])].join(' '), /Y was Q changes nothing/);
 });
