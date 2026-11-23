@@ -148,6 +148,13 @@ test('program-level model fuzz: 150 chains, what the program shows matches the d
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
 });
 
+test('rename fuzz: 200 chains of swaps, rotations, renames back, re-submits, Undo and re-apply, restores of any backup, reload after every step', async () => {
+  const { runRenameFuzz } = await import('./fuzz-model.mjs');
+  const r = runRenameFuzz(200, 13);
+  assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
+  assert.ok(r.reloads >= 2000 && r.restores > 20 && r.reapplies > 10);
+});
+
 // ---- round 5: a `was` already applied to the stored data is never applied again ----
 import { diff } from '../diff.mjs';
 const swapCases = [
