@@ -16,7 +16,7 @@ if adding
 stack gap 0
   plural(open, "task") "open" head
   if late > 0
-    "Late:" plural(late, "task is") "past the due date" bold color bad
+    "Late:" plural(late, "task") "past the due date" bold color bad
   else
     "Nothing is late" color good
 if open = 0

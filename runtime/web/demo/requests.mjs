@@ -41,7 +41,7 @@ export const PATCHES = {
   ],
   journal: [
     { text: 'Add one thing I am grateful for', says: 'Each entry can now hold one thing you are grateful for.',
-      ops: [['table entry mood num 1..5, note long', 'table entry mood num 1..5, note long, grateful text?'], ['  field d.note "What happened today?"\n', '  field d.note "What happened today?"\n  field d.grateful "One thing you are grateful for"\n'], ['      r.note\n', '      r.note\n      r.grateful color muted\n']] },
+      ops: [['table entry mood num 1..5, note long', 'table entry mood num 1..5, note long, grateful text?'], ['    field d.note "What happened today?"\n', '    field d.note "What happened today?"\n    field d.grateful "One thing you are grateful for"\n'], ['      r.note\n', '      r.note\n      r.grateful color muted\n']] },
   ],
   tasbeeh: [
     { text: 'Add Astaghfirullah to the phrases', says: 'Astaghfirullah is now one of the phrases.', ops: [['AllahuAkbar = SubhanAllah', 'AllahuAkbar|Astaghfirullah = SubhanAllah']] },

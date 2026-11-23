@@ -17,6 +17,9 @@ const $ = (tag, cls, attrs) => { const e = document.createElement(tag); if (cls)
 const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const INSET = 80;   // the strip at the bottom of the phone that holds the chat button
+// the runtime's locale: where the money sign and number formats come from (one place)
+const RUNTIME = { currency: 'Rs', locale: 'en-US', tz: 'local' };
+const STORE = 'molde-demo-v4';   // this device's copy: every app's program, data and history
 
 function readHash() {
   const q = new URLSearchParams(location.hash.slice(1));
@@ -25,7 +28,7 @@ function readHash() {
 function systemMode() { try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'light'; } }
 
 export function seeded(id, src) {
-  const app = load(src, { now: NOW, currency: 'Rs', tz: 'local' });
+  const app = load(src, { now: NOW, currency: RUNTIME.currency, tz: RUNTIME.tz });
   if (SEEDS[id]) SEEDS[id](app);
   return app;
 }
@@ -113,9 +116,33 @@ export function start(root, sources) {
 
   function mountApp() {
     if (S.renderer) S.renderer.destroy();
-    S.renderer = mount(appEl, cur().app, { mode: S.mode, insetBottom: INSET, onAsk: a => S.renderer.toast('Answer: ' + a) });
+    S.renderer = mount(appEl, cur().app, { mode: S.mode, insetBottom: INSET, currency: RUNTIME.currency, locale: RUNTIME.locale, onChange: save, onAsk: a => S.renderer.toast('Answer: ' + a) });
+    save();
     for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === S.ex));
     paintSource(); paintChat(); writeHash();
+  }
+  // the demo keeps every app on this device, as the phone app will: program text, data (with its
+  // storage history) and the earlier programs chat Undo can go back to
+  function save() {
+    try {
+      const out = { ex: S.ex, apps: {} };
+      for (const [id, a] of Object.entries(S.apps)) if (a) out.apps[id] = { src: a.app.source, snap: a.app.snapshot(), prev: a.prev };
+      localStorage.setItem(STORE, JSON.stringify(out));
+    } catch { /* no storage here (private window, sandboxed frame): the session still works */ }
+  }
+  function restore() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+      if (!saved || !saved.apps) return null;
+      for (const [id, a] of Object.entries(saved.apps)) {
+        if (!sources[id]) continue;
+        const app = load(a.src, { now: NOW, currency: RUNTIME.currency, tz: RUNTIME.tz, data: a.snap });
+        if (!app.ok) continue;
+        app.versionsUndo = (a.prev || []).slice();
+        S.apps[id] = { app, base: sources[id], prev: (a.prev || []).slice() };
+      }
+      return saved.ex;
+    } catch { return null; }
   }
   // open an app; one opened before keeps the data it had (nothing is reseeded behind the user)
   function open(id) {
@@ -260,6 +287,7 @@ export function start(root, sources) {
   // the only way the demo puts sample data back: an explicit control, outside the phone
   reset.addEventListener('click', () => {
     S.apps[S.ex] = undefined;
+    save();
     S.history.forEach((x, i) => { if (x.ex === S.ex || x.from === S.ex) S.chat.forEach(m => { if (m.change === i) m.undone = true; }); });
     open(S.ex);
     S.renderer.toast('Demo data put back for this app');
@@ -267,9 +295,11 @@ export function start(root, sources) {
   list.addEventListener('click', e => { const b = e.target.closest('[data-ex]'); if (b) open(b.getAttribute('data-ex')); });
   addEventListener('hashchange', () => { const n = readHash(); if (n.ex && n.ex !== S.ex && CATALOG.some(c => c.id === n.ex)) open(n.ex); });
   paintTools();
+  const lastEx = restore();
+  if (!h.ex && lastEx && CATALOG.some(c => c.id === lastEx)) S.ex = lastEx;
   open(S.ex);
-  S.showBlank = id => { S.ex = id; S.apps[id] = { app: load(sources[id], { now: NOW, currency: 'Rs', tz: 'local' }), base: sources[id], prev: [] }; mountApp(); };   // tests: the app with no data
-  S.mountSource = src => { S.apps[S.ex] = { app: load(src, { now: NOW, currency: 'Rs', tz: 'local' }), base: src, prev: [] }; mountApp(); };   // tests: any program in place of the current one
+  S.showBlank = id => { S.ex = id; S.apps[id] = { app: load(sources[id], { now: NOW, currency: RUNTIME.currency, tz: RUNTIME.tz }), base: sources[id], prev: [] }; mountApp(); };   // tests: the app with no data
+  S.mountSource = src => { S.apps[S.ex] = { app: load(src, { now: NOW, currency: RUNTIME.currency, tz: RUNTIME.tz }), base: src, prev: [] }; mountApp(); };   // tests: any program in place of the current one
   S.runEdit = runEdit; S.runNewApp = runNewApp; S.undoLatest = () => { const i = undoable(); if (i >= 0) undo(i); }; S.openChat = openChat;
   Object.defineProperty(S, 'app', { get: () => cur().app });
   window.__molde = S;   // for tests: the running apps, renderer and chat actions

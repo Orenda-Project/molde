@@ -53,6 +53,7 @@ function applyFill(el, c) {
  *   opts: { mode: 'light'|'dark', tickMs: 1000, onAsk(answer), autoTick: true }
  */
 export function mount(root, app, opts = {}) {
+  setLocale(opts);   // currency sign and number locale come from the runtime's options
   const R = new Renderer(root, app, opts);
   R.render();
   return R;
@@ -92,6 +93,7 @@ class Renderer {
     this.scroller.prepend(this.head);
     this.root.append(shell);
   }
+  onChange() { if (this.opts.onChange) try { this.opts.onChange(this.app); } catch { /* host problem, not ours */ } }
   setMode(mode) { this.opts.mode = mode; this.shell.setAttribute('data-mode', mode); }
   destroy() { this.destroyed = true; clearInterval(this.timer); if (this.ro) this.ro.disconnect(); this.root.textContent = ''; document.removeEventListener('visibilitychange', this.onVis); }
 
@@ -116,12 +118,6 @@ class Renderer {
       this.screenEl.append(Object.assign(h('p', 'mo-error'), { textContent: this.app.errors.join('\n') }));
     } else {
       let kids = this.screenChildren(t);
-      // a first row made only of small controls (a month switcher, the app's one main button)
-      // joins the app bar, to the right of the title
-      const bar = (!t.screens || t.screens.length < 2) && kids.length > 1 && isToolbar(kids[0]) ? kids[0] : null;
-      if (bar) kids = kids.slice(1);
-      this.patchChildren(this.headTools, bar ? [bar] : [], {});
-      this.head.classList.toggle('mo-head-tools', !!bar);
       // a screen that is one block (a board, one drawing) sits in the middle of the free height;
       // anything else starts at the top
       this.patchChildren(this.screenEl, kids, { top: true });
@@ -276,16 +272,7 @@ class Renderer {
       switch (n.t) {
         case 'stack': case 'screen': cls.push('mo-stack'); break;
         case 'row': cls.push('mo-row'); break;
-        case 'grid': {
-          cls.push('mo-grid');
-          const N = Math.max(1, n.cols || 2), g = SCALE[fin(st.gap) ? Math.max(0, Math.min(6, Math.round(st.gap))) : 1];
-          // cells with words keep at least 4.5rem, so large system text drops a column instead of
-          // breaking names letter by letter; cells without text (heat maps) keep N columns
-          style.gridTemplateColumns = hasText(n)
-            ? `repeat(auto-fill, minmax(max(4.5rem, calc((100% - ${(N - 1) * g}px) / ${N} - 0.5px)), 1fr))`
-            : `repeat(${N}, minmax(0, 1fr))`;
-          break;
-        }
+        case 'grid': cls.push('mo-grid'); style.gridTemplateColumns = `repeat(${Math.max(1, n.cols || 2)}, minmax(0, 1fr))`; break;
         case 'box': cls.push('mo-box'); break;
         case 'scroll': cls.push('mo-scroll'); break;
         case 'text': cls.push('mo-text'); break;
@@ -622,13 +609,13 @@ class Renderer {
     el.textContent = '';
     if (n.axes) {
       const yl = h('div', 'mo-plot-y', { 'aria-hidden': 'true' });
-      for (const t of ticks.y || []) { const d = h('span'); d.style.top = sy(t.v) + '%'; d.textContent = typo(t.label ?? ''); yl.append(d); }
+      for (const t of ticks.y || []) { const d = h('span'); d.style.top = sy(t.v) + '%'; d.textContent = tickText(t); yl.append(d); }
       el.append(yl);
     }
     el.append(area);
     if (n.axes || (ticks.x || []).length) {
       const xl = h('div', 'mo-plot-x', { 'aria-hidden': 'true' });
-      for (const t of ticks.x || []) { const d = h('span'); d.style.left = sx(t.v) + '%'; d.textContent = typo(t.label ?? ''); xl.append(d); }
+      for (const t of ticks.x || []) { const d = h('span'); d.style.left = sx(t.v) + '%'; d.textContent = tickText(t); xl.append(d); }
       el.append(xl);
     }
     // a summary for screen readers: the tick labels and the plotted labels
@@ -738,7 +725,7 @@ class Renderer {
 
   // ---------- sheets (runtime editor for rows and settings) ----------
   renderSheet() {
-    if (!this.sheet) { if (this.sheetEl) { this.sheetEl.remove(); this.sheetEl = null; } return; }
+    if (!this.sheet) { if (this.sheetEl) { const el = this.sheetEl; this.sheetEl = null; if (el.isConnected) el.remove(); } return; }
     const spec = this.sheetSpec(this.sheet);
     if (!spec) { this.sheet = null; return this.renderSheet(); }
     if (!this.sheetEl) {
@@ -787,8 +774,9 @@ class Renderer {
     S.addEventListener('click', e => {
       if (this.suppressClick) { this.suppressClick = false; e.preventDefault(); return; }
       const ui = e.target.closest('[data-ui]');
-      if (ui && S.contains(ui)) return this.onUi(ui, e);
       const t = e.target.closest('[data-ev]');
+      // the nearest handler wins: a chip or tick box inside a sheet is not a tap on the scrim
+      if (ui && S.contains(ui) && !(t && ui.contains(t))) return this.onUi(ui, e);
       if (!t || !S.contains(t)) return;
       const ev = t.getAttribute('data-ev'), id = t.getAttribute('data-id');
       if (ev === 'tap') this.send(id, 'tap');
@@ -806,7 +794,13 @@ class Renderer {
         if (i >= 0 && i < cells.length) { e.preventDefault(); for (const c of cells) c.setAttribute('tabindex', '-1'); cells[i].setAttribute('tabindex', '0'); cells[i].focus(); }
         return;
       }
-      if (e.key === 'Escape' && this.sheet) { this.closeSheet(); return; }
+      if (e.key === 'Escape' && this.sheet) { this.closeSheet(true); return; }
+      if (e.key === 'Enter' && this.sheet && t.tagName === 'INPUT' && this.sheetEl && this.sheetEl.contains(t) && !t.classList.contains('mo-dt-native')) { e.preventDefault(); this.closeSheet(); return; }
+      if (e.key === 'Tab' && this.sheetEl && this.sheetEl.contains(t)) {   // focus stays inside the open sheet
+        const f = [...this.sheetEl.querySelectorAll('button:not([hidden]), input, textarea, [tabindex="0"]')].filter(x => x.getClientRects().length && !x.classList.contains('mo-dt-native'));
+        if (f.length && e.shiftKey && t === f[0]) { e.preventDefault(); f[f.length - 1].focus(); return; }
+        if (f.length && !e.shiftKey && t === f[f.length - 1]) { e.preventDefault(); f[0].focus(); return; }
+      }
       if (!(t instanceof Element) || !t.hasAttribute('data-id')) return;
       if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
       if ((e.key === 'Enter' || e.key === ' ') && t.classList.contains('mo-dt-native')) { e.preventDefault(); try { t.showPicker(); } catch { /* no picker */ } }
@@ -818,6 +812,7 @@ class Renderer {
       const ev = t.getAttribute('data-ev'), id = t.getAttribute('data-id');
       if (ev === 'slide') { t.nextElementSibling.textContent = fmtNum(+t.value); this.send(id, 'change', +t.value); }
       else if (ev === 'change') {
+        if (this.cancelBlur) return;
         const kind = t.getAttribute('data-kind');
         const v = fromInputValue(kind, t.value);
         const live = kind === 'text' || kind === 'long' || kind === 'num' || kind === 'money' || kind === 'dur';
@@ -867,9 +862,9 @@ class Renderer {
 
   onUi(el, e) {
     const k = el.getAttribute('data-ui');
-    if (k === 'settings') { this.sheet = { kind: 'settings' }; this.sheetReturn = el; this.render(); }
+    if (k === 'settings') { this.sheetDepth = this.app.undoStack ? this.app.undoStack.length : undefined; this.sheet = { kind: 'settings' }; this.sheetReturn = el; this.render(); }
     else if (k === 'picker') { const i = el.querySelector('input'); if (i && e.target !== i) { try { i.showPicker(); } catch { i.focus(); } } }
-    else if (k === 'scrim') { if (e.target === el) this.closeSheet(); }
+    else if (k === 'scrim') { if (e.target === el) this.closeSheet(true); }
     else if (k === 'sheet-done') this.closeSheet();
     else if (k === 'sheet-remove') { const sh = this.sheet; this.closeSheet(); bridge.removeRow(this.app, sh); this.afterChange(true); }
     else if (k === 'undo') {
@@ -877,12 +872,25 @@ class Renderer {
       if (this.app.undo && this.app.undo()) { this.toast('Restored'); this.afterChange(false); }
     } else if (k === 'ask') { if (this.opts.onAsk) this.opts.onAsk(el.getAttribute('data-answer')); }
   }
-  closeSheet() {
-    // send a value still waiting in a field's debounce before the sheet goes
+  closeSheet(cancel) {
+    if (!this.sheet || this.closing) return;
+    this.closing = true;
     const a = document.activeElement;
-    if (a && this.sheetEl && this.sheetEl.contains(a) && a._deb) { clearTimeout(a._deb); a._deb = null; a.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (a && this.sheetEl && this.sheetEl.contains(a)) {
+      if (!cancel && a._deb) { clearTimeout(a._deb); a._deb = null; a.dispatchEvent(new Event('change', { bubbles: true })); }
+      else if (a._deb) { clearTimeout(a._deb); a._deb = null; }
+      this.cancelBlur = !!cancel;
+      a.blur();
+      this.cancelBlur = false;
+    }
+    if (cancel && this.sheetDepth !== undefined && this.app.undoStack) {
+      while (this.app.undoStack.length > this.sheetDepth) this.app.undo();   // Escape: nothing from the sheet is kept
+    }
     this.sheet = null;
+    this.sheetDepth = undefined;
+    this.closing = false;
     this.render();
+    this.onChange();
     const back = this.sheetReturn && this.sheetReturn.isConnected ? this.sheetReturn : null;
     this.sheetReturn = null;
     if (back) back.focus();
@@ -900,12 +908,13 @@ class Renderer {
 
   // read new log entries (notify, removed, edit, error) and draw again
   afterChange(user, srcId) {
+    if (user !== false || srcId) this.onChange();
     const log = this.app.log || [];
     for (; this.logSeen < log.length; this.logSeen++) {
       const l = log[this.logSeen];
       if (l.kind === 'notify') this.toast(l.text);
       else if (l.kind === 'removed') this.toast(bridge.removedText(this.app, l), true);
-      else if (l.kind === 'edit') { this.sheet = { kind: typeof l.target === 'string' ? 'setting' : 'row', target: l.target }; this.sheetReturn = document.activeElement; }
+      else if (l.kind === 'edit') { this.sheetDepth = this.app.undoStack ? this.app.undoStack.length : undefined; this.sheet = { kind: typeof l.target === 'string' ? 'setting' : 'row', target: l.target }; this.sheetReturn = document.activeElement; }
       else if (l.kind === 'error' && user) this.toast(friendlyError(l.text));
       else if (l.kind === 'remind') this.toast('Reminder set: ' + l.text);
     }
@@ -914,29 +923,18 @@ class Renderer {
 }
 
 // ---------- helpers ----------
-// a first row of compact controls only: buttons, short texts, icons, empty boxes, tick boxes
-// one block that is a board or a drawing: a draw or a grid, or a plain (not card) stack around one
-function isBoard(n) {
-  if (n.t === 'draw' || n.t === 'grid') return true;
-  return n.t === 'stack' && !(n.style && n.style.card) && (n.children || []).some(c => c.t === 'draw' || c.t === 'grid');
-}
-function isToolbar(n) {
-  if (!n || n.t !== 'row' || (n.style && n.style.card) || !n.children || !n.children.length || n.children.length > 4) return false;
-  return n.children.every(c => c.t === 'button' || c.t === 'icon' || c.t === 'toggle' || (c.t === 'text' && (c.text || '').length <= 24) || (c.t === 'box' && !(c.children || []).length));
-}
-// the runtime's number typography (SPEC 12: numbers in the user's locale): thousands separators
-// for 4-digit numbers too (the evaluator groups from 10,000), but never in a year after a month
-// name, a time or a date; a short word before a number and a short unit after it do not wrap away
-const MONTHW = 'January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec';
-const YEAR_AFTER_MONTH = new RegExp(`(${MONTHW}) $`);
+// Text arrives formatted by the evaluator; the renderer does not guess number formats. The one
+// thing it knows for sure is the runtime's own currency sign (a load option), which stays on the
+// same line as its amount. Plot tick values are numbers, so the runtime formats those itself.
+let CURRENCY = '', LOCALE = 'en-US';
+export function setLocale(o = {}) { CURRENCY = o.currency || ''; LOCALE = o.locale || 'en-US'; }
 function typo(t) {
-  t = String(t).replace(/(^|[^\d.,:\/\-])(\d)(\d{3})(?=(\.\d+)?(?![\d:,\-\/]))/g, (all, pre, a, b, dec, off, str) => {
-    const before = str.slice(0, off + pre.length);
-    if (YEAR_AFTER_MONTH.test(before) || /\d{4}$/.test(before)) return all;
-    return `${pre}${a},${b}`;
-  });
-  return t.replace(/\b([A-Za-z]{1,3}) (?=[\d–-])/g, '$1\u00a0').replace(/(\d) ([A-Za-z%]{1,3})\b/g, '$1\u00a0$2');
+  t = String(t);
+  if (!CURRENCY) return t;
+  const esc2 = CURRENCY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return t.replace(new RegExp(`(^|[^\\w])(${esc2}) (?=-?\\d)`, 'g'), '$1$2\u00a0');
 }
+function tickText(t) { return fin(t.v) && String(t.label) === String(t.v) ? group(t.v) : String(t.label ?? ''); }
 function hasText(n) { return (n.children || []).some(c => ((c.t === 'text' || c.t === 'button') && /[A-Za-z]{4}/.test(c.text || '')) || hasText(c)); }
 function unq(s) { return typeof s === 'string' ? s.replace(/^"|"$/g, '') : String(s); }
 function cap(s) { s = String(s); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -1107,19 +1105,18 @@ export const bridge = {
       if (v === null || v === undefined || v === '' || v === false) continue;
       const t = f.type.t;
       if (t === 'text' || t === 'long') words.push(String(v).length > 40 ? String(v).slice(0, 38) + '…' : String(v));
-      else if (t === 'pick') words.push(String(v).replace(/_/g, ' '));
       else if (t === 'money') amounts.push(money(v));
       else if (t === 'num') amounts.push(group(v) + (f.unit ? ' ' + unq(f.unit) : ''));
       else if (t === 'ref') { const r = app.rows(f.type.table).find(x => x.id === v); if (r) { try { words.push(app.summary({ table: f.type.table, r }).split(' · ')[0]); } catch { /* skip */ } } }
     }
-    const parts = [...words.slice(0, 2), ...amounts.slice(0, 2)];
+    const parts = [...words.slice(0, 1), ...amounts.slice(0, 1)];
     return 'Removed ' + (parts.length ? parts.join(', ') : (unq(tb.label || '') || l.table.replace(/_/g, ' ')));
   },
 };
 // the runtime's number and money formats (SPEC section 12: the runtime formats numbers and
 // money in the user's locale; the demo locale is English, Pakistan)
-export function group(n) { return typeof n === 'number' && isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(n); }
-export function money(n) { return 'Rs\u00a0' + group(n); }
+export function group(n) { return typeof n === 'number' && isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString(LOCALE, { maximumFractionDigits: 2 }) : String(n); }
+export function money(n) { return (CURRENCY ? CURRENCY + '\u00a0' : '') + group(n); }
 function coerce(type, v) {
   if (v === null || v === undefined || v === '') return type.t === 'bool' ? false : null;
   switch (type.t) {

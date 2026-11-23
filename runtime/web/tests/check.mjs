@@ -591,18 +591,6 @@ await scenario('medicine: doses taken never exceed doses due', 'ex=medicine&view
   expect(m2 && +m2[1] <= +m2[2], t2);
 });
 
-await scenario('header: title left, the app bar holds the month switcher or the main action', 'ex=budget&view=app', async page => {
-  const prev = await page.$('.mo-head .mo-head-bar button[aria-label="Previous"] svg');
-  expect(prev, 'no chevron in the budget app bar');
-  const same = await page.evaluate(() => { const t = document.querySelector('.mo-title').getBoundingClientRect(); const b = document.querySelector('.mo-head-bar').getBoundingClientRect(); return Math.abs((t.top + t.bottom) / 2 - (b.top + b.bottom) / 2); });
-  expect(same < 6, `title and month not on one line (${same}px apart)`);
-  for (const [id, label] of [['habits', 'Add habit'], ['exercise', 'Log exercise'], ['reading', 'Add book'], ['todo', 'Add task'], ['medicine', 'Add medicine']]) {
-    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
-    await page.waitForFunction(i => window.__molde.ex === i, id);
-    expect(await page.$(`.mo-head .mo-head-bar button:has-text("${label}")`), `${id}: "${label}" not in the app bar`);
-  }
-});
-
 await scenario('act first: habits Today list before the heat grid; workouts log near the top', 'ex=habits&view=app', async page => {
   const y = await page.evaluate(() => [document.querySelector('.mo-toggle').getBoundingClientRect().top, document.querySelector('.mo-grid').getBoundingClientRect().top]);
   expect(y[0] < y[1], 'heat grid above today\'s habits');
@@ -630,20 +618,6 @@ await scenario('pickers: the exercise chips are one sideways row with a cue', 'e
   const tops = await page.$$eval('.mo-scroll .mo-btn', e => [...new Set(e.map(x => Math.round(x.getBoundingClientRect().top)))]);
   expect(tops.length === 1, `chips on ${tops.length} lines`);
   expect(await page.$eval('.mo-scroll', e => e.classList.contains('mo-more-end') || e.scrollWidth <= e.clientWidth), 'no cue');
-});
-
-await scenario('numbers: one format (thousands separators from 1,000; money with Rs)', 'ex=water&view=app', async page => {
-  const bad = [];
-  for (const c of CATALOG) {
-    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
-    await page.waitForFunction(i => window.__molde.ex === i, c.id);
-    const txt = await page.$eval('.mo-app', e => e.innerText);
-    for (const m of txt.matchAll(/(^|[^\d,.:\/-])(\d{4})(?![\d,:\/-])/g)) {
-      const before = txt.slice(Math.max(0, m.index - 12), m.index + m[1].length);
-      if (!/(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s$/.test(before)) bad.push(`${c.id}: ${m[2]}`);
-    }
-  }
-  expect(!bad.length, bad.slice(0, 6).join(' | '));
 });
 
 await scenario('charts: three y ticks, month names under savings bars, reached bars marked', 'ex=budget&view=app', async page => {
@@ -685,6 +659,153 @@ await scenario('200%: drawing labels stay inside their drawings', 'ex=tasbeeh&vi
     for (const x of out) bad.push(`${id}: "${x}"`);
   }
   expect(!bad.length, bad.join(' | '));
+});
+
+// ---------- 6. round 4 checks ----------
+await scenario('no guessed app bar: the bar is the name only; each main action is the first thing under it', 'ex=budget&view=app', async page => {
+  const bad = [];
+  for (const [id, label] of [['budget', 'Previous'], ['habits', 'Add habit'], ['exercise', 'Log exercise'], ['reading', 'Add book'], ['todo', 'Add task'], ['medicine', 'Add medicine'], ['journal', 'Write']]) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    if (await page.$eval('.mo-head', e => e.querySelectorAll('.mo-head-bar *').length)) bad.push(`${id}: something moved into the app bar`);
+    const first = await page.$eval('.mo-screen > :first-child', (e, l) => !![...e.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.textContent).trim() === l), label);
+    if (!first) bad.push(`${id}: "${label}" is not the first thing under the title`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('no guessed numbers: every text is drawn exactly as the evaluator wrote it', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    const miss = await page.evaluate(() => {
+      const norm = x => x.replace(/\s+/g, ' ').trim();
+      const dom = norm(document.querySelector('.mo-app').innerText);
+      const texts = window.__molde.app.findAll(n => n.t === 'text' && !(n.style && n.style.opacity === 0)).map(n => norm(n.text)).filter(Boolean);
+      return texts.filter(t => !dom.includes(t)).slice(0, 3);
+    });
+    for (const m of miss) bad.push(`${c.id}: "${m}" was changed`);
+  }
+  expect(!bad.length, bad.slice(0, 6).join(' | '));
+});
+
+await scenario('S1: a fixed grid keeps its 7 columns at 320, 360 and 412, headers over their days', 'ex=habits&view=app', async page => {
+  const bad = [];
+  for (const w of [320, 360, 412]) {
+    await page.setViewportSize({ width: w, height: 800 });
+    await page.waitForTimeout(80);
+    const r = await page.$eval('.mo-grid[data-rove]', g => {
+      const kids = [...g.children];
+      const cols = new Set(kids.map(k => Math.round(k.getBoundingClientRect().left))).size;
+      const heads = kids.slice(0, 7).map(k => Math.round(k.getBoundingClientRect().left));
+      const cells = kids.slice(7, 14).map(k => Math.round(k.getBoundingClientRect().left));
+      return { cols, aligned: heads.every((x, i) => Math.abs(x - cells[i]) < 2) };
+    });
+    if (r.cols !== 7) bad.push(`${w}px: ${r.cols} columns`);
+    if (!r.aligned) bad.push(`${w}px: day headers not over their cells`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('S1: a row editor changes a pick by mouse and by Space; the value reads back after Done', 'ex=budget&view=app', async page => {
+  await page.click('.mo-row.mo-card.mo-tap >> nth=0');
+  await page.waitForSelector('.mo-sheet');
+  await page.click('.mo-sheet .mo-chip:text-is("Health")');
+  expect(await page.$eval('.mo-sheet .mo-chip:text-is("Health")', e => e.getAttribute('aria-checked')) === 'true', 'mouse: chip not selected');
+  await page.focus('.mo-sheet .mo-chip:text-is("Transport")');
+  await page.keyboard.press('Space');
+  expect(await page.$eval('.mo-sheet .mo-chip:text-is("Transport")', e => e.getAttribute('aria-checked')) === 'true', 'Space: chip not selected');
+  await page.click('.mo-sheet button:has-text("Done")');
+  await page.waitForSelector('.mo-sheet', { state: 'detached' });
+  await page.click('.mo-row.mo-card.mo-tap >> nth=0');
+  await page.waitForSelector('.mo-sheet');
+  expect(await page.$eval('.mo-sheet .mo-chip:text-is("Transport")', e => e.getAttribute('aria-checked')) === 'true', 'pick not saved');
+});
+
+await scenario('S2: Escape cancels a sheet edit and Remove works, with no page error', 'ex=budget&view=app', async page => {
+  const name0 = await page.$eval('.mo-row.mo-card.mo-tap', e => e.innerText);
+  await page.click('.mo-row.mo-card.mo-tap >> nth=0');
+  const inp = page.locator('.mo-sheet input[type=text]').first();
+  await inp.fill('Something else');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.mo-sheet', { state: 'detached' });
+  expect(await page.$eval('.mo-row.mo-card.mo-tap', e => e.innerText) === name0, 'Escape kept the edit');
+  await page.click('.mo-row.mo-card.mo-tap >> nth=0');
+  await page.locator('.mo-sheet input[type=text]').first().fill('Changed then removed');
+  await page.click('.mo-sheet button:has-text("Remove")');
+  await page.waitForSelector('.mo-toast:has-text("Removed")');
+});
+
+await scenario('S2: Enter saves a sheet; Tab stays inside it', 'ex=water&view=app', async page => {
+  await page.click('.mo-head [aria-label="Settings"]');
+  const inp = page.locator('.mo-sheet input').first();
+  await inp.fill('2200');
+  await page.keyboard.press('Shift+Tab');
+  expect(await page.evaluate(() => !!document.activeElement.closest('.mo-sheet')), 'focus left the sheet');
+  await inp.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.mo-sheet', { state: 'detached' });
+  await page.waitForSelector('.mo-app :text("of 2200 ml today")');
+});
+
+// text boxes that overprint each other
+function overlaps() {
+  const leaf = [...document.querySelectorAll('.mo-app .mo-text, .mo-app .mo-btn, .mo-app .mo-chip, .mo-app .mo-lbl, .mo-app .mo-plot-x span, .mo-app .mo-plot-y span, .mo-app .mo-title')].filter(e => e.getClientRects().length && e.textContent.trim() && !e.closest('.mo-sr'));
+  const box = e => { const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect(); return b; };
+  const out = [];
+  const bs = leaf.map(e => [e, box(e)]);
+  for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
+    const [a, A] = bs[i], [b, B] = bs[j];
+    if (a.contains(b) || b.contains(a)) continue;
+    const w = Math.min(A.right, B.right) - Math.max(A.left, B.left), h = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
+    if (w > 2 && h > 2) out.push(`"${a.textContent.trim().slice(0, 14)}" over "${b.textContent.trim().slice(0, 14)}"`);
+  }
+  return out;
+}
+await scenario('S2: no text overprints other text at 200% system text, 360 and 320 px', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const w of [360, 320]) {
+    await page.setViewportSize({ width: w, height: 700 });
+    for (const c of CATALOG) {
+      await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+      await page.waitForFunction(i => window.__molde.ex === i, c.id);
+      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      await page.waitForTimeout(60);
+      for (const x of (await page.evaluate(overlaps)).slice(0, 2)) bad.push(`${c.id}@${w}: ${x}`);
+    }
+  }
+  expect(!bad.length, bad.slice(0, 8).join(' | ') + (bad.length > 8 ? ` (+${bad.length - 8})` : ''));
+});
+
+await scenario('S2: no plural or grammar slips in any app', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    const txt = (await page.$eval('.mo-app', e => e.innerText)).replace(/\s+/g, ' ');
+    const m = txt.match(/\b\w+ ises\b|\w(?<!pro|cl|r|w|prom)ises\b|\b1 (days|drinks|exercises|sessions|questions|rounds|habits|tasks|books|doses|times|sets)\b|\b(0|[2-9]|\d\d+) (day|drink|task|book|dose|habit|set) (is|was)\b/);
+    if (m) bad.push(`${c.id}: "${m[0]}"`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('S2: Journal opens on the mood trend and entries; chart words come from the plot, not hand labels', 'ex=journal&view=app', async page => {
+  expect(!(await page.$('.mo-plot .mo-plot-lbl')), 'hand-placed labels in the mood chart');
+  expect((await page.$$eval('.mo-plot-y span', e => e.length)) >= 3, 'no y ticks');
+  const inside = await page.$eval('.mo-plot', p => { const b = p.getBoundingClientRect(); return [...p.querySelectorAll('.mo-plot-x span')].every(s => { const r = s.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }); });
+  expect(inside, 'x labels outside the plot');
+  const top = await page.$eval('.mo-plot', e => e.getBoundingClientRect().top);
+  expect(top < 600, 'mood trend below the first screen');
+  expect(!(await page.$('.mo-app textarea')), 'opens on a blank text box');
+});
+
+await scenario('S2: the demo keeps data on this device across a reload', 'ex=water&view=app', async page => {
+  const t0 = await total(page);
+  await page.click('button.mo-btn:has-text("+ 500 ml")');
+  await page.reload();
+  await page.waitForFunction(() => window.__molde && document.querySelector('.mo-app'));
+  expect(await total(page) === t0 + 500, `after reload ${await total(page)}, expected ${t0 + 500}`);
 });
 
 await browser.close();
