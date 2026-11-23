@@ -406,7 +406,14 @@ class App {
   }
   // an app whose stored values a person (or an edit) has changed is no longer a new install
   touch() { if (this.ever && !this.ever.touched) this.ever = { ...this.ever, touched: true }; }
-  rows(table) { return (this.data.tables[this.tk(table)] || []).filter(r => !r.deleted); }
+  // the rows of a table that are not removed; computed once per data generation (callers do not change the list)
+  rows(table) {
+    const tk = this.tk(table);
+    if (!this._rc || this._rc.gen !== this.gen || this._rc.data !== this.data) this._rc = { gen: this.gen, data: this.data, m: new Map() };
+    let r = this._rc.m.get(tk);
+    if (!r) { r = (this.data.tables[tk] || []).filter(x => !x.deleted); this._rc.m.set(tk, r); }
+    return r;
+  }
   // THE boundary out: a stored option reference leaves the evaluator as the option's name, never as {o}
   ext(raw, type) { return isOptRef(raw) ? (type && type.ids && raw.o in type.ids ? type.ids[raw.o] : raw.o.slice(1)) : raw; }
   // a stored cell as the program reads it; {raw: true} gives the stored form
@@ -1322,6 +1329,11 @@ class App {
     return null;
   }
   columnValues(col) {
+    if (col.path.length === 1) { // one field of the rows: read the stored values directly (no Row per row)
+      const fd = this.fieldDef(col.set.table, col.path[0]);
+      if (fd && fd.type.t !== 'ref') { const fk = this.fk(col.set.table, col.path[0]); return col.set.rows.map(r => this.wrap(r[fk], fd.type)); }
+      if (col.path[0] === 'at') return col.set.rows.map(r => new When(r.at));
+    }
     return col.set.rows.map(r => { let x = new Row(col.set.table, r); for (const p of col.path) x = this.stepVal(x, p); return x; });
   }
 
@@ -1355,6 +1367,21 @@ class App {
     return (a === null || d >= a) && (b === null || d <= b);
   }
 
+  // `at` compared with a date that does not depend on the row (a chart's `where at <= it`): one bound,
+  // then a number compare per row; same result as comparing the day of `at` with the date
+  fastWhere(w, env) {
+    if (w.k !== 'bin' || !['<', '<=', '>', '>=', '='].includes(w.op)) return null;
+    const isAt = x => x.k === 'path' && x.head === 'at' && !x.parts.length;
+    let op = w.op, other = w.b;
+    if (!isAt(w.a)) { if (!isAt(w.b)) return null; other = w.a; op = { '<': '>', '<=': '>=', '>': '<', '>=': '<=', '=': '=' }[op]; }
+    if (JSON.stringify(other).includes('"k":"path"') || JSON.stringify(other).includes('"k":"agg"')) { // only `it`, a plain name of a state, or a literal
+      if (!(other.k === 'path' && !other.parts.length && (other.head === 'it' || this.lookup(other.head, env)))) return null;
+    }
+    const v = this.ev(other, env);
+    if (!(v instanceof DateV)) return null;
+    const d0 = msOfLocal(v.s), d1 = d0 + DAY;
+    switch (op) { case '<': return r => r.at < d0; case '<=': return r => r.at < d1; case '>': return r => r.at >= d1; case '>=': return r => r.at >= d0; default: return r => r.at >= d0 && r.at < d1; }
+  }
   queryRows(q, env) {
     let base = this.evalPathRaw(q.path, env);
     if (base instanceof Group) base = new RowSet(base.table, base.rows);
@@ -1377,7 +1404,9 @@ class App {
       rows = rows.slice().sort((x, y) => y.at - x.at || y.id - x.id); // newest first
       if (ck) this._qc.m.set(ck, rows);
     }
-    if (q.where) { const we = this.child(env, { where: null }); rows = rows.filter(r => { we.where = { table: base.table, row: r }; return this.truthy(this.ev(q.where, we)); }); } // one scope per query, the row changes
+    const fast = q.where && this.fastWhere(q.where, env);
+    if (fast) rows = rows.filter(fast);
+    else if (q.where) { const we = this.child(env, { where: null }); rows = rows.filter(r => { we.where = { table: base.table, row: r }; return this.truthy(this.ev(q.where, we)); }); } // one scope per query, the row changes
     if (q.shuffle) { // a fixed random order per row (chosen when the row was added), so the screen does not jump
       const key = r => r._rnd ?? ((r.id * 2654435761) % 1000003) / 1000003;
       rows = rows.slice().sort((x, y) => key(x) - key(y));
