@@ -976,7 +976,7 @@ function readableValue(kind, v) {
   if (v === null || v === undefined || v === '') return '';
   const day = ms => { const d = new Date(ms); return `${WD[(d.getUTCDay() + 6) % 7]} ${d.getUTCDate()} ${MON3[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
   if (kind === 'date') { const ms = Date.parse(String(v).slice(0, 10) + 'T00:00:00Z'); return isFinite(ms) ? day(ms) : ''; }
-  if (kind === 'when') { if (typeof v !== 'number') return ''; const d = new Date(v); return `${day(v)}, ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
+  if (kind === 'when') { if (typeof v !== 'number') return ''; const d = new Date(v); return `${WD[(d.getDay() + 6) % 7]} ${d.getDate()} ${MON3[d.getMonth()]} ${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }   // apps run in local time
   if (kind === 'time') return toInputValue('time', v);
   return '';
 }
@@ -984,7 +984,7 @@ function toInputValue(kind, v) {
   if (v === null || v === undefined) return '';
   switch (kind) {
     case 'time': return typeof v === 'number' ? `${pad2(Math.floor(v / 3600) % 24)}:${pad2(Math.floor(v % 3600 / 60))}` : String(v);
-    case 'when': return typeof v === 'number' ? new Date(v).toISOString().slice(0, 16) : String(v);
+    case 'when': { if (typeof v !== 'number') return String(v); const d = new Date(v); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
     case 'dur': return typeof v === 'number' ? String(Math.round(v / 6) / 10) : String(v);
     case 'date': return String(v).slice(0, 10);
     default: return String(v);
@@ -995,7 +995,7 @@ function fromInputValue(kind, s) {
   switch (kind) {
     case 'num': case 'money': { const n = Number(s); return isFinite(n) ? n : null; }
     case 'dur': { const n = Number(s); return isFinite(n) ? Math.round(n * 60) : null; }
-    case 'when': { const t = Date.parse(s + ':00Z'); return isFinite(t) ? t : null; }
+    case 'when': { const t = new Date(s).getTime(); return isFinite(t) ? t : null; }   // datetime-local is local time
     case 'time': return s;
     default: return s;
   }

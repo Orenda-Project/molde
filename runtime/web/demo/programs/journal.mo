@@ -26,20 +26,17 @@ stack card gap 3
   if count(entry last 30 days) < 2
     "Write on two days to see your mood line." color muted
   else
-    draw 110, 60
-      line 24, 6, 108, 6 stroke edge thick 0.3
-      line 24, 26, 108, 26 stroke edge thick 0.3
-      line 24, 46, 108, 46 stroke edge thick 0.3
-      label 10, 6, "Great" size tiny color muted
-      label 10, 26, "Okay" size tiny color muted
-      label 10, 46, "Rough" size tiny color muted
-      poly stroke accent thick 1
+    plot -7..30, 0.5..5.5 gridlines
+      poly stroke accent thick 2
         each entry last 30 days sort at
-          pt 106 - 80 * ((now - it.at) / 1d) / 30, 46 - 10 * (it.mood - 1)
+          pt 30 - (now - it.at) / 1d, it.mood
       each entry last 30 days
-        circle 106 - 80 * ((now - it.at) / 1d) / 30, 46 - 10 * (it.mood - 1), 1.3 fill accent
-      label 34, 56, today - 29 size tiny color muted
-      label 100, 56, "Today" size tiny color muted
+        circle 30 - (now - it.at) / 1d, it.mood, 1 fill accent
+      label -4, 4.7, "Great" faint
+      label -4, 2.7, "Okay" faint
+      label -4, 0.7, "Rough" faint
+      tick 1, today - 29
+      tick 29, "Today"
     "This week averages" round(avg(entry.mood week) * 10) / 10 "out of 5; last week" round(avg(entry.mood prev week) * 10) / 10 faint
 field q "Search entries"
 if q != "" and count(entry where has(note, q)) = 0

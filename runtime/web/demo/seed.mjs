@@ -2,15 +2,18 @@
 // addRow (the same path a form save takes), backdated with an explicit `at`, so screens open
 // with a few weeks of history instead of empty states. Same seed, same data, every time.
 
-export const NOW = Date.parse('2026-11-26T15:30:00Z'); // a Thursday afternoon
+// the demo clock: Thursday 26 November 2026, 15:30 in the viewer's own time zone (apps load with
+// tz: 'local'), so every row below lands on the same local day and hour on any machine
+export const NOW = new Date(2026, 10, 26, 15, 30).getTime();
 const DAY = 86400000;
 
 function rng(seed) {
   let a = seed >>> 0;
   return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
-const dayStart = n => Math.floor(NOW / DAY) * DAY - n * DAY;        // midnight UTC, n days ago
-const at = (n, h, m = 0) => dayStart(n) + (h * 60 + m) * 60000;     // n days ago at h:m
+const dayStart = n => new Date(2026, 10, 26 - n).getTime();            // local midnight, n days ago
+const at = (n, h, m = 0) => new Date(2026, 10, 26 - n, h, m).getTime(); // n days ago at h:m local
+const ymd = n => { const d = new Date(2026, 10, 26 + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const pick = (r, list) => list[Math.floor(r() * list.length)];
 
 function helper(app, seed) {
@@ -59,15 +62,14 @@ export const SEEDS = {
     const fixed = [['Bills', 0, 'Internet', 3200, 3], ['Bills', 0, 'Mobile package', 1300, 5], ['Bills', 0, 'Electricity bill', 12400, 9], ['Bills', 0, 'Gas bill', 2600, 11]];
     for (let month = 1; month >= 0; month--) {
       const days = month === 1 ? 31 : 26;              // October, then November up to the 26th
-      const base = month === 1 ? dayStart(26 + 31 - 1) : dayStart(26 - 1);  // the 1st of the month
-      for (const [cat, , what, amt, d] of fixed) add('spend', { what, amount: amt + Math.round(r() * 400), category: cat }, base + (d - 1) * DAY + 14 * 3600000);
+      for (const [cat, , what, amt, d] of fixed) add('spend', { what, amount: amt + Math.round(r() * 400), category: cat }, new Date(2026, month === 1 ? 9 : 10, d, 14).getTime());
       for (let d = 1; d <= days; d++) {
         const k = r() < 0.6 ? 1 + Math.floor(r() * 1.6) : 0;
         for (let i = 0; i < k; i++) {
           const cat = pick(r, ['Groceries', 'Groceries', 'Groceries', 'Transport', 'Transport', 'Eating_out', 'Eating_out', 'Health', 'Other']);
           const [what, lo, hi] = pick(r, cats[cat]);
           const amount = Math.round((lo + r() * (hi - lo)) / 10) * 10;
-          add('spend', { what, amount, category: cat }, base + (d - 1) * DAY + (10 + Math.floor(r() * 10)) * 3600000);
+          add('spend', { what, amount, category: cat }, new Date(2026, month === 1 ? 9 : 10, d, 10 + Math.floor(r() * 10)).getTime());
         }
       }
     }
@@ -80,7 +82,7 @@ export const SEEDS = {
                   [['Pull-ups', 0, 0, 6], ['Bench press', 47.5, 2.5, 8], ['Squat', 60, 2.5, 6]]];
     let s = 0;
     for (let n = 34; n >= 1; n--) {
-      const wd = new Date(dayStart(n)).getUTCDay();
+      const wd = new Date(dayStart(n)).getDay();
       if (![1, 3, 5, 6].includes(wd) || r() < 0.15) continue;
       const week = Math.floor((34 - n) / 7);
       for (const [ex, kg, step, reps] of plan[s % 3]) add('lift', { exercise: ex, kg: kg + step * week, sets: 3, reps: reps + (r() < 0.3 ? 1 : 0) }, at(n, 18, 30));
@@ -168,12 +170,12 @@ export const SEEDS = {
   reading(app) {
     const { add } = helper(app, 122);
     const books = [['Atomic Habits', 'James Clear', 'Done', -40], ['Raja Gidh', 'Bano Qudsia', 'Reading', null], ['Sapiens', 'Yuval Noah Harari', 'Done', -90], ['Peer-e-Kamil', 'Umera Ahmed', 'Done', -150], ['Deep Work', 'Cal Newport', 'Want', null], ['The Kite Runner', 'Khaled Hosseini', 'Want', null], ['Thinking, Fast and Slow', 'Daniel Kahneman', 'Reading', null], ['Udas Naslain', 'Abdullah Hussain', 'Want', null]];
-    books.forEach(([title, author, status, d], i) => add('book', { title, author, status, finished: d === null ? null : new Date(NOW + d * DAY).toISOString().slice(0, 10) }, at(200 - i * 10, 20, 0)));
+    books.forEach(([title, author, status, d], i) => add('book', { title, author, status, finished: d === null ? null : ymd(d) }, at(200 - i * 10, 20, 0)));
   },
 
   todo(app) {
     const { add } = helper(app, 133);
-    const d = n => new Date(NOW + n * DAY).toISOString().slice(0, 10);
+    const d = n => ymd(n);
     [['Pay the electricity bill', -2, false, 'Home'], ['Send the November report to Sana', 0, false, 'Work'], ['Book a dentist appointment', 3, false, 'Home'], ['Renew car token tax', 6, false, 'Other'], ['Review pull request for the login page', 1, false, 'Work'], ['Buy school shoes for Ali', -1, false, 'Home'], ['Call the plumber', -5, true, 'Home'], ['Prepare slides for Monday', -3, true, 'Work']]
       .forEach(([title, due, done, tag], i) => add('task', { title, due: d(due), done, tag }, at(10 - i, 9, 0)));
   },
@@ -183,7 +185,7 @@ export const SEEDS = {
     const names = ['Ayesha', 'Bilal', 'Fatima', 'Hamza', 'Hira', 'Imran', 'Iqra', 'Junaid', 'Kashif', 'Laiba', 'Maryam', 'Nadia', 'Omar', 'Saad', 'Sana', 'Zainab'];
     const ids = names.map((name, i) => add('student', { name }, at(60, 8, i)).id);
     for (let n = 25; n >= 0; n--) {
-      const wd = new Date(dayStart(n)).getUTCDay();
+      const wd = new Date(dayStart(n)).getDay();
       if (wd === 0 || wd === 6) continue;
       ids.forEach((id, i) => { if (r() < (i === 7 ? 0.25 : 0.06)) add('absent', { student: id }, at(n, 8, 30)); });
     }

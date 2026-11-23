@@ -61,9 +61,7 @@ stack card gap 3
         tick 34, "Today"
       "Latest:" last(lift.kg where exercise = ex) "kg for" last(lift.reps where exercise = ex) "reps. Weights in kg." faint
 "Recent" head
-if count(lift last 14 days) = 0
-  "Nothing logged in the last two weeks." color muted
-each lift last 14 days by day as g
+each lift last 14 days by day as g empty "Nothing logged in the last two weeks."
   g.key bold faint
   each g as r
     row card tap edit r swipe remove r

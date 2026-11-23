@@ -76,14 +76,14 @@ Direction: personal tools on a cheap phone; calm, exact, a little warm. Surfaces
 
 - **The number rule is a heuristic** (rule 2): a 4-digit year that does not follow a month name would get a comma ("in 2026" would show as "in 2,026"); no demo program shows one. `grouped()` exists, but programs would have to call it on every number.
 - **Heat-map cells and board squares are named with invisible text** (rule 7); there is no accessible name for a box.
-- **The mood chart keeps hand-placed labels**: `plot` makes numeric y ticks, and the journal wants the words Great, Okay, Rough there.
-- **Empty states** are still `if count(...) = 0` blocks in most programs; only new code would use `each ... empty`.
+- **The mood chart's words** (Great, Okay, Rough) are `label` nodes inside the plot's left margin, because `plot` y ticks are always numbers.
+- **Empty states**: lists use `each ... empty`; whole-app empty states (no habits, no medicines) are still `if` blocks because they replace several sections.
 - The heat grid needs 44 px cells to be tappable, so it shows 6 weeks, not 10.
-- Dates are UTC in the evaluator; the demo does not pass `tz: 'local'` so screenshots stay fixed.
+- Apps run in the viewer's local time (`tz: 'local'`); the demo clock is Thursday 26 November 2026, 15:30 local, so the seeded data looks the same on any machine.
 
 ## Language and evaluator needs (after round 3 parts 1 to 6)
 
-Merged and used: `applyEdit`/`revert` (chat changes and Undo), storage slots, public `addRow`, `fields()`/`setField()` (editor sheets), `plot`/`tick` (budget and workout charts), `plural()`, `monthshort()`, `middle`, labels on `toggle`/`choice`, `action`, `text.empty`, `currency`. Still needed:
+Merged and used (workarounds removed): `applyEdit`/`revert` replaced the demo's own load-with-data and snapshot undo; storage slots and public `addRow` (seeds); `fields()`/`setField()` replaced the sheets' direct writes to `app.data`; `plot`/`tick` replaced every hand-placed chart (water, budget, workouts, journal, savings, focus); `plural()` replaced `if(n = 1, ...)` pairs; `monthshort()` replaced a 12-level `if`; `middle` replaced the renderer's "centre a one-block screen" guess; `toggle.label`/`choice.label` replaced the "Done" fallback name; `action` (save) finds primary buttons; `each ... empty` replaced list empty-state `if` blocks; `currency` replaced "Rs" written into programs; `tz: 'local'`. Still needed:
 
 1. An accessible name for any node (for example `say "..."`), to replace rule 7.
 2. Named y ticks on `plot` (`ytick V, "Great"`), so a scale of words needs no hand-placed labels.

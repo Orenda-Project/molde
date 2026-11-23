@@ -25,7 +25,7 @@ function readHash() {
 function systemMode() { try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'light'; } }
 
 export function seeded(id, src) {
-  const app = load(src, { now: NOW, currency: 'Rs' });
+  const app = load(src, { now: NOW, currency: 'Rs', tz: 'local' });
   if (SEEDS[id]) SEEDS[id](app);
   return app;
 }
@@ -268,8 +268,8 @@ export function start(root, sources) {
   addEventListener('hashchange', () => { const n = readHash(); if (n.ex && n.ex !== S.ex && CATALOG.some(c => c.id === n.ex)) open(n.ex); });
   paintTools();
   open(S.ex);
-  S.showBlank = id => { S.ex = id; S.apps[id] = { app: load(sources[id], { now: NOW, currency: 'Rs' }), base: sources[id], prev: [] }; mountApp(); };   // tests: the app with no data
-  S.mountSource = src => { S.apps[S.ex] = { app: load(src, { now: NOW, currency: 'Rs' }), base: src, prev: [] }; mountApp(); };   // tests: any program in place of the current one
+  S.showBlank = id => { S.ex = id; S.apps[id] = { app: load(sources[id], { now: NOW, currency: 'Rs', tz: 'local' }), base: sources[id], prev: [] }; mountApp(); };   // tests: the app with no data
+  S.mountSource = src => { S.apps[S.ex] = { app: load(src, { now: NOW, currency: 'Rs', tz: 'local' }), base: src, prev: [] }; mountApp(); };   // tests: any program in place of the current one
   S.runEdit = runEdit; S.runNewApp = runNewApp; S.undoLatest = () => { const i = undoable(); if (i >= 0) undo(i); }; S.openChat = openChat;
   Object.defineProperty(S, 'app', { get: () => cur().app });
   window.__molde = S;   // for tests: the running apps, renderer and chat actions

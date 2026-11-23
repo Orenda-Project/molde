@@ -31,19 +31,13 @@ stack card gap 2
   row
     "Last 6 months" head grow
     sum(deposit.amount month) "this month" faint
-  row gap 1 align end
+  plot 0..6, 0..maxof([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))) axes gridlines
     each [5, 4, 3, 2, 1, 0]
-      stack grow gap 1 align center
-        round(sum(deposit.amount month of addmonths(today, 0 - it)) / 1000) size tiny color muted
-        draw 10, 56
-          rect 0, 0, 10, 56 fill soft radius 3
-          rect 0, 56 - 56 * clamp(sum(deposit.amount month of addmonths(today, 0 - it)) / maxof([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))), 0, 1), 10, 56 * clamp(sum(deposit.amount month of addmonths(today, 0 - it)) / maxof([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))), 0, 1) fill if(it = 0, accent, muted) radius 3
-        monthshort(addmonths(today, 0 - it)) size tiny color if(it = 0, ink, muted)
-  "Thousands of rupees saved each month" faint
+      rect index + 0.15, 0, 0.7, sum(deposit.amount month of addmonths(today, 0 - it)) fill if(it = 0, accent, muted) radius 3
+      tick index + 0.5, monthshort(addmonths(today, 0 - it))
+  "Rupees saved each month; this month in colour" faint
 "Deposits" head
-if count(deposit) = 0
-  "Nothing saved yet. Tap + 1,000 to make the first deposit." color muted
-each deposit sort at desc top 12 as r
+each deposit sort at desc top 12 as r empty "Nothing saved yet. Tap + 1,000 to make the first deposit."
   row card tap edit r swipe remove r
     stack grow gap 0
       r.note

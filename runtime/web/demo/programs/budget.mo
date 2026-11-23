@@ -77,9 +77,7 @@ row gap 2 align center
   if(cat = "", "All expenses", cat) head grow
   if cat != ""
     button "Show all" tap set cat = ""
-if count(spend month of m where cat = "" or category = cat) = 0
-  "Nothing here. Expenses you add show up here, newest first." color muted
-each spend month of m where cat = "" or category = cat by day as g
+each spend month of m where cat = "" or category = cat by day as g empty "Nothing here. Expenses you add show up here, newest first."
   row
     g.key bold faint grow
     sum(g.amount) faint

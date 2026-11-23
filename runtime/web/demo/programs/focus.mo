@@ -19,14 +19,10 @@ stack card gap 2
   row
     "Today" head grow
     plural(count(session today), "session") "," sum(session.mins today) "min" faint
-  row gap 1 align end
+  plot 0..7, 0..max(60, maxof(days last 7 days, sum(session.mins on it))) axes gridlines
     each days last 7 days
-      stack grow gap 1 align center
-        sum(session.mins on it) size tiny color muted
-        draw 10, 56
-          rect 0, 0, 10, 56 fill soft radius 3
-          rect 0, 56 - 56 * clamp(sum(session.mins on it) / 150, 0, 1), 10, 56 * clamp(sum(session.mins on it) / 150, 0, 1) fill if(it = today, accent, muted) radius 3
-        dayname(it) size tiny color if(it = today, ink, muted)
+      rect index + 0.15, 0, 0.7, sum(session.mins on it) fill if(it = today, accent, muted) radius 3
+      tick index + 0.5, dayname(it)
   "Minutes of focus per day" faint
 if count(session today) = 0
   "No sessions yet today. Press Start when you sit down to work." color muted
