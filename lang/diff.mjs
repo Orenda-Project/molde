@@ -125,7 +125,7 @@ function pickSlots(prev, type, label, announce, c) {
   for (const od of oa.fresh) { const ok = '#' + newKey(Object.fromEntries(Object.keys(opts).map(x => [x.slice(1), 1])), od.name); opts[ok] = { seen: {}, visible: null }; oa.claims.set(od, ok); if (announce) c.changes.push(`adds option ${od.name} to ${label}`); }
   for (const [od, ok] of oa.claims) {
     const os = opts[ok];
-    if (os.visible !== null && os.visible !== od.name) c.changes.push(`renames option ${os.visible} of ${label} to ${od.name} (stored choices keep their option)`);
+    if (os.visible !== null && os.visible !== od.name) { c.changes.push(`renames option ${os.visible} of ${label} to ${od.name} (stored choices keep their option)`); (c.renamedOpts ||= []).push({ label, from: os.visible, to: od.name, field: label.split('.').pop().replace(/^(setting|state) /, '') }); }
     else if (os.visible === null && Object.keys(os.seen).length) c.changes.push(`lists option ${od.name} of ${label} again`);
     opts[ok] = { ...os, visible: od.name, seen: { ...os.seen, [od.name]: c.V } };
   }
@@ -284,6 +284,28 @@ export function evolve(ever, src, opts = {}) {
     if (lost.length) refused.push(`this would leave the saved value of ${what} ${lost.map(x => lastName(G[x])).join(', ')} with no name to bring it back. Pick another name.`);
   }
 
+  // a renamed option compared with a TEXT state, setting or field: that text still holds the old name
+  // and is not migrated, so the comparison stops matching; say so (a pick would follow the rename)
+  if (ctx.renamedOpts) {
+    const textNames = new Set([...m.settings, ...m.states].filter(x => x.type && (x.type.t === 'text' || x.type.t === 'long')).map(x => x.name));
+    const textFields = new Set(m.tables.flatMap(t => t.fields.filter(f => f.type.t === 'text' || f.type.t === 'long').map(f => f.name)));
+    const lastOf = e => e && e.k === 'path' ? (e.parts.length ? e.parts[e.parts.length - 1] : e.head) : null;
+    const seen = new Set();
+    const walk = x => {
+      if (!x || typeof x !== 'object') return;
+      if (Array.isArray(x)) { x.forEach(walk); return; }
+      if (x.k === 'bin' && (x.op === '=' || x.op === '!=')) for (const [a, b] of [[x.a, x.b], [x.b, x.a]]) {
+        const fa = lastOf(a), other = b && b.k === 'path' ? b : null;
+        const ro = fa && ctx.renamedOpts.find(r => r.field === fa);
+        if (!ro || !other) continue;
+        const name = other.parts.length ? other.parts[other.parts.length - 1] : other.head;
+        const isText = (!other.parts.length && textNames.has(other.head)) || (other.parts.length > 0 && textFields.has(name));
+        if (isText && !seen.has(name + ro.label)) { seen.add(name + ro.label); warnings.push(`option ${ro.from} of ${ro.label} is now ${ro.to}, and the program compares ${fa} with ${name}, which is text: a text that says ${ro.from} is not changed and no longer matches. Make ${name} a pick of the same options (for example state ${name} pick ...) so it follows renames.`); }
+      }
+      for (const v of Object.values(x)) if (v && typeof v === 'object') walk(v);
+    };
+    walk(m.ast.body);
+  }
   if (refused.length) return { verdict: 'refused', changes, refused, notes, ever, moves: [] };
   // the text as written is kept too (edit), so an older-shaped backup can be rebuilt by replaying it
   E.versions = [...(ever.versions || []), { src: stored, ...(src !== stored ? { edit: src } : {}), map: mapOf(E), v: V }];
