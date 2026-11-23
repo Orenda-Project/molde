@@ -1,6 +1,7 @@
 # The UI tree (renderer contract)
 
 Changes (newest first):
+- 2026-11-23 (round 3, part 1): **API** `load(src, {data, history, tz})`; `app.applyEdit(src)` applies a chat edit (returns the diff result: `safe`, `restore` or `refused`; refused keeps the old program); `app.revert()` is chat Undo (back to the previous program, data kept); `app.snapshot()` now includes `ever` (the schema history; pass the whole snapshot back to `load` or `restore`); `restore()` adds tables and settings the program declares but the snapshot lacks; `app.addRow(table, values, atMs)` is public. **Stored data is keyed by storage slots** (see SEMANTICS.md, "Storage and edits"): for programs that never renamed anything the slot ids equal the names. **Formatting**: money with cents shows 2 decimals (`12.50`); a date outside the current year shows the year (`Mon 3 Nov 2025`). `tz: 'local'` makes days and times local.
 - 2026-11-23 (later): numbers show thousands separators only from 10,000 up (`2000`, `80,000`); an empty value is left out of a multi-part text; with several screens and no main content, `screens` no longer lists `_main`; `input` may carry `unit`; `circle`/`arc` written with one or three values arrive already centred (`cx`, `cy` filled in). No node type or property was removed.
 - 2026-11-23: first version.
 

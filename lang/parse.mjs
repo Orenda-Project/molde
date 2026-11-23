@@ -180,7 +180,7 @@ const BUILD = {
   'setting-stmt': n => ({ kind: 'setting', ...field(child(n, 'field')) }),
   'state-stmt': n => {
     const st = child(n, 'state-type');
-    const o = { kind: 'state', name: id(child(n, 'ident')), type: null, draft: null, init: child(n, 'expr') ? expr(child(n, 'expr')) : child(n, 'word') ? { k: 'str', v: child(n, 'word').v, word: true } : null, keep: lits(n).includes('keep') };
+    const o = { kind: 'state', name: id(child(n, 'ident')), type: null, draft: null, init: child(n, 'expr') ? expr(child(n, 'expr')) : child(n, 'word') ? { k: 'str', v: child(n, 'word').v, word: true } : null, keep: lits(n).includes('keep'), was: lits(n).includes('was') ? id(children(n, 'ident')[children(n, 'ident').length - 1]) : null };
     if (child(st, 'type')) o.type = type(child(st, 'type')); else o.draft = id(child(st, 'ident'));
     return o;
   },

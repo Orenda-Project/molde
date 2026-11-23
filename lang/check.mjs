@@ -272,13 +272,14 @@ class Checker {
   table(s) {
     if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different table name.');
     if (s.was && s.was === s.name) this.err('E_DUP', `table ${s.name} cannot be renamed from itself.`, 'remove "was".');
-    if (s.was && this.tables.has(s.was)) this.err('E_DUP', `table ${s.name} says it was ${s.was}, but ${s.was} is still declared.`, `remove "table ${s.was}" or the "was ${s.was}".`);
+    if (s.was && this.tables.has(s.was) && !this.tables.get(s.was).decl.was) this.err('E_DUP', `table ${s.name} says it was ${s.was}, but ${s.was} is still declared (and not renamed itself).`, `remove "table ${s.was}" or the "was ${s.was}"; to swap two names, give both tables a was.`);
     const fields = new Map();
     const was = new Set();
     for (const f of s.fields) {
       if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, 'every row already has at (when it was added); remove this field or rename it.');
       if (fields.has(f.name)) this.err('E_DUP', `field "${f.name}" appears twice in ${s.name}.`, 'remove one or rename it.');
-      if (f.was && (fields.has(f.was) || s.fields.some(g => g.name === f.was) || was.has(f.was))) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (or renamed twice).`, `keep only one of them.`);
+      if (f.was && was.has(f.was)) this.err('E_DUP', `two fields say they were ${f.was}; only one can take its values.`, 'keep one was.');
+      else if (f.was && s.fields.some(g => g.name === f.was && !g.was)) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (and not renamed itself).`, `remove the field ${f.was} or the "was"; to swap two names, give both fields a was.`);
       if (f.was) was.add(f.was);
       if (f.type.t === 'ref' && !this.tables.has(f.type.table) && f.type.table !== s.name) {
         this.failed.set(`${s.name}.${f.name}`, this.failed.get(f.type.table) || this.line);
@@ -677,7 +678,7 @@ class Checker {
         if (family(a) === 'date' && isNum(b)) return a;
         if (family(a) === 'date' && nb === 'dur') return 'when';
         if (na === 'time' && nb === 'dur') return 'time';
-        if (e.op === '-' && na === 'date' && nb === 'date') return 'num';
+        if (e.op === '-' && family(a) === 'date' && family(b) === 'date' && (na === 'date' || nb === 'date')) return 'num'; // whole days between
         if (e.op === '-' && na === 'when' && nb === 'when') return 'dur';
         if (e.op === '-' && na === 'time' && nb === 'time') return 'dur';
         return bad();

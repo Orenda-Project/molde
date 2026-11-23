@@ -2,10 +2,24 @@
 
 What every statement means when it runs. The reference evaluator `lang/eval.mjs` implements exactly this; `lang/tests/eval.test.mjs` and `lang/tests/gaps.test.mjs` check it on all 30 examples and on each feature. Where the phone runtime and the evaluator differ (local time, real notifications), it says so.
 
+## Storage and edits (the contract the phone runtime must follow)
+
+- **Data is keyed by storage slots, never by program names.** The schema history (`ever`, built by `diff.mjs`) gives every table, field, setting and top-level `state` a slot id when it first appears (its first name, plus `~2`, `~3` if that id was taken). The id never changes. A slot keeps its stored type and every name it has had, with the version each name was last seen.
+- Stored rows are `{id, at, deleted?, <field slot id>: value}` in `data.tables[<table slot id>]`; settings are `data.settings[<setting slot id>]`; top-level states are `data.state["|" + <state slot id>]`. Values are stored in plain JSON: numbers and money as numbers, dates as `YYYY-MM-DD`, date-and-time as milliseconds, times of day and durations as seconds, links as row ids, options as their word.
+- **On every edit** (a new program from the chat) the runtime runs `evolve(ever, newProgram)`:
+  - `safe`: adopt the new program and the new `ever`; apply the returned `moves` (pick option renames written with `was`) to the stored rows; give new tables an empty row list and new settings their default. Nothing else in the stored data changes: renamed tables and fields keep their slots, hidden ones keep their values.
+  - `refused`: keep running the old program; nothing changes.
+  - `restore`: see below.
+- **Going back (chat Undo, or any earlier version)** is always allowed. If the new program text equals an earlier version, the verdict is `restore`: that version's own name-to-slot map is used, data entered since stays in its slots, slots the old version does not know are hidden, and values that were widened since are read with the old declared type (money as a number, long text as text, a date and time as its date, a free text in an old pick field as the text itself).
+- Reading a slot with a narrower declared type never changes what is stored; the next edit is judged against the widest type the slot has ever had.
+- The evaluator implements this: `load(src, {data, history})`, `app.applyEdit(src)` (returns the diff result), `app.revert()` (back to the program before the last applied edit), and `app.snapshot()` (which includes `ever`). `app.addRow(table, values, atMs)` adds a row by program names (values in the field types, `atMs` optional) and returns the stored row, or null if a required field is empty.
+
 ## Time
 
-- The evaluator runs on a fixed clock (`load(src, {now})`); `tick(ms)` moves it. The phone uses local time; the evaluator uses UTC so tests are repeatable.
+- The evaluator runs on a fixed clock (`load(src, {now})`); `tick(ms)` moves it. Calendar days are UTC by default so tests are repeatable; `load(src, {tz: 'local'})` uses the device's local time and `{tz: 300}` a fixed offset in minutes east of UTC (the phone uses local time).
 - `today` is the date of the clock; `now` the date and time. Weeks start on Monday (`weekday` 1 to 7).
+- **A date compared with a date and time compares whole days**: `at <= today` includes every row of today, `at = d` is true all day, and `date - when` is whole days between the two dates.
+- **`time - time` is the forward duration from the second time to the first, wrapping past midnight**: bed 23:00 to wake 07:00 is `07:00 - 23:00 = 8:00`, always between 0 and 24 hours.
 - A row's `at` is the moment it was added. **Windows always filter on `at`'s date**: `today` matches rows whose `at` falls on today's date, `last 7 days` the 7 dates ending today, `month of d` the calendar month of `d`.
 - `each days WINDOW` gives the window's dates oldest first (at most 400).
 

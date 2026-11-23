@@ -3,7 +3,8 @@
 //   node lang/mo.mjs check FILE...            errors (code, line, fix) or OK; exit 1 on errors
 //   node lang/mo.mjs format FILE [--write]    canonical text (or rewrite the file)
 //   node lang/mo.mjs describe FILE            the plain-English plan
-//   node lang/mo.mjs diff OLD NEW             what changes + data-safety verdict; exit 1 if refused
+//   node lang/mo.mjs diff V1 ... VN NEW        verdict against the whole history (oldest first); exit 1 if refused
+//   node lang/mo.mjs diff --history LIST NEW   the same, with the earlier files listed one per line in LIST
 //   node lang/mo.mjs migrate FILE... [--write] rewrite older text into the current spelling
 //   node lang/mo.mjs expand FILE              the program with every component expanded to level 1
 //   node lang/mo.mjs tokens [FILE...]         token counts (runs lang/tokens.py)
@@ -22,6 +23,13 @@ const [cmd, ...args] = process.argv.slice(2);
 const read = f => readFileSync(f, 'utf8');
 const files = args.filter(a => !a.startsWith('--'));
 
+// Rewrites for meaning changes between v0 revisions (each keeps what the program meant):
+// - round 3: time - time wraps past midnight, so the old overnight pattern
+//   if(A < B, A - B + 24h, A - B)  becomes  A - B
+export function migrateText(src) {
+  return src.replace(/if\(([a-z_.]+) < ([a-z_.]+), \1 - \2 \+ 24h, \1 - \2\)/g, '($1 - $2)');
+}
+
 export function expandedText(src) {
   const r = check(src);
   const out = [];
@@ -36,7 +44,8 @@ export function expandedText(src) {
   return { text: out.join('\n') + '\n', errors: r.errors };
 }
 
-switch (cmd) {
+const isCli = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isCli) switch (cmd) {
   case 'check': {
     let bad = 0;
     for (const f of files) {
@@ -56,7 +65,19 @@ switch (cmd) {
   }
   case 'describe': for (const f of files) process.stdout.write(describe(read(f))); break;
   case 'diff': {
-    const r = diff(read(files[0]), read(files[1]));
+    // mo.mjs diff V1 V2 ... VN NEW   (every earlier version, oldest first; the last file is the new one)
+    // mo.mjs diff --history LIST NEW (LIST: a text file naming one program file per line, oldest first)
+    let hist, next;
+    const hi = args.indexOf('--history');
+    if (hi >= 0) {
+      const listFile = args[hi + 1];
+      hist = read(listFile).split('\n').map(x => x.trim()).filter(Boolean);
+      next = files.filter(f => f !== listFile).pop();
+    } else { hist = files.slice(0, -1); next = files[files.length - 1]; }
+    if (!next || !hist.length) { console.error('usage: mo.mjs diff OLDEST ... PREVIOUS NEW  or  mo.mjs diff --history LIST NEW'); process.exit(2); }
+    const r = diff(hist.map(read), read(next));
+    console.log(`history used (oldest first): ${hist.map((h, i) => `${h}${r.historyUsed[i] ? '' : ' (was refused, skipped)'}`).join(', ')}`);
+    console.log(`new program: ${next}`);
     process.stdout.write(diffText(r));
     process.exit(r.verdict === 'refused' ? 1 : 0);
     break;
@@ -70,7 +91,7 @@ switch (cmd) {
     // rewrite older MoldeScript v0 text into the current canonical spelling (the formatter's
     // one-spelling rules: implicit text lines, style roles, bare option values); prints what changed
     for (const f of files) {
-      const before = read(f); const after = format(before);
+      const before = read(f); const after = format(migrateText(before));
       if (args.includes('--write')) writeFileSync(f, after); else process.stdout.write(after);
       if (before !== after) console.error(`migrated ${f}`);
     }

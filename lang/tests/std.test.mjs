@@ -9,7 +9,7 @@ import { expandedText } from '../mo.mjs';
 const LEVEL1 = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'each', 'if', 'else', 'box', 'draw', 'poly', 'pt', 'shape',
   'text', 'button', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'screen', 'def']);
 
-const HEAD = 'app "Std test"\ntable t n num, c pick A|B, note text?\nstate d date = today\n';
+const HEAD = 'app "Std test"\ntable t n num, c pick A|B = A, note text?\nstate d date = today\n';
 const SAMPLES = {
   stat: 'stat count(t today), "today"',
   goal: 'goal sum(t.n today), 10, "done", "kg"',
