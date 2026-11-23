@@ -129,7 +129,7 @@ if (SHOTS) {
 // ---------- 3. interactions ----------
 async function scenario(name, hash, fn) {
   const { page, ctx, logs } = await open(412, 915, 'light', hash);
-  try { await fn(page); if (logs.length) fail(`${name}: console output`, logs.join(' | ')); else pass(name); console.log(`ok   ${name}`); }
+  try { await fn(page); if (logs.length) fail(`${name}: console output`, logs.join(' | ')); else { pass(name); console.log(`ok   ${name}`); } }
   catch (e) { fail(name, e.message.split('\n')[0]); }
   await ctx.close();
 }
@@ -139,7 +139,7 @@ const big = page => page.$eval('.mo-big', e => e.textContent.trim());
 await scenario('water: quick add raises the total and fills the glass', 'ex=water&view=app', async page => {
   const before = await big(page);
   const h0 = await page.$eval('.mo-draw rect', r => +r.getAttribute('height'));
-  await page.click('button.mo-btn:has-text("250 ml")');
+  await page.click('button.mo-btn:has-text("+ 250 ml")');
   const after = await big(page);
   const h1 = await page.$eval('.mo-draw rect', r => +r.getAttribute('height'));
   const num = s => +s.replace(/[^\d]/g, '');
@@ -148,10 +148,10 @@ await scenario('water: quick add raises the total and fills the glass', 'ex=wate
 });
 
 await scenario('tasbeeh: a tap on the ring counts and the arc grows', 'ex=tasbeeh&view=app', async page => {
-  const n0 = await page.$eval('.mo-lbl.mo-big', e => +e.textContent);
+  const n0 = await page.$eval('.mo-draw.mo-tap .mo-lbl.mo-size-huge', e => +e.textContent);
   const d0 = await page.$eval('.mo-draw path', p => p.getAttribute('d'));
   await page.click('.mo-draw.mo-tap');
-  const n1 = await page.$eval('.mo-lbl.mo-big', e => +e.textContent);
+  const n1 = await page.$eval('.mo-draw.mo-tap .mo-lbl.mo-size-huge', e => +e.textContent);
   const d1 = await page.$eval('.mo-draw path', p => p.getAttribute('d'));
   expect(n1 === n0 + 1, `count ${n0} -> ${n1}`);
   expect(d0 !== d1, 'arc did not change');
@@ -191,10 +191,11 @@ await scenario('undo by swipe: dragging a row sideways removes it', 'ex=todo&vie
 });
 
 await scenario('timer: start counts down in real time', 'ex=pomodoro&view=app', async page => {
-  const t0 = await big(page);
+  const clock = () => page.$eval('.mo-lbl.mo-size-huge', e => e.textContent.trim());
+  const t0 = await clock();
   await page.click('button.mo-btn:has-text("Start") >> nth=0');
   await page.waitForTimeout(2300);
-  const t1 = await big(page);
+  const t1 = await clock();
   expect(t0 === '25:00' && /^24:5\d$/.test(t1), `timer ${t0} -> ${t1}`);
 });
 
@@ -229,7 +230,7 @@ await scenario('chat: a request swaps the program live, keeps data, and undoes',
   const total0 = await big(page);
   await page.click('.dm-fab');
   await page.click('.dm-chip:has-text("quick buttons")');
-  await page.waitForSelector('.dm-bot:has-text("What changed")');
+  await page.waitForSelector('.dm-bot:has-text("Quick buttons are now 200, 330 and 500 ml.")');
   await page.waitForSelector('.mo-btn:has-text("330 ml")');
   expect(await big(page) === total0, 'data changed after an edit');
   expect(await page.$$eval('.dm-ln.dm-new', e => e.length) > 0, 'changed lines not marked');
@@ -258,7 +259,7 @@ await scenario('every scripted request produces a program that checks and is saf
         chip.click();
         await new Promise(r => setTimeout(r, 20));
         const last = S.chat[S.chat.length - 1];
-        if (!/What changed/.test(last.html) || !S.app.ok || S.app.findAll(n => n.t === 'error').length) out.push(`${S.ex}: "${text}" ${S.app.errors.join('; ')}`);
+        if (last.who !== 'bot' || /could not|lines? added|lines? removed/.test(last.html) || !S.app.ok || S.app.findAll(n => n.t === 'error').length) out.push(`${S.ex}: "${text}" ${last.html.slice(0, 80)} ${S.app.errors.join('; ')}`);
         S.undo();
       }
       document.querySelector('.dm-chatwrap').click();
@@ -276,6 +277,213 @@ await scenario('sandboxed iframe with a strict CSP runs the demo', 'ex=water', a
   await frame.waitForSelector('.mo-app .mo-big', { timeout: 5000 });
   await frame.click('.dm-item:has-text("Tasbeeh")');
   await frame.waitForSelector('.mo-app .mo-title:has-text("Tasbeeh")');
+});
+
+// ---------- 4. round 2 checks ----------
+const MINE = ['water', 'habits', 'budget', 'exercise', 'journal', 'tasbeeh', 'cricket', 'tictactoe', 'quiz', 'savings', 'pomodoro'];
+const total = page => page.$eval('.mo-big', e => +e.textContent.replace(/[^\d]/g, ''));
+
+await scenario('S1: chat Undo keeps data added after the change', 'ex=water', async page => {
+  const t0 = await total(page);
+  await page.click('.dm-fab');
+  await page.click('.dm-chip:has-text("quick buttons")');
+  await page.keyboard.press('Escape');
+  await page.click('button.mo-btn:has-text("+ 500 ml")');
+  expect(await total(page) === t0 + 500, 'add after change');
+  await page.click('.dm-fab');
+  await page.click('.dm-undo');
+  await page.waitForSelector('.dm-bot:has-text("Everything you added since is still here")');
+  await page.waitForSelector('.mo-btn:has-text("+ 150 ml")');
+  expect(await total(page) === t0 + 500, `after chat Undo the total is ${await total(page)}, expected ${t0 + 500}`);
+});
+
+await scenario('S1: a new field filled in, chat Undo, then the same change again shows the values', 'ex=water', async page => {
+  await page.click('.dm-fab');
+  await page.click('.dm-chip:has-text("note to each drink")');
+  await page.keyboard.press('Escape');
+  await page.click('[data-swipe] >> nth=0');
+  await page.waitForSelector('.mo-sheet');
+  const note = page.locator('.mo-sheet input[type=text]').first();
+  await note.fill('after the gym'); await note.press('Tab');
+  await page.click('.mo-sheet button:has-text("Done")');
+  await page.waitForSelector('.mo-app :text("after the gym")');
+  await page.click('.dm-fab');
+  await page.click('.dm-undo');
+  await page.waitForSelector('.dm-bot:has-text("kept but hidden")');
+  expect(!(await page.$('.mo-app :text("after the gym")')), 'hidden field still shown after Undo');
+  await page.click('.dm-chip:has-text("note to each drink")');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.mo-app :text("after the gym")');
+});
+
+await scenario('chat replies: a human sentence, data line only when data is involved, a labelled Undo', 'ex=water', async page => {
+  await page.click('.dm-fab');
+  await page.click('.dm-chip:has-text("Make it")');
+  const last = await page.$eval('.dm-bot:last-child', e => e.textContent);
+  expect(/The colours are now/.test(last) && !/still here|kept/.test(last), `theme reply: ${last}`);
+  expect((await page.$eval('.dm-undo', e => e.textContent.trim())) === 'Undo', 'Undo label');
+  await page.click('.dm-undo');
+  await page.click('.dm-chip:has-text("note to each drink")');
+  const l2 = await page.$eval('.dm-bot:last-child', e => e.textContent);
+  expect(/note/.test(l2) && /still here/.test(l2), `field reply: ${l2}`);
+});
+
+await scenario('chat button: hidden under the edit sheet; Done works at its right edge', 'ex=water&view=app', async page => {
+  await page.click('[data-swipe] >> nth=0');
+  await page.waitForSelector('.mo-sheet');
+  await page.waitForTimeout(250);
+  expect(await page.$eval('.dm-fab', e => getComputedStyle(e).opacity) === '0', 'chat button visible over the sheet');
+  const b = await (await page.$('.mo-sheet button:has-text("Done")')).boundingBox();
+  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y).closest('button')?.textContent, [b.x + b.width - 3, b.y + b.height / 2]);
+  expect(hit === 'Done', `right edge of Done hits ${hit}`);
+  await page.mouse.click(b.x + b.width - 3, b.y + b.height / 2);
+  await page.waitForSelector('.mo-sheet', { state: 'detached' });
+});
+
+await scenario('chat button: steps aside on scroll down, returns on scroll up; hidden while typing', 'ex=budget&view=app', async page => {
+  const op = () => page.$eval('.dm-fab', e => getComputedStyle(e).opacity);
+  await page.$eval('.mo-scrollarea', e => { e.scrollTop = 0; });
+  await page.mouse.move(200, 400);
+  await page.mouse.wheel(0, 600); await page.waitForTimeout(300);
+  expect(await op() === '0', 'still visible while scrolling down');
+  await page.mouse.wheel(0, -300); await page.waitForTimeout(300);
+  expect(await op() === '1', 'not back on scroll up');
+  await page.$eval('.mo-scrollarea', e => { e.scrollTop = 0; });
+  await page.click('button.mo-btn:has-text("Add expense")');
+  await page.click('.mo-app input[type=text] >> nth=0');
+  await page.waitForTimeout(250);
+  expect(await op() === '0', 'visible while typing');
+});
+
+await scenario('undo toast: one line, beside the chat button, Undo never wraps', 'ex=water&view=app', async page => {
+  await (await page.$('[data-swipe]')).focus();
+  await page.keyboard.press('Delete');
+  const t = await (await page.waitForSelector('.mo-toast')).boundingBox();
+  const u = await (await page.$('.mo-toast button')).boundingBox();
+  const f = await (await page.$('.dm-fab')).boundingBox();
+  expect(t.height <= 56, `toast ${t.height}px tall`);
+  expect(u.height <= 48 && u.width >= 44, `Undo ${u.width}x${u.height}`);
+  expect(t.x + t.width <= f.x, 'toast runs under the chat button');
+});
+
+await scenario('primary action: one accent button on each app that has one', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const id of ['water', 'habits', 'budget', 'exercise', 'journal', 'savings', 'pomodoro', 'tictactoe']) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    const n = await page.$$eval('.mo-app .mo-btn.mo-primary', els => els.filter(e => e.getBoundingClientRect().height > 0).map(e => e.textContent));
+    if (n.length !== 1) bad.push(`${id}: ${JSON.stringify(n)}`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('empty states: every demo program says what to do when it has no data', 'ex=water', async page => {
+  const bad = [];
+  for (const id of MINE) {
+    await page.evaluate(i => window.__molde.showBlank(i), id);
+    const txt = await page.$eval('.mo-app', e => e.innerText);
+    const errs = await page.$$('.mo-error');
+    if (!/(Nothing|No [a-z]+ yet|Add a|Write on|Log )/.test(txt) && !['tictactoe', 'cricket', 'tasbeeh'].includes(id)) bad.push(`${id}: no empty message`);
+    if (errs.length) bad.push(`${id}: error node`);
+    if (/\bNaN\b|undefined|Infinity/.test(txt)) bad.push(`${id}: ${txt.match(/\bNaN\b|undefined|Infinity/)[0]}`);
+    const a = await page.evaluate(audit);
+    for (const k of ['overflow', 'small', 'tiny', 'contrast']) if (a[k].length) bad.push(`${id} empty ${k}: ${a[k][0]}`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('copy: plurals, the quiz shows the right answer, budget stays in the present', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const id of MINE) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    const txt = await page.$eval('.mo-app', e => e.innerText);
+    const m = txt.match(/\b1 (days|drinks|exercises|sessions|questions|rounds|habits)\b/);
+    if (m) bad.push(`${id}: "${m[0]}"`);
+  }
+  await page.evaluate(() => { location.hash = 'ex=quiz&view=app'; });
+  await page.waitForSelector('.mo-app :text("Not quite. The answer is 300")');
+  await page.evaluate(() => { location.hash = 'ex=budget&view=app'; });
+  await page.waitForFunction(() => window.__molde.ex === 'budget');
+  if (await page.$('.mo-btn:text-is(">")')) bad.push('budget: can page into a future month');
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('dates and times read as text, never mm/dd/yyyy', 'ex=todo&view=app', async page => {
+  const shown = await page.$$eval('.mo-dt-v', els => els.map(e => e.textContent));
+  expect(shown.length && shown.every(t => t === 'Pick a date' || /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d{4}/.test(t)), JSON.stringify(shown));
+  await page.click('.mo-row.mo-card.mo-tap >> nth=0');
+  await page.waitForSelector('.mo-sheet');
+  const s2 = await page.$$eval('.mo-sheet .mo-dt-v', els => els.map(e => e.textContent));
+  expect(s2.some(t => /^Tue 24 Nov 2026$/.test(t)), JSON.stringify(s2));
+  expect(!(await page.evaluate(() => /mm\/dd\/yyyy|--:--/.test(document.body.innerText))), 'raw format visible');
+});
+
+await scenario('sideways chips show a fade cue when there is more', 'ex=tasbeeh&view=app', async page => {
+  expect(await page.$eval('.mo-scroll', e => e.classList.contains('mo-more-end')), 'no cue on the phrase chips');
+  await page.$eval('.mo-scroll', e => { e.scrollLeft = 9999; e.dispatchEvent(new Event('scroll')); });
+  await page.waitForTimeout(50);
+  expect(await page.$eval('.mo-scroll', e => !e.classList.contains('mo-more-end')), 'cue stays at the end');
+});
+
+await scenario('custom screens are centred, not stuck top-left', 'ex=tasbeeh&view=app', async page => {
+  const bad = [];
+  for (const id of ['tasbeeh', 'tictactoe', 'pomodoro']) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    await page.waitForTimeout(80);
+    const r = await page.evaluate(() => { const d = document.querySelector('.mo-draw, .mo-grid'); const b = d.getBoundingClientRect(); return { l: b.left, r: innerWidth - b.right }; });
+    if (Math.abs(r.l - r.r) > 4) bad.push(`${id}: left ${r.l} right ${r.r}`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+// system text size: 200% root font at 360 px wide
+function audit200() {
+  const out = [];
+  const vw = document.documentElement.clientWidth;
+  if (document.documentElement.scrollWidth > vw + 1) out.push(`page ${document.documentElement.scrollWidth} > ${vw}`);
+  for (const el of document.querySelectorAll('.mo-scrollarea, .mo-screen')) if (el.scrollWidth > el.clientWidth + 1) out.push(`${el.className} ${el.scrollWidth} > ${el.clientWidth}`);
+  const walker = document.createTreeWalker(document.querySelector('.mo-app'), NodeFilter.SHOW_TEXT);
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+    const s = t.textContent.trim();
+    const el = t.parentElement;
+    if (!s || !el || el.closest('svg') || !el.getClientRects().length) continue;
+    const fs = parseFloat(getComputedStyle(el).fontSize);
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && s.replace(/\s/g, '').length >= 4 && /[A-Za-z]{3}/.test(s) && r.width < 1.6 * fs) out.push(`letter per line: "${s.slice(0, 20)}" ${Math.round(r.width)}px`);
+    for (const m of s.matchAll(/\d[\d,.:]*\d/g)) {
+      const i = t.textContent.indexOf(m[0]);
+      const range = document.createRange(); range.setStart(t, i); range.setEnd(t, i + m[0].length);
+      const tops = new Set([...range.getClientRects()].map(x => Math.round(x.top)));
+      if (tops.size > 1) out.push(`number broken: ${m[0]}`);
+    }
+  }
+  return out;
+}
+await scenario('200% system text at 360 px: no overflow, no letter-per-line, numbers whole', 'ex=water&view=app', async page => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await page.waitForTimeout(80);
+    for (const x of await page.evaluate(audit200)) bad.push(`${c.id}: ${x}`);
+  }
+  expect(!bad.length, bad.slice(0, 8).join(' | ') + (bad.length > 8 ? ` (+${bad.length - 8})` : ''));
+});
+
+await scenario('narrow 300 px still works (no page overflow)', 'ex=water&view=app', async page => {
+  await page.setViewportSize({ width: 300, height: 640 });
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    await page.waitForTimeout(50);
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) bad.push(c.id);
+  }
+  expect(!bad.length, bad.join(', '));
 });
 
 await browser.close();

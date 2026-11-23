@@ -192,7 +192,7 @@ export const SEEDS = {
   pomodoro(app) {
     const { r, add } = helper(app, 155);
     const tasks = ['Thesis chapter 3', 'Statistics homework', 'Read research paper', 'Emails', null];
-    for (let n = 6; n >= 0; n--) { const k = n === 0 ? 2 : Math.floor(r() * 6); for (let i = 0; i < k; i++) add('session', { task: pick(r, tasks) }, at(n, 9 + i, 25)); }
+    for (let n = 6; n >= 0; n--) { const k = n === 0 ? 2 : Math.floor(r() * 6); for (let i = 0; i < k; i++) add('session', { task: pick(r, tasks), mins: pick(r, [25, 25, 25, 50]) }, at(n, 9 + i, 25)); }
   },
 
   medicine(app) {

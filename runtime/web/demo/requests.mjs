@@ -1,51 +1,71 @@
 // Scripted chat requests for the demo. There is no trained model yet, so each request maps to a
 // program change written by hand: either a real edit pair from lang/examples/edits (the request
 // text and the after-program are used as they are) or a small patch to the current program.
-// Every result is checked by tests/check.mjs (it must type-check and keep data safe).
+// Each request carries the sentence the reply shows (`says`); tests/check.mjs checks that every
+// result type-checks, is data-safe and gets its sentence.
 
 // real pairs: request.txt + after.mo, applied when the current program equals before.mo
 export const EDIT_PAIRS = {
-  pomodoro: ['06-add-goal'],
   todo: ['08-add-pick-field', '20-add-filter'],
   reading: ['09-add-search'],
   medicine: ['11-add-screen'],
 };
 export const EDIT_FILES = Object.values(EDIT_PAIRS).flat();
+const PAIR_SAYS = {
+  '08-add-pick-field': 'Each task now has a priority: low, normal or high.',
+  '20-add-filter': 'You can now filter your tasks by tag.',
+  '09-add-search': 'You can now search your books by title.',
+  '11-add-screen': 'There is a new History tab that lists every dose you took.',
+};
 
 // patches: [find, replace] pairs applied in order to the current source; the request is offered
 // only while every `find` is still present
 export const PATCHES = {
   water: [
-    { text: 'Add a note to each drink', ops: [['kind pick Water|Tea|Juice|Milk = Water', 'kind pick Water|Tea|Juice|Milk = Water, note text?'], ['      text d.kind grow', '      stack grow gap 0\n        text d.kind\n        text d.note faint']] },
-    { text: 'Change the quick buttons to 200, 330 and 500 ml', ops: [['each [150, 250, 500]', 'each [200, 330, 500]']] },
-    { text: "Call the goal 'Target for today'", ops: [['"Daily goal (ml)"', '"Target for today (ml)"']] },
+    { text: 'Change the quick buttons to 200, 330 and 500 ml', says: 'Quick buttons are now 200, 330 and 500 ml.',
+      ops: [['button "+ 250 ml" fill accent grow tap add drink ml = 250', 'button "+ 330 ml" fill accent grow tap add drink ml = 330'], ['button "+ 150 ml" grow tap add drink ml = 150', 'button "+ 200 ml" grow tap add drink ml = 200'], ['Tap + 250 ml when', 'Tap + 330 ml when']] },
+    { text: 'Add a note to each drink', says: 'Each drink can now have a note. It shows under the drink in today\'s list.',
+      ops: [['kind pick Water|Tea|Juice|Milk = Water', 'kind pick Water|Tea|Juice|Milk = Water, note text?'], ['      d.kind grow\n', '      stack grow gap 0\n        d.kind\n        d.note faint\n']] },
+    { text: "Call the goal 'Target for today'", says: 'The goal is now called "Target for today".',
+      ops: [['"Daily goal (ml)"', '"Target for today (ml)"'], ['"of" goal "ml today"', '"Target for today:" goal "ml"']] },
   ],
   habits: [
-    { text: 'Show the last 4 weeks instead of 10', ops: [['text "Last 10 weeks" head grow', 'text "Last 4 weeks" head grow'], ['each days last 70 days', 'each days last 28 days'], ['count(check last 70 days) * 100 / (n * 70)', 'count(check last 28 days) * 100 / (n * 28)']] },
-    { text: 'Let me write why each habit matters', ops: [['table habit name text', 'table habit name text, why text?'], ['        text h.name bold\n', '        text h.name bold\n        text h.why faint\n']] },
+    { text: 'Show the last 4 weeks instead of 6', says: 'The grid now shows the last 4 weeks.',
+      ops: [['"Last 6 weeks"', '"Last 4 weeks"'], ['count(check last 42 days) * 100 / (n * 42)', 'count(check last 28 days) * 100 / (n * 28)'], ['dayname(today - 42 + it)', 'dayname(today - 28 + it)'], ['each days last 42 days', 'each days last 28 days']] },
+    { text: 'Let me write why each habit matters', says: 'Each habit can now have a reason. It shows under its name.',
+      ops: [['table habit name text', 'table habit name text, why text?'], ['        h.name bold\n', '        h.name bold\n        h.why faint\n']] },
   ],
   budget: [
-    { text: 'Add a Rent category', ops: [['Health|Other = Groceries', 'Health|Rent|Other = Groceries']] },
-    { text: 'Let me add a note to each expense', ops: [['= Groceries\n', '= Groceries, note text?\n'], ['        text r.category faint', '        text r.category r.note faint']] },
+    { text: 'Add a Rent category', says: 'Rent is now one of the categories.', ops: [['Health|Other = Groceries', 'Health|Rent|Other = Groceries']] },
+    { text: 'Let me add a note to each expense', says: 'Each expense can now have a note. It shows next to the category.',
+      ops: [['|Other = Groceries\n', '|Other = Groceries, note text?\n'], ['        r.category faint', '        r.category r.note faint']] },
   ],
   exercise: [
-    { text: 'Add a 90 second rest timer', ops: [['form lift, "Add set"\n', 'form lift, "Add set"\ntimer 90s, "Rest between sets"\n']] },
-    { text: 'Track how hard each set felt', ops: [['reps num 1..100', 'reps num 1..100, felt pick Easy|Okay|Hard = Okay'], ['      text r.sets "x" r.reps color muted', '      text r.sets "x" r.reps r.felt color muted']] },
+    { text: 'Add a 90 second rest timer', says: 'A 90 second rest timer is now under the buttons.',
+      ops: [['\nif adding\n', '\ntimer 90s, "Rest between sets"\nif adding\n']] },
+    { text: 'Track how hard each set felt', says: 'Each set can now say how it felt: easy, okay or hard.',
+      ops: [['reps num 1..100', 'reps num 1..100, felt pick Easy|Okay|Hard = Okay'], ['      r.sets "x" r.reps color muted', '      r.sets "x" r.reps r.felt color muted']] },
   ],
   journal: [
-    { text: 'Add one thing I am grateful for', ops: [['table entry mood num 1..5, note long', 'table entry mood num 1..5, note long, grateful text?'], ['  field d.note "What happened today?"\n', '  field d.note "What happened today?"\n  field d.grateful "One thing you are grateful for"\n'], ['      text r.note\n', '      text r.note\n      text r.grateful color muted\n']] },
+    { text: 'Add one thing I am grateful for', says: 'Each entry can now hold one thing you are grateful for.',
+      ops: [['table entry mood num 1..5, note long', 'table entry mood num 1..5, note long, grateful text?'], ['  field d.note "What happened today?"\n', '  field d.note "What happened today?"\n  field d.grateful "One thing you are grateful for"\n'], ['      r.note\n', '      r.note\n      r.grateful color muted\n']] },
   ],
   tasbeeh: [
-    { text: 'Count to 100 instead of 33', ops: [['setting target num = 33', 'setting target num = 100']] },
+    { text: 'Add Astaghfirullah to the phrases', says: 'Astaghfirullah is now one of the phrases.', ops: [['AllahuAkbar = SubhanAllah', 'AllahuAkbar|Astaghfirullah = SubhanAllah']] },
   ],
   cricket: [
-    { text: 'Make it a 10 over match', ops: [['setting overs num = 20', 'setting overs num = 10']] },
+    { text: 'Show the extras on the scoreboard', says: 'The scoreboard now shows the extras.', ops: [['  "Last six balls, newest first" faint\n', '  "Last six balls, newest first" faint\n  "Extras:" count(ball today where wide = yes) "wides" faint\n']] },
   ],
   savings: [
-    { text: 'Show my deposits as bars for each month', ops: [['quick deposit, amount', 'bars deposit last 6 months by month, sum(it.amount), monthname(it.key)\nquick deposit, amount']] },
+    { text: 'Change the buttons to 2,000 and 10,000', says: 'The quick buttons now add 2,000 and 10,000.',
+      ops: [['button "+ 1,000" fill accent grow tap add deposit amount = 1000', 'button "+ 2,000" fill accent grow tap add deposit amount = 2000'], ['button "+ 5,000" grow tap add deposit amount = 5000', 'button "+ 10,000" grow tap add deposit amount = 10000'], ['Tap + 1,000 to', 'Tap + 2,000 to']] },
+  ],
+  pomodoro: [
+    { text: 'Add a 5 minute break timer', says: 'A 5 minute break timer is now under the focus timer.',
+      ops: [['  button "Reset" width 120 tap set going = no then set left = work\n', '  button "Reset" width 120 tap set going = no then set left = work\ntimer 5m, "Break"\n']] },
   ],
   attendance: [
-    { text: 'Show the class in 3 columns', ops: [['grid 4 gap 1', 'grid 3 gap 1']] },
+    { text: 'Show the class in 3 columns', says: 'The class now shows in 3 columns.', ops: [['grid 4 gap 1', 'grid 3 gap 1']] },
   ],
 };
 
@@ -61,20 +81,20 @@ export const NEW_APPS = [
 const THEMES = { ocean: 'blue', mint: 'green', plum: 'purple', slate: 'steel blue', ink: 'indigo' };
 const NEXT = { ocean: 'mint', mint: 'plum', plum: 'ocean', slate: 'ocean', ink: 'plum' };
 
-// requests that make sense for this program right now: [{text, apply(src) -> newSrc} | {text, to}]
+// requests that make sense for this program now: [{text, says, apply(src) -> newSrc}]
 export function requestsFor(id, src, sources) {
   const out = [];
   for (const name of EDIT_PAIRS[id] || []) {
     const before = sources['edit:' + name + ':before'], after = sources['edit:' + name + ':after'], req = sources['edit:' + name + ':request'];
-    if (before && after && req && src.trim() === before.trim()) out.push({ text: req.trim(), apply: () => after });
+    if (before && after && req && src.trim() === before.trim()) out.push({ text: req.trim(), says: PAIR_SAYS[name], apply: () => after });
   }
   for (const p of PATCHES[id] || []) {
-    if (p.ops.every(([f]) => src.includes(f))) out.push({ text: p.text, apply: s => p.ops.reduce((acc, [f, r]) => acc.replace(f, r), s) });
+    if (p.ops.every(([f]) => src.includes(f))) out.push({ text: p.text, says: p.says, apply: s => p.ops.reduce((acc, [f, r]) => acc.replace(f, r), s) });
   }
   const m = /^app "[^"]*"(?: [a-z]+)? (ocean|mint|plum|slate|ink)\b/.exec(src);
   if (m) {
     const to = NEXT[m[1]];
-    out.push({ text: `Make it ${THEMES[to]}`, apply: s => s.replace(/^(app "[^"]*"(?: [a-z]+)?) (ocean|mint|plum|slate|ink)\b/, `$1 ${to}`) });
+    out.push({ text: `Make it ${THEMES[to]}`, says: `The colours are now ${THEMES[to]}.`, apply: s => s.replace(/^(app "[^"]*"(?: [a-z]+)?) (ocean|mint|plum|slate|ink)\b/, `$1 ${to}`) });
   }
   return out.slice(0, 4);
 }

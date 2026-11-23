@@ -46,7 +46,7 @@ export function start(root, sources) {
     view: h.view === 'app' ? 'app' : 'demo',
     frame: h.frame === 'full' ? 'full' : 'phone',
     mode: h.mode === 'dark' || h.mode === 'light' ? h.mode : systemMode(),
-    renderer: null, app: null, src: '', prevSrc: '', history: [], chat: [],
+    renderer: null, app: null, src: '', prevSrc: '', history: [], chat: [], versions: [],
   };
   document.documentElement.setAttribute('data-mode', S.mode);
   root.textContent = '';
@@ -130,7 +130,7 @@ export function start(root, sources) {
     pre.innerHTML = lines.map(l => `<span class="dm-ln${old.has(l) ? '' : ' dm-new'}">${highlight(l)}</span>`).join('\n');
   }
   function show(id, keepScroll) {
-    S.ex = id; S.src = sources[id]; S.prevSrc = ''; S.history = []; S.chat = [];
+    S.ex = id; S.src = sources[id]; S.prevSrc = ''; S.history = []; S.chat = []; S.versions = [S.src];
     mountApp(seeded(id, S.src));
     for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === id));
     paintSource(); paintChat(); writeHash();
@@ -165,7 +165,7 @@ export function start(root, sources) {
       m.innerHTML = c.html;
       if (c.undo && i === S.chat.length - 1 && S.history.length) {
         const u = $('button', 'dm-btn dm-undo', { type: 'button' });
-        u.innerHTML = icon('_undo') + '<span>Undo this change</span>';
+        u.innerHTML = icon('_undo') + '<span>Undo</span>';
         u.addEventListener('click', undo);
         m.append(u);
       }
@@ -188,32 +188,46 @@ export function start(root, sources) {
   function runEdit(r) {
     const oldSrc = S.src, newSrc = r.apply(oldSrc);
     say('you', `<p>${esc(r.text)}</p>`);
-    const d = diff(oldSrc, newSrc);
+    const d = diff(S.versions, newSrc);   // checked against every earlier version of this app
     if (d.verdict !== 'safe') { say('bot', `<p>I could not make that change safely.</p><ul>${d.refused.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`); paintChat(); return; }
-    S.history.push({ ex: S.ex, src: oldSrc, prevSrc: S.prevSrc, snap: S.app.snapshot() });
-    const app = loadWithData(newSrc, S.app.snapshot());
-    S.prevSrc = oldSrc; S.src = newSrc;
-    mountApp(app);
-    say('bot', `<p>Done. What changed:</p><ul>${humanize(d).map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="dm-small">Your data is kept. The changed lines are marked in the program.</p>`, true);
+    S.history.push({ kind: 'edit', ex: S.ex, src: oldSrc, prevSrc: S.prevSrc });
+    mountApp(loadWithData(newSrc, S.app.snapshot()));
+    S.prevSrc = oldSrc; S.src = newSrc; S.versions.push(newSrc);
+    const data = touchesData(d);
+    say('bot', `<p>${esc(r.says || 'Done.')}</p>${data ? '<p class="dm-small">Everything you saved is still here.</p>' : ''}`, true);
     paintSource(); paintChat();
   }
   function runNewApp(a) {
     say('you', `<p>${esc(a.text)}</p>`);
-    S.history.push({ ex: S.ex, src: S.src, prevSrc: S.prevSrc, snap: S.app.snapshot() });
-    S.ex = a.to; S.src = sources[a.to]; S.prevSrc = '';
+    S.history.push({ kind: 'app', ex: S.ex, src: S.src, prevSrc: S.prevSrc, versions: S.versions, snap: S.app.snapshot() });
+    S.ex = a.to; S.src = sources[a.to]; S.prevSrc = ''; S.versions = [S.src];
     mountApp(seeded(a.to, S.src));
     for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === a.to));
-    say('bot', `<p>Here is a new app, <strong>${esc(appName(S.src))}</strong>.</p><ul>${summary(S.src).map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="dm-small">It opens with sample data so you can see it working.</p>`, true);
+    const c = CATALOG.find(x => x.id === a.to);
+    say('bot', `<p>Here is a new app: <strong>${esc(appName(S.src))}</strong>. ${esc(c.about || '')}</p><p class="dm-small">${esc(plainSummary(S.src))} It opens with sample data so you can try it.</p>`, true);
     paintSource(); paintChat(); writeHash();
   }
+  // chat Undo puts back the previous PROGRAM. Data is never rolled back by it: every row and
+  // setting entered since stays, and values in fields the older program does not have stay
+  // stored (hidden) and come back if those fields return.
   function undo() {
     const p = S.history.pop();
     if (!p) return;
-    S.ex = p.ex; S.src = p.src; S.prevSrc = p.prevSrc;
-    mountApp(loadWithData(p.src, p.snap));
+    let msg;
+    if (p.kind === 'app') {
+      S.ex = p.ex; S.src = p.src; S.prevSrc = p.prevSrc; S.versions = p.versions;
+      mountApp(loadWithData(p.src, p.snap));
+      msg = `Back to ${appName(p.src)}, as you left it.`;
+    } else {
+      const hidden = hiddenData(S.app, p.src);
+      mountApp(loadWithData(p.src, S.app.snapshot()));
+      S.src = p.src; S.prevSrc = p.prevSrc;
+      msg = 'The app is back to the earlier version. Everything you added since is still here.' +
+        (hidden.length ? ` What you wrote in ${hidden.join(' and ')} is kept but hidden; it shows again if you ask for it back.` : '');
+    }
     for (const b of list.querySelectorAll('.dm-item')) b.setAttribute('aria-current', String(b.getAttribute('data-ex') === S.ex));
     S.chat.forEach(c => { c.undo = false; });
-    say('bot', '<p>Undone. The app is back to how it was, with your data.</p>');
+    say('bot', `<p>${esc(msg)}</p>`);
     paintSource(); paintChat(); writeHash();
   }
   form.addEventListener('submit', e => {
@@ -229,6 +243,16 @@ export function start(root, sources) {
     paintChat();
   });
   fab.addEventListener('click', openChat);
+  // the chat button steps aside while the user scrolls down a long screen and comes back on the way up
+  let lastTop = 0;
+  appEl.addEventListener('scroll', e => {
+    const t = e.target;
+    if (!t.classList || !t.classList.contains('mo-scrollarea')) return;
+    const y = t.scrollTop, atEnd = y + t.clientHeight >= t.scrollHeight - 4;
+    if (y > lastTop + 6 && y > 80 && !atEnd) phone.classList.add('dm-fab-away');
+    else if (y < lastTop - 6 || y <= 80) phone.classList.remove('dm-fab-away');
+    lastTop = y;
+  }, true);
   chatClose.addEventListener('click', closeChat);
   chatWrap.addEventListener('click', e => { if (e.target === chatWrap) closeChat(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !chatWrap.hidden) closeChat(); });
@@ -244,45 +268,36 @@ export function start(root, sources) {
   addEventListener('hashchange', () => { const n = readHash(); if (n.ex && n.ex !== S.ex && CATALOG.some(c => c.id === n.ex)) show(n.ex); });
   paintTools();
   show(S.ex);
+  S.showBlank = id => { show(id); mountApp(load(sources[id], { now: NOW })); };   // tests: the app with no data
   S.runEdit = runEdit; S.runNewApp = runNewApp; S.undo = undo; S.openChat = openChat;
   window.__molde = S;   // for tests: the running app, renderer and chat actions
   return S;
 }
 
-function appName(src) { const m = /^app "([^"]*)"/.exec(src); return m ? m[1] : 'this app'; }
-
-// diff.mjs lines into plain sentences
-const THEME_WORDS = { ocean: 'blue', mint: 'green', plum: 'purple', slate: 'steel blue', ink: 'indigo' };
-export function humanize(d) {
+// a change that adds or changes stored data (not only the screen)
+function touchesData(d) { return d.changes.some(c => /\b(field|table|setting|options?)\b/.test(c) && !/^(adds|removes from the screen): /.test(c)); }
+// fields (and tables) holding values in the running app that the older program does not declare
+function hiddenData(app, olderSrc) {
+  const older = load(olderSrc, { now: NOW });
   const out = [];
-  let added = 0, removed = 0;
-  for (const c of d.changes) {
-    let m;
-    if ((m = /^adds field (\w+)\.(\w+) \(([^)]+)\)(; old rows get the default)?/.exec(c))) out.push(`Each ${m[1].replace(/_/g, ' ')} now has "${m[2].replace(/_/g, ' ')}" (${m[3]}). ${m[4] ? 'Old entries get the default.' : 'Old entries leave it empty.'}`);
-    else if ((m = /^changes the theme to (\w+)/.exec(c))) out.push(`New colours: the ${THEME_WORDS[m[1]] || m[1]} theme.`);
-    else if ((m = /^adds options to (\w+)\.(\w+)/.exec(c))) out.push(`New choices for ${m[2].replace(/_/g, ' ')}.`);
-    else if ((m = /^renames the label of setting (\w+)/.exec(c))) out.push(`The setting ${m[1].replace(/_/g, ' ')} has a new name.`);
-    else if ((m = /^changes the starting value of setting (\w+)/.exec(c))) out.push(`New starting value for ${m[1].replace(/_/g, ' ')}. A value you set yourself is kept.`);
-    else if ((m = /^adds table (\w+)/.exec(c))) out.push(`A new list: ${m[1].replace(/_/g, ' ')}.`);
-    else if ((m = /^adds setting (\w+)/.exec(c))) out.push(`A new setting: ${m[1].replace(/_/g, ' ')}.`);
-    else if (/^adds: /.test(c)) added++;
-    else if (/^removes from the screen: /.test(c)) removed++;
-    else out.push(c.charAt(0).toUpperCase() + c.slice(1) + '.');
+  for (const [t, tb] of app.env.tables) {
+    const ot = older.env.tables.get(t);
+    for (const [f] of tb.fields) {
+      if (ot && ot.fields.has(f)) continue;
+      if (app.rows(t).some(r => r[f] !== null && r[f] !== undefined && r[f] !== '' && r[f] !== false)) out.push(ot ? `"${f.replace(/_/g, ' ')}"` : `the ${t.replace(/_/g, ' ')} list`);
+    }
   }
-  if (added || removed) out.push(`The screen changed: ${added ? `${added} line${added > 1 ? 's' : ''} added` : ''}${added && removed ? ', ' : ''}${removed ? `${removed} removed` : ''}.`);
-  return out.length ? out : ['Nothing that stores data changed.'];
+  return [...new Set(out)];
 }
-// describe.mjs output, shortened for a chat reply
-function summary(src) {
+// the first line of describe.mjs and what it keeps, as one plain sentence
+function plainSummary(src) {
   const lines = describe(src).split('\n');
-  const keeps = [], shows = [];
-  let sec = '';
-  for (const l of lines) {
-    if (/^Keeps:/.test(l)) sec = 'k'; else if (/^Shows:/.test(l)) sec = 's'; else if (/^[A-Z]/.test(l)) sec = '';
-    else if (/^- /.test(l)) (sec === 'k' ? keeps : sec === 's' ? shows : []).push(l.slice(2).replace(/\.$/, ''));
-  }
-  return [...keeps.slice(0, 2).map(k => 'Keeps ' + k.replace(/ Every entry also keeps when it was added$/, '')), ...shows.slice(0, 3).map(s => 'Shows ' + s)];
+  const keeps = [];
+  let on = false;
+  for (const l of lines) { if (/^Keeps:/.test(l)) on = true; else if (/^[A-Z]/.test(l)) on = false; else if (on && /^- /.test(l)) keeps.push(l.slice(2).split(':')[0].replace(/_/g, ' ')); }
+  return keeps.length ? `It keeps a list of ${keeps.join(' and ')}.` : '';
 }
+function appName(src) { const m = /^app "([^"]*)"/.exec(src); return m ? m[1] : 'this app'; }
 
 // light syntax colouring: statement word, strings, numbers, keywords after the first word
 const KW = new Set(['tap', 'swipe', 'then', 'fill', 'stroke', 'color', 'thick', 'radius', 'opacity', 'width', 'height', 'grow', 'pad', 'gap', 'span', 'align', 'card', 'big', 'head', 'faint', 'bold', 'size', 'where', 'by', 'sort', 'desc', 'top', 'as', 'of', 'on', 'today', 'week', 'month', 'last', 'prev', 'days', 'all', 'set', 'add', 'remove', 'edit', 'save', 'toggle', 'go', 'notify', 'keep', 'new', 'unit', 'and', 'or', 'not', 'if', 'yes', 'no']);

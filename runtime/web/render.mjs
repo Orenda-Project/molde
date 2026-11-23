@@ -90,7 +90,7 @@ class Renderer {
     this.root.append(shell);
   }
   setMode(mode) { this.opts.mode = mode; this.shell.setAttribute('data-mode', mode); }
-  destroy() { this.destroyed = true; clearInterval(this.timer); this.root.textContent = ''; document.removeEventListener('visibilitychange', this.onVis); }
+  destroy() { this.destroyed = true; clearInterval(this.timer); if (this.ro) this.ro.disconnect(); this.root.textContent = ''; document.removeEventListener('visibilitychange', this.onVis); }
 
   startClock() {
     const ms = this.opts.tickMs || 1000;
@@ -114,6 +114,15 @@ class Renderer {
     } else this.patchChildren(this.screenEl, this.screenChildren(t), { top: true });
     this.renderTabs(t);
     this.renderSheet();
+    this.shell.classList.toggle('mo-sheet-open', !!this.sheetEl);
+    this.markScrolls();
+  }
+  // a sideways-scrolling row shows a fade on the side that has more
+  markScrolls() {
+    for (const el of this.shell.querySelectorAll('.mo-scroll')) {
+      el.classList.toggle('mo-more-end', el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+      el.classList.toggle('mo-more-start', el.scrollLeft > 2);
+    }
   }
 
   // children of the visible screen (lines outside screens are the first tab)
@@ -124,21 +133,16 @@ class Renderer {
     return s ? s.children : [];
   }
 
+  // the runtime's own bar: the app's name and, when the program has settings, a settings button.
+  // Everything below it is the program's (its first line decides how the screen opens).
   renderHead(t) {
-    const key = `${t.name}|${t.icon}|${this.today()}|${this.hasSettings()}`;
+    const key = `${t.name}|${this.hasSettings()}`;
     if (this.head._key === key) return;
     this.head._key = key;
     this.head.textContent = '';
-    const txt = h('div', 'mo-head-text');
-    const date = h('div', 'mo-date');
-    const mark = h('span', 'mo-mark');
-    mark.innerHTML = iconSvg(t.icon || 'check');
-    const d = new Date(this.today() + 'T00:00:00Z');
-    date.append(mark, document.createTextNode(`${DAYS[(d.getUTCDay() + 6) % 7]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`));
     const title = h('h1', 'mo-title');
     title.textContent = t.name || 'App';
-    txt.append(date, title);
-    this.head.append(txt);
+    this.head.append(title);
     if (this.hasSettings()) {
       const b = h('button', 'mo-iconbtn', { type: 'button', 'aria-label': 'Settings', 'data-ui': 'settings' });
       b.innerHTML = iconSvg('_settings');
@@ -255,7 +259,16 @@ class Renderer {
       switch (n.t) {
         case 'stack': case 'screen': cls.push('mo-stack'); break;
         case 'row': cls.push('mo-row'); break;
-        case 'grid': cls.push('mo-grid'); style.gridTemplateColumns = `repeat(${Math.max(1, n.cols || 2)}, minmax(0, 1fr))`; break;
+        case 'grid': {
+          cls.push('mo-grid');
+          const N = Math.max(1, n.cols || 2), g = SCALE[fin(st.gap) ? Math.max(0, Math.min(6, Math.round(st.gap))) : 1];
+          // cells with words keep at least 4.5rem, so large system text drops a column instead of
+          // breaking names letter by letter; cells without text (heat maps) keep N columns
+          style.gridTemplateColumns = hasText(n)
+            ? `repeat(auto-fill, minmax(max(4.5rem, calc((100% - ${(N - 1) * g}px) / ${N} - 0.5px)), 1fr))`
+            : `repeat(${N}, minmax(0, 1fr))`;
+          break;
+        }
         case 'box': cls.push('mo-box'); break;
         case 'scroll': cls.push('mo-scroll'); break;
         case 'text': cls.push('mo-text'); break;
@@ -280,7 +293,7 @@ class Renderer {
       if (st.card) cls.push('mo-card');
       if (st.grow) cls.push('mo-grow');
       if (st.align) {
-        cls.push('mo-align-' + st.align);
+        if (n.t !== 'row') cls.push('mo-align-' + st.align);   // in a row, align is the cross axis only
         const flex = { start: 'flex-start', center: 'center', end: 'flex-end' }[st.align];
         if (n.t === 'row') style.alignItems = flex;
         else if (n.t === 'stack' || n.t === 'box' || n.t === 'form') { style.alignItems = flex; }
@@ -386,7 +399,13 @@ class Renderer {
           if (type === 'number') { inp.setAttribute('inputmode', 'decimal'); inp.setAttribute('step', 'any'); }
         }
         inp.setAttribute('data-id', n.id); inp.setAttribute('data-ev', kind === 'image' ? 'change-image' : 'change'); inp.setAttribute('data-kind', kind);
-        wrap.append(l, inp);
+        if (kind === 'date' || kind === 'time' || kind === 'when') {
+          // the value reads as "Thu 26 Nov" or "08:30"; the browser's picker opens on tap
+          inp.className = 'mo-dt-native';
+          const box = h('div', 'mo-input mo-dt', { 'data-ui': 'picker' });
+          box.append(h('span', 'mo-dt-v', { 'aria-hidden': 'true' }), inp);
+          wrap.append(l, box);
+        } else wrap.append(l, inp);
       }
     }
     wrap.removeAttribute('data-id');
@@ -402,7 +421,7 @@ class Renderer {
       this.fillChoice(wrap.lastElementChild, n, labelText);
       return;
     }
-    const l = wrap.firstElementChild, inp = wrap.lastElementChild;
+    const l = wrap.firstElementChild, inp = wrap.querySelector('[data-ev]');
     l.innerHTML = esc(labelText) + (optional ? ' <span class="mo-opt">optional</span>' : '');
     inp.setAttribute('data-id', n.id);
     if (fin(n.min)) inp.setAttribute('min', kind === 'dur' ? n.min / 60 : n.min); else inp.removeAttribute('min');
@@ -411,7 +430,8 @@ class Renderer {
     if (kind === 'image') return;
     const shown = toInputValue(kind, n.value);
     if (document.activeElement !== inp && inp.value !== shown) inp.value = shown;
-    if (document.activeElement === inp && inp._sent !== undefined && inp._sent !== inp.value) { /* user is typing; keep theirs */ }
+    const dv = wrap.querySelector('.mo-dt-v');
+    if (dv) { const t = readableValue(kind, n.value); dv.textContent = t || (kind === 'time' ? 'Pick a time' : 'Pick a date'); dv.classList.toggle('mo-dt-empty', !t); }
   }
 
   fillChoice(el, n, label) {
@@ -653,6 +673,7 @@ class Renderer {
       if (e.key === 'Escape' && this.sheet) { this.closeSheet(); return; }
       if (!(t instanceof Element) || !t.hasAttribute('data-id')) return;
       if ((e.key === 'Enter' || e.key === ' ') && t.getAttribute('role') === 'button' && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
+      if ((e.key === 'Enter' || e.key === ' ') && t.classList.contains('mo-dt-native')) { e.preventDefault(); try { t.showPicker(); } catch { /* no picker */ } }
       if ((e.key === 'Delete' || e.key === 'Backspace') && t.hasAttribute('data-swipe')) { e.preventDefault(); this.send(t.getAttribute('data-id'), 'swipe'); }
     });
     const onInput = e => {
@@ -678,6 +699,8 @@ class Renderer {
     S.addEventListener('input', onInput);
     S.addEventListener('change', onInput);
     this.bindSwipe(S);
+    S.addEventListener('scroll', e => { if (e.target.classList && e.target.classList.contains('mo-scroll')) this.markScrolls(); }, true);
+    if (typeof ResizeObserver === 'function') { this.ro = new ResizeObserver(() => this.markScrolls()); this.ro.observe(S); }
     this.onVis = () => {};
   }
 
@@ -709,6 +732,7 @@ class Renderer {
   onUi(el, e) {
     const k = el.getAttribute('data-ui');
     if (k === 'settings') { this.sheet = { kind: 'settings' }; this.sheetReturn = el; this.render(); }
+    else if (k === 'picker') { const i = el.querySelector('input'); if (i && e.target !== i) { try { i.showPicker(); } catch { i.focus(); } } }
     else if (k === 'scrim') { if (e.target === el) this.closeSheet(); }
     else if (k === 'sheet-done') this.closeSheet();
     else if (k === 'sheet-remove') { const sh = this.sheet; this.closeSheet(); bridge.removeRow(this.app, sh); this.afterChange(true); }
@@ -751,6 +775,7 @@ class Renderer {
 }
 
 // ---------- helpers ----------
+function hasText(n) { return (n.children || []).some(c => ((c.t === 'text' || c.t === 'button') && /[A-Za-z]{4}/.test(c.text || '')) || hasText(c)); }
 function unq(s) { return typeof s === 'string' ? s.replace(/^"|"$/g, '') : String(s); }
 function cap(s) { s = String(s); return s.charAt(0).toUpperCase() + s.slice(1); }
 function round3(n) { return Math.round(n * 1000) / 1000; }
@@ -782,6 +807,16 @@ function underFill(shapes, x, y) {
     if (inside) return s.fill && colorClass(s.fill) ? normColor(s.fill) : null;
   }
   return null;
+}
+const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function readableValue(kind, v) {
+  if (v === null || v === undefined || v === '') return '';
+  const day = ms => { const d = new Date(ms); return `${WD[(d.getUTCDay() + 6) % 7]} ${d.getUTCDate()} ${MON3[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+  if (kind === 'date') { const ms = Date.parse(String(v).slice(0, 10) + 'T00:00:00Z'); return isFinite(ms) ? day(ms) : ''; }
+  if (kind === 'when') { if (typeof v !== 'number') return ''; const d = new Date(v); return `${day(v)}, ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
+  if (kind === 'time') return toInputValue('time', v);
+  return '';
 }
 function toInputValue(kind, v) {
   if (v === null || v === undefined) return '';

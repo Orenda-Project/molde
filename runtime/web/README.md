@@ -11,7 +11,7 @@ The first real renderer for MoldeScript. `lang/eval.mjs` runs a program and hand
 | `icons.mjs` | the 84 MoldeScript icon names (one Lucide icon each; a few names share one) plus runtime chrome, as Lucide line icons (ISC licence) |
 | `demo/` | the demo page: `index.html` (development), `main.mjs`, `demo.css`, `catalog.mjs` (15 programs), `seed.mjs` (deterministic history), `requests.mjs` (scripted chat requests), `programs/` (richer water, habits, budget, workouts and journal programs) |
 | `build.mjs` | writes `dist/molde-demo.html`: one file, all JS, CSS and program sources inlined |
-| `tests/check.mjs` | Playwright machine checks and interaction tests on the built file |
+| `tests/check.mjs` | Playwright machine checks and interaction tests on the built file (192 checks) |
 | `shots/` | every demo program at 412x915, light and dark, app only |
 
 ## Run and build
@@ -57,21 +57,33 @@ Direction: personal tools on a cheap phone; calm, exact, a little warm; a pocket
 
 ## What still looks weak (honest list)
 
-- **Money has no currency sign.** The tree gives money as a bare number (UITREE says the sign is a locale setting). The demo budget writes "Rs" as text in the program; a real runtime should add it.
-- **Text arrives pre-joined.** A text node is one string, so the renderer cannot style a number apart from its unit except by a pattern (`1,480 ml` in a `big` text); times like `14:05` cannot be built from `hour` and `minute` because parts join with spaces.
-- **Charts have no axes or value labels** unless the program draws them; programs written by a tiny model will rarely do that, so its charts will look thinner than the baseline's.
-- **The heat grid is rectangles, not squares**: a `box` has a height but no aspect ratio.
-- **Tap targets inside tight drawings**: a shape with `tap` smaller than 44 px fails the target rule; the habits program had to drop per-day taps on its week strip for that reason.
-- **No dates or times in the user's time zone**: the evaluator works in UTC.
-- The edit sheet and the settings sheet read declarations from the `App` object because the tree has no "describe this row's fields" call (see contract gaps below).
-- Rows in a plain `each` list (no `card`) have only 12 px between them, which reads loose next to card lists.
-- The date input shows the browser's own format (`mm/dd/yyyy` in Chromium in English).
+- **Axis labels cost a lot of program text.** Every label, gridline and latest-point dot is placed by hand with `label`, `line` and `circle`, repeating the chart's formulas; a tiny model will rarely write that.
+- **Number formatting:** no "80k" (text parts always join with a space), no thousands separator under 10,000 ("Rs 5322"), no currency sign from the runtime, no short month name for month bars.
+- **Plurals and empty states are written by hand** in each program; std `list` and `log` still say "Nothing here yet."
+- Reading, to-do, attendance and medicine (the unchanged language examples) keep the plainer round 1 look.
+- The heat grid needs 44 px cells to be tappable, so it shows 6 weeks, not 10, and sits outside a card.
+- Dates are UTC in the evaluator.
+- The editor and settings sheets read declarations from the `App` object (gap 1 below).
 
-## Contract gaps found (for lang/UITREE.md)
+## Round 2 changes (after the round 1 verdict, issue #37)
 
-1. `edit` logs a target, but there is no public way to list a row's or a setting's fields and change them; the renderer's `bridge` reads `app.env`, `app.prog` and `app.data` and calls `app.pushUndo` directly.
-2. `app.restore(snapshot)` replaces data wholesale, so a program that adds a table after an edit crashes on `addRow` for it; `demo/main.mjs` `loadWithData` adds the missing tables and settings.
-3. `toggle` and `choice` nodes carry no label, so a tick box's accessible name is a guess ("Done").
-4. A `button`'s action kind is not in the tree, so the renderer cannot tell a save button from any other; it uses `fill accent`.
-5. Every `dispatch` pushes an undo step, including each input change, so `app.undo()` after typing undoes keystrokes rather than the last remove; the renderer removes the Undo toast as soon as anything else is dispatched.
-6. Seeding history needs `app.addRow(table, values, atMs)`, which is not in the documented API.
+- **Chat Undo never loses data.** It puts back the previous *program* and keeps every row and setting the user has now. Values in a field the older program lacks stay stored (hidden) and come back when the field returns; the reply says so. Edits are diffed against every earlier version of the app; only a data action's own Undo toast reverts data.
+- **Charts are labelled** in the demo programs with plain `label` nodes: budget (y values, days 1/15/30, a legend, the current point), workouts (best and lowest kg, first date and Today, the latest point), journal (Great/Okay/Rough, first date and Today), water, savings and focus (value over each bar). The habits heat grid has weekday headers and shows the value of a tapped day.
+- **Generic renderer rules:** a short screen sits in the middle of the free height; a `draw` on its own line is centred; a `scroll` shows a fade on the side that has more; grid cells that hold words keep at least 4.5rem (large system text drops a column instead of breaking names); `align` on a row is the cross axis only.
+- **Shell:** the chat button hides under sheets and scrims, while a field is being typed in, and while the user scrolls down (it returns on the way up); the Undo toast has its own place beside it, on one line.
+- **One primary action per app**, the only accent button: Log exercise, Add expense, Save entry, Add habit, + 250 ml, + 1,000, Start, New game.
+- **Replies are sentences** written per request; "Everything you saved is still here." appears only when the change touched stored data; new apps are described in plain words; the button says Undo.
+- **Empty states and plurals** in every demo program; the quiz shows the right answer after a wrong one and can start again (`remove all`); budget cannot page into future months.
+- **Font sizes in rem**, tested at 200% root size at 360 px and at 300 px wide.
+- **Date and time inputs** read "Thu 26 Nov 2026" and "08:30"; the browser's picker opens on tap.
+- **Less template:** the runtime bar is just the app's name (and settings); each program leads with its own element.
+
+## Contract gaps and language needs
+
+1. `edit` logs a target, but there is no public way to list a row's or setting's fields and change them; the renderer's `bridge` reads `app.env`, `app.prog`, `app.data` and calls `app.pushUndo` directly.
+2. `app.restore(snapshot)` replaces data wholesale; `demo/main.mjs` `loadWithData` adds new tables and settings itself.
+3. `toggle` and `choice` nodes carry no label, so a tick box's accessible name is a guess.
+4. A button's action kind is not in the tree; programs mark the primary button with `fill accent`.
+5. Every `dispatch` (each keystroke too) is one undo step; the renderer drops the Undo toast as soon as anything else is dispatched.
+6. Seeding history needs `app.addRow(table, values, atMs)`, which is not documented.
+7. A changed setting default does nothing for a user who already has the setting stored, so "count to 100" cannot be done as an edit.
