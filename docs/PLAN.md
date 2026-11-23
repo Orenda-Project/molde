@@ -33,7 +33,16 @@ Kamal's idea does not change: the user says what they want, one small offline mo
 5. **Made of parts, not a menu of apps.** There is no `habit_tracker` keyword. There are tables, formulas, views and drawing primitives, and apps come from combining them. This keeps the rule Kamal set in v1: generic building blocks, the model writes the app.
 6. **Data is never at risk.** The language can add or hide fields and tables. It has no "delete data" statement.
 
-### 3.2 The four layers
+### 3.1b Kamal's correction (2026-11-23): the model is generic
+
+The model must be able to create any type of UI. The app must not hard-code every possible screen piece. So MoldeScript has two levels:
+
+- **Level 1, the core.** A small general UI language: layout, text, shapes bound to formulas, input controls, repetition over data, conditions, local state, data, formulas, events and actions, screens. With only this, a calendar, a chart, a water glass, a scoreboard, a quiz or a simple board game can be built. The runtime implements level 1 and nothing else.
+- **Level 2, the standard library.** Common pieces (bar chart, calendar, list with actions, form, timer) are written in MoldeScript itself and shipped as library files. They are shorthand, not built-in features. A program can use them for a few tokens, or build its own piece from level 1 when nothing fits, and can define new components.
+
+Section 3.2 below was the first sketch (a fixed list of views). It is replaced by this two-level design; the Phase 0 spec in `lang/SPEC.md` is the source of truth. The limit in 3.4 becomes narrower: any 2D data-and-UI tool is in scope; the internet, the camera, files and heavy algorithms are not.
+
+### 3.2 The four layers (first sketch, superseded by 3.1b)
 
 - **Data:** `table`, fields with types, `setting` (a goal or limit the user can edit).
 - **Formulas:** `sum`, `count`, `avg`, `min`, `max`, `streak`, with a time window (`today`, `week`, `month`, `last 7 days`), `by` grouping, `where` filters, and plain arithmetic.
