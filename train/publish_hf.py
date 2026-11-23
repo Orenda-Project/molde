@@ -32,7 +32,7 @@ def main():
     ap.add_argument("--base-model", required=True); ap.add_argument("--licence", required=True)
     ap.add_argument("--dataset-card", required=True); ap.add_argument("--train-log"); ap.add_argument("--train-config")
     ap.add_argument("--metrics", nargs="*", default=[]); ap.add_argument("--pipeline-test", action="store_true")
-    ap.add_argument("--note", default=""); ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--note", default=""); ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--lang", default=str(HERE.parent / "lang")); ap.add_argument("--data", default=str(HERE / "data/out"))
     a = ap.parse_args()
     if "/" in a.round or a.round in ("", ".", ".."):
@@ -46,7 +46,7 @@ def main():
     for g in a.gguf:
         g = pathlib.Path(g)
         out = pathlib.Path(tempfile.mkdtemp(prefix="molde-pub-")) / "load.json"
-        r = subprocess.run([sys.executable, str(HERE / "local_load_test.py"), str(g), "--data", a.data, "--lang", a.lang, "--json", str(out)])
+        r = subprocess.run([sys.executable, str(HERE / "local_load_test.py"), str(g), "--data", a.data, "--lang", a.lang, "--json", str(out), "--chat-kwargs", a.chat_kwargs])
         if r.returncode != 0:
             sys.exit(f"REFUSED: {g.name} failed the local load test (exit {r.returncode}); nothing uploaded")
         t = json.load(open(out)); t.pop("rows", None); tests[g.name] = t

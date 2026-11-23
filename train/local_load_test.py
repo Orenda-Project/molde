@@ -19,7 +19,7 @@ def avail_mb():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("gguf"); ap.add_argument("--data", default=str(HERE / "data/out")); ap.add_argument("--lang", default=str(HERE.parent / "lang"))
-    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
+    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--chat-kwargs", default="{}", help='JSON for the chat template, e.g. {"enable_thinking": false} for Qwen3.5'); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
     ap.add_argument("--full", action="store_true", help="run the whole test split (create + edit) and score it with score.mjs")
     ap.add_argument("--nogrammar", action="store_true", help="with --full: no grammar (raw model quality)")
     ap.add_argument("--metrics", help="with --full: write metrics JSON here")
@@ -30,7 +30,14 @@ def main():
     if avail_mb() < need:
         sys.exit(f"REFUSED: only {avail_mb()} MB available, need about {need} MB for a {size} MB file")
     binp = os.path.expanduser(os.environ.get("LLAMA_BIN", "~/llama.cpp-b12144/llama-b12144"))
-    port = os.environ.get("PORT", "8197")
+    import socket
+    def free_port():
+        with socket.socket() as k:
+            k.bind(("127.0.0.1", 0)); return str(k.getsockname()[1])
+    port = os.environ.get("PORT") or free_port()
+    with socket.socket() as k:   # never talk to someone else's server (a Qwen eval once silently hit another job's Gemma server)
+        if k.connect_ex(("127.0.0.1", int(port))) == 0:
+            sys.exit(f"REFUSED: port {port} is already in use; unset PORT to pick a free one")
     env = {**os.environ, "LD_LIBRARY_PATH": binp + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
     grammar = open(pathlib.Path(a.lang) / "moldescript.gbnf").read()
     refs = [json.loads(l) for l in open(pathlib.Path(a.data) / a.refs)]
@@ -57,6 +64,7 @@ def main():
             user = ("Edit request: %s\n\nCurrent program:\n%s" % (r["request"], r["before"])) if r["task"] == "edit" else "Request: " + r["request"]
             body = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                     "temperature": 0, "max_tokens": a.n_predict, "cache_prompt": False}
+            body["chat_template_kwargs"] = json.loads(a.chat_kwargs)
             if not a.nogrammar:
                 body["grammar"] = grammar
             q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
@@ -79,6 +87,7 @@ def main():
                     continue
                 body = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": x["user"]}, {"role": "assistant", "content": x["output"]},
                                      {"role": "user", "content": repair_user_message(x["err"] or "invalid program")}], "temperature": 0, "max_tokens": a.n_predict, "cache_prompt": False}
+                body["chat_template_kwargs"] = json.loads(a.chat_kwargs)
                 if not a.nogrammar: body["grammar"] = grammar
                 q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
                 t2 = json.load(urllib.request.urlopen(q, timeout=600))["choices"][0]["message"]["content"]
