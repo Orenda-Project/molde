@@ -126,6 +126,30 @@ class Renderer {
     this.renderSheet();
     this.shell.classList.toggle('mo-sheet-open', !!this.sheetEl);
     this.markScrolls();
+    this.fitTicks();
+  }
+  // x tick labels that would touch are thinned (every 2nd, 3rd ... kept, the last always kept);
+  // the first and last labels are pulled inside the plot's edges
+  fitTicks() {
+    for (const row of this.shell.querySelectorAll('.mo-plot-x')) {
+      const spans = [...row.children];
+      if (!spans.length) continue;
+      for (const sp of spans) { sp.hidden = false; sp.style.transform = ''; }
+      const box = row.closest('.mo-plot').getBoundingClientRect();
+      for (let step = 1; step <= spans.length; step++) {
+        spans.forEach((sp, i) => { sp.hidden = !(i % step === 0 || i === spans.length - 1); });
+        const shown = spans.filter(sp => !sp.hidden);
+        if (shown.length > 1 && !shown[shown.length - 2].hidden && step > 1 && (spans.length - 1) % step !== 0) shown[shown.length - 2].hidden = true;
+        const vis = spans.filter(sp => !sp.hidden).map(sp => sp.getBoundingClientRect());
+        if (vis.every((b, i) => i === 0 || b.left >= vis[i - 1].right + 4)) break;
+      }
+      for (const sp of spans) {
+        if (sp.hidden) continue;
+        const b = sp.getBoundingClientRect();
+        if (b.left < box.left) sp.style.transform = `translateX(calc(-50% + ${box.left - b.left}px))`;
+        else if (b.right > box.right) sp.style.transform = `translateX(calc(-50% - ${b.right - box.right}px))`;
+      }
+    }
   }
   // a sideways-scrolling row shows a fade on the side that has more
   markScrolls() {
@@ -389,7 +413,7 @@ class Renderer {
     if (n.tap) {
       let b = el.firstElementChild;
       if (!b || b.tagName !== 'SPAN') { el.textContent = ''; b = h('span', 'mo-textbtn'); el.append(b); }
-      b.innerHTML = esc(text).replace(/\d[\d,.:]*\d/g, x => `<span class="mo-num">${x}</span>`);
+      b.innerHTML = '<span>' + esc(text).replace(/\d[\d,.:]*\d/g, x => `<span class="mo-num">${x}</span>`) + '</span>';   // one flex item, so the words flow
       el.classList.add('mo-tapped-text');
       return;
     }
@@ -831,7 +855,7 @@ class Renderer {
     S.addEventListener('change', onInput);
     this.bindSwipe(S);
     S.addEventListener('scroll', e => { if (e.target.classList && e.target.classList.contains('mo-scroll')) this.markScrolls(); }, true);
-    if (typeof ResizeObserver === 'function') { this.ro = new ResizeObserver(() => this.markScrolls()); this.ro.observe(S); }
+    if (typeof ResizeObserver === 'function') { this.ro = new ResizeObserver(() => { this.markScrolls(); this.fitTicks(); }); this.ro.observe(S); }
     this.onVis = () => {};
   }
 

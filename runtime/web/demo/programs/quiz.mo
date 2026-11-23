@@ -9,7 +9,10 @@ row
 if adding
   form item, "Save question"
 stack gap 1
-  text score "of" count(answer) "right" big
+  if count(answer) = 0
+    plural(count(item), "question") "to answer" big
+  else
+    text score "of" count(answer) "right" big
   draw 100, 3
     rect 0, 0, 100, 3 fill soft radius 1.5
     rect 0, 0, 100 * count(answer) / count(item), 3 fill accent radius 1.5

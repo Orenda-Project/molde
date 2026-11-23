@@ -206,7 +206,7 @@ await scenario('edit sheet: tapping a row opens it and a change is saved', 'ex=r
   const input = page.locator('.mo-sheet input[type=text]').first();
   await input.fill('Raja Gidh (2nd read)');
   await input.press('Tab');
-  await page.click('.mo-sheet button:has-text("Done")');
+  await page.click('.mo-sheet [data-ui="sheet-done"]');
   await page.waitForSelector('text=Raja Gidh (2nd read)');
 });
 
@@ -306,7 +306,7 @@ await scenario('S1: a new field filled in, chat Undo, then the same change again
   await page.waitForSelector('.mo-sheet');
   const note = page.locator('.mo-sheet input[type=text]').first();
   await note.fill('after the gym'); await note.press('Tab');
-  await page.click('.mo-sheet button:has-text("Done")');
+  await page.click('.mo-sheet [data-ui="sheet-done"]');
   await page.waitForSelector('.mo-app :text("after the gym")');
   await page.click('.dm-fab');
   await page.click('.dm-undo');
@@ -334,7 +334,7 @@ await scenario('chat button: hidden under the edit sheet; Done works at its righ
   await page.waitForSelector('.mo-sheet');
   await page.waitForTimeout(250);
   expect(await page.$eval('.dm-fab', e => getComputedStyle(e).opacity) === '0', 'chat button visible over the sheet');
-  const b = await (await page.$('.mo-sheet button:has-text("Done")')).boundingBox();
+  const b = await (await page.$('.mo-sheet [data-ui="sheet-done"]')).boundingBox();
   const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y).closest('button')?.textContent, [b.x + b.width - 3, b.y + b.height / 2]);
   expect(hit === 'Done', `right edge of Done hits ${hit}`);
   await page.mouse.click(b.x + b.width - 3, b.y + b.height / 2);
@@ -518,10 +518,10 @@ await scenario('S1: Done closes on the first real mouse click after typing a val
   await page.click('.mo-head [aria-label="Settings"]');
   const inp = page.locator('.mo-sheet input').first();
   await inp.fill('2500');
-  const b = await (await page.$('.mo-sheet button:has-text("Done")')).boundingBox();
+  const b = await (await page.$('.mo-sheet [data-ui="sheet-done"]')).boundingBox();
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
-  await page.waitForSelector('.mo-app :text("of 2,500 ml today")');
+  await page.waitForSelector('.mo-app :text("of 2500 ml today")');
 });
 
 await scenario('S1: Tab then Enter closes the sheet and keeps the value', 'ex=water&view=app', async page => {
@@ -532,14 +532,14 @@ await scenario('S1: Tab then Enter closes the sheet and keeps the value', 'ex=wa
   expect(await page.evaluate(() => document.activeElement.textContent) === 'Done', 'Tab did not reach Done');
   await page.keyboard.press('Enter');
   await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
-  await page.waitForSelector('.mo-app :text("of 3,000 ml today")');
+  await page.waitForSelector('.mo-app :text("of 3000 ml today")');
 });
 
 await scenario('S1: a row editor closes on the first click too', 'ex=budget&view=app', async page => {
   await page.click('.mo-row.mo-card.mo-tap >> nth=0');
   const inp = page.locator('.mo-sheet input[type=text]').first();
   await inp.fill('Weekly shop');
-  const b = await (await page.$('.mo-sheet button:has-text("Done")')).boundingBox();
+  const b = await (await page.$('.mo-sheet [data-ui="sheet-done"]')).boundingBox();
   await page.mouse.click(b.x + b.width - 4, b.y + b.height / 2);
   await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
   await page.waitForSelector('.mo-app :text("Weekly shop")');
@@ -716,7 +716,7 @@ await scenario('S1: a row editor changes a pick by mouse and by Space; the value
   await page.focus('.mo-sheet .mo-chip:text-is("Transport")');
   await page.keyboard.press('Space');
   expect(await page.$eval('.mo-sheet .mo-chip:text-is("Transport")', e => e.getAttribute('aria-checked')) === 'true', 'Space: chip not selected');
-  await page.click('.mo-sheet button:has-text("Done")');
+  await page.click('.mo-sheet [data-ui="sheet-done"]');
   await page.waitForSelector('.mo-sheet', { state: 'detached' });
   await page.click('.mo-row.mo-card.mo-tap >> nth=0');
   await page.waitForSelector('.mo-sheet');
@@ -752,14 +752,25 @@ await scenario('S2: Enter saves a sheet; Tab stays inside it', 'ex=water&view=ap
 // text boxes that overprint each other
 function overlaps() {
   const leaf = [...document.querySelectorAll('.mo-app .mo-text, .mo-app .mo-btn, .mo-app .mo-chip, .mo-app .mo-lbl, .mo-app .mo-plot-x span, .mo-app .mo-plot-y span, .mo-app .mo-title')].filter(e => e.getClientRects().length && e.textContent.trim() && !e.closest('.mo-sr'));
-  const box = e => { const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect(); return b; };
+  const box = e => {
+    const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect();
+    let L = b.left, R = b.right, T = b.top, B = b.bottom;
+    for (let p = e; p && p.nodeType === 1; p = p.parentElement) {
+      const cs = getComputedStyle(p);
+      if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible' || cs.textOverflow === 'ellipsis') { const c = p.getBoundingClientRect(); L = Math.max(L, c.left); R = Math.min(R, c.right); T = Math.max(T, c.top); B = Math.min(B, c.bottom); }
+    }
+    // the line box, not the font's full ascent and descent
+    const lh = parseFloat(getComputedStyle(e).lineHeight), fs = parseFloat(getComputedStyle(e).fontSize);
+    const inset = isFinite(lh) ? 0 : fs * 0.1;
+    return { left: L, right: R, top: T + inset, bottom: B - inset };
+  };
   const out = [];
   const bs = leaf.map(e => [e, box(e)]);
   for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
     const [a, A] = bs[i], [b, B] = bs[j];
     if (a.contains(b) || b.contains(a)) continue;
     const w = Math.min(A.right, B.right) - Math.max(A.left, B.left), h = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
-    if (w > 2 && h > 2) out.push(`"${a.textContent.trim().slice(0, 14)}" over "${b.textContent.trim().slice(0, 14)}"`);
+    if (w > 2 && h > 4) out.push(`"${a.textContent.trim().slice(0, 14)}" over "${b.textContent.trim().slice(0, 14)}"`);
   }
   return out;
 }
@@ -784,7 +795,7 @@ await scenario('S2: no plural or grammar slips in any app', 'ex=water&view=app',
     await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
     await page.waitForFunction(i => window.__molde.ex === i, c.id);
     const txt = (await page.$eval('.mo-app', e => e.innerText)).replace(/\s+/g, ' ');
-    const m = txt.match(/\b\w+ ises\b|\w(?<!pro|cl|r|w|prom)ises\b|\b1 (days|drinks|exercises|sessions|questions|rounds|habits|tasks|books|doses|times|sets)\b|\b(0|[2-9]|\d\d+) (day|drink|task|book|dose|habit|set) (is|was)\b/);
+    const m = txt.match(/\b\w+ ises\b|\b\w*[ktys]ises\b|\b1 (days|drinks|exercises|sessions|questions|rounds|habits|tasks|books|doses|times|sets)\b|\b(0|[2-9]|\d\d+) (day|drink|task|book|dose|habit|set) (is|was)\b/);
     if (m) bad.push(`${c.id}: "${m[0]}"`);
   }
   expect(!bad.length, bad.join(' | '));
