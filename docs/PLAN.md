@@ -170,6 +170,8 @@ All numbers are measured on the quantized file that ships, on a real phone.
 
 ## 9. The phone app
 
+**Shell shape (Kamal, 2026-11-23):** the whole screen is the user's app. One chat button sits in the bottom-right corner. Tapping it opens a chat where the user asks for a new app or a change to the current one. Everything else on screen is what the user asked for. The goal is one app that replaces the many basic to-do, tracker and list apps.
+
 - **Shell:** reuse the Flutter shell and the `llama_flutter_android` setup that already runs a GGUF on Kamal's phone in offline-teacher-coach, plus a WebView for the kit runtime. v1 chose React Native on paper; reusing a shell that already works on the real phone is cheaper. After every model export, run a load test with the bundled llama.cpp (the lesson from the coach's GGUF metadata bug).
 - **Model delivery:** small enough to ship with the app as a Play asset pack, so there is no 1 GB first-run download. To verify against Play size limits.
 - **Screens:** ask box, building view with lines appearing, the app itself, change box with a "what changed" line and undo, home grid, history, export and backup. The flows from `docs/plan/04` still apply.
