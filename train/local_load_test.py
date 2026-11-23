@@ -60,14 +60,30 @@ def main():
             if not a.nogrammar:
                 body["grammar"] = grammar
             q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
+            t_req = time.time()
             d = json.load(urllib.request.urlopen(q, timeout=600))
+            secs = time.time() - t_req
             text = d["choices"][0]["message"]["content"]
             tm = d.get("timings", {})
             p = pathlib.Path("/tmp") / f"molde-lt-{r['id']}.mo"; p.write_text(text)
             ck = subprocess.run(["node", str(pathlib.Path(a.lang) / "mo.mjs"), "check", str(p)], capture_output=True, text=True)
             rows.append({"id": r["id"], "task": r["task"], "ref": r["ref"], "output": text, "request": r["request"], "program": text, "gen_tokens": tm.get("predicted_n"), "tok_s": tm.get("predicted_per_second"),
-                         "prompt_tok_s": tm.get("prompt_per_second"), "check_ok": ck.returncode == 0})
+                         "prompt_tok_s": tm.get("prompt_per_second"), "check_ok": ck.returncode == 0, "secs": round(secs, 2),
+                         "err": (ck.stdout.strip().splitlines() or [""])[0][:400], "user": user})
             print(f"--- {r['id']}: {r['request']}\n{text}\n[{tm.get('predicted_n')} tokens, {tm.get('predicted_per_second', 0):.1f} tok/s, checker {'OK' if ck.returncode == 0 else 'FAIL'}]")
+        if a.full:   # one repair round for every failing program (same prompt text as eval_gen.py)
+            sys.path.insert(0, str(HERE)); from common import repair_user_message
+            for x in rows:
+                x["repaired_ok"] = x["check_ok"]
+                if x["check_ok"]:
+                    continue
+                body = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": x["user"]}, {"role": "assistant", "content": x["output"]},
+                                     {"role": "user", "content": repair_user_message(x["err"] or "invalid program")}], "temperature": 0, "max_tokens": a.n_predict, "cache_prompt": False}
+                if not a.nogrammar: body["grammar"] = grammar
+                q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
+                t2 = json.load(urllib.request.urlopen(q, timeout=600))["choices"][0]["message"]["content"]
+                p = pathlib.Path("/tmp") / f"molde-lt-{x['id']}-rep.mo"; p.write_text(t2)
+                x["repaired_ok"] = subprocess.run(["node", str(pathlib.Path(a.lang) / "mo.mjs"), "check", str(p)], capture_output=True).returncode == 0
         speeds = [x["tok_s"] for x in rows if x["tok_s"]]
         summary = {"file": os.path.basename(a.gguf), "size_mb": size, "load_s": round(load_s, 1), "n": len(rows),
                    "mean_tok_s": round(sum(speeds) / len(speeds), 1) if speeds else None, "threads": os.environ.get("THREADS", "6"),
@@ -90,7 +106,9 @@ def main():
             mean = lambda k, f=float: round(sum(f(x[k]) for x in sd) / len(sd), 3)
             m = {"file": os.path.basename(a.gguf), "grammar": not a.nogrammar, "n": len(sd), "checker_pass_raw": mean("pass_raw"), "checker_pass_formatted": mean("pass_fmt"),
                  "exact_match": mean("exact"), "intent_score": mean("score", lambda v: v or 0), "intent_auto": mean("intent_auto"),
-                 "median_gen_tokens": statistics.median(x["gen_tokens"] for x in rows if x["gen_tokens"]), "mean_tok_s": summary["mean_tok_s"]}
+                 "median_gen_tokens": statistics.median(x["gen_tokens"] for x in rows if x["gen_tokens"]), "mean_tok_s": summary["mean_tok_s"],
+                 "checker_pass_after_repair": round(sum(x["repaired_ok"] for x in rows) / len(rows), 3), "median_secs_per_app": round(statistics.median(x["secs"] for x in rows), 1),
+                 "size_mb": size, "threads": os.environ.get("THREADS", "6")}
             print(json.dumps(m))
             if a.metrics:
                 json.dump(m, open(a.metrics, "w"), indent=1)

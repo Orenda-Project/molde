@@ -22,6 +22,7 @@ SYSTEM = ("You write MoldeScript, a tiny language for small phone apps. "
           "For an edit request you get the current program: reply with the full updated program.")
 N_TEST_CORPUS, N_TEST_EDIT = 40, 4
 SEED = "molde-p2-v1"
+NO_SOURCES = False
 
 
 def h(s):
@@ -43,16 +44,20 @@ def normalise(lang, progs, migrate):
             paths[k] = p
         if migrate:
             node(lang, "migrate", *map(str, paths.values()), "--write")
-        for k, p in paths.items():
+        def one(kp):
+            k, p = kp
             c = node(lang, "check", str(p))
             if c.returncode != 0:
-                bad[k] = (c.stdout + c.stderr).strip()[:300]
-                continue
+                return k, None, (c.stdout + c.stderr).strip()[:300]
             f = node(lang, "format", str(p))
             if f.returncode != 0 or not f.stdout.strip():
-                bad[k] = "format failed: " + f.stderr[:200]
-                continue
-            out[k] = f.stdout if f.stdout.endswith("\n") else f.stdout + "\n"
+                return k, None, "format failed: " + f.stderr[:200]
+            return k, (f.stdout if f.stdout.endswith("\n") else f.stdout + "\n"), None
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(8) as ex:
+            for k, text, err in ex.map(one, paths.items()):
+                if err: bad[k] = err
+                else: out[k] = text
     return out, bad
 
 
@@ -75,7 +80,7 @@ def collect(lang, requests_path, root):
         if d.is_dir():
             rows.append(dict(id="ed-" + d.name, src="edits", task="edit", request=(d / "request.txt").read_text().strip(),
                              before=(d / "before.mo").read_text(), program=(d / "after.mo").read_text(), meta={}))
-    for p in sorted((root / "data/sources").glob("*.jsonl")):
+    for p in ([] if NO_SOURCES else sorted((root / "data/sources").glob("*.jsonl"))):
         for n, l in enumerate(open(p)):
             if l.strip():
                 r = json.loads(l)
@@ -102,7 +107,9 @@ def main():
     ap.add_argument("--requests", default="/tmp/molde-requests-en-1/requests.jsonl")
     ap.add_argument("--out", default=None)
     ap.add_argument("--migrate", action="store_true")
+    ap.add_argument("--no-sources", action="store_true", help="only corpus, examples and edits (the small committed base set)")
     a = ap.parse_args()
+    global NO_SOURCES; NO_SOURCES = a.no_sources
     root = pathlib.Path(__file__).resolve().parent.parent
     out = pathlib.Path(a.out or root / "data/out"); out.mkdir(parents=True, exist_ok=True)
     rows = collect(a.lang, a.requests, root)
@@ -150,7 +157,7 @@ def main():
     with open(out / "test_refs.jsonl", "w") as f:
         for r in sorted(split["test"], key=lambda r: r["id"]):
             f.write(json.dumps({"id": r["id"], "task": r["task"], "request": r["request"], "before": r.get("before"), "ref": r["program"]}, ensure_ascii=False) + "\n")
-    commit = subprocess.run(["git", "-C", a.lang, "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+    commit = subprocess.run(["git", "-C", a.lang, "log", "-1", "--format=%h", "--", "."], capture_output=True, text=True).stdout.strip()
     cnt = lambda rs, k: sum(1 for r in rs if r[k[0]] == k[1])
     by_src = {}
     for s, rs in split.items():

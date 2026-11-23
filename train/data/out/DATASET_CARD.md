@@ -1,6 +1,6 @@
 # Molde dataset card
 
-- language commit: `f473464` (migrated: False)
+- language commit: `6801a61` (migrated: True)
 - counts: {'train': 292, 'val': 14, 'test': 44}
 - by task: {'train': {'create': 277, 'edit': 15}, 'val': {'create': 13, 'edit': 1}, 'test': {'create': 40, 'edit': 4}}
 - by source: {'corpus': {'train': 249, 'val': 11, 'test': 40}, 'examples': {'train': 28, 'val': 2}, 'edits': {'train': 15, 'val': 1, 'test': 4}}

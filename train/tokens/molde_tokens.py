@@ -13,7 +13,9 @@ CLI:
 import argparse, glob, json, os, statistics, sys
 
 
-def molde_token_list(tok, lang):
+def molde_token_list(tok, lang, mode="full"):
+    """mode full = keywords with and without a leading space plus newline+indent tokens; safe = only space-free, newline-free keywords
+    (llama.cpp tokenizes whitespace-carrying added tokens differently from Hugging Face for SentencePiece models such as Gemma)."""
     d = json.load(open(os.path.join(lang, "grammar", "added-tokens.json")))
     enc = lambda s: tok(s, add_special_tokens=False)["input_ids"]
     add = []
@@ -25,14 +27,16 @@ def molde_token_list(tok, lang):
         s = "\n" + ind
         if len(enc(s)) > 1:
             add.append(s)
+    if mode == "safe":
+        add = [t for t in add if not t[0].isspace()]
     return sorted(set(add), key=lambda x: (-len(x), x))
 
 
-def add_molde_tokens(tok, model=None, lang=None):
+def add_molde_tokens(tok, model=None, lang=None, mode="full"):
     """Adds the tokens to tok (in place). If model is given, resizes and initialises embeddings.
     Returns (new_tokens, {token: sub_token_ids})."""
     from tokenizers import AddedToken
-    new = molde_token_list(tok, lang)
+    new = molde_token_list(tok, lang, mode)
     subs = {t: tok(t, add_special_tokens=False)["input_ids"] for t in new}   # before adding
     tok.add_tokens([AddedToken(t, normalized=False, special=False, lstrip=False, rstrip=False) for t in new])
     if model is not None:

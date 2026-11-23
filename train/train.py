@@ -23,10 +23,10 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from common import encode_example, read_jsonl  # noqa: E402
 
-DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False,
+DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False, token_mode="full",
                 epochs=3, max_steps=0, lr=5e-5, min_lr_ratio=0.1, warmup_steps=10, weight_decay=0.0, batch_size=8,
                 grad_accum=1, max_len=1536, precision="auto", grad_checkpointing=False, eval_every=20, save_every=50,
-                max_minutes=0, seed=1234, save_dtype="bf16", chat_kwargs={})
+                max_minutes=0, seed=1234, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
 
 
 def load_cfg(argv):
@@ -81,7 +81,8 @@ def main():
     if cfg["add_molde_tokens"] and not (ck / "state.json").exists():
         sys.path.insert(0, str(pathlib.Path(__file__).parent / "tokens"))
         from molde_tokens import add_molde_tokens
-        new, _ = add_molde_tokens(tok, model, cfg["lang"])
+        orig_vocab = len(tok)
+        new, _ = add_molde_tokens(tok, model, cfg["lang"], cfg["token_mode"])
         log(event="added_tokens", n=len(new), vocab=len(tok))
     model.to(dev)
     if cfg["grad_checkpointing"]:
@@ -145,6 +146,30 @@ def main():
             l, n = fwd(*collate(val, ids, pad, dev)); tl += l.item(); tn += n.item()
         model.train(); return tl / max(1, tn)
 
+    def checker_pass(n):
+        """greedy-generate the first n validation requests and count programs that pass `mo.mjs check` (early-stopping metric)."""
+        import subprocess, tempfile
+        from concurrent.futures import ThreadPoolExecutor
+        from common import prompt_text
+        rows = read_jsonl(pathlib.Path(cfg["data_dir"]) / "val.jsonl")[:n]
+        model.eval(); tok.padding_side = "left"; outs = []
+        old_cache = model.config.use_cache; model.config.use_cache = True
+        for i in range(0, len(rows), 16):
+            ps = [prompt_text(tok, r["messages"][:-1], ck_args) for r in rows[i:i + 16]]
+            enc = tok(ps, return_tensors="pt", padding=True, add_special_tokens=False).to(dev)
+            with torch.no_grad(), (torch.autocast("cuda", dtype=amp_dtype) if amp_dtype and dev == "cuda" else torch.autocast("cpu", enabled=False)):
+                o = model.generate(**enc, max_new_tokens=cfg["es_max_new"], do_sample=False, pad_token_id=pad)
+            outs += [tok.decode(x[enc["input_ids"].shape[1]:], skip_special_tokens=True).strip("\n") + "\n" for x in o]
+        model.config.use_cache = old_cache; model.train()
+        td = tempfile.mkdtemp()
+        def chk(j):
+            p = pathlib.Path(td) / f"{j}.mo"; p.write_text(outs[j])
+            return subprocess.run(["node", str(pathlib.Path(cfg["lang"]) / "mo.mjs"), "check", str(p)], capture_output=True).returncode == 0
+        with ThreadPoolExecutor(8) as ex:
+            ok = list(ex.map(chk, range(len(outs))))
+        return sum(ok) / max(1, len(ok))
+
+    best = {"score": -1.0, "epoch_bad": 0}
     def save_ckpt():
         tmp = out / "ckpt_tmp"; tmp.mkdir(exist_ok=True)
         model.save_pretrained(tmp / "model", safe_serialization=True); tok.save_pretrained(tmp / "model")
@@ -156,8 +181,8 @@ def main():
     model.train()
     if step == 0:
         log(event="eval", step=0, val_loss=round(evaluate(), 4))
-    last_loss = []
-    while step < total:
+    last_loss = []; step_stop = False
+    while step < total and not step_stop:
         ep, within = divmod(step, spe)
         order = batches(train, cfg["batch_size"], random.Random(cfg["seed"] + ep))
         ga = cfg["grad_accum"]
@@ -180,14 +205,41 @@ def main():
                 log(event="train", step=step, epoch=round(step / spe, 2), loss=round(sum(last_loss) / len(last_loss), 4), lr=round(lr_at(step), 8), gnorm=round(gn.item(), 3)); last_loss = []
             if step % cfg["eval_every"] == 0 or step == total:
                 log(event="eval", step=step, val_loss=round(evaluate(), 4))
+            if cfg["es_val_n"] and step % spe == 0 and step < total:
+                sc = checker_pass(cfg["es_val_n"]); log(event="val_checker", step=step, epoch=step // spe, checker_pass=round(sc, 3))
+                if sc > best["score"]:
+                    best.update(score=sc, epoch_bad=0)
+                    import shutil
+                    shutil.rmtree(out / "best", ignore_errors=True); model.save_pretrained(out / "best", safe_serialization=True)
+                    (out / "best.json").write_text(json.dumps({"step": step, "checker_pass": sc}))
+                else:
+                    best["epoch_bad"] += 1
+                    if best["epoch_bad"] >= cfg["es_patience"]:
+                        log(event="early_stop", step=step); step_stop = True; break
             if step % cfg["save_every"] == 0 and step < total:
                 save_ckpt()
             if step >= total: break
             if cfg["max_minutes"] and (time.time() - t0) / 60 > cfg["max_minutes"]:
                 save_ckpt(); (out / "PAUSED").write_text(str(step)); log(event="PAUSE", step=step); return
+    if cfg["es_val_n"] and (out / "best.json").exists():
+        fin = checker_pass(cfg["es_val_n"]); log(event="val_checker", step=step, epoch="final", checker_pass=round(fin, 3))
+        if fin < best["score"]:
+            from safetensors.torch import load_file
+            sd = load_file(out / "best" / "model.safetensors"); model.load_state_dict(sd, strict=False); model.tie_weights()
+            log(event="restored_best", checker_pass=round(best["score"], 3))
     dt = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[cfg["save_dtype"]]
     model.to(dt).save_pretrained(out / "final", safe_serialization=True); tok.save_pretrained(out / "final")
     json.dump({k: v for k, v in cfg.items()}, open(out / "final" / "train_config.json", "w"), indent=1)
+    if cfg["add_molde_tokens"] and (out / "final" / "tokenizer.json").exists():
+        # llama.cpp's SentencePiece path reads added tokens from added_tokens.json (tokenizer.json alone would export [PAD] placeholders)
+        json.dump({t: i for t, i in tok.get_vocab().items() if i >= orig_vocab}, open(out / "final" / "added_tokens.json", "w"))
+    if True:   # llama.cpp's converter needs the SentencePiece file for Gemma (tokenizer.json alone fails an assert)
+        try:
+            from huggingface_hub import hf_hub_download
+            import shutil
+            shutil.copy(hf_hub_download(cfg["tokenizer"] or cfg["model"], "tokenizer.model"), out / "final" / "tokenizer.model")
+        except Exception as e:
+            print("no tokenizer.model for this base (fine for BPE models):", type(e).__name__)
     (out / "DONE").write_text(f"steps={step}"); (out / "PAUSED").unlink(missing_ok=True)
     log(event="SFT_DONE", step=step, minutes=round((time.time() - t0) / 60, 1))
 

@@ -18,12 +18,13 @@ ap.add_argument("jobs"); ap.add_argument("--name", required=True); ap.add_argume
 ap.add_argument("--set", nargs="*", default=[]); ap.add_argument("--stages", default="train,eval,export")
 ap.add_argument("--quants", default="Q8_0 Q4_K_M"); ap.add_argument("--resume-parts", type=int, default=0); ap.add_argument("--ckpt-parts", type=int, default=0)
 ap.add_argument("--inputs", default="molde-train/inputs/molde_inputs.tgz"); ap.add_argument("--extra-fetch", nargs="*", default=[])
+ap.add_argument("--data-dir", default="data/out", help="dataset folder under train/ (train.jsonl, val.jsonl, test_refs.jsonl, dataset_card.json)")
 ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--gguf-parts", type=int, default=1, help="parts per f16 GGUF when it exceeds 900 MB")
 a = ap.parse_args()
 d = pathlib.Path(a.jobs); d.mkdir(parents=True, exist_ok=True)
 stages = a.stages.split(","); N = a.name
 RUN = f"/content/run/{N}"; ROOT = "/content/molde"; DR = f"molde-train/runs/{N}"
-sets = " ".join(shlex.quote(s) for s in ["out_dir=" + RUN] + a.set)
+sets = " ".join(shlex.quote(s) for s in ["out_dir=" + RUN, f"data_dir={ROOT}/train/{a.data_dir}", f"lang={ROOT}/lang"] + a.set)
 
 (d / "30_setup.py").write_text('''
 import os, subprocess
@@ -45,7 +46,7 @@ if a.resume_parts:
 cfg = shlex.quote(a.config)
 (d / "33_smoke.py").write_text(f'''
 import os, subprocess, sys, json
-need = ["train/train.py", "train/eval_gen.py", "train/score.mjs", "train/data/out/train.jsonl", "train/data/out/test_refs.jsonl", "lang/mo.mjs", "lang/moldescript.gbnf", "train/{a.config}"]
+need = ["train/train.py", "train/eval_gen.py", "train/score.mjs", "train/{a.data_dir}/train.jsonl", "train/{a.data_dir}/test_refs.jsonl", "lang/mo.mjs", "lang/moldescript.gbnf", "train/{a.config}"]
 miss = [n for n in need if not os.path.exists("{ROOT}/" + n) or os.path.getsize("{ROOT}/" + n) == 0]
 assert not miss, "MISSING " + str(miss)
 import torch, transformers, yaml
@@ -90,7 +91,7 @@ if "train" in stages:
     (d / "37_save_model.drivesave.json").write_text(json.dumps({f"{RUN}/log.jsonl": DR, f"{RUN}/train.stdout.log": DR, f"{RUN}/final.tar.part00": DR, f"{RUN}/final.tar.SHA256SUMS": DR}))
 if "eval" in stages:
     (d / "38_eval.py").write_text(HEART + f'''
-cmd = "cd {ROOT}/train && python3 eval_gen.py --model {RUN}/final --data data/out --out {RUN}/eval --lang {ROOT}/lang --chat_kwargs {shlex.quote(a.chat_kwargs)} > {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
+cmd = "cd {ROOT}/train && python3 eval_gen.py --model {RUN}/final --data {a.data_dir} --out {RUN}/eval --lang {ROOT}/lang --chat_kwargs {shlex.quote(a.chat_kwargs)} > {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
 subprocess.Popen(cmd, shell=True)
 log = heart("{RUN}.eval.log", "EVAL_FINISHED", 1500, "eval_gen.py")
 print(log[-2500:])

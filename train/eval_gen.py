@@ -17,7 +17,7 @@ import argparse, json, os, pathlib, statistics, subprocess, sys, time
 import torch
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from common import prompt_text, read_jsonl  # noqa: E402
+from common import prompt_text, read_jsonl, repair_user_message  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 SYSTEM_KEY = "system"
@@ -61,21 +61,23 @@ def main():
         model = model.half()      # small models stay fp32 (Gemma 3 is not safe in fp16)
     model = model.to(dev).eval()
     ck = json.loads(a.chat_kwargs)
-    gen = []; t0 = time.time()
-    order = sorted(range(len(refs)), key=lambda i: len(refs[i].get("before") or "") + len(refs[i]["request"]))
-    res = {}
-    for s in range(0, len(order), a.bs):
-        ids = order[s:s + a.bs]
-        prompts = [prompt_text(tok, build_messages(refs[i], system), ck) for i in ids]
-        enc = tok(prompts, return_tensors="pt", padding=True, add_special_tokens=False).to(dev)
-        with torch.no_grad():
-            o = model.generate(**enc, max_new_tokens=a.max_new, do_sample=False, pad_token_id=tok.pad_token_id)
-        for k, i in enumerate(ids):
-            new = o[k, enc["input_ids"].shape[1]:]
-            n_tok = int((new != tok.pad_token_id).sum()) if tok.pad_token_id != tok.eos_token_id else int(len(new))
-            text = tok.decode(new, skip_special_tokens=True).strip("\n") + "\n"
-            res[i] = (text, n_tok)
-        print(f"generated {len(res)}/{len(refs)} in {time.time() - t0:.0f}s", flush=True)
+    t0 = time.time()
+    def generate(msgs_by_idx):
+        order = sorted(msgs_by_idx, key=lambda i: len(str(msgs_by_idx[i])))
+        res = {}
+        for s in range(0, len(order), a.bs):
+            ids = order[s:s + a.bs]
+            prompts = [prompt_text(tok, msgs_by_idx[i], ck) for i in ids]
+            enc = tok(prompts, return_tensors="pt", padding=True, add_special_tokens=False).to(dev)
+            with torch.no_grad():
+                o = model.generate(**enc, max_new_tokens=a.max_new, do_sample=False, pad_token_id=tok.pad_token_id)
+            for k, i in enumerate(ids):
+                new = o[k, enc["input_ids"].shape[1]:]
+                n_tok = int((new != tok.pad_token_id).sum()) if tok.pad_token_id != tok.eos_token_id else int(len(new))
+                res[i] = (tok.decode(new, skip_special_tokens=True).strip("\n") + "\n", n_tok)
+            print(f"generated {len(res)}/{len(msgs_by_idx)} in {time.time() - t0:.0f}s", flush=True)
+        return res
+    res = generate({i: build_messages(refs[i], system) for i in range(len(refs))})
     gen_s = time.time() - t0
     tmp = out / "programs"; tmp.mkdir(exist_ok=True)
     rows = []
@@ -95,12 +97,22 @@ def main():
         x["exact"] = bool(c and c.strip() == x["ref"].strip())
     with open(out / "scored.jsonl", "w") as f:
         for x in scored: f.write(json.dumps(x, ensure_ascii=False) + "\n")
+    # one repair round: failures get the checker's first error back, the model answers once more
+    fails = {i: x for i, x in enumerate(scored) if not x["pass_raw"]}
+    rep = generate({i: build_messages(refs[i], system) + [{"role": "assistant", "content": x["output"]}, {"role": "user", "content": repair_user_message(x["err_first"] or "invalid program")}] for i, x in fails.items()}) if fails else {}
+    with open(out / "repair_gen.jsonl", "w") as f:
+        for i, (text, n_tok) in rep.items():
+            f.write(json.dumps({"id": refs[i]["id"], "output": text, "ref": scored[i]["ref"]}, ensure_ascii=False) + "\n")
+    rsc = subprocess.run(["node", str(HERE / "score.mjs"), str(out / "repair_gen.jsonl")], capture_output=True, text=True, env={**os.environ, "MOLDE_LANG": a.lang}) if rep else None
+    fixed = {json.loads(l)["id"] for l in rsc.stdout.splitlines() if l.strip() and json.loads(l)["pass_raw"]} if rsc else set()
+    for x in scored:
+        x["pass_after_repair"] = bool(x["pass_raw"] or x["id"] in fixed)
     n = len(scored)
     def by(task, key, fn=lambda v: v):
         v = [fn(x[key]) for x in scored if task in (None, x["task"])]
         return round(sum(v) / len(v), 3) if v else None
     m = {"model": a.model, "n": n, "n_create": sum(x["task"] == "create" for x in scored), "n_edit": sum(x["task"] == "edit" for x in scored),
-         "checker_pass_raw": by(None, "pass_raw", float), "checker_pass_formatted": by(None, "pass_fmt", float),
+         "checker_pass_raw": by(None, "pass_raw", float), "checker_pass_formatted": by(None, "pass_fmt", float), "checker_pass_after_repair": by(None, "pass_after_repair", float),
          "exact_match": by(None, "exact", float), "intent_score": by(None, "score"), "intent_auto": by(None, "intent_auto", float),
          "by_task": {t: {"checker_pass_raw": by(t, "pass_raw", float), "exact": by(t, "exact", float), "intent_score": by(t, "score")} for t in ("create", "edit")},
          "median_gen_tokens": statistics.median(x["gen_tokens"] for x in scored), "max_gen_tokens": max(x["gen_tokens"] for x in scored),

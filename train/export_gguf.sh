@@ -16,7 +16,8 @@ if [ ! -d "$BIN" ]; then
   tar xzf /tmp/lc.tgz -C "$BIN"
 fi
 Q=$(find "$BIN" -name llama-quantize -type f | head -1)
-python3 -c "import gguf, sentencepiece" 2>/dev/null || pip install -q gguf sentencepiece
+export PYTHONPATH="$SRC/gguf-py:${PYTHONPATH:-}"
+python3 -c "import numpy, sentencepiece" 2>/dev/null || pip install -q numpy sentencepiece gguf || pip install -q --break-system-packages numpy sentencepiece
 python3 "$SRC/convert_hf_to_gguf.py" "$MODEL_DIR" --outtype f16 --outfile "$OUT/$NAME-f16.gguf"
 for q in $QUANTS; do LD_LIBRARY_PATH="$(dirname "$Q")" "$Q" "$OUT/$NAME-f16.gguf" "$OUT/$NAME-$q.gguf" "$q"; done
 ( cd "$OUT" && sha256sum "$NAME"-*.gguf > SHA256SUMS && cat SHA256SUMS && ls -la )

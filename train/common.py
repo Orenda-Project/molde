@@ -33,3 +33,8 @@ def encode_example(tok, messages, max_len, family_kwargs=None):
     ids = (p_ids + t_ids)[:max_len]
     labels = ([-100] * len(p_ids) + t_ids)[:max_len]
     return ids, labels, len(p_ids) + len(t_ids) > max_len
+
+
+def repair_user_message(err):
+    """One repair round: the checker's first error goes back to the model (same text for HF and GGUF evals)."""
+    return f"The checker rejected that program: {err}\nReply with the corrected complete program only."
