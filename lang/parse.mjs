@@ -3,6 +3,12 @@
 // engine.mjs. Indentation gives the tree. Errors carry a code, line, message and fix hint.
 import { parseText, child, children, kids, lits, KEYWORDS, RESERVED } from './engine.mjs';
 import { loadGrammar } from './grammar.mjs';
+import { STD_SOURCES } from './sources.gen.mjs';
+
+// std component signatures, for "separate the values with commas" hints
+export const STD_SIGS = new Map();
+for (const src of Object.values(STD_SOURCES)) for (const m of src.matchAll(/^def ([a-z][a-z0-9_]*) ?(.*)$/gm)) STD_SIGS.set(m[1], m[2].split(', ').map(p => p.split(' ')[0]).filter(Boolean));
+const SHAPES = { rect: ['X', 'Y', 'W', 'H'], line: ['X1', 'Y1', 'X2', 'Y2'], circle: ['CX', 'CY', 'R'], arc: ['CX', 'CY', 'R', 'FROM', 'TO'], label: ['X', 'Y', 'TEXT'], pt: ['X', 'Y'] };
 
 const GR = loadGrammar();
 const altNames = r => (GR.map.get(r).items || [GR.map.get(r)]).map(n => n.name);
@@ -45,10 +51,37 @@ export function splitLines(src) {
 const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
 const WINDOW_RE = /\b(today|yesterday|week|month|year|prev \w+|last \d+ \w+|on \w+)\)?$/;
 
+// Is the line a valid text line once "text " is put in front? (a line that starts with a bare name)
+export function asTextLine(text) {
+  const r = parseText('text ' + text, ['text-stmt']);
+  return r.tree ? r.tree : null;
+}
+
 function syntaxError(no, text, r) {
   const col = r.far;
   const near = text.slice(col).split(' ')[0] || '(end of line)';
   const E = (msg, hint, code = 'E_SYNTAX') => new MoError(code, no, msg, hint);
+  const first = text.split(' ')[0];
+  // names start with a small letter
+  const up = text.match(/^(?:table|setting|state|let|def|screen) ([A-Z][A-Za-z0-9_]*)/) || text.match(/\bref ([A-Z][A-Za-z0-9_]*)/);
+  if (up) return E(`"${up[1]}" starts with a capital letter; names are written in small letters.`, `write ${up[0].replace(up[1], up[1].toLowerCase())}.`);
+  // a line that starts with a bare name and is a fine text line
+  if (/^[a-z][a-z0-9_]*\b/.test(first) && !STMT_WORDS.has(first) && !STD_SIGS.has(first) && asTextLine(text)) return E(`a line that starts with a name is read as a component call, and there is no component "${first}".`, `to show the value, start the line with text: text ${text}`);
+  // shapes: values separated by commas, the right number of them
+  if (SHAPES[first]) {
+    const want = SHAPES[first];
+    const rest = text.slice(first.length + 1).replace(/ (fill|stroke|thick|opacity|radius|tap|swipe|size|bold|big|head|faint|color)\b.*$/, '');
+    const n = rest.split(', ').length;
+    if (!rest.includes(',') && rest.split(' ').length > 1) return E(`the values of ${first} must be separated by commas.`, `write ${first} ${want.join(', ')}, for example ${first} ${want.map((w, i) => w === 'TEXT' ? '"Hi"' : [10, 20, 30, 40, 50][i]).join(', ')}.`);
+    if (!(first === 'circle' && n === 1) && !(first === 'arc' && n === 3) && n !== want.length) return E(`${first} needs ${want.length} values (${want.join(', ')}) but has ${n}.`, `write ${first} ${want.join(', ')}${first === 'circle' ? ' (or circle R, centred)' : first === 'arc' ? ' (or arc R, FROM, TO, centred)' : ''}.`);
+  }
+  // component calls: values separated by commas
+  if (STD_SIGS.has(first)) {
+    const sig = STD_SIGS.get(first);
+    return E(`cannot read the values of ${first}; they are separated by commas.`, `write ${first} ${sig.join(', ')}${sig.length ? '' : ''} (for example: ${first === 'daybars' ? 'daybars last 7 days, sum(drink.ml on it)' : first + ' ' + sig.join(', ')}).`);
+  }
+  // if() needs three values
+  if (/\bif\([^,()]*\)/.test(text)) return E('if() needs three values separated by commas.', 'write if(condition, value when yes, value when no), for example if(n > 0, good, bad).');
   const decl = text.match(/^(?:table|setting|state|def|screen|let) ([a-z]+)\b/) || text.match(/^table [a-z][a-z0-9_]*(?: "[^"]*")? (?:.*, )?([a-z]+) /);
   if (decl && RESERVED.has(decl[1])) return E(`"${decl[1]}" is one of the 12 reserved words (${[...RESERVED].join(', ')}) and cannot be a name.`, `use another word, for example "${decl[1]}_value".`, 'E_RESERVED');
   const word = text.slice(col).match(/^[a-z]+/)?.[0];

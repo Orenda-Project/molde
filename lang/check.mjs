@@ -10,6 +10,13 @@ export const ICONS = new Set(('drop check wallet dumbbell book clock heart star 
   + 'bus plane bike walk run baby paw plant tree cloud rain snow fire coffee food apple bread fish egg milk tooth eye brain '
   + 'mosque beads school pencil alarm hourglass dice cards ball game board shield key lock seat plus minus tool box grid').split(' '));
 export const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
+// the closest icon name, for "unknown icon" hints
+export function nearestIcon(w) {
+  const d = (a, b) => { const m = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) m[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return m[a.length][b.length]; };
+  const pre = a => { let i = 0; while (i < a.length && a[i] === w[i]) i++; return i; };
+  return [...ICONS].sort((a, b) => d(w, a) - d(w, b) || pre(b) - pre(a) || a.localeCompare(b))[0];
+}
+const iconHint = w => `use a known icon; the closest is ${nearestIcon(w)}. All icons are listed in SPEC.md section 8.4.`;
 export const COLORS = ['accent', 'ink', 'muted', 'soft', 'good', 'warn', 'bad', 'bg', 'surface', 'edge', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'grey', 'black', 'white'];
 
 const NUMERIC = new Set(['num', 'money']);
@@ -99,7 +106,7 @@ class Checker {
 
   header(h) {
     this.line = h.line;
-    if (h.icon && !ICONS.has(h.icon)) this.err('E_ICON', `unknown icon "${h.icon}".`, `use one of: ${[...ICONS].slice(0, 30).join(', ')} ...`);
+    if (h.icon && !ICONS.has(h.icon)) this.err('E_ICON', `unknown icon "${h.icon}".`, iconHint(h.icon));
   }
 
   // ---------- statements ----------
@@ -114,6 +121,7 @@ class Checker {
   }
 
   declare(name, t, cx) {
+    if (this.options.has(name)) this.err('E_OPTION', `"${name}" is already an option of a pick field, so a bare ${name} would be ambiguous.`, `rename this (for example chosen_${name}) or write the option with a capital letter.`);
     if (cx.top) {
       if (this.taken(name)) { this.err('E_DUP', `the name "${name}" is already used (tables, settings, states, lets and screens share one set of names).`, 'pick a different name.'); return false; }
       return true;
@@ -168,7 +176,7 @@ class Checker {
       case 'screen': {
         if (!cx.top) return this.err('E_CONTEXT', 'screen must be at the top level.', 'move it to column 1.');
         if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used (screens share names with tables, settings and states).`, 'pick a different screen name.');
-        if (s.icon && !ICONS.has(s.icon)) this.err('E_ICON', `unknown icon "${s.icon}".`, 'use an icon name from SPEC.md.');
+        if (s.icon && !ICONS.has(s.icon)) this.err('E_ICON', `unknown icon "${s.icon}".`, iconHint(s.icon));
         this.screens.set(s.name, s);
         return this.block(s.children, { ...cx, top: false });
       }
@@ -226,7 +234,7 @@ class Checker {
         return;
       case 'icon': {
         const e = s.icon;
-        if (e.k === 'path' && !e.parts.length && !this.lookup(e.head)) { if (!ICONS.has(e.head)) this.err('E_ICON', `unknown icon "${e.head}".`, 'use an icon name from SPEC.md.'); }
+        if (e.k === 'path' && !e.parts.length && !this.lookup(e.head)) { if (!ICONS.has(e.head)) this.err('E_ICON', `unknown icon "${e.head}".`, iconHint(e.head)); }
         else { const t = this.expr(e); if (!isAny(t) && !TEXTUAL.has(tname(t)) && tname(t) !== 'icon') this.err('E_TYPE', 'icon needs an icon name or a text holding one.', 'write icon heart.'); }
         return this.mods(s.mods);
       }
@@ -297,7 +305,12 @@ class Checker {
     const t = this.fieldType(f.type);
     if (f.type.t === 'pick') {
       const seen = new Set();
-      for (const o of f.type.options) { if (seen.has(o)) this.err('E_DUP', `option "${o}" appears twice.`, 'remove the repeat.'); seen.add(o); this.options.add(o); }
+      for (const o of f.type.options) {
+        if (seen.has(o)) this.err('E_DUP', `option "${o}" appears twice.`, 'remove the repeat.');
+        seen.add(o); this.options.add(o);
+        if (COLORS.includes(o)) this.err('E_OPTION', `option "${o}" is also a colour word, so ${f.name} = ${o} would read as the colour.`, `write the option with a capital letter: ${o[0].toUpperCase() + o.slice(1)}.`);
+        else if (this.lookup(o) || this.tables.has(o)) this.err('E_OPTION', `option "${o}" has the same name as your ${this.tables.has(o) ? 'table' : 'state, setting or let'} ${o}, so a bare ${o} would mean that.`, `write the option with a capital letter (${o[0].toUpperCase() + o.slice(1)}) or rename the ${this.tables.has(o) ? 'table' : 'value'}.`);
+      }
     }
     if (f.range && !isNum(t) && tname(t) !== 'dur') this.err('E_RANGE', `a range like 1..10 only fits number fields, not ${show(t)}.`, 'remove the range.');
     if (f.range && f.range.hi !== null && f.range.hi < f.range.lo) this.err('E_RANGE', 'the range is backwards.', 'write the small number first, like 1..10.');
@@ -642,7 +655,11 @@ class Checker {
         if (e.fn === 'anyrow') { if (!this.inAction) this.err('E_CONTEXT', 'random(table) picks a row, so it can only be used inside an action (tap, every, when).', 'store it: tap set pick = random(card).'); return isAny(t) ? ANY : { t: 'row', table: t.table }; }
         return ANY;
       }
-      case 'ucall': return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
+      case 'ucall': {
+        const ARITY = { if: 'three values: if(condition, value when yes, value when no)', clamp: 'three values: clamp(x, low, high)', min: 'one column (min(t.price)) or two numbers (min(a, b))', max: 'one column (max(t.price)) or two numbers (max(a, b))', has: 'two values: has(text, part)', pow: 'two values: pow(base, power)', addmonths: 'two values: addmonths(date, months)', plural: 'two values: plural(n, "day")', fixed: 'two values: fixed(x, decimals)', round: 'one value: round(x)', floor: 'one value', abs: 'one value', len: 'one value', due: 'a table and a number of days: due(water, 3)', nth: 'a table and a position: nth(card, 1)' };
+        if (ARITY[e.name]) return this.err('E_ARGS', `${e.name}() has the wrong number of values.`, `${e.name}() needs ${ARITY[e.name]}.`);
+        return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
+      }
     }
     return ANY;
   }

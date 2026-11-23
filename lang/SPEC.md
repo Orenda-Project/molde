@@ -414,7 +414,7 @@ There is no statement that deletes data.
 
 | Code | Meaning |
 |---|---|
-| `E_SYNTAX` | the line does not match any statement (with targeted hints for a window after `where`, `?` in the wrong place, a theme word, text parts inside `if()`, a field without a type) |
+| `E_SYNTAX` | the line does not match any statement, with one targeted fix for common slips: a line that starts with a bare name (start it with `text`), shape or component values without commas or with one missing, a capital letter in a name, a window after `where`, `?` in the wrong place, a theme word, text parts inside `if()`, a field without a type |
 | `E_RESERVED` | one of the 12 reserved words used as a name, or a built-in field (`at`, `id`) redeclared |
 | `E_HEADER`, `E_ASK` | the first line is not `app`/`ask`; an `ask` program has more lines |
 | `E_INDENT`, `E_CHILD` | indentation is off; a line that cannot have children has some |
@@ -425,8 +425,8 @@ There is no statement that deletes data.
 | `E_DUP` | a name, field, option or modifier used twice; a `was` that clashes |
 | `E_CONTEXT` | a statement in the wrong place (`it` outside `each`, a shape outside `draw`, `table` inside a block, `else` without `if`, `random` outside an action) |
 | `E_ARGS`, `E_KIND`, `E_RECURSION` | wrong values for a component or formula; a component that uses itself |
-| `E_OPTION`, `E_DEFAULT`, `E_RANGE` | a value that is not one of a `pick`'s options; a bad default; a bad range |
-| `E_ICON`, `E_ACTION`, `E_TARGET`, `E_REQUIRED` | unknown icon; button without `tap`; something that cannot be changed; an `add` missing a required field |
+| `E_OPTION`, `E_DEFAULT`, `E_RANGE` | a value that is not one of a `pick`'s options, or an option that is a colour word or a name you declared (write it with a capital); a bad default; a bad range |
+| `E_ICON`, `E_ACTION`, `E_TARGET`, `E_REQUIRED` | unknown icon (the hint names the closest); button without `tap`; something that cannot be changed; an `add` missing a required field |
 | `E_SELF_COMPARE` | a `where` that compares a field with itself because the field hides your state or setting |
 | `E_INTERNAL` | a checker bug (never expected; the fuzz tests count it as a crash) |
 
