@@ -423,6 +423,8 @@ To change an app, the model writes the whole new program. `node lang/mo.mjs diff
 - a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. It acts once; the stored program drops the `was` words. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename"; a `was` naming something the previous program does not have changes nothing (said in a note);
 - a stored type may only **widen**: `text` to `long`, `pick` to `text`/`long`, `num` to/from `money`, `date` to `when`; a `ref` keeps its target table (a renamed target is followed);
 - a `pick` option that disappears stays on the rows that have it (they keep showing it); it is no longer offered for new rows and formulas cannot name it (write `NEW was OLD` to rename it). The verdict is a **warning**; so is a table name used again after it was removed;
+- options of a `setting` or `state` pick follow the same rules; renaming an option onto the name of another option, even a dropped one, is **refused** (list the dropped one again without `was` to bring it back);
+- restoring a backup brings back that whole app: its data and its program;
 - a narrower range keeps old values that fall outside it;
 - going to any recorded version (chat Undo, backward or forward) is an explicit restore and is never refused: it uses that version's text and names as recorded; data entered since stays.
 
