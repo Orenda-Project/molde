@@ -138,6 +138,7 @@ class Checker {
   }
 
   stmt(s, cx, prev) {
+    this.curKind = s.kind === 'box' ? s.box : s.kind; // for mods that fit only some lines (bar)
     const topOnly = () => { if (!cx.top) this.err('E_CONTEXT', `"${s.kind}" must be at the top level (not indented).`, 'move it to the start of a line with no indentation.'); };
     switch (s.kind) {
       case 'table': return topOnly(), this.table(s);
@@ -225,8 +226,8 @@ class Checker {
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, draw: s });
       case 'tick':
-        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', 'tick labels the x axis of a plot; it must be inside plot.', 'indent it under a plot line.');
-        this.num(s.x, 'tick x'); this.parts(s.parts);
+        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', `${s.axis === 'y' ? 'ytick' : 'tick'} labels an axis of a plot; it must be inside plot.`, 'indent it under a plot line.');
+        this.num(s.x, s.axis === 'y' ? 'ytick y' : 'tick x'); this.parts(s.parts);
         return;
       case 'poly':
         if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw line.');
@@ -289,6 +290,7 @@ class Checker {
       if (seen.has(m.m)) this.err('E_DUP', `"${m.m}" appears twice on this line.`, 'keep one.');
       seen.add(m.m);
       if (m.m === 'tap' || m.m === 'swipe') this.actions(m.actions);
+      else if (m.m === 'bar' && this.curKind !== 'row') this.err('E_CONTEXT', 'bar marks the app bar row (the title and the main action); it goes on a row.', 'write row bar, with the title and one button inside.');
       else if (['color', 'fill', 'stroke'].includes(m.m)) { const t = this.expr(m.e); if (!isAny(t) && t !== 'color') this.err('E_TYPE', `${m.m} needs a colour (${COLORS.join(', ')} or hue(0..360)), got ${show(t)}.`, `write ${m.m} accent, or ${m.m} if(x > 0, good, bad).`); }
       else if (m.e) this.num(m.e, m.m);
     }

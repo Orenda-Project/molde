@@ -295,7 +295,7 @@ const BUILD = {
   'when-stmt': n => ({ kind: 'when', cond: expr(child(n, 'expr')), actions: actions(child(n, 'actions')) }),
   'each-stmt': n => ({ kind: 'each', source: source(child(n, 'source')), as: child(n, 'ident') ? id(child(n, 'ident')) : null, empty: child(n, 'string') ? str(child(n, 'string')) : null }),
   'plot-stmt': n => { const r = children(n, 'range').map(x => children(x, 'sum-expr').map(expr)); return { kind: 'plot', x: r[0], y: r[1], mods: mods(n) }; },
-  'tick-stmt': n => ({ kind: 'tick', x: expr(child(n, 'expr')), parts: tparts(child(n, 'tparts')) }),
+  'tick-stmt': n => ({ kind: 'tick', axis: lits(n).includes('ytick') ? 'y' : 'x', x: expr(child(n, 'expr')), parts: tparts(child(n, 'tparts')) }),
   'if-stmt': n => ({ kind: 'if', cond: expr(child(n, 'expr')) }),
   'else-stmt': () => ({ kind: 'else' }),
   'box-stmt': n => ({ kind: 'box', box: lits(n)[0], cols: child(n, 'number') ? +child(n, 'number').v : null, mods: mods(n) }),
@@ -393,7 +393,9 @@ function mods(n) {
     if (child(m, 'size')) return { m: 'size', v: lits(child(m, 'size'))[0] }; // tiny, small, large, huge
     const l = lits(m)[0];
     const o = { m: l };
-    if (l === 'align') o.v = lits(child(m, 'align'))[0];
+    if (l === 'alt') o.v = str(child(m, 'string'));
+    else if (l === 'bar') o.v = true;
+    else if (l === 'align') o.v = lits(child(m, 'align'))[0];
     else if (['pad', 'gap', 'span'].includes(l)) o.v = +child(m, 'number').v;
     else if (['axes', 'gridlines', 'middle', 'full'].includes(l)) o.v = true;
     else if (l === 'tap' || l === 'swipe') o.actions = actions(child(m, 'actions'));

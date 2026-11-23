@@ -373,7 +373,16 @@ class App {
             out.push({ ...base, once: new Date(ms).toISOString() });
           }
         }
-      } else if (s.monthly) out.push({ ...base, monthly: s.monthly, times: s.times });
+      } else if (s.monthly) { // a day past the month's end (on 31 in November) fires on its last day
+        const [y0, m0] = dateOf(this.clock).split('-').map(Number);
+        let next = null;
+        for (let k = 0; k < 3 && next === null; k++) {
+          const y = y0 + Math.floor((m0 - 1 + k) / 12), m = (m0 - 1 + k) % 12 + 1, last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+          const cands = s.monthly.flatMap(d => s.times.map(t => msOfLocal(`${y}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`) + parseTime(t) * 1000)).filter(ms => ms >= this.clock).sort((a, b) => a - b);
+          if (cands.length) next = new Date(cands[0]).toISOString();
+        }
+        out.push({ ...base, monthly: s.monthly, times: s.times, next });
+      }
       else if (s.every !== undefined) out.push({ ...base, every: s.every, from: s.from, to: s.to });
       else out.push({ ...base, times: s.times, days: s.days || [] });
     }
@@ -429,13 +438,16 @@ class App {
         case 'size': case 'align': st[m.m] = m.v; break;
         case 'pad': case 'gap': case 'span': st[m.m] = m.v; break;
         case 'color': case 'fill': case 'stroke': { const v = this.evalIn(m.e, env); st[m.m] = v instanceof Color ? v.c : v === null ? null : String(v); break; }
-        case 'tap': case 'swipe': break;
+        case 'tap': case 'swipe': case 'alt': case 'bar': break; // see events(): a11y and bar are node properties
         default: { const v = num(this.evalIn(m.e, env)); st[m.m] = v; }
       }
     }
     return st;
   }
   events(mods, env, id, node) {
+    const alt = (mods || []).find(m => m.m === 'alt');
+    if (alt) node.a11y = alt.v; // the accessible name the author gave; nodes with their own text use that text
+    if ((mods || []).some(m => m.m === 'bar')) node.bar = true;
     const tap = (mods || []).find(m => m.m === 'tap'), swipe = (mods || []).find(m => m.m === 'swipe');
     if (!tap && !swipe) return;
     const h = this.H.nodes.get(id) || {};
@@ -461,7 +473,7 @@ class App {
   }
 
   node(s, env, id, cx, lastIf) {
-    const N = (o) => ({ nodes: [o] });
+    const N = (o) => { if (o.a11y === undefined && (o.label !== undefined || o.t === 'icon')) o.a11y = o.t === 'icon' ? o.name : o.label; return { nodes: [o] }; }; // a11y: the accessible name
     switch (s.kind) {
       case 'table': case 'setting': case 'remind': case 'def': return { nodes: [] };
       case 'state': this.declareState(s, env); return { nodes: [] };
@@ -510,12 +522,13 @@ class App {
         delete st.axes; delete st.gridlines;
         this.events(s.mods, env, id, node);
         const kids = this.render(s.children, this.child(env, { draw: { w: x[1] - x[0], h: y[1] - y[0], cx: (x[0] + x[1]) / 2, cy: (y[0] + y[1]) / 2 }, oldestFirst: true }), id, cx);
-        const xt = kids.filter(k => k.t === 'tick').map(k => ({ v: k.x, label: k.text }));
+        const xt = kids.filter(k => k.t === 'tick' && k.axis !== 'y').map(k => ({ v: k.x, label: k.text }));
+        const yt = kids.filter(k => k.t === 'tick' && k.axis === 'y').map(k => ({ v: k.x, label: k.text }));
         node.children = kids.filter(k => k.t !== 'tick');
-        node.ticks = { x: xt.length ? xt : (node.axes ? niceTicks(x[0], x[1]).map(v => ({ v, label: fmt(v) })) : []), y: node.axes || node.gridlines ? niceTicks(y[0], y[1]).map(v => ({ v, label: fmt(v) })) : [] };
+        node.ticks = { x: xt.length ? xt : (node.axes ? niceTicks(x[0], x[1]).map(v => ({ v, label: fmt(v) })) : []), y: yt.length ? yt : node.axes || node.gridlines ? niceTicks(y[0], y[1]).map(v => ({ v, label: fmt(v) })) : [] };
         return N(node);
       }
-      case 'tick': return N({ id, t: 'tick', x: num(this.evalIn(s.x, env)), text: this.textOf(s.parts, env) });
+      case 'tick': return N({ id, t: 'tick', axis: s.axis, x: num(this.evalIn(s.x, env)), text: this.textOf(s.parts, env) });
       case 'poly': {
         const pts = [];
         const collect = (list, e) => {
@@ -548,6 +561,9 @@ class App {
       }
       case 'text': case 'button': {
         const node = { id, t: s.kind, text: this.textOf(s.parts, env), style: this.style(s.mods, env) };
+        const typed = this.typedParts(s.parts, env);
+        if (typed.some(p => p.t !== 'text')) node.parts = typed;
+        node.a11y = node.text;
         this.events(s.mods, env, id, node);
         return N(node);
       }
@@ -675,6 +691,22 @@ class App {
     }
   }
 
+  // the parts of a text as typed values, so a renderer can format numbers, money and dates for the
+  // phone's locale: {t: text|num|year|money|date|when|time|dur|bool, v, text}
+  typedParts(parts, env) {
+    return parts.map(p => {
+      if (p.k === 'str') return { t: 'text', v: p.v, text: p.v };
+      const v = this.evalIn(p, env), text = v === null || v === undefined ? '' : fmt(v, this);
+      if (typeof v === 'number') return { t: p.k === 'fn' && p.fn === 'year' ? 'year' : 'num', v, text };
+      if (typeof v === 'boolean') return { t: 'bool', v, text };
+      if (v instanceof Money) return { t: 'money', v: v.v, text };
+      if (v instanceof DateV) return { t: 'date', v: v.s, text };
+      if (v instanceof When) return { t: 'when', v: new Date(v.ms).toISOString(), text };
+      if (v instanceof TimeV) return { t: 'time', v: fmt(v), text };
+      if (v instanceof Dur) return { t: 'dur', v: v.sec, text };
+      return { t: 'text', v: text, text };
+    });
+  }
   // an empty value is left out of a text with other parts, and shows as – when it is alone
   textOf(parts, env) {
     const vals = parts.map(p => p.k === 'str' ? p.v : this.evalIn(p, env));
@@ -968,7 +1000,7 @@ class App {
     const vals = col ? this.columnValues(col).filter(v => v !== null && v !== undefined) : [];
     switch (e.fn) {
       case 'count': return col ? vals.length : set.rows.length;
-      case 'sum': { const s = vals.reduce((a, v) => a + num(v), 0); return this.like(vals[0], s); }
+      case 'sum': { const s = vals.reduce((a, v) => a + num(v), 0); return vals.length ? this.like(vals[0], s) : this.colZero(col); }
       case 'avg': return vals.length ? this.like(vals[0], vals.reduce((a, v) => a + num(v), 0) / vals.length) : null;
       case 'min': case 'max': {
         if (!vals.length) return null;
@@ -1006,6 +1038,13 @@ class App {
       }
     }
     return null;
+  }
+  // the sum of no values keeps the column's type: Rs 0 for money, 0:00 for a duration
+  colZero(col) {
+    if (!col) return 0;
+    let table = col.set.table, f = null;
+    for (const p of col.path) { f = this.fieldDef(table, p); if (!f) return 0; if (f.type.t === 'ref') table = f.type.table; }
+    return f && f.type.t === 'money' ? new Money(0) : f && f.type.t === 'dur' ? new Dur(0) : 0;
   }
   like(sample, n) { return sample instanceof Money ? new Money(n) : sample instanceof Dur ? new Dur(n) : n; }
 

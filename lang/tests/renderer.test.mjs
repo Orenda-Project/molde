@@ -130,3 +130,21 @@ test('reminders skip times in the past; local time option', () => {
   const b = run('app "Z" clock ink\nhour(now)\n', { now: '2026-11-23T22:00:00Z', tz: 300 });
   assert.deepEqual(texts(b), ['3']); // 22:00 UTC is 03:00 the next day at +5:00
 });
+
+test('round 4: app-bar row, accessible names, word ticks on y, typed text parts', () => {
+  const a = run('app "x" list mint\ntable spend amount money\nstate n num = 2026\nrow bar\n  "Spending" head\n  button "Add" tap add spend amount = 12.5\n"Year" year(today) "total" sum(spend.amount) n today\ndraw 10, 10 alt "A red square"\n  rect 0, 0, 10, 10 fill red\nplot 0..2, 0..10 axes\n  rect 0, 0, 1, 5\n  tick 0.5, "Mon"\n  ytick 5, "half"\n', { now: '2026-11-23T10:00:00Z' });
+  const bar = a.find(n => n.bar);
+  assert.deepEqual([bar.t, bar.children.map(c => c.t)], ['row', ['text', 'button']]);
+  assert.equal(a.find(n => n.t === 'draw').a11y, 'A red square');
+  assert.equal(a.find(n => n.t === 'button').a11y, 'Add');
+  assert.deepEqual(a.find(n => n.t === 'plot').ticks.y, [{ v: 5, label: 'half' }]);
+  const parts = a.find(n => n.parts).parts.map(p => [p.t, p.v]);
+  assert.deepEqual(parts, [['text', 'Year'], ['year', 2026], ['text', 'total'], ['money', 0], ['num', 2026], ['date', '2026-11-23']]);
+  assert.equal(check('app "x"\nstack bar\n  "a"\n').errors[0].code, 'E_CONTEXT');
+});
+
+test('monthly on 31 fires on the last day of a shorter month', () => {
+  const r = m => load('app "x"\nremind "Rent" monthly on 31 at 9:00\n', { now: m }).reminders()[0].next;
+  assert.equal(r('2026-11-23T10:00:00Z'), '2026-11-30T09:00:00.000Z');
+  assert.equal(r('2027-02-10T10:00:00Z'), '2027-02-28T09:00:00.000Z');
+});

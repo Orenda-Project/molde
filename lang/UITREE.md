@@ -1,6 +1,7 @@
 # The UI tree (renderer contract)
 
 Changes (newest first):
+- 2026-11-23 (round 4): **new properties**: `a11y` (the accessible name) on any node: the text of a text or button, the label of a toggle, choice or input, the name of an icon, or what the author wrote with `alt "..."`; `bar: true` on the one `row` that is the app bar (title plus main action; draw it at the top); `parts` on a `text`/`button` that shows values: `[{t, v, text}]` with `t` one of `text num year money date when time dur bool` and `v` the plain value (`num`/`money` full numbers, `date` `YYYY-MM-DD`, `when` ISO, `time` `HH:MM`, `dur` seconds) so the renderer formats them for the phone's locale (a `year` never gets separators; `text` is still the evaluator's own formatting); `ticks.y` comes from `ytick` lines when a plot has any (word labels on the y axis); `tick` children carry `axis`. `reminders()` monthly entries carry `next` (ISO; a day past the end of a month fires on its last day). The sum of no money values is money (`{t: 'money', v: 0}`). **Syntax the renderer may see in programs** (no tree change): bare-name text lines, `tiny`/`small`/`large`/`huge` without `size`, `count/sum/min/max(source, formula)`, `list X by day` (same tree as the old `log X`), `toggle X all`, date literals. `ring` is gone from std (programs use `goal`). Nothing else was removed.
 - 2026-11-23 (round 3, part 5): **new node `plot`** (a chart frame in data units, y up: `x`, `y` ranges, `axes`, `gridlines`, `ticks.x` and `ticks.y` as `[{v, label}]`; children are shapes in data units); std `daybars`, `bars` and `trend` now produce `plot` nodes. **New properties**: `toggle.label` and `choice.label` (accessible names); `action` on tappable nodes (`add`, `set`, `toggle`, `remove`, `edit`, `save`, `go`, `notify`, `remind`, `setall`, `removeall`, `after`); `style.ratio` (width / height), `style.middle` (centre the block in the free space), `style.full` (take the full height); `text.empty: true` on the message of an empty `each`; `input.unit`. **API**: `app.fields(target)` and `app.setField(target, field, value)` for editor panels (target `{table, id}` or a setting name; one undo step per call); consecutive `change` events on one node are one undo step; `load(src, {currency: 'Rs'})` puts the sign before money. An edit that changes a setting's starting value now sets the stored value too. Nothing was removed.
 - 2026-11-23 (round 3, part 1): **API** `load(src, {data, history, tz})`; `app.applyEdit(src)` applies a chat edit (returns the diff result: `safe`, `restore` or `refused`; refused keeps the old program); `app.revert()` is chat Undo (back to the previous program, data kept); `app.snapshot()` now includes `ever` (the schema history; pass the whole snapshot back to `load` or `restore`); `restore()` adds tables and settings the program declares but the snapshot lacks; `app.addRow(table, values, atMs)` is public. **Stored data is keyed by storage slots** (see SEMANTICS.md, "Storage and edits"): for programs that never renamed anything the slot ids equal the names. **Formatting**: money with cents shows 2 decimals (`12.50`); a date outside the current year shows the year (`Mon 3 Nov 2025`). `tz: 'local'` makes days and times local.
 - 2026-11-23 (later): numbers show thousands separators only from 10,000 up (`2000`, `80,000`); an empty value is left out of a multi-part text; with several screens and no main content, `screens` no longer lists `_main`; `input` may carry `unit`; `circle`/`arc` written with one or three values arrive already centred (`cx`, `cy` filled in). No node type or property was removed.
@@ -27,7 +28,7 @@ app.applyEdit(src) / app.revert()                  // chat edits and chat Undo (
 
 ## Common properties
 
-Every node has `id` (stable across renders: built from the statement position and, inside `each`, the item key such as `r12` for row 12 or `2026-11-23` for a day) and `t` (its type). Most have `style` and some have `children`.
+Every node has `id` (stable across renders: built from the statement position and, inside `each`, the item key such as `r12` for row 12 or `2026-11-23` for a day) and `t` (its type). Most have `style` and some have `children`. Any node may have `a11y` (its accessible name) and a `row` may have `bar: true` (the app bar).
 
 | Property | Meaning |
 |---|---|
@@ -51,7 +52,7 @@ Every node has `id` (stable across renders: built from the statement position an
 | `screen` | `name`, `label`, `children` | the current tab's content |
 | `stack`, `row`, `box`, `scroll` | `children` | children top to bottom; side by side (wrap on small screens); one plain area; a sideways-scrolling row |
 | `grid` | `cols`, `children` | children in `cols` columns |
-| `text` | `text` (already formatted) | text in its role |
+| `text` | `text` (already formatted), maybe `parts` (typed values, see the change notes) | text in its role; to format for the locale, join `parts` with the same spacing rule |
 | `button` | `text`, `tap` | a button |
 | `icon` | `name` | an icon by name |
 | `image` | `src` | a picture the user picked |
@@ -63,7 +64,7 @@ Every node has `id` (stable across renders: built from the statement position an
 | `choice` | `label`, `value`, `options`, `labels` | tap chips; `dispatch(id, 'change', option)` |
 | `slider` | `value`, `min`, `max` | a slider; `dispatch(id, 'change', number)` |
 | `draw` | `w`, `h` (its own units), `children` (shapes), maybe `tap` | a canvas scaled to its width (`style.width` if set, else the full width) keeping `w:h` |
-| `plot` | `x` and `y` (`[lo, hi]` in data units), `axes`, `gridlines`, `ticks` (`{x: [{v, label}], y: [{v, label}]}`), `children` (shapes in data units) | a chart: map data units to the plot area (y grows upward: a `rect` with `y: 0, h: 40` stands on the x axis), draw the axes with the tick labels when `axes` is true and grid lines at the y ticks when `gridlines` is true |
+| `plot` | `x` and `y` (`[lo, hi]` in data units), `axes`, `gridlines`, `ticks` (`{x: [{v, label}], y: [{v, label}]}`; labels may be words from `tick`/`ytick`), `children` (shapes in data units) | a chart: map data units to the plot area (y grows upward: a `rect` with `y: 0, h: 40` stands on the x axis), draw the axes with the tick labels when `axes` is true and grid lines at the y ticks when `gridlines` is true |
 | `rect` | `x`, `y`, `w`, `h` | a rectangle (`style.radius` rounds it) |
 | `circle` | `cx`, `cy`, `r` | a circle |
 | `arc` | `cx`, `cy`, `r`, `from`, `to` (degrees, 0 at the top, clockwise) | with `style.stroke`: an arc line of width `thick`; with `style.fill`: a pie wedge from the centre |

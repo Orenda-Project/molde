@@ -51,7 +51,7 @@ Line by line: the app is called Water with the `drop` icon and the `ocean` theme
 | time of day | `H:MM` or `HH:MM`, 24 hours | `8:00`, `21:30` |
 | duration | whole number + `s`, `m`, `h` or `d` | `90s`, `25m`, `8h`, `3d` |
 | yes/no | `yes`, `no` | |
-| dates | `today` (a date), `now` (date and time) | |
+| dates | year-month-day; `today` (a date), `now` (date and time) | `2026-11-30`, `today` |
 | option value | the option word as declared, bare | `Food`, `Eating_out` |
 | colour | a theme role, a named colour or `hue(N)` (section 8.2) | `accent`, `red`, `hue(200)` |
 
@@ -229,7 +229,8 @@ A function's result can be followed by a field: `last(item).name`, `random(card)
 plot X0..X1, Y0..Y1 [axes] [gridlines]   # a chart frame in data units (y grows upward); the ranges may be formulas
   rect X, Y, W, H                        # in data units: rect index + 0.15, 0, 0.7, value is a bar standing on the axis
   poly                                   # pt X, Y in data units: a line chart
-  tick X, PART ...                       # a label under the x axis at X (y labels come from the range)
+  tick X, PART ...                       # a label under the x axis at X
+  ytick Y, PART ...                      # a label beside the y axis at Y (without any, y labels come from the range)
 ```
 
 `axes` draws both axes with labels; `gridlines` draws lines at the y labels. Inside a plot, rows of a table come oldest first (time left to right) unless you sort them. The std `daybars`, `bars` and `trend` are plots.
@@ -296,6 +297,8 @@ else
 | `card` | a raised surface |
 | `ratio N`, `middle`, `full` | keep width / height at N (`ratio 1` makes square cells); centre the block in the free space; take the full screen height |
 | `tap ACTION`, `swipe ACTION` | what a tap or a sideways swipe does |
+| `alt "words"` | what a screen reader says for this line (a drawing, an icon, a chart); text lines and buttons already say their text |
+| `bar` | on a `row`: the app bar (the title and the main action), drawn at the top by the phone |
 
 ### 8.2 Colours
 
@@ -338,7 +341,7 @@ when condition ACTION ...                    # runs once each time the condition
 remind "Text" at 8:00, 21:00 [on mon wed fri] [if condition]
 remind "Text" at TABLE.field                 # one reminder per row: daily at a time field, once on a date field (9:00)
 remind "Text" at TABLE.field - 3d [at 9:00]  # before (or + after) a date field, at a time
-remind "Text" monthly on 1, 15 at 10:00      # every month on those days (31 means the last day)
+remind "Text" monthly on 1, 15 at 10:00      # every month on those days (a day past the end of a month, like 31 in November, fires on its last day)
 remind "Text" every 2h [from 9:00 to 21:00] [if condition]
 ```
 
