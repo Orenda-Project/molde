@@ -59,7 +59,7 @@ const cases = [
 
 for (const [name, hist, next, verdict, re] of cases) {
   test(`diff: ${name}`, () => {
-    const r = diff(hist, next);
+    const r = diff(hist, next, verdict === 'restore' ? { restore: true } : {});
     assert.equal(r.verdict, verdict, JSON.stringify(r, null, 1));
     if (re) has(r, re);
   });
@@ -68,11 +68,31 @@ for (const [name, hist, next, verdict, re] of cases) {
 test('diff: a restore maps names back to the same slots (data stays)', () => {
   let ever = emptySchema();
   for (const s of [Q('table a x num'), Q('table a y num was x, z text')]) ever = evolve(ever, s).ever;
-  const r = evolve(ever, Q('table a x num'));
+  const r = evolve(ever, Q('table a x num'), { restore: true });
   assert.equal(r.verdict, 'restore');
   const map = r.ever.versions.at(-1).map;
   assert.equal(map.fields[map.tables.a].x, 'x');
   assert.equal(r.ever.tables.a.fields.z.visible, null);
+});
+
+test('diff: an edit equal to an older text is judged as an edit (only an explicit restore is a restore)', () => {
+  const r = diff([Q('table a k text'), Q('table a k long')], Q('table a k text'));
+  assert.equal(r.verdict, 'refused');
+  assert.equal(diff([Q('table a x num'), Q('table a y num was x')], Q('table a x num was y')).verdict, 'safe');
+});
+
+test('diff: a restore undoes later option renames', () => {
+  const r = diff([Q('table a k pick Food|Bills'), Q('table a k pick Meals was Food|Bills')], Q('table a k pick Food|Bills'), { restore: true });
+  assert.equal(r.verdict, 'restore');
+  assert.deepEqual(r.moves[0].map, { Meals: 'Food' });
+});
+
+test('diff: setting defaults never overwrite a saved value; "set" does, and says so', () => {
+  const h = ['app "K"\nsetting g num = 5\ntext g\n'];
+  const r1 = diff(h, 'app "K"\nsetting g num = 9\ntext g\n');
+  assert.equal(r1.verdict, 'safe'); assert.ok(r1.notes.some(n => /only fills an empty setting/.test(n)));
+  const r2 = diff(h, 'app "K"\nsetting g num = 9 set\ntext g\n');
+  assert.ok(r2.changes.some(c => /sets the saved value of setting g to 9/.test(c)));
 });
 
 test('diff: a refused edit leaves the schema history unchanged', () => {

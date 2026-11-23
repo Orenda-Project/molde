@@ -80,14 +80,21 @@ test('editor API: fields() and setField(), one undo per field edit', () => {
   assert.equal(b.find(n => n.t === 'input').value, '');
 });
 
-test('an edit that changes a setting\'s starting value sets it ("count to 100"); a restore does not', () => {
+test('setting defaults: a new default never overwrites a saved value; `set` does, and revert undoes it', () => {
   const v1 = 'app "T" beads mint\nsetting target num = 33 "Count to"\ntext target\n';
   const a = run(v1);
   a.setField('target', null, 50);
   assert.equal(a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\ntext target\n').verdict, 'safe');
+  assert.deepEqual(texts(a), ['50']); // the user's 50 wins
+  const r = a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\ntext target\n');
+  assert.ok(r.changes.some(c => /sets the saved value of setting target to 100/.test(c)));
   assert.deepEqual(texts(a), ['100']);
-  a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\n"Target" target\n');
-  assert.deepEqual(texts(a), ['Target 100']);
+  a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\n"Target" target\n'); // the same set again: no new write
+  a.setField('target', null, 70);
+  a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\n"T" target\n');
+  assert.deepEqual(texts(a), ['T 70']);
+  a.revert(); a.revert();
+  assert.deepEqual(texts(a), ['70']); // undoing the `set` edit gives back the value from before it... the user's later 70 stays in data
 });
 
 test('nth row, a random row in an action, shuffle keeps a stable order', () => {

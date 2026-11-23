@@ -41,7 +41,11 @@ export function runEvalFuzz(chains = 2000, seed = 3, steps = 6) {
     write();
     for (let st = 0; st < steps; st++) {
       let r;
-      if (ri(6) === 0 && st > 0) { r = app.revert(); stats.reverts++; if (!r) continue; if (r.verdict === 'refused') stats.violations.push({ c, st, why: 'revert refused' }); }
+      if (ri(6) === 0 && st > 0) {
+        r = app.revert(); stats.reverts++;
+        if (r.verdict === 'refused') stats.violations.push({ c, st, why: 'revert refused' });
+        for (const mv of r.moves || []) for (const k of kept) if (k.tk === mv.table && k.fk === mv.field && k.raw in mv.map) k.raw = mv.map[k.raw]; // a restore moves rows back to older option names
+      }
       else {
         const nm = clean(m);
         const t = one(nm.tables);

@@ -210,7 +210,7 @@ const BUILD = {
     return { kind: 'ask', question: s[0], options: s.slice(1) };
   },
   'table-stmt': n => { const ids = children(n, 'ident'); return { kind: 'table', name: id(ids[0]), was: lits(n).includes('was') ? id(ids[1]) : null, label: child(n, 'string') ? str(child(n, 'string')) : null, fields: children(n, 'field').map(field) }; },
-  'setting-stmt': n => ({ kind: 'setting', ...field(child(n, 'field')) }),
+  'setting-stmt': n => ({ kind: 'setting', ...field(child(n, 'field')), force: lits(n).includes('set') }),
   'state-stmt': n => {
     const st = child(n, 'state-type');
     const o = { kind: 'state', name: id(child(n, 'ident')), type: null, draft: null, init: child(n, 'expr') ? expr(child(n, 'expr')) : child(n, 'word') ? { k: 'str', v: child(n, 'word').v, word: true } : null, keep: lits(n).includes('keep'), was: lits(n).includes('was') ? id(children(n, 'ident')[children(n, 'ident').length - 1]) : null };

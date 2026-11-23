@@ -104,15 +104,15 @@ A table holds rows the user adds. A field is `name type[?] [range] [= default] [
 ### 4.2 Settings, state and named formulas
 
 ```
-setting NAME TYPE [range] [= default] ["Label"]     # a value the user can change; listed in the app's settings
-state NAME TYPE [= formula] [keep]                  # a value the screen holds (selected tab, running timer, search text)
+setting NAME TYPE [range] [= default] ["Label"] [was OLD] [set]   # a value the user can change; listed in the app's settings
+state NAME TYPE [was OLD] [= formula] [keep]        # a value the screen holds (selected tab, running timer, search text); was renames it keeping its value
 state NAME new TABLE [keep]                         # a new row being filled in (a form); keep keeps values after saving
 let NAME = formula                                  # a name for a formula; read-only, always up to date
 let NAME(value kind, ...) = formula                 # a formula with values, used as NAME(...) anywhere below
                                                     # a value can be a row: let worth(r item) = r.qty * r.price
 ```
 
-`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. An edit that changes a setting's `= default` also sets the stored value (the user asked for it in the chat); otherwise a value the user set is kept. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
+`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. A setting's `= default` only fills it when nothing is stored; a value the user saved always wins. An edit that must change the saved value says so with `set` at the end of the line (`setting target num = 100 set`); the change is listed and undoable. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
 
 ## 5. Formulas
 
@@ -418,7 +418,8 @@ To change an app, the model writes the whole new program. `node lang/mo.mjs diff
 - a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename";
 - a stored type may only **widen**: `text` to `long`, `pick` to `text`/`long`, `num` to/from `money`, `date` to `when`; a `ref` keeps its target table (a renamed target is followed);
 - a `pick` option that disappears stays available: rows keep it and it stays selectable and filterable;
-- a narrower range keeps old values that fall outside it.
+- a narrower range keeps old values that fall outside it;
+- going back to an earlier version (chat Undo) is an explicit restore and is never refused: data entered since stays, and pick options renamed since are renamed back.
 
 There is no statement that deletes data.
 

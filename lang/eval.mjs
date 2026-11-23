@@ -107,26 +107,38 @@ class App {
     this.lastWhen = new Map();
     this.screen = null;
     this.random = mulberry(opts.seed || 1);
-    // the schema history: from a snapshot, from a list of earlier programs, or new
-    let ever = opts.data && opts.data.ever ? opts.data.ever : (opts.history ? everOf(opts.history).ever : emptySchema());
-    if (opts.data) this.restore(opts.data, true);
-    this.ever = ever;
-    this.ever0 = true;
-    const r = this.setProgram(source);
-    this.edit = r;
+    // saved data with a damaged schema history is never touched: the app reports why and stops
+    const bad = opts.data !== undefined ? badSnapshot(opts.data) : null;
+    if (bad) {
+      this.source = source; this.ok = false; this.errors = [`the saved data cannot be read safely: ${bad}. It was left untouched.`];
+      this.rawData = opts.data; this.prog = { header: null, body: [] }; this.env = { tables: new Map(), settings: new Map() };
+      this.map = { tables: {}, fields: {}, settings: {}, states: {} }; this.ever = emptySchema();
+      return;
+    }
+    try {
+      // the schema history: from a snapshot, from a list of earlier programs, or new
+      let ever = opts.data && opts.data.ever ? opts.data.ever : (opts.history ? everOf(opts.history).ever : emptySchema());
+      if (opts.data) this.restore(opts.data, true);
+      this.ever = ever;
+      const r = this.setProgram(source);
+      this.edit = r;
+    } catch (e) {
+      this.ok = false; this.errors = [`could not load: ${e && e.message}`];
+      this.prog = this.prog || { header: null, body: [] }; this.env = this.env || { tables: new Map(), settings: new Map() };
+    }
   }
 
   // Load a program against the schema history: data stays keyed by storage slot.
-  setProgram(source) {
+  setProgram(source, opts = {}) {
     OFF = this.off;
     const c = check(source);
     if (!c.ok) {
       if (!this.prog) { this.source = source; this.ok = false; this.errors = c.errors.map(String); this.prog = c.ast; this.env = { tables: new Map(), settings: new Map() }; this.map = { tables: {}, fields: {}, settings: {}, states: {} }; }
       return { verdict: 'refused', refused: c.errors.map(String), changes: [], notes: [] };
     }
-    const r = evolve(this.ever, source);
+    const r = evolve(this.ever, source, opts);
     if (r.verdict === 'refused' && this.prog) return r; // an unsafe edit: keep running the old version
-    const oldSettings = this.prog && this.prog.body ? new Map(this.prog.body.filter(x => x.kind === 'setting').map(x => [this.map?.settings[x.name] ?? x.name, x.dflt ?? null])) : null;
+    const oldForce = this.prog && this.prog.body ? new Map(this.prog.body.filter(x => x.kind === 'setting' && x.force).map(x => [this.map?.settings[x.name] ?? x.name, x.dflt ?? null])) : null;
     this.source = source;
     this.ok = c.ok && r.verdict !== 'refused'; this.errors = [...c.errors.map(String), ...(r.verdict === 'refused' ? r.refused : [])];
     this.prog = c.ast; this.env = c.ast.env || { tables: new Map(), settings: new Map() };
@@ -134,10 +146,15 @@ class App {
     this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : { tables: {}, fields: {}, settings: {}, states: {} };
     // pick option renames move rows
     for (const mv of r.moves || []) for (const row of this.data.tables[mv.table] || []) if (row[mv.field] in mv.map) row[mv.field] = mv.map[row[mv.field]];
-    // an edit that changes a setting's starting value sets it ("count to 100"); restores do not
-    if (r.verdict === 'safe' && oldSettings) for (const sd of c.ast.body.filter(x => x.kind === 'setting')) {
-      const key = this.map.settings[sd.name], before = oldSettings.get(key);
-      if (before !== undefined && sd.dflt && JSON.stringify(before) !== JSON.stringify(sd.dflt)) this.data.settings[key] = this.litValue(sd.dflt, sd.type);
+    // the stored value of a setting always wins over its default; only `setting x ... = v set` in an
+    // edit writes it on purpose (once: when the marker or its value is new), and revert undoes that
+    r.settingWrites = {};
+    if (r.verdict === 'safe' && oldForce) for (const sd of c.ast.body.filter(x => x.kind === 'setting' && x.force && x.dflt)) { // only an edit writes; loading never does
+      const key = this.map.settings[sd.name];
+      const was = oldForce && oldForce.get(key);
+      if (was !== undefined && JSON.stringify(was) === JSON.stringify(sd.dflt)) continue;
+      r.settingWrites[key] = key in this.data.settings ? this.data.settings[key] : null;
+      this.data.settings[key] = this.litValue(sd.dflt, sd.type);
     }
     this.initData();
     this.lastWhen = new Map();
@@ -161,25 +178,37 @@ class App {
     OFF = this.off;
     const before = this.source;
     const r = this.setProgram(source);
-    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), before]; this.screen = null; }
+    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), { src: before, settings: r.settingWrites || {} }]; this.screen = null; }
     return r;
   }
   // Chat undo: go back to the previous program; data entered since stays.
   revert() {
     const prev = (this.versionsUndo || []).pop();
-    if (!prev) return null;
-    const r = this.setProgram(prev);
+    if (!prev) return { verdict: 'none', changes: ['nothing to undo: this is the first version'], refused: [], notes: [] };
+    const r = this.setProgram(prev.src || prev, { restore: true });
+    // settings that the undone edit wrote on purpose (setting ... set) get their earlier value back
+    if (prev.settings) for (const [k, v] of Object.entries(prev.settings)) this.data.settings[k] = v;
     this.screen = null;
     return r;
   }
 
   // ----- data -----
   snapshot() { return JSON.parse(JSON.stringify({ data: this.data, seq: this.seq, clock: this.clock, ever: this.ever })); }
+  // Load a backup into this app. Its schema history is MERGED with the app's (never replaced by an
+  // older one), so the next edit still knows every slot the program uses.
   restore(snap, early) {
+    const bad = badSnapshot(snap);
+    if (bad) return { ok: false, reason: bad };
     const s = JSON.parse(JSON.stringify(snap));
     this.data = { tables: {}, settings: {}, state: {}, ...s.data };
-    this.seq = s.seq ?? this.seq; if (s.clock) this.clock = s.clock;
-    if (!early) { if (s.ever) { this.ever = s.ever; this.setProgram(this.source); } else this.initData(); }
+    this.seq = Math.max(s.seq ?? 0, ...Object.values(this.data.tables).flat().map(r => r.id || 0), this.seq || 0);
+    if (s.clock) this.clock = s.clock;
+    if (!early) {
+      if (s.ever) this.ever = mergeEver(this.ever, s.ever);
+      this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : this.map;
+      this.initData();
+    }
+    return { ok: true };
   }
   pushUndo() { this.undoStack.push(JSON.stringify({ data: this.data, seq: this.seq })); if (this.undoStack.length > 50) this.undoStack.shift(); }
   undo() { const s = this.undoStack.pop(); if (!s) return false; const o = JSON.parse(s); this.data = o.data; this.seq = o.seq; this.log.push({ kind: 'undo', at: this.clock }); return true; }
@@ -1115,6 +1144,44 @@ function niceTicks(lo, hi) {
   const out = [];
   for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.round(v * 1e9) / 1e9);
   return out;
+}
+
+// Is a snapshot safe to read? (null when it is)
+function badSnapshot(d) {
+  if (!d || typeof d !== 'object') return 'it is not an object';
+  if (d.data !== undefined && (typeof d.data !== 'object' || d.data === null)) return 'data is missing';
+  if (d.data && d.data.tables !== undefined && (typeof d.data.tables !== 'object' || d.data.tables === null || Array.isArray(d.data.tables))) return 'data.tables is not a set of tables';
+  if (d.data && d.data.tables) for (const [k, v] of Object.entries(d.data.tables)) if (!Array.isArray(v)) return `table ${k} is not a list of rows`;
+  if (d.ever !== undefined) {
+    const e = d.ever;
+    if (!e || typeof e !== 'object' || Array.isArray(e)) return 'the schema history is not an object';
+    if (typeof e.tables !== 'object' || e.tables === null) return 'the schema history has no tables';
+    if (!Array.isArray(e.versions)) return 'the schema history has no versions';
+    for (const [k, t] of Object.entries(e.tables)) if (!t || typeof t.fields !== 'object' || t.fields === null) return `the schema history of table ${k} is damaged`;
+    const used = Object.keys(d.data?.tables || {}).filter(k => (d.data.tables[k] || []).length);
+    if (used.length && !e.versions.length) return 'the schema history has no versions but there are rows';
+    for (const k of used) if (!e.tables[k]) return `rows of ${k} have no entry in the schema history`;
+  }
+  return null;
+}
+
+// merge two schema histories of the same app: every slot of both, each with all its names
+export function mergeEver(a, b) {
+  if (!b || !b.tables) return a;
+  const base = (b.v || 0) > (a.v || 0) ? b : a, other = base === a ? b : a;
+  const E = JSON.parse(JSON.stringify(base));
+  const mergeSlot = (x, y) => {
+    for (const [n, v] of Object.entries(y.seen || {})) if (!(n in x.seen) || x.seen[n] < v) x.seen[n] = v;
+    if (x.type && y.type && x.type.t === 'pick' && y.type.t === 'pick') x.type.options = [...new Set([...x.type.options, ...y.type.options])];
+  };
+  for (const [k, t] of Object.entries(other.tables || {})) {
+    if (!E.tables[k]) { E.tables[k] = { ...JSON.parse(JSON.stringify(t)), visible: null }; for (const f of Object.values(E.tables[k].fields)) f.visible = null; continue; }
+    mergeSlot(E.tables[k], t);
+    for (const [fk, f] of Object.entries(t.fields || {})) { if (!E.tables[k].fields[fk]) E.tables[k].fields[fk] = { ...JSON.parse(JSON.stringify(f)), visible: null }; else mergeSlot(E.tables[k].fields[fk], f); }
+  }
+  for (const g of ['settings', 'states']) for (const [k, x] of Object.entries(other[g] || {})) { E[g] ||= {}; if (!E[g][k]) E[g][k] = { ...JSON.parse(JSON.stringify(x)), visible: null }; else mergeSlot(E[g][k], x); }
+  E.optionLog = [...new Map([...(a.optionLog || []), ...(b.optionLog || [])].map(x => [JSON.stringify(x), x])).values()];
+  return E;
 }
 
 // small seeded random, so tests are repeatable

@@ -140,6 +140,7 @@ class Checker {
         topOnly();
         if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different name.');
         this.fieldDecl(s, null);
+        if (s.force && !s.dflt) this.err('E_DEFAULT', `"set" on setting ${s.name} writes its value, so it needs one: = VALUE.`, `write setting ${s.name} ... = 100 set.`);
         this.settings.set(s.name, this.fieldType(s.type));
         return;
       }
