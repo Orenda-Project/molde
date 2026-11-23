@@ -7,7 +7,7 @@ each task where done = no sort due as t
     toggle t.done
     stack grow
       t.title bold
-      t.tag t.due size small color if(t.due < today, bad, muted)
+      t.tag t.due small color if(t.due < today, bad, muted)
 remind "You have tasks due today" at 8:00 if count(task where done = no and due = today) > 0
 form task
 "Done" faint

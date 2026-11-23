@@ -13,5 +13,5 @@ each flash sort at as c
 row gap 1
   button "Previous" tap set i = clamp(i - 1, 0, count(flash) - 1) then set flipped = no
   button "Next" tap set i = clamp(i + 1, 0, count(flash) - 1) then set flipped = no
-text i + 1 "of" count(flash) faint
+i + 1 "of" count(flash) faint
 form flash, "Add card"

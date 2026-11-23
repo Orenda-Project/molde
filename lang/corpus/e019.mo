@@ -2,7 +2,7 @@ app "Wedding Budget" gift plum
 table func name text, budget money
 table expense func ref func, vendor text, amount money
 table guest name text, side pick Bride|Groom, count num 1..20 = 1
-when countof(func, sum(it.expense.amount) > it.budget * 0.9) > 0 notify "A function passed 90 percent of its budget"
+when count(func, sum(it.expense.amount) > it.budget * 0.9) > 0 notify "A function passed 90 percent of its budget"
 each func
   stack card gap 1
     row

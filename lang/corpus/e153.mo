@@ -3,7 +3,7 @@ table work crop text, job text, mth pick Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct
 grid 2 gap 1
   each options work.mth as m
     stack card gap 1
-      text m head
+      m head
       each work where mth = m as w
         row gap 1
           toggle w.done

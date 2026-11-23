@@ -46,6 +46,9 @@ const isAny = t => !t || tname(t) === 'any';
 const AGG_NUM = ['count', 'streak', 'best', 'since', 'gap'];
 const PKIND_TYPE = { num: 'num', money: 'money', text: 'text', bool: 'bool', date: 'date', time: 'time', dur: 'dur', color: 'color', icon: 'text' };
 
+// a date written another way: "2026-11-30" in quotes, or 30/11/2026 (which reads as a division)
+const dateSlip = e => e && ((e.k === 'str' && /^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(e.v)) || (e.k === 'bin' && ['/', '-'].includes(e.op) && e.a.k === 'bin' && e.a.a.k === 'num'));
+
 export function check(src, opts = {}) {
   let prog, errors, defs = new Map();
   try {
@@ -57,6 +60,8 @@ export function check(src, opts = {}) {
       errors.push(...ex.errors);
       defs = ex.defs;
       const C = new Checker(errors, prog);
+      C.compNames = [...ex.defs.keys()];
+      C.compSig = n => ex.defs.has(n) ? ex.defs.get(n).def.params.map(p => p.name).join(', ') : null;
       C.probeName = opts.probe || null;
       C.header(prog.header);
       C.list(prog.body, { top: true });
@@ -133,6 +138,7 @@ class Checker {
   }
 
   stmt(s, cx, prev) {
+    this.curKind = s.kind === 'box' ? s.box : s.kind; // for mods that fit only some lines (bar)
     const topOnly = () => { if (!cx.top) this.err('E_CONTEXT', `"${s.kind}" must be at the top level (not indented).`, 'move it to the start of a line with no indentation.'); };
     switch (s.kind) {
       case 'table': return topOnly(), this.table(s);
@@ -140,6 +146,7 @@ class Checker {
         topOnly();
         if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different name.');
         this.fieldDecl(s, null);
+        if (s.force && !s.dflt) this.err('E_DEFAULT', `"set" on setting ${s.name} writes its value, so it needs one: = VALUE.`, `write setting ${s.name} ... = 100 set.`);
         this.settings.set(s.name, this.fieldType(s.type));
         return;
       }
@@ -219,8 +226,8 @@ class Checker {
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, draw: s });
       case 'tick':
-        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', 'tick labels the x axis of a plot; it must be inside plot.', 'indent it under a plot line.');
-        this.num(s.x, 'tick x'); this.parts(s.parts);
+        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', `${s.axis === 'y' ? 'ytick' : 'tick'} labels an axis of a plot; it must be inside plot.`, 'indent it under a plot line.');
+        this.num(s.x, s.axis === 'y' ? 'ytick y' : 'tick x'); this.parts(s.parts);
         return;
       case 'poly':
         if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw line.');
@@ -235,10 +242,18 @@ class Checker {
         s.args.forEach((a, i) => this.num(a, `${s.shape} value ${i + 1}`));
         if (s.parts) this.parts(s.parts);
         return this.mods(s.mods);
-      case 'text': this.parts(s.parts); return this.mods(s.mods);
+      case 'text': {
+        // a line that starts with a bare unknown word: most likely a component or statement that does not exist
+        const p0 = s.implicit && s.parts[0];
+        if (p0 && p0.k === 'path' && !p0.parts.length && this.compSig && this.compSig(p0.head) !== null)
+          return this.err('E_SYNTAX', `"${p0.head}" is a component, so this line is a component call, but cannot read the values of ${p0.head}; they are separated by commas.`, `write ${p0.head} ${this.compSig(p0.head)}; to show a value with the same name, start the line with text.`);
+        if (p0 && p0.k === 'path' && p0.head !== 'it' && !p0.parts.length && !this.lookup(p0.head) && !this.tables.has(p0.head) && !this.options.has(p0.head) && !this.failed.has(p0.head))
+          return this.err('E_UNKNOWN_COMPONENT', `there is no component, statement or value called "${p0.head}".`, `start the line with a statement from SPEC.md, a component (${(this.compNames || []).join(', ')}) or a declared value.`);
+        this.parts(s.parts); return this.mods(s.mods);
+      }
       case 'button':
         this.parts(s.parts); this.mods(s.mods);
-        if (!s.mods.some(m => m.m === 'tap')) this.err('E_ACTION', 'a button needs tap and an action.', 'add: tap add/set/toggle/...');
+        if (!s.mods.some(m => m.m === 'tap')) this.err('E_ACTION', 'a button needs tap and an action.', 'write button "Add" tap add drink ml = 250 (or tap set, toggle, remove, edit, go, notify).');
         return;
       case 'icon': {
         const e = s.icon;
@@ -275,6 +290,7 @@ class Checker {
       if (seen.has(m.m)) this.err('E_DUP', `"${m.m}" appears twice on this line.`, 'keep one.');
       seen.add(m.m);
       if (m.m === 'tap' || m.m === 'swipe') this.actions(m.actions);
+      else if (m.m === 'bar' && this.curKind !== 'row') this.err('E_CONTEXT', 'bar marks the app bar row (the title and the main action); it goes on a row.', 'write row bar, with the title and one button inside.');
       else if (['color', 'fill', 'stroke'].includes(m.m)) { const t = this.expr(m.e); if (!isAny(t) && t !== 'color') this.err('E_TYPE', `${m.m} needs a colour (${COLORS.join(', ')} or hue(0..360)), got ${show(t)}.`, `write ${m.m} accent, or ${m.m} if(x > 0, good, bad).`); }
       else if (m.e) this.num(m.e, m.m);
     }
@@ -292,7 +308,7 @@ class Checker {
     const fields = new Map();
     const was = new Set();
     for (const f of s.fields) {
-      if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, 'every row already has at (when it was added); remove this field or rename it.');
+      if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, `every row already has id (its number) and at (when it was added); remove ${f.name} or rename it, for example ${f.name === 'id' ? 'code' : 'when_done'}.`);
       if (fields.has(f.name)) this.err('E_DUP', `field "${f.name}" appears twice in ${s.name}.`, 'remove one or rename it.');
       if (f.was && was.has(f.was)) this.err('E_DUP', `two fields say they were ${f.was}; only one can take its values.`, 'keep one was.');
       else if (f.was && s.fields.some(g => g.name === f.was && !g.was)) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (and not renamed itself).`, `remove the field ${f.was} or the "was"; to swap two names, give both fields a was.`);
@@ -328,7 +344,7 @@ class Checker {
         const v = d.k === 'word' || d.k === 'str' ? d.v : null;
         if (v === null || !f.type.options.includes(v)) this.err('E_DEFAULT', `the default of ${f.name} must be one of its options (${f.type.options.join(', ')}).`, `write = ${f.type.options[0]}.`);
       } else {
-        const lt = { num: 'num', str: 'text', time: 'time', dur: 'dur', bool: 'bool', today: 'date', now: 'when', word: 'text' }[d.k];
+        const lt = { num: 'num', str: 'text', time: 'time', date: 'date', dur: 'dur', bool: 'bool', today: 'date', now: 'when', word: 'text' }[d.k];
         if (!this.compatible(t, lt)) this.err('E_DEFAULT', `the default of ${f.name} is ${show(lt)} but the field is ${show(t)}.`, 'make the default match the type.');
         if (d.k === 'num' && f.range && (d.v < f.range.lo || (f.range.hi !== null && d.v > f.range.hi))) this.err('E_RANGE', `the default ${d.v} is outside ${f.range.lo}..${f.range.hi ?? ''}.`, 'pick a default inside the range.');
       }
@@ -369,7 +385,12 @@ class Checker {
     for (const m of [this.states, this.settings, this.lets]) for (const [k, v] of m) if (tname(v) !== 'fn') names.add(k);
     const tables = [...this.tables.keys()];
     const wt = this.whereTable && this.tb(this.whereTable);
-    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt() };
+    const types = {};
+    for (const sc of this.scopes) for (const [k, v] of sc.names) types[k] = v;
+    for (const m of [this.settings, this.lets, this.states]) for (const [k, v] of m) if (tname(v) !== 'fn') types[k] = v;
+    for (const sc of this.scopes) for (const [k, v] of sc.names) types[k] = v; // inner scopes win
+    const writable = [...names].filter(n => this.writable(n) && !this.lets.has(n));
+    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt(), itType: this.curIt(), types, writable };
   }
   probePart(t) {
     const n = tname(t);
@@ -561,7 +582,7 @@ class Checker {
     if (tname(t) === 'rows') {
       if (t.field) return this.err('E_TYPE', 'toggle on a table marks a day; it takes the table, not a column.', `write toggle ${t.table}.`);
       this.query({ path: s.target, win: s.win, where: s.where });
-      if (s.win && ['all', 'last'].includes(s.win.k)) this.err('E_WINDOW', 'toggle marks one day; use today, yesterday, on DATE (or week/month for a once-a-period mark).', 'write toggle X today or toggle X on d.');
+      if (s.win && s.win.k === 'last') this.err('E_WINDOW', 'toggle marks one day; use today, yesterday, on DATE, week/month for a once-a-period mark, or all for a mark that does not depend on the day.', 'write toggle X today, toggle X on d or toggle X all.');
       if (s.where) this.whereEq(s.where, t.table);
       return;
     }
@@ -635,7 +656,7 @@ class Checker {
     const o = this.optionOf(e);
     if (tname(target) === 'pick' && o !== null && !target.options.includes(o)) { this.err('E_OPTION', `"${o}" is not an option of ${what} (${target.options.join(', ')}).`, 'use one of the options, spelled the same.'); return; }
     if (tname(target) === 'draft') { this.err('E_TARGET', 'a new row cannot be set directly.', 'use field d or save d.'); return; }
-    if (!this.compatible(target, val)) this.err('E_TYPE', `${what} is ${show(target)} but the value is ${show(val)}.`, 'give it a value of the same type.');
+    if (!this.compatible(target, val)) this.err('E_TYPE', `${what} is ${show(target)} but the value is ${show(val)}.`, family(target) === 'date' && dateSlip(e) ? 'write a date as year-month-day without quotes, for example 2026-11-30.' : 'give it a value of the same type.');
   }
 
   compatible(a, b) {
@@ -663,6 +684,7 @@ class Checker {
       case 'pi': return 'num';
       case 'str': case 'word': return 'text';
       case 'time': return 'time';
+      case 'date': { const [y, m, d] = e.v.split('-').map(Number); const ok = m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(y, m, 0)).getUTCDate(); return ok ? 'date' : this.err('E_TYPE', `${e.v} is not a real date.`, 'write year-month-day, for example 2026-11-30.'); }
       case 'dur': return 'dur';
       case 'bool': return 'bool';
       case 'today': return 'date';
@@ -693,6 +715,8 @@ class Checker {
       case 'ucall': {
         const ARITY = { if: 'three values: if(condition, value when yes, value when no)', clamp: 'three values: clamp(x, low, high)', min: 'one column (min(t.price)) or two numbers (min(a, b))', max: 'one column (max(t.price)) or two numbers (max(a, b))', has: 'two values: has(text, part)', pow: 'two values: pow(base, power)', addmonths: 'two values: addmonths(date, months)', plural: 'two values: plural(n, "day")', fixed: 'two values: fixed(x, decimals)', round: 'one value: round(x)', floor: 'one value', abs: 'one value', len: 'one value', due: 'a table and a number of days: due(water, 3)', nth: 'a table and a position: nth(card, 1)' };
         if (ARITY[e.name]) return this.err('E_ARGS', `${e.name}() has the wrong number of values.`, `${e.name}() needs ${ARITY[e.name]}.`);
+        const OLD = { sumof: 'sum', countof: 'count', maxof: 'max', minof: 'min', compact: '', grouped: '', monthshort: 'monthname' };
+        if (e.name in OLD) return this.err('E_SYNTAX', `${e.name}() is an old spelling.`, OLD[e.name] ? `write ${OLD[e.name]}(...) (node lang/mo.mjs migrate rewrites it).` : `numbers are formatted by the phone; write the value itself (node lang/mo.mjs migrate rewrites it).`);
         return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
       }
     }
@@ -714,7 +738,7 @@ class Checker {
     const a = this.expr(e.a), b = this.expr(e.b);
     if (isAny(a) || isAny(b)) return ['and', 'or', '=', '!=', '<', '>', '<=', '>='].includes(e.op) ? 'bool' : ANY;
     const na = tname(a), nb = tname(b);
-    const bad = () => this.err('E_TYPE', `cannot use ${e.op} between ${show(a)} and ${show(b)}.`, 'make both sides the same kind of value.');
+    const bad = () => this.err('E_TYPE', `cannot use ${e.op} between ${show(a)} and ${show(b)}.`, e.op === '+' && (tname(a) === 'text' || tname(b) === 'text') ? 'texts are joined by writing the parts side by side, without +: "Total:" amount "rupees" (or join(a, b) to join without a space).' : 'make both sides the same kind of value.');
     switch (e.op) {
       case 'and': case 'or':
         if (na !== 'bool' || nb !== 'bool') bad();
@@ -777,12 +801,18 @@ class Checker {
   }
 
   fold(e) {
+    if (e.pair) { // min(x, y): a fold only when x is rows
+      const n = this.errors.length; const t0 = this.path(e.pair.args[0], 'value'); this.errors.length = n;
+      const rowsy = t0 && ['rows', 'group'].includes(tname(t0));
+      if (!rowsy) { Object.assign(e, e.pair); delete e.src; delete e.pair; return this.fn(e); }
+      delete e.pair;
+    }
     const item = this.source(e.src);
     this.scopes.push({ it: item, names: new Map(), each: true });
     const t = this.expr(e.e);
     this.scopes.pop();
-    if (e.fn === 'countof') { if (!isAny(t) && tname(t) !== 'bool') this.err('E_TYPE', 'countof(source, condition) needs a yes/no condition.', 'write countof(habit, streak(it.check) > 3).'); return 'num'; }
-    if (!isAny(t) && !isNum(t) && tname(t) !== 'dur') return this.err('E_TYPE', `${e.fn}() needs a number for each item, got ${show(t)}.`, 'give a formula that makes a number.');
+    if (e.fn === 'countof') { if (!isAny(t) && tname(t) !== 'bool') this.err('E_TYPE', 'count(source, condition) needs a yes/no condition.', 'write count(habit, streak(it.check) > 3).'); return 'num'; }
+    if (!isAny(t) && !isNum(t) && tname(t) !== 'dur') return this.err('E_TYPE', `${e.fn.replace('of', '')}(source, value) needs a number for each item, got ${show(t)}.`, 'give a formula that makes a number.');
     return t;
   }
 

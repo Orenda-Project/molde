@@ -10,7 +10,7 @@ each class as c
       circle 50, 50, 40 fill if(going, good, soft)
     stack grow
       c.name bold
-      text left big
+      left big
     button if(going, "Pause", "Start") tap set going = not going
     button "Reset" tap set going = no then set left = c.mins * 1m
 form class, "Add class"

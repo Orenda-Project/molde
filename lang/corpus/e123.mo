@@ -16,7 +16,7 @@ screen tables "Seating" seat
         "Table" n bold
         count(guest where seat = n) "guests" faint
         each guest where seat = n as g
-          g.name size small
+          g.name small
 screen gifts "Gifts" gift
   list gift
   form gift, "Add gift"

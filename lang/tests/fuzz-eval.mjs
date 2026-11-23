@@ -6,6 +6,7 @@
 // Usage: node lang/tests/fuzz-eval.mjs [chains=2000] [seed=3]
 import { load } from '../eval.mjs';
 import { resolve } from '../diff.mjs';
+import { boundaryLeak, echoChanges } from './fuzz-model.mjs';
 
 const WIDE = { text: ['long'], pick: ['text', 'long'], num: ['money'], money: ['num'], date: ['when'] };
 const widens = (a, b) => a.t === b.t ? (a.t !== 'ref' || a.table === b.table) : !!(WIDE[a.t] || []).includes(b.t);
@@ -41,7 +42,11 @@ export function runEvalFuzz(chains = 2000, seed = 3, steps = 6) {
     write();
     for (let st = 0; st < steps; st++) {
       let r;
-      if (ri(6) === 0 && st > 0) { r = app.revert(); stats.reverts++; if (!r) continue; if (r.verdict === 'refused') stats.violations.push({ c, st, why: 'revert refused' }); }
+      if (ri(6) === 0 && st > 0) {
+        r = app.revert(); stats.reverts++;
+        if (r.verdict === 'refused') stats.violations.push({ c, st, why: 'revert refused' });
+        for (const mv of r.moves || []) for (const k of kept) if (k.tk === mv.table && k.fk === mv.field && k.raw in mv.map) k.raw = mv.map[k.raw]; // a restore moves rows back to older option names
+      }
       else {
         const nm = clean(m);
         const t = one(nm.tables);
@@ -64,6 +69,7 @@ export function runEvalFuzz(chains = 2000, seed = 3, steps = 6) {
       }
       // re-derive the model from the running program (a revert changes it)
       m = clean({ tables: app.prog.body.filter(x => x.kind === 'table').map(x => ({ name: x.name, fields: x.fields.map(f => ({ name: f.name, type: f.type.t, options: f.type.options && f.type.options.map(v => ({ v })) })) })), settings: app.prog.body.filter(x => x.kind === 'setting').map(x => ({ name: x.name, type: x.type.t })) });
+      { const leak = boundaryLeak(app); if (leak) stats.violations.push({ c, st, why: 'a stored form left the evaluator: ' + leak }); const echo = echoChanges(app); if (echo) stats.violations.push({ c, st, why: 'echo changed data: ' + echo }); }
       for (const k of kept) {
         const row = (app.data.tables[k.tk] || []).find(r => r.id === k.id);
         const slot = app.ever.tables[k.tk]?.fields[k.fk];

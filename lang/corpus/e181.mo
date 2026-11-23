@@ -2,7 +2,7 @@ app "Board exam" school ocean
 table subject name text
 table topic subject ref subject, name text, studied bool, conf num 1..5 = 3 "Confidence"
 setting exam date = today "Exam date"
-text exam - today "days to the exam" big
+exam - today "days to the exam" big
 count(topic where studied = yes) "of" count(topic) "topics studied" head
 "Today's plan: next 3 topics" head
 each topic where studied = no sort conf top 3 as t

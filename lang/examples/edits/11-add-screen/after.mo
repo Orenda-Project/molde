@@ -11,4 +11,4 @@ each med sort time
     toggle it.taken
 form med, "Add medicine"
 screen history "History" calendar
-  log taken
+  list taken by day

@@ -9,4 +9,4 @@ if count(day) >= 30
     "Quran pages" sum(day.pages all) bold
     "Charity given" sum(day.charity all) bold
 daybars last 30 days, sum(day.pages on it)
-log day
+list day by day

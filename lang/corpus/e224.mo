@@ -6,5 +6,5 @@ row gap 1
     stack grow align center tap toggle did on d
       draw width 44
         circle 50, 50, 44 fill if(count(did on d) > 0, accent, soft)
-      dayname(d) size tiny
+      dayname(d) tiny
 streak(did) "day streak" faint

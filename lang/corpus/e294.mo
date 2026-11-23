@@ -4,9 +4,9 @@ table delivery customer ref customer, litres num 0..
 table payment customer ref customer, amount money
 state m date = today
 monthnav m
-count(customer) "customers," sumof(delivery today, it.litres) "litres delivered today" head
+count(customer) "customers," sum(delivery today, it.litres) "litres delivered today" head
 each customer as c
-  let bill = sumof(c.delivery month of m, it.litres) * c.rate
+  let bill = sum(c.delivery month of m, it.litres) * c.rate
   stack card gap 1
     row
       c.name bold grow
@@ -17,4 +17,4 @@ each customer as c
         button v "L" tap add delivery customer = c, litres = v
 form customer, "Add customer"
 form payment, "Payment received"
-log delivery month of m
+list delivery month of m by day

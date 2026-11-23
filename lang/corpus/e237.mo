@@ -16,4 +16,4 @@ each sale where paid = no as s
     s.amount
 form sale, "Add sale"
 form cost, "Add cost"
-log cost month of m
+list cost month of m by day

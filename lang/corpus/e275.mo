@@ -4,4 +4,4 @@ sum(walk.mins today) "minutes today" big
 daybars last 7 days, sum(walk.mins on it)
 "Last blood pressure" last(walk.sys) "/" last(walk.dia) head
 form walk, "Log walk"
-log walk
+list walk by day

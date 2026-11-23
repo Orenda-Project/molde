@@ -6,4 +6,4 @@ stat sum(study.mins week) / 60, "hours this week"
 daybars last 7 days, sum(study.mins on it) / 60
 quick study, mins, [30, 60, 90]
 form study
-log study
+list study by day

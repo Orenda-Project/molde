@@ -9,4 +9,4 @@ each player as p
     button "+1" tap add score player = p, pts = 1
 form player, "Add player"
 form score, "Add score"
-log score
+list score by day

@@ -4,4 +4,4 @@ table spend what text, amount money, category pick Food|Bills|Travel|Fun|Other =
 share spend week by category, sum(it.amount), it.key
 daybars last 7 days, sum(spend.amount on it)
 form spend
-log spend week
+list spend week by day

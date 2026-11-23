@@ -30,12 +30,12 @@ test('std daybars is a plot with axes, a bar and a day label per day', () => {
 });
 
 test('joining and number formatting', () => {
-  const a = run('app "F" calc slate\nstate r num = 120\nstate w num = 3\njoin(r, "/", w) fixed(2.5, 2) compact(81500) grouped(1234) plural(1, "day") plural(3, "day") monthshort(today) pow(2, 10)\n');
-  assert.deepEqual(texts(a), ['120/3 2.50 81.5k 1,234 1 day 3 days Nov 1024']);
+  const a = run('app "F" calc slate\nstate r num = 120\nstate w num = 3\njoin(r, "/", w) fixed(2.5, 2) plural(1, "day") plural(3, "day") monthname(today) pow(2, 10)\n');
+  assert.deepEqual(texts(a), ['120/3 2.50 1 day 3 days November 2026 1024']);
 });
 
 test('currency comes from the locale option; cents show 2 decimals; other years show the year', () => {
-  const a = run('app "M" coin mint\nstate m money = 1200\nstate c money = 2.5\nstate d date = today\nbutton "old" tap set d = addmonths(d, -12)\ntext m c d\n', { currency: 'Rs' });
+  const a = run('app "M" coin mint\nstate m money = 1200\nstate c money = 2.5\nstate d date = today\nbutton "old" tap set d = addmonths(d, -12)\nm c d\n', { currency: 'Rs' });
   assert.deepEqual(texts(a).slice(1), ['Rs 1200 Rs 2.50 Mon 23 Nov']);
   tapText(a, 'old');
   assert.ok(texts(a)[1].endsWith('Sun 23 Nov 2025'), texts(a)[1]);
@@ -80,14 +80,21 @@ test('editor API: fields() and setField(), one undo per field edit', () => {
   assert.equal(b.find(n => n.t === 'input').value, '');
 });
 
-test('an edit that changes a setting\'s starting value sets it ("count to 100"); a restore does not', () => {
-  const v1 = 'app "T" beads mint\nsetting target num = 33 "Count to"\ntext target\n';
+test('setting defaults: a new default never overwrites a saved value; `set` does, and revert undoes it', () => {
+  const v1 = 'app "T" beads mint\nsetting target num = 33 "Count to"\ntarget\n';
   const a = run(v1);
   a.setField('target', null, 50);
-  assert.equal(a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\ntext target\n').verdict, 'safe');
+  assert.equal(a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\ntarget\n').verdict, 'safe');
+  assert.deepEqual(texts(a), ['50']); // the user's 50 wins
+  const r = a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\ntarget\n');
+  assert.ok(r.changes.some(c => /sets the saved value of setting target to 100/.test(c)));
   assert.deepEqual(texts(a), ['100']);
-  a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\n"Target" target\n');
-  assert.deepEqual(texts(a), ['Target 100']);
+  a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\n"Target" target\n'); // the same set again: no new write
+  a.setField('target', null, 70);
+  a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\n"T" target\n');
+  assert.deepEqual(texts(a), ['T 70']);
+  a.revert(); a.revert();
+  assert.deepEqual(texts(a), ['70']); // undoing the `set` edit gives back the value from before it... the user's later 70 stays in data
 });
 
 test('nth row, a random row in an action, shuffle keeps a stable order', () => {
@@ -101,7 +108,7 @@ test('nth row, a random row in an action, shuffle keeps a stable order', () => {
 });
 
 test('after DUR runs an action later', () => {
-  const a = run('app "D" timer ink\nstate flash bool = no\ntext flash\nbutton "go" tap set flash = yes then after 2s set flash = no\n');
+  const a = run('app "D" timer ink\nstate flash bool = no\nflash\nbutton "go" tap set flash = yes then after 2s set flash = no\n');
   tapText(a, 'go');
   assert.equal(texts(a)[0], 'Yes');
   a.tick(1000);
@@ -122,4 +129,22 @@ test('reminders skip times in the past; local time option', () => {
   assert.equal(a.reminders().length, 1);
   const b = run('app "Z" clock ink\nhour(now)\n', { now: '2026-11-23T22:00:00Z', tz: 300 });
   assert.deepEqual(texts(b), ['3']); // 22:00 UTC is 03:00 the next day at +5:00
+});
+
+test('round 4: app-bar row, accessible names, word ticks on y, typed text parts', () => {
+  const a = run('app "x" list mint\ntable spend amount money\nstate n num = 2026\nrow bar\n  "Spending" head\n  button "Add" tap add spend amount = 12.5\n"Year" year(today) "total" sum(spend.amount) n today\ndraw 10, 10 alt "A red square"\n  rect 0, 0, 10, 10 fill red\nplot 0..2, 0..10 axes\n  rect 0, 0, 1, 5\n  tick 0.5, "Mon"\n  ytick 5, "half"\n', { now: '2026-11-23T10:00:00Z' });
+  const bar = a.find(n => n.bar);
+  assert.deepEqual([bar.t, bar.children.map(c => c.t)], ['row', ['text', 'button']]);
+  assert.equal(a.find(n => n.t === 'draw').a11y, 'A red square');
+  assert.equal(a.find(n => n.t === 'button').a11y, 'Add');
+  assert.deepEqual(a.find(n => n.t === 'plot').ticks.y, [{ v: 5, label: 'half' }]);
+  const parts = a.find(n => n.parts).parts.map(p => [p.t, p.v]);
+  assert.deepEqual(parts, [['text', 'Year'], ['year', 2026], ['text', 'total'], ['money', 0], ['num', 2026], ['date', '2026-11-23']]);
+  assert.equal(check('app "x"\nstack bar\n  "a"\n').errors[0].code, 'E_CONTEXT');
+});
+
+test('monthly on 31 fires on the last day of a shorter month', () => {
+  const r = m => load('app "x"\nremind "Rent" monthly on 31 at 9:00\n', { now: m }).reminders()[0].next;
+  assert.equal(r('2026-11-23T10:00:00Z'), '2026-11-30T09:00:00.000Z');
+  assert.equal(r('2027-02-10T10:00:00Z'), '2027-02-28T09:00:00.000Z');
 });

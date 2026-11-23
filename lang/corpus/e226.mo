@@ -5,5 +5,5 @@ let used = last(reading.units month) - first(reading.units month)
 "Used this month" used "units" big
 "Estimated bill" used * rate faint
 form reading, "Add meter reading"
-log reading
+list reading by day
 "The app cannot read your K-Electric account; enter the meter reading by hand." faint

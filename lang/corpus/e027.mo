@@ -7,4 +7,4 @@ each ride sort day desc
       it.stop - it.start "km" faint
     "Net" it.earn - it.fuel bold color if(it.earn - it.fuel >= 0, good, bad)
 form ride, "Add day"
-"Net this month" sumof(ride month, it.earn - it.fuel) head
+"Net this month" sum(ride month, it.earn - it.fuel) head

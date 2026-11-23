@@ -6,4 +6,4 @@ each visit where next >= today sort next top 1
     "Next appointment" faint
     it.next it.doctor bold
 form visit
-log visit
+list visit by day

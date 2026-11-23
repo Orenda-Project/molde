@@ -4,7 +4,7 @@ table finish book ref book, rating num 1..5
 "Finished this year" count(finish year) big
 "Average rating" round(avg(finish.rating year) * 10) / 10 head
 "Pages read per month" head
-bars 0..5, sumof(finish month of addmonths(today, -it), it.book.pages), monthname(addmonths(today, -it))
+bars 0..5, sum(finish month of addmonths(today, -it), it.book.pages), monthname(addmonths(today, -it))
 each book sort title
   row card
     stack grow

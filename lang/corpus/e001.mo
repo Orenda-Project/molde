@@ -8,4 +8,4 @@ goal sum(read.mins today), goal, "minutes tonight", "min"
 quick read, mins, [10, 20, 30]
 form read
 daybars last 7 days, sum(read.mins on it)
-log read
+list read by day

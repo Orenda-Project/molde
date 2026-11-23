@@ -9,5 +9,5 @@ row gap 2
 form income, "Add income"
 form fuel, "Add petrol"
 daybars last 7 days, sum(income.amount on it) - sum(fuel.amount on it)
-log income
-log fuel
+list income by day
+list fuel by day

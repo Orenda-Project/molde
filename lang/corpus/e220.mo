@@ -14,10 +14,10 @@ each options expense.category as k
   let lim = if(k = Rent, lim_rent, if(k = Groceries, lim_groceries, if(k = School, lim_school, if(k = Transport, lim_transport, if(k = Medicine, lim_medicine, lim_eid)))))
   stack gap 1
     row
-      text k bold grow color if(spent > lim, bad, ink)
-      text spent "of" lim
+      k bold grow color if(spent > lim, bad, ink)
+      spent "of" lim
     draw 100, 4
       rect 0, 0, 100, 4 fill soft radius 2
       rect 0, 0, 100 * clamp(spent / lim, 0, 1), 4 fill if(spent > lim, bad, accent) radius 2
 form expense
-log expense month of m
+list expense month of m by day

@@ -4,7 +4,7 @@ setting monthly money = 5000 "Monthly deposit"
 table deposit amount money
 let saved = sum(deposit.amount)
 let left = if(saved < price, price - saved, 0)
-text saved "of" price big
+saved "of" price big
 "Remaining" left head
 draw 100, 6
   rect 0, 0, 100, 6 fill soft radius 3
@@ -12,4 +12,4 @@ draw 100, 6
 "At this pace you reach the goal on" addmonths(today, 0 - floor(0 - left / monthly)) faint
 button "Add monthly deposit" tap add deposit amount = monthly
 form deposit
-log deposit
+list deposit by day

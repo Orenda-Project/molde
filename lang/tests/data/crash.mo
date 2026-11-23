@@ -1,7 +1,7 @@
 app "Quiz" star plum
 table item question text, a a text, b text, c text, right pick A|B|C
 table answer item ref item, chose pick A|B|C
-let score = countof(answer, it.chose = it.item.right)
+let score = count(answer, it.chose = it.item.right)
 text score "of" count(answer) "right" big
 each item as x
   if count(x.answer) = 0

@@ -36,7 +36,7 @@ export const CASES = [
   ['else without if', A + 'else\n  text "a"\n', 'E_CONTEXT', 2],
   ['table inside a row', A + 'row\n  table t a text\n', 'E_CONTEXT', 3],
   ['index outside each', A + 'text index\n', 'E_CONTEXT', 2],
-  ['missing component value', A + 'ring 3\n', 'E_ARGS', 2],
+  ['missing component value', A + 'goal 3\n', 'E_ARGS', 2],
   ['too many component values', A + 'stat 1, "a", 3\n', 'E_ARGS', 2],
   ['formula where a table is needed', A + 'form 3 + 4\n', 'E_KIND', 2],
   ['unknown component', A + 'chart 3\n', 'E_UNKNOWN_COMPONENT', 2],
@@ -54,7 +54,7 @@ export const CASES = [
   ['go to an unknown screen', A + 'button "b" tap go stats\n', 'E_UNKNOWN_NAME', 2],
   ['toggle a number', A + 'state v num = 1\ntoggle v\n', 'E_TYPE', 3],
   ['image of text', A + 'table t n text\neach t\n  image it.n\n', 'E_TYPE', 4],
-  ['countof with a number', A + 'table t n num\ntext countof(t, it.n)\n', 'E_TYPE', 3],
+  ['countof with a number', A + 'table t n num\ntext count(t, it.n)\n', 'E_TYPE', 3],
   ['sort by unknown name', A + 'table t n num\neach t sort colour\n  text it\n', 'E_UNKNOWN_NAME', 3],
   ['bad add value type', A + 'table t n num\nbutton "b" tap add t n = "a"\n', 'E_TYPE', 3],
 ];

@@ -3,5 +3,5 @@ table spend what text, amount money, category pick Food|Bills|Travel|Fun|Health|
 "Spent this month" sum(spend.amount month) big
 share spend month by category, sum(it.amount), it.key
 form spend
-log spend
+list spend by day
 "Connecting to a bank is not possible here; add spending by hand." faint

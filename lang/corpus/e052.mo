@@ -9,6 +9,6 @@ row gap 2 align center
     circle 20, 60, 11 fill if(s <= limit and s > limit * 0.8, warn, soft)
     circle 20, 100, 11 fill if(s <= limit * 0.8, good, soft)
   stack gap 1
-    text s big
+    s big
     if(s > limit, "Over your limit", "Under your limit") "of" limit head
 form spend, "Add spending"

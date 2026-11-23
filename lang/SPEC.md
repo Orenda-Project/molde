@@ -51,7 +51,7 @@ Line by line: the app is called Water with the `drop` icon and the `ocean` theme
 | time of day | `H:MM` or `HH:MM`, 24 hours | `8:00`, `21:30` |
 | duration | whole number + `s`, `m`, `h` or `d` | `90s`, `25m`, `8h`, `3d` |
 | yes/no | `yes`, `no` | |
-| dates | `today` (a date), `now` (date and time) | |
+| dates | year-month-day; `today` (a date), `now` (date and time) | `2026-11-30`, `today` |
 | option value | the option word as declared, bare | `Food`, `Eating_out` |
 | colour | a theme role, a named colour or `hue(N)` (section 8.2) | `accent`, `red`, `hue(200)` |
 
@@ -69,6 +69,10 @@ Line by line: the app is called Water with the `drop` icon and the `ocean` theme
 | `big`, `head`, `faint` | `size huge bold`, `size large bold`, `size small color muted` |
 | `where kind = Food` (option values bare) | `where kind = "Food"` |
 | `pick Eating_out\|Home` (an underscore shows as a space) | `pick "Eating out"\|Home` |
+| `tiny` `small` `large` `huge` | `size tiny` ... |
+| `sum(t, it.a * it.b)`, `count(habit, streak(it.check) > 3)`, `max(src, f)`, `min(src, f)` | `sumof(...)`, `countof(...)`, `maxof(...)`, `minof(...)` |
+| `goal value, target` | `ring value, target` (one way to show progress toward a target) |
+| `list t by day` | `log t` |
 
 ## 4. Data
 
@@ -99,20 +103,20 @@ A table holds rows the user adds. A field is `name type[?] [range] [= default] [
 
 **Every row also has `at`** (when it was added; type `when`, editable) and `id`. Time windows (section 5.3) look at `at`. A table with no fields (`table zikr`) is a plain log of moments.
 
-`was` is for renaming without losing data (section 14): `table drinks was drink`, `amount num was ml`, `pick Meals was Food|Bills`. A `was` that has already been applied is harmless and may stay.
+`was` is for renaming without losing data (section 14): `table drinks was drink`, `amount num was ml`, `pick Meals was Food|Bills`. It acts **once, in the edit that writes it**: `X was Y` gives the values the previous program calls `Y` the name `X` (all at once, so `b was a, a was b` swaps). A `Y` the previous program does not have is harmless (nothing happens). The app then stores the program **without** its `was` words, and that stored text is what you see and edit next, so writing the same swap again swaps back.
 
 ### 4.2 Settings, state and named formulas
 
 ```
-setting NAME TYPE [range] [= default] ["Label"]     # a value the user can change; listed in the app's settings
-state NAME TYPE [= formula] [keep]                  # a value the screen holds (selected tab, running timer, search text)
+setting NAME TYPE [range] [= default] ["Label"] [was OLD] [set]   # a value the user can change; listed in the app's settings
+state NAME TYPE [was OLD] [= formula] [keep]        # a value the screen holds (selected tab, running timer, search text); was renames it keeping its value
 state NAME new TABLE [keep]                         # a new row being filled in (a form); keep keeps values after saving
 let NAME = formula                                  # a name for a formula; read-only, always up to date
 let NAME(value kind, ...) = formula                 # a formula with values, used as NAME(...) anywhere below
                                                     # a value can be a row: let worth(r item) = r.qty * r.price
 ```
 
-`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. An edit that changes a setting's `= default` also sets the stored value (the user asked for it in the chat); otherwise a value the user set is kept. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
+`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. A setting's `= default` only fills it when nothing is stored; a value the user saved always wins. An edit that must change the saved value says so with `set` at the end of the line (`setting target num = 100 set`); the change is listed and undoable. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = count(...)` then `win(X)`.
 
 ## 5. Formulas
 
@@ -160,10 +164,10 @@ gap(T ...)      average days between the days that have rows (empty with fewer t
 ### 5.4 Folds (over any source, with `it` = each item)
 
 ```
-sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   countof(SOURCE, condition)
+sum(SOURCE, formula)   max(SOURCE, formula)   min(SOURCE, formula)   count(SOURCE, condition)
 ```
 
-`sumof(sets today, it.kg * it.reps)`, `maxof(habit, streak(it.check))`, `countof(days last 14 days, count(entry on it) > 0)`. Sources are listed in section 7.1.
+`sum(sets today, it.kg * it.reps)`, `max(habit, streak(it.check))`, `count(days last 14 days, count(entry on it) > 0)`. With one value these are the aggregates of section 5.2; with a source and a formula they work item by item (`it` is the item). `min(a, b)` and `max(a, b)` of two values are the smaller and the larger. Sources are listed in section 7.1.
 
 ### 5.5 Functions
 
@@ -184,9 +188,8 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 | `nth(TABLE ..., n)` | the nth row (from 1) in the query's order (`nth(card sort front, 1)`) |
 | `pow(x, y)` | x to the power y |
 | `join(a, b, ...)` | the parts joined with no spaces: `join(runs, "/", wickets)` |
-| `fixed(x, n)`, `compact(x)`, `grouped(x)` | x with n decimals; `81.5k`, `1.2M`; `1,234` with separators |
+| `fixed(x, n)` | x with n decimals (otherwise the phone formats numbers: separators, currency, short forms) |
 | `plural(n, "day")` | `1 day`, `3 days` |
-| `monthshort(d)` | `"Nov"` |
 | `words(formula)` | the formula read out in plain English (used for default captions) |
 
 A function's result can be followed by a field: `last(item).name`, `random(card).front`.
@@ -208,7 +211,7 @@ A function's result can be followed by a field: `last(item).name`, `random(card)
 
 | Line | What it shows |
 |---|---|
-| `"text" formula "text" ...` | a text line: parts are texts in quotes or formulas, joined by one space (no space before a text that starts with `, . ; : ! ? % ) /`, none after one ending in `( / #`). A line that starts with a quote, a number, a function, a bracket or a dotted name (`it.name`) is a text line |
+| `"text" formula "text" ...` | a text line: parts are texts in quotes or formulas, joined by one space (no space before a text that starts with `, . ; : ! ? % ) /`, none after one ending in `( / #`). A line that starts with a quote, a number, a function, a bracket or a name is a text line (`total big`, `it faint`, `it.name grow`), **unless the name is a component** (std or your own `def`): `list card` calls `list` with the table `card`. To show a value whose name is a component, write `text NAME` |
 | `text name ...` | the same, for a line that starts with a bare name |
 | `button PART ... tap ACTION` | a button (a `tap` is required) |
 | `icon NAME` | an icon by name (section 8.4), or a formula giving a name |
@@ -216,7 +219,7 @@ A function's result can be followed by a field: `last(item).name`, `random(card)
 | `space [N]`, `divider` | empty space; a thin line |
 | `field TARGET ["Label"]` | an input for a setting, a state, a field of a new row (`d.note`) or a field of a row (`it.qty`). `field d` (a whole new row) shows one input per field |
 | `toggle TARGET` | a tick box for a yes/no setting, state or row field |
-| `toggle TABLE [window] [where field = value ...]` | a tick box that is on when the table has a row in the window (default today); tapping adds or removes that row. Inside `each`, `toggle it.check` links the new row to `it`. `where` values are copied into the new row |
+| `toggle TABLE [window] [where field = value ...]` | a tick box that is on when the table has a row in the window (default today); tapping adds or removes that row. With `all` the mark does not depend on the day (a favourite: `toggle it.fav all`); tapping it off removes every matching row. Inside `each`, `toggle it.check` links the new row to `it`. `where` values are copied into the new row |
 | `choice TARGET` | tap chips for a `pick`, `ref` or yes/no value |
 | `slider TARGET LO..HI` | a slider for a number |
 
@@ -226,10 +229,11 @@ A function's result can be followed by a field: `last(item).name`, `random(card)
 plot X0..X1, Y0..Y1 [axes] [gridlines]   # a chart frame in data units (y grows upward); the ranges may be formulas
   rect X, Y, W, H                        # in data units: rect index + 0.15, 0, 0.7, value is a bar standing on the axis
   poly                                   # pt X, Y in data units: a line chart
-  tick X, PART ...                       # a label under the x axis at X (y labels come from the range)
+  tick X, PART ...                       # a label under the x axis at X
+  ytick Y, PART ...                      # a label beside the y axis at Y (without any, y labels come from the range)
 ```
 
-`axes` draws both axes with labels; `gridlines` draws lines at the y labels. The std `daybars`, `bars` and `trend` are plots.
+`axes` draws both axes with labels; `gridlines` draws lines at the y labels. Inside a plot, rows of a table come oldest first (time left to right) unless you sort them. The std `daybars`, `bars` and `trend` are plots.
 
 
 ```
@@ -284,7 +288,7 @@ else
 | Modifier | Effect |
 |---|---|
 | `big` / `head` / `faint` | text roles: the main number; a heading; small quiet text |
-| `size tiny\|small\|large\|huge`, `bold` | text size and weight |
+| `tiny` / `small` / `large` / `huge`, `bold` | text size and weight |
 | `color C`, `fill C`, `stroke C` | text colour; background or shape fill; outline |
 | `thick N`, `radius N`, `opacity N` | line width; corner radius; 0 to 1 |
 | `width N`, `height N` | size in screen points; `grow` takes the free space in a row |
@@ -293,6 +297,8 @@ else
 | `card` | a raised surface |
 | `ratio N`, `middle`, `full` | keep width / height at N (`ratio 1` makes square cells); centre the block in the free space; take the full screen height |
 | `tap ACTION`, `swipe ACTION` | what a tap or a sideways swipe does |
+| `alt "words"` | what a screen reader says for this line (a drawing, an icon, a chart); text lines and buttons already say their text |
+| `bar` | on a `row`: the app bar (the title and the main action), drawn at the top by the phone |
 
 ### 8.2 Colours
 
@@ -323,7 +329,7 @@ Theme roles `accent ink muted soft good warn bad bg surface edge`; named colours
 | `go SCREEN` | opens a screen |
 | `notify PART ...` | shows a notice (and a phone notification if the app is closed) |
 | `remind "Text" in DURATION` | schedules one reminder |
-| `after DURATION ACTION` | does the action later, while the app is open (`tap set flash = yes then after 2s set flash = no`) |
+| `after DURATION ACTION` | does the action later, while the app is open (`tap set flash = yes then after 2s set flash = no`); in a chain each `after` counts from the previous step and the actions after it wait too |
 
 Values written to a field are kept inside its range (a stock count cannot go below `0..`).
 
@@ -335,7 +341,7 @@ when condition ACTION ...                    # runs once each time the condition
 remind "Text" at 8:00, 21:00 [on mon wed fri] [if condition]
 remind "Text" at TABLE.field                 # one reminder per row: daily at a time field, once on a date field (9:00)
 remind "Text" at TABLE.field - 3d [at 9:00]  # before (or + after) a date field, at a time
-remind "Text" monthly on 1, 15 at 10:00      # every month on those days (31 means the last day)
+remind "Text" monthly on 1, 15 at 10:00      # every month on those days (a day past the end of a month, like 31 in November, fires on its last day)
 remind "Text" every 2h [from 9:00 to 21:00] [if condition]
 ```
 
@@ -371,14 +377,13 @@ Written in MoldeScript in `lang/std/*.mo`; read those files to see exactly what 
 |---|---|
 | `stat value [, caption]` | a big number with a caption (default: the value read out, for example "total ml of drink today") |
 | `goal value, target [, caption, suffix]` | "value of target" and a progress bar (turns `warn` above the target) |
-| `ring value, target [, caption]` | a progress ring with the value in the middle |
 | `daybars WINDOW, value` | a bar per day of the window (`it` = the day) |
 | `bars SOURCE, value [, key]` | a bar per item of any source (`it` = the item) |
 | `trend SOURCE, value` | a line through the items (`it` = the item) |
 | `heat WINDOW, value [, peak]` | a 7-column heat map of the days (`it` = the day); darker as value nears peak |
 | `share SOURCE, value, key` | labelled bars comparing items: `share spend month by category, sum(it.amount), it.key` |
 | `list SOURCE` | rows (tap to edit, swipe to remove), with an empty message |
-| `log SOURCE` | rows grouped by day (the source may not use `by`, `sort` or `top`) |
+| `list SOURCE by day` | the same rows grouped by day, newest day first (the source may not use `sort` or `top`) |
 | `form TABLE [, button text]` | inputs for every field and a save button; keeps the last values |
 | `quick TABLE, field, [values]` | one-tap buttons that add a row with that field set |
 | `timer DURATION [, caption, actions when done]` | a countdown with start, pause and reset; default end action `notify "Time is up"` |
@@ -415,10 +420,13 @@ To change an app, the model writes the whole new program. `node lang/mo.mjs diff
 
 - a new table or field is **safe** (old rows get the default or stay empty; a new required field without a default gets a note);
 - a table, field or setting that disappears is **hidden, never dropped**; adding it back with the same (or a wider) type shows the old data again; adding it back with another type is **refused**;
-- a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename";
+- a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. It acts once; the stored program drops the `was` words. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename"; a `was` naming something the previous program does not have changes nothing (said in a note);
 - a stored type may only **widen**: `text` to `long`, `pick` to `text`/`long`, `num` to/from `money`, `date` to `when`; a `ref` keeps its target table (a renamed target is followed);
-- a `pick` option that disappears stays available: rows keep it and it stays selectable and filterable;
-- a narrower range keeps old values that fall outside it.
+- a `pick` option that disappears stays on the rows that have it (they keep showing it); it is no longer offered for new rows and formulas cannot name it (write `NEW was OLD` to rename it). The verdict is a **warning**; so is a table name used again after it was removed;
+- options of a `setting` or `state` pick follow the same rules; renaming an option onto the name of another option, even a dropped one, is **refused** (list the dropped one again without `was` to bring it back);
+- restoring a backup brings back that whole app: its data and its program;
+- a narrower range keeps old values that fall outside it;
+- going to any recorded version (chat Undo, backward or forward) is an explicit restore and is never refused: it uses that version's text and names as recorded; data entered since stays.
 
 There is no statement that deletes data.
 
@@ -484,7 +492,7 @@ And a formula with values (tic-tac-toe's win check, written once):
 app "Tic tac toe" board ink
 table move game num, cell num 1..9, mark pick X|O
 setting cur num = 1 "Game"
-let win(m text) = countof([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
+let win(m text) = count([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
 if win("X")
   "X wins!" big
 ```

@@ -5,4 +5,4 @@ goal sum(food.sugar today), limit, "sugar today", "g"
 form food, "Add food"
 "Sugar by day" head
 daybars last 7 days, sum(food.sugar on it)
-log food
+list food by day

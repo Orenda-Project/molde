@@ -10,7 +10,7 @@ screen shopping "Shopping" cart
   form shop, "Add item"
 screen chores "Chores" check
   each options chore.day as d
-    text d bold
+    d bold
     each chore where day = d as c
       row card
         toggle c.done

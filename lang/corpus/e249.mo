@@ -7,4 +7,4 @@ when cyc > 0 and since(period) >= cyc - 3 notify "Period expected in about 3 day
 button "Period started today" tap add period
 form period, "Add past period"
 calendar period
-log period
+list period by day

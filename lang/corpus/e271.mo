@@ -5,4 +5,4 @@ sum(session.mins week) "minutes this week" faint
 daybars last 7 days, sum(session.mins on it)
 share session week by subject, sum(it.mins), it.key
 form session, "Log study"
-log session
+list session by day

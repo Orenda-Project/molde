@@ -4,7 +4,7 @@ table lift exercise ref plan, kg num 0..
 setting start date = today "Programme start"
 "Week" clamp(floor((today - start) / 7) + 1, 1, 12) "of 12" head
 each options plan.day as dd
-  text dd head
+  dd head
   each plan where day = dd as p
     state w num = 0
     stack card gap 1

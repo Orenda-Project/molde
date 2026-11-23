@@ -2,9 +2,11 @@
 // MoldeScript v0 command line.
 //   node lang/mo.mjs check FILE...            errors (code, line, fix) or OK; exit 1 on errors
 //   node lang/mo.mjs format FILE [--write]    canonical text (or rewrite the file)
+//   node lang/mo.mjs strip FILE [--write]     the stored form: canonical with every `was OLD` removed
 //   node lang/mo.mjs describe FILE            the plain-English plan
 //   node lang/mo.mjs diff V1 ... VN NEW        verdict against the whole history (oldest first); exit 1 if refused
 //   node lang/mo.mjs diff --history LIST NEW   the same, with the earlier files listed one per line in LIST
+//   add --restore to go back to an earlier version (never refused; the reverse of later option renames is applied)
 //   node lang/mo.mjs migrate FILE... [--write] rewrite older text into the current spelling
 //   node lang/mo.mjs expand FILE              the program with every component expanded to level 1
 //   node lang/mo.mjs tokens [FILE...]         token counts (runs lang/tokens.py)
@@ -14,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { check } from './check.mjs';
-import { format } from './format.mjs';
+import { format, strip } from './format.mjs';
 import { describe } from './describe.mjs';
 import { diff, diffText } from './diff.mjs';
 
@@ -56,6 +58,9 @@ if (isCli) switch (cmd) {
     process.exit(bad ? 1 : 0);
     break;
   }
+  case 'strip': // the stored form: canonical, every `was OLD` removed (what the model sees as program_before)
+    for (const f of files) { const t = strip(read(f)); if (args.includes('--write')) writeFileSync(f, t); else process.stdout.write(t); }
+    break;
   case 'format': {
     for (const f of files) {
       const t = format(read(f));
@@ -75,7 +80,7 @@ if (isCli) switch (cmd) {
       next = files.filter(f => f !== listFile).pop();
     } else { hist = files.slice(0, -1); next = files[files.length - 1]; }
     if (!next || !hist.length) { console.error('usage: mo.mjs diff OLDEST ... PREVIOUS NEW  or  mo.mjs diff --history LIST NEW'); process.exit(2); }
-    const r = diff(hist.map(read), read(next));
+    const r = diff(hist.map(read), read(next), { restore: args.includes('--restore') });
     console.log(`history used (oldest first): ${hist.map((h, i) => `${h}${r.historyUsed[i] ? '' : ' (was refused, skipped)'}`).join(', ')}`);
     console.log(`new program: ${next}`);
     process.stdout.write(diffText(r));
@@ -104,6 +109,6 @@ if (isCli) switch (cmd) {
     break;
   }
   default:
-    console.log('usage: node lang/mo.mjs check|format|migrate|describe|diff|expand|tree|tokens FILE...');
+    console.log('usage: node lang/mo.mjs check|format|strip|migrate|describe|diff|expand|tree|tokens FILE...');
     process.exit(cmd ? 2 : 0);
 }

@@ -10,7 +10,7 @@ state sub ref subject
 screen plan "Timetable" calendar
   each options lesson.day as dd
     stack gap 1
-      text dd bold
+      dd bold
       each lesson where day = dd sort start as l
         row card tap edit l swipe remove l
           l.start l.subject.name grow

@@ -44,7 +44,7 @@ test('time parts, durations, date setting', () => {
 
 test('random only inside actions, seeded', () => {
   assert.equal(check('app "x"\ntext random(6)\n').errors[0].code, 'E_CONTEXT');
-  const a = run('app "Dice" dice plum\nstate roll num = 0\ntext roll big\nbutton "Roll" tap set roll = random(6)\n', { seed: 3 });
+  const a = run('app "Dice" dice plum\nstate roll num = 0\nroll big\nbutton "Roll" tap set roll = random(6)\n', { seed: 3 });
   a.dispatch(a.find(n => n.t === 'button').id, 'tap');
   const v = +texts(a)[0];
   assert.ok(v >= 1 && v <= 6);

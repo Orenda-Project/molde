@@ -18,12 +18,12 @@ def timer secs dur, caption text = "Timer", done act = notify "Time is up"
 def calendar t src, day date = today
   grid 7 gap 1
     each ["M", "T", "W", "T", "F", "S", "S"] as w
-      text w size tiny color muted align center
+      text w tiny color muted align center
     each 1..weekday(day - monthday(day) + 1) - 1 as n
       box
     each days month of day as d
       box height 32 radius 6 fill if(count(t on d) > 0, accent, soft) tap toggle t on d
-        text monthday(d) size small align center color if(count(t on d) > 0, bg, ink)
+        text monthday(d) small align center color if(count(t on d) > 0, bg, ink)
 
 # describe: arrows that move {m} back and forward one month
 def monthnav m name

@@ -11,4 +11,4 @@ daybars last 7 days, sum(spend.amount on it)
 form spend, "Add spend"
 goal sum(saved.amount), saved_goal, "saved so far"
 form saved, "Put aside"
-log spend
+list spend by day

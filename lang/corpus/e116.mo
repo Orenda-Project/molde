@@ -3,8 +3,8 @@ table move game num, cell num 1..9, mark pick X|O
 setting cur num = 1 "Game"
 let n = count(move where game = cur)
 let turn = if(n % 2 = 0, "X", "O")
-let xw = countof([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = X and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
-let ow = countof([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = O and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
+let xw = count([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = X and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
+let ow = count([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = O and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
 if xw or ow
   if(xw, "X", "O") "wins!" big
 else

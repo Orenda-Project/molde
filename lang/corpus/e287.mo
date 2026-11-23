@@ -10,4 +10,4 @@ if(odo >= due_km - 500, "Service is due very soon. Km left:", "Km to next servic
 when odo >= due_km - 500 notify "Service due within 500 km"
 button "Update odometer" tap edit odo
 form service, "Log service"
-log service
+list service by day

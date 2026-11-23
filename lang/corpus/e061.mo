@@ -2,7 +2,7 @@ app "Wholesale" package slate
 table supplier name text, phone text?
 table invoice supplier ref supplier, inv text, amount money, due date, paid bool
 table stock item text, qty num 0.., cost money
-"Stock value" sumof(stock, it.qty * it.cost) big
+"Stock value" sum(stock, it.qty * it.cost) big
 "Unpaid invoices" sum(invoice.amount where paid = no) head
 each invoice where paid = no sort due
   row card tap edit it

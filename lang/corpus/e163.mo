@@ -5,8 +5,8 @@ grid 4 gap 1
   each days year
     if monthday(it) = 1
       stack radius 8 pad 1 gap 0 align center fill if(sum(saving.amount month of it) > 0, accent, soft) opacity if(sum(saving.amount month of it) > 0, clamp(sum(saving.amount month of it) / best, 0.25, 1), 1)
-        dayname(it) size tiny
-        monthname(it) size tiny
-        sum(saving.amount month of it) bold size small
+        dayname(it) tiny
+        monthname(it) tiny
+        sum(saving.amount month of it) bold small
 quick saving, amount, [500, 1000, 5000]
 form saving

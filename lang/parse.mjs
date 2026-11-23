@@ -13,11 +13,21 @@ const SHAPES = { rect: ['X', 'Y', 'W', 'H'], line: ['X1', 'Y1', 'X2', 'Y2'], cir
 const GR = loadGrammar();
 const altNames = r => (GR.map.get(r).items || [GR.map.get(r)]).map(n => n.name);
 // statements other than a component call, and the words that start them
-export const NONCALL = [...altNames('leaf-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')];
+export const NONCALL = [...altNames('leaf-stmt').filter(n => n !== 'itext-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')]; // and not a text line
 export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
 import { lex, join, LexError } from './lex.mjs';
 
 export const MAX_DEPTH = 8;
+
+// Parsing one line is the expensive part; the same line text always parses the same way, so
+// results are cached (decoding re-checks a growing program line by line).
+const LINE_CACHE = new Map();
+function parseCached(canon, starts) {
+  const key = starts.join(',') + '\u0000' + canon;
+  let r = LINE_CACHE.get(key);
+  if (!r) { r = parseText(canon, starts); if (LINE_CACHE.size > 20000) LINE_CACHE.clear(); LINE_CACHE.set(key, r); }
+  return r;
+}
 export const BLOCK = new Set(['def', 'screen', 'each', 'if', 'else', 'box', 'draw', 'plot', 'poly', 'call']);
 
 export class MoError {
@@ -57,7 +67,28 @@ export function asTextLine(text) {
   return r.tree ? r.tree : null;
 }
 
+// Slips from other languages, with the MoldeScript way to write them.
+export function slip(text, hardOnly = false) {
+  let m;
+  if (/^else if\b/.test(text)) return ['"else if" is not one line here: else stands alone.', 'write else on its own line and put the if under it, two spaces in (or write a second if with the opposite condition).'];
+  if (/&&/.test(text)) return ['MoldeScript writes "and", not &&.', 'write: a > 1 and b < 9.'];
+  if (/\|\|/.test(text)) return ['MoldeScript writes "or", not ||.', 'write: a = 1 or b = 2.'];
+  if (/==/.test(text)) return ['= already compares; there is no ==.', 'write a single =, for example if count(t) = 3.'];
+  if (/!(?!=)/.test(text)) return ['MoldeScript writes "not", not !.', 'write: not done, or a != b.'];
+  if ((m = text.match(/\bset ([a-z][a-z0-9_.]*) ?([-+*\/])= ?(.+?)$/))) return [`there is no ${m[2]}=.`, `write set ${m[1]} = ${m[1]} ${m[2]} ${m[3]}.`];
+  if ((m = text.match(/\b([a-z][a-z0-9_.]*) ?(\+\+|--)/))) return [`there is no ${m[2]}.`, `write set ${m[1]} = ${m[1]} ${m[2][0]} 1.`];
+  if ((m = text.match(/^for ([a-z][a-z0-9_]*) in (.+)$/))) return ['there is no for loop; each repeats its lines for every item.', `write each ${m[2]} as ${m[1]}.`];
+  if (/^(while|loop|repeat) /.test(text)) return [`there is no ${text.split(' ')[0]}; lines repeat with each, and actions repeat with every.`, 'write each SOURCE (a table, 1..n, days last 7 days) or every 1s if CONDITION ACTION.'];
+  if (hardOnly) return null; // the slips below can also be valid MoldeScript
+  if (/"[^"]*" \+ |\+ "[^"]*"/.test(text)) return ['texts are not joined with +.', 'write the parts side by side: "Total:" amount "rupees" (or join(a, b) to join without a space).'];
+  if (/\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b\d{4}\/\d{1,2}\/\d{1,2}\b/.test(text)) return ['a date is written year-month-day.', 'write 2026-11-30.'];
+  if (/^button\b/.test(text) && !/ tap /.test(text)) return ['a button needs tap and an action.', 'write button "Add" tap add drink ml = 250 (or set, toggle, go, remove ...).'];
+  return null;
+}
+
 function syntaxError(no, text, r) {
+  const sl = slip(text);
+  if (sl) return new MoError('E_SYNTAX', no, sl[0], sl[1]);
   const col = r.far;
   const near = text.slice(col).split(' ')[0] || '(end of line)';
   const E = (msg, hint, code = 'E_SYNTAX') => new MoError(code, no, msg, hint);
@@ -112,8 +143,17 @@ function syntaxError(no, text, r) {
   return E(`cannot read the line from "${near}" (column ${col + 1}).`, exp ? `expected ${exp}.` : 'check the statement form in SPEC.md.');
 }
 
-export function parse(src, { lib = false } = {}) {
+// the component names a program can call: the std library plus its own defs
+export function componentNames(src, extra) {
+  const c = new Set(STD_SIGS.keys());
+  for (const m of src.matchAll(/^\s*def ([a-z][a-z0-9_]*)/gm)) c.add(m[1]);
+  if (extra) for (const n of extra) c.add(n);
+  return c;
+}
+
+export function parse(src, { lib = false, comps = null } = {}) {
   const { lines, errors } = splitLines(src);
+  const COMPS = componentNames(src, comps);
   const prog = { kind: 'program', header: null, body: [], comments: [], errors };
   const stack = [{ node: prog, depth: -1, block: true }];
   let first = true;
@@ -129,15 +169,21 @@ export function parse(src, { lib = false } = {}) {
   };
   for (const ln of lines) {
     if (ln.comment) { prog.comments.push(ln); continue; }
+    const hard = slip(ln.body.replace(/"(?:[^"\\]|\\.)*"/g, '""'), true); // never valid: else if, &&, ||, ==, +=, ++, for x in, while
+    if (hard) { errors.push(new MoError('E_SYNTAX', ln.no, hard[0], hard[1])); first = false; skip(ln); continue; }
     let canon;
     try { canon = join(lex(ln.body)); }
     catch (e) {
-      if (e instanceof LexError) { errors.push(new MoError('E_SYNTAX', ln.no, e.message + '.', 'remove or quote the character.')); first = false; skip(ln); continue; }
+      if (e instanceof LexError) { const sl = slip(ln.body); errors.push(sl ? new MoError('E_SYNTAX', ln.no, sl[0], sl[1]) : new MoError('E_SYNTAX', ln.no, e.message + '.', 'remove or quote the character.')); first = false; skip(ln); continue; }
       throw e;
     }
     ln.canon = canon;
     const starts = first ? [lib ? 'lib-first' : 'first-stmt'] : ['leaf-stmt', 'block-stmt'];
-    const r = parseText(canon, starts);
+    // a line that starts with a bare name: a component call when the name is a component, else a text line
+    const w0 = !first && canon.match(/^[a-z][a-z0-9_]*(?![a-z0-9_(])/);
+    let r = null;
+    if (w0) r = parseCached(canon, STMT_WORDS.has(w0[0]) ? NONCALL : [COMPS.has(w0[0]) ? 'call-stmt' : 'itext-stmt']);
+    if (!r || !r.tree) r = parseCached(canon, starts);
     if (!r.tree) {
       if (first && !/^(app|ask|lib)\b/.test(canon)) errors.push(new MoError('E_HEADER', ln.no, lib ? 'a library starts with lib "name".' : 'a program starts with app "Name" (or is a single ask line).', lib ? 'add lib "name" as line 1.' : 'add app "My app" as line 1.'));
       else errors.push(syntaxError(ln.no, canon, r));
@@ -146,9 +192,11 @@ export function parse(src, { lib = false } = {}) {
       continue;
     }
     const top = kids(r.tree)[0];
-    if (top && top.r === 'call-stmt' && STMT_WORDS.has(child(top, 'ident').v)) {
+    const lead = top && top.r === 'itext-stmt' && canon.match(/^[a-z][a-z0-9_]*(?![a-z0-9_(])/);
+    if ((top && top.r === 'call-stmt' && STMT_WORDS.has(child(top, 'ident').v)) || (lead && STMT_WORDS.has(lead[0]))) {
       // `table drink ml` is a broken table line, not a component called "table"
-      errors.push(syntaxError(ln.no, canon, parseText(canon, NONCALL)));
+      const rn = parseText(canon, NONCALL);
+      errors.push(syntaxError(ln.no, canon, rn.tree ? { far: 0, expected: [] } : rn));
       skip(ln);
       continue;
     }
@@ -210,7 +258,7 @@ const BUILD = {
     return { kind: 'ask', question: s[0], options: s.slice(1) };
   },
   'table-stmt': n => { const ids = children(n, 'ident'); return { kind: 'table', name: id(ids[0]), was: lits(n).includes('was') ? id(ids[1]) : null, label: child(n, 'string') ? str(child(n, 'string')) : null, fields: children(n, 'field').map(field) }; },
-  'setting-stmt': n => ({ kind: 'setting', ...field(child(n, 'field')) }),
+  'setting-stmt': n => ({ kind: 'setting', ...field(child(n, 'field')), force: lits(n).includes('set') }),
   'state-stmt': n => {
     const st = child(n, 'state-type');
     const o = { kind: 'state', name: id(child(n, 'ident')), type: null, draft: null, init: child(n, 'expr') ? expr(child(n, 'expr')) : child(n, 'word') ? { k: 'str', v: child(n, 'word').v, word: true } : null, keep: lits(n).includes('keep'), was: lits(n).includes('was') ? id(children(n, 'ident')[children(n, 'ident').length - 1]) : null };
@@ -247,7 +295,7 @@ const BUILD = {
   'when-stmt': n => ({ kind: 'when', cond: expr(child(n, 'expr')), actions: actions(child(n, 'actions')) }),
   'each-stmt': n => ({ kind: 'each', source: source(child(n, 'source')), as: child(n, 'ident') ? id(child(n, 'ident')) : null, empty: child(n, 'string') ? str(child(n, 'string')) : null }),
   'plot-stmt': n => { const r = children(n, 'range').map(x => children(x, 'sum-expr').map(expr)); return { kind: 'plot', x: r[0], y: r[1], mods: mods(n) }; },
-  'tick-stmt': n => ({ kind: 'tick', x: expr(child(n, 'expr')), parts: tparts(child(n, 'tparts')) }),
+  'tick-stmt': n => ({ kind: 'tick', axis: lits(n).includes('ytick') ? 'y' : 'x', x: expr(child(n, 'expr')), parts: tparts(child(n, 'tparts')) }),
   'if-stmt': n => ({ kind: 'if', cond: expr(child(n, 'expr')) }),
   'else-stmt': () => ({ kind: 'else' }),
   'box-stmt': n => ({ kind: 'box', box: lits(n)[0], cols: child(n, 'number') ? +child(n, 'number').v : null, mods: mods(n) }),
@@ -332,6 +380,7 @@ function lit(n) {
   if (k.r === 'snum') return { k: 'num', v: snum(k) };
   if (k.r === 'string') return { k: 'str', v: str(k) };
   if (k.r === 'time') return { k: 'time', v: k.v };
+  if (k.r === 'datelit') return { k: 'date', v: k.v };
   if (k.r === 'dur') return { k: 'dur', v: durSec(k.v) };
   if (k.r === 'word') return { k: 'word', v: k.v };
   throw new Error('bad literal');
@@ -341,9 +390,11 @@ function tparts(n) { return children(n, 'tpart').map(p => child(p, 'string') ? {
 
 function mods(n) {
   return children(n, 'mod').map(m => {
+    if (child(m, 'size')) return { m: 'size', v: lits(child(m, 'size'))[0] }; // tiny, small, large, huge
     const l = lits(m)[0];
     const o = { m: l };
-    if (l === 'size') o.v = lits(child(m, 'size'))[0];
+    if (l === 'alt') o.v = str(child(m, 'string'));
+    else if (l === 'bar') o.v = true;
     else if (l === 'align') o.v = lits(child(m, 'align'))[0];
     else if (['pad', 'gap', 'span'].includes(l)) o.v = +child(m, 'number').v;
     else if (['axes', 'gridlines', 'middle', 'full'].includes(l)) o.v = true;
@@ -432,6 +483,7 @@ function expr(n) {
       if (k.lit === '-') return { k: 'neg', a: expr(child(n, 'unary')) };
       if (k.lit === '(') return { k: 'paren', a: expr(child(n, 'expr')) };
       if (k.r === 'number') return { k: 'num', v: +k.v };
+      if (k.r === 'lead-ident') return { k: 'path', head: child(k, 'ident').v, parts: [] };
       if (k.r === 'ident' || k.lit === 'it') { const ids = children(n, 'ident').map(id); return k.lit === 'it' ? { k: 'path', head: 'it', parts: ids } : { k: 'path', head: ids[0], parts: ids.slice(1) }; }
       return func(k);
     }
@@ -459,15 +511,23 @@ function primary(n) {
   if (k.r === 'number') return { k: 'num', v: +k.v };
   if (k.r === 'string') return { k: 'str', v: str(k) };
   if (k.r === 'time') return { k: 'time', v: k.v };
+  if (k.r === 'datelit') return { k: 'date', v: k.v };
   if (k.r === 'dur') return { k: 'dur', v: durSec(k.v) };
   if (k.r === 'path') return path(k);
   if (k.r === 'func') { const f = func(k); const parts = children(n, 'ident').map(id); return parts.length ? { k: 'member', e: f, parts } : f; } // last(t).name
   throw new Error('bad primary');
 }
+const FOLD = { 'count(': 'countof', 'sum(': 'sumof', 'min(': 'minof', 'max(': 'maxof' };
 function func(n) {
   const f = only(n)[0];
   if (f.r === 'agg') return { k: 'agg', fn: lits(f)[0].slice(0, -1), q: query(child(n, 'query')) };
-  if (f.r === 'fold') return { k: 'fold', fn: lits(f)[0].slice(0, -1), src: source(child(n, 'source')), e: expr(child(n, 'expr')) };
+  if (f.r === 'fold') {
+    const o = { k: 'fold', fn: FOLD[lits(f)[0]], src: source(child(n, 'source')), e: expr(child(n, 'expr')) };
+    // min(a, b) / max(a, b) of two values reads the same as a fold over a table a: the checker decides by a's type
+    const q = o.src.k === 'query' && o.src.q;
+    if ((o.fn === 'minof' || o.fn === 'maxof') && q && !q.win && !q.where && !q.by && !q.sort && !q.top && !q.shuffle) o.pair = { k: 'fn', fn: o.fn.slice(0, 3), args: [q.path, o.e] };
+    return o;
+  }
   if (f.r === 'ident') return { k: 'ucall', name: f.v, args: children(n, 'expr').map(expr) };
   if (f.lit === 'due(' || f.lit === 'nth(') return { k: 'qfn', fn: f.lit.slice(0, -1), q: query(child(n, 'query')), e: expr(child(n, 'expr')) };
   if (f.lit === 'random(' && child(n, 'query')) return { k: 'qfn', fn: 'anyrow', q: query(child(n, 'query')) };

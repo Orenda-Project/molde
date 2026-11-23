@@ -10,4 +10,4 @@ if(profit >= 0, "Profit this month", "Loss this month") abs(profit) head color i
 daybars last 7 days, sum(sale.amount on it)
 form sale, "Add sale"
 form expense, "Add expense"
-log sale
+list sale by day

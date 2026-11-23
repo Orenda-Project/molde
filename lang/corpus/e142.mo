@@ -8,4 +8,4 @@ each child as c
     sum(c.reading.mins week) "min this week" bold
 form reading, "Log reading"
 form child, "Add child"
-log reading
+list reading by day

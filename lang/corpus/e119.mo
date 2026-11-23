@@ -1,8 +1,8 @@
 app "Tuition centre" school ocean
 table student name text, class text, fee money, discount money = 0
 table payment student ref student, amount money
-let unpaid = countof(student, count(it.payment month) = 0)
-text unpaid "students have not paid this month" head color if(unpaid > 0, warn, good)
+let unpaid = count(student, count(it.payment month) = 0)
+unpaid "students have not paid this month" head color if(unpaid > 0, warn, good)
 stat sum(payment.amount month), "collected this month"
 "Defaulters" head
 each student sort name as s

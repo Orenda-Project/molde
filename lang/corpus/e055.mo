@@ -3,7 +3,7 @@ table task name text, quad pick Urgent|Important|Both|Neither = Important
 grid 2 gap 1
   each options task.quad as b
     stack card gap 1
-      text b head
+      b head
       each task where quad = b
         row
           it.name grow
