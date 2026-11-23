@@ -267,9 +267,11 @@ test('28 pomodoro: the focus timer logs a session when it ends', () => {
 test('28 pomodoro: after a sleep of 26 hours or of 3 days the focus timer has ended once', () => {
   for (const ms of [26 * 3600 * 1000, 3 * 86400 * 1000]) {
     const a = L('28-pomodoro');
+    const t0 = a.clock;
     btn(a, 'Start');
     a.tick(ms);
-    has(a, /^1 focus sessions today$/);
+    assert.equal(a.rows('session').length, 1);
+    assert.equal(a.rows('session')[0].at, t0 + 25 * 60 * 1000, 'the session is dated when the timer ended, not at the resume');
     assert.equal(a.log.filter(l => l.text === 'Take a short break').length, 1);
     assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === '25:00'), 'the timer is back at its length');
   }

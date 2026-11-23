@@ -108,12 +108,14 @@ class App {
     this.log = [];
     this.undoStack = [];
     this.seq = 0;
+    this.gen = 0; this.stepIds = 0; // the data generation (every write moves it; caches check it) and undo step ids
     this.data = { tables: {}, settings: {}, state: {} };
     this.lastWhen = new Map();
     this.screen = null;
     this.random = mulberry(opts.seed || 1);
     // saved data with a damaged schema history is never touched: the app reports why and stops
     let bad = opts.data !== undefined ? badSnapshot(opts.data) : null;
+    if (!isFinite(this.clock) || !okMoment(this.clock)) { this.source = source; this.ok = false; this.errors = ['the time given as now is not a valid date and time.']; this.prog = { header: null, body: [] }; this.env = { tables: new Map(), settings: new Map() }; this.map = { tables: {}, fields: {}, settings: {}, states: {} }; this.ever = emptySchema(); return; }
     const up = !bad && opts.data ? upgradeSnapshot(opts.data) : null;
     if (up && up.error) bad = up.error;
     if (bad) {
@@ -176,6 +178,7 @@ class App {
       if (!this.prog) { this.source = source; this.ok = false; this.errors = c.errors.map(String); this.prog = c.ast; this.env = { tables: new Map(), settings: new Map() }; this.map = { tables: {}, fields: {}, settings: {}, states: {} }; }
       return { verdict: 'refused', refused: c.errors.map(String), changes: [], notes: [] };
     }
+    const oldProg = this.prog; // the program running before this one (its statements carry their ids)
     const r = evolve(this.ever, source, opts);
     if (r.verdict === 'refused' && this.prog) return r; // an unsafe edit: keep running the old version
     const oldForce = this.prog && this.prog.body ? new Map(this.prog.body.filter(x => x.kind === 'setting' && x.force).map(x => [this.map?.settings[x.name] ?? x.name, x.dflt ?? null])) : null;
@@ -183,7 +186,7 @@ class App {
     this.ok = c.ok && r.verdict !== 'refused'; this.errors = [...c.errors.map(String), ...(r.verdict === 'refused' ? r.refused : [])];
     this.prog = c.ast; this.env = c.ast.env || { tables: new Map(), settings: new Map() };
     if (r.verdict !== 'refused') this.ever = r.ever;
-    if (r.verdict !== 'refused' && !opts.restore) this.renameBlockStates(c.ast);
+    if (r.verdict !== 'refused') this.assignStatementIds(oldProg, c.ast, r, opts);
     this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : { tables: {}, fields: {}, settings: {}, states: {} };
     // the stored program is the recorded version's text: canonical, with no was (rule 2)
     if (r.verdict !== 'refused' && this.ever.versions.length) { this.source = this.ever.versions[this.ever.versions.length - 1].src; r.stored = this.source; }
@@ -196,18 +199,56 @@ class App {
       const was = oldForce && oldForce.get(key);
       if (was !== undefined && JSON.stringify(was) === JSON.stringify(sd.dflt)) continue;
       r.settingWrites[key] = key in this.data.settings ? this.data.settings[key] : null;
-      this.data.settings[key] = this.litValue(sd.dflt, sd.type);
+      this.w(this.data.settings, key, this.litValue(sd.dflt, sd.type));
     }
     this.hasWhen = JSON.stringify(this.prog.body).includes('"kind":"when"');
     this.initData();
+    this.gen++;
     // conditions that are already true stay known across edits and reloads, so they do not fire twice
     return r;
+  }
+  // ---- statement identity: everything that owns stored state (when edges, every schedules, each
+  // blocks and their states, component instances and their states) is known by a statement id that
+  // an edit carries over: the previous program's statements are aligned with the new ones (the same
+  // kind and text first, in order; then the same kind and name, nearest first); new ones get new ids.
+  // Every version records its ids, so Undo, restore-to-version and backups read them.
+  flatStatements(ast) { const out = []; const walk = l => { for (const st of l || []) { out.push(st); walk(st.children); } }; walk(ast.body); return out; }
+  stmtKey(st) { return st.kind + '|' + (st.src || ''); }
+  stmtName(st) { return st.kind === 'state' ? [st.name, st.was].filter(Boolean) : st.kind === 'use' ? [st.name] : st.kind === 'each' ? [JSON.stringify(st.source)] : st.kind === 'every' || st.kind === 'when' ? [JSON.stringify(st.actions)] : []; }
+  assignStatementIds(oldProg, ast, r, opts) {
+    const now = this.flatStatements(ast), V = this.ever.versions, cur = V[V.length - 1];
+    if (!cur) { now.forEach((st, i) => { st.sid = i; }); return; }
+    let ids = null;
+    const fits = v => v && Array.isArray(v.stmt) && v.stmt.length === now.length;
+    if (opts.restore && Number.isInteger(r.restoredFrom)) { if (fits(V[r.restoredFrom])) ids = V[r.restoredFrom].stmt; } // the version's own ids
+    else if (!(oldProg && oldProg.body && oldProg.header)) { if (fits(cur)) ids = cur.stmt; } // a load: the stored version's ids
+    if (!ids && oldProg && oldProg.body && oldProg.header && !opts.restore) {
+      const old = this.flatStatements(oldProg).filter(st => st.sid !== undefined);
+      const a = old.map(st => this.stmtKey(st)), b = now.map(st => this.stmtKey(st));
+      // longest common subsequence of the statement texts
+      const L = Array.from({ length: a.length + 1 }, () => new Int32Array(b.length + 1));
+      for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+      ids = new Array(now.length).fill(null); const used = new Set();
+      for (let i = 0, j = 0; i < a.length && j < b.length;) { if (a[i] === b[j]) { ids[j] = old[i].sid; used.add(i); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++; }
+      for (let j = 0; j < now.length; j++) { // then the same kind and name, nearest position first
+        if (ids[j] !== null) continue;
+        const names = this.stmtName(now[j]);
+        let best = -1;
+        for (let i = 0; i < old.length; i++) if (!used.has(i) && old[i].kind === now[j].kind && (names.length === 0 || this.stmtName(old[i]).some(n => names.includes(n))) && (best < 0 || Math.abs(i - j) < Math.abs(best - j))) best = i;
+        if (best >= 0) { ids[j] = old[best].sid; used.add(best); }
+      }
+    }
+    if (!ids) ids = Array.isArray(cur.stmt) && cur.stmt.length === now.length ? cur.stmt : now.map((_, i) => i); // a version from before statement ids: by position
+    let next = Math.max(this.ever.nextSid || 0, ...ids.filter(x => x !== null).map(x => x + 1), now.length);
+    ids = ids.map(x => x === null ? next++ : x);
+    now.forEach((st, i) => { st.sid = ids[i]; });
+    cur.stmt = ids; this.ever.nextSid = next;
   }
   // tables and settings the program declares but the data lacks get their empty/default values
   initData() {
     if (!this.prog.header || this.prog.header.kind !== 'app') return;
     for (const [name] of this.env.tables) this.data.tables[this.tk(name)] ||= [];
-    for (const s of this.prog.body) if (s.kind === 'setting' && !(this.sk(s.name) in this.data.settings)) this.data.settings[this.sk(s.name)] = s.dflt ? this.litValue(s.dflt, s.type) : this.emptyOf(s.type);
+    for (const s of this.prog.body) if (s.kind === 'setting' && !(this.sk(s.name) in this.data.settings)) this.w(this.data.settings, this.sk(s.name), s.dflt ? this.litValue(s.dflt, s.type) : this.emptyOf(s.type));
   }
   // name -> storage slot
   tk(table) { return this.map.tables[table] ?? table; }
@@ -226,11 +267,12 @@ class App {
   }
   // Chat undo: go back to the previous program; data entered since stays.
   revert() {
+    this.lastChange = null; this.undoGroup = null; // also with nothing to undo, a revert ends a change group
     const prev = (this.versionsUndo || []).pop();
     if (!prev) return { verdict: 'none', changes: ['nothing to undo: this is the first version'], refused: [], notes: [] };
     const r = this.setProgram(prev.src || prev, { restore: true, version: prev.ver });
     // settings that the undone edit wrote on purpose (setting ... set) get their earlier value back
-    if (prev.settings) for (const [k, v] of Object.entries(prev.settings)) this.data.settings[k] = v;
+    if (prev.settings) for (const [k, v] of Object.entries(prev.settings)) this.w(this.data.settings, k, v);
     this.screen = null;
     return r;
   }
@@ -279,11 +321,13 @@ class App {
         this.ever = { ...this.ever, touched: true };
       } else { convertOptionRows(this.data, this.ever); if (this.ever.touched === undefined) this.deriveTouched(); } // data only: read with the running program's history
       this.annotateOptions();
+      this.migrateBlockState(); // the same conversion as a load, on every entry path
       this.initData();
       this.screen = null;
       this.undoStack = []; // data Undo steps belonged to the data that was replaced
       if (typeof s.clock === 'number' && s.clock < this.clock) { this.catchUp(s.clock); this.undoStack = []; } // schedules catch up from when the backup was taken
     }
+    this.gen++;
     return { ok: true, program: this.source, replaced: { before, after: count(this.data) } };
   }
   // pick fields: rows store option slot ids; the program's types learn id -> name (shown) and name -> id
@@ -309,26 +353,42 @@ class App {
   // step(fn, group): run fn as one step; with the same group key as the step on top (consecutive
   // changes to one input), it joins that step instead.
   step(fn, group = null) {
-    const joining = group !== null && this.undoGroup === group && this.undoStack.length && this.undoStack[this.undoStack.length - 1].group === group;
-    const base = joining ? this.undoStack[this.undoStack.length - 1].base : JSON.stringify({ data: this.data, seq: this.seq });
-    const before = joining ? null : base;
-    const out = fn();
-    const now = JSON.stringify({ data: this.data, seq: this.seq });
-    let open = false; // is the step on top this group's, so the next change of the same input may join it
-    if (joining) { // the group's delta grows from the group's start
-      const top = this.undoStack[this.undoStack.length - 1];
-      top.delta = makeDelta(JSON.parse(base), this);
-      if (now === base) this.undoStack.pop(); else open = true;
-    } else if (now !== before) {
-      this.undoStack.push({ delta: makeDelta(JSON.parse(before), this), group, base: group !== null ? before : undefined });
-      if (this.undoStack.length > 50) this.undoStack.shift();
-      open = true;
-    }
-    if (now !== (joining ? base : before)) this.touch();
+    const top = this.undoStack[this.undoStack.length - 1];
+    const joining = group !== null && this.undoGroup === group && top && top.group === group;
+    const j = joining ? top.journal : { cells: new Map(), lens: new Map(), seq: this.seq, id: ++this.stepIds };
+    const outer = this.journal; this.journal = j; this.curStep = j.id;
+    let out;
+    try { out = fn(); } finally { this.journal = outer; this.curStep = null; }
+    const changed = journalChanged(j, this);
+    let open = false;
+    if (joining) { if (!changed) this.undoStack.pop(); else open = true; }
+    else if (changed) { this.undoStack.push({ journal: j, group }); if (this.undoStack.length > 50) this.undoStack.shift(); open = true; }
+    if (changed) this.touch();
     this.undoGroup = open ? group : null;
     return out;
   }
-  undo() { this.lastChange = null; this.undoGroup = null; const s = this.undoStack.pop(); if (!s) return false; applyDelta(this, s.delta); this.initData(); this.undoEdges(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
+  // every write to stored data goes through w(), del() or pushRow(): a step records the old value
+  // once (its journal) and the data generation moves on, which every cache checks
+  w(obj, key, val) {
+    const old = obj[key];
+    if (old === val && (key in obj)) return;
+    if ((typeof old === 'object' || typeof val === 'object') && (key in obj) && JSON.stringify(old) === JSON.stringify(val)) return;
+    this.record(obj, key);
+    obj[key] = val; this.gen++;
+  }
+  del(obj, key) { if (!(key in obj)) return; this.record(obj, key); delete obj[key]; this.gen++; }
+  record(obj, key) {
+    const j = this.journal; if (!j) return;
+    let m = j.cells.get(obj); if (!m) j.cells.set(obj, m = new Map());
+    if (!m.has(key)) m.set(key, { had: key in obj, v: obj[key] === undefined ? undefined : JSON.parse(JSON.stringify(obj[key])) });
+  }
+  pushRow(tk, r) {
+    if (!this.data.tables[tk]) this.w(this.data.tables, tk, []);
+    const arr = this.data.tables[tk];
+    if (this.journal && !this.journal.lens.has(arr)) this.journal.lens.set(arr, arr.length);
+    arr.push(r); this.gen++;
+  }
+  undo() { this.lastChange = null; this.undoGroup = null; const s = this.undoStack.pop(); if (!s) return false; undoJournal(this, s.journal); this.pending = (this.pending || []).filter(p => p.step !== s.journal.id); this.gen++; this.initData(); this.undoEdges(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
   // saves made before the flag existed: derive it ONCE from the data (any row, any setting or literal
   // state off its default, or more than one version) and record it; from then on it is recorded
   deriveTouched() {
@@ -353,8 +413,8 @@ class App {
   rowById(tk, id) {
     const arr = this.data.tables[tk]; if (!arr) return null;
     const ix = (this._ids ||= new Map()).get(tk);
-    let m = ix && ix.arr === arr && ix.len === arr.length ? ix.m : null;
-    if (!m) { m = new Map(arr.map(r => [r.id, r])); this._ids.set(tk, { arr, len: arr.length, m }); }
+    let m = ix && ix.gen === this.gen && ix.arr === arr ? ix.m : null; // valid only for the data generation it was built in
+    if (!m) { m = new Map(arr.map(r => [r.id, r])); this._ids.set(tk, { arr, gen: this.gen, m }); }
     return m.get(id) || null;
   }
   fieldDef(table, f) { return this.env.tables.get(table)?.fields.get(f) || null; }
@@ -442,7 +502,7 @@ class App {
     if (values.at !== undefined) r.at = this.unwrap(values.at, { t: 'when' });
     const missing = [...tb.fields].filter(([n, f]) => !f.optional && f.type.t !== 'bool' && (r[this.fk(table, n)] === null || r[this.fk(table, n)] === '')).map(([n]) => n);
     if (missing.length) { this.log.push({ kind: 'error', text: `${table} needs ${missing.join(', ')}`, at: this.clock }); return null; }
-    this.seq = r.id; (this.data.tables[this.tk(table)] ||= []).push(r); this.touch(); // an id is used only when the row is stored
+    this.seq = r.id; this.pushRow(this.tk(table), r); this.touch(); // an id is used only when the row is stored
     return r;
   }
 
@@ -457,43 +517,84 @@ class App {
   // for at most CATCH_UP_MS of wall time per tick, and stops early once a fire changes nothing; the rest are skipped and logged; `after` actions run
   // in due order; `when` conditions are evaluated once at the end.
   tick(ms) {
-    this.lastChange = null;
+    this.lastChange = null; this.undoGroup = null;
     if (!(ms > 0)) { this.step(() => this.runWhen()); return; }
     this.step(() => {
-      const end = this.clock + ms;
+      const start = this.clock, end = start + ms, t0 = Date.now();
       const { handlers } = this.build();
-      // after: run in due order, with the clock at each due time
-      for (const p of (this.pending || []).filter(p => p.due <= end).sort((a, b) => a.due - b.due)) {
-        this.pending = this.pending.filter(x => x !== p);
-        this.clock = Math.max(this.clock, p.due); this.act(p.act, p.env);
-      }
-      const start = this.clock;
-      // when conditions are checked after every fire (with this render's handlers), so a countdown that
-      // reaches zero during the catch-up fires its when once, at that point
-      const whenNow = () => { for (const w of handlers.when) { const v = this.truthy(w.cond()); const was = this.lastWhen.get(w.key) || false; this.lastWhen.set(w.key, v); if (v && !was) this.run(w.actions, w.env, false); } };
-      const t0 = Date.now();
-      for (const h of handlers.every) {
-        const acc0 = this.everyAcc.get(h.key) || 0;
-        const all = Math.floor((acc0 + ms) / h.period);
-        this.everyAcc.set(h.key, (acc0 + ms) % h.period);
-        const readsClock = /"k":"(now|today)"/.test(JSON.stringify([h.actions, h.condAst || null]));
-        let done = 0;
-        for (let i = 0; i < all; i++) {
-          if (Date.now() - t0 > CATCH_UP_MS) break; // the time budget of one resume
-          this.clock = start + (i + 1) * h.period - acc0;
-          const before = this.fingerprint();
-          if (!h.cond || this.truthy(h.cond())) this.run(h.actions, h.env, false);
-          if (this.hasWhen) whenNow();
-          done++;
-          // a fire that changed nothing: the later ones (same condition, same data) change nothing either
-          if (!readsClock && this.fingerprint() === before) { done = all; break; }
+      const td = this.timeDeps();
+      // one timeline for every rules and pending afters (also afters scheduled during it), in time order
+      const evs = handlers.every.map(h => ({ h, next: start + h.period - (this.everyAcc.get(h.key) || 0), idle: false, dep: td(h.condAst) || td(h.actions) }));
+      const whens = handlers.when;
+      const whenNow = () => { for (const w of whens) { const v = this.truthy(w.cond()); const was = this.lastWhen.get(w.key) || false; this.lastWhen.set(w.key, v); if (v && !was) this.run(w.actions, w.env, false); } };
+      const fire = fn => { // run one event in its own sub-journal: did it change stored data?
+        const parent = this.journal, sub = { cells: new Map(), lens: new Map(), seq: this.seq, id: parent ? parent.id : 0 };
+        this.journal = sub; this.curStep = sub.id;
+        try { fn(); if (this.hasWhen) whenNow(); } finally { this.journal = parent; this.curStep = parent ? parent.id : null; }
+        const changed = journalChanged(sub, this);
+        if (parent) { for (const [obj, m] of sub.cells) { let pm = parent.cells.get(obj); if (!pm) parent.cells.set(obj, pm = new Map()); for (const [k, rec] of m) if (!pm.has(k)) pm.set(k, rec); } for (const [arr, len] of sub.lens) if (!parent.lens.has(arr)) parent.lens.set(arr, len); }
+        return changed;
+      };
+      let out = false;
+      for (;;) {
+        const pend = (this.pending || []).filter(p => p.due <= end).sort((a, b) => a.due - b.due)[0];
+        const ev = evs.filter(e => !e.idle && e.next <= end).sort((a, b) => a.next - b.next)[0];
+        if (!pend && !ev) break;
+        if (Date.now() - t0 > CATCH_UP_MS) { out = true; break; }
+        if (pend && (!ev || pend.due <= ev.next)) { // an after
+          this.pending = this.pending.filter(x => x !== pend);
+          this.clock = pend.due;
+          fire(() => this.act(pend.act, pend.env));
+          for (const e of evs) e.idle = false;
+          continue;
         }
-        if (done < all) this.log.push({ kind: 'skipped', every: h.key, fires: all - done, at: end });
-        this.clock = start;
+        this.clock = ev.next; ev.next += ev.h.period;
+        const changed = fire(() => { if (!ev.h.cond || this.truthy(ev.h.cond())) this.run(ev.h.actions, ev.h.env, false); });
+        if (changed) { for (const e of evs) e.idle = false; }
+        else if (!ev.dep) ev.idle = true; // nothing changed and nothing here reads the clock: its later fires change nothing either
+      }
+      for (const e of evs) {
+        let next = e.next;
+        if (e.idle || out) { const left = next <= end ? Math.floor((end - next) / e.h.period) + 1 : 0; if (left && out) this.log.push({ kind: 'skipped', every: e.h.key, fires: left, at: end }); next += left * e.h.period; }
+        this.everyAcc.set(e.h.key, e.h.period - (next - end));
       }
       this.clock = end;
+      this.whenAt(start, end, td); // a when that turned true by the clock alone fires at the second it did
       this.runWhen();
     });
+  }
+  // which parts of a program read the clock: now, today, since, due, gap, streak, any date window,
+  // and lets that use them (transitively). Returns a test for an AST part.
+  timeDeps() {
+    if (this._td && this._td.prog === this.prog) return this._td.f;
+    const lets = new Map(); const walkLets = l => { for (const st of l || []) { if (st.kind === 'let') lets.set(st.name, st.e); walkLets(st.children); } }; walkLets(this.prog.body);
+    const dep = new Map();
+    const reads = (x, seen) => {
+      if (!x || typeof x !== 'object') return false;
+      if (Array.isArray(x)) return x.some(y => reads(y, seen));
+      if (x.k === 'now' || x.k === 'today' || (x.win && x.win.k) || x.k === 'qfn' && x.fn === 'due' || (x.k === 'agg' && ['since', 'gap', 'streak', 'best'].includes(x.fn)) || (x.k === 'on')) return true;
+      if (x.k === 'path' && lets.has(x.head) && !seen.has(x.head)) { if (!dep.has(x.head)) { seen.add(x.head); dep.set(x.head, reads(lets.get(x.head), seen)); } if (dep.get(x.head)) return true; }
+      if (x.k === 'ucall' && lets.has(x.name) && !seen.has(x.name)) { seen.add(x.name); if (reads(lets.get(x.name), seen)) return true; }
+      for (const v of Object.values(x)) if (v && typeof v === 'object' && reads(v, seen)) return true;
+      return false;
+    };
+    const f = x => reads(x, new Set());
+    this._td = { prog: this.prog, f };
+    return f;
+  }
+  // a time-dependent when that became true during [start, end] fires at the first whole second it is
+  // true (as with one-second ticks), not at the end
+  whenAt(start, end, td) {
+    if (!this.hasWhen) return;
+    const { handlers } = this.build();
+    for (const w of handlers.when) {
+      if (this.lastWhen.get(w.key) || !w.condAst || !td(w.condAst) || !this.truthy(w.cond())) continue;
+      let lo = 0, hi = Math.ceil((end - start) / 1000); // whole seconds after start; true at hi (end)
+      const at = k => Math.min(start + k * 1000, end);
+      while (hi - lo > 1) { const mid = (lo + hi) >> 1; this.clock = at(mid); if (this.truthy(w.cond())) hi = mid; else lo = mid; }
+      this.clock = at(hi); this.lastWhen.set(w.key, true); this.run(w.actions, w.env, false);
+      this.clock = end;
+    }
   }
   // actions scheduled with `after DUR` run when the clock reaches them
   runPending() {
@@ -583,12 +684,10 @@ class App {
   build() {
     OFF = this.off;
     const bk = this._bk;
-    if (bk && bk.prog === this.prog && bk.clock === this.clock && bk.screen === this.screen) {
-      const key = JSON.stringify(this.data);
-      if (key === bk.data) { this.H = bk.res.handlers; return bk.res; }
-    }
+    if (bk && bk.gen === this.gen && bk.prog === this.prog && bk.clock === this.clock && bk.screen === this.screen && bk.data === this.data) { this.H = bk.res.handlers; return bk.res; }
     const res = this.buildNow();
-    this._bk = { prog: this.prog, clock: this.clock, screen: this.screen, data: JSON.stringify(this.data), res };
+    deepFreeze(res.tree); // a caller may hold a tree; nobody can change it, so the reused one stays right
+    this._bk = { gen: this.gen, prog: this.prog, clock: this.clock, screen: this.screen, data: this.data, res }; // after the render's own writes (new states)
     return res;
   }
   buildNow() {
@@ -665,31 +764,46 @@ class App {
   // keys of state inside an each made before round 10 (by line position: /n.4.1@r12|open) become
   // keys by what the each goes over; state of rows that are gone is dropped
   migrateBlockState() {
+    // keys of state inside an each from older saves become keys by statement id: by line position
+    // (/n.4.1@r12|open, before round 10) or by what the each goes over (/q:task@r12|open, round 10)
     const st = this.data.state || {};
+    const eachById = new Map(), all = this.flatStatements(this.prog);
+    for (const n of all) if (n.kind === 'each') eachById.set(String(n.sid), n);
+    const stateIn = (each, name) => { let f = null; const walk = l => { for (const x of l || []) { if (f) return; if (x.kind === 'state' && x.name === name) f = x; else if (x.kind !== 'each') walk(x.children); } }; walk(each.children); return f; };
     for (const k of Object.keys(st)) {
       if (!k.startsWith('/')) continue;
       const bar = k.lastIndexOf('|'), segs = k.slice(1, bar).split('/'), name = k.slice(bar + 1);
-      let nk = '', ok = true;
+      let nk = '', ok = true, last = null;
       for (const seg of segs) {
+        if (seg.startsWith('u')) { nk += '/' + seg; last = 'u'; continue; } // a component instance
         const at = seg.lastIndexOf('@'); if (at < 0) { ok = false; break; }
         const id = seg.slice(0, at), item = seg.slice(at + 1);
-        if (/^[a-z]:|^[dl]$/.test(id)) { nk += '/' + seg; continue; } // already the new form
-        const path = id.replace(/@[^.]*/g, '').split('.').slice(1).map(Number);
-        let node = null, list = this.prog.body;
-        for (const ix of path) { node = list && list[ix]; list = node && node.children; }
+        let node = null;
+        if (/^\d+$/.test(id)) node = eachById.get(id) || null; // already by statement id
+        else if (/^[a-z]:|^[dl]$/.test(id)) node = all.find(n => n.kind === 'each' && this.eachSig(n.source) === id) || null;
+        else { const path = id.replace(/@[^.]*/g, '').split('.').slice(1).map(Number); let list = this.prog.body; for (const ix of path) { node = list && list[ix]; list = node && node.children; } }
         if (!node || node.kind !== 'each') { ok = false; break; }
-        const sig = this.eachSig(node.source);
-        const it2 = node.source.k === 'options' ? (this.sourceItems(node.source, this.rootEnv()).find(x => x.v === item)?.key ?? item) : item;
-        nk += `/${sig}@${it2}`;
+        const it2 = node.source.k === 'options' && !item.startsWith('#') ? (this.sourceItems(node.source, this.rootEnv()).find(x => x.v === item)?.key ?? item) : item;
+        nk += `/${node.sid}@${it2}`; last = node;
       }
-      const v = st[k]; delete st[k];
-      if (ok) st[`${nk}|${name}`] = v;
+      if (!ok) { this.del(st, k); continue; }
+      if (!last || last === 'u') continue; // a component instance's state is known by its name in the def
+      const sn = /^s\d+$/.test(name) ? name : (stateIn(last, name) ? 's' + stateIn(last, name).sid : null);
+      if (!sn) { this.del(st, k); continue; }
+      const key = `${nk}|${sn}`;
+      if (key !== k) { const v = st[k]; this.del(st, k); if (!(key in st)) this.w(st, key, v); }
     }
     // state of rows that no longer exist goes
     for (const k of Object.keys(st)) {
       if (!k.startsWith('/')) continue;
-      const m = /\/q:([^/@.]+)@r(\d+)[^/]*$/.exec(k.slice(0, k.lastIndexOf('|')));
-      if (m && this.data.tables[m[1]] && !this.rowById(m[1], +m[2])) delete st[k];
+      const m = /\/(\d+)@r(\d+)[^/]*$/.exec(k.slice(0, k.lastIndexOf('|')));
+      const each = m && eachById.get(m[1]);
+      if (each && each.source.k === 'query' && this.env.tables.has(each.source.q.path.head) && !this.rowById(this.tk(each.source.q.path.head), +m[2])) this.del(st, k);
+    }
+    // a component instance's own state saved by its inner name (|left_3, before round 11)
+    for (const n of all) if (n.kind === 'use') for (const x of this.flatStatements({ body: n.children })) {
+      const outer = x.kind === 'state' && this.prog.renamedLocals && this.prog.renamedLocals.get(x.name);
+      if (outer && `|${x.name}` in st) { const key = `/u${n.sid}|${outer}`; if (!(key in st)) this.w(st, key, st[`|${x.name}`]); this.del(st, `|${x.name}`); }
     }
   }
   // `state NEW ... was OLD` inside an each: the per-item values move to the new name (once: the
@@ -701,14 +815,23 @@ class App {
     } };
     walk(ast.body, false);
   }
-  stateKey(env, name) { return env.scope === '' ? `|${this.stk(name)}` : `${env.scope}|${name}`; }
+  stateKey(env, name, s) {
+    const local = this.prog.renamedLocals && this.prog.renamedLocals.get(name);
+    if (local && env.use !== undefined) return `${env.scope}/u${env.use}|${local}`; // a component instance's own state
+    if (env.scope === '') return `|${this.stk(name)}`;
+    return `${env.scope}|s${s ? s.sid : name}`; // state inside an each: by its statement id (follows was, reorders, other eaches)
+  }
   declareState(s, env) {
-    const key = this.stateKey(env, s.name);
+    const key = this.stateKey(env, s.name, s);
     if (!(key in this.data.state)) {
-      if (s.draft) this.data.state[key] = this.newDraft(s.draft);
-      else { const u = s.init ? this.unwrap(this.evalIn(s.init, env), s.type) : (s.type.t === 'bool' ? false : null); this.data.state[key] = u === REJECT ? null : u; }
+      if (s.draft) this.w(this.data.state, key, this.newDraft(s.draft));
+      else { const u = s.init ? this.unwrap(this.evalIn(s.init, env), s.type) : (s.type.t === 'bool' ? false : null); this.w(this.data.state, key, u === REJECT ? null : u); }
     }
-    else if (s.draft) this.data.state[key] = this.reconcileDraft(this.data.state[key], s.draft);
+    else if (s.draft) { // the draft object stays the same object (an Undo step may hold it); only its keys change
+      const d = this.data.state[key], out = this.reconcileDraft(d, s.draft);
+      if (d && typeof d === 'object' && JSON.stringify(d) !== JSON.stringify(out)) { for (const k of Object.keys(d)) if (!(k in out)) this.del(d, k); for (const [k, v] of Object.entries(out)) this.w(d, k, v); }
+      else if (!d || typeof d !== 'object') this.w(this.data.state, key, out);
+    }
     env.vars.set(s.name, { state: key, type: s.draft ? { t: 'draft', table: s.draft } : s.type, keep: s.keep });
   }
   newDraft(table) {
@@ -754,14 +877,14 @@ class App {
       case 'table': case 'setting': case 'remind': case 'def': return { nodes: [] };
       case 'state': this.declareState(s, env); return { nodes: [] };
       case 'let': if (!s.params) env.vars.set(s.name, { let: s.e, env }); return { nodes: [] };
-      case 'every': this.H.every.push({ key: id, period: s.every * 1000, cond: s.cond ? () => this.evalIn(s.cond, env) : null, condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
-      case 'when': this.H.when.push({ key: id, cond: () => this.evalIn(s.cond, env), actions: s.actions, env }); return { nodes: [] };
+      case 'every': this.H.every.push({ key: `e${s.sid}${env.scope}`, period: s.every * 1000, cond: s.cond ? () => this.evalIn(s.cond, env) : null, condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
+      case 'when': this.H.when.push({ key: `w${s.sid}${env.scope}`, cond: () => this.evalIn(s.cond, env), condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
       case 'screen': {
         const visible = this.screen === s.name;
         const kids = this.render(s.children, this.child(env, {}), id, { top: false }); // hidden screens still run their states and events
         return visible ? N({ id, t: 'screen', name: s.name, label: s.label, children: kids }) : { nodes: [] };
       }
-      case 'use': return { nodes: this.render(s.children, this.child(env, {}), id, cx) };
+      case 'use': return { nodes: this.render(s.children, this.child(env, { use: s.sid }), id, cx) }; // its own states are kept per instance (statement id)
       case 'if': {
         const taken = this.truthy(this.evalIn(s.cond, env));
         return { taken, nodes: taken ? this.render(s.children, this.child(env, {}), id, cx) : [] };
@@ -769,12 +892,12 @@ class App {
       case 'else': return { nodes: lastIf === false ? this.render(s.children, this.child(env, {}), id, cx) : [] };
       case 'each': {
         const items = this.sourceItems(s.source, env);
-        const sig = this.eachSig(s.source);
+
         const out = [];
         items.forEach((item, i) => {
           const key = item.key;
           // state inside an each is kept per (what the each goes over, the item): not by line position, so edits above it keep it
-          const scope = `${env.scope}/${sig}@${key}`;
+          const scope = `${env.scope}/${s.sid}@${key}`; // by the each's statement id (kept across edits) and the item
           const e2 = this.child(env, s.as ? { index: i, scope } : { it: item.v, index: i, scope });
           if (s.as) e2.vars.set(s.as, { value: item.v });
           out.push(...this.render(s.children, e2, `${id}@${key}`, cx));
@@ -922,7 +1045,7 @@ class App {
         if (value === this.ext(this.data.settings[key], sd.type)) return true; // its own value back: nothing changes
         const v = this.unwrap(this.fromInput(value, sd.type), sd.type);
         if (v === REJECT) return false;
-        this.data.settings[key] = this.clampTo(v, sd);
+        this.w(this.data.settings, key, this.clampTo(v, sd));
       } else {
         const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
         const f = field === 'at' ? { type: { t: 'when' } } : this.fieldDef(target.table, field);
@@ -931,7 +1054,7 @@ class App {
         if (value === this.ext(row[key], f.type)) return true;
         const v = this.unwrap(this.fromInput(value, f.type), f.type);
         if (v === REJECT || (v === null && !f.optional && f.type.t !== 'bool') || (field === 'at' && !okMoment(v))) return false; // not a value of the field, a required field emptied, or an impossible added time
-        row[key] = this.clampTo(v, f);
+        this.w(row, key, this.clampTo(v, f));
       }
       this.runWhen();
       return true;
@@ -976,10 +1099,10 @@ class App {
     switch (type.t) {
       case 'num': return number();
       case 'money': { const n = number(); return n === REJECT ? n : new Money(n); }
-      case 'dur': { const n = number(); return n === REJECT ? n : new Dur(n); }
+      case 'dur': { const n = number(); return n === REJECT || n < 0 ? REJECT : new Dur(n); } // a duration is not negative
       case 'date': return typeof v === 'string' && realDate(v.slice(0, 10)) ? new DateV(v.slice(0, 10)) : REJECT;
       case 'when': { const ms = typeof v === 'number' ? v : typeof v === 'string' ? Date.parse(v) : NaN; return okMoment(ms) && (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(v) || realDate(v.slice(0, 10))) ? new When(ms) : REJECT; }
-      case 'time': return typeof v === 'number' && isFinite(v) ? new TimeV(v) : typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim()) ? new TimeV(parseTime(v.trim())) : REJECT;
+      case 'time': return typeof v === 'number' && isFinite(v) ? new TimeV(v) : typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim()) && +v.trim().split(':')[0] < 24 && +v.trim().split(':')[1] < 60 ? new TimeV(parseTime(v.trim())) : REJECT; // no 25:00, no 12:60
       case 'bool': return typeof v === 'boolean' ? v : REJECT;
       case 'ref': { const id = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? +v : NaN; const r = this.rows(type.table).find(x => x.id === id); return r ? new Row(type.table, r) : REJECT; }
       default: return typeof v === 'string' || typeof v === 'number' ? String(v) : REJECT;
@@ -1035,11 +1158,11 @@ class App {
     const self = this;
     if (!p.parts.length && p.head !== 'it') {
       const v = this.lookup(p.head, env);
-      if (v && v.state) return { type: v.type || { t: 'text' }, raw: () => self.ext(self.data.state[v.state], v.type), set: x => { if (x === self.ext(self.data.state[v.state], v.type)) return; const u = self.unwrap(x, v.type); if (u !== REJECT) self.data.state[v.state] = u; } };
+      if (v && v.state) return { type: v.type || { t: 'text' }, raw: () => self.ext(self.data.state[v.state], v.type), set: x => { if (x === self.ext(self.data.state[v.state], v.type)) return; const u = self.unwrap(x, v.type); if (u !== REJECT) self.w(self.data.state, v.state, u); } };
       const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === p.head);
       if (sd) {
         const key = this.sk(p.head);
-        return { type: sd.type, label: sd.label, range: sd.range, raw: () => self.ext(self.data.settings[key], sd.type), set: x => { if (x === self.ext(self.data.settings[key], sd.type)) return; const u = self.unwrap(x, sd.type); if (u !== REJECT) self.data.settings[key] = self.clampTo(u, sd); } };
+        return { type: sd.type, label: sd.label, range: sd.range, raw: () => self.ext(self.data.settings[key], sd.type), set: x => { if (x === self.ext(self.data.settings[key], sd.type)) return; const u = self.unwrap(x, sd.type); if (u !== REJECT) self.w(self.data.settings, key, self.clampTo(u, sd)); } };
       }
       throw new Error(`cannot change ${p.head}`);
     }
@@ -1047,14 +1170,14 @@ class App {
     const f = p.parts[p.parts.length - 1];
     if (base instanceof Draft) {
       const fd = this.fieldDef(base.table, f), dk = this.fk(base.table, f);
-      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(self.data.state[base.key][dk], fd.type), set: x => { const d = self.data.state[base.key]; if (x === self.ext(d[dk], fd.type)) return; const u = self.unwrap(x, fd.type); if (u === REJECT) return; d[dk] = self.clampTo(u, fd); if (d._missing) d._missing = d._missing.filter(k => k !== dk); } };
+      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(self.data.state[base.key][dk], fd.type), set: x => { const d = self.data.state[base.key]; if (x === self.ext(d[dk], fd.type)) return; const u = self.unwrap(x, fd.type); if (u === REJECT) return; self.w(d, dk, self.clampTo(u, fd)); if (d._missing) self.w(d, '_missing', d._missing.filter(k => k !== dk)); } };
     }
     if (base instanceof Row) {
       const fd = this.fieldDef(base.table, f) || (f === 'at' ? { type: { t: 'when' } } : null);
-      const row = base.r; // the stored row itself (a render's rows are the stored objects); no search per row
-      const key = f === 'at' ? 'at' : this.fk(base.table, f);
-      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(row[key], fd.type), set: x => { if (x === self.ext(row[key], fd.type)) return; // its own value back changes nothing
-        const u = self.unwrap(x, fd.type); if (u === REJECT) return; if (u === null && !fd.optional && fd.type.t !== 'bool') return; /* a required field is never emptied */ row[key] = self.clampTo(u, fd); } };
+      const tk = this.tk(base.table), id = base.r.id, key = f === 'at' ? 'at' : this.fk(base.table, f);
+      const row = () => self.rowById(tk, id) || {}; // handlers hold the row's id, never the row object
+      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(row()[key], fd.type), set: x => { if (x === self.ext(row()[key], fd.type)) return; // its own value back changes nothing
+        const u = self.unwrap(x, fd.type); if (u === REJECT) return; if (u === null && !fd.optional && fd.type.t !== 'bool') return; /* a required field is never emptied */ self.w(row(), key, self.clampTo(u, fd)); } };
     }
     throw new Error(`cannot change ${p.head}.${p.parts.join('.')}`);
   }
@@ -1084,13 +1207,13 @@ class App {
         for (const r of this.rows(table)) {
           const e2 = this.child(env, { it: new Row(table, r), where: { table, row: r } });
           if (a.where && !this.truthy(this.evalIn(a.where, e2))) continue;
-          const u = this.unwrap(this.evalIn(a.e, e2, true), fd.type); if (u !== REJECT) r[this.fk(table, f)] = this.clampTo(u, fd);
+          const u = this.unwrap(this.evalIn(a.e, e2, true), fd.type); if (u !== REJECT) this.w(r, this.fk(table, f), this.clampTo(u, fd));
         }
         return;
       }
-      case 'removeall': for (const r of this.queryRows(a.q, env).rows) r.deleted = true; return;
+      case 'removeall': for (const r of this.queryRows(a.q, env).rows) this.w(r, 'deleted', true); return;
       case 'toggle': this.doToggle(a.target, a.win, a.where, env); return;
-      case 'remove': { const v = this.evalIn(a.e, env); if (v instanceof Row) { const r = this.data.tables[this.tk(v.table)].find(x => x.id === v.r.id); if (r) r.deleted = true; this.log.push({ kind: 'removed', table: v.table, id: v.r.id, at: this.clock }); } return; }
+      case 'remove': { const v = this.evalIn(a.e, env); if (v instanceof Row) { const r = this.data.tables[this.tk(v.table)].find(x => x.id === v.r.id); if (r) this.w(r, 'deleted', true); this.log.push({ kind: 'removed', table: v.table, id: v.r.id, at: this.clock }); } return; }
       case 'edit': { const v = a.e.k === 'path' && !a.e.parts.length && a.e.head !== 'it' && !(this.lookup(a.e.head, env)?.value instanceof Row) ? a.e.head : this.evalIn(a.e, env); this.log.push({ kind: 'edit', target: v instanceof Row ? { table: v.table, id: v.r.id } : v, at: this.clock }); return; }
       case 'save': {
         const v = this.lookup(a.name, env);
@@ -1099,12 +1222,12 @@ class App {
         const vals = {};
         for (const [n, f] of tb.fields) vals[n] = this.wrap(d[this.fk(v.type.table, n)], f.type);
         const r = this.addRow(v.type.table, vals);
-        if (r) { if (!v.keep) this.data.state[v.state] = this.newDraft(v.type.table); else delete d._missing; }
-        else d._missing = [...tb.fields].filter(([, f]) => !f.optional && f.type.t !== 'bool' && !f.dflt).filter(([n]) => vals[n] === null || vals[n] === undefined || vals[n] === '').map(([n]) => this.fk(v.type.table, n)); // field slots, shown on the form
+        if (r) { if (!v.keep) this.w(this.data.state, v.state, this.newDraft(v.type.table)); else this.del(d, '_missing'); }
+        else this.w(d, '_missing', [...tb.fields].filter(([, f]) => !f.optional && f.type.t !== 'bool' && !f.dflt).filter(([n]) => vals[n] === null || vals[n] === undefined || vals[n] === '').map(([n]) => this.fk(v.type.table, n))); // field slots, shown on the form
         return;
       }
       case 'go': this.screen = a.name; return;
-      case 'after': (this.pending ||= []).push({ due: this.clock + a.every * 1000, act: a.act, env }); return;
+      case 'after': (this.pending ||= []).push({ due: this.clock + a.every * 1000, act: a.act, env, step: this.curStep }); return; // Undo of the step that scheduled it cancels it
       case 'notify': this.log.push({ kind: 'notify', text: this.textOf(a.parts, env), at: this.clock }); return;
       case 'remind': { const d = this.evalIn(a.e, env); this.log.push({ kind: 'remind', text: a.text, due: this.clock + num(d) * 1000, at: this.clock }); return; }
     }
@@ -1125,7 +1248,7 @@ class App {
   doToggle(target, win, where, env) {
     const set = this.evalPathRaw(target, env);
     const hit = this.matchToggle(target, win, where, env);
-    if (hit.length) { for (const r of hit) r.deleted = true; return; }
+    if (hit.length) { for (const r of hit) this.w(r, 'deleted', true); return; }
     const vals = {};
     if (set.via) vals[set.via] = set.viaRow;
     const eqs = x => { if (!x) return; if (x.k === 'bin' && x.op === 'and') { eqs(x.a); eqs(x.b); } else if (x.k === 'bin' && x.op === '=' && x.a.k === 'path') vals[x.a.head] = this.evalIn(x.b, env); };
@@ -1634,34 +1757,19 @@ export const CATCH_UP_MS = 150; // a resume applies every fires until done or th
 // a moment that can be an added time: a finite number of ms between the years 1900 and 3000
 // a calendar date that exists (no 2026-02-30), between the years 1900 and 2999
 const realDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (!m) return false; const y = +m[1], mo = +m[2], d = +m[3]; return y >= 1900 && y < 3000 && mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(Date.UTC(y, mo, 0)).getUTCDate(); };
-const okMoment = v => typeof v === 'number' && isFinite(v) && v > -2208988800000 && v < 32503680000000;
-// the delta of one undo step: what the tables (row by row), settings, states and seq were before it
-export function makeDelta(b, app) {
-  const d = { tables: {}, settings: {}, state: {}, seq: b.seq };
-  const cur = app.data;
-  for (const tk of new Set([...Object.keys(b.data.tables || {}), ...Object.keys(cur.tables || {})])) {
-    const ba = b.data.tables[tk], aa = cur.tables[tk];
-    if (!ba) { d.tables[tk] = { absent: true }; continue; }
-    const rows = [];
-    for (let i = 0; i < Math.max(ba.length, aa ? aa.length : 0); i++) if (i >= ba.length || !aa || i >= aa.length || JSON.stringify(ba[i]) !== JSON.stringify(aa[i])) rows.push([i, i < ba.length ? ba[i] : null]);
-    if (rows.length || !aa || aa.length !== ba.length) d.tables[tk] = { len: ba.length, rows };
-  }
-  for (const g of ['settings', 'state']) for (const k of new Set([...Object.keys(b.data[g] || {}), ...Object.keys(cur[g] || {})])) {
-    const x = (b.data[g] || {})[k], y = (cur[g] || {})[k];
-    if (JSON.stringify(x) !== JSON.stringify(y)) d[g][k] = x === undefined ? { absent: true } : { v: x };
-  }
-  return d;
+const okMoment = v => typeof v === 'number' && isFinite(v) && v >= -2208988800000 && v < 32503680000000;
+// did a step change stored data? (only what it touched is compared)
+const deepFreeze = o => { if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) deepFreeze(v); } return o; };
+export function journalChanged(j, app) {
+  if (app.seq !== j.seq) return true;
+  for (const [arr, len] of j.lens) if (arr.length !== len) return true;
+  for (const [obj, m] of j.cells) for (const [k, rec] of m) { if ((k in obj) !== rec.had) return true; if (rec.had && JSON.stringify(obj[k]) !== JSON.stringify(rec.v)) return true; }
+  return false;
 }
-export function applyDelta(app, d) {
-  const D = app.data;
-  for (const [tk, t] of Object.entries(d.tables)) {
-    if (t.absent) { delete D.tables[tk]; continue; }
-    const arr = D.tables[tk] ||= [];
-    for (const [i, r] of t.rows) if (r !== null && i < t.len) arr[i] = JSON.parse(JSON.stringify(r));
-    arr.length = t.len;
-  }
-  for (const g of ['settings', 'state']) for (const [k, x] of Object.entries(d[g])) { D[g] ||= {}; if (x.absent) delete D[g][k]; else D[g][k] = JSON.parse(JSON.stringify(x.v)); }
-  app.seq = d.seq;
+export function undoJournal(app, j) {
+  for (const [obj, m] of j.cells) for (const [k, rec] of m) { if (rec.had) obj[k] = JSON.parse(JSON.stringify(rec.v)); else delete obj[k]; }
+  for (const [arr, len] of j.lens) arr.length = len;
+  app.seq = j.seq;
 }
 export const isOptRef = v => v !== null && typeof v === 'object' && !Array.isArray(v) && typeof v.o === 'string' && Object.keys(v).length === 1;
 
