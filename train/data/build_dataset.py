@@ -157,6 +157,10 @@ def main():
     with open(out / "test_refs.jsonl", "w") as f:
         for r in sorted(split["test"], key=lambda r: r["id"]):
             f.write(json.dumps({"id": r["id"], "task": r["task"], "request": r["request"], "before": r.get("before"), "ref": r["program"]}, ensure_ascii=False) + "\n")
+    # held-out slice of templated/generated requests (val rows from sources/), reported separately from the 40 real-wording requests
+    with open(out / "templ_refs.jsonl", "w") as f:
+        for r in sorted([r for r in split["val"] if r["src"].startswith("sources/")], key=lambda r: r["id"])[:60]:
+            f.write(json.dumps({"id": r["id"], "task": r["task"], "request": r["request"], "before": r.get("before"), "ref": r["program"]}, ensure_ascii=False) + "\n")
     commit = subprocess.run(["git", "-C", a.lang, "log", "-1", "--format=%h", "--", "."], capture_output=True, text=True).stdout.strip()
     cnt = lambda rs, k: sum(1 for r in rs if r[k[0]] == k[1])
     by_src = {}

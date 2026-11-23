@@ -91,12 +91,12 @@ if "train" in stages:
     (d / "37_save_model.drivesave.json").write_text(json.dumps({f"{RUN}/log.jsonl": DR, f"{RUN}/train.stdout.log": DR, f"{RUN}/final.tar.part00": DR, f"{RUN}/final.tar.SHA256SUMS": DR}))
 if "eval" in stages:
     (d / "38_eval.py").write_text(HEART + f'''
-cmd = "cd {ROOT}/train && python3 eval_gen.py --model {RUN}/final --data {a.data_dir} --out {RUN}/eval --lang {ROOT}/lang --chat_kwargs {shlex.quote(a.chat_kwargs)} > {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
+cmd = "cd {ROOT}/train && python3 eval_gen.py --model {RUN}/final --data {a.data_dir} --out {RUN}/eval --lang {ROOT}/lang --chat_kwargs {shlex.quote(a.chat_kwargs)} > {RUN}.eval.log 2>&1; python3 eval_gen.py --model {RUN}/final --data {a.data_dir} --refs templ_refs.jsonl --out {RUN}/eval_templ --lang {ROOT}/lang --chat_kwargs {shlex.quote(a.chat_kwargs)} >> {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
 subprocess.Popen(cmd, shell=True)
 log = heart("{RUN}.eval.log", "EVAL_FINISHED", 1500, "eval_gen.py")
 print(log[-2500:])
 assert "Traceback" not in log and "score.mjs failed" not in log, "eval failed"
-assert os.path.exists("{RUN}/eval/metrics.json"), "no metrics"
+assert os.path.exists("{RUN}/eval/metrics.json") and os.path.exists("{RUN}/eval_templ/metrics.json"), "no metrics"
 ''')
 if "export" in stages:
     (d / "39_export.py").write_text(HEART + f'''
@@ -110,6 +110,7 @@ assert "EXPORT_OK" in log, "export failed"
 pk = ["true"]
 if "eval" in stages:
     pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/eval {RUN}/eval")
+    pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/eval_templ {RUN}/eval_templ")
 if "export" in stages and a.gguf_parts > 1:
     pk.append(f"python3 {ROOT}/train/colab/pack.py split {RUN}/gguf/{N}-f16.gguf && rm {RUN}/gguf/{N}-f16.gguf")
 if a.ckpt_parts:
@@ -117,7 +118,7 @@ if a.ckpt_parts:
 (d / "40_pack.py").write_text(f'import subprocess\nfor c in {pk!r}:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-300:], r.stderr[-300:])\n    assert r.returncode == 0, c\nprint(subprocess.run("ls -la {RUN} {RUN}/gguf", shell=True, capture_output=True, text=True).stdout)\n')
 save = {}
 if "eval" in stages:
-    save |= {f"{RUN}/eval.tar.part00": DR, f"{RUN}/eval.tar.SHA256SUMS": DR, f"{RUN}/eval/metrics.json": DR}
+    save |= {f"{RUN}/eval.tar.part00": DR, f"{RUN}/eval.tar.SHA256SUMS": DR, f"{RUN}/eval/metrics.json": DR, f"{RUN}/eval_templ.tar.part00": DR, f"{RUN}/eval_templ.tar.SHA256SUMS": DR}
 if "export" in stages:
     save[f"{RUN}/gguf/SHA256SUMS"] = DR + "/gguf"
     for q in ["f16"] + a.quants.split():

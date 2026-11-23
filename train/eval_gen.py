@@ -46,11 +46,11 @@ def main():
     ap.add_argument("--model", required=True); ap.add_argument("--data", default="data/out")
     ap.add_argument("--out", default=None); ap.add_argument("--lang", default=str(HERE.parent / "lang"))
     ap.add_argument("--max_new", type=int, default=768); ap.add_argument("--bs", type=int, default=8)
-    ap.add_argument("--chat_kwargs", default="{}"); ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--chat_kwargs", default="{}"); ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()
     from transformers import AutoModelForCausalLM, AutoTokenizer
     out = pathlib.Path(a.out or pathlib.Path(a.model).parent / "eval"); out.mkdir(parents=True, exist_ok=True)
-    refs = read_jsonl(pathlib.Path(a.data) / "test_refs.jsonl")
+    refs = read_jsonl(pathlib.Path(a.data) / a.refs)
     if a.limit: refs = refs[:a.limit]
     system = json.load(open(pathlib.Path(a.data) / "dataset_card.json"))["system_prompt"]
     tok = AutoTokenizer.from_pretrained(a.model); tok.padding_side = "left"

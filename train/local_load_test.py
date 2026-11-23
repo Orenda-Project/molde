@@ -19,7 +19,7 @@ def avail_mb():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("gguf"); ap.add_argument("--data", default=str(HERE / "data/out")); ap.add_argument("--lang", default=str(HERE.parent / "lang"))
-    ap.add_argument("-n", type=int, default=5); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
+    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
     ap.add_argument("--full", action="store_true", help="run the whole test split (create + edit) and score it with score.mjs")
     ap.add_argument("--nogrammar", action="store_true", help="with --full: no grammar (raw model quality)")
     ap.add_argument("--metrics", help="with --full: write metrics JSON here")
@@ -33,7 +33,7 @@ def main():
     port = os.environ.get("PORT", "8197")
     env = {**os.environ, "LD_LIBRARY_PATH": binp + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
     grammar = open(pathlib.Path(a.lang) / "moldescript.gbnf").read()
-    refs = [json.loads(l) for l in open(pathlib.Path(a.data) / "test_refs.jsonl")]
+    refs = [json.loads(l) for l in open(pathlib.Path(a.data) / a.refs)]
     refs = refs if a.full else [r for r in refs if r["task"] == "create"][:a.n]
     system = json.load(open(pathlib.Path(a.data) / "dataset_card.json"))["system_prompt"]
     log = open("/tmp/molde-llama-server.log", "w")
