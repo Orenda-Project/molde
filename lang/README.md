@@ -22,7 +22,7 @@ The language the tiny on-device model writes. The reference is [`SPEC.md`](SPEC.
 | `tokens.py`, `TOKENS.md` | token counts (stock Qwen3.5 and planned tokenizer) and the gates |
 | `examples/NN-name.mo`, `examples/INDEX.json` | 30 programs; `edits/NN-name/{before.mo,request.txt,after.mo}`: 20 edits |
 | `tests/` | `node --test lang/tests/` |
-| `tools/gbnf-check.cpp` | a 60-line checker that runs llama.cpp's own grammar engine on files |
+| `tools/gbnf-check.cpp` | a small checker that runs llama.cpp's own grammar engine on files |
 
 ## Run
 
