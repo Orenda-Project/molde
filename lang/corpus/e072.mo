@@ -4,7 +4,7 @@ let low = minof(options study.subject, sum(study.mins week where subject = it))
 "Minutes this week" sum(study.mins week) big
 each options study.subject
   row card
-    text it grow
+    it grow
     sum(study.mins week where subject = it) "min" bold
     if(sum(study.mins week where subject = it) = low, "neglected most", "") color warn
 form study, "Add study time"

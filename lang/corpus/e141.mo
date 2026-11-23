@@ -2,7 +2,7 @@ app "Shopping" cart mint
 table item name text, aisle pick Produce|Dairy|Bakery|Meat|Pantry|Other = Produce, got bool
 each options item.aisle as a
   if countof(item, it.aisle = a) > 0
-    text a head color accent size huge
+    a head color accent size huge
     each item where aisle = a as i
       row swipe remove i
         toggle i.got

@@ -9,12 +9,12 @@ let ra = sum(ball.runs where team = A) + count(ball where team = A and wide = ye
 let rb = sum(ball.runs where team = B) + count(ball where team = B and wide = yes)
 row gap 2
   stack card grow
-    text name_a head
-    text ra "/" count(ball where team = A and out = yes) big
+    name_a head
+    ra "/" count(ball where team = A and out = yes) big
     "Overs" floor(la / 6) + la % 6 / 10 faint
   stack card grow
-    text name_b head
-    text rb "/" count(ball where team = B and out = yes) big
+    name_b head
+    rb "/" count(ball where team = B and out = yes) big
     "Overs" floor(lb / 6) + lb % 6 / 10 faint
 choice bat
 row gap 1

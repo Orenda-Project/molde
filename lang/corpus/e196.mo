@@ -17,7 +17,7 @@ each customer as c
   row card gap 1 fill if(pr > 0 and pr = maxof(customer, sum(it.order.price week) - sum(it.order.delivery week)), good, surface)
     c.name bold grow
     count(c.order week) "orders"
-    text pr bold
+    pr bold
     button "+ Lunch" tap add order customer = c, meal = Lunch, price = last(c.order.price)
 form customer, "Add customer"
 form order, "Add order"

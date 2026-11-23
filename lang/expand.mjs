@@ -81,7 +81,8 @@ function expandCall(call, defs, errors, stack) {
   // `goal faint`, `x big`: a value followed by a style, not a component call
   const asText = asTextLine(call.src);
   const styled = asText && asText.k && asText.k.some(k => k.r === 'mod');
-  if (styled && (!entry || call.args.length <= 1)) return err('E_SYNTAX', `a line that starts with a name is read as a component call${entry ? ` ("${call.name}" is a component that needs other values)` : `, and there is no component "${call.name}"`}.`, `to show the value, start the line with text: text ${call.src}`);
+  const firstKind = entry && entry.def.params[0] && entry.def.params[0].kind;
+  if (styled && (!entry || (call.args.length <= 1 && !['table', 'name', 'src'].includes(firstKind)))) return err('E_SYNTAX', `a line that starts with a name is read as a component call${entry ? ` ("${call.name}" is a component that needs other values)` : `, and there is no component "${call.name}"`}.`, `to show the value, start the line with text: text ${call.src}`);
   if (!entry) {
     const names = [...defs.keys()].join(', ');
     return err('E_UNKNOWN_COMPONENT', `there is no component (or statement) called "${call.name}".`, `use a statement from SPEC.md or one of: ${names}${asText ? `; or, to show a value, start the line with text: text ${call.src}` : ''}.`);
@@ -116,7 +117,7 @@ function expandCall(call, defs, errors, stack) {
     const toks = lex(l.text.trim()).flatMap(t => (t.t === 'word' && subst.has(t.v)) ? subst.get(t.v) : [t]);
     text.push(ind + joinToks(toks));
   }
-  const frag = parse(text.join('\n') + '\n');
+  const frag = parse(text.join('\n') + '\n', { comps: defs.keys() });
   for (const e of frag.errors) {
     const dl = lines[e.line - 2];
     errors.push(new MoError(e.code, call.line, `inside "${call.name}"${dl ? ` (its line "${dl.text.trim()}")` : ''}: ${e.msg}`, e.hint));

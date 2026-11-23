@@ -11,7 +11,7 @@ row gap 3
     rect 14, 98 - 92 * p, 12, 92 * p fill accent radius 6
     circle 20, 106, 12 fill accent
   stack grow
-    text total big
+    total big
     round(p * 100) "% of" goal faint
     "At this pace:" monthname(addmonths(today, nm)) faint
 quick deposit, amount, [5000, 10000]

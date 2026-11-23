@@ -7,10 +7,7 @@ import { format } from '../format.mjs';
 
 const HEAD = 'app "x"\ntable t n num\nsetting goal num = 3\nstate n num = 1\nstate x num = 1\nstate tab text = "a"\nstate w time = 7:00\nstate b time = 23:00\n';
 const CASES = [
-  ['a bare name and a style', 'x big', 'E_SYNTAX', /start the line with text: text x big/],
-  ['a bare name and align', 'n align center', 'E_SYNTAX', /start the line with text: text n align center/],
   ['a std name used as a value with a style', 'goal faint', 'E_SYNTAX', /start the line with text: text goal faint/],
-  ['a bare name and a formula', 'w - b x - w', 'E_SYNTAX', /start the line with text/],
   ['shape values without commas', 'draw\n  rect 0 0 10 10', 'E_SYNTAX', /values of rect must be separated by commas/],
   ['a shape with a missing value', 'draw\n  rect 0, 0, 10', 'E_SYNTAX', /rect needs 4 values \(X, Y, W, H\) but has 3/],
   ['a std call without commas', 'daybars last 7 days sum(t.n on it)', 'E_SYNTAX', /values of daybars.*separated by commas/],

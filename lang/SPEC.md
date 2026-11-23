@@ -208,7 +208,7 @@ A function's result can be followed by a field: `last(item).name`, `random(card)
 
 | Line | What it shows |
 |---|---|
-| `"text" formula "text" ...` | a text line: parts are texts in quotes or formulas, joined by one space (no space before a text that starts with `, . ; : ! ? % ) /`, none after one ending in `( / #`). A line that starts with a quote, a number, a function, a bracket or a dotted name (`it.name`) is a text line |
+| `"text" formula "text" ...` | a text line: parts are texts in quotes or formulas, joined by one space (no space before a text that starts with `, . ; : ! ? % ) /`, none after one ending in `( / #`). A line that starts with a quote, a number, a function, a bracket or a name is a text line (`total big`, `it faint`, `it.name grow`), **unless the name is a component** (std or your own `def`): `list card` calls `list` with the table `card`. To show a value whose name is a component, write `text NAME` |
 | `text name ...` | the same, for a line that starts with a bare name |
 | `button PART ... tap ACTION` | a button (a `tap` is required) |
 | `icon NAME` | an icon by name (section 8.4), or a formula giving a name |

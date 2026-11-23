@@ -8,7 +8,7 @@ row gap 1
       draw width 44
         circle 50, 50, 46 fill if(d.mood = index + 1, accent, soft)
         rect 30, 74 - 12 * index, 40, 8 + 12 * index fill bg radius 3
-      text it size tiny
+      it size tiny
 field d.note "What is on your mind?"
 button "Save entry" tap save d
 row gap 2

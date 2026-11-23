@@ -6,7 +6,7 @@ remind "Prayer time" at ptime.at_time
 count(prayer today) "of 5 prayed today" head
 each options prayer.name
   row card
-    text it grow
+    it grow
     toggle prayer today where name = it
 count(prayer week) "prayers this week" faint
 daybars last 7 days, count(prayer on it)

@@ -11,5 +11,5 @@ each med as m
         m.name m.dose bold
         m.per_day "times a day since" m.started faint
       button "Took one" tap add taken med = m
-    text left "left," dleft "days" bold color if(dleft <= 5, bad, good)
+    left "left," dleft "days" bold color if(dleft <= 5, bad, good)
 form med, "Add medicine"

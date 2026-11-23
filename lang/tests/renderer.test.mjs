@@ -35,7 +35,7 @@ test('joining and number formatting', () => {
 });
 
 test('currency comes from the locale option; cents show 2 decimals; other years show the year', () => {
-  const a = run('app "M" coin mint\nstate m money = 1200\nstate c money = 2.5\nstate d date = today\nbutton "old" tap set d = addmonths(d, -12)\ntext m c d\n', { currency: 'Rs' });
+  const a = run('app "M" coin mint\nstate m money = 1200\nstate c money = 2.5\nstate d date = today\nbutton "old" tap set d = addmonths(d, -12)\nm c d\n', { currency: 'Rs' });
   assert.deepEqual(texts(a).slice(1), ['Rs 1200 Rs 2.50 Mon 23 Nov']);
   tapText(a, 'old');
   assert.ok(texts(a)[1].endsWith('Sun 23 Nov 2025'), texts(a)[1]);
@@ -81,12 +81,12 @@ test('editor API: fields() and setField(), one undo per field edit', () => {
 });
 
 test('setting defaults: a new default never overwrites a saved value; `set` does, and revert undoes it', () => {
-  const v1 = 'app "T" beads mint\nsetting target num = 33 "Count to"\ntext target\n';
+  const v1 = 'app "T" beads mint\nsetting target num = 33 "Count to"\ntarget\n';
   const a = run(v1);
   a.setField('target', null, 50);
-  assert.equal(a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\ntext target\n').verdict, 'safe');
+  assert.equal(a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to"\ntarget\n').verdict, 'safe');
   assert.deepEqual(texts(a), ['50']); // the user's 50 wins
-  const r = a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\ntext target\n');
+  const r = a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\ntarget\n');
   assert.ok(r.changes.some(c => /sets the saved value of setting target to 100/.test(c)));
   assert.deepEqual(texts(a), ['100']);
   a.applyEdit('app "T" beads mint\nsetting target num = 100 "Count to" set\n"Target" target\n'); // the same set again: no new write
@@ -108,7 +108,7 @@ test('nth row, a random row in an action, shuffle keeps a stable order', () => {
 });
 
 test('after DUR runs an action later', () => {
-  const a = run('app "D" timer ink\nstate flash bool = no\ntext flash\nbutton "go" tap set flash = yes then after 2s set flash = no\n');
+  const a = run('app "D" timer ink\nstate flash bool = no\nflash\nbutton "go" tap set flash = yes then after 2s set flash = no\n');
   tapText(a, 'go');
   assert.equal(texts(a)[0], 'Yes');
   a.tick(1000);

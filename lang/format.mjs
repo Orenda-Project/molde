@@ -1,13 +1,15 @@
 // Canonical formatter: two spaces per indentation level, single spaces between tokens with
 // fixed exceptions (see lex.mjs join), no blank lines, comments kept, one final newline.
 // It also writes the ONE spelling of things that can be written two ways:
-//   text "x" ...            ->  "x" ...           (a line starting with a text, formula or dotted name is a text line)
+//   text "x" ...            ->  "x" ...           (a line starting with a text, formula or name is a text line,
+//                                                 unless the name is a component: text list stays)
 //   size huge bold          ->  big     size large bold -> head     size small color muted -> faint
 //   = "Food" (a pick option) -> = Food  (option values are written bare, as in their declaration)
 //   pick "Eating out"|...   ->  pick Eating_out|... (an underscore shows as a space)
 //   setting goal num "Goal" ->  setting goal num   (a label that repeats the name is the default label)
 // The output is exactly the text the GBNF accepts, and format(format(x)) === format(x).
-import { splitLines } from './parse.mjs';
+import { splitLines, componentNames, STMT_WORDS } from './parse.mjs';
+import { RESERVED } from './engine.mjs';
 import { lex, join } from './lex.mjs';
 
 const WORD = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -31,7 +33,7 @@ function declaredOptions(lines) {
   return opts;
 }
 
-function rewrite(toks, opts) {
+function rewrite(toks, opts, comps) {
   // option values: bare words in declarations and after = or !=
   toks = toks.map((t, i) => {
     if (t.t !== 'str') return t;
@@ -66,18 +68,20 @@ function rewrite(toks, opts) {
   }
   // implicit text line
   if (out[0] && out[0].t === 'word' && out[0].v === 'text' && out[1] && (out[1].t === 'str' || out[1].t === 'num' || (out[1].t === 'func' && out[1].known) || out[1].v === '('
-    || (out[1].t === 'word' && out[2] && out[2].v === '.'))) out.shift();
+    || (out[1].t === 'word' && out[2] && out[2].v === '.')
+    || (out[1].t === 'word' && /^[a-z][a-z0-9_]*$/.test(out[1].v) && (out[1].v === 'it' || !RESERVED.has(out[1].v)) && !STMT_WORDS.has(out[1].v) && !comps.has(out[1].v)))) out.shift();
   return out;
 }
 
 export function format(src) {
   const { lines } = splitLines(src);
   const opts = declaredOptions(lines);
+  const comps = componentNames(src);
   const out = [];
   for (const ln of lines) {
     if (ln.comment) { out.push(ln.comment); continue; }
     let body;
-    try { body = join(rewrite(lex(ln.body), opts)); } catch { body = ln.body; }
+    try { body = join(rewrite(lex(ln.body), opts, comps)); } catch { body = ln.body; }
     out.push('  '.repeat(ln.depth) + body);
   }
   return out.join('\n') + '\n';

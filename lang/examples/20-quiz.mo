@@ -2,7 +2,7 @@ app "Quiz" star plum
 table item question text, a text, b text, c text, right pick A|B|C
 table answer item ref item, chose pick A|B|C
 let score = countof(answer, it.chose = it.item.right)
-text score "of" count(answer) "right" big
+score "of" count(answer) "right" big
 each item as x
   if count(x.answer) = 0
     stack card gap 1

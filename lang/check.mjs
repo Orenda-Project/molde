@@ -57,6 +57,8 @@ export function check(src, opts = {}) {
       errors.push(...ex.errors);
       defs = ex.defs;
       const C = new Checker(errors, prog);
+      C.compNames = [...ex.defs.keys()];
+      C.compSig = n => ex.defs.has(n) ? ex.defs.get(n).def.params.map(p => p.name).join(', ') : null;
       C.probeName = opts.probe || null;
       C.header(prog.header);
       C.list(prog.body, { top: true });
@@ -236,7 +238,15 @@ class Checker {
         s.args.forEach((a, i) => this.num(a, `${s.shape} value ${i + 1}`));
         if (s.parts) this.parts(s.parts);
         return this.mods(s.mods);
-      case 'text': this.parts(s.parts); return this.mods(s.mods);
+      case 'text': {
+        // a line that starts with a bare unknown word: most likely a component or statement that does not exist
+        const p0 = s.implicit && s.parts[0];
+        if (p0 && p0.k === 'path' && !p0.parts.length && this.compSig && this.compSig(p0.head) !== null)
+          return this.err('E_SYNTAX', `"${p0.head}" is a component, so this line is a component call, but cannot read the values of ${p0.head}; they are separated by commas.`, `write ${p0.head} ${this.compSig(p0.head)}; to show a value with the same name, start the line with text.`);
+        if (p0 && p0.k === 'path' && p0.head !== 'it' && !p0.parts.length && !this.lookup(p0.head) && !this.tables.has(p0.head) && !this.options.has(p0.head) && !this.failed.has(p0.head))
+          return this.err('E_UNKNOWN_COMPONENT', `there is no component, statement or value called "${p0.head}".`, `start the line with a statement from SPEC.md, a component (${(this.compNames || []).join(', ')}) or a declared value.`);
+        this.parts(s.parts); return this.mods(s.mods);
+      }
       case 'button':
         this.parts(s.parts); this.mods(s.mods);
         if (!s.mods.some(m => m.m === 'tap')) this.err('E_ACTION', 'a button needs tap and an action.', 'add: tap add/set/toggle/...');

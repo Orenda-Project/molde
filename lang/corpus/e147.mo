@@ -10,7 +10,7 @@ each activity where day = dayname(today) sort start as a
 grid 2 gap 1
   each options activity.day as dd
     stack card gap 1
-      text dd bold
+      dd bold
       each activity where day = dd sort start as a
         stack tap edit a gap 0
           a.start a.kid.name size small bold

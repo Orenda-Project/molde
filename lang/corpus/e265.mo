@@ -4,7 +4,7 @@ table item name text, cat pick Vegetables|Dairy|Grains|Spices|Cleaning|Medicine,
 "In the cart" sumof(item where got = yes, it.qty * it.price) faint
 each options item.cat as k
   if count(item where cat = k) > 0
-    text k head
+    k head
     each item where cat = k as i
       row card swipe remove i
         toggle i.got

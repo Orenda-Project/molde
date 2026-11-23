@@ -2,7 +2,7 @@ app "Exam prep" school plum
 table question q text, a text, b text, c text, right pick A|B|C, topic text
 table attempt question ref question, chose pick A|B|C
 setting exam date = today "Exam date"
-text exam - today "days to the exam" big
+exam - today "days to the exam" big
 "Practice score" countof(attempt, it.chose = it.question.right) "of" count(attempt) head
 each question as x
   stack card gap 1

@@ -8,7 +8,7 @@ row gap 3 align center
     rect 16, 95 - 88 * clamp(total / goal, 0, 1), 8, 88 * clamp(total / goal, 0, 1) fill accent radius 4
     circle 20, 105, 12 fill accent
   stack grow gap 1
-    text total big
+    total big
     "of" goal faint
     round(100 * clamp(total / goal, 0, 1)) "% there" head
 quick saved, amount, [500, 1000, 5000]

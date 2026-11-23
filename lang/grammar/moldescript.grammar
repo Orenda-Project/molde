@@ -67,11 +67,14 @@ box-stmt ::= ("stack" | "row" | "box" | "scroll" | "grid" sp number) (sp mod)*
 
 # ---------- content and inputs ----------
 text-stmt ::= "text" sp tparts (sp mod)*
-# a line that starts with a quoted text, a number, a function, a bracket or a dotted name (it.name) is a text line
+# a line that starts with a quoted text, a number, a function, a bracket or a name is a text line
+# (a name that is a component starts a component call instead: parse.mjs decides, it knows the components)
 itext-stmt ::= (string | lead-expr) (sp tpart)* (sp mod)*
 lead-expr ::= lead-prod (sp add-op sp prod-expr)*
 lead-prod ::= lead-unary (sp mul-op sp unary)*
-lead-unary ::= "-" unary | number | func | "(" expr ")" | ("it" | ident) ("." ident)+
+lead-unary ::= "-" unary | number | func | "(" expr ")" | ("it" | ident) ("." ident)+ | "it" | lead-ident
+# a name that is not a statement word (gen-gbnf.mjs writes this rule out letter by letter for the GBNF)
+lead-ident ::= ident
 tparts ::= tpart (sp tpart)*
 tpart ::= string | expr
 icon-stmt ::= "icon" sp primary (sp mod)*

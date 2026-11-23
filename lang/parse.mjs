@@ -13,7 +13,7 @@ const SHAPES = { rect: ['X', 'Y', 'W', 'H'], line: ['X1', 'Y1', 'X2', 'Y2'], cir
 const GR = loadGrammar();
 const altNames = r => (GR.map.get(r).items || [GR.map.get(r)]).map(n => n.name);
 // statements other than a component call, and the words that start them
-export const NONCALL = [...altNames('leaf-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')];
+export const NONCALL = [...altNames('leaf-stmt').filter(n => n !== 'itext-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')]; // and not a text line
 export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
 import { lex, join, LexError } from './lex.mjs';
 
@@ -122,8 +122,17 @@ function syntaxError(no, text, r) {
   return E(`cannot read the line from "${near}" (column ${col + 1}).`, exp ? `expected ${exp}.` : 'check the statement form in SPEC.md.');
 }
 
-export function parse(src, { lib = false } = {}) {
+// the component names a program can call: the std library plus its own defs
+export function componentNames(src, extra) {
+  const c = new Set(STD_SIGS.keys());
+  for (const m of src.matchAll(/^\s*def ([a-z][a-z0-9_]*)/gm)) c.add(m[1]);
+  if (extra) for (const n of extra) c.add(n);
+  return c;
+}
+
+export function parse(src, { lib = false, comps = null } = {}) {
   const { lines, errors } = splitLines(src);
+  const COMPS = componentNames(src, comps);
   const prog = { kind: 'program', header: null, body: [], comments: [], errors };
   const stack = [{ node: prog, depth: -1, block: true }];
   let first = true;
@@ -147,7 +156,11 @@ export function parse(src, { lib = false } = {}) {
     }
     ln.canon = canon;
     const starts = first ? [lib ? 'lib-first' : 'first-stmt'] : ['leaf-stmt', 'block-stmt'];
-    const r = parseCached(canon, starts);
+    // a line that starts with a bare name: a component call when the name is a component, else a text line
+    const w0 = !first && canon.match(/^[a-z][a-z0-9_]*(?![a-z0-9_(])/);
+    let r = null;
+    if (w0) r = parseCached(canon, STMT_WORDS.has(w0[0]) ? NONCALL : [COMPS.has(w0[0]) ? 'call-stmt' : 'itext-stmt']);
+    if (!r || !r.tree) r = parseCached(canon, starts);
     if (!r.tree) {
       if (first && !/^(app|ask|lib)\b/.test(canon)) errors.push(new MoError('E_HEADER', ln.no, lib ? 'a library starts with lib "name".' : 'a program starts with app "Name" (or is a single ask line).', lib ? 'add lib "name" as line 1.' : 'add app "My app" as line 1.'));
       else errors.push(syntaxError(ln.no, canon, r));
@@ -156,9 +169,11 @@ export function parse(src, { lib = false } = {}) {
       continue;
     }
     const top = kids(r.tree)[0];
-    if (top && top.r === 'call-stmt' && STMT_WORDS.has(child(top, 'ident').v)) {
+    const lead = top && top.r === 'itext-stmt' && canon.match(/^[a-z][a-z0-9_]*(?![a-z0-9_(])/);
+    if ((top && top.r === 'call-stmt' && STMT_WORDS.has(child(top, 'ident').v)) || (lead && STMT_WORDS.has(lead[0]))) {
       // `table drink ml` is a broken table line, not a component called "table"
-      errors.push(syntaxError(ln.no, canon, parseText(canon, NONCALL)));
+      const rn = parseText(canon, NONCALL);
+      errors.push(syntaxError(ln.no, canon, rn.tree ? { far: 0, expected: [] } : rn));
       skip(ln);
       continue;
     }
@@ -442,6 +457,7 @@ function expr(n) {
       if (k.lit === '-') return { k: 'neg', a: expr(child(n, 'unary')) };
       if (k.lit === '(') return { k: 'paren', a: expr(child(n, 'expr')) };
       if (k.r === 'number') return { k: 'num', v: +k.v };
+      if (k.r === 'lead-ident') return { k: 'path', head: child(k, 'ident').v, parts: [] };
       if (k.r === 'ident' || k.lit === 'it') { const ids = children(n, 'ident').map(id); return k.lit === 'it' ? { k: 'path', head: 'it', parts: ids } : { k: 'path', head: ids[0], parts: ids.slice(1) }; }
       return func(k);
     }

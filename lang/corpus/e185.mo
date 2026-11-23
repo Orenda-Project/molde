@@ -5,7 +5,7 @@ goal sum(lesson.mins) / 60, test_hours, "hours practised", "h"
 "Confidence by skill" head
 each options lesson.skill as s
   row gap 1
-    text s grow
+    s grow
     round(avg(lesson.confidence where skill = s)) "/ 5" bold
 form lesson, "Log lesson"
 trend lesson sort at, it.confidence

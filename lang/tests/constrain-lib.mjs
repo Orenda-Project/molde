@@ -37,7 +37,7 @@ export function decodeRandom(src, seed, leafOnly = false) {
     positions++;
     if (leafOnly && !isLeaf(src, p)) continue;
     let names = ctx.names;
-    if (ctx.groups) names = out[at + p.word.length] === '.' ? ctx.groups.dotted : ctx.groups.component;
+    if (ctx.groups) names = ctx.groups.component.includes(p.word) ? ctx.groups.component : ctx.groups.dotted; // a component call, or a text line that starts with a value
     const dotNext = out[at + p.word.length] === '.' && out[at + p.word.length + 1] !== '.';
     const canDot = n => { const c = nameContext(out.slice(0, at) + n + '.'); return c.mode === 'free' || c.names.length > 0; };
     let pool = names.filter(n => !STRUCTURE.has(n) && (!dotNext || canDot(n))); // as the mask does: no dot after a name nothing can follow

@@ -5,7 +5,7 @@ stat sum(sale.amount today), "sales today"
 "By payment type" head
 each options sale.pay
   row
-    text it grow
+    it grow
     sum(sale.amount today where pay = it) bold
 "By item" head
 each sale today by item

@@ -5,7 +5,7 @@ state el dur = 0s
 state going bool = no
 every 1s if going set el = el + 1s
 field sub "Subject"
-text el big
+el big
 row gap 1
   button if(going, "Pause", "Start") tap set going = not going
   button "Save" tap add session subject = sub, mins = round(el / 1m) then set going = no then set el = 0s

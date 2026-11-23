@@ -11,7 +11,7 @@ row gap 3
     circle 20, 106, 12 fill warn
   stack grow
     "Raised" faint
-    text raised big color warn
+    raised big color warn
     round(p * 100) "% of the target" faint
 quick donation, amount, [500, 1000, 5000]
 form donation

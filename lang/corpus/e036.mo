@@ -4,7 +4,7 @@ state m date = today
 monthnav m
 grid 7 gap 1
   each ["M", "T", "W", "T", "F", "S", "S"] as w
-    text w size tiny color muted align center
+    w size tiny color muted align center
   each 1..weekday(m - monthday(m) + 1) - 1
     box
   each days month of m as d

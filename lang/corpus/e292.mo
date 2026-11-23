@@ -10,7 +10,7 @@ each task where day = dayname(today) as t
 "The week" head
 each options task.day as dd
   if count(task where day = dd) > 0
-    text dd bold
+    dd bold
     each task where day = dd as t
       row tap edit t swipe remove t
         t.name grow
