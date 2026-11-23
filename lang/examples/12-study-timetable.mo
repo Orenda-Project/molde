@@ -12,6 +12,6 @@ grid 5 gap 1
       dd bold align center
       each lesson where day = dd sort start as l
         stack radius 6 pad 1 fill if(l.subject = Maths, accent, if(l.subject = English, good, if(l.subject = Science, warn, soft))) tap edit l
-          l.subject size small bold
-          l.start l.mins "min" size tiny
+          l.subject small bold
+          l.start l.mins "min" tiny
 form lesson

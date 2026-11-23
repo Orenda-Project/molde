@@ -1,7 +1,7 @@
 app "Client payments" wallet slate
 table client name text, phone text?
 table due client ref client, amount money, pay_by date, paid bool
-"Due now" sumof(due where paid = no, it.amount) big
+"Due now" sum(due where paid = no, it.amount) big
 each due where paid = no sort pay_by as d
   row card gap 1
     stack grow

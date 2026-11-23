@@ -112,7 +112,7 @@ let NAME(value kind, ...) = formula                 # a formula with values, use
                                                     # a value can be a row: let worth(r item) = r.qty * r.price
 ```
 
-`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. A setting's `= default` only fills it when nothing is stored; a value the user saved always wins. An edit that must change the saved value says so with `set` at the end of the line (`setting target num = 100 set`); the change is listed and undoable. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
+`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. A setting's `= default` only fills it when nothing is stored; a value the user saved always wins. An edit that must change the saved value says so with `set` at the end of the line (`setting target num = 100 set`); the change is listed and undoable. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = count(...)` then `win(X)`.
 
 ## 5. Formulas
 
@@ -160,10 +160,10 @@ gap(T ...)      average days between the days that have rows (empty with fewer t
 ### 5.4 Folds (over any source, with `it` = each item)
 
 ```
-sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   countof(SOURCE, condition)
+sum(SOURCE, formula)   max(SOURCE, formula)   min(SOURCE, formula)   count(SOURCE, condition)
 ```
 
-`sumof(sets today, it.kg * it.reps)`, `maxof(habit, streak(it.check))`, `countof(days last 14 days, count(entry on it) > 0)`. Sources are listed in section 7.1.
+`sum(sets today, it.kg * it.reps)`, `max(habit, streak(it.check))`, `count(days last 14 days, count(entry on it) > 0)`. With one value these are the aggregates of section 5.2; with a source and a formula they work item by item (`it` is the item). `min(a, b)` and `max(a, b)` of two values are the smaller and the larger. Sources are listed in section 7.1.
 
 ### 5.5 Functions
 
@@ -485,7 +485,7 @@ And a formula with values (tic-tac-toe's win check, written once):
 app "Tic tac toe" board ink
 table move game num, cell num 1..9, mark pick X|O
 setting cur num = 1 "Game"
-let win(m text) = countof([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
+let win(m text) = count([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
 if win("X")
   "X wins!" big
 ```

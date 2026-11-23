@@ -19,7 +19,7 @@ import { lex } from './lex.mjs';
 const PROBE = 'zprobeq';
 const WORDCH = /[A-Za-z0-9_]/;
 const AGGS = new Set(['count(', 'sum(', 'avg(', 'min(', 'max(', 'last(', 'first(', 'streak(', 'best(', 'since(', 'gap(', 'due(', 'nth(', 'random(']);
-const FOLDS = new Set(['sumof(', 'maxof(', 'minof(', 'countof(']);
+const FOLDS = new Set(['count(', 'sum(', 'min(', 'max(']); // with a comma: a formula for each item
 const TARGETS = new Set(['set', 'field', 'choice', 'slider']);
 
 const tname = t => typeof t === 'string' ? t : t && t.t;

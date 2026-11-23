@@ -14,7 +14,7 @@ each order today as o
 "Customers this week" head
 each customer as c
   let pr = sum(c.order.price week) - sum(c.order.delivery week)
-  row card gap 1 fill if(pr > 0 and pr = maxof(customer, sum(it.order.price week) - sum(it.order.delivery week)), good, surface)
+  row card gap 1 fill if(pr > 0 and pr = max(customer, sum(it.order.price week) - sum(it.order.delivery week)), good, surface)
     c.name bold grow
     count(c.order week) "orders"
     pr bold

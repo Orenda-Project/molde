@@ -12,5 +12,5 @@ heat last 70 days, avg(mood.score on it), 5
 each [1, 2, 3, 4, 5, 6, 7] as w
   row
     dayname(today - weekday(today) + w) grow
-    round(sumof(days last 70 days, if(weekday(it) = w, sum(mood.score on it), 0)) / (countof(days last 70 days, weekday(it) = w and count(mood on it) > 0) + 0.001) * 10) / 10 bold
+    round(sum(days last 70 days, if(weekday(it) = w, sum(mood.score on it), 0)) / (count(days last 70 days, weekday(it) = w and count(mood on it) > 0) + 0.001) * 10) / 10 bold
 log mood

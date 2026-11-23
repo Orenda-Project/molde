@@ -8,7 +8,7 @@ each checkup where done = no sort due as c
     toggle c.done
     stack grow
       c.what bold
-      c.due size small color if(c.due < today, bad, muted)
+      c.due small color if(c.due < today, bad, muted)
 form checkup
 "Done" faint
 list checkup where done = yes

@@ -1,7 +1,7 @@
 app "Gold stock" coin plum
 table piece name text, tola num 0.., bought money, price money, sold bool
 count(piece where sold = no) "pieces in stock," sum(piece.tola where sold = no) "tola" head
-"Stock cost" sum(piece.bought where sold = no) "Profit on sold" sumof(piece where sold = yes, it.price - it.bought) faint
+"Stock cost" sum(piece.bought where sold = no) "Profit on sold" sum(piece where sold = yes, it.price - it.bought) faint
 each piece where sold = no sort at as p
   row card tap edit p swipe remove p
     stack grow

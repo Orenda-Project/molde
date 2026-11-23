@@ -4,21 +4,21 @@ lib "charts"
 
 # describe: a bar chart of {value} for each day {win}
 def daybars win win, value num
-  plot 0..countof(days win, yes), 0..maxof(days win, value) axes
+  plot 0..count(days win, yes), 0..max(days win, value) axes
     each days win
       rect index + 0.15, 0, 0.7, value fill accent radius 2
       tick index + 0.5, dayname(it)
 
 # describe: a bar chart of {value} for each of {src}
 def bars src src, value num, key text = ""
-  plot 0..countof(src, yes), 0..maxof(src, value) axes
+  plot 0..count(src, yes), 0..max(src, value) axes
     each src
       rect index + 0.15, 0, 0.7, value fill accent radius 2
       tick index + 0.5, key
 
 # describe: a line chart of {value} over {src}
 def trend src src, value num
-  plot 0..countof(src, yes) - 1, minof(src, value)..maxof(src, value) axes
+  plot 0..count(src, yes) - 1, min(src, value)..max(src, value) axes
     poly stroke accent thick 2
       each src
         pt index, value
@@ -37,4 +37,4 @@ def share src src, value num, key text
         text key grow
         text value bold
       draw 100, 3
-        rect 0, 0, 100 * value / maxof(src, value), 3 fill accent radius 1
+        rect 0, 0, 100 * value / max(src, value), 3 fill accent radius 1

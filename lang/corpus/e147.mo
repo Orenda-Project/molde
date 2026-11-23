@@ -13,7 +13,7 @@ grid 2 gap 1
       dd bold
       each activity where day = dd sort start as a
         stack tap edit a gap 0
-          a.start a.kid.name size small bold
-          a.what a.place size tiny faint
+          a.start a.kid.name small bold
+          a.what a.place tiny faint
 form activity, "Add activity"
 form kid, "Add child"

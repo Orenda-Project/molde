@@ -3,7 +3,7 @@ table question q text, a text, b text, c text, right pick A|B|C, topic text
 table attempt question ref question, chose pick A|B|C
 setting exam date = today "Exam date"
 exam - today "days to the exam" big
-"Practice score" countof(attempt, it.chose = it.question.right) "of" count(attempt) head
+"Practice score" count(attempt, it.chose = it.question.right) "of" count(attempt) head
 each question as x
   stack card gap 1
     x.q bold
@@ -13,8 +13,8 @@ each question as x
       button x.c tap add attempt question = x, chose = C
 "Weak topics" head
 each question by topic
-  if sumof(it, count(it.attempt where chose != question.right)) > 0
+  if sum(it, count(it.attempt where chose != question.right)) > 0
     row
       it.key grow
-      sumof(it, count(it.attempt where chose != question.right)) "wrong"
+      sum(it, count(it.attempt where chose != question.right)) "wrong"
 form question, "Add question from my notes"

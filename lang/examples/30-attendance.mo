@@ -11,7 +11,7 @@ grid 4 gap 1
   each student sort name as s
     stack radius 8 pad 1 fill if(count(s.absent on d) > 0, bad, good) tap toggle s.absent on d
       s.name bold align center color bg
-      if(count(s.absent on d) > 0, "Absent", "Present") size tiny align center color bg
+      if(count(s.absent on d) > 0, "Absent", "Present") tiny align center color bg
 "Tap a name to mark absent. Everyone starts present." faint
 each student sort name as s
   row

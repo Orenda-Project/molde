@@ -1,10 +1,10 @@
 app "Sleep" bed plum
 table sleep bed when, wake when, caffeine bool "Caffeine after 4pm"
 table nap len dur
-let best = maxof(sleep last 7 days, (it.wake - it.bed) / 1h)
-let worst = minof(sleep last 7 days, (it.wake - it.bed) / 1h)
-"Average sleep" round(sumof(sleep last 7 days, (it.wake - it.bed) / 1h) / count(sleep last 7 days)) "h" big
-daybars last 7 days, sumof(sleep on it, (it.wake - it.bed) / 1h)
+let best = max(sleep last 7 days, (it.wake - it.bed) / 1h)
+let worst = min(sleep last 7 days, (it.wake - it.bed) / 1h)
+"Average sleep" round(sum(sleep last 7 days, (it.wake - it.bed) / 1h) / count(sleep last 7 days)) "h" big
+daybars last 7 days, sum(sleep on it, (it.wake - it.bed) / 1h)
 each sleep last 7 days sort at desc
   row card
     it.at grow

@@ -17,6 +17,6 @@ screen kitchen "Kitchen" bell
         o.at faint grow
         button "Ready" tap set o.served = yes
 screen sales "Sales" wallet
-  stat sumof(order today, it.qty * it.dish.price), "sales today"
+  stat sum(order today, it.qty * it.dish.price), "sales today"
   stat count(order today), "orders today"
-  daybars last 7 days, sumof(order on it, it.qty * it.dish.price)
+  daybars last 7 days, sum(order on it, it.qty * it.dish.price)

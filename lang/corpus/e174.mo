@@ -12,6 +12,6 @@ each book as b
   stack card gap 1
     b.title bold
     each b.note as n
-      n.idea size small
+      n.idea small
 form book, "Add book"
 form note, "Add what I learned"

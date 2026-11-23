@@ -7,7 +7,7 @@ grid 5 gap 1
       each 1..8 as p
         if count(cell where day = dd and period = p) = 0
           box height 40 radius 6 fill soft tap add cell day = dd, period = p
-            p size tiny color muted align center
+            p tiny color muted align center
         each cell where day = dd and period = p as c
           box height 40 radius 6 fill if(c.subject = Maths, accent, if(c.subject = English, good, if(c.subject = Science, warn, if(c.subject = Urdu, bad, if(c.subject = Islamiat, ink, soft))))) tap edit c
-            c.subject size tiny bold align center color bg
+            c.subject tiny bold align center color bg

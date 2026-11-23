@@ -10,5 +10,5 @@ row gap 1
           row gap 1
             each options job.col as o
               if o != c
-                button o size tiny tap set j.col = o
+                button o tiny tap set j.col = o
 form job, "Add card"

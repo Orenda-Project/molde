@@ -2,8 +2,8 @@ app "Shop Stock" bag slate
 table item name text, buy money, sell money, qty num 0..
 table sale item ref item, n num 1..
 setting low num = 5 "Low stock level"
-let sold = sumof(sale today, it.n * it.item.sell)
-let profit = sumof(sale today, it.n * (it.item.sell - it.item.buy))
+let sold = sum(sale today, it.n * it.item.sell)
+let profit = sum(sale today, it.n * (it.item.sell - it.item.buy))
 row gap 3
   stat sold, "sales today"
   stat profit, "profit today"

@@ -1,11 +1,11 @@
 app "Exercise" dumbbell ink
 table lift exercise text, kg num 0.. = 0, sets num 1.. = 3, reps num 1..
-let vol = sumof(lift week, it.kg * it.sets * it.reps)
-let before = sumof(lift prev week, it.kg * it.sets * it.reps)
+let vol = sum(lift week, it.kg * it.sets * it.reps)
+let before = sum(lift prev week, it.kg * it.sets * it.reps)
 row gap 2
   stat vol, "kg moved this week"
   stat round((vol - before) * 100 / before), "% vs last week"
-  stat countof(days week, count(lift on it) > 0), "days trained"
+  stat count(days week, count(lift on it) > 0), "days trained"
 form lift
 "Use 0 kg for bodyweight moves like push-ups." faint
 button "Repeat last" tap add lift exercise = last(lift.exercise), kg = last(lift.kg), sets = last(lift.sets), reps = last(lift.reps)

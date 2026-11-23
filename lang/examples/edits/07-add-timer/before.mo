@@ -6,5 +6,5 @@ each options prayer.name
     it grow
     toggle prayer today where name = it
 daybars last 7 days, count(prayer on it)
-"All five on" countof(days last 30 days, count(prayer on it) = 5) "of the last 30 days" faint
+"All five on" count(days last 30 days, count(prayer on it) = 5) "of the last 30 days" faint
 remind "Time to pray" at 5:00, 13:00, 16:30, 18:30, 20:00

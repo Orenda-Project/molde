@@ -6,10 +6,10 @@ form entry, "Write tonight"
 monthnav m
 grid 7 gap 1
   each ["M", "T", "W", "T", "F", "S", "S"] as w
-    w size tiny color muted align center
+    w tiny color muted align center
   each 1..weekday(m - monthday(m) + 1) - 1
     box
   each days month of m as d
     box height 36 radius 6 fill if(count(entry on d) = 0, soft, if(count(entry on d where mood = "😀" or mood = "🙂") > 0, good, if(count(entry on d where mood = "😐") > 0, warn, bad)))
-      monthday(d) size small align center
+      monthday(d) small align center
 log entry

@@ -9,6 +9,6 @@ each friend as f
       f.name bold grow
       f.birthday faint
     each f.likes as l
-      "likes" l.thing size small
+      "likes" l.thing small
 form friend, "Add friend"
 form likes, "Add something they like"

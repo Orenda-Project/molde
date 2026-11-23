@@ -15,7 +15,7 @@ each plan as p
     row
       it.item grow
       it.cost
-"Estimated cost" sumof(plan, sum(it.dish.ingredient.cost)) head
+"Estimated cost" sum(plan, sum(it.dish.ingredient.cost)) head
 form dish, "Add dish"
 form ingredient, "Add ingredient"
 form plan, "Plan a meal"

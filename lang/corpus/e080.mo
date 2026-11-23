@@ -4,7 +4,7 @@ state sel text = ""
 scroll
   each book sort title
     box width 36 height 100 radius 3 fill if(it.colour = Blue, accent, if(it.colour = Green, good, if(it.colour = Orange, warn, if(it.colour = Red, bad, muted)))) tap set sel = it.title
-      it.title size tiny color bg
+      it.title tiny color bg
 each book where title = sel
   stack card gap 1
     it.title head

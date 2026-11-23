@@ -7,7 +7,7 @@ let used = last(reading.meter) - last(reading.meter prev week)
 "Cost" used * rate head
 form reading, "Add weekly reading"
 "Appliances (units per month)" head
-let biggest = maxof(appliance, it.watts * it.hours)
+let biggest = max(appliance, it.watts * it.hours)
 each appliance
   row card
     it.name grow

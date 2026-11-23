@@ -5,7 +5,7 @@ each order where done = no sort due as o
     toggle o.done
     stack grow
       o.customer o.garment bold
-      o.due size small color if(o.due < today, bad, muted)
+      o.due small color if(o.due < today, bad, muted)
 form order
 "Done" faint
 list order where done = yes

@@ -54,7 +54,7 @@ export const CASES = [
   ['go to an unknown screen', A + 'button "b" tap go stats\n', 'E_UNKNOWN_NAME', 2],
   ['toggle a number', A + 'state v num = 1\ntoggle v\n', 'E_TYPE', 3],
   ['image of text', A + 'table t n text\neach t\n  image it.n\n', 'E_TYPE', 4],
-  ['countof with a number', A + 'table t n num\ntext countof(t, it.n)\n', 'E_TYPE', 3],
+  ['countof with a number', A + 'table t n num\ntext count(t, it.n)\n', 'E_TYPE', 3],
   ['sort by unknown name', A + 'table t n num\neach t sort colour\n  text it\n', 'E_UNKNOWN_NAME', 3],
   ['bad add value type', A + 'table t n num\nbutton "b" tap add t n = "a"\n', 'E_TYPE', 3],
 ];

@@ -3,7 +3,8 @@
 // It also writes the ONE spelling of things that can be written two ways:
 //   text "x" ...            ->  "x" ...           (a line starting with a text, formula or name is a text line,
 //                                                 unless the name is a component: text list stays)
-//   size huge bold          ->  big     size large bold -> head     size small color muted -> faint
+//   sumof(t, x) -> sum(t, x)   countof -> count   maxof -> max   minof -> min
+//   size tiny -> tiny (sizes are bare words)   huge bold -> big   large bold -> head   small color muted -> faint
 //   = "Food" (a pick option) -> = Food  (option values are written bare, as in their declaration)
 //   pick "Eating out"|...   ->  pick Eating_out|... (an underscore shows as a space)
 //   setting goal num "Goal" ->  setting goal num   (a label that repeats the name is the default label)
@@ -43,16 +44,18 @@ function rewrite(toks, opts, comps) {
     const ctx = (prev && ['pick', '|', '=', '!='].includes(prev.v)) || (next && next.v === '|');
     return ctx ? { ...t, t: 'word', v: asWord(v) } : t;
   });
-  // style roles
+  // folds are written with the aggregate's name: sumof( -> sum(, countof( -> count(, maxof( -> max(, minof( -> min(
+  const FOLD = { 'sumof(': 'sum(', 'countof(': 'count(', 'maxof(': 'max(', 'minof(': 'min(' };
+  toks = toks.map(t => t.t === 'func' && FOLD[t.v] ? { ...t, v: FOLD[t.v], known: true } : t);
+  // style: `size X` is written X; the three roles replace their spelled-out forms
+  const SIZES = new Set(['tiny', 'small', 'large', 'huge']);
+  toks = toks.filter((t, i) => !(t.t === 'word' && t.v === 'size' && toks[i + 1] && SIZES.has(toks[i + 1].v)));
   const out = [];
   for (let i = 0; i < toks.length; i++) {
     const v = k => toks[i + k] && toks[i + k].t === 'word' ? toks[i + k].v : null;
-    if (v(0) === 'size' && v(1) === 'huge' && v(2) === 'bold') { out.push({ ...toks[i], v: 'big' }); i += 2; continue; }
-    if (v(0) === 'bold' && v(1) === 'size' && v(2) === 'huge') { out.push({ ...toks[i], v: 'big' }); i += 2; continue; }
-    if (v(0) === 'size' && v(1) === 'large' && v(2) === 'bold') { out.push({ ...toks[i], v: 'head' }); i += 2; continue; }
-    if (v(0) === 'bold' && v(1) === 'size' && v(2) === 'large') { out.push({ ...toks[i], v: 'head' }); i += 2; continue; }
-    if (v(0) === 'size' && v(1) === 'small' && v(2) === 'color' && v(3) === 'muted') { out.push({ ...toks[i], v: 'faint' }); i += 3; continue; }
-    if (v(0) === 'color' && v(1) === 'muted' && v(2) === 'size' && v(3) === 'small') { out.push({ ...toks[i], v: 'faint' }); i += 3; continue; }
+    const role = (a, b, r) => { if ((v(0) === a && v(1) === b) || (v(0) === b && v(1) === a)) { out.push({ ...toks[i], v: r }); i += 1; return true; } return false; };
+    if (role('huge', 'bold', 'big') || role('large', 'bold', 'head')) continue;
+    if ((v(0) === 'small' && v(1) === 'color' && v(2) === 'muted') || (v(0) === 'color' && v(1) === 'muted' && v(2) === 'small')) { out.push({ ...toks[i], v: 'faint' }); i += 2; continue; }
     out.push(toks[i]);
   }
   // a label that only repeats the name is the default label: drop it (setting goal ... "Goal")

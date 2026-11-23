@@ -1,7 +1,7 @@
 app "Tuition fees" school ocean
 table student name text, fee money
 table paid student ref student, amount money
-let due_total = sumof(student, if(count(it.paid month) = 0, it.fee, 0))
+let due_total = sum(student, if(count(it.paid month) = 0, it.fee, 0))
 "Fees due this month" due_total big
 each student sort name as s
   row card gap 1

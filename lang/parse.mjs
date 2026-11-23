@@ -366,10 +366,10 @@ function tparts(n) { return children(n, 'tpart').map(p => child(p, 'string') ? {
 
 function mods(n) {
   return children(n, 'mod').map(m => {
+    if (child(m, 'size')) return { m: 'size', v: lits(child(m, 'size'))[0] }; // tiny, small, large, huge
     const l = lits(m)[0];
     const o = { m: l };
-    if (l === 'size') o.v = lits(child(m, 'size'))[0];
-    else if (l === 'align') o.v = lits(child(m, 'align'))[0];
+    if (l === 'align') o.v = lits(child(m, 'align'))[0];
     else if (['pad', 'gap', 'span'].includes(l)) o.v = +child(m, 'number').v;
     else if (['axes', 'gridlines', 'middle', 'full'].includes(l)) o.v = true;
     else if (l === 'tap' || l === 'swipe') o.actions = actions(child(m, 'actions'));
@@ -490,10 +490,17 @@ function primary(n) {
   if (k.r === 'func') { const f = func(k); const parts = children(n, 'ident').map(id); return parts.length ? { k: 'member', e: f, parts } : f; } // last(t).name
   throw new Error('bad primary');
 }
+const FOLD = { 'count(': 'countof', 'sum(': 'sumof', 'min(': 'minof', 'max(': 'maxof' };
 function func(n) {
   const f = only(n)[0];
   if (f.r === 'agg') return { k: 'agg', fn: lits(f)[0].slice(0, -1), q: query(child(n, 'query')) };
-  if (f.r === 'fold') return { k: 'fold', fn: lits(f)[0].slice(0, -1), src: source(child(n, 'source')), e: expr(child(n, 'expr')) };
+  if (f.r === 'fold') {
+    const o = { k: 'fold', fn: FOLD[lits(f)[0]], src: source(child(n, 'source')), e: expr(child(n, 'expr')) };
+    // min(a, b) / max(a, b) of two values reads the same as a fold over a table a: the checker decides by a's type
+    const q = o.src.k === 'query' && o.src.q;
+    if ((o.fn === 'minof' || o.fn === 'maxof') && q && !q.win && !q.where && !q.by && !q.sort && !q.top && !q.shuffle) o.pair = { k: 'fn', fn: o.fn.slice(0, 3), args: [q.path, o.e] };
+    return o;
+  }
   if (f.r === 'ident') return { k: 'ucall', name: f.v, args: children(n, 'expr').map(expr) };
   if (f.lit === 'due(' || f.lit === 'nth(') return { k: 'qfn', fn: f.lit.slice(0, -1), q: query(child(n, 'query')), e: expr(child(n, 'expr')) };
   if (f.lit === 'random(' && child(n, 'query')) return { k: 'qfn', fn: 'anyrow', q: query(child(n, 'query')) };

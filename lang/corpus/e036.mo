@@ -4,12 +4,12 @@ state m date = today
 monthnav m
 grid 7 gap 1
   each ["M", "T", "W", "T", "F", "S", "S"] as w
-    w size tiny color muted align center
+    w tiny color muted align center
   each 1..weekday(m - monthday(m) + 1) - 1
     box
   each days month of m as d
     stack height 44 radius 6 pad 1 fill soft
-      monthday(d) size tiny
+      monthday(d) tiny
       row gap 0
         each workout on d
           draw width 10

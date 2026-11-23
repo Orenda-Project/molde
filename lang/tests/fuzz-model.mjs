@@ -33,7 +33,7 @@ export function runModelFuzz(chains = 1000, seed = 5, steps = 10) {
         `state ${S.st} num${renames.st ? ' was ' + renames.st : ''} = 0`,
         `"cP" count(${S.P})`, `"sN" sum(${S.P}.${S.n})`,
         ...S.opts.map(o => `"k${o.id}" count(${S.P} where ${S.k} = ${o.name})`),
-        `"cC" count(${S.C})`, `"sV" sum(${S.C}.${S.v})`, `"rp" sumof(${S.C}, it.${S.p}.${S.n})`,
+        `"cC" count(${S.C})`, `"sV" sum(${S.C}.${S.v})`, `"rp" sum(${S.C}, it.${S.p}.${S.n})`,
         `"g" ${S.set}`, `"st" ${S.st}`, `button "inc" tap set ${S.st} = ${S.st} + 1`,
       ];
       return lines.join('\n') + '\n';

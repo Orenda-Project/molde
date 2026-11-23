@@ -10,7 +10,7 @@ const SPOT = `app "Spot" plant mint
 table plant name text, photo image?, every_days num 1..60 = 7
 table water plant ref plant
 state view pick Grid|List = Grid
-remind "Water the plants" every 2h from 9:00 to 21:00 if countof(plant, since(it.water) >= it.every_days) > 0
+remind "Water the plants" every 2h from 9:00 to 21:00 if count(plant, since(it.water) >= it.every_days) > 0
 choice view
 if view = Grid
   grid 2 gap 1

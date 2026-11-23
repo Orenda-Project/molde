@@ -7,9 +7,9 @@ each student as s
       s.name bold grow
       sum(s.expense.amount month) big
     row gap 2
-      "Mess" sum(s.expense.amount month where kind = Mess) size small faint
-      "Laundry" sum(s.expense.amount month where kind = Laundry) size small faint
-      "Pocket" sum(s.expense.amount month where kind = Pocket) size small faint
+      "Mess" sum(s.expense.amount month where kind = Mess) small faint
+      "Laundry" sum(s.expense.amount month where kind = Laundry) small faint
+      "Pocket" sum(s.expense.amount month where kind = Pocket) small faint
 stat sum(expense.amount month), "total this month"
 form expense, "Add expense"
 form student, "Add student"

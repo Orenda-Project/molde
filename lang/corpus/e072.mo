@@ -1,6 +1,6 @@
 app "Study Time" school ocean
 table study subject pick Maths|English|Science|History|Urdu, mins num 1..600 = 30
-let low = minof(options study.subject, sum(study.mins week where subject = it))
+let low = min(options study.subject, sum(study.mins week where subject = it))
 "Minutes this week" sum(study.mins week) big
 each options study.subject
   row card

@@ -9,7 +9,7 @@ field q "Quantity"
 field ex "Expiry date"
 button "Add" tap add med name = n, qty = q, expiry = ex, alert = ex - alert_days then set n = ""
 remind "A medicine expires soon" at med.alert
-let soon = countof(med, it.expiry - today <= alert_days)
+let soon = count(med, it.expiry - today <= alert_days)
 soon "items expire within" alert_days "days" head color if(soon > 0, warn, good)
 each med where expiry - today <= alert_days sort expiry as m
   row card tap edit m

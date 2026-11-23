@@ -709,6 +709,8 @@ class Checker {
       case 'ucall': {
         const ARITY = { if: 'three values: if(condition, value when yes, value when no)', clamp: 'three values: clamp(x, low, high)', min: 'one column (min(t.price)) or two numbers (min(a, b))', max: 'one column (max(t.price)) or two numbers (max(a, b))', has: 'two values: has(text, part)', pow: 'two values: pow(base, power)', addmonths: 'two values: addmonths(date, months)', plural: 'two values: plural(n, "day")', fixed: 'two values: fixed(x, decimals)', round: 'one value: round(x)', floor: 'one value', abs: 'one value', len: 'one value', due: 'a table and a number of days: due(water, 3)', nth: 'a table and a position: nth(card, 1)' };
         if (ARITY[e.name]) return this.err('E_ARGS', `${e.name}() has the wrong number of values.`, `${e.name}() needs ${ARITY[e.name]}.`);
+        const OLD = { sumof: 'sum', countof: 'count', maxof: 'max', minof: 'min', compact: '', grouped: '', monthshort: 'monthname' };
+        if (e.name in OLD) return this.err('E_SYNTAX', `${e.name}() is an old spelling.`, OLD[e.name] ? `write ${OLD[e.name]}(...) (node lang/mo.mjs migrate rewrites it).` : `numbers are formatted by the phone; write the value itself (node lang/mo.mjs migrate rewrites it).`);
         return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
       }
     }
@@ -793,12 +795,18 @@ class Checker {
   }
 
   fold(e) {
+    if (e.pair) { // min(x, y): a fold only when x is rows
+      const n = this.errors.length; const t0 = this.path(e.pair.args[0], 'value'); this.errors.length = n;
+      const rowsy = t0 && ['rows', 'group'].includes(tname(t0));
+      if (!rowsy) { Object.assign(e, e.pair); delete e.src; delete e.pair; return this.fn(e); }
+      delete e.pair;
+    }
     const item = this.source(e.src);
     this.scopes.push({ it: item, names: new Map(), each: true });
     const t = this.expr(e.e);
     this.scopes.pop();
-    if (e.fn === 'countof') { if (!isAny(t) && tname(t) !== 'bool') this.err('E_TYPE', 'countof(source, condition) needs a yes/no condition.', 'write countof(habit, streak(it.check) > 3).'); return 'num'; }
-    if (!isAny(t) && !isNum(t) && tname(t) !== 'dur') return this.err('E_TYPE', `${e.fn}() needs a number for each item, got ${show(t)}.`, 'give a formula that makes a number.');
+    if (e.fn === 'countof') { if (!isAny(t) && tname(t) !== 'bool') this.err('E_TYPE', 'count(source, condition) needs a yes/no condition.', 'write count(habit, streak(it.check) > 3).'); return 'num'; }
+    if (!isAny(t) && !isNum(t) && tname(t) !== 'dur') return this.err('E_TYPE', `${e.fn.replace('of', '')}(source, value) needs a number for each item, got ${show(t)}.`, 'give a formula that makes a number.');
     return t;
   }
 

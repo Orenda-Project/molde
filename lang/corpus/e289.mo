@@ -12,6 +12,6 @@ each kid as k
       row gap 1
         toggle h.done
         h.subject grow
-        h.due size small color if(h.due < today, bad, muted)
+        h.due small color if(h.due < today, bad, muted)
 form kid, "Add child"
 form hw, "Add homework"
