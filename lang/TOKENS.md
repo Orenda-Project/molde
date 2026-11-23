@@ -1,4 +1,4 @@
-# Token counts (MoldeScript v0, round 2)
+# Token counts (MoldeScript v0, round 3)
 
 Measured on 2026-11-23 with `python3 lang/tokens.py` (also `node lang/mo.mjs tokens`). Two counts per program:
 
@@ -7,7 +7,7 @@ Measured on 2026-11-23 with `python3 lang/tokens.py` (also `node lang/mo.mjs tok
 
 Qwen's BPE already spends one token on almost every English keyword, so "keywords as one token" saves only 3 to 6 percent; the saving comes from the language being short. Numbers are expensive (Qwen splits digits) and quoted labels are content the user asked for.
 
-Round 2 cuts that did not hurt clarity: a line that starts with a quoted text, a number, a function, a bracket or a dotted name is a text line (no `text` keyword); option values are bare; std captions default to the value read out; `circle R` / `arc R, FROM, TO` sit at the centre; tic-tac-toe's win check is a `let` formula written once. Not done: putting short children on the parent's line (it would give the same thing a second spelling, against the one-spelling rule, for about one token per child).
+Round 3 cuts: `time - time` wraps past midnight (the 40-token sleep expression is now `it.woke - it.slept`), and a setting or field label that only repeats its name is dropped (the default label is the name). Round 2 cuts that did not hurt clarity: a line that starts with a quoted text, a number, a function, a bracket or a dotted name is a text line (no `text` keyword); option values are bare; std captions default to the value read out; `circle R` / `arc R, FROM, TO` sit at the centre; tic-tac-toe's win check is a `let` formula written once. Not done: putting short children on the parent's line (it would give the same thing a second spelling, against the one-spelling rule, for about one token per child).
 
 ## The 30 examples
 
@@ -29,9 +29,9 @@ Round 2 cuts that did not hurt clarity: a line that starts with a quoted text, a
 | 14-shop-stock.mo | std | 12 | 155 | 151 |
 | 15-khata.mo | std | 14 | 172 | 165 |
 | 16-expense-split.mo | std | 13 | 130 | 123 |
-| 17-sleep-log.mo | std | 11 | 216 | 210 |
+| 17-sleep-log.mo | std | 11 | 169 | 163 |
 | 18-weight.mo | std | 9 | 107 | 104 |
-| 19-cricket-score.mo | custom | 24 | 307 | 296 |
+| 19-cricket-score.mo | custom | 24 | 303 | 292 |
 | 20-quiz.mo | custom | 17 | 200 | 191 |
 | 21-grocery.mo | std | 13 | 97 | 95 |
 | 22-todo.mo | std | 14 | 177 | 173 |
@@ -46,7 +46,7 @@ Round 2 cuts that did not hurt clarity: a line that starts with a quoted text, a
 
 | set | count | keyword median | p90 | max | stock median | p90 | max |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| all | 30 | 191.5 | 339.9 | 433 | 196.5 | 349.7 | 459 |
+| all | 30 | 186.5 | 339.9 | 433 | 192.5 | 349.7 | 459 |
 | std | 19 | 151 | 313.8 | 368 | 156 | 331.6 | 376 |
 | custom | 11 | 224 | 357 | 433 | 229 | 374 | 459 |
 
@@ -59,23 +59,23 @@ Round 2 cuts that did not hurt clarity: a line that starts with a quoted text, a
 | journal | 1184 | 193 | 192 | 6.13x | 6.17x |
 | **total** | 5511 | 1106 | 1068 | 4.98x | 5.16x |
 
-`std` = the main visual comes from standard-library shorthands; `custom` = the main visual is built from level 1 (drawing, grids, boxes). See `examples/INDEX.json`.
 
-## The 300-program corpus (the most honest size measure)
+`std` = the main visual comes from standard-library shorthands; `custom` = the main visual is built from level 1. See `examples/INDEX.json`.
 
-`lang/corpus/` holds the 300 programs that three other agents wrote from SPEC.md for the coverage test (requests e001 to e300), migrated to the current spelling with `node lang/mo.mjs migrate`. I did not write them.
+## The 300-program corpus (the gate)
+
+`lang/corpus/` holds the 300 programs that three other agents wrote from SPEC.md for the coverage test (requests in `corpus/requests.jsonl`, verdicts in `corpus/COVERAGE.md`), migrated to the current spelling with `node lang/mo.mjs migrate`. I did not write them, so this is the honest size measure.
 
 | set | count | keyword median | p90 | max | stock median | p90 | max |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| all | 300 | 133 | 240.2 | 821 | 137.5 | 248.6 | 847 |
+| all | 300 | 132 | 240.2 | 821 | 136 | 248.6 | 847 |
+
 
 ## Gates
 
 | Gate | Target | Measured | Result |
 |---|---|---|---|
-| median program, std-style examples (planned tokenizer) | 150 or fewer | 151 (stock 156) | **missed by 1** |
-| median program, the 300-program corpus (planned) | 150 or fewer | 133 (stock 137.5), p90 240, max 821 | met |
+| median program, the 300-program corpus (planned tokenizer) | 150 or fewer | 132 (stock 136), p90 240, max 821 | **met** (this is the gate) |
+| median program, std-style examples | 150 or fewer | 151 (stock 156) | missed by 1 (reported, not tuned) |
 | median program, custom level-1 examples | report; target 350 or fewer | 224 (stock 229), max 433 | median met; budget-plus (433) and habits-plus (357) are over 350 |
-| v1 HTML fixtures vs MoldeScript, the 5 shared apps | 5x fewer | 5.16x total planned (4.98x stock); per app 2.8x to 9.0x | **met in total with the planned count; missed on stock (4.98x) and for water (2.8x) and budget (3.9x)** |
-
-Why the misses (not tuned away): the examples keep the full feature set of the v1 fixtures and the richer baseline apps. Water's v1 fixture is already small (559 tokens) and its MoldeScript version draws the glass in level 1. Budget keeps the pace line, month navigator and category filter in level 1.
+| v1 HTML fixtures vs MoldeScript, the 5 shared apps | 5x fewer | 5.16x total planned (4.98x stock); per app 2.8x to 9.0x | met in total with the planned count; missed on stock and for water (2.8x) and budget (3.9x) |

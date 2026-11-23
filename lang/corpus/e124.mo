@@ -1,5 +1,5 @@
 app "Renovation fund" coin slate
-setting target money = 200000 "Target"
+setting target money = 200000
 table donation amount money, donor text?
 let raised = sum(donation.amount)
 let p = clamp(raised / target, 0, 1)

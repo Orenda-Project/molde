@@ -57,9 +57,11 @@ export function check(src, opts = {}) {
       errors.push(...ex.errors);
       defs = ex.defs;
       const C = new Checker(errors, prog);
+      C.probeName = opts.probe || null;
       C.header(prog.header);
       C.list(prog.body, { top: true });
       prog.env = { tables: C.tables, settings: C.settings, states: C.states, screens: C.screens, lets: C.lets, options: C.options };
+      if (C.probe) prog.probe = C.probe;
       // never show internal names made by component expansion (d_3 -> d)
       for (const e of errors) for (const [inner, outer] of ex.renamed) {
         const re = new RegExp(`\\b${inner}\\b`, 'g');
@@ -157,7 +159,8 @@ class Checker {
       case 'let': {
         if (s.params) {
           // a formula with values: check its body with the parameters' types
-          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, PKIND_TYPE[p.kind] || ANY])), each: false });
+          for (const p of s.params) if (p.kind === 'row' && !this.tb(p.table)) this.err('E_UNKNOWN_TABLE', `value ${p.name} is a row of "${p.table}", which is not a table declared above.`, 'write NAME TABLE with a declared table, or a kind: num money text bool date time dur.');
+          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, p.kind === 'row' ? { t: 'row', table: p.table } : (PKIND_TYPE[p.kind] || ANY)])), each: false });
           const t = this.expr(s.e);
           this.scopes.pop();
           if (!cx.top) return this.err('E_CONTEXT', 'a let with values (a formula you call) must be at the top level.', 'move it to column 1.');
@@ -210,10 +213,15 @@ class Checker {
         return this.block(s.children, { ...cx, top: false });
       case 'box': this.mods(s.mods); return this.block(s.children, { ...cx, top: false });
       case 'use': return this.block(s.children, { ...cx, top: false });
-      case 'draw':
-        if (cx.draw) this.err('E_CONTEXT', 'a draw cannot be inside another draw.', 'close the first draw first.');
+      case 'draw': case 'plot':
+        if (cx.draw) this.err('E_CONTEXT', `a ${s.kind} cannot be inside a draw or plot.`, 'close the first one first.');
+        if (s.kind === 'plot') [...s.x, ...s.y].forEach((e, i) => this.num(e, `the plot ${i < 2 ? 'x' : 'y'} range`));
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, draw: s });
+      case 'tick':
+        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', 'tick labels the x axis of a plot; it must be inside plot.', 'indent it under a plot line.');
+        this.num(s.x, 'tick x'); this.parts(s.parts);
+        return;
       case 'poly':
         if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw line.');
         this.mods(s.mods);
@@ -354,8 +362,31 @@ class Checker {
   }
 
   // mode: 'value' (a value), 'rows' (a table query), 'target' (something to write)
+  // constrain.mjs puts a probe name where the model is about to write a name; record what fits there
+  probeHere(mode) {
+    const names = new Set();
+    for (const sc of this.scopes) for (const k of sc.names.keys()) names.add(k);
+    for (const m of [this.states, this.settings, this.lets]) for (const [k, v] of m) if (tname(v) !== 'fn') names.add(k);
+    const tables = [...this.tables.keys()];
+    const wt = this.whereTable && this.tb(this.whereTable);
+    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt() };
+  }
+  probePart(t) {
+    const n = tname(t);
+    const out = [];
+    if (n === 'row' || n === 'ref' || n === 'draft') {
+      const tb = this.tb(t.table);
+      if (tb) out.push(...tb.fields.keys(), 'at', 'id');
+      if (n !== 'draft') for (const [name, b] of this.tables) if ([...b.fields.values()].filter(f => f.type.t === 'ref' && f.type.table === t.table).length === 1) out.push(name);
+    } else if (n === 'rows' && !t.field) { const tb = this.tb(t.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    else if (n === 'rows' && t.field && tname(t.ftype) === 'ref') { const tb = this.tb(t.ftype.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    else if (n === 'group') { out.push('key'); const tb = this.tb(t.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    this.probe = { kind: 'part', parts: [...new Set(out)] };
+  }
+
   path(p, mode = 'value') {
     let t;
+    if (this.probeName && p.head === this.probeName) { this.probeHere(mode); return ANY; }
     if (p.head === 'it') {
       t = this.curIt();
       if (!t && this.failed.has('it')) { this.followOn('it'); return ANY; }
@@ -375,6 +406,7 @@ class Checker {
       if (tname(t) === 'fn') return this.err('E_TYPE', `${p.head} is a formula with values; call it like ${p.head}(...).`, `write ${p.head}(value, ...).`);
     }
     for (const part of p.parts) {
+      if (this.probeName && part === this.probeName) { this.probePart(t); return ANY; }
       if (isAny(t)) return t;
       t = this.step(t, part, p);
     }
@@ -586,6 +618,7 @@ class Checker {
       case 'go': if (!this.screens.has(a.name)) this.err('E_UNKNOWN_NAME', `there is no screen "${a.name}" declared above.`, 'declare the screen first, or remove go (screens already get tabs).'); return;
       case 'notify': return this.parts(a.parts);
       case 'remind': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'dur') this.err('E_TYPE', 'remind ... in needs a duration like 10m.', 'write remind "Text" in 10m.'); return; }
+      case 'after': return this.action(a.act);
       case 'param': return this.err('E_UNKNOWN_NAME', `"${a.name}" is not an action.`, 'use add, set, toggle, remove, edit, save, go, notify or remind.');
     }
   }
@@ -648,6 +681,8 @@ class Checker {
       case 'agg': return this.agg(e);
       case 'fold': return this.fold(e);
       case 'fn': return this.fn(e);
+      case 'member': { let t = this.expr(e.e); for (const part of e.parts) { if (isAny(t)) return t; t = this.step(t, part, null); } return t; }
+      case 'join': this.parts(e.parts); return 'text';
       case 'qfn': {
         const t = this.query(e.q, false);
         if (e.fn === 'due') { const n = this.expr(e.e); if (!isAny(n) && !isNum(n)) this.err('E_TYPE', 'due(table, days) needs a number of days.', 'write due(water, 3).'); return 'bool'; }
@@ -767,10 +802,16 @@ class Checker {
       case 'sin': case 'cos': need(0, isNum, 'a number of degrees'); return 'num';
       case 'hue': need(0, isNum, 'a number from 0 to 360'); return 'color';
       case 'random':
-        need(0, isNum, 'a whole number');
+        if (tname(A[0]) === 'rows' && !A[0].field) { if (!this.inAction) this.err('E_CONTEXT', 'random(table) picks a row, so it can only be used inside an action (tap, every, when).', 'store it: tap set pick = random(card).front.'); return { t: 'row', table: A[0].table }; }
+        need(0, isNum, 'a whole number or a table');
         if (!this.inAction) this.err('E_CONTEXT', 'random() can only be used inside an action (tap, every, when), so the screen does not change by itself.', 'store it: tap set roll = random(6), then show roll.');
         return 'num';
       case 'words': return 'text';
+      case 'pow': need(0, isNum, 'a number'); need(1, isNum, 'a number'); return A[0];
+      case 'plural': need(0, isNum, 'a number'); need(1, t => TEXTUAL.has(tname(t)), 'a word in quotes'); return 'text';
+      case 'fixed': need(0, t => isNum(t) || tname(t) === 'dur', 'a number'); need(1, isNum, 'a number of decimals'); return 'text';
+      case 'compact': case 'grouped': need(0, isNum, 'a number'); return 'text';
+      case 'monthshort': need(0, isDate, 'a date'); return 'text';
       case 'len': need(0, t => TEXTUAL.has(tname(t)), 'text'); return 'num';
       case 'has': need(0, t => TEXTUAL.has(tname(t)), 'text'); need(1, t => TEXTUAL.has(tname(t)), 'text'); return 'bool';
       case 'weekday': case 'monthday': case 'monthdays': case 'month': case 'year': need(0, isDate, 'a date'); return 'num';

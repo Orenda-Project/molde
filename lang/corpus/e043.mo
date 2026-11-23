@@ -1,6 +1,6 @@
 app "Savings Thermometer" coin mint
 table saved amount money
-setting goal money = 50000 "Goal"
+setting goal money = 50000
 let total = sum(saved.amount all)
 row gap 3 align center
   draw 40, 120 width 80

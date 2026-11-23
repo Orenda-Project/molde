@@ -67,6 +67,7 @@ export function fmt(v, ev) {
   if (typeof v === 'number') return fmtNum(v);
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (typeof v === 'string') return ev && ev.env.options && ev.env.options.has(v) ? v.replace(/_/g, ' ') : v;
+  if (v instanceof Money && ev && ev.currency) return ev.currency + ' ' + fmt(v, null);
   if (v instanceof Money) return Number.isInteger(v.v) ? fmtNum(v.v) : (Math.abs(v.v) >= 10000 ? v.v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v.v.toFixed(2)); // cents show as 2 decimals
   if (v instanceof DateV) { const d = new Date(msOf(v.s)); const yr = ev && v.s.slice(0, 4) !== dateOf(ev.clock).slice(0, 4) ? ' ' + v.s.slice(0, 4) : ''; return `${WD[weekdayOf(v.s) - 1]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}${yr}`; }
   if (v instanceof When) { const d = new Date(shift(v.ms)); return `${fmt(new DateV(dateOf(v.ms)), ev)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
@@ -95,6 +96,7 @@ export function load(source, opts = {}) {
 
 class App {
   constructor(source, opts) {
+    this.currency = opts.currency || '';
     this.off = opts.tz === 'local' ? -new Date().getTimezoneOffset() : (typeof opts.tz === 'number' ? opts.tz : 0);
     OFF = this.off;
     this.clock = typeof opts.now === 'number' ? opts.now : Date.parse(opts.now || '2026-11-23T10:00:00Z');
@@ -124,6 +126,7 @@ class App {
     }
     const r = evolve(this.ever, source);
     if (r.verdict === 'refused' && this.prog) return r; // an unsafe edit: keep running the old version
+    const oldSettings = this.prog && this.prog.body ? new Map(this.prog.body.filter(x => x.kind === 'setting').map(x => [this.map?.settings[x.name] ?? x.name, x.dflt ?? null])) : null;
     this.source = source;
     this.ok = c.ok && r.verdict !== 'refused'; this.errors = [...c.errors.map(String), ...(r.verdict === 'refused' ? r.refused : [])];
     this.prog = c.ast; this.env = c.ast.env || { tables: new Map(), settings: new Map() };
@@ -131,6 +134,11 @@ class App {
     this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : { tables: {}, fields: {}, settings: {}, states: {} };
     // pick option renames move rows
     for (const mv of r.moves || []) for (const row of this.data.tables[mv.table] || []) if (row[mv.field] in mv.map) row[mv.field] = mv.map[row[mv.field]];
+    // an edit that changes a setting's starting value sets it ("count to 100"); restores do not
+    if (r.verdict === 'safe' && oldSettings) for (const sd of c.ast.body.filter(x => x.kind === 'setting')) {
+      const key = this.map.settings[sd.name], before = oldSettings.get(key);
+      if (before !== undefined && sd.dflt && JSON.stringify(before) !== JSON.stringify(sd.dflt)) this.data.settings[key] = this.litValue(sd.dflt, sd.type);
+    }
     this.initData();
     this.lastWhen = new Map();
     return r;
@@ -240,7 +248,7 @@ class App {
   addRow(table, values, atMs) {
     const tb = this.env.tables.get(table);
     if (!tb) return null;
-    const r = { id: ++this.seq, at: atMs ?? this.clock };
+    const r = { id: ++this.seq, at: atMs ?? this.clock, _rnd: Math.round(this.random() * 1e6) / 1e6 };
     for (const [name, f] of tb.fields) {
       let v = values[name];
       if (v === undefined && f.dflt) v = this.wrap(this.litValue(f.dflt, f.type), f.type);
@@ -261,9 +269,11 @@ class App {
     while (left > 0) {
       const { handlers } = this.build();
       const active = handlers.every.filter(h => !h.cond || this.truthy(h.cond()));
-      if (!active.length) { this.clock += left; left = 0; this.runWhen(); break; }
-      const step = Math.min(left, ...active.map(h => h.period - (this.everyAcc.get(h.key) || 0)));
+      const pend = (this.pending || []).map(p => p.due - this.clock).filter(x => x > 0);
+      if (!active.length && !pend.length) { this.clock += left; left = 0; this.runPending(); this.runWhen(); break; }
+      const step = Math.min(left, ...active.map(h => h.period - (this.everyAcc.get(h.key) || 0)), ...pend);
       this.clock += step; left -= step;
+      this.runPending();
       for (const h of active) {
         const acc = (this.everyAcc.get(h.key) || 0) + step;
         if (acc >= h.period) { this.everyAcc.set(h.key, acc - h.period); this.run(h.actions, h.env, false); }
@@ -271,6 +281,12 @@ class App {
       }
       this.runWhen();
     }
+  }
+  // actions scheduled with `after DUR` run when the clock reaches them
+  runPending() {
+    const due = (this.pending || []).filter(p => p.due <= this.clock);
+    this.pending = (this.pending || []).filter(p => p.due > this.clock);
+    for (const p of due) this.act(p.act, p.env);
   }
   get everyAcc() { return this._ea || (this._ea = new Map()); }
   runWhen() {
@@ -294,7 +310,9 @@ class App {
     const { handlers } = this.build();
     const h = handlers.nodes.get(id);
     if (!h || !h[event]) { this.log.push({ kind: 'error', text: `no ${event} on ${id}`, at: this.clock }); return false; }
-    this.pushUndo();
+    // typing into one input is one undo step: consecutive changes of the same node share it
+    if (!(event === 'change' && this.lastChange === id)) this.pushUndo();
+    this.lastChange = event === 'change' ? id : null;
     h[event](payload);
     this.runWhen();
     return true;
@@ -377,7 +395,7 @@ class App {
     for (const m of mods || []) {
       switch (m.m) {
         case 'big': case 'head': case 'faint': st.role = m.m; break;
-        case 'bold': case 'card': case 'grow': st[m.m] = true; break;
+        case 'bold': case 'card': case 'grow': case 'middle': case 'full': case 'axes': case 'gridlines': st[m.m] = true; break;
         case 'size': case 'align': st[m.m] = m.v; break;
         case 'pad': case 'gap': case 'span': st[m.m] = m.v; break;
         case 'color': case 'fill': case 'stroke': { const v = this.evalIn(m.e, env); st[m.m] = v instanceof Color ? v.c : v === null ? null : String(v); break; }
@@ -391,7 +409,7 @@ class App {
     const tap = (mods || []).find(m => m.m === 'tap'), swipe = (mods || []).find(m => m.m === 'swipe');
     if (!tap && !swipe) return;
     const h = this.H.nodes.get(id) || {};
-    if (tap) { h.tap = () => this.run(tap.actions, env, true); node.tap = true; }
+    if (tap) { h.tap = () => this.run(tap.actions, env, true); node.tap = true; node.action = tap.actions[0] && (tap.actions[0].a === 'param' ? 'other' : tap.actions[0].a); }
     if (swipe) { h.swipe = () => this.run(swipe.actions, env, true); node.swipe = true; }
     this.H.nodes.set(id, h);
   }
@@ -440,6 +458,7 @@ class App {
           if (s.as) e2.vars.set(s.as, { value: item.v });
           out.push(...this.render(s.children, e2, `${id}@${key}`, cx));
         });
+        if (!items.length && s.empty) out.push({ id: id + ':empty', t: 'text', text: s.empty, style: { role: 'faint' }, empty: true });
         return { nodes: out };
       }
       case 'box': {
@@ -453,6 +472,20 @@ class App {
         node.children = this.render(s.children, this.child(env, { draw: { w: s.w, h: s.h } }), id, cx);
         return N(node);
       }
+      case 'plot': {
+        const rng = r => { let lo = num(this.evalIn(r[0], env)) ?? 0, hi = num(this.evalIn(r[1], env)) ?? 1; if (!(hi > lo)) hi = lo + 1; return [lo, hi]; };
+        const x = rng(s.x), y = rng(s.y);
+        const st = this.style(s.mods, env);
+        const node = { id, t: 'plot', x, y, axes: !!st.axes, gridlines: !!st.gridlines, style: st };
+        delete st.axes; delete st.gridlines;
+        this.events(s.mods, env, id, node);
+        const kids = this.render(s.children, this.child(env, { draw: { w: x[1] - x[0], h: y[1] - y[0], cx: (x[0] + x[1]) / 2, cy: (y[0] + y[1]) / 2 } }), id, cx);
+        const xt = kids.filter(k => k.t === 'tick').map(k => ({ v: k.x, label: k.text }));
+        node.children = kids.filter(k => k.t !== 'tick');
+        node.ticks = { x: xt.length ? xt : (node.axes ? niceTicks(x[0], x[1]).map(v => ({ v, label: fmt(v) })) : []), y: node.axes || node.gridlines ? niceTicks(y[0], y[1]).map(v => ({ v, label: fmt(v) })) : [] };
+        return N(node);
+      }
+      case 'tick': return N({ id, t: 'tick', x: num(this.evalIn(s.x, env)), text: this.textOf(s.parts, env) });
       case 'poly': {
         const pts = [];
         const collect = (list, e) => {
@@ -475,8 +508,9 @@ class App {
         const node = { id, t: s.shape, style: this.style(s.mods, env) };
         if (s.shape === 'rect') Object.assign(node, { x: a[0], y: a[1], w: a[2], h: a[3] });
         if (s.shape === 'line') Object.assign(node, { x1: a[0], y1: a[1], x2: a[2], y2: a[3] });
-        if (s.shape === 'circle') Object.assign(node, a.length === 1 ? { cx: d.w / 2, cy: d.h / 2, r: a[0] } : { cx: a[0], cy: a[1], r: a[2] });
-        if (s.shape === 'arc') Object.assign(node, a.length === 3 ? { cx: d.w / 2, cy: d.h / 2, r: a[0], from: a[1], to: a[2] } : { cx: a[0], cy: a[1], r: a[2], from: a[3], to: a[4] });
+        const ccx = d.cx ?? d.w / 2, ccy = d.cy ?? d.h / 2;
+        if (s.shape === 'circle') Object.assign(node, a.length === 1 ? { cx: ccx, cy: ccy, r: a[0] } : { cx: a[0], cy: a[1], r: a[2] });
+        if (s.shape === 'arc') Object.assign(node, a.length === 3 ? { cx: ccx, cy: ccy, r: a[0], from: a[1], to: a[2] } : { cx: a[0], cy: a[1], r: a[2], from: a[3], to: a[4] });
         if (s.shape === 'path') node.d = s.d;
         if (s.shape === 'label') Object.assign(node, { x: a[0], y: a[1], text: this.textOf(s.parts, env) });
         this.events(s.mods, env, id, node);
@@ -504,7 +538,7 @@ class App {
         const options = type.t === 'pick' ? type.options : type.t === 'bool' ? [true, false] : type.t === 'ref' ? this.rows(type.table).map(r => r.id) : [];
         const labels = type.t === 'ref' ? options.map(i => this.summary(new Row(type.table, this.rows(type.table).find(r => r.id === i)))) : options.map(o => fmt(o));
         this.H.nodes.set(id, { change: v => ref.set(type.t === 'ref' ? v : v) });
-        return N({ id, t: 'choice', value: ref.raw(), options, labels, style: this.style(s.mods, env) });
+        return N({ id, t: 'choice', label: (ref.label || s.target.parts[s.target.parts.length - 1] || s.target.head).replace(/_/g, ' '), value: ref.raw(), options, labels, style: this.style(s.mods, env) });
       }
       case 'slider': {
         const ref = this.target(s.target, env);
@@ -512,7 +546,7 @@ class App {
         return N({ id, t: 'slider', value: ref.raw(), min: s.range.lo, max: s.range.hi, style: this.style(s.mods, env) });
       }
       case 'toggle': {
-        const node = { id, t: 'toggle', style: this.style(s.mods, env) };
+        const node = { id, t: 'toggle', label: this.toggleLabel(s, env), style: this.style(s.mods, env) };
         const t = this.evalPathRaw(s.target, env);
         if (t instanceof RowSet) {
           node.on = this.matchToggle(s.target, s.win, s.where, env).length > 0;
@@ -527,6 +561,46 @@ class App {
       }
     }
     return { nodes: [] };
+  }
+
+  // an accessible name for a tick box: the value it shows (where name = it), else its target in words
+  toggleLabel(s, env) {
+    if (s.where && s.where.k === 'bin' && s.where.op === '=') { const v = this.evalIn(s.where.b, env); if (v !== null && typeof v !== 'object') return fmt(v, this); }
+    const words = [s.target.head === 'it' ? null : s.target.head, ...s.target.parts].filter(Boolean).map(x => x.replace(/_/g, ' ')).join(' ');
+    const it = this.nearestIt(env);
+    return (it instanceof Row ? this.summary(it).split(' · ')[0] + ' ' : '') + words + (s.win ? '' : '');
+  }
+
+  // ---- the editor API (what an editor sheet needs) ----
+  // fields({table, id}) or fields('settingName') -> [{name, label, kind, value, options, min, max, required}]
+  fields(target) {
+    OFF = this.off;
+    if (typeof target === 'string') {
+      const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === target);
+      if (!sd) return [];
+      return [this.inputDesc(target, sd.label || target, { ...sd, optional: true }, this.data.settings[this.sk(target)])].map(d => ({ ...d, name: target }));
+    }
+    const tb = this.env.tables.get(target.table);
+    const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
+    if (!tb || !row) return [];
+    return [...tb.fields].map(([n, f]) => ({ ...this.inputDesc(`${target.table}:${target.id}:${n}`, f.label || n, f, row[this.fk(target.table, n)]), name: n })).concat([{ id: `${target.table}:${target.id}:at`, t: 'input', kind: 'when', label: 'added', value: row.at, name: 'at' }]);
+  }
+  // setField({table, id}, field, value) or setField('settingName', null, value); one undo step per call
+  setField(target, field, value) {
+    OFF = this.off;
+    this.pushUndo();
+    if (typeof target === 'string') {
+      const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === target);
+      if (!sd) return false;
+      this.data.settings[this.sk(target)] = this.clampTo(this.unwrap(this.fromInput(value, sd.type), sd.type), sd);
+    } else {
+      const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
+      const f = field === 'at' ? { type: { t: 'when' } } : this.fieldDef(target.table, field);
+      if (!row || !f) return false;
+      row[field === 'at' ? 'at' : this.fk(target.table, field)] = this.clampTo(this.unwrap(this.fromInput(value, f.type), f.type), f);
+    }
+    this.runWhen();
+    return true;
   }
 
   fieldNode(s, env, id) {
@@ -664,6 +738,7 @@ class App {
         return;
       }
       case 'go': this.screen = a.name; return;
+      case 'after': (this.pending ||= []).push({ due: this.clock + a.every * 1000, act: a.act, env }); return;
       case 'notify': this.log.push({ kind: 'notify', text: this.textOf(a.parts, env), at: this.clock }); return;
       case 'remind': { const d = this.evalIn(a.e, env); this.log.push({ kind: 'remind', text: a.text, due: this.clock + num(d) * 1000, at: this.clock }); return; }
     }
@@ -784,6 +859,10 @@ class App {
     let rows = base.rows.filter(r => this.inWindow(r, q.win, env));
     if (q.where) rows = rows.filter(r => this.truthy(this.ev(q.where, this.child(env, { where: { table: base.table, row: r } }))));
     rows = rows.slice().sort((x, y) => y.at - x.at || y.id - x.id); // newest first
+    if (q.shuffle) { // a fixed random order per row (chosen when the row was added), so the screen does not jump
+      const key = r => r._rnd ?? ((r.id * 2654435761) % 1000003) / 1000003;
+      rows = rows.slice().sort((x, y) => key(x) - key(y));
+    }
     if (q.sort) {
       const key = r => this.ev(q.sort, this.child(env, { it: new Row(base.table, r), where: { table: base.table, row: r } }));
       const keyed = rows.map(r => [key(r), r]);
@@ -969,6 +1048,8 @@ class App {
       case 'agg': return this.agg(e, env);
       case 'fold': return this.fold(e, env);
       case 'fn': return this.fn(e, env, inAction);
+      case 'member': { let v = this.ev(e.e, env, inAction); for (const p of e.parts) v = this.stepVal(v, p); return v; }
+      case 'join': return e.parts.map(p => p.k === 'str' ? p.v : fmt(this.ev(p, env, inAction), this)).join('');
       case 'qfn': {
         if (e.fn === 'due') { // never done, or at least n days since the last row
           const n = num(this.ev(e.e, env, inAction));
@@ -995,10 +1076,16 @@ class App {
       case 'round': return A[0] === null ? null : this.like(A[0], Math.sign(num(A[0])) * Math.round(Math.abs(num(A[0])))); // half away from zero: -2.5 -> -3
       case 'floor': return A[0] === null ? null : this.like(A[0], Math.floor(num(A[0])));
       case 'abs': return A[0] === null ? null : this.like(A[0], Math.abs(num(A[0])));
+      case 'pow': return A[0] === null || A[1] === null ? null : this.like(A[0], Math.pow(num(A[0]), num(A[1])));
+      case 'plural': { const n = num(A[0]); if (n === null) return null; const w = String(A[1] ?? ''); return `${fmtNum(n)} ${n === 1 ? w : (/(s|x|ch|sh)$/.test(w) ? w + 'es' : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + 'ies' : w + 's')}`; }
+      case 'fixed': { if (A[0] === null) return null; const d = Math.max(0, Math.min(6, Math.round(num(A[1]) ?? 0))); return num(A[0]).toFixed(d); }
+      case 'compact': { const n = num(A[0]); if (n === null) return null; const a = Math.abs(n); const f = (v, u) => `${Math.round(v * 10) / 10}${u}`; return a >= 1e9 ? f(n / 1e9, 'B') : a >= 1e6 ? f(n / 1e6, 'M') : a >= 1e3 ? f(n / 1e3, 'k') : fmtNum(n); }
+      case 'grouped': { const n = num(A[0]); return n === null ? null : (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+      case 'monthshort': return d(A[0]) ? MONTHS[+d(A[0]).slice(5, 7) - 1].slice(0, 3) : null;
       case 'sin': return A[0] === null ? null : Math.round(Math.sin(num(A[0]) * Math.PI / 180) * 1e9) / 1e9;
       case 'cos': return A[0] === null ? null : Math.round(Math.cos(num(A[0]) * Math.PI / 180) * 1e9) / 1e9;
       case 'hue': return new Color('hue:' + Math.round(((num(A[0]) % 360) + 360) % 360));
-      case 'random': { const n = Math.max(1, Math.floor(num(A[0]) || 1)); return 1 + Math.floor(this.random() * n); }
+      case 'random': { if (A[0] instanceof RowSet) { const rs = A[0].rows; return rs.length ? new Row(A[0].table, rs[Math.floor(this.random() * rs.length)]) : null; } const n = Math.max(1, Math.floor(num(A[0]) || 1)); return 1 + Math.floor(this.random() * n); }
       case 'len': return A[0] === null ? 0 : String(A[0]).length;
       case 'has': return A[0] !== null && String(A[0]).toLowerCase().includes(String(A[1] ?? '').toLowerCase());
       case 'weekday': return d(A[0]) ? weekdayOf(d(A[0])) : null;
@@ -1011,13 +1098,23 @@ class App {
       case 'addmonths': { const s = d(A[0]); if (!s) return null; const r = addMonths(s, Math.round(num(A[1]))); return A[0] instanceof When ? new When(msOfLocal(r) + (shift(A[0].ms) % DAY)) : new DateV(r); }
       case 'hour': case 'minute': case 'second': {
         const v = A[0]; if (v === null) return null;
-        const sec = v instanceof TimeV ? v.sec : v instanceof When ? Math.floor((v.ms % DAY) / 1000) : v instanceof Dur ? v.sec : 0;
+        const sec = v instanceof TimeV ? v.sec : v instanceof When ? Math.floor((((shift(v.ms) % DAY) + DAY) % DAY) / 1000) : v instanceof Dur ? v.sec : 0;
         if (v instanceof Dur) return e.fn === 'hour' ? Math.floor(sec / 3600) : e.fn === 'minute' ? Math.floor(sec % 3600 / 60) : Math.floor(sec % 60);
         return e.fn === 'hour' ? Math.floor(sec / 3600) : e.fn === 'minute' ? Math.floor(sec % 3600 / 60) : sec % 60;
       }
     }
     return null;
   }
+}
+
+// about 4 round tick values covering [lo, hi]
+function niceTicks(lo, hi) {
+  const span = hi - lo; if (!(span > 0)) return [lo];
+  const raw = span / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.round(v * 1e9) / 1e9);
+  return out;
 }
 
 // small seeded random, so tests are repeatable

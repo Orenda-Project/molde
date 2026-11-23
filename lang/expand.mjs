@@ -143,7 +143,7 @@ function substitute(e, params) {
     const arg = params.get(e.head);
     if (!e.parts.length) return { k: 'paren', a: arg };
     if (arg.k === 'path') return { ...arg, parts: [...arg.parts, ...e.parts] };
-    return { k: 'paren', a: arg, bad: true };
+    return { k: 'member', e: { k: 'paren', a: arg }, parts: e.parts }; // r.qty where r is a row value
   }
   const out = {};
   for (const [k, v] of Object.entries(e)) out[k] = substitute(v, params);

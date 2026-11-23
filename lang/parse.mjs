@@ -461,7 +461,7 @@ function primary(n) {
   if (k.r === 'time') return { k: 'time', v: k.v };
   if (k.r === 'dur') return { k: 'dur', v: durSec(k.v) };
   if (k.r === 'path') return path(k);
-  if (k.r === 'func') return func(k);
+  if (k.r === 'func') { const f = func(k); const parts = children(n, 'ident').map(id); return parts.length ? { k: 'member', e: f, parts } : f; } // last(t).name
   throw new Error('bad primary');
 }
 function func(n) {
