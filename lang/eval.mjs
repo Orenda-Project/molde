@@ -5,6 +5,7 @@
 // JSON of level-1 nodes with resolved values and stable ids (see UITREE.md).
 import { check } from './check.mjs';
 import { ex as words } from './describe.mjs';
+import { evolve, emptySchema, everOf } from './diff.mjs';
 
 const DAY = 86400000;
 const pad2 = n => String(n).padStart(2, '0');
@@ -24,7 +25,12 @@ class Column { constructor(set, path) { this.set = set; this.path = path; } }
 class Group { constructor(table, key, rows) { this.table = table; this.key = key; this.rows = rows; } }
 class Draft { constructor(table, key) { this.table = table; this.key = key; } }
 
-const dateOf = ms => new Date(ms).toISOString().slice(0, 10);
+// All calendar maths uses UTC fields of a shifted moment, so local time is one number: the
+// offset (minutes east of UTC) set per app (load(src, {tz: 'local'}) or {tz: 300}).
+let OFF = 0;
+const shift = ms => ms + OFF * 60000;
+const dateOf = ms => new Date(shift(ms)).toISOString().slice(0, 10);
+const msOfLocal = s => Date.parse(s + 'T00:00:00Z') - OFF * 60000; // the moment local midnight of s happens
 const msOf = s => Date.parse(s + 'T00:00:00Z');
 const addDays = (s, n) => dateOf(msOf(s) + n * DAY);
 const weekdayOf = s => ((new Date(msOf(s)).getUTCDay() + 6) % 7) + 1; // Mon = 1
@@ -38,7 +44,9 @@ const parseTime = t => { const [h, m] = t.split(':').map(Number); return h * 360
 const num = v => v === null || v === undefined ? null : v instanceof Money ? v.v : v instanceof Dur ? v.sec : typeof v === 'number' ? v : typeof v === 'boolean' ? (v ? 1 : 0) : null;
 
 function cmpVal(a, b) {
-  if (a instanceof DateV || a instanceof When) { const x = a instanceof DateV ? msOf(a.s) : a.ms, y = b instanceof DateV ? msOf(b.s) : b instanceof When ? b.ms : NaN; return x - y; }
+  // a date against a date and time compares whole days (at <= today includes all of today)
+  if (a instanceof DateV || b instanceof DateV) { const x = a instanceof DateV ? a.s : a instanceof When ? dateOf(a.ms) : null, y = b instanceof DateV ? b.s : b instanceof When ? dateOf(b.ms) : null; return x < y ? -1 : x > y ? 1 : 0; }
+  if (a instanceof When) return a.ms - (b instanceof When ? b.ms : NaN);
   if (a instanceof TimeV) return a.sec - b.sec;
   if (typeof a === 'string') return a < b ? -1 : a > b ? 1 : 0;
   return num(a) - num(b);
@@ -59,9 +67,9 @@ export function fmt(v, ev) {
   if (typeof v === 'number') return fmtNum(v);
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (typeof v === 'string') return ev && ev.env.options && ev.env.options.has(v) ? v.replace(/_/g, ' ') : v;
-  if (v instanceof Money) return fmtNum(v.v);
-  if (v instanceof DateV) { const d = new Date(msOf(v.s)); return `${WD[weekdayOf(v.s) - 1]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}`; }
-  if (v instanceof When) { const d = new Date(v.ms); return `${fmt(new DateV(dateOf(v.ms)))} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
+  if (v instanceof Money) return Number.isInteger(v.v) ? fmtNum(v.v) : (Math.abs(v.v) >= 10000 ? v.v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v.v.toFixed(2)); // cents show as 2 decimals
+  if (v instanceof DateV) { const d = new Date(msOf(v.s)); const yr = ev && v.s.slice(0, 4) !== dateOf(ev.clock).slice(0, 4) ? ' ' + v.s.slice(0, 4) : ''; return `${WD[weekdayOf(v.s) - 1]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}${yr}`; }
+  if (v instanceof When) { const d = new Date(shift(v.ms)); return `${fmt(new DateV(dateOf(v.ms)), ev)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
   if (v instanceof TimeV) return `${pad2(Math.floor(v.sec / 3600))}:${pad2(Math.floor(v.sec % 3600 / 60))}`;
   if (v instanceof Dur) { const s = Math.round(Math.abs(v.sec)); const sg = v.sec < 0 ? '-' : ''; return s >= 3600 ? `${sg}${Math.floor(s / 3600)}:${pad2(Math.floor(s % 3600 / 60))}` : `${sg}${Math.floor(s / 60)}:${pad2(s % 60)}`; }
   if (v instanceof Row) return ev ? ev.summary(v) : `#${v.r.id}`;
@@ -87,11 +95,9 @@ export function load(source, opts = {}) {
 
 class App {
   constructor(source, opts) {
-    this.source = source;
+    this.off = opts.tz === 'local' ? -new Date().getTimezoneOffset() : (typeof opts.tz === 'number' ? opts.tz : 0);
+    OFF = this.off;
     this.clock = typeof opts.now === 'number' ? opts.now : Date.parse(opts.now || '2026-11-23T10:00:00Z');
-    const r = check(source);
-    this.ok = r.ok; this.errors = r.errors.map(String);
-    this.prog = r.ast; this.env = r.ast.env || { tables: new Map(), settings: new Map() };
     this.log = [];
     this.undoStack = [];
     this.seq = 0;
@@ -99,18 +105,77 @@ class App {
     this.lastWhen = new Map();
     this.screen = null;
     this.random = mulberry(opts.seed || 1);
+    // the schema history: from a snapshot, from a list of earlier programs, or new
+    let ever = opts.data && opts.data.ever ? opts.data.ever : (opts.history ? everOf(opts.history).ever : emptySchema());
+    if (opts.data) this.restore(opts.data, true);
+    this.ever = ever;
+    this.ever0 = true;
+    const r = this.setProgram(source);
+    this.edit = r;
+  }
+
+  // Load a program against the schema history: data stays keyed by storage slot.
+  setProgram(source) {
+    OFF = this.off;
+    const c = check(source);
+    if (!c.ok) {
+      if (!this.prog) { this.source = source; this.ok = false; this.errors = c.errors.map(String); this.prog = c.ast; this.env = { tables: new Map(), settings: new Map() }; this.map = { tables: {}, fields: {}, settings: {}, states: {} }; }
+      return { verdict: 'refused', refused: c.errors.map(String), changes: [], notes: [] };
+    }
+    const r = evolve(this.ever, source);
+    if (r.verdict === 'refused' && this.prog) return r; // an unsafe edit: keep running the old version
+    this.source = source;
+    this.ok = c.ok && r.verdict !== 'refused'; this.errors = [...c.errors.map(String), ...(r.verdict === 'refused' ? r.refused : [])];
+    this.prog = c.ast; this.env = c.ast.env || { tables: new Map(), settings: new Map() };
+    if (r.verdict !== 'refused') this.ever = r.ever;
+    this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : { tables: {}, fields: {}, settings: {}, states: {} };
+    // pick option renames move rows
+    for (const mv of r.moves || []) for (const row of this.data.tables[mv.table] || []) if (row[mv.field] in mv.map) row[mv.field] = mv.map[row[mv.field]];
+    this.initData();
+    this.lastWhen = new Map();
+    return r;
+  }
+  // tables and settings the program declares but the data lacks get their empty/default values
+  initData() {
     if (!this.prog.header || this.prog.header.kind !== 'app') return;
-    for (const [name] of this.env.tables) this.data.tables[name] = [];
-    for (const s of this.prog.body) if (s.kind === 'setting') this.data.settings[s.name] = s.dflt ? this.litValue(s.dflt, s.type) : this.emptyOf(s.type);
-    if (opts.data) this.restore(opts.data);
+    for (const [name] of this.env.tables) this.data.tables[this.tk(name)] ||= [];
+    for (const s of this.prog.body) if (s.kind === 'setting' && !(this.sk(s.name) in this.data.settings)) this.data.settings[this.sk(s.name)] = s.dflt ? this.litValue(s.dflt, s.type) : this.emptyOf(s.type);
+  }
+  // name -> storage slot
+  tk(table) { return this.map.tables[table] ?? table; }
+  fk(table, f) { return this.map.fields[this.tk(table)]?.[f] ?? f; }
+  sk(name) { return this.map.settings[name] ?? name; }
+  stk(name) { return this.map.states[name] ?? name; }
+
+  // An edit from the chat: a new program. Safe edits and restores of earlier versions apply and
+  // keep all data; refused edits change nothing. Returns the diff result.
+  applyEdit(source) {
+    OFF = this.off;
+    const before = this.source;
+    const r = this.setProgram(source);
+    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), before]; this.screen = null; }
+    return r;
+  }
+  // Chat undo: go back to the previous program; data entered since stays.
+  revert() {
+    const prev = (this.versionsUndo || []).pop();
+    if (!prev) return null;
+    const r = this.setProgram(prev);
+    this.screen = null;
+    return r;
   }
 
   // ----- data -----
-  snapshot() { return JSON.parse(JSON.stringify({ data: this.data, seq: this.seq, clock: this.clock })); }
-  restore(snap) { const s = JSON.parse(JSON.stringify(snap)); this.data = s.data; this.seq = s.seq ?? this.seq; if (s.clock) this.clock = s.clock; }
+  snapshot() { return JSON.parse(JSON.stringify({ data: this.data, seq: this.seq, clock: this.clock, ever: this.ever })); }
+  restore(snap, early) {
+    const s = JSON.parse(JSON.stringify(snap));
+    this.data = { tables: {}, settings: {}, state: {}, ...s.data };
+    this.seq = s.seq ?? this.seq; if (s.clock) this.clock = s.clock;
+    if (!early) { if (s.ever) { this.ever = s.ever; this.setProgram(this.source); } else this.initData(); }
+  }
   pushUndo() { this.undoStack.push(JSON.stringify({ data: this.data, seq: this.seq })); if (this.undoStack.length > 50) this.undoStack.shift(); }
   undo() { const s = this.undoStack.pop(); if (!s) return false; const o = JSON.parse(s); this.data = o.data; this.seq = o.seq; this.log.push({ kind: 'undo', at: this.clock }); return true; }
-  rows(table) { return (this.data.tables[table] || []).filter(r => !r.deleted); }
+  rows(table) { return (this.data.tables[this.tk(table)] || []).filter(r => !r.deleted); }
   fieldDef(table, f) { return this.env.tables.get(table)?.fields.get(f) || null; }
   emptyOf(type) { return type && type.t === 'bool' ? false : null; }
 
@@ -119,11 +184,11 @@ class App {
     if (raw === null || raw === undefined) return type && type.t === 'bool' ? false : null;
     switch (type && type.t) {
       case 'money': return new Money(raw);
-      case 'date': return new DateV(raw);
-      case 'when': return new When(raw);
+      case 'date': return new DateV(typeof raw === 'number' ? dateOf(raw) : raw);
+      case 'when': return new When(typeof raw === 'string' ? msOfLocal(raw) + 12 * 3600000 : raw);
       case 'time': return new TimeV(raw);
       case 'dur': return new Dur(raw);
-      case 'ref': { const r = (this.data.tables[type.table] || []).find(x => x.id === raw && !x.deleted); return r ? new Row(type.table, r) : null; }
+      case 'ref': { const r = (this.data.tables[this.tk(type.table)] || []).find(x => x.id === raw && !x.deleted); return r ? new Row(type.table, r) : null; }
       default: return raw;
     }
   }
@@ -134,7 +199,7 @@ class App {
       case 'num': { const n = num(v); return n === null ? null : n; }
       case 'money': { const n = num(v); return n === null ? null : Math.round(n * 100) / 100; }
       case 'date': return v instanceof DateV ? v.s : v instanceof When ? dateOf(v.ms) : typeof v === 'string' ? v : null;
-      case 'when': return v instanceof When ? v.ms : v instanceof DateV ? msOf(v.s) + 12 * 3600000 : typeof v === 'number' ? v : null;
+      case 'when': return v instanceof When ? v.ms : v instanceof DateV ? msOfLocal(v.s) + 12 * 3600000 : typeof v === 'number' ? v : null;
       case 'time': return v instanceof TimeV ? v.sec : typeof v === 'string' && /:/.test(v) ? parseTime(v) : num(v);
       case 'dur': return v instanceof Dur ? v.sec : num(v);
       case 'bool': return !!v;
@@ -165,7 +230,7 @@ class App {
     const tb = this.env.tables.get(row.table);
     const parts = [];
     for (const [name, f] of tb ? tb.fields : []) {
-      const v = this.wrap(row.r[name], f.type);
+      const v = this.wrap(row.r[this.fk(row.table, name)], f.type);
       if (v === null || v === '' || f.type.t === 'image' || (f.type.t === 'bool' && !v)) continue;
       parts.push(f.type.t === 'bool' ? (f.label || name) : f.type.t === 'ref' ? this.summary(v).split(' · ')[0] : fmt(v, this) + (f.unit ? ' ' + f.unit : ''));
     }
@@ -179,12 +244,12 @@ class App {
     for (const [name, f] of tb.fields) {
       let v = values[name];
       if (v === undefined && f.dflt) v = this.wrap(this.litValue(f.dflt, f.type), f.type);
-      r[name] = v === undefined ? (f.type.t === 'bool' ? false : null) : this.clampTo(this.unwrap(v, f.type), f);
+      r[this.fk(table, name)] = v === undefined ? (f.type.t === 'bool' ? false : null) : this.clampTo(this.unwrap(v, f.type), f);
     }
     if (values.at !== undefined) r.at = this.unwrap(values.at, { t: 'when' });
-    const missing = [...tb.fields].filter(([n, f]) => !f.optional && f.type.t !== 'bool' && (r[n] === null || r[n] === '')).map(([n]) => n);
+    const missing = [...tb.fields].filter(([n, f]) => !f.optional && f.type.t !== 'bool' && (r[this.fk(table, n)] === null || r[this.fk(table, n)] === '')).map(([n]) => n);
     if (missing.length) { this.log.push({ kind: 'error', text: `${table} needs ${missing.join(', ')}`, at: this.clock }); return null; }
-    this.data.tables[table].push(r);
+    (this.data.tables[this.tk(table)] ||= []).push(r);
     return r;
   }
 
@@ -245,16 +310,18 @@ class App {
     return out;
   }
   reminders() {
+    OFF = this.off;
     const out = [];
     for (const s of this.prog.body || []) if (s.kind === 'remind') {
       const base = { text: s.text, cond: s.cond ? this.truthy(this.evalIn(s.cond, this.rootEnv())) : true };
       if (s.at) {
         const tbn = s.at.head; const field = s.at.parts[0]; const f = this.fieldDef(tbn, field);
         for (const r of this.rows(tbn)) {
-          const v = this.wrap(r[field], f?.type);
+          const v = this.wrap(r[this.fk(tbn, field)], f?.type);
           if (v instanceof TimeV) out.push({ ...base, daily: fmt(v) });
           else if (v instanceof DateV || v instanceof When) {
-            const ms = (v instanceof DateV ? msOf(v.s) + (s.time ? parseTime(s.time) * 1000 : 9 * 3600000) : v.ms) + (s.offset || 0) * 1000;
+            const ms = (v instanceof DateV ? msOfLocal(v.s) + (s.time ? parseTime(s.time) * 1000 : 9 * 3600000) : v.ms) + (s.offset || 0) * 1000;
+            if (ms < this.clock) continue; // reminders in the past are skipped
             out.push({ ...base, once: new Date(ms).toISOString() });
           }
         }
@@ -269,6 +336,7 @@ class App {
   child(env, o) { return { ...env, vars: new Map(), parent: env, ...o }; }
 
   build() {
+    OFF = this.off;
     const handlers = { nodes: new Map(), every: [], when: [] };
     this.H = handlers;
     const h = this.prog.header || {};
@@ -328,7 +396,7 @@ class App {
     this.H.nodes.set(id, h);
   }
 
-  stateKey(env, name) { return `${env.scope}|${name}`; }
+  stateKey(env, name) { return env.scope === '' ? `|${this.stk(name)}` : `${env.scope}|${name}`; }
   declareState(s, env) {
     const key = this.stateKey(env, s.name);
     if (!(key in this.data.state)) {
@@ -513,7 +581,7 @@ class App {
   // ----- names -----
   lookup(name, env) {
     for (let e = env; e; e = e.parent) if (e.vars.has(name)) return e.vars.get(name);
-    if (this.data.state && `|${name}` in this.data.state) return { state: `|${name}`, type: this.topStateType(name) };
+    if (this.data.state && `|${this.stk(name)}` in this.data.state && this.topStateType(name)) return { state: `|${this.stk(name)}`, type: this.topStateType(name) };
     return null;
   }
   topStateType(name) {
@@ -537,9 +605,10 @@ class App {
     if (!p.parts.length && p.head !== 'it') {
       const v = this.lookup(p.head, env);
       if (v && v.state) return { type: v.type || { t: 'text' }, raw: () => self.data.state[v.state], set: x => { self.data.state[v.state] = self.unwrap(x, v.type); } };
-      if (p.head in this.data.settings) {
-        const s = this.prog.body.find(x => x.kind === 'setting' && x.name === p.head);
-        return { type: s.type, label: s.label, range: s.range, raw: () => self.data.settings[p.head], set: x => { self.data.settings[p.head] = self.clampTo(self.unwrap(x, s.type), s); } };
+      const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === p.head);
+      if (sd) {
+        const key = this.sk(p.head);
+        return { type: sd.type, label: sd.label, range: sd.range, raw: () => self.data.settings[key], set: x => { self.data.settings[key] = self.clampTo(self.unwrap(x, sd.type), sd); } };
       }
       throw new Error(`cannot change ${p.head}`);
     }
@@ -551,8 +620,9 @@ class App {
     }
     if (base instanceof Row) {
       const fd = this.fieldDef(base.table, f) || (f === 'at' ? { type: { t: 'when' } } : null);
-      const row = this.data.tables[base.table].find(r => r.id === base.r.id);
-      return { type: fd.type, label: fd.label, range: fd.range, raw: () => row[f], set: x => { row[f] = self.clampTo(self.unwrap(x, fd.type), fd); } };
+      const row = this.data.tables[this.tk(base.table)].find(r => r.id === base.r.id);
+      const key = f === 'at' ? 'at' : this.fk(base.table, f);
+      return { type: fd.type, label: fd.label, range: fd.range, raw: () => row[key], set: x => { row[key] = self.clampTo(self.unwrap(x, fd.type), fd); } };
     }
     throw new Error(`cannot change ${p.head}.${p.parts.join('.')}`);
   }
@@ -575,13 +645,13 @@ class App {
         for (const r of this.rows(table)) {
           const e2 = this.child(env, { it: new Row(table, r), where: { table, row: r } });
           if (a.where && !this.truthy(this.evalIn(a.where, e2))) continue;
-          r[f] = this.clampTo(this.unwrap(this.evalIn(a.e, e2, true), fd.type), fd);
+          r[this.fk(table, f)] = this.clampTo(this.unwrap(this.evalIn(a.e, e2, true), fd.type), fd);
         }
         return;
       }
       case 'removeall': for (const r of this.queryRows(a.q, env).rows) r.deleted = true; return;
       case 'toggle': this.doToggle(a.target, a.win, a.where, env); return;
-      case 'remove': { const v = this.evalIn(a.e, env); if (v instanceof Row) { const r = this.data.tables[v.table].find(x => x.id === v.r.id); if (r) r.deleted = true; this.log.push({ kind: 'removed', table: v.table, id: v.r.id, at: this.clock }); } return; }
+      case 'remove': { const v = this.evalIn(a.e, env); if (v instanceof Row) { const r = this.data.tables[this.tk(v.table)].find(x => x.id === v.r.id); if (r) r.deleted = true; this.log.push({ kind: 'removed', table: v.table, id: v.r.id, at: this.clock }); } return; }
       case 'edit': { const v = a.e.k === 'path' && !a.e.parts.length && a.e.head !== 'it' && !(this.lookup(a.e.head, env)?.value instanceof Row) ? a.e.head : this.evalIn(a.e, env); this.log.push({ kind: 'edit', target: v instanceof Row ? { table: v.table, id: v.r.id } : v, at: this.clock }); return; }
       case 'save': {
         const v = this.lookup(a.name, env);
@@ -620,7 +690,7 @@ class App {
     const eqs = x => { if (!x) return; if (x.k === 'bin' && x.op === 'and') { eqs(x.a); eqs(x.b); } else if (x.k === 'bin' && x.op === '=' && x.a.k === 'path') vals[x.a.head] = this.evalIn(x.b, env); };
     eqs(where);
     const day = this.toggleDay(win, env);
-    const at = day === this.today() ? this.clock : msOf(day) + 12 * 3600000;
+    const at = day === this.today() ? this.clock : msOfLocal(day) + 12 * 3600000;
     this.addRow(set.table, vals, at);
   }
 
@@ -636,7 +706,7 @@ class App {
       else {
         const vr = this.lookup(p.head, env);
         if (vr) v = this.varValue(vr, env);
-        else if (p.head in this.data.settings) { const s = this.prog.body.find(x => x.kind === 'setting' && x.name === p.head); v = this.wrap(this.data.settings[p.head], s.type); }
+        else if (this.prog.body.some(x => x.kind === 'setting' && x.name === p.head)) { const s = this.prog.body.find(x => x.kind === 'setting' && x.name === p.head); v = this.wrap(this.data.settings[this.sk(p.head)], s.type); }
         else if (this.env.tables.has(p.head)) v = new RowSet(p.head, this.rows(p.head));
         else if (this.env.options && this.env.options.has(p.head) && !p.parts.length) return p.head;
         else v = null;
@@ -651,7 +721,7 @@ class App {
     if (f === 'at') return new When(row.r.at);
     if (f === 'id') return row.r.id;
     const fd = this.fieldDef(row.table, f);
-    return this.wrap(row.r[f], fd?.type);
+    return this.wrap(row.r[this.fk(row.table, f)], fd?.type);
   }
   stepVal(v, part) {
     if (v === null || v === undefined) return null;
@@ -660,7 +730,7 @@ class App {
       const back = this.env.tables.get(part);
       if (back) {
         const ref = [...back.fields.values()].find(f => f.type.t === 'ref' && f.type.table === v.table);
-        const set = new RowSet(part, this.rows(part).filter(r => r[ref.name] === v.r.id));
+        const set = new RowSet(part, this.rows(part).filter(r => r[this.fk(part, ref.name)] === v.r.id));
         set.via = ref.name; set.viaRow = v;
         return set;
       }
@@ -838,12 +908,14 @@ class App {
       const sg = op === '+' ? 1 : -1;
       if (a instanceof DateV && typeof b === 'number') return new DateV(addDays(a.s, sg * Math.round(b)));
       if (a instanceof When && typeof b === 'number') return new When(a.ms + sg * b * DAY);
-      if (a instanceof DateV && b instanceof Dur) return new When(msOf(a.s) + sg * b.sec * 1000);
+      if (a instanceof DateV && b instanceof Dur) return new When(msOfLocal(a.s) + sg * b.sec * 1000);
       if (a instanceof When && b instanceof Dur) return new When(a.ms + sg * b.sec * 1000);
       if (a instanceof TimeV && b instanceof Dur) return new TimeV(a.sec + sg * b.sec);
-      if (op === '-' && a instanceof DateV && b instanceof DateV) return Math.round((msOf(a.s) - msOf(b.s)) / DAY);
-      if (op === '-' && isD(a) && isD(b)) return new Dur(((a instanceof When ? a.ms : msOf(a.s)) - (b instanceof When ? b.ms : msOf(b.s))) / 1000);
-      if (op === '-' && a instanceof TimeV && b instanceof TimeV) return new Dur(a.sec - b.sec);
+      // date - date and date - (date and time) are whole days between the two dates
+      if (op === '-' && isD(a) && isD(b) && (a instanceof DateV || b instanceof DateV)) return Math.round((msOf(a instanceof DateV ? a.s : dateOf(a.ms)) - msOf(b instanceof DateV ? b.s : dateOf(b.ms))) / DAY);
+      if (op === '-' && a instanceof When && b instanceof When) return new Dur((a.ms - b.ms) / 1000);
+      // time - time is the forward duration from b to a, wrapping past midnight (bed 23:00 to wake 07:00 is 8:00)
+      if (op === '-' && a instanceof TimeV && b instanceof TimeV) return new Dur(((a.sec - b.sec) % 86400 + 86400) % 86400);
       if (a instanceof Dur && b instanceof Dur) return new Dur(a.sec + sg * b.sec);
       const r = num(a) + sg * num(b);
       return a instanceof Money || b instanceof Money ? new Money(r) : r;
@@ -897,6 +969,17 @@ class App {
       case 'agg': return this.agg(e, env);
       case 'fold': return this.fold(e, env);
       case 'fn': return this.fn(e, env, inAction);
+      case 'qfn': {
+        if (e.fn === 'due') { // never done, or at least n days since the last row
+          const n = num(this.ev(e.e, env, inAction));
+          const since = this.agg({ fn: 'since', q: e.q }, env);
+          return since === null || (n !== null && since >= n);
+        }
+        const rows = this.queryRows(e.q, env);
+        if (e.fn === 'nth') { const i = Math.round(num(this.ev(e.e, env, inAction)) ?? 0); const r = rows.rows[i - 1]; return r ? new Row(rows.table, r) : null; }
+        if (e.fn === 'anyrow') { if (!rows.rows.length) return null; return new Row(rows.table, rows.rows[Math.floor(this.random() * rows.rows.length)]); }
+        return null;
+      }
     }
     return null;
   }
@@ -909,7 +992,7 @@ class App {
       case 'if': return A[0] === true ? A[1] : A[2];
       case 'min': case 'max': if (A[0] === null) return A[1]; if (A[1] === null) return A[0]; return (e.fn === 'min' ? cmpVal(A[0], A[1]) <= 0 : cmpVal(A[0], A[1]) >= 0) ? A[0] : A[1];
       case 'clamp': { if (A[0] === null) return null; const v = Math.min(Math.max(num(A[0]), num(A[1])), num(A[2])); return this.like(A[0], v); }
-      case 'round': return A[0] === null ? null : this.like(A[0], Math.round(num(A[0])));
+      case 'round': return A[0] === null ? null : this.like(A[0], Math.sign(num(A[0])) * Math.round(Math.abs(num(A[0])))); // half away from zero: -2.5 -> -3
       case 'floor': return A[0] === null ? null : this.like(A[0], Math.floor(num(A[0])));
       case 'abs': return A[0] === null ? null : this.like(A[0], Math.abs(num(A[0])));
       case 'sin': return A[0] === null ? null : Math.round(Math.sin(num(A[0]) * Math.PI / 180) * 1e9) / 1e9;
@@ -925,7 +1008,7 @@ class App {
       case 'year': return d(A[0]) ? +d(A[0]).slice(0, 4) : null;
       case 'dayname': return d(A[0]) ? WD[weekdayOf(d(A[0])) - 1] : null;
       case 'monthname': { const s = d(A[0]); return s ? `${MONTHS[+s.slice(5, 7) - 1]} ${s.slice(0, 4)}` : null; }
-      case 'addmonths': { const s = d(A[0]); if (!s) return null; const r = addMonths(s, Math.round(num(A[1]))); return A[0] instanceof When ? new When(msOf(r) + (A[0].ms % DAY)) : new DateV(r); }
+      case 'addmonths': { const s = d(A[0]); if (!s) return null; const r = addMonths(s, Math.round(num(A[1]))); return A[0] instanceof When ? new When(msOfLocal(r) + (shift(A[0].ms) % DAY)) : new DateV(r); }
       case 'hour': case 'minute': case 'second': {
         const v = A[0]; if (v === null) return null;
         const sec = v instanceof TimeV ? v.sec : v instanceof When ? Math.floor((v.ms % DAY) / 1000) : v instanceof Dur ? v.sec : 0;

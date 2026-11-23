@@ -6,6 +6,6 @@ each plant sort name
     stack grow
       it.name bold
       "Water every" it.days_gap "days" faint
-    if(since(it.water) >= it.days_gap, "Water today", "OK") bold color if(since(it.water) >= it.days_gap, warn, good)
+    if(due(it.water, it.days_gap), "Water today", "OK") bold color if(due(it.water, it.days_gap), warn, good)
     button "Watered" tap add water plant = it
 form plant, "Add plant"

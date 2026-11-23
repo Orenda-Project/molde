@@ -3,7 +3,7 @@
 // state, puts the call's indented lines where the def says `slot`, and parses the result.
 // After expansion only level-1 statements remain; the checker then checks them.
 // Browser-safe: the std library text comes from sources.gen.mjs (written by gen-gbnf.mjs).
-import { parse, MoError } from './parse.mjs';
+import { parse, MoError, asTextLine } from './parse.mjs';
 import { lex, join as joinToks } from './lex.mjs';
 import { STD_SOURCES } from './sources.gen.mjs';
 export const VALUE_KINDS = new Set(['num', 'money', 'text', 'bool', 'date', 'time', 'dur', 'color', 'icon']);
@@ -78,9 +78,13 @@ export function expandList(list, defs, errors, stack = []) {
 function expandCall(call, defs, errors, stack) {
   const err = (code, msg, hint) => { errors.push(new MoError(code, call.line, msg, hint)); return null; };
   const entry = defs.get(call.name);
+  // `goal faint`, `x big`: a value followed by a style, not a component call
+  const asText = asTextLine(call.src);
+  const styled = asText && asText.k && asText.k.some(k => k.r === 'mod');
+  if (styled && (!entry || call.args.length <= 1)) return err('E_SYNTAX', `a line that starts with a name is read as a component call${entry ? ` ("${call.name}" is a component that needs other values)` : `, and there is no component "${call.name}"`}.`, `to show the value, start the line with text: text ${call.src}`);
   if (!entry) {
     const names = [...defs.keys()].join(', ');
-    return err('E_UNKNOWN_COMPONENT', `there is no component (or statement) called "${call.name}".`, `use a statement from SPEC.md or one of: ${names}.`);
+    return err('E_UNKNOWN_COMPONENT', `there is no component (or statement) called "${call.name}".`, `use a statement from SPEC.md or one of: ${names}${asText ? `; or, to show a value, start the line with text: text ${call.src}` : ''}.`);
   }
   if (stack.includes(call.name)) return err('E_RECURSION', `component "${call.name}" uses itself.`, 'a component cannot contain itself; repeat with each instead.');
   if (stack.length >= 8) return err('E_RECURSION', 'components nest more than 8 deep.', 'flatten the components.');

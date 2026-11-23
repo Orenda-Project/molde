@@ -13,10 +13,10 @@
 first-stmt ::= app-stmt | ask-stmt
 lib-first ::= "lib" sp string
 
-block-stmt ::= def-stmt | screen-stmt | each-stmt | if-stmt | else-stmt | box-stmt | draw-stmt | poly-stmt | call-stmt
+block-stmt ::= def-stmt | screen-stmt | each-stmt | if-stmt | else-stmt | box-stmt | draw-stmt | plot-stmt | poly-stmt | call-stmt
 leaf-stmt ::= table-stmt | setting-stmt | state-stmt | let-stmt | remind-stmt | every-stmt | when-stmt | text-stmt | itext-stmt | icon-stmt
   | image-stmt | space-stmt | divider-stmt | field-stmt | toggle-stmt | choice-stmt | slider-stmt | button-stmt
-  | shape-stmt | pt-stmt | slot-stmt
+  | shape-stmt | pt-stmt | tick-stmt | slot-stmt
 
 app-stmt ::= "app" sp string (sp ident)? (sp theme)?
 ask-stmt ::= "ask" sp string (sp string)+
@@ -25,7 +25,7 @@ theme ::= "ocean" | "mint" | "slate" | "ink" | "plum"
 # ---------- data ----------
 table-stmt ::= "table" sp ident (sp "was" sp ident)? (sp string)? (sp field ("," sp field)*)?
 setting-stmt ::= "setting" sp field
-state-stmt ::= "state" sp ident sp state-type (sp "=" sp (expr | word))? (sp "keep")?
+state-stmt ::= "state" sp ident sp state-type (sp "=" sp (expr | word))? (sp "keep")? (sp "was" sp ident)?
 state-type ::= type | "new" sp ident
 let-stmt ::= "let" sp (ident | ident "(" param ("," sp param)* ")") sp "=" sp expr
 field ::= ident sp type "?"? (sp fmod)*
@@ -38,7 +38,7 @@ lit ::= "yes" | "no" | "today" | "now" | snum | string | time | dur | word
 
 # ---------- components and screens ----------
 def-stmt ::= "def" sp ident (sp param ("," sp param)*)?
-param ::= ident sp pkind (sp "=" sp arg)?
+param ::= ident sp (pkind | ident) (sp "=" sp arg)?
 pkind ::= "num" | "money" | "text" | "bool" | "date" | "time" | "dur" | "color" | "icon" | "table" | "name" | "src" | "win" | "act"
 call-stmt ::= ident (sp arg ("," sp arg)*)?
 arg ::= actions | source | window | expr
@@ -55,11 +55,11 @@ every-stmt ::= "every" sp dur (sp "if" sp expr)? sp actions
 when-stmt ::= "when" sp expr sp actions
 
 # ---------- structure ----------
-each-stmt ::= "each" sp source (sp "as" sp ident)?
+each-stmt ::= "each" sp source (sp "as" sp ident)? (sp "empty" sp string)?
 source ::= "days" sp window | "options" sp path | list | range | query
 range ::= sum-expr ".." sum-expr
 list ::= "[" lit ("," sp lit)* "]"
-query ::= path (sp window)? (sp "where" sp expr)? (sp "by" sp group)? (sp "sort" sp expr (sp "desc")?)? (sp "top" sp number)?
+query ::= path (sp window)? (sp "where" sp expr)? (sp "by" sp group)? (sp ("sort" sp expr (sp "desc")? | "shuffle"))? (sp "top" sp number)?
 group ::= "day" | "week" | "month" | path
 if-stmt ::= "if" sp expr
 else-stmt ::= "else"
@@ -86,6 +86,9 @@ slider-stmt ::= "slider" sp path sp range-lit (sp mod)*
 
 # ---------- drawing (inside draw) ----------
 draw-stmt ::= "draw" (sp number "," sp number)? (sp mod)*
+# a chart frame: data coordinates (y grows upward), with optional axes and grid lines from the ranges
+plot-stmt ::= "plot" sp range "," sp range (sp mod)*
+tick-stmt ::= "tick" sp expr "," sp tparts
 shape-stmt ::= ("rect" sp e4 | "line" sp e4 | "circle" sp (e3 | expr) | "arc" sp (e5 | e3) | "path" sp string
   | "label" sp expr "," sp expr "," sp tparts) (sp mod)*
 poly-stmt ::= "poly" (sp mod)*
@@ -95,7 +98,7 @@ e4 ::= e3 "," sp expr
 e5 ::= e4 "," sp expr
 
 # ---------- style and events on elements ----------
-mod ::= "big" | "head" | "faint" | "size" sp size | "bold" | "card" | "grow" | "color" sp expr | "fill" sp expr | "stroke" sp expr
+mod ::= "big" | "head" | "faint" | "axes" | "gridlines" | "middle" | "full" | "ratio" sp expr | "size" sp size | "bold" | "card" | "grow" | "color" sp expr | "fill" sp expr | "stroke" sp expr
   | "thick" sp expr | "opacity" sp expr | "width" sp expr | "height" sp expr | "radius" sp expr
   | "pad" sp number | "gap" sp number | "span" sp number | "align" sp align
   | "tap" sp actions | "swipe" sp actions
@@ -107,7 +110,7 @@ actions ::= action (sp "then" sp action)*
 action ::= "add" sp ident (sp assign ("," sp assign)*)? | "set" sp path sp "=" sp expr | "remove" sp expr
   | "set" sp "all" sp path sp "=" sp expr (sp "where" sp expr)? | "remove" sp "all" sp query
   | "toggle" sp path (sp window)? (sp "where" sp expr)?
-  | "edit" sp expr | "save" sp ident | "go" sp ident | "notify" sp tparts | "remind" sp string sp "in" sp expr | ident
+  | "edit" sp expr | "save" sp ident | "go" sp ident | "notify" sp tparts | "remind" sp string sp "in" sp expr | "after" sp dur sp action | ident
 assign ::= ident sp "=" sp expr
 
 # ---------- formulas ----------
@@ -127,12 +130,13 @@ color ::= "accent" | "ink" | "muted" | "soft" | "good" | "warn" | "bad" | "bg" |
 path ::= ("it" | ident) ("." ident)*
 func ::= agg query ")" | fold source "," sp expr ")" | "if(" expr "," sp expr "," sp expr ")"
   | "clamp(" expr "," sp expr "," sp expr ")" | fn1 expr ")" | fn2 expr "," sp expr ")" | ("min(" | "max(") expr "," sp expr ")"
+  | "due(" query "," sp expr ")" | "nth(" query "," sp expr ")" | "random(" query ")" | "join(" tpart ("," sp tpart)* ")"
   | ident "(" expr ("," sp expr)* ")"
 agg ::= "count(" | "sum(" | "avg(" | "min(" | "max(" | "last(" | "first(" | "streak(" | "best(" | "since(" | "gap("
 fold ::= "sumof(" | "maxof(" | "minof(" | "countof("
 fn1 ::= "round(" | "floor(" | "abs(" | "len(" | "weekday(" | "monthday(" | "monthdays(" | "dayname(" | "monthname(" | "hour("
-  | "minute(" | "second(" | "month(" | "year(" | "sin(" | "cos(" | "hue(" | "random(" | "words("
-fn2 ::= "has(" | "addmonths("
+  | "minute(" | "second(" | "month(" | "year(" | "sin(" | "cos(" | "hue(" | "random(" | "words(" | "compact(" | "grouped(" | "monthshort("
+fn2 ::= "has(" | "addmonths(" | "pow(" | "plural(" | "fixed("
 window ::= "today" | "yesterday" | "all" | "prev" sp period | "last" sp number sp periods
   | "on" sp primary | period (sp "of" sp primary)? | ident
 period ::= "week" | "month" | "year"
