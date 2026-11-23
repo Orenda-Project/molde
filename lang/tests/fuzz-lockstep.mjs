@@ -47,7 +47,7 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
       const op = ri(10);
       try {
         if (op <= 3) { // a tap on a button, a toggle, a chip, or a shape that takes taps
-          const ns = a.findAll(n => n.tap); const n = ns[ri(ns.length)];
+          const ns = a.findAll(n => n.tap && n.t !== 'more'); const n = ns[ri(ns.length)]; // more is view state (not saved)
           if (n) { a.dispatch(n.id, 'tap'); stats.taps++; }
         } else if (op <= 5) { // a change of an input (form fields included) with a value of its kind
           const ins = [...a.findAll(n => n.t === 'input' || n.t === 'choice' || n.t === 'slider'), ...a.findAll(n => n.t === 'form').flatMap(f => f.fields)];

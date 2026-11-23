@@ -38,6 +38,18 @@ for (const [name, tbl] of [['01-water', 'drink'], ['04-budget', 'spend'], ['22-t
   });
 }
 
+for (const [name, tbl] of [['01-water', 'drink'], ['04-budget', 'spend'], ['22-todo', 'task']]) {
+  test(`perf: ${name} at 20,000 rows: cold tree <= 600 ms, tap + tree <= 400 ms (fails only above 3x)`, () => {
+    const a = load(readFileSync(new URL(`../examples/${name}.mo`, import.meta.url), 'utf8'));
+    for (let i = 0; i < 20000; i++) a.addRow(tbl, MK[tbl](i), a.clock - (i % 60) * 864e5 - i * 1000);
+    const cold = T(() => a.tree());
+    const b = a.find(x => x.tap && x.t !== 'more');
+    const tap = T(() => { a.dispatch(b.id, 'tap'); a.tree(); });
+    console.log(`# perf ${name} 20000 rows: cold tree ${cold.toFixed(1)} ms, tap+tree ${tap.toFixed(1)} ms`);
+    assert.ok(cold <= 600 * 3 && tap <= 400 * 3, `cold ${cold} tap ${tap}`);
+  });
+}
+
 test('perf: 20,000 rows is no worse than linear (tree of 22-todo)', () => {
   const small = measure('22-todo', 'task', 2000).tree, big = measure('22-todo', 'task', 20000).tree;
   console.log(`# perf 22-todo tree: 2000 rows ${small.toFixed(1)} ms, 20000 rows ${big.toFixed(1)} ms (x${(big / small).toFixed(1)})`);

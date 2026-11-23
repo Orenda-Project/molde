@@ -1,6 +1,7 @@
 # The UI tree (renderer contract)
 
 Changes (newest first):
+- 2026-11-24 (round 11): **new node `more`** (`count`, `tap`): an `each` shows its first 200 items and then a `more` node; tapping it shows the next 200 (view state, not saved; a renderer may also page on scroll). Trees are shared while nothing changes: treat them as read-only (`load(src, {freezeTree: true})` freezes them). `snapshot()` also has `every` (how far each `every` is into its period).
 - 2026-11-24 (round 10): `tree()` returns the same object while nothing changed (render cache); a renderer should not mutate it. `load(src, {data, now})` uses `now`; `restore` keeps the clock. `tick(ms)` catches up fires within a time budget (about 150 ms) and logs `{kind: 'skipped'}` for the rest; the std timer is timestamp-based (its Start/Pause buttons are two buttons now, one shown at a time). Node ids are unchanged; state inside an `each` no longer depends on them.
 - 2026-11-24 (round 9): `form` fields carry `name` (the field's current name); a refused Add sets `form.error` ("Fill in name first.") and `error: 'needed'` on each missing field. `dispatch(id, 'change', v)` ignores values that are not of the input's kind. `snapshot()` has `when` (conditions already true).
 - 2026-11-24 (round 8): no option reference ever appears in the tree, `fields()` or `cell()` (option names only; `cell(..., {raw: true})` for the stored form). `dispatch(id, 'change', v)` with an object or an unknown option name is ignored. `restore` also returns `replaced: {before, after}` counts and clears data Undo. `each options NAME` works for a pick setting or state.
@@ -77,6 +78,7 @@ Every node has `id` (stable across renders: built from the statement position an
 | `path` | `d` | an SVG path in canvas units |
 | `label` | `x`, `y`, `text` | text centred at x, y |
 | `poly` | `points` (`[[x, y], ...]`) | a line through the points |
+| `more` | `count`, `tap` | the rest of a long list: show "N more"; tapping it shows the next page |
 | `error` | `text`, `line` | only if the evaluator hit a bug on that line; show it small |
 
 A shape with `tap` is hit when the tap lands inside its shape (for `arc` with a stroke: within the stroke width; for `line` and `poly`: within 12 points). A `draw` with `tap` is hit anywhere on the canvas. If shapes overlap, the last one drawn wins.

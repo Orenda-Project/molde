@@ -679,7 +679,8 @@ class App {
   }
 
   rootEnv() { return { vars: new Map(), it: null, index: null, scope: '', where: null, parent: null, draw: null }; }
-  child(env, o) { return { ...env, vars: new Map(), parent: env, ...o }; }
+  child(env, o) { return { ...env, vars: NO_VARS, parent: env, ...o }; } // vars are made when a name is declared (most scopes declare none)
+  declare(env, name, v) { if (env.vars === NO_VARS) env.vars = new Map(); env.vars.set(name, v); }
 
   // build() renders the tree and its handlers. The result is reused while the program, the clock,
   // the screen and the stored data are the same (a render can be most of the cost of a tap).
@@ -841,7 +842,7 @@ class App {
       if (d && typeof d === 'object' && JSON.stringify(d) !== JSON.stringify(out)) { for (const k of Object.keys(d)) if (!(k in out)) this.del(d, k); for (const [k, v] of Object.entries(out)) this.w(d, k, v); }
       else if (!d || typeof d !== 'object') this.w(this.data.state, key, out);
     }
-    env.vars.set(s.name, { state: key, type: s.draft ? { t: 'draft', table: s.draft } : s.type, keep: s.keep });
+    this.declare(env, s.name, { state: key, type: s.draft ? { t: 'draft', table: s.draft } : s.type, keep: s.keep });
   }
   newDraft(table) {
     const d = {};
@@ -885,7 +886,7 @@ class App {
     switch (s.kind) {
       case 'table': case 'setting': case 'remind': case 'def': return { nodes: [] };
       case 'state': this.declareState(s, env); return { nodes: [] };
-      case 'let': if (!s.params) env.vars.set(s.name, { let: s.e, env }); return { nodes: [] };
+      case 'let': if (!s.params) this.declare(env, s.name, { let: s.e, env }); return { nodes: [] };
       case 'every': this.H.every.push({ key: `e${s.sid}${env.scope}`, period: s.every * 1000, cond: s.cond ? () => this.evalIn(s.cond, env) : null, condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
       case 'when': this.H.when.push({ key: `w${s.sid}${env.scope}`, cond: () => this.evalIn(s.cond, env), condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
       case 'screen': {
@@ -900,18 +901,22 @@ class App {
       }
       case 'else': return { nodes: lastIf === false ? this.render(s.children, this.child(env, {}), id, cx) : [] };
       case 'each': {
-        const items = this.sourceItems(s.source, env);
-
+        const all = this.sourceItems(s.source, env);
+        // a long list shows its first EACH_PAGE items and a `more` node; tapping it shows the next page
+        // (view state, like the screen: not stored; a renderer may also page on scroll)
+        const pageKey = `${s.sid}${env.scope}`, limit = (this.pages && this.pages.get(pageKey)) || EACH_PAGE;
+        const items = all.length > limit ? all.slice(0, limit) : all;
         const out = [];
         items.forEach((item, i) => {
           const key = item.key;
           // state inside an each is kept per (what the each goes over, the item): not by line position, so edits above it keep it
           const scope = `${env.scope}/${s.sid}@${key}`; // by the each's statement id (kept across edits) and the item
           const e2 = this.child(env, s.as ? { index: i, scope } : { it: item.v, index: i, scope });
-          if (s.as) e2.vars.set(s.as, { value: item.v });
+          if (s.as) this.declare(e2, s.as, { value: item.v });
           out.push(...this.render(s.children, e2, `${id}@${key}`, cx));
         });
         if (!items.length && s.empty) out.push({ id: id + ':empty', t: 'text', text: s.empty, style: { role: 'faint' }, empty: true });
+        if (all.length > limit) { const mid = id + ':more'; out.push({ id: mid, t: 'more', count: all.length - limit, tap: true }); this.H.nodes.set(mid, { tap: () => { (this.pages ||= new Map()).set(pageKey, limit + EACH_PAGE); this.gen++; } }); }
         return { nodes: out };
       }
       case 'box': {
@@ -946,10 +951,10 @@ class App {
           let li = null;
           for (const c of list) {
             if (c.kind === 'pt') pts.push([num(this.evalIn(c.x, e)), num(this.evalIn(c.y, e))]);
-            else if (c.kind === 'each') this.sourceItems(c.source, e).forEach((it, i) => { const e2 = this.child(e, c.as ? { index: i } : { it: it.v, index: i }); if (c.as) e2.vars.set(c.as, { value: it.v }); collect(c.children, e2); });
+            else if (c.kind === 'each') this.sourceItems(c.source, e).forEach((it, i) => { const e2 = this.child(e, c.as ? { index: i } : { it: it.v, index: i }); if (c.as) this.declare(e2, c.as, { value: it.v }); collect(c.children, e2); });
             else if (c.kind === 'if') { li = this.truthy(this.evalIn(c.cond, e)); if (li) collect(c.children, e); }
             else if (c.kind === 'else') { if (li === false) collect(c.children, e); }
-            else if (c.kind === 'let') e.vars.set(c.name, { let: c.e, env: e });
+            else if (c.kind === 'let') this.declare(e, c.name, { let: c.e, env: e });
           }
         };
         collect(s.children || [], this.child(env, {}));
@@ -1355,14 +1360,24 @@ class App {
     if (base instanceof Group) base = new RowSet(base.table, base.rows);
     if (base instanceof Column) base = base.set;
     if (!(base instanceof RowSet)) return new RowSet(null, []);
-    let rows = base.rows;
+    let rows = base.rows, lo = -Infinity, hi = Infinity;
     if (q.win && q.win.k !== 'all') { // the window once per query, then a number compare per row
       const [a, b] = this.windowRange(q.win, env);
       if (a === null && b === null) rows = [];
-      else { const lo = a === null ? -Infinity : msOfLocal(a), hi = b === null ? Infinity : msOfLocal(b) + DAY; rows = rows.filter(r => r.at >= lo && r.at < hi); }
+      else { lo = a === null ? -Infinity : msOfLocal(a); hi = b === null ? Infinity : msOfLocal(b) + DAY; }
+    }
+    // a whole table in a window, newest first, is computed once per data generation and clock (a render
+    // asks for the same one many times: one per day of a chart)
+    const plain = !q.path.parts.length && q.path.head !== 'it' && this.env.tables.has(q.path.head) && rows.length;
+    const ck = plain ? `${q.path.head}|${lo}|${hi}` : null;
+    if (!this._qc || this._qc.gen !== this.gen || this._qc.clock !== this.clock || this._qc.data !== this.data) this._qc = { gen: this.gen, clock: this.clock, data: this.data, m: new Map() };
+    if (ck && this._qc.m.has(ck)) rows = this._qc.m.get(ck);
+    else {
+      if (lo !== -Infinity || hi !== Infinity) rows = rows.filter(r => r.at >= lo && r.at < hi);
+      rows = rows.slice().sort((x, y) => y.at - x.at || y.id - x.id); // newest first
+      if (ck) this._qc.m.set(ck, rows);
     }
     if (q.where) { const we = this.child(env, { where: null }); rows = rows.filter(r => { we.where = { table: base.table, row: r }; return this.truthy(this.ev(q.where, we)); }); } // one scope per query, the row changes
-    rows = rows.slice().sort((x, y) => y.at - x.at || y.id - x.id); // newest first
     if (q.shuffle) { // a fixed random order per row (chosen when the row was added), so the screen does not jump
       const key = r => r._rnd ?? ((r.id * 2654435761) % 1000003) / 1000003;
       rows = rows.slice().sort((x, y) => key(x) - key(y));
@@ -1762,6 +1777,8 @@ export function convertOptionRows(data, ever) {
 }
 // a stored reference to a pick option: an object, so no typed text can ever look like one
 const REJECT = Symbol('reject');
+export const EACH_PAGE = 200; // items an each shows before a `more` node
+const NO_VARS = new Map(); // shared by scopes that declare nothing; never written (declare() makes a scope its own)
 export const CATCH_UP_MS = 150; // a resume applies every fires until done or this much wall time has gone (the rest are skipped and logged)
 // a moment that can be an added time: a finite number of ms between the years 1900 and 3000
 // a calendar date that exists (no 2026-02-30), between the years 1900 and 2999
