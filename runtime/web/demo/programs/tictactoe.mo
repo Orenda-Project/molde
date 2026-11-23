@@ -6,7 +6,7 @@ let turn = if(n % 2 = 0, "X", "O")
 let won(m text) = countof([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
 let xw = won(X)
 let ow = won(O)
-stack gap 4 align center
+stack gap 4 align center middle
   stack gap 0 align center
     if xw or ow
       if(xw, "X", "O") "wins this one" big color good

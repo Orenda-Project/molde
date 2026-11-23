@@ -14,9 +14,9 @@ if adding
     choice d.tag
     button "Save task" fill accent tap save d then set adding = no
 stack gap 0
-  text open if(open = 1, "task", "tasks") "open" head
+  plural(open, "task") "open" head
   if late > 0
-    "Late:" late if(late = 1, "task is", "tasks are") "past the due date" bold color bad
+    "Late:" plural(late, "task is") "past the due date" bold color bad
   else
     "Nothing is late" color good
 if open = 0

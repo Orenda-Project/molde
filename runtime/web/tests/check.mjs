@@ -403,7 +403,7 @@ await scenario('empty states: every demo program says what to do when it has no 
     if (/\bNaN\b|undefined|Infinity/.test(txt)) bad.push(`${id}: ${txt.match(/\bNaN\b|undefined|Infinity/)[0]}`);
     const noise = txt.match(/\b0 of 0\b|\b0 t moved|^\s*[–-]\s*$|Best streak\s*\n\s*\n/m);
     if (noise) bad.push(`${id}: noise "${noise[0].trim()}"`);
-    if (id !== 'tictactoe' && await page.$eval('.mo-screen', e => e.classList.contains('mo-single'))) bad.push(`${id}: empty state floats mid-screen`);
+    if (id !== 'tictactoe' && await page.$('.mo-screen .mo-middle')) bad.push(`${id}: empty state floats mid-screen`);
     const a = await page.evaluate(audit);
     for (const k of ['overflow', 'small', 'tiny', 'contrast']) if (a[k].length) bad.push(`${id} empty ${k}: ${a[k][0]}`);
   }
@@ -450,13 +450,18 @@ await scenario('centring: only a one-block screen is centred; lists and forms st
   for (const c of CATALOG) {
     await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
     await page.waitForFunction(i => window.__molde.ex === i, c.id);
-    const single = await page.$eval('.mo-screen', e => e.classList.contains('mo-single'));
-    if (single !== (c.id === 'tictactoe')) bad.push(`${c.id}: single=${single}`);
+    const single = !!(await page.$('.mo-screen .mo-middle'));
+    if (single !== (c.id === 'tictactoe')) bad.push(`${c.id}: middle=${single}`);
+    if (!single) {   // lists and forms start right under the app bar
+      const gap = await page.evaluate(() => document.querySelector('.mo-screen').firstElementChild.getBoundingClientRect().top - document.querySelector('.mo-head').getBoundingClientRect().bottom);
+      if (gap > 40) bad.push(`${c.id}: content starts ${Math.round(gap)}px below the bar`);
+    }
   }
   const r = await page.evaluate(() => { location.hash = 'ex=tictactoe&view=app'; return null; });
   await page.waitForFunction(() => window.__molde.ex === 'tictactoe');
-  const g = await page.evaluate(() => { const b = document.querySelector('.mo-grid').getBoundingClientRect(); const a = document.querySelector('.mo-scrollarea').getBoundingClientRect(); return { l: b.left - a.left, r: a.right - b.right }; });
+  const g = await page.evaluate(() => { const b = document.querySelector('.mo-middle').getBoundingClientRect(); const a = document.querySelector('.mo-scrollarea').getBoundingClientRect(); const h = document.querySelector('.mo-head').getBoundingClientRect(); return { l: b.left - a.left, r: a.right - b.right, t: b.top - h.bottom, bt: a.bottom - b.bottom }; });
   if (Math.abs(g.l - g.r) > 4) bad.push(`board off centre ${g.l} vs ${g.r}`);
+  if (Math.abs(g.t - g.bt) > 40) bad.push(`board not in the middle of the free height ${g.t} vs ${g.bt}`);
   expect(!bad.length, bad.join(' | '));
 });
 
@@ -642,7 +647,7 @@ await scenario('numbers: one format (thousands separators from 1,000; money with
 });
 
 await scenario('charts: three y ticks, month names under savings bars, reached bars marked', 'ex=budget&view=app', async page => {
-  const ticks = await page.$$eval('.mo-draw .mo-lbl', e => e.filter(x => parseFloat(x.style.left) < 12).length);
+  const ticks = await page.$$eval('.mo-plot-y span', e => e.length);
   expect(ticks >= 3, `budget y ticks: ${ticks}`);
   await page.evaluate(() => { location.hash = 'ex=savings&view=app'; });
   await page.waitForFunction(() => window.__molde.ex === 'savings');

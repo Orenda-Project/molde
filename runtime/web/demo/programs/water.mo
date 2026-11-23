@@ -21,7 +21,7 @@ row gap 1
 stack card gap 2
   row
     "Today" head grow
-    count(drink today) if(count(drink today) = 1, "drink", "drinks") faint
+    plural(count(drink today), "drink") faint
   if count(drink today) = 0
     "Nothing yet today. Tap + 250 ml when you have a glass." color muted
   each drink today as d

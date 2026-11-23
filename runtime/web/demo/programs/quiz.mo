@@ -13,7 +13,7 @@ stack gap 1
   draw 100, 3
     rect 0, 0, 100, 3 fill soft radius 1.5
     rect 0, 0, 100 * count(answer) / count(item), 3 fill accent radius 1.5
-  text todo if(todo = 1, "question", "questions") "left of" count(item) color muted
+  plural(todo, "question") "left of" count(item) color muted
 each item as x
   if count(x.answer) = 0
     stack card gap 2

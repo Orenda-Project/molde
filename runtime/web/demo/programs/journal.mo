@@ -7,7 +7,7 @@ stack card gap 3
   row
     "How are you feeling?" head grow
     if streak(entry) > 0
-      streak(entry) if(streak(entry) = 1, "day", "days") "in a row" faint
+      plural(streak(entry), "day") "in a row" faint
   row gap 1
     each ["Rough", "Low", "Okay", "Good", "Great"]
       stack grow gap 1 align center radius 10 pad 1 fill if(d.mood = index + 1, accent, soft) tap set d.mood = index + 1

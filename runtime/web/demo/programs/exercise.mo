@@ -23,11 +23,11 @@ row gap 1
         text it if(count(lift on it) > 0, ", trained", ", rest") opacity 0
 stack gap 1
   if count(lift today) > 0
-    count(lift today) if(count(lift today) = 1, "exercise", "exercises") "today," sumof(lift today, it.sets) "sets" head
+    plural(count(lift today), "exercise") "today," sumof(lift today, it.sets) "sets" head
   else
     "No training yet today" head
   if trained > 0
-    text trained if(trained = 1, "day", "days") "this week," round(vol / 100) / 10 "t moved" color muted
+    plural(trained, "day") "this week," round(vol / 100) / 10 "t moved" color muted
     if before > 0
       round((vol - before) * 100 / before) "% compared with the same days last week" faint
   else
@@ -52,19 +52,13 @@ stack card gap 3
         stack gap 0
           count(lift last 35 days where exercise = ex) "times" head
           "logged" faint
-      draw 110, 64
-        line 22, 6, 108, 6 stroke edge thick 0.3
-        line 22, 30, 108, 30 stroke edge thick 0.3
-        line 22, 54, 108, 54 stroke edge thick 0.3
-        label 10, 6, hi size tiny color muted
-        label 10, 30, round((hi + lo) / 2 * 10) / 10 size tiny color muted
-        label 10, 54, lo size tiny color muted
-        poly stroke accent thick 1.2
+      plot 0..35, lo..hi axes gridlines
+        poly stroke accent thick 2
           each lift last 35 days where exercise = ex sort at
-            pt 106 - 84 * ((now - it.at) / 1d) / 35, 54 - 48 * (it.kg - lo) / max(hi - lo, 1)
-        circle 106 - 84 * ((now - last(lift.at where exercise = ex)) / 1d) / 35, 54 - 48 * (last(lift.kg where exercise = ex) - lo) / max(hi - lo, 1), 1.8 fill accent
-        label 34, 62, today - 34 size tiny color muted
-        label 100, 62, "Today" size tiny color muted
+            pt 35 - (now - it.at) / 1d, it.kg
+        circle 35 - (now - last(lift.at where exercise = ex)) / 1d, last(lift.kg where exercise = ex), 1 fill accent
+        tick 1, today - 34
+        tick 34, "Today"
       "Latest:" last(lift.kg where exercise = ex) "kg for" last(lift.reps where exercise = ex) "reps. Weights in kg." faint
 "Recent" head
 if count(lift last 14 days) = 0

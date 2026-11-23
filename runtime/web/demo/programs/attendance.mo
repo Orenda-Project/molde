@@ -36,7 +36,7 @@ else
     each student sort count(it.absent month of d) desc top 5 as s
       row
         s.name grow
-        count(s.absent month of d) if(count(s.absent month of d) = 1, "day", "days") "absent" color muted
+        plural(count(s.absent month of d), "day") "absent" color muted
 button if(adding, "Close", "Add student") tap set adding = not adding
 if adding
   form student, "Save student"

@@ -52,7 +52,7 @@ else
         "of all ticks" faint
       stack gap 0
         "Best streak" faint
-        maxof(habit, streak(it.check)) if(maxof(habit, streak(it.check)) = 1, "day", "days") head
+        plural(maxof(habit, streak(it.check)), "day") head
         "running now" faint
   row
     "Last 6 weeks" head grow

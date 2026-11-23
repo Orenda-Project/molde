@@ -21,4 +21,4 @@ stack card gap 2
     row gap 2
       text o grow
       count(zikr today where phrase = o) bold
-      floor(count(zikr today where phrase = o) / target) if(floor(count(zikr today where phrase = o) / target) = 1, "round", "rounds") color muted
+      plural(floor(count(zikr today where phrase = o) / target), "round") color muted

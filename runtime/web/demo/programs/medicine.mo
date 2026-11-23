@@ -20,7 +20,7 @@ if n = 0
     "Add each medicine with the time you take it. You get a reminder at that time." color muted
 else
   stack gap 0
-    text took "of" n if(n = 1, "dose", "doses") "taken today" head
+    text took "of" plural(n, "dose") "taken today" head
     if took >= n
       "All taken" color good
     else

@@ -18,7 +18,7 @@ field task "Working on"
 stack card gap 2
   row
     "Today" head grow
-    count(session today) if(count(session today) = 1, "session,", "sessions,") sum(session.mins today) "min" faint
+    plural(count(session today), "session") "," sum(session.mins today) "min" faint
   row gap 1 align end
     each days last 7 days
       stack grow gap 1 align center

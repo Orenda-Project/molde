@@ -124,7 +124,6 @@ class Renderer {
       this.head.classList.toggle('mo-head-tools', !!bar);
       // a screen that is one block (a board, one drawing) sits in the middle of the free height;
       // anything else starts at the top
-      this.screenEl.classList.toggle('mo-single', kids.length === 1 && isBoard(kids[0]));
       this.patchChildren(this.screenEl, kids, { top: true });
     }
     this.renderTabs(t);
@@ -252,6 +251,7 @@ class Renderer {
       case 'slider': el = h('div', 'mo-slider'); el.append(h('input', null, { type: 'range' }), h('output')); break;
       case 'toggle': el = h('button', 'mo-toggle', { type: 'button', role: 'checkbox' }); el.innerHTML = `<span class="mo-tick">${iconSvg('check')}</span>`; break;
       case 'draw': el = h('div', 'mo-draw'); break;
+      case 'plot': el = h('div', 'mo-plot'); break;
       case 'error': el = h('p', 'mo-error'); break;
       default: el = h('div'); el.hidden = true;
     }
@@ -269,6 +269,7 @@ class Renderer {
     el._sig = sig;
     el.setAttribute('data-id', n.id);
     if (n.t === 'draw') { if (!same) this.fillDraw(el, n); return; }
+    if (n.t === 'plot') { if (!same) this.fillPlot(el, n); return; }
     if (same && !n.children) return;
     if (!same) {
       el.removeAttribute('style');
@@ -316,6 +317,10 @@ class Renderer {
       }
       if (fin(st.gap)) style.gap = sc(st.gap);
       if (fin(st.pad)) style.padding = sc(st.pad);
+      if (fin(st.ratio) && st.ratio > 0) { style.aspectRatio = String(st.ratio); if (!fin(st.height)) style.height = 'auto'; }
+      if (st.middle) cls.push('mo-middle');
+      if (st.full) cls.push('mo-full');
+      if (n.t === 'text' && n.empty) cls.push('mo-empty');
       if (fin(st.span)) style.gridColumn = `span ${Math.max(1, Math.round(st.span))}`;
       if (fin(st.width)) { style.width = pt(st.width); style.maxWidth = '100%'; style.flex = 'none'; }
       else if (n.t === 'box') style.alignSelf = 'stretch';   // a box with no width fills its column
@@ -331,7 +336,7 @@ class Renderer {
       const cc = colorClass(st.color);
       if (cc === 'hue') { el.setAttribute('data-color', 'hue'); el.style.setProperty('--hue', /\d+/.exec(normColor(st.color))[0]); }
       else if (cc) el.setAttribute('data-color', cc); else el.removeAttribute('data-color');
-      if (n.t === 'button' && (st.fill === 'accent' || n.primary)) cls.push('mo-primary');
+      if (n.t === 'button' && (st.fill === 'accent' || (n.action === 'save' && !st.fill))) cls.push('mo-primary');
       if (n.t === 'row' && n.children && !n.children.some(c => c.style && c.style.grow) && n.children.filter(c => c.t === 'stack').length >= 2) cls.push('mo-row-even');
       // a row whose children are all growing stacks (a week strip, a mood picker) is a strip:
       // its columns stay side by side at any text size
@@ -364,8 +369,8 @@ class Renderer {
       case 'image': if (typeof n.src === 'string' && /^data:image\//.test(n.src)) el.src = n.src; else el.removeAttribute('src'); break;
       case 'space': el.style.height = sc(fin(n.size) ? n.size : 2); break;
       case 'error': el.textContent = (n.line ? `Line ${n.line}: ` : '') + (n.text || 'error'); break;
-      case 'toggle': el.setAttribute('aria-checked', String(!!n.on)); el.setAttribute('aria-label', n.label || this.nearLabel(n) || 'Done'); el.setAttribute('data-ev', 'tap'); break;
-      case 'choice': this.fillChoice(el, n, n.label); break;
+      case 'toggle': el.setAttribute('aria-checked', String(!!n.on)); el.setAttribute('aria-label', cap(String(n.label || 'Done').replace(/_/g, ' '))); el.setAttribute('data-ev', 'tap'); break;
+      case 'choice': this.fillChoice(el, n, n.label ? cap(String(n.label).replace(/_/g, ' ')) : null); break;
       case 'slider': this.fillSlider(el, n); break;
       case 'input': this.fillInput(el, n, cx); break;
       case 'form': this.patchChildren(el, (n.fields || []).map(f => ({ ...f, inForm: true })), cx); break;
@@ -557,6 +562,79 @@ class Renderer {
       el.append(d);
     }
     if (n.tap && !el.hasAttribute('aria-label')) el.setAttribute('aria-label', labels.map(l => l.text).join(' ') || 'Tap');
+  }
+
+  // a chart frame in data units (y grows upward): the SVG takes the plot area, tick labels and
+  // point labels are HTML so they keep real sizes, dots stay round at any width
+  fillPlot(el, n) {
+    const [x0, x1] = n.x && n.x.length === 2 ? n.x : [0, 1], [y0, y1] = n.y && n.y.length === 2 ? n.y : [0, 1];
+    const sx = v => 100 * (v - x0) / ((x1 - x0) || 1), sy = v => 100 * (y1 - v) / ((y1 - y0) || 1);
+    const st = n.style || {};
+    el.removeAttribute('style');
+    el.className = 'mo-plot' + (n.axes ? ' mo-plot-axes' : '');
+    const area = h('div', 'mo-plot-area');
+    if (fin(st.height)) area.style.height = pt(st.height);
+    else if (fin(st.ratio) && st.ratio > 0) area.style.aspectRatio = String(st.ratio);
+    const svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 100 100'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+    const mk = tag => document.createElementNS(SVGNS, tag);
+    const ticks = n.ticks || {};
+    if (n.gridlines) for (const t of ticks.y || []) { const l = mk('line'); l.setAttribute('x1', 0); l.setAttribute('x2', 100); l.setAttribute('y1', sy(t.v)); l.setAttribute('y2', sy(t.v)); l.setAttribute('class', 's-edge'); l.setAttribute('stroke-width', '1'); l.setAttribute('vector-effect', 'non-scaling-stroke'); svg.append(l); }
+    const html = [];
+    for (const c of n.children || []) {
+      const cs = c.style || {};
+      let e = null;
+      if (c.t === 'rect' && [c.x, c.y, c.w, c.h].every(fin)) {
+        const top = Math.min(sy(c.y), sy(c.y + c.h)), bot = Math.max(sy(c.y), sy(c.y + c.h));
+        const l = Math.min(sx(c.x), sx(c.x + c.w)), r = Math.max(sx(c.x), sx(c.x + c.w));
+        if (bot - top <= 0 || r - l <= 0) continue;
+        // bars are HTML boxes so their corners stay round when the chart stretches
+        const b = h('div', 'mo-plot-bar');
+        Object.assign(b.style, { left: l + '%', width: (r - l) + '%', top: top + '%', height: (bot - top) + '%' });
+        if (fin(cs.radius)) b.style.borderRadius = `${Math.min(cs.radius, 8)}px ${Math.min(cs.radius, 8)}px 0 0`;
+        if (fin(cs.opacity)) b.style.opacity = String(cs.opacity);
+        applyFill(b, cs.fill !== undefined ? cs.fill : 'accent');
+        if (c.tap) { b.setAttribute('data-id', c.id); b.setAttribute('data-ev', 'tap'); b.setAttribute('role', 'button'); b.setAttribute('tabindex', '0'); }
+        html.push(b);
+        continue;
+      }
+      if (c.t === 'line' && [c.x1, c.y1, c.x2, c.y2].every(fin)) { e = mk('line'); e.setAttribute('x1', sx(c.x1)); e.setAttribute('y1', sy(c.y1)); e.setAttribute('x2', sx(c.x2)); e.setAttribute('y2', sy(c.y2)); setPaint(e, 'stroke', cs.stroke || 'muted'); }
+      if (c.t === 'poly') { const ps = (c.points || []).filter(q => fin(q[0]) && fin(q[1])); if (ps.length < 2) continue; e = mk('polyline'); e.setAttribute('points', ps.map(q => `${round3(sx(q[0]))},${round3(sy(q[1]))}`).join(' ')); e.setAttribute('fill', 'none'); setPaint(e, 'stroke', cs.stroke || 'accent'); e.setAttribute('stroke-linejoin', 'round'); e.setAttribute('stroke-linecap', 'round'); }
+      if (e) { e.setAttribute('stroke-width', fin(cs.thick) ? Math.max(1, cs.thick) : 2); e.setAttribute('vector-effect', 'non-scaling-stroke'); if (fin(cs.opacity)) e.setAttribute('opacity', cs.opacity); svg.append(e); continue; }
+      if (c.t === 'circle' && [c.cx, c.cy].every(fin)) {
+        const d = h('span', 'mo-plot-dot');
+        Object.assign(d.style, { left: sx(c.cx) + '%', top: sy(c.cy) + '%' });
+        applyFill(d, cs.fill !== undefined ? cs.fill : 'accent');
+        html.push(d);
+        continue;
+      }
+      if (c.t === 'label' && [c.x, c.y].every(fin)) {
+        const d = h('span', 'mo-lbl mo-plot-lbl');
+        if (cs.role === 'faint' || cs.size === 'tiny' || cs.size === 'small') d.classList.add('mo-faint');
+        if (cs.bold || cs.role === 'head') d.classList.add('mo-bold');
+        Object.assign(d.style, { left: Math.max(4, Math.min(96, sx(c.x))) + '%', top: sy(c.y) + '%' });
+        d.textContent = typo(c.text ?? '');
+        const lc = colorClass(cs.color); if (lc && lc !== 'hue') d.setAttribute('data-color', lc);
+        html.push(d);
+      }
+    }
+    area.append(svg, ...html);
+    el.textContent = '';
+    if (n.axes) {
+      const yl = h('div', 'mo-plot-y', { 'aria-hidden': 'true' });
+      for (const t of ticks.y || []) { const d = h('span'); d.style.top = sy(t.v) + '%'; d.textContent = typo(t.label ?? ''); yl.append(d); }
+      el.append(yl);
+    }
+    el.append(area);
+    if (n.axes || (ticks.x || []).length) {
+      const xl = h('div', 'mo-plot-x', { 'aria-hidden': 'true' });
+      for (const t of ticks.x || []) { const d = h('span'); d.style.left = sx(t.v) + '%'; d.textContent = typo(t.label ?? ''); xl.append(d); }
+      el.append(xl);
+    }
+    // a summary for screen readers: the tick labels and the plotted labels
+    const said = [...(ticks.x || []).map(t => t.label), ...html.filter(x => x.classList.contains('mo-plot-lbl')).map(x => x.textContent)].filter(Boolean);
+    el.setAttribute('role', 'img');
+    el.setAttribute('aria-label', 'Chart' + (said.length ? ': ' + said.slice(0, 12).join(', ') : ''));
   }
 
   drawShape(svg, c, W, H, labels, shapes) {
@@ -937,6 +1015,24 @@ export const bridge = {
     return (app.prog && app.prog.body || []).filter(s => s.kind === 'setting');
   },
   sheetSpec(app, sh) {
+    if (app.fields) {   // the evaluator's editor API (UITREE round 3)
+      if (sh.kind === 'settings' || sh.kind === 'setting') {
+        const list = this.settingsList(app).filter(s => sh.kind === 'settings' || s.name === sh.target);
+        if (!list.length) return null;
+        const fields = list.flatMap(s => app.fields(s.name)).map(f => ({ ...f, id: 'sheet:set:' + f.name, label: cap(String(f.label || f.name).replace(/_/g, ' ')) }));
+        return { title: sh.kind === 'settings' ? 'Settings' : fields[0] ? fields[0].label : 'Setting', fields };
+      }
+      if (sh.kind === 'row') {
+        const { table, id } = sh.target || {};
+        const row = this.rowOf(app, table, id);
+        const fields = row && !row.deleted ? app.fields({ table, id }) : [];
+        if (!fields.length) return null;
+        const tb = app.env.tables.get(table);
+        return { title: 'Edit ' + ((tb && unq(tb.label || '')) || table.replace(/_/g, ' ')), removable: true,
+          fields: fields.map(f => ({ ...f, id: `sheet:row:${table}:${id}:${f.name}`, label: f.name === 'at' ? 'When' : cap(String(f.label || f.name).replace(/_/g, ' ')) })) };
+      }
+      return null;
+    }
     if (sh.kind === 'settings' || sh.kind === 'setting') {
       const list = this.settingsList(app).filter(s => sh.kind === 'settings' || s.name === sh.target);
       if (!list.length) return null;
@@ -965,6 +1061,11 @@ export const bridge = {
   },
   sheetChange(app, sh, id, v) {
     const p = id.split(':');
+    if (app.setField) {
+      if (p[1] === 'set') app.setField(p[2], null, v);
+      else if (p[1] === 'row') { if (p[5] === 'at' && (v === null || v === '')) return; app.setField({ table: p[2], id: +p[3] }, p[4], v); }
+      return;
+    }
     if (p[1] === 'set') {
       const s = this.settingsList(app).find(x => x.name === p[2]);
       if (!s) return;

@@ -34,9 +34,9 @@ All fifteen programs are written for the demo in `demo/programs/` (plain level 1
 
 ## Level-1 nodes implemented
 
-`app` (an app bar with the name and, when the program has settings, a settings button), `screen` (tab bar), `stack`, `row`, `grid`, `box`, `scroll`, `text` (roles, sizes, `bold`, `color`, `align`, tappable text), `button`, `icon`, `image`, `space`, `divider`, `input` (text, long, num, money, date, time, when, dur, bool, pick and ref as chips, image), `form`, `toggle`, `choice`, `slider`, `draw` with `rect`, `circle`, `arc` (stroke arc or filled wedge), `line`, `path`, `label`, `poly`, and `error`; every style key in UITREE.md.
+`app` (an app bar with the name and, when the program has settings, a settings button), `screen` (tab bar), `stack`, `row`, `grid`, `box`, `scroll`, `text` (roles, sizes, `bold`, `color`, `align`, tappable text), `button`, `icon`, `image`, `space`, `divider`, `input` (text, long, num, money, date, time, when, dur, bool, pick and ref as chips, image), `form`, `toggle`, `choice`, `slider`, `draw` with `rect`, `circle`, `arc` (stroke arc or filled wedge), `line`, `path`, `label`, `poly`; `plot` (a chart frame in data units: axes, grid lines at the y ticks, x and y tick labels, bars, lines, round dots and point labels); `error`. Every style key in UITREE.md, including `ratio`, `middle` and `full`; `toggle.label` and `choice.label` as accessible names; `action` (a `save` button is primary); `text.empty` messages. Apps load with `currency: 'Rs'`, so money carries its sign from the runtime.
 
-Runtime pieces from SPEC section 12: editor sheets for rows and settings, remove with an Undo toast that names the row ("Removed Petrol, Rs 5,740"), `notify` as a toast, swipe to remove (or Delete on a focused row), timers (`app.tick` once a second), focus and scroll kept across updates (keyed patching by node id; a focused or pressed control is never replaced).
+Runtime pieces from SPEC section 12: editor sheets for rows and settings (built from the evaluator's `app.fields()` and saved with `app.setField()`), remove with an Undo toast that names the row ("Removed Petrol, Rs 5,740"), `notify` as a toast, swipe to remove (or Delete on a focused row), timers (`app.tick` once a second), focus and scroll kept across updates (keyed patching by node id; a focused or pressed control is never replaced).
 
 ## Generic rules the renderer applies (and why each is generic)
 
@@ -46,13 +46,13 @@ None of these names an app, a table or a field; each reads only node types and s
 2. **Numbers in the runtime's locale** (SPEC 12 says the runtime formats numbers): thousands separators from 1,000 (the evaluator starts at 10,000), never inside a year after a month name, a time or a date; a 1 to 3 letter word before a number and a unit after it do not wrap away ("Rs 5,322", "250 ml"); a number never breaks inside.
 3. **A first row of small controls joins the app bar** (at most 4 buttons, short texts, icons, empty boxes): the month switcher, the app's one main action.
 4. **`<` and `>` buttons are drawn as chevrons** named Previous and Next.
-5. **Centring only for a one-block screen**: a screen that is a single board or drawing sits in the middle of the free height; everything else starts at the top. A drawing on its own line is centred across.
+5. **Centring comes from the program** (`middle`, used by tic-tac-toe); everything else starts at the top. The screen fills the free height so a `middle` block can centre. A drawing on its own line is centred across.
 6. **Strips and columns**: a row whose children are all growing stacks is a strip and keeps its columns; a growing column beside other things keeps about 8 characters so rows wrap at large text; grid cells that hold words keep 4.5rem.
 7. **Invisible text is read aloud only**: a `text` with `opacity 0` becomes screen-reader text (used to name heat-map cells and board squares).
 8. **Big grids are one tab stop**: a grid with more than 12 tappable cells has one tab stop and arrow keys (roving tabindex).
 9. **`stroke` on a block is an outline ring** (inset, so the layout does not move).
 10. **Labels in drawings** are HTML with real sizes; their colour follows the shape under them.
-11. **Primary button**: a button with `fill accent` is primary; others are quiet.
+11. **Primary button**: a button with `fill accent`, or a `save` action with no fill, is primary; others are quiet.
 12. **Even stat rows**: a row of two or more stacks with no `grow` shares the width.
 13. **Drawing height caps**: a canvas with no width fills its column but stays under 120 points for a tall canvas, 280 for a wide one.
 14. **Scroll cue**: a sideways row fades on the side that has more.
@@ -62,7 +62,7 @@ None of these names an app, a table or a field; each reads only node types and s
 
 Direction: personal tools on a cheap phone; calm, exact, a little warm. Surfaces stay neutral; colour goes into what the program draws. Spacing on a 4 px scale (`gap`/`pad` 0 to 6 = 0, 8, 12, 16, 24, 32, 48 px), one type scale in rem (14, 16, 18, 22, 32, 44 px at 100%; weights 400 to 600), nested radii (cards 16, controls 10), a visible focus ring, targets of at least 44 px, no text under 14 px, text contrast of at least 4.5:1 in all five themes, light and dark. No gradients, glows, emoji or brown.
 
-## Checks (tests/check.mjs, 208)
+## Checks (tests/check.mjs, 208 plus any added since; the last run is in the PR)
 
 - every program at 360x640, 412x915, 600x960, 800x1280 and 1440x900, light and dark (and with the chat sheet open): no console output or network request, no overflow, targets of at least 44 px, text of at least 14 px, contrast of at least 4.5:1;
 - 200% system text at 360 px (no overflow, no letter-per-line, numbers whole, drawing labels inside their drawings) and 300 px wide;
@@ -74,20 +74,18 @@ Direction: personal tools on a cheap phone; calm, exact, a little warm. Surfaces
 
 ## What still looks weak (honest list)
 
-- **Charts cost a lot of program text**: every tick, gridline and point is placed by hand with `label`, `line` and `circle`; the language's chart frame (`plot`, `tick`) is not finished yet.
-- **Short month names** are a 12-level `if` in the savings program; plurals and empty states are written by hand everywhere.
-- **The number rule is a heuristic**: a 4-digit year that does not follow a month name would get a comma ("in 2026" would show as "in 2,026"); no demo program shows one. A typed number in the tree would remove the guess.
-- **Heat-map cells and board squares are named with invisible text** (rule 7); a real accessible-name modifier would be cleaner.
+- **The number rule is a heuristic** (rule 2): a 4-digit year that does not follow a month name would get a comma ("in 2026" would show as "in 2,026"); no demo program shows one. `grouped()` exists, but programs would have to call it on every number.
+- **Heat-map cells and board squares are named with invisible text** (rule 7); there is no accessible name for a box.
+- **The mood chart keeps hand-placed labels**: `plot` makes numeric y ticks, and the journal wants the words Great, Okay, Rough there.
+- **Empty states** are still `if count(...) = 0` blocks in most programs; only new code would use `each ... empty`.
 - The heat grid needs 44 px cells to be tappable, so it shows 6 weeks, not 10.
 - Dates are UTC in the evaluator; the demo does not pass `tz: 'local'` so screenshots stay fixed.
-- The editor and settings sheets still read declarations from the `App` object (gap 1 below).
 
-## Contract gaps and language needs
+## Language and evaluator needs (after round 3 parts 1 to 6)
 
-1. A public editor API: list a row's or setting's fields with their values and types, and set one (with one undo step). The `bridge` in render.mjs reads `app.env`, `app.prog`, `app.data` through `tk/fk/sk` and calls `app.pushUndo`.
-2. Typed text parts in the tree (number, money, date), so the runtime formats numbers and currency without guessing (rule 2).
-3. An accessible name for any node (`say "..."`), replacing rule 7.
-4. Labels on `toggle` and `choice`; the action kind on buttons (save, add, go), so primary actions need no `fill accent`.
-5. The chart frame (`plot`, `tick`), `plural`, a short month name, `each ... empty`, aspect ratio for `box`, centre and fill on blocks.
-6. One undo step per field edit rather than per keystroke.
-7. A way for an edit to set a stored setting's value (a new default does nothing once a value is stored).
+Merged and used: `applyEdit`/`revert` (chat changes and Undo), storage slots, public `addRow`, `fields()`/`setField()` (editor sheets), `plot`/`tick` (budget and workout charts), `plural()`, `monthshort()`, `middle`, labels on `toggle`/`choice`, `action`, `text.empty`, `currency`. Still needed:
+
+1. An accessible name for any node (for example `say "..."`), to replace rule 7.
+2. Named y ticks on `plot` (`ytick V, "Great"`), so a scale of words needs no hand-placed labels.
+3. Typed text parts in the tree (number, money, date), so the runtime formats numbers without guessing (rule 2), or grouping from 1,000 as the evaluator's default.
+4. A way to tell the renderer which row is the app bar (rule 3 guesses from "a first row of small controls").
