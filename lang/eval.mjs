@@ -119,18 +119,43 @@ class App {
       return;
     }
     try {
-      // the schema history: from a snapshot, from a list of earlier programs, or new
-      // rows that hold option names (older backups) get option slot ids, read with the data's own history
+      // the schema history: the snapshot's own (rebuilt if older-shaped), or a list of earlier programs, or new.
+      // Rows that hold option names (older backups) get option references, read with the data's own history.
       if (opts.data) { this.restore(opts.data, true); if (up.ever) convertOptionRows(this.data, up.ever); }
-      // a list of earlier programs always wins: it replays the steps an old backup has not seen (rule 6)
-      this.ever = opts.history ? everOf(opts.history).ever : up && up.ever ? up.ever : emptySchema();
-      // loading is never an edit: a text that is the stored program with was clauses still in it is the stored program
+      const loadWarnings = [];
+      let ever = up && up.ever && up.ever.versions.length ? up.ever : null;
+      if (opts.history) {
+        if (!ever) ever = everOf(opts.history).ever;
+        else { // the snapshot's maps win; the history only adds the steps after the snapshot's program
+          const last = ever.versions[ever.versions.length - 1].src;
+          const j = opts.history.map(h => strip(h)).lastIndexOf(last);
+          if (j < 0) loadWarnings.push('the history given does not contain the program of this data, so it was not used.');
+          else for (const h of opts.history.slice(j + 1)) {
+            const r = evolve(ever, h);
+            if (r.verdict === 'refused') { loadWarnings.push(`a later program of the history does not apply to this data (${r.refused[0]}); the steps from there on were not used.`); break; }
+            if (r.verdict !== 'ask') ever = r.ever;
+            if (r.warnings) loadWarnings.push(...r.warnings);
+          }
+        }
+      }
+      this.ever = ever || emptySchema();
+      if (!this.ever.app) this.ever = { ...this.ever, app: opts.appId || newAppId() };
+      // loading never acts as an edit and never renames: the stored program of the data is what runs
       const last = this.ever.versions[this.ever.versions.length - 1];
-      const r = this.setProgram(last && strip(source) === last.src ? last.src : source, { load: !!last });
+      let r;
+      if (last && strip(source) !== last.src) {
+        r = this.setProgram(last.src);
+        r = { ...r, verdict: 'warn', warnings: ['the program given is not the stored program of this data; the stored program was loaded. Send the new program as an edit to change it.', ...loadWarnings] };
+      } else {
+        r = this.setProgram(last ? last.src : source);
+        if (loadWarnings.length) r = { ...r, verdict: 'warn', warnings: loadWarnings };
+      }
       convertOptionRows(this.data, this.ever);
+      this.annotateOptions();
       this.edit = r;
     } catch (e) {
-      this.ok = false; this.errors = [`could not load: ${e && e.message}`];
+      this.ok = false; this.errors = ['the saved data could not be read (an unexpected shape); it was left untouched.'];
+      this.rawData = opts.data; this.internalError = String(e && e.stack || e);
       this.prog = this.prog || { header: null, body: [] }; this.env = this.env || { tables: new Map(), settings: new Map() };
     }
   }
@@ -204,33 +229,60 @@ class App {
   snapshot() { return JSON.parse(JSON.stringify({ data: this.data, seq: this.seq, clock: this.clock, ever: this.ever })); }
   // Load a backup into this app. Its schema history is MERGED with the app's (never replaced by an
   // older one), so the next edit still knows every slot the program uses.
-  restore(snap, early) {
+  // Load a backup. A backup is a whole app: by default it brings its own stored program, map and
+  // versions with its data. {keepProgram: true} keeps the running program, allowed only when that
+  // program is one of the backup's versions (then that version's map is used). A backup of another
+  // app is refused. Refusals leave everything as it was.
+  restore(snap, early, opts = {}) {
+    if (early && typeof early === 'object') { opts = early; early = false; }
     const bad = badSnapshot(snap);
     if (bad) return { ok: false, reason: bad };
-    if (!early) { const up = upgradeSnapshot(snap); if (up.error) return { ok: false, reason: up.error }; }
+    let bE = null, keepAt = -1;
+    if (!early) {
+      const up = upgradeSnapshot(snap);
+      if (up.error) return { ok: false, reason: up.error };
+      bE = up.ever && up.ever.versions.length ? JSON.parse(JSON.stringify(up.ever)) : null;
+      const fresh = this.ever.versions.length <= 1 && !Object.values(this.data.tables).some(t => t.length); // a new install with nothing in it yet
+      if (bE && bE.app && this.ever.app && bE.app !== this.ever.app && !fresh) return { ok: false, reason: 'this backup belongs to another app' };
+      if (bE && opts.keepProgram) {
+        keepAt = bE.versions.map(v => v.src).lastIndexOf(this.source);
+        if (keepAt < 0) return { ok: false, reason: 'the running program is not one of the versions in this backup, so its names cannot be matched to the backup\'s data; restore the backup with its own program instead' };
+      }
+    }
     const s = JSON.parse(JSON.stringify(snap));
     this.data = { tables: {}, settings: {}, state: {}, ...s.data };
     this.seq = Math.max(s.seq ?? 0, ...Object.values(this.data.tables).flat().map(r => r.id || 0), this.seq || 0);
     if (s.clock) this.clock = s.clock;
     if (!early) {
-      // the backup's own history (rebuilt if it is an older shape) names its rows; slots are the identity (rule 4)
-      const up = upgradeSnapshot(s);
-      if (up.error) return { ok: false, reason: up.error };
-      if (up.ever) { convertOptionRows(this.data, up.ever); this.ever = mergeEver(this.ever, up.ever); }
-      convertOptionRows(this.data, this.ever);
+      if (bE) { // the backup's history, program and map come with it; slots are the identity
+        convertOptionRows(this.data, bE);
+        this.ever = { ...bE, app: bE.app || this.ever.app };
+        this.prog = null; // the next setProgram is a load, not an edit
+        if (keepAt >= 0) this.setProgram(this.source, { restore: true, version: keepAt });
+        else this.setProgram(bE.versions[bE.versions.length - 1].src);
+        this.versionsUndo = []; // Undo steps belonged to the program that was running
+      } else convertOptionRows(this.data, this.ever); // data only: read with the running program's history
       this.annotateOptions();
-      this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : this.map;
       this.initData();
+      this.screen = null;
     }
-    return { ok: true };
+    return { ok: true, program: this.source };
   }
   // pick fields: rows store option slot ids; the program's types learn id -> name (shown) and name -> id
   annotateOptions() {
-    for (const [tn, td] of this.env.tables || []) for (const [fn, f] of td.fields || []) {
-      const slot = this.ever.tables[this.tk(tn)]?.fields[this.fk(tn, fn)];
-      if (!slot || !slot.opts) continue;
-      f.type.ids = {}; f.type.oid = {};
-      for (const [ok, o] of Object.entries(slot.opts)) { f.type.ids[ok] = o.visible ?? lastSeen(o); if (o.visible !== null) f.type.oid[o.visible] = ok; }
+    const learn = (type, slot) => {
+      if (!type || !slot || !slot.opts) return;
+      type.ids = {}; type.oid = {}; type.seenOid = {};
+      for (const [ok, o] of Object.entries(slot.opts)) {
+        type.ids[ok] = o.visible ?? lastSeen(o);
+        if (o.visible !== null) type.oid[o.visible] = ok;
+        for (const [n, v] of Object.entries(o.seen || {})) if (!type.seenOid[n] || type.seenOid[n].v < v) type.seenOid[n] = { ok, v };
+      }
+    };
+    for (const [tn, td] of this.env.tables || []) for (const [fn, f] of td.fields || []) learn(f.type, this.ever.tables[this.tk(tn)]?.fields[this.fk(tn, fn)]);
+    for (const st of this.prog.body || []) {
+      if (st.kind === 'setting') learn(st.type, this.ever.settings[this.sk(st.name)]);
+      if (st.kind === 'state' && !st.draft) learn(st.type, this.ever.states[this.stk(st.name)]);
     }
   }
   pushUndo() { this.undoStack.push(JSON.stringify({ data: this.data, seq: this.seq })); if (this.undoStack.length > 50) this.undoStack.shift(); }
@@ -244,7 +296,7 @@ class App {
   // stored (JSON) -> value
   wrap(raw, type) {
     if (raw === null || raw === undefined) return type && type.t === 'bool' ? false : null;
-    if (type && type.ids && typeof raw === 'string' && raw in type.ids) raw = type.ids[raw]; // an option slot id reads as its name
+    if (isOptRef(raw)) raw = type && type.ids && raw.o in type.ids ? type.ids[raw.o] : raw.o.slice(1); // an option reference {o: slot} reads as its name
     switch (type && type.t) {
       case 'money': return new Money(raw);
       case 'date': return new DateV(typeof raw === 'number' ? dateOf(raw) : raw);
@@ -258,7 +310,10 @@ class App {
   // value -> stored (JSON), coerced to the field type
   unwrap(v, type) {
     if (v === null || v === undefined) return null;
-    if (type && type.t === 'pick' && type.oid) { const n = String(v); return type.oid[n] ?? n; } // a name is stored as its option slot id
+    if (type && type.t === 'pick' && type.oid) { // a name is stored as a reference to its option slot; a stale name to the slot last seen under it
+      const n = String(v), ok = type.oid[n] ?? type.seenOid?.[n]?.ok;
+      return ok ? { o: ok } : null; // a name no option ever had is not stored
+    }
     switch (type && type.t) {
       case 'num': { const n = num(v); return n === null ? null : n; }
       case 'money': { const n = num(v); return n === null ? null : Math.round(n * 100) / 100; }
@@ -281,7 +336,7 @@ class App {
   litValue(l, type) {
     switch (l.k) {
       case 'num': return type && type.t === 'money' ? l.v : l.v;
-      case 'str': case 'word': return l.v;
+      case 'str': case 'word': return type && type.t === 'pick' && type.oid ? this.unwrap(l.v, type) : l.v;
       case 'bool': return l.v;
       case 'time': return parseTime(l.v);
       case 'date': return type && type.t === 'when' ? msOfLocal(l.v) : l.v;
@@ -665,12 +720,16 @@ class App {
     if (typeof target === 'string') {
       const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === target);
       if (!sd) return false;
-      this.data.settings[this.sk(target)] = this.clampTo(this.unwrap(this.fromInput(value, sd.type), sd.type), sd);
+      const v = this.unwrap(this.fromInput(value, sd.type), sd.type);
+      if (v === null && value !== null && value !== undefined && sd.type.t === 'pick') { this.undoStack.pop(); return false; } // not an option of this pick
+      this.data.settings[this.sk(target)] = this.clampTo(v, sd);
     } else {
       const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
       const f = field === 'at' ? { type: { t: 'when' } } : this.fieldDef(target.table, field);
       if (!row || !f) return false;
-      row[field === 'at' ? 'at' : this.fk(target.table, field)] = this.clampTo(this.unwrap(this.fromInput(value, f.type), f.type), f);
+      const v = this.unwrap(this.fromInput(value, f.type), f.type);
+      if (v === null && value !== null && value !== undefined && f.type.t === 'pick') { this.undoStack.pop(); return false; } // not an option of this pick
+      row[field === 'at' ? 'at' : this.fk(target.table, field)] = this.clampTo(v, f);
     }
     this.runWhen();
     return true;
@@ -1245,6 +1304,15 @@ function badSnapshot(d) {
       if (!Array.isArray(e.optionLog)) return 'the option rename log is not a list';
       for (const x of e.optionLog) if (!x || typeof x !== 'object' || typeof x.v !== 'number' || typeof x.table !== 'string' || typeof x.field !== 'string' || !x.map || typeof x.map !== 'object' || Object.values(x.map).some(v => typeof v !== 'string')) return 'an entry of the option rename log is damaged';
     }
+    for (const [i, v] of e.versions.entries()) {
+      if (!v || typeof v !== 'object' || typeof v.src !== 'string') return `version ${i + 1} of the schema history has no program text`;
+      if (e.format !== undefined) { // a current-shape history must carry a usable map in every version
+        const m = v.map;
+        if (!m || typeof m !== 'object' || !m.tables || typeof m.tables !== 'object' || !m.fields || typeof m.fields !== 'object' || (m.settings !== undefined && typeof m.settings !== 'object')) return `version ${i + 1} of the schema history has no usable name map`;
+        for (const [n, k] of Object.entries(m.tables)) if (!e.tables[k]) return `version ${i + 1} names a table ${n} that the schema history does not have`;
+        if (v.from !== undefined && !(Number.isInteger(v.from) && v.from >= 0 && v.from < i)) return `version ${i + 1} says it restores a version that does not exist`;
+      }
+    }
     const used = Object.keys(d.data?.tables || {}).filter(k => (d.data.tables[k] || []).length);
     if (used.length && !e.versions.length) return 'the schema history has no versions but there are rows';
     for (const k of used) if (!e.tables[k]) return `rows of ${k} have no entry in the schema history`;
@@ -1253,6 +1321,8 @@ function badSnapshot(d) {
 }
 
 // merge two schema histories of the same app: every slot of both, each with all its names
+export function newAppId() { return 'app-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+
 export function mergeEver(a, b) {
   if (!b || !b.tables) return a;
   const base = (b.v || 0) > (a.v || 0) ? b : a, other = base === a ? b : a;
@@ -1292,6 +1362,7 @@ export function upgradeSnapshot(snap) {
     at.push(E.versions.length - 1);
     prev = v.src;
   }
+  if (e.app) E.app = e.app;
   for (const k of Object.keys(snap.data?.tables || {})) if ((snap.data.tables[k] || []).length && !E.tables[k]) return { error: `an older backup cannot be rebuilt: rows of ${k} belong to no table of its history` };
   return { ever: E };
 }
@@ -1300,14 +1371,22 @@ export function upgradeSnapshot(snap) {
 // the history shows now, else the option last seen under that name. Ids start with #, so this is
 // idempotent.
 export function convertOptionRows(data, ever) {
-  for (const [tk, t] of Object.entries(ever.tables || {})) for (const [fk, f] of Object.entries(t.fields || {})) {
-    if (!f.opts) continue;
+  const conv = (slot, get, set) => {
+    if (!slot || !slot.opts || (slot.type && slot.type.t !== 'pick')) return; // a field widened to text keeps its text as typed
     const byName = {};
-    for (const [ok, o] of Object.entries(f.opts)) for (const [n, v] of Object.entries(o.seen || {})) if (!(n in byName) || byName[n].v < v) byName[n] = { ok, v };
-    for (const [ok, o] of Object.entries(f.opts)) if (o.visible !== null) byName[o.visible] = { ok, v: Infinity };
-    for (const row of data.tables?.[tk] || []) { const v = row[fk]; if (typeof v === 'string' && !v.startsWith('#') && byName[v]) row[fk] = byName[v].ok; }
-  }
+    for (const [ok, o] of Object.entries(slot.opts)) for (const [n, v] of Object.entries(o.seen || {})) if (!(n in byName) || byName[n].v < v) byName[n] = { ok, v };
+    for (const [ok, o] of Object.entries(slot.opts)) if (o.visible !== null) byName[o.visible] = { ok, v: Infinity };
+    const v = get();
+    if (typeof v !== 'string') return;
+    if (v.startsWith('#') && slot.opts[v]) set({ o: v }); // round 6 stored the bare id
+    else if (byName[v]) set({ o: byName[v].ok });
+  };
+  for (const [tk, t] of Object.entries(ever.tables || {})) for (const [fk, f] of Object.entries(t.fields || {})) for (const row of data.tables?.[tk] || []) conv(f, () => row[fk], x => { row[fk] = x; });
+  for (const [k, sl] of Object.entries(ever.settings || {})) if (data.settings && k in data.settings) conv(sl, () => data.settings[k], x => { data.settings[k] = x; });
+  for (const [k, sl] of Object.entries(ever.states || {})) if (data.state && `|${k}` in data.state) conv(sl, () => data.state[`|${k}`], x => { data.state[`|${k}`] = x; });
 }
+// a stored reference to a pick option: an object, so no typed text can ever look like one
+export const isOptRef = v => v !== null && typeof v === 'object' && !Array.isArray(v) && typeof v.o === 'string' && Object.keys(v).length === 1;
 
 // small seeded random, so tests are repeatable
 function mulberry(a) {

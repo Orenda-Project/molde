@@ -77,7 +77,10 @@ test('snapshot carries the schema history; loading a renamed program with old da
 test('restore() adds tables and settings the program declares but the snapshot lacks', () => {
   const a = load('app "S"\ntable drink ml num\n');
   const b = load('app "S"\ntable drink ml num\ntable food name text\nsetting goal num = 7\n"Goal" goal count(food)\n');
-  b.restore(a.snapshot());
+  // round 7: a backup is a whole app; it brings its own program, and the newer program is then an edit
+  assert.equal(b.restore(a.snapshot()).ok, true);
+  assert.equal(b.source, a.source);
+  b.applyEdit('app "S"\ntable drink ml num\ntable food name text\nsetting goal num = 7\n"Goal" goal count(food)\n');
   assert.ok(texts(b).includes('Goal 7 0'), JSON.stringify(texts(b)));
 });
 
@@ -251,7 +254,7 @@ test('round 6 S1: an older-shaped backup (format, option slots, maps and round 5
   assert.deepEqual(texts(b), ['x 20 1', 'hi']);
   const bad = a.snapshot(); delete bad.ever.format; bad.ever.versions[1] = { v: 2 };
   const c = load(a.source, { data: bad });
-  assert.equal(c.ok, false); assert.match(c.errors[0], /cannot be rebuilt|without its program text/);
+  assert.equal(c.ok, false); assert.match(c.errors[0], /cannot be rebuilt|without its program text|has no program text/);
 });
 
 const O1 = 'app "T"\ntable s c pick A|X\n"x" count(s where c = A)\n', O2 = 'app "T"\ntable s c pick B was A|X\n"x" count(s where c = B)\n';
@@ -296,4 +299,82 @@ test('round 6 S3: a pick option renamed without was is a warning; a was that cha
   assert.equal(a.cell('s', a.rows('s')[0], 'c'), 'A', 'the row keeps A');
   const n = diff([O1], 'app "T"\ntable s c pick A|X|Y was Q\n"x" count(s where c = A)\n');
   assert.match([...n.notes, ...(n.warnings || [])].join(' '), /Y was Q changes nothing/);
+});
+
+// ---- round 7: a backup is a whole app; setting and state picks have option slots; edges of load ----
+test('round 7 S1: restoring a backup that is ahead brings its own program and map; new rows land in the right slots', () => {
+  const V0 = 'app "T"\ntable s a num, b text\n"x" sum(s.a)\nlist s\n', V1 = 'app "T"\ntable s b num was a, a text was b\n"x" sum(s.b)\nlist s\n';
+  const A = load(V0); A.addRow('s', { a: 1, b: 'x' }); const old = A.snapshot();
+  A.applyEdit(V1); A.addRow('s', { b: 5, a: 'q' }); const ahead = A.snapshot();
+  const B = load(V0, { data: old });
+  assert.equal(B.restore(ahead).ok, true);
+  assert.equal(B.source, A.source, 'the backup brings its program');
+  B.addRow('s', { b: 7, a: 'n' });
+  assert.deepEqual(B.rows('s').map(r => B.cell('s', r, 'b')), [1, 5, 7]);
+  assert.deepEqual(texts(B)[0], 'x 13');
+  // keeping the running program: only when it is one of the backup's versions, and then that version's map
+  const C = load(V0, { data: old });
+  const k = C.restore(ahead, { keepProgram: true });
+  assert.equal(k.ok, true); assert.equal(C.source, strip(V0)); assert.deepEqual(texts(C)[0], 'x 6'); // V0's map: slot a holds 1 and the 5 written as b under V1
+  const D = load(V0, { data: old }); D.applyEdit(V0.replace('"x"', '"y"'));
+  const before = JSON.stringify(D.snapshot().data);
+  const r = D.restore(ahead, { keepProgram: true });
+  assert.equal(r.ok, false); assert.match(r.reason, /not one of the versions/); assert.equal(JSON.stringify(D.snapshot().data), before, 'data untouched');
+  // a backup of another app is refused
+  const other = load(V0); other.addRow('s', { a: 9, b: 'z' });
+  const r2 = D.restore(other.snapshot());
+  assert.equal(r2.ok, false); assert.match(r2.reason, /another app/);
+});
+
+test('round 7 S2a: an option rename onto the name of a dropped option is refused; listing it again without was brings it back', () => {
+  const P = o => `app "T"\ntable s c pick ${o}\nlist s\n`;
+  const a = load(P('Food|Fun|X')); a.addRow('s', { c: 'Fun' }); a.addRow('s', { c: 'Food' });
+  assert.equal(a.applyEdit(P('Food|X')).verdict, 'warn');
+  const r = a.applyEdit(P('Fun was Food|X'));
+  assert.equal(r.verdict, 'refused'); assert.match(r.refused.join(' '), /earlier dropped option Fun/);
+  assert.notEqual(a.applyEdit(P('Food|Fun|X')).verdict, 'refused');
+  assert.deepEqual(a.rows('s').map(x => a.cell('s', x, 'c')), ['Fun', 'Food']);
+});
+
+test('round 7 S2b: setting and state picks have option slots: a rename keeps the stored choice, filter chips keep working', () => {
+  const S1 = 'app "T"\ntable t k pick A|B|C\nsetting g pick A|B|C = A\nstate sel pick A|B|C = A\n"v" g sel\n"n" count(t where k = sel)\nbutton "gB" tap set g = B\nbutton "sB" tap set sel = B\n';
+  const a = load(S1); a.addRow('t', { k: 'B' }); a.addRow('t', { k: 'A' });
+  for (const b of a.findAll(n => n.t === 'button')) a.dispatch(b.id, 'tap');
+  assert.deepEqual(texts(a).slice(0, 2), ['v B B', 'n 1']);
+  const S2 = 'app "T"\ntable t k pick X was B|A|C\nsetting g pick X was B|A|C = A\nstate sel pick X was B|A|C = A\n"v" g sel\n"n" count(t where k = sel)\n';
+  assert.equal(a.applyEdit(S2).verdict, 'safe');
+  assert.deepEqual(texts(a), ['v X X', 'n 1']);
+  assert.deepEqual(texts(load(a.source, { data: a.snapshot() })), ['v X X', 'n 1']);
+  a.revert();
+  assert.deepEqual(texts(a).slice(0, 2), ['v B B', 'n 1']);
+});
+
+test('round 7 S3: load never acts as an edit; history that contradicts the data is not used', () => {
+  const a = load(SW1); a.addRow('s', { a: 1, b: 20 });
+  const b = load(SW2, { data: a.snapshot() }); // a different program text: the stored program runs, with a warning
+  assert.equal(b.source, strip(SW1)); assert.equal(b.edit.verdict, 'warn'); assert.deepEqual(texts(b), ['x 1 20']);
+  const c = load(strip(SW1), { data: a.snapshot(), history: ['app "T"\ntable s z num\n"x" sum(s.z)\n'] });
+  assert.deepEqual(texts(c), ['x 1 20']); assert.match(c.edit.warnings.join(' '), /history given does not contain/);
+});
+
+test('round 7 S3: text that starts with # stays text, also in a field widened from pick; a stale or unknown option name in a form', () => {
+  const a = load('app "T"\ntable s c pick A|B, t text?\n"n" count(s where t = "#A")\n');
+  a.addRow('s', { c: 'A', t: '#A' });
+  assert.deepEqual(texts(a), ['n 1']);
+  const w = load(a.source, { data: a.snapshot() }); w.applyEdit('app "T"\ntable s c text, t text?\n"n" count(s where c = "#A") count(s where c = "A")\n');
+  assert.deepEqual(texts(w), ['n 0 1'], 'the widened field shows the option name, and # text is not taken for an option');
+  const r = a.rows('s')[0];
+  a.applyEdit('app "T"\ntable s c pick Z was A|B, t text?\n"n" count(s where c = Z)\n');
+  assert.equal(a.setField({ table: 's', id: r.id }, 'c', 'A'), true, 'a stale name goes to the option last seen under it');
+  assert.equal(a.cell('s', r, 'c'), 'Z');
+  assert.equal(a.setField({ table: 's', id: r.id }, 'c', 'Nope'), false, 'a name no option ever had is rejected');
+});
+
+test('round 7 S3: a missing or wrong version map is refused with a plain reason', () => {
+  const a = load(SW1); a.addRow('s', { a: 1, b: 20 }); a.applyEdit(SW2);
+  for (const damage of [s => { delete s.ever.versions[1].map; }, s => { s.ever.versions[1].map.tables = { s: 'nope' }; }, s => { s.ever.versions[1].from = 7; }]) {
+    const snap = a.snapshot(); damage(snap);
+    const b = load(a.source, { data: snap });
+    assert.equal(b.ok, false); assert.match(b.errors[0], /schema history|restores a version/); assert.ok(!/undefined|null|Cannot read/.test(b.errors[0]));
+  }
 });
