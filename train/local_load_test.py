@@ -5,7 +5,7 @@ Exit 0 only if the file loads and every request produced a program. Checks `free
 Env: LLAMA_BIN (default ~/llama.cpp-b12144/llama-b12144), THREADS (default 6), PORT (default 8197).
 Uses the chat template stored in the GGUF (/v1/chat/completions), greedy, grammar-constrained, 600-token cap.
 """
-import argparse, json, os, pathlib, subprocess, sys, time, urllib.request
+import argparse, json, os, pathlib, re, subprocess, sys, time, urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -69,7 +69,7 @@ def main():
             ck = subprocess.run(["node", str(pathlib.Path(a.lang) / "mo.mjs"), "check", str(p)], capture_output=True, text=True)
             rows.append({"id": r["id"], "task": r["task"], "ref": r["ref"], "output": text, "request": r["request"], "program": text, "gen_tokens": tm.get("predicted_n"), "tok_s": tm.get("predicted_per_second"),
                          "prompt_tok_s": tm.get("prompt_per_second"), "check_ok": ck.returncode == 0, "secs": round(secs, 2),
-                         "err": (ck.stdout.strip().splitlines() or [""])[0][:400], "user": user})
+                         "err": next((l for l in (ck.stdout + ck.stderr).splitlines() if re.search(r"E_[A-Z_]+", l)), "")[:400], "user": user})
             print(f"--- {r['id']}: {r['request']}\n{text}\n[{tm.get('predicted_n')} tokens, {tm.get('predicted_per_second', 0):.1f} tok/s, checker {'OK' if ck.returncode == 0 else 'FAIL'}]")
         if a.full:   # one repair round for every failing program (same prompt text as eval_gen.py)
             sys.path.insert(0, str(HERE)); from common import repair_user_message
