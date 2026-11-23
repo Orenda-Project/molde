@@ -5,7 +5,7 @@
         [--stages train,eval,export] [--quants "Q8_0 Q4_K_M"] [--resume-parts N] [--ckpt-parts N]
         [--inputs molde-train/inputs/molde_inputs.tgz] [--extra-fetch DRIVEPATH=COLABPATH ...]
 
-Jobs (numbers = run order): 30 setup (tiny cell: node + pip pins) · 31 fetch inputs from Drive · 32 unpack ·
+Jobs (numbers = run order; the trained model is packed and saved to Drive right after training, before eval/export): 30 setup (tiny cell: node + pip pins) · 31 fetch inputs from Drive · 32 unpack ·
 33 smoke (files, cuda, node, tokenizer, checker on one example; a failure aborts before any training) ·
 34 fetch ckpt parts (resume only) · 36 train (detached process + heartbeat) · 37 eval (test split, greedy) ·
 38 export (GGUF f16/Q8_0/Q4_K_M) · 39 pack (tar of final/eval, ckpt parts) · 40 Drive save.
@@ -85,9 +85,12 @@ assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
 assert ("SFT_DONE" in log) or ("PAUSE" in log), "train did not finish in the job time"
 print("TRAIN_END", "SFT_DONE" in log)
 ''')
+if "train" in stages:
+    (d / "37_pack_model.py").write_text(f'import subprocess, os\nfor c in ["python3 {ROOT}/train/colab/pack.py pack {RUN}/final {RUN}/final", "cp {RUN}.train.log {RUN}/train.stdout.log"]:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-200:], r.stderr[-300:])\n    assert r.returncode == 0, c\n')
+    (d / "37_save_model.drivesave.json").write_text(json.dumps({f"{RUN}/log.jsonl": DR, f"{RUN}/train.stdout.log": DR, f"{RUN}/final.tar.part00": DR, f"{RUN}/final.tar.SHA256SUMS": DR}))
 if "eval" in stages:
-    (d / "37_eval.py").write_text(HEART + f'''
-cmd = "cd {ROOT}/train && python3 eval_gen.py --model {RUN}/final --data data/out --out {RUN}/eval --lang {ROOT}/lang --chat-kwargs {shlex.quote(a.chat_kwargs)} > {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
+    (d / "38_eval.py").write_text(HEART + f'''
+cmd = "cd {ROOT}/train && python3 eval_gen.py --model {RUN}/final --data data/out --out {RUN}/eval --lang {ROOT}/lang --chat_kwargs {shlex.quote(a.chat_kwargs)} > {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
 subprocess.Popen(cmd, shell=True)
 log = heart("{RUN}.eval.log", "EVAL_FINISHED", 1500, "eval_gen.py")
 print(log[-2500:])
@@ -95,7 +98,7 @@ assert "Traceback" not in log and "score.mjs failed" not in log, "eval failed"
 assert os.path.exists("{RUN}/eval/metrics.json"), "no metrics"
 ''')
 if "export" in stages:
-    (d / "38_export.py").write_text(HEART + f'''
+    (d / "39_export.py").write_text(HEART + f'''
 env = "QUANTS={shlex.quote(a.quants)}"
 cmd = "cd {ROOT}/train && " + env + " bash export_gguf.sh {RUN}/final {N} {RUN}/gguf > {RUN}.export.log 2>&1; echo EXPORT_FINISHED >> {RUN}.export.log"
 subprocess.Popen(cmd, shell=True)
@@ -103,16 +106,15 @@ log = heart("{RUN}.export.log", "EXPORT_FINISHED", 1500, "export_gguf|convert_hf
 print(log[-2000:])
 assert "EXPORT_OK" in log, "export failed"
 ''')
-pk = [f"cd {RUN} && python3 {ROOT}/train/colab/pack.py pack {RUN}/final {RUN}/final",
-      f"cp {RUN}.train.log {RUN}/train.stdout.log"]
+pk = ["true"]
 if "eval" in stages:
     pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/eval {RUN}/eval")
 if "export" in stages and a.gguf_parts > 1:
     pk.append(f"python3 {ROOT}/train/colab/pack.py split {RUN}/gguf/{N}-f16.gguf && rm {RUN}/gguf/{N}-f16.gguf")
 if a.ckpt_parts:
     pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/ckpt {RUN}/ckpt")
-(d / "39_pack.py").write_text(f'import subprocess\nfor c in {pk!r}:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-300:], r.stderr[-300:])\n    assert r.returncode == 0, c\nprint(subprocess.run("ls -la {RUN} {RUN}/gguf", shell=True, capture_output=True, text=True).stdout)\n')
-save = {f"{RUN}/log.jsonl": DR, f"{RUN}/train.stdout.log": DR, f"{RUN}/final.tar.part00": DR, f"{RUN}/final.tar.SHA256SUMS": DR}
+(d / "40_pack.py").write_text(f'import subprocess\nfor c in {pk!r}:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-300:], r.stderr[-300:])\n    assert r.returncode == 0, c\nprint(subprocess.run("ls -la {RUN} {RUN}/gguf", shell=True, capture_output=True, text=True).stdout)\n')
+save = {}
 if "eval" in stages:
     save |= {f"{RUN}/eval.tar.part00": DR, f"{RUN}/eval.tar.SHA256SUMS": DR, f"{RUN}/eval/metrics.json": DR}
 if "export" in stages:
@@ -125,5 +127,5 @@ if "export" in stages:
             save[f"{RUN}/gguf/{N}-{q}.gguf"] = DR + "/gguf"
 if a.ckpt_parts:
     save |= {f"{RUN}/ckpt.tar.part{i:02d}": DR for i in range(a.ckpt_parts)} | {f"{RUN}/ckpt.tar.SHA256SUMS": DR}
-(d / "40_save.drivesave.json").write_text(json.dumps(save))
+(d / "41_save.drivesave.json").write_text(json.dumps(save or {f"{RUN}/log.jsonl": DR}))
 print("jobs written to", d, sorted(p.name for p in d.iterdir()))

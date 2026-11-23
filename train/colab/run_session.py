@@ -18,13 +18,13 @@ p = subprocess.Popen(f"uvx --from mcp-colab-gpu --with 'mcp<2' python {here}/col
 t0 = time.time()
 while p.poll() is None:
     L = rl.read_text().splitlines()[n0:] if rl.exists() else []
-    if any("done 40_save" in l for l in L) and not (jobs / "STOP").exists():
+    if any("done 41_save" in l for l in L) and not (jobs / "STOP").exists():
         (jobs / "STOP").write_text("done")
     if any("ABORT" in l for l in L) and not (jobs / "STOP").exists():
         (jobs / "STOP").write_text("abort")
     time.sleep(10)
 L = rl.read_text().splitlines()[n0:]
 print("\n".join(L))
-ok = any("done 40_save" in l and "rc=0" in l for l in L)
+ok = any("done 41_save" in l and "rc=0" in l for l in L)
 print("SESSION_OK" if ok else "SESSION_FAILED", f"wall {int(time.time() - t0)} s", "released" if any("released" in l for l in L) else "NOT RELEASED?")
 sys.exit(0 if ok else (2 if (jobs / "QUOTA").exists() else 1))
