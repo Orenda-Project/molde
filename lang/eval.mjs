@@ -448,11 +448,13 @@ class App {
 
   // ----- clock and events -----
   today() { return dateOf(this.clock); }
+  // what a fire could change, cheaply: settings, states, and each table's rows count and last row
+  fingerprint() { const t = this.data.tables; let x = ''; for (const k in t) { const a = t[k]; x += k + a.length + (a.length ? JSON.stringify(a[a.length - 1]) : ''); } return x + JSON.stringify(this.data.settings) + JSON.stringify(this.data.state) + this.seq; }
   // time passed between a save and now: schedules catch up (P2) as if the clock had run from `from`
   catchUp(from) { const now = this.clock; this.clock = from; this.tick(now - from); this.clock = now; }
   // A tick moves the host clock and is ONE undo step (if it changed data). Schedules catch up without
   // stepping second by second: each `every` fires as many times as its period fits into the interval,
-  // at most CATCH_UP times per tick (the rest are skipped and noted in the log); `after` actions run
+  // for at most CATCH_UP_MS of wall time per tick, and stops early once a fire changes nothing; the rest are skipped and logged; `after` actions run
   // in due order; `when` conditions are evaluated once at the end.
   tick(ms) {
     this.lastChange = null;
@@ -466,17 +468,27 @@ class App {
         this.clock = Math.max(this.clock, p.due); this.act(p.act, p.env);
       }
       const start = this.clock;
+      // when conditions are checked after every fire (with this render's handlers), so a countdown that
+      // reaches zero during the catch-up fires its when once, at that point
+      const whenNow = () => { for (const w of handlers.when) { const v = this.truthy(w.cond()); const was = this.lastWhen.get(w.key) || false; this.lastWhen.set(w.key, v); if (v && !was) this.run(w.actions, w.env, false); } };
+      const t0 = Date.now();
       for (const h of handlers.every) {
         const acc0 = this.everyAcc.get(h.key) || 0;
         const all = Math.floor((acc0 + ms) / h.period);
         this.everyAcc.set(h.key, (acc0 + ms) % h.period);
-        const skip = Math.max(0, all - CATCH_UP);
-        if (skip) this.log.push({ kind: 'skipped', every: h.key, fires: skip, at: end });
-        for (let i = skip; i < all; i++) { // the latest fires run, each at its own time
+        const readsClock = /"k":"(now|today)"/.test(JSON.stringify([h.actions, h.condAst || null]));
+        let done = 0;
+        for (let i = 0; i < all; i++) {
+          if (Date.now() - t0 > CATCH_UP_MS) break; // the time budget of one resume
           this.clock = start + (i + 1) * h.period - acc0;
-          if (h.cond && !this.truthy(h.cond())) continue;
-          this.run(h.actions, h.env, false);
+          const before = this.fingerprint();
+          if (!h.cond || this.truthy(h.cond())) this.run(h.actions, h.env, false);
+          if (this.hasWhen) whenNow();
+          done++;
+          // a fire that changed nothing: the later ones (same condition, same data) change nothing either
+          if (!readsClock && this.fingerprint() === before) { done = all; break; }
         }
+        if (done < all) this.log.push({ kind: 'skipped', every: h.key, fires: all - done, at: end });
         this.clock = start;
       }
       this.clock = end;
@@ -742,7 +754,7 @@ class App {
       case 'table': case 'setting': case 'remind': case 'def': return { nodes: [] };
       case 'state': this.declareState(s, env); return { nodes: [] };
       case 'let': if (!s.params) env.vars.set(s.name, { let: s.e, env }); return { nodes: [] };
-      case 'every': this.H.every.push({ key: id, period: s.every * 1000, cond: s.cond ? () => this.evalIn(s.cond, env) : null, actions: s.actions, env }); return { nodes: [] };
+      case 'every': this.H.every.push({ key: id, period: s.every * 1000, cond: s.cond ? () => this.evalIn(s.cond, env) : null, condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
       case 'when': this.H.when.push({ key: id, cond: () => this.evalIn(s.cond, env), actions: s.actions, env }); return { nodes: [] };
       case 'screen': {
         const visible = this.screen === s.name;
@@ -1618,7 +1630,7 @@ export function convertOptionRows(data, ever) {
 }
 // a stored reference to a pick option: an object, so no typed text can ever look like one
 const REJECT = Symbol('reject');
-export const CATCH_UP = 600; // an every fires at most this many times per tick (a resume after a long sleep: 10 minutes of a 1s timer); the rest are skipped and logged
+export const CATCH_UP_MS = 150; // a resume applies every fires until done or this much wall time has gone (the rest are skipped and logged)
 // a moment that can be an added time: a finite number of ms between the years 1900 and 3000
 // a calendar date that exists (no 2026-02-30), between the years 1900 and 2999
 const realDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (!m) return false; const y = +m[1], mo = +m[2], d = +m[3]; return y >= 1900 && y < 3000 && mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(Date.UTC(y, mo, 0)).getUTCDate(); };

@@ -1,17 +1,21 @@
 lib "time"
 # Time pieces from level-1 parts: state, every, when, toggle actions and grids of days.
 
+# It keeps the moment it ends (not a count of seconds), so it is right after any sleep.
 # describe: a countdown timer of {secs}, labelled {caption}; when it ends it {done}
 def timer secs dur, caption text = "Timer", done act = notify "Time is up"
   state left dur = secs
+  state ends when = now
   state going bool = no
-  every 1s if going set left = left - 1s
-  when going and left <= 0s set going = no then set left = secs then done
+  when going and now >= ends set going = no then set left = secs then done
   stack align center gap 1
     text caption color muted
-    text left big
+    text if(going, max(ends - now, 0s), left) big
     row gap 1
-      button if(going, "Pause", "Start") tap set going = not going
+      if going
+        button "Pause" tap set left = ends - now then set going = no
+      else
+        button "Start" tap set ends = now + left then set going = yes
       button "Reset" tap set going = no then set left = secs
 
 # describe: a month calendar of {t}; tap a day to mark or unmark it
