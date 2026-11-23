@@ -57,9 +57,11 @@ export function check(src, opts = {}) {
       errors.push(...ex.errors);
       defs = ex.defs;
       const C = new Checker(errors, prog);
+      C.probeName = opts.probe || null;
       C.header(prog.header);
       C.list(prog.body, { top: true });
       prog.env = { tables: C.tables, settings: C.settings, states: C.states, screens: C.screens, lets: C.lets, options: C.options };
+      if (C.probe) prog.probe = C.probe;
       // never show internal names made by component expansion (d_3 -> d)
       for (const e of errors) for (const [inner, outer] of ex.renamed) {
         const re = new RegExp(`\\b${inner}\\b`, 'g');
@@ -354,8 +356,31 @@ class Checker {
   }
 
   // mode: 'value' (a value), 'rows' (a table query), 'target' (something to write)
+  // constrain.mjs puts a probe name where the model is about to write a name; record what fits there
+  probeHere(mode) {
+    const names = new Set();
+    for (const sc of this.scopes) for (const k of sc.names.keys()) names.add(k);
+    for (const m of [this.states, this.settings, this.lets]) for (const [k, v] of m) if (tname(v) !== 'fn') names.add(k);
+    const tables = [...this.tables.keys()];
+    const wt = this.whereTable && this.tb(this.whereTable);
+    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt() };
+  }
+  probePart(t) {
+    const n = tname(t);
+    const out = [];
+    if (n === 'row' || n === 'ref' || n === 'draft') {
+      const tb = this.tb(t.table);
+      if (tb) out.push(...tb.fields.keys(), 'at', 'id');
+      if (n !== 'draft') for (const [name, b] of this.tables) if ([...b.fields.values()].filter(f => f.type.t === 'ref' && f.type.table === t.table).length === 1) out.push(name);
+    } else if (n === 'rows' && !t.field) { const tb = this.tb(t.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    else if (n === 'rows' && t.field && tname(t.ftype) === 'ref') { const tb = this.tb(t.ftype.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    else if (n === 'group') { out.push('key'); const tb = this.tb(t.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    this.probe = { kind: 'part', parts: [...new Set(out)] };
+  }
+
   path(p, mode = 'value') {
     let t;
+    if (this.probeName && p.head === this.probeName) { this.probeHere(mode); return ANY; }
     if (p.head === 'it') {
       t = this.curIt();
       if (!t && this.failed.has('it')) { this.followOn('it'); return ANY; }
@@ -375,6 +400,7 @@ class Checker {
       if (tname(t) === 'fn') return this.err('E_TYPE', `${p.head} is a formula with values; call it like ${p.head}(...).`, `write ${p.head}(value, ...).`);
     }
     for (const part of p.parts) {
+      if (this.probeName && part === this.probeName) { this.probePart(t); return ANY; }
       if (isAny(t)) return t;
       t = this.step(t, part, p);
     }

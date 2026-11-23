@@ -19,6 +19,7 @@ The language the tiny on-device model writes. The reference is [`SPEC.md`](SPEC.
 | `format.mjs` | canonical formatter (idempotent; writes the one spelling of each idea; its output is what the GBNF accepts) |
 | `describe.mjs` | plain-English summary of a program for non-programmers (the plan shown to the user) |
 | `diff.mjs` | edit verdict against the whole schema history: hide, never drop; renames only with `was`; type changes refused |
+| `constrain.mjs` | the dynamic name constraint for decoding: which names may come next, given the text so far |
 | `eval.mjs` | the reference evaluator: runs a program headless and builds the UI tree (plain ES modules, no Node APIs: runs in a browser) |
 | `mo.mjs` | the CLI |
 | `std/*.mo` | the standard library, written in MoldeScript |
@@ -49,6 +50,17 @@ UPDATE_SNAPSHOTS=1 node --test lang/tests/describe.test.mjs   # after changing d
 ```
 
 In a browser: `import { load } from './lang/eval.mjs'` (see UITREE.md). The llama.cpp grammar test compiles `tools/gbnf-check.cpp` against `libllama.so` from `LLAMA_LIB_DIR` (default: Kamal's `~/llama.cpp-b12144/llama-b12144`) and is skipped when g++ or the library is missing; the GBNF is always also checked by our own engine.
+
+## Constrained decoding
+
+The GBNF fixes the syntax but cannot know which names exist, so a name that was never declared, or a field of the wrong table, passes the grammar and fails the checker. `constrain.mjs` closes that gap:
+
+- `nameContext(textSoFar)` says whether the cursor is at a name position and, if so, which names may come: declared tables after `ref`, `add`, `options`; the fields of the row in scope after `it.` or `h.`; the queried table's fields first inside `where` and `sort`; your states and settings after `set`, `field`, `choice`, `slider`; components (or a dotted value) at the start of a line; the right kind for each component value (`form` takes a table, `quick`'s second value a field of its table). Declarations (`table NAME`, field names, `state NAME`, `as NAME` ...) are free.
+- `allowedWords(textSoFar)` filters by what is already typed of the word; `tokenMask(textSoFar, vocab)` turns that into allowed vocabulary indices (tokens that keep the word a prefix of an allowed name or keyword; tokens that end the word only when it is complete).
+
+A llama.cpp sampler keeps the GBNF sampler unchanged and, at every step, masks the logits of tokens outside `tokenMask(text, vocab)` before the grammar sampler runs. Scope comes from running the checker on the complete lines above (cached per line) plus one probe of the current line, so the cost is one check per generated name, on programs of about 20 lines.
+
+`tests/constrain.test.mjs` checks both directions on the 30 examples and a sample of the corpus: the name each real program uses is always allowed, and decoding left to right with a random allowed choice at every leaf name position (a name that nothing written later depends on) gives programs with no unknown-name or link errors. Names that later lines depend on (an `each` source, a `let`, a head before a dot) are constrained the same way, but the test keeps the original continuation, so it only randomises leaves; a real decoder chooses the continuation under the new context.
 
 ## What the tests check
 
