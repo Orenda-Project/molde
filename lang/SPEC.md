@@ -422,7 +422,7 @@ To change an app, the model writes the whole new program. `node lang/mo.mjs diff
 - a table, field or setting that disappears is **hidden, never dropped**; adding it back with the same (or a wider) type shows the old data again; adding it back with another type is **refused**;
 - a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename";
 - a stored type may only **widen**: `text` to `long`, `pick` to `text`/`long`, `num` to/from `money`, `date` to `when`; a `ref` keeps its target table (a renamed target is followed);
-- a `pick` option that disappears stays available: rows keep it and it stays selectable and filterable;
+- a `pick` option that disappears stays on the rows that have it (they keep showing it); it is no longer offered for new rows and formulas cannot name it (write `NEW was OLD` to rename it);
 - a narrower range keeps old values that fall outside it;
 - going back to an earlier version (chat Undo) is an explicit restore and is never refused: data entered since stays, and pick options renamed since are renamed back.
 

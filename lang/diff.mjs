@@ -14,7 +14,7 @@
 // - No accepted edit may leave a slot that no name can reach (every slot keeps at least one name
 //   that still resolves to it).
 // - Stored types only widen: text->long, pick->text/long, num<->money, date->when; a ref keeps its
-//   target slot. Pick options are never dropped: a removed option stays selectable.
+//   target slot. Pick option values are never dropped: rows keep a removed option (it is no longer offered).
 // - RESTORE: going back to an earlier version (its exact program text) is always allowed: the
 //   version's own name->slot map is used, data entered since stays, slots unknown to it are hidden,
 //   and widened values stay readable (the evaluator reads them with the old declared type).
@@ -67,15 +67,26 @@ function newKey(slots, name) {
 
 // Assign declarations to slots (one group: the tables, the fields of one table, the settings, or
 // the states). decl: {name, was, type (stored form), shape (for tables)}. Returns claims or problems.
+// A `was` that the stored data already went through: the slot now called NAME got that name by
+// its last rename, from OLD. Decided from the recorded storage state (slot.renamed), never from
+// the program text, so a program that still says `b was a` (reloaded, re-submitted, or edited
+// elsewhere) does not move the values again; this matters for swaps and rotations.
+export function appliedRename(slots, d) {
+  for (const [k, s] of Object.entries(slots)) if (s.visible === d.name && s.renamed && s.renamed.from === d.was && s.renamed.to === d.name) return k;
+  return null;
+}
 function assign(slots, decls, what, ctx) {
   const claims = new Map(); // decl -> key
   const problems = [];
   const fresh = [];
   const wasTaken = new Set();
-  for (const d of decls) if (d.was && d.was !== d.name) { const r = resolve(slots, d.was); if (r && r.key) wasTaken.add(r.key); }
+  const done = new Map(); // decl -> slot, for renames already applied
+  for (const d of decls) if (d.was && d.was !== d.name) { const a = appliedRename(slots, d); if (a) { done.set(d, a); wasTaken.add(a); } }
+  for (const d of decls) if (d.was && d.was !== d.name && !done.has(d)) { const r = resolve(slots, d.was); if (r && r.key) wasTaken.add(r.key); }
   for (const d of decls) {
     let k = null;
-    if (d.was && d.was !== d.name) {
+    if (done.has(d)) k = done.get(d);
+    else if (d.was && d.was !== d.name) {
       const r = resolve(slots, d.was);
       if (r && r.ambiguous) { problems.push(`${what} ${d.name} was ${d.was}: more than one earlier set of values was last called ${d.was}; it is unclear which to move.`); continue; }
       if (r) k = r.key;
@@ -102,6 +113,17 @@ function assign(slots, decls, what, ctx) {
   }
   return { claims, fresh, problems };
 }
+// option -> the option it was renamed from by its last rename, replaying the option log of one field
+export function optionFrom(log, table, field) {
+  let from = {};
+  for (const x of (log || []).filter(x => x.table === table && x.field === field).sort((a, b) => a.v - b.v)) {
+    const nx = { ...from };
+    for (const ol of Object.keys(x.map)) delete nx[ol];
+    for (const [ol, nw] of Object.entries(x.map)) nx[nw] = ol;
+    from = nx;
+  }
+  return from;
+}
 const lastName = s => Object.entries(s.seen || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
 
 // every slot must keep a name that resolves to it
@@ -125,7 +147,9 @@ export function evolve(ever, src, opts = {}) {
   // going back to an earlier version: use that version's own map
   // going back to an earlier version is an explicit restore (chat Undo), not an edit that happens to match
   if (opts.restore) {
-    const old = ever.versions.map(x => x.src).lastIndexOf(src);
+    // the version to go back to is named by its index (chat Undo knows it); the text alone can match several versions
+    const byIndex = Number.isInteger(opts.version) && ever.versions[opts.version]?.src === src ? opts.version : -1;
+    const old = byIndex >= 0 ? byIndex : ever.versions.map(x => x.src).lastIndexOf(src);
     if (old >= 0) return restoreVersion(ever, old, m);
     return { verdict: 'refused', changes, refused: ['restore: this program text is not an earlier version.'], notes, ever, moves: [] };
   }
@@ -152,9 +176,14 @@ export function evolve(ever, src, opts = {}) {
     else changes.push(`hides table ${s.visible} (its rows are kept and come back if it returns)`);
     s.visible = null;
   }
+  const warnings = [];
   for (const [d, k] of ta.claims) {
     const s = E.tables[k];
-    if (s.visible !== d.name) changes.push(s.visible ? `renames table ${s.visible} to ${d.name} (its rows move with it)` : `shows table ${d.name} again (its old rows come back)`);
+    if (s.visible !== d.name) {
+      changes.push(s.visible ? `renames table ${s.visible} to ${d.name} (its rows move with it)` : `shows table ${d.name} again (its old rows come back)`);
+      if (!s.visible && !d.was) warnings.push(`table ${d.name} was removed earlier; its old rows come back with it. If this is a new table, give it another name.`);
+      if (d.was && d.was !== d.name) s.renamed = { from: d.was, to: d.name, v: V };
+    }
   }
 
   // ---- fields of each table ----
@@ -194,6 +223,7 @@ export function evolve(ever, src, opts = {}) {
       } else if (st.t !== ty.t) changes.push(`widens ${t.name}.${d.name} from ${tw(st)} to ${tw(ty)}`);
       // pick options: renames and drops
       let newType = widens(st, ty) && st.t !== ty.t ? ty : st;
+      const renamedNow = d.was && d.was !== d.name && s.visible !== d.name ? { from: d.was, to: d.name, v: V } : s.renamed;
       if (st.t === 'pick' && ty.t === 'pick') {
         const ren = d.f.type.renames || {};
         const ever0 = st.options;
@@ -202,7 +232,9 @@ export function evolve(ever, src, opts = {}) {
         if (dupOld) { refused.push(`${t.name}.${d.name}: two options say they were ${dupOld}; only one can.`); continue; }
         const map = {};
         let bad = false;
+        const from = optionFrom(E.optionLog, k, fk); // option -> the name it had before its last rename
         for (const [nw, ol] of Object.entries(ren)) {
+          if (from[nw] === ol) continue; // this rename is already in the stored rows
           if (!ever0.includes(ol)) {
             if (ever0.includes(nw)) continue; // rename already done
             refused.push(`${t.name}.${d.name}: option ${nw} says it was ${ol}, but there never was an option ${ol}.`); bad = true; continue;
@@ -220,7 +252,7 @@ export function evolve(ever, src, opts = {}) {
         const mapped = ever0.map(o => map[o] || o);
         const added = ty.options.filter(o => !mapped.includes(o));
         if (added.length) changes.push(`adds options ${added.join(', ')} to ${t.name}.${d.name}`);
-        for (const o of mapped) if (!ty.options.includes(o)) notes.push(`${t.name}.${d.name}: option ${o} is no longer listed, but rows keep it and it stays selectable and filterable. To rename it write "NEW was ${o}".`);
+        for (const o of mapped) if (!ty.options.includes(o)) notes.push(`${t.name}.${d.name}: option ${o} is no longer listed. Rows that have it keep it and still show it, but it is not offered for new rows and formulas cannot name it. To rename it write "NEW was ${o}"; to keep it, list it again.`);
         newType = { t: 'pick', options: [...new Set([...ty.options, ...mapped])] };
       }
       if (prevDecl && s.visible !== null) {
@@ -231,7 +263,7 @@ export function evolve(ever, src, opts = {}) {
           if (r && (!p || r.lo > p.lo || (r.hi !== null && (p.hi === null || r.hi < p.hi)))) notes.push(`${t.name}.${d.name}: the range is narrower now; old values outside it are kept as they are.`);
         }
       }
-      T.fields[fk] = { ...s, type: newType, visible: d.name, seen: { ...s.seen, [d.name]: V }, decl: { t: d.f.type.t, optional: !!d.f.optional, range: d.f.range ?? null, ...(d.f.type.t === 'pick' ? { options: [...d.f.type.options] } : {}) } };
+      T.fields[fk] = { ...s, renamed: renamedNow, type: newType, visible: d.name, seen: { ...s.seen, [d.name]: V }, decl: { t: d.f.type.t, optional: !!d.f.optional, range: d.f.range ?? null, ...(d.f.type.t === 'pick' ? { options: [...d.f.type.options] } : {}) } };
     }
     if (T.visible !== t.name) T.seen = { ...T.seen };
     T.visible = t.name; T.seen[t.name] = V;
@@ -264,7 +296,7 @@ export function evolve(ever, src, opts = {}) {
       if (what === 'setting' && s.visible === d.name && s.label !== undefined && (s.label ?? null) !== (d.s.label ?? null)) changes.push(`renames the label of setting ${d.name}`);
       if (what === 'setting' && d.s.force && JSON.stringify(s.force ?? null) !== JSON.stringify(d.s.dflt)) changes.push(`sets the saved value of setting ${d.name} to ${d.s.dflt.v} (written on purpose with "set"; undo brings the old value back)`);
       else if (what === 'setting' && !d.s.force && s.visible === d.name && JSON.stringify(s.dflt ?? null) !== JSON.stringify(d.s.dflt ?? null)) notes.push(`setting ${d.name}: a new starting value only fills an empty setting; a value the user saved is kept. Add "set" to change it.`);
-      G[k] = { ...s, type: widens(s.type, d.type) && s.type.t !== d.type.t ? d.type : s.type, visible: d.name, seen: { ...s.seen, [d.name]: V }, label: d.s.label ?? null, dflt: d.s.dflt ?? null, force: d.s.force ? d.s.dflt : null };
+      G[k] = { ...s, renamed: d.was && d.was !== d.name && s.visible !== d.name ? { from: d.was, to: d.name, v: V } : s.renamed, type: widens(s.type, d.type) && s.type.t !== d.type.t ? d.type : s.type, visible: d.name, seen: { ...s.seen, [d.name]: V }, label: d.s.label ?? null, dflt: d.s.dflt ?? null, force: d.s.force ? d.s.dflt : null };
     }
     const lost = unreachable(G);
     if (lost.length) refused.push(`this would leave the saved value of ${what} ${lost.map(x => lastName(G[x])).join(', ')} with no name to bring it back. Pick another name.`);
@@ -272,6 +304,7 @@ export function evolve(ever, src, opts = {}) {
 
   if (refused.length) return { verdict: 'refused', changes, refused, notes, ever, moves: [] };
   E.versions = [...(ever.versions || []), { src, map: mapOf(E), v: V }];
+  if (warnings.length) return { verdict: 'warn', warnings, changes, refused, notes, ever: E, moves };
   return { verdict: 'safe', changes, refused, notes, ever: E, moves };
 }
 
@@ -310,15 +343,18 @@ function restoreVersion(ever, i, m) {
   for (const [k, s] of Object.entries(E.tables)) {
     const name = Object.keys(map.tables).find(n => map.tables[n] === k) ?? null;
     if (s.visible !== null && name === null) changes.push(`hides table ${s.visible}`);
+    if (s.visible !== name) delete s.renamed; // going back undoes that rename: writing it again applies it again
     s.visible = name; if (name) s.seen[name] = E.v;
     for (const [fk, f] of Object.entries(s.fields)) {
       const fn = name ? (Object.keys(map.fields[k] || {}).find(n => map.fields[k][n] === fk) ?? null) : null;
       if (f.visible !== null && fn === null && name) changes.push(`hides field ${name}.${f.visible}`);
+      if (f.visible !== fn) delete f.renamed;
       f.visible = fn; if (fn) f.seen[fn] = E.v;
     }
   }
   for (const g of ['settings', 'states']) for (const [k, s] of Object.entries(E[g])) {
     const n = Object.keys(map[g]).find(x => map[g][x] === k) ?? null;
+    if (s.visible !== n) delete s.renamed;
     s.visible = n; if (n) s.seen[n] = E.v;
   }
   E.versions = [...ever.versions, { src: ever.versions[i].src, map, v: E.v }];
@@ -341,7 +377,7 @@ function uiLines(prog) {
 export function everOf(history) {
   let ever = emptySchema();
   const used = [];
-  for (const h of history) { const r = evolve(ever, h); if (r.verdict === 'safe' || r.verdict === 'restore') { ever = r.ever; used.push(true); } else used.push(false); }
+  for (const h of history) { const r = evolve(ever, h); if (r.verdict === 'safe' || r.verdict === 'warn' || r.verdict === 'restore') { ever = r.ever; used.push(true); } else used.push(false); }
   return { ever, used };
 }
 
@@ -353,7 +389,7 @@ export function diff(history, newSrc, opts = {}) {
   r.historyUsed = used;
   const prev = list[list.length - 1];
   const A = prev ? check(prev) : null, B = check(newSrc);
-  if ((r.verdict === 'safe' || r.verdict === 'restore') && A && A.ast.header && A.ast.header.kind === 'app' && B.ok) {
+  if ((r.verdict === 'safe' || r.verdict === 'warn' || r.verdict === 'restore') && A && A.ast.header && A.ast.header.kind === 'app' && B.ok) {
     const ha = A.ast.header, hb = B.ast.header;
     const head = [];
     if (ha.name !== hb.name) head.push(`renames the app from "${ha.name}" to "${hb.name}"`);
@@ -372,6 +408,7 @@ export function diff(history, newSrc, opts = {}) {
 
 export function diffText(r) {
   const out = [`verdict: ${r.verdict}`];
+  for (const w of r.warnings || []) out.push(`! warning: ${w}`);
   for (const c of r.changes) out.push(`- ${c}`);
   for (const x of r.refused) out.push(`! refused: ${x}`);
   for (const n of r.notes) out.push(`note: ${n}`);

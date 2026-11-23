@@ -121,6 +121,7 @@ class App {
       if (opts.data) this.restore(opts.data, true);
       this.ever = ever;
       const r = this.setProgram(source);
+      if (opts.data && !opts.data.ever) this.carryOldOptions();
       this.edit = r;
     } catch (e) {
       this.ok = false; this.errors = [`could not load: ${e && e.message}`];
@@ -149,7 +150,7 @@ class App {
     // the stored value of a setting always wins over its default; only `setting x ... = v set` in an
     // edit writes it on purpose (once: when the marker or its value is new), and revert undoes that
     r.settingWrites = {};
-    if (r.verdict === 'safe' && oldForce) for (const sd of c.ast.body.filter(x => x.kind === 'setting' && x.force && x.dflt)) { // only an edit writes; loading never does
+    if ((r.verdict === 'safe' || r.verdict === 'warn') && oldForce) for (const sd of c.ast.body.filter(x => x.kind === 'setting' && x.force && x.dflt)) { // only an edit writes; loading never does
       const key = this.map.settings[sd.name];
       const was = oldForce && oldForce.get(key);
       if (was !== undefined && JSON.stringify(was) === JSON.stringify(sd.dflt)) continue;
@@ -176,16 +177,16 @@ class App {
   // keep all data; refused edits change nothing. Returns the diff result.
   applyEdit(source) {
     OFF = this.off;
-    const before = this.source;
+    const before = this.source, ver = this.ever.versions.length - 1; // the version Undo goes back to, by index (texts can repeat)
     const r = this.setProgram(source);
-    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), { src: before, settings: r.settingWrites || {} }]; this.screen = null; }
+    if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), { src: before, ver, settings: r.settingWrites || {} }]; this.screen = null; }
     return r;
   }
   // Chat undo: go back to the previous program; data entered since stays.
   revert() {
     const prev = (this.versionsUndo || []).pop();
     if (!prev) return { verdict: 'none', changes: ['nothing to undo: this is the first version'], refused: [], notes: [] };
-    const r = this.setProgram(prev.src || prev, { restore: true });
+    const r = this.setProgram(prev.src || prev, { restore: true, version: prev.ver });
     // settings that the undone edit wrote on purpose (setting ... set) get their earlier value back
     if (prev.settings) for (const [k, v] of Object.entries(prev.settings)) this.data.settings[k] = v;
     this.screen = null;
@@ -204,11 +205,27 @@ class App {
     this.seq = Math.max(s.seq ?? 0, ...Object.values(this.data.tables).flat().map(r => r.id || 0), this.seq || 0);
     if (s.clock) this.clock = s.clock;
     if (!early) {
-      if (s.ever) this.ever = mergeEver(this.ever, s.ever);
+      if (s.ever) {
+        // option renames recorded since the backup move its rows, oldest first (tables and fields need no move: rows are keyed by slot)
+        const had = new Set((s.ever.optionLog || []).map(x => JSON.stringify(x)));
+        const later = (this.ever.optionLog || []).filter(x => !had.has(JSON.stringify(x)) && x.v > (s.ever.v || 0)).sort((a, b) => a.v - b.v);
+        this.ever = mergeEver(this.ever, s.ever);
+        this.moveOptions(later);
+      }
       this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : this.map;
       this.initData();
     }
     return { ok: true };
+  }
+  moveOptions(log) { for (const mv of log) for (const row of this.data.tables[mv.table] || []) if (row[mv.field] in mv.map) row[mv.field] = mv.map[row[mv.field]]; }
+  // data saved without its schema history: values of a pick field that are no current option are
+  // carried through the recorded option renames (the data's own version is unknown)
+  carryOldOptions() {
+    for (const x of [...(this.ever.optionLog || [])].sort((a, b) => a.v - b.v)) {
+      const f = this.ever.tables[x.table]?.fields[x.field];
+      const cur = new Set(f && f.type.t === 'pick' ? f.type.options : []);
+      for (const row of this.data.tables[x.table] || []) { const v = row[x.field]; if (v in x.map && !cur.has(v)) row[x.field] = x.map[v]; }
+    }
   }
   pushUndo() { this.undoStack.push(JSON.stringify({ data: this.data, seq: this.seq })); if (this.undoStack.length > 50) this.undoStack.shift(); }
   undo() { const s = this.undoStack.pop(); if (!s) return false; const o = JSON.parse(s); this.data = o.data; this.seq = o.seq; this.log.push({ kind: 'undo', at: this.clock }); return true; }
@@ -1201,15 +1218,23 @@ function niceTicks(lo, hi) {
 // Is a snapshot safe to read? (null when it is)
 function badSnapshot(d) {
   if (!d || typeof d !== 'object') return 'it is not an object';
-  if (d.data !== undefined && (typeof d.data !== 'object' || d.data === null)) return 'data is missing';
+  if (d.data === undefined || typeof d.data !== 'object' || d.data === null) return 'data is missing';
   if (d.data && d.data.tables !== undefined && (typeof d.data.tables !== 'object' || d.data.tables === null || Array.isArray(d.data.tables))) return 'data.tables is not a set of tables';
-  if (d.data && d.data.tables) for (const [k, v] of Object.entries(d.data.tables)) if (!Array.isArray(v)) return `table ${k} is not a list of rows`;
+  if (d.data && d.data.tables) for (const [k, v] of Object.entries(d.data.tables)) { if (!Array.isArray(v)) return `table ${k} is not a list of rows`; if (v.some(r => !r || typeof r !== 'object' || Array.isArray(r))) return `table ${k} has a row that is not a record`; }
+  if (d.data && d.data.settings !== undefined && (typeof d.data.settings !== 'object' || d.data.settings === null)) return 'data.settings is not a set of values';
   if (d.ever !== undefined) {
     const e = d.ever;
     if (!e || typeof e !== 'object' || Array.isArray(e)) return 'the schema history is not an object';
     if (typeof e.tables !== 'object' || e.tables === null) return 'the schema history has no tables';
     if (!Array.isArray(e.versions)) return 'the schema history has no versions';
     for (const [k, t] of Object.entries(e.tables)) if (!t || typeof t.fields !== 'object' || t.fields === null) return `the schema history of table ${k} is damaged`;
+    const slotOk = s => s && typeof s === 'object' && s.seen && typeof s.seen === 'object' && (s.type === undefined || (s.type && typeof s.type === 'object' && typeof s.type.t === 'string' && (s.type.t !== 'pick' || (Array.isArray(s.type.options) && s.type.options.every(o => typeof o === 'string')))));
+    for (const [k, t] of Object.entries(e.tables)) { if (!slotOk(t)) return `the schema history of table ${k} is damaged`; for (const [fk, f] of Object.entries(t.fields)) if (!slotOk(f) || !f.type) return `the schema history of field ${k}.${fk} is damaged`; }
+    for (const g of ['settings', 'states']) if (e[g] !== undefined) { if (!e[g] || typeof e[g] !== 'object') return `the schema history of ${g} is damaged`; for (const [k, s] of Object.entries(e[g])) if (!slotOk(s)) return `the schema history of ${k} is damaged`; }
+    if (e.optionLog !== undefined) {
+      if (!Array.isArray(e.optionLog)) return 'the option rename log is not a list';
+      for (const x of e.optionLog) if (!x || typeof x !== 'object' || typeof x.v !== 'number' || typeof x.table !== 'string' || typeof x.field !== 'string' || !x.map || typeof x.map !== 'object' || Object.values(x.map).some(v => typeof v !== 'string')) return 'an entry of the option rename log is damaged';
+    }
     const used = Object.keys(d.data?.tables || {}).filter(k => (d.data.tables[k] || []).length);
     if (used.length && !e.versions.length) return 'the schema history has no versions but there are rows';
     for (const k of used) if (!e.tables[k]) return `rows of ${k} have no entry in the schema history`;

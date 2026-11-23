@@ -147,3 +147,67 @@ test('program-level model fuzz: 150 chains, what the program shows matches the d
   const r = runModelFuzz(150, 9);
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
 });
+
+// ---- round 5: a `was` already applied to the stored data is never applied again ----
+import { diff } from '../diff.mjs';
+const swapCases = [
+  ['field swap', 'table s a num, b num\n"x" sum(s.a) sum(s.b)', 'table s b num was a, a num was b\n"x" sum(s.a) sum(s.b)', a => a.addRow('s', { a: 1, b: 20 }), 'x 20 1'],
+  ['field 3-cycle', 'table s a num, b num, c num\n"x" sum(s.a) sum(s.b) sum(s.c)', 'table s b num was a, c num was b, a num was c\n"x" sum(s.a) sum(s.b) sum(s.c)', a => a.addRow('s', { a: 1, b: 20, c: 300 }), 'x 300 1 20'],
+  ['setting swap', 'setting g num = 0\nsetting h num = 0\n"x" g h', 'setting h num = 0 was g\nsetting g num = 0 was h\n"x" g h', a => { a.setField('g', null, 10); a.setField('h', null, 20); }, 'x 20 10'],
+  ['option swap', 'table s c pick A|B\n"x" count(s where c = A) count(s where c = B)', 'table s c pick B was A|A was B\n"x" count(s where c = A) count(s where c = B)', a => { a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'B' }); }, 'x 1 2'],
+];
+for (const [name, b1, b2, fill, want] of swapCases) {
+  test(`a ${name} is applied once: reload, re-submit, a later edit and diff leave it`, () => {
+    const S1 = `app "T"\n${b1}\n`, S2 = `app "T"\n${b2}\n`;
+    const a = load(S1); fill(a);
+    assert.equal(a.applyEdit(S2).verdict, 'safe');
+    assert.deepEqual(texts(a), [want]);
+    assert.deepEqual(texts(load(S2, { data: a.snapshot() })), [want], 'reload with the snapshot');
+    assert.deepEqual(texts(load(S2, { data: a.snapshot(), history: [S1, S2] })), [want], 'reload with history too');
+    const again = a.applyEdit(S2);
+    assert.deepEqual([again.verdict, again.changes.filter(c => /renames/.test(c)), texts(a)], ['safe', [], [want]], 're-submit');
+    a.applyEdit(S2 + '"hi"\n');
+    assert.deepEqual(texts(a), [want, 'hi'], 'a later unrelated edit');
+    const d = diff([S1, S2], S2);
+    assert.deepEqual(d.changes.filter(c => /renames/.test(c)), [], 'diff reports no rename');
+  });
+}
+
+test('restore of an older backup after an option rename brings its rows to the new name', () => {
+  const S1 = 'app "T"\ntable s c pick A|X\n"x" count(s where c = A)\n', S2 = 'app "T"\ntable s c pick B was A|X\n"x" count(s where c = B)\n';
+  const a = load(S1); a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'A' });
+  const old = a.snapshot();
+  a.applyEdit(S2);
+  assert.deepEqual(texts(a), ['x 2']);
+  a.addRow('s', { c: 'X' });
+  assert.ok(a.restore(old).ok);
+  assert.deepEqual(texts(a), ['x 2'], 'restored rows read under B');
+  const noEver = { data: old.data, seq: old.seq };
+  assert.deepEqual(texts(load(S2, { data: noEver, history: [S1, S2] })), ['x 2'], 'data saved without its schema history');
+});
+
+test('Undo goes back by version, not by text: rename, edit back to the old text, undo twice', () => {
+  const S1 = 'app "T"\ntable s c pick A|X\n"x" count(s where c = A)\n', S2 = 'app "T"\ntable s c pick B was A|X\n"x" count(s where c = B)\n';
+  const a = load(S1); a.addRow('s', { c: 'A' }); a.addRow('s', { c: 'A' });
+  a.applyEdit(S2); a.applyEdit(S1);
+  a.revert(); a.revert();
+  assert.equal(a.source, S1);
+  assert.deepEqual(texts(a), ['x 2'], 'rows are A again');
+});
+
+test('a table name used again after it was removed is a warning, not plain safe', () => {
+  const a = load('app "T"\ntable t n num\nlist t\n'); a.addRow('t', { n: 1 });
+  a.applyEdit('app "T"\n"none"\n');
+  const r = a.applyEdit('app "T"\ntable t name text\nlist t\n');
+  assert.equal(r.verdict, 'warn');
+  assert.match(r.warnings[0], /removed earlier; its old rows come back/);
+});
+
+test('a damaged option log is refused at load with a message, data untouched', () => {
+  const a = load('app "T"\ntable s c pick A|B\nlist s\n'); a.addRow('s', { c: 'A' });
+  for (const bad of ['x', [{ v: 'q', map: 5 }], [{ v: 9, table: 's', field: 'c', map: null }]]) {
+    const snap = a.snapshot(); snap.ever.optionLog = bad;
+    const b = load('app "T"\ntable s c pick A|B\nlist s\n', { data: snap });
+    assert.equal(b.ok, false); assert.match(b.errors[0], /option rename log/); assert.equal(b.rawData, snap);
+  }
+});

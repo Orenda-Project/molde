@@ -84,3 +84,23 @@ test('tokenMask timing in a decoding loop (151k-token vocabulary)', () => {
   console.log(`# tokenMask per decoding step: n ${ts.length}, median ${q(0.5)} ms, p90 ${q(0.9)} ms, p99 ${q(0.99)} ms`);
   assert.ok(+q(0.5) < 5, 'median step too slow');
 });
+
+test('tokenMask never blocks the word a valid program writes (all examples and corpus, as whole-word tokens)', () => {
+  const all = progs();
+  const words = new Set();
+  for (const { src } of all) for (const m of src.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) words.add(m[0]);
+  const vocab = [...words, ...[...words].map(w => ' ' + w)];
+  let n = 0; const bad = [];
+  for (const { f, src } of all) for (const p of namePositions(src)) { n++; if (!tokenMask(src.slice(0, p.at), vocab).has(vocab.indexOf(p.word))) bad.push(`${f}: ${p.word}`); }
+  assert.deepEqual(bad.slice(0, 5), []);
+  console.log(`# tokenMask false refusals: ${bad.length} over ${n} word positions`);
+});
+
+test('no space and no keyword where only a name can stand; edit never takes all', () => {
+  const vocab = ['ml', ' ml', ' ', '.', 'all', 'it', ' all'];
+  const got = t => [...tokenMask(t, vocab)].map(i => vocab[i]);
+  assert.deepEqual(got('app "x"\ntable d ml num\n"T" sum(d.'), ['ml']);
+  const P = 'app "x"\ntable d ml num\neach d\n  button "a" tap ';
+  assert.ok(!got(P + 'edit ').includes('all') && got(P + 'edit ').includes('it'));
+  assert.ok(got(P + 'remove ').includes('all'));
+});
