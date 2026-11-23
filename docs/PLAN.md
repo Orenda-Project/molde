@@ -42,6 +42,10 @@ The model must be able to create any type of UI. The app must not hard-code ever
 
 Section 3.2 below was the first sketch (a fixed list of views). It is replaced by this two-level design; the Phase 0 spec in `lang/SPEC.md` is the source of truth. The limit in 3.4 becomes narrower: any 2D data-and-UI tool is in scope; the internet, the camera, files and heavy algorithms are not.
 
+### 3.1c Scope for now: English only (Kamal, 2026-11-23)
+
+The first version works in plain English: requests, labels and training data. Urdu and Roman Urdu come back later as their own step. Wherever this plan mentions Urdu or Roman Urdu (data mix, eval gates, risks), read it as "later". The loop to prove first: the user says what they want in English, it is built inside the app, and it is tracked.
+
 ### 3.2 The four layers (first sketch, superseded by 3.1b)
 
 - **Data:** `table`, fields with types, `setting` (a goal or limit the user can edit).
