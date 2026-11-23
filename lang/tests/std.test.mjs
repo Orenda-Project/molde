@@ -6,7 +6,7 @@ import { check } from '../check.mjs';
 import { stdDefs } from '../expand.mjs';
 import { expandedText } from '../mo.mjs';
 
-const LEVEL1 = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'each', 'if', 'else', 'box', 'draw', 'poly', 'pt', 'shape',
+const LEVEL1 = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'each', 'if', 'else', 'box', 'draw', 'plot', 'tick', 'poly', 'pt', 'shape',
   'text', 'button', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'screen', 'def']);
 
 const HEAD = 'app "Std test"\ntable t n num, c pick A|B = A, note text?\nstate d date = today\n';

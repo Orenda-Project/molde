@@ -4,17 +4,13 @@ lib "data"
 
 # describe: a list of {src}; tap one to edit it, swipe to remove it
 def list src src
-  if countof(src, yes) = 0
-    text "Nothing here yet." color muted
-  each src as r
+  each src as r empty "Nothing here yet. Add one to see it here."
     row card tap edit r swipe remove r
       text r grow
 
 # describe: a list of {src} by day; tap one to edit it, swipe to remove it
 def log src src
-  if countof(src, yes) = 0
-    text "Nothing here yet." color muted
-  each src by day as g
+  each src by day as g empty "Nothing here yet. Add one to see it here."
     text g.key bold faint
     each g as r
       row card tap edit r swipe remove r

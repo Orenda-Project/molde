@@ -109,9 +109,10 @@ state NAME TYPE [= formula] [keep]                  # a value the screen holds (
 state NAME new TABLE [keep]                         # a new row being filled in (a form); keep keeps values after saving
 let NAME = formula                                  # a name for a formula; read-only, always up to date
 let NAME(value kind, ...) = formula                 # a formula with values, used as NAME(...) anywhere below
+                                                    # a value can be a row: let worth(r item) = r.qty * r.price
 ```
 
-`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
+`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. An edit that changes a setting's `= default` also sets the stored value (the user asked for it in the chat); otherwise a value the user set is kept. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
 
 ## 5. Formulas
 
@@ -179,8 +180,16 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 | `hour(t)`, `minute(t)`, `second(t)` | parts of a time, a date and time, or a length of time |
 | `addmonths(d, n)` | the same day n months later (or earlier, with a minus) |
 | `hue(n)` | a colour from 0 to 360 (section 8.2) |
-| `random(n)` | a whole number from 1 to n; only inside actions (`tap set roll = random(6)`) |
+| `random(n)`, `random(TABLE ...)` | a whole number from 1 to n, or a random row; only inside actions (`tap set roll = random(6)`) |
+| `nth(TABLE ..., n)` | the nth row (from 1) in the query's order (`nth(card sort front, 1)`) |
+| `pow(x, y)` | x to the power y |
+| `join(a, b, ...)` | the parts joined with no spaces: `join(runs, "/", wickets)` |
+| `fixed(x, n)`, `compact(x)`, `grouped(x)` | x with n decimals; `81.5k`, `1.2M`; `1,234` with separators |
+| `plural(n, "day")` | `1 day`, `3 days` |
+| `monthshort(d)` | `"Nov"` |
 | `words(formula)` | the formula read out in plain English (used for default captions) |
+
+A function's result can be followed by a field: `last(item).name`, `random(card).front`.
 
 ## 6. Showing things
 
@@ -211,7 +220,17 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 | `choice TARGET` | tap chips for a `pick`, `ref` or yes/no value |
 | `slider TARGET LO..HI` | a slider for a number |
 
-### 6.3 Drawing
+### 6.3 Charts and drawing
+
+```
+plot X0..X1, Y0..Y1 [axes] [gridlines]   # a chart frame in data units (y grows upward); the ranges may be formulas
+  rect X, Y, W, H                        # in data units: rect index + 0.15, 0, 0.7, value is a bar standing on the axis
+  poly                                   # pt X, Y in data units: a line chart
+  tick X, PART ...                       # a label under the x axis at X (y labels come from the range)
+```
+
+`axes` draws both axes with labels; `gridlines` draws lines at the y labels. The std `daybars`, `bars` and `trend` are plots.
+
 
 ```
 draw [W, H] [mods]        # a canvas W wide and H tall in its own units (default 100, 100), scaled to fit
@@ -238,12 +257,14 @@ each SOURCE [as NAME]
 
 | Source | Items |
 |---|---|
-| `TABLE [window] [where ...] [by GROUP] [sort FORMULA [desc]] [top N]` | rows (newest first unless sorted). `sort` takes any formula of the row (`sort count(it.goal) desc`). With `by day\|week\|month\|FIELD\|LINK.FIELD` the items are groups: `it.key`, `count(it)`, `sum(it.amount)`, and `each it` for the group's rows |
+| `TABLE [window] [where ...] [by GROUP] [sort FORMULA [desc] \| shuffle] [top N]` | rows (newest first unless sorted). `sort` takes any formula of the row (`sort count(it.goal) desc`); `shuffle` gives a random order that stays the same while the app runs (each row gets its place when it is added). With `by day\|week\|month\|FIELD\|LINK.FIELD` the items are groups: `it.key`, `count(it)`, `sum(it.amount)`, and `each it` for the group's rows |
 | back link `it.check ...` | rows linked to `it` |
 | `days WINDOW` | dates, oldest first, for calendars and charts (`each days last 70 days`) |
 | `options T.field` | the options of a `pick` field |
 | `[250, 500, 1000]` | the listed values |
 | `1..9`, `1..n` | whole numbers (at most 1000) |
+
+`each SOURCE ... empty "No entries yet"` shows that text when there are no items.
 
 Inside the block, `it` is the item and `index` its position from 0. **`as NAME` names the item and leaves `it` alone**, so an inner `each` (or a chart's own loop) can still reach the outer item: `each habit as h` then `daybars last 7 days, count(h.check on it)`.
 
@@ -270,6 +291,7 @@ else
 | `pad N`, `gap N`, `span N` | inner space; space between children (both 0 to 6); columns to span in a grid |
 | `align start\|center\|end` | alignment |
 | `card` | a raised surface |
+| `ratio N`, `middle`, `full` | keep width / height at N (`ratio 1` makes square cells); centre the block in the free space; take the full screen height |
 | `tap ACTION`, `swipe ACTION` | what a tap or a sideways swipe does |
 
 ### 8.2 Colours
@@ -301,6 +323,7 @@ Theme roles `accent ink muted soft good warn bad bg surface edge`; named colours
 | `go SCREEN` | opens a screen |
 | `notify PART ...` | shows a notice (and a phone notification if the app is closed) |
 | `remind "Text" in DURATION` | schedules one reminder |
+| `after DURATION ACTION` | does the action later, while the app is open (`tap set flash = yes then after 2s set flash = no`) |
 
 Values written to a field are kept inside its range (a stock count cannot go below `0..`).
 

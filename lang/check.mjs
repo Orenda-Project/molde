@@ -159,7 +159,8 @@ class Checker {
       case 'let': {
         if (s.params) {
           // a formula with values: check its body with the parameters' types
-          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, PKIND_TYPE[p.kind] || ANY])), each: false });
+          for (const p of s.params) if (p.kind === 'row' && !this.tb(p.table)) this.err('E_UNKNOWN_TABLE', `value ${p.name} is a row of "${p.table}", which is not a table declared above.`, 'write NAME TABLE with a declared table, or a kind: num money text bool date time dur.');
+          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, p.kind === 'row' ? { t: 'row', table: p.table } : (PKIND_TYPE[p.kind] || ANY)])), each: false });
           const t = this.expr(s.e);
           this.scopes.pop();
           if (!cx.top) return this.err('E_CONTEXT', 'a let with values (a formula you call) must be at the top level.', 'move it to column 1.');
@@ -212,10 +213,15 @@ class Checker {
         return this.block(s.children, { ...cx, top: false });
       case 'box': this.mods(s.mods); return this.block(s.children, { ...cx, top: false });
       case 'use': return this.block(s.children, { ...cx, top: false });
-      case 'draw':
-        if (cx.draw) this.err('E_CONTEXT', 'a draw cannot be inside another draw.', 'close the first draw first.');
+      case 'draw': case 'plot':
+        if (cx.draw) this.err('E_CONTEXT', `a ${s.kind} cannot be inside a draw or plot.`, 'close the first one first.');
+        if (s.kind === 'plot') [...s.x, ...s.y].forEach((e, i) => this.num(e, `the plot ${i < 2 ? 'x' : 'y'} range`));
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, draw: s });
+      case 'tick':
+        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', 'tick labels the x axis of a plot; it must be inside plot.', 'indent it under a plot line.');
+        this.num(s.x, 'tick x'); this.parts(s.parts);
+        return;
       case 'poly':
         if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw line.');
         this.mods(s.mods);
@@ -612,6 +618,7 @@ class Checker {
       case 'go': if (!this.screens.has(a.name)) this.err('E_UNKNOWN_NAME', `there is no screen "${a.name}" declared above.`, 'declare the screen first, or remove go (screens already get tabs).'); return;
       case 'notify': return this.parts(a.parts);
       case 'remind': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'dur') this.err('E_TYPE', 'remind ... in needs a duration like 10m.', 'write remind "Text" in 10m.'); return; }
+      case 'after': return this.action(a.act);
       case 'param': return this.err('E_UNKNOWN_NAME', `"${a.name}" is not an action.`, 'use add, set, toggle, remove, edit, save, go, notify or remind.');
     }
   }
@@ -674,6 +681,8 @@ class Checker {
       case 'agg': return this.agg(e);
       case 'fold': return this.fold(e);
       case 'fn': return this.fn(e);
+      case 'member': { let t = this.expr(e.e); for (const part of e.parts) { if (isAny(t)) return t; t = this.step(t, part, null); } return t; }
+      case 'join': this.parts(e.parts); return 'text';
       case 'qfn': {
         const t = this.query(e.q, false);
         if (e.fn === 'due') { const n = this.expr(e.e); if (!isAny(n) && !isNum(n)) this.err('E_TYPE', 'due(table, days) needs a number of days.', 'write due(water, 3).'); return 'bool'; }
@@ -793,10 +802,16 @@ class Checker {
       case 'sin': case 'cos': need(0, isNum, 'a number of degrees'); return 'num';
       case 'hue': need(0, isNum, 'a number from 0 to 360'); return 'color';
       case 'random':
-        need(0, isNum, 'a whole number');
+        if (tname(A[0]) === 'rows' && !A[0].field) { if (!this.inAction) this.err('E_CONTEXT', 'random(table) picks a row, so it can only be used inside an action (tap, every, when).', 'store it: tap set pick = random(card).front.'); return { t: 'row', table: A[0].table }; }
+        need(0, isNum, 'a whole number or a table');
         if (!this.inAction) this.err('E_CONTEXT', 'random() can only be used inside an action (tap, every, when), so the screen does not change by itself.', 'store it: tap set roll = random(6), then show roll.');
         return 'num';
       case 'words': return 'text';
+      case 'pow': need(0, isNum, 'a number'); need(1, isNum, 'a number'); return A[0];
+      case 'plural': need(0, isNum, 'a number'); need(1, t => TEXTUAL.has(tname(t)), 'a word in quotes'); return 'text';
+      case 'fixed': need(0, t => isNum(t) || tname(t) === 'dur', 'a number'); need(1, isNum, 'a number of decimals'); return 'text';
+      case 'compact': case 'grouped': need(0, isNum, 'a number'); return 'text';
+      case 'monthshort': need(0, isDate, 'a date'); return 'text';
       case 'len': need(0, t => TEXTUAL.has(tname(t)), 'text'); return 'num';
       case 'has': need(0, t => TEXTUAL.has(tname(t)), 'text'); need(1, t => TEXTUAL.has(tname(t)), 'text'); return 'bool';
       case 'weekday': case 'monthday': case 'monthdays': case 'month': case 'year': need(0, isDate, 'a date'); return 'num';
