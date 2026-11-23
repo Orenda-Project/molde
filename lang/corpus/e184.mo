@@ -22,4 +22,4 @@ each event sort day as e
     e.budget
     if e.day < today
       button "Next year" tap set e.day = addmonths(e.day, 12) then set e.alert = addmonths(e.alert, 12)
-"Budget for upcoming" sumof(event where day >= today, it.budget) faint
+"Budget for upcoming" sum(event where day >= today, it.budget) faint

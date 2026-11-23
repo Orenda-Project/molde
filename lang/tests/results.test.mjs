@@ -64,3 +64,31 @@ test('sum or avg of a time or text column is an error with a hint', () => {
   assert.match(String(e), /times of day cannot be added up/);
   assert.match(String(check('app "x"\ntable t name text\navg(t.name)\n').errors[0]), /use count\(t\) for how many/);
 });
+
+test('charts over a table go oldest to newest (time left to right), whatever the list order', () => {
+  const a = load('app "W" scale mint\ntable w kg num\ntrend w, it.kg\nbars w, it.kg\nlist w\n');
+  for (const [kg, d] of [[70, 0], [72, 1], [75, 2]]) a.addRow('w', { kg }, Date.parse('2026-11-20T08:00:00Z') + d * 86400000);
+  assert.deepEqual(a.find(n => n.t === 'poly').points, [[0, 70], [1, 72], [2, 75]]);
+  assert.deepEqual(a.findAll(n => n.t === 'plot')[1].children.map(r => r.h), [70, 72, 75]);
+  assert.deepEqual(texts(a), ['75', '72', '70']); // the list stays newest first
+});
+
+test('money keeps full precision in formulas and rounds only when shown', () => {
+  const a = load('app "M" coin mint\nstate m money = 1\nstate p money = 0.1\nstate q money = 0.2\ntext m / 3 * 3 (p + q) * 1000000\n');
+  assert.deepEqual(texts(a), ['1 300,000']);
+});
+
+test('empty values sort last, also with desc', () => {
+  const a = load('app "S" list mint\ntable t n num?\neach t sort n desc\n  text it.n\n');
+  a.addRow('t', { n: 1 }); a.addRow('t', {}); a.addRow('t', { n: 3 });
+  assert.deepEqual(texts(a), ['3', '1', '–']);
+});
+
+test('in a chain, each after is measured from the previous step and delays what follows', () => {
+  const a = load('app "D" timer ink\nstate s num = 0\ntext s\nbutton "go" tap set s = 1 then after 2s set s = 2 then set s = 3 then after 2s set s = 4\n');
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  assert.equal(texts(a)[0], '1');
+  a.tick(2000); assert.equal(texts(a)[0], '3');
+  a.tick(1000); assert.equal(texts(a)[0], '3');
+  a.tick(1000); assert.equal(texts(a)[0], '4');
+});

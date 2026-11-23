@@ -6,4 +6,4 @@ form stock, "Add to fridge"
 list stock
 "Dishes from leftovers" head
 form dish, "Log a dish"
-log dish
+list dish by day

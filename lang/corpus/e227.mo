@@ -5,4 +5,4 @@ row gap 2
   stat round(avg(reading.value last 30 days where moment = Evening)), "evening average"
 trend reading last 30 days sort at, it.value
 form reading
-log reading
+list reading by day

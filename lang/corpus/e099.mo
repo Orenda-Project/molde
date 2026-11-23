@@ -7,4 +7,4 @@ each batch sort at desc
       it.portions "portions at" it.price faint
     "Profit" it.portions * it.price - it.cost bold color if(it.portions * it.price - it.cost >= 0, good, bad)
 form batch, "Add batch"
-"Profit this month" sumof(batch month, it.portions * it.price - it.cost) head
+"Profit this month" sum(batch month, it.portions * it.price - it.cost) head

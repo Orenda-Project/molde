@@ -4,4 +4,4 @@ table visit note text?
 "Visits this month" count(visit month) "| Usually every" round(gap(visit)) "days" faint
 button "I visited today" tap add visit
 heat last 70 days, count(visit on it)
-log visit
+list visit by day

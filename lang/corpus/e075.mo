@@ -6,4 +6,4 @@ remind "Ramadan is here: calculate zakat" at ramadan.starts
 "This month" sum(given.amount month) faint
 form given, "Add giving"
 form ramadan, "Set Ramadan start date"
-log given
+list given by day

@@ -86,13 +86,13 @@ test('05 journal: pick a mood, save, streak and search', () => {
   has(a, /Nothing here yet/);
 });
 
-test('06 habits plus: ring and week strip follow a tick on an earlier day', () => {
+test('06 habits plus: goal and week strip follow a tick on an earlier day', () => {
   const a = L('06-habits-plus');
   fill(a, { name: 'Walk' }); btn(a, 'Add');
   tap(a, n => n.t === 'toggle');
   has(a, /^All done today$/);
-  const arcs = a.findAll(n => n.t === 'arc');
-  assert.equal(arcs[0].to, 360);
+  const bar = a.findAll(n => n.t === 'rect').find(n => n.style.fill === 'accent');
+  assert.equal(bar.w, 100, 'the goal bar is full');
 });
 
 test('07 exercise plus: a new record is listed', () => {

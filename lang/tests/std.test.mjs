@@ -13,7 +13,6 @@ const HEAD = 'app "Std test"\ntable t n num, c pick A|B = A, note text?\nstate d
 const SAMPLES = {
   stat: 'stat count(t today), "today"',
   goal: 'goal sum(t.n today), 10, "done", "kg"',
-  ring: 'ring count(t), 5, "of five"',
   daybars: 'daybars last 7 days, count(t on it)',
   bars: 'bars t by c, count(it), it.key',
   trend: 'trend t sort at, it.n',
@@ -53,7 +52,7 @@ for (const [name, line] of Object.entries(SAMPLES)) {
 }
 
 test('a program can define its own component with a slot', () => {
-  const src = HEAD + 'def panel title text\n  stack card gap 1\n    text title head\n    slot\npanel "Today"\n  text count(t today) "entries"\n  ring count(t today), 5\n';
+  const src = HEAD + 'def panel title text\n  stack card gap 1\n    text title head\n    slot\npanel "Today"\n  text count(t today) "entries"\n  goal count(t today), 5\n';
   const r = check(src);
   assert.deepEqual(r.errors.map(String), []);
   const use = r.ast.body.find(s => s.kind === 'use' && s.name === 'panel');

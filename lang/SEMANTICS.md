@@ -10,7 +10,10 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
   - `safe`: adopt the new program and the new `ever`; apply the returned `moves` (pick option renames written with `was`) to the stored rows; give new tables an empty row list and new settings their default. Nothing else in the stored data changes: renamed tables and fields keep their slots, hidden ones keep their values.
   - `refused`: keep running the old program; nothing changes.
   - `restore`: see below.
-- **Going back (chat Undo, or any earlier version)** is always allowed. If the new program text equals an earlier version, the verdict is `restore`: that version's own name-to-slot map is used, data entered since stays in its slots, slots the old version does not know are hidden, and values that were widened since are read with the old declared type (money as a number, long text as text, a date and time as its date, a free text in an old pick field as the text itself).
+- **Going back (chat Undo, or any earlier version)** is always allowed, and it is an explicit operation: `app.revert()`, `evolve(ever, src, {restore: true})` or `mo.mjs diff ... --restore`. (A normal edit whose text happens to equal an older version is judged like any edit.) The verdict is `restore`: that version's own name-to-slot map is used, data entered since stays in its slots, slots the old version does not know are hidden, and values that were widened since are read with the old declared type (money as a number, long text as text, a date and time as its date, a free text in an old pick field as the text itself). **Every pick option renamed since that version is renamed back** (the result carries the reverse `moves`), so rows read under the old option names; re-applying the rename later moves all rows again, old and new. Table, field, setting and state renames need no data change: the restored map points at the same slots.
+- **Settings: the stored value always wins.** A setting's `= default` fills it only when nothing is stored yet; changing the default in an edit never changes a value the user saved. To change it on purpose, an edit writes `setting goal num = 3000 set`: the value is written once (when the `set` or its value is new), the diff lists it in `changes`, and `revert()` puts the earlier value back.
+- **Loading a backup** (`app.restore(snapshot)`) replaces the data and **merges** the backup's schema history with the app's (every slot of both, with all their names), so an older backup never makes the next edit forget a slot.
+- **Damaged saved data** (a history that is not an object, has no versions while rows exist, rows of a table it does not know, tables that are not lists) is never read: `load` returns `ok: false` with the reason, and the data is left untouched.
 - Reading a slot with a narrower declared type never changes what is stored; the next edit is judged against the widest type the slot has ever had.
 - The evaluator implements this: `load(src, {data, history})`, `app.applyEdit(src)` (returns the diff result), `app.revert()` (back to the program before the last applied edit), and `app.snapshot()` (which includes `ever`). `app.addRow(table, values, atMs)` adds a row by program names (values in the field types, `atMs` optional) and returns the stored row, or null if a required field is empty.
 
@@ -26,9 +29,9 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Values
 
-- **Money** is stored as a decimal number rounded to 2 places in the currency's main unit (rupees, not paisa). Arithmetic with numbers keeps it money; the currency sign is a display setting of the runtime.
+- **Money** is stored as a decimal number rounded to 2 places in the currency's main unit (rupees, not paisa). Inside formulas it keeps full precision (`1 / 3 * 3` is 1) and is rounded to cents only when shown or stored. Arithmetic with numbers keeps it money; the currency sign is a display setting of the runtime.
 - **Durations** are whole seconds; **times of day** are seconds after midnight (they wrap at 24:00); **dates** are calendar days; **date and time** values are moments.
-- **Empty**: an optional field nobody filled in, `last()`/`first()` of no rows, `min()`/`max()`/`avg()` of no values, `since()` of no rows and `gap()` with fewer than two days are empty. Empty plus, minus, times or divided by anything is empty. Every comparison with empty (`=`, `<`, `>=` ...) is no, and `!=` is yes only when exactly one side is empty. `sum()`, `sumof()`, `count()` skip empty values, so they are 0 for nothing.
+- **Empty**: an optional field nobody filled in, `last()`/`first()` of no rows, `min()`/`max()`/`avg()` of no values, `since()` of no rows and `gap()` with fewer than two days are empty. Empty plus, minus, times or divided by anything is empty. Every comparison with empty (`=`, `<`, `>=` ...) is no, and `!=` is yes only when exactly one side is empty. `sum()` (of a column or `sum(source, value)`) and `count()` skip empty values, so they are 0 for nothing.
 - **`since(T)` with no rows is empty, never 0**, so a never-watered plant does not look "just watered". `since(water) >= 3` is no for it; write `due(water, 3)` when never should count as overdue.
 - **Division by zero** gives 0. `x % 0` gives 0. `x % n` is never negative for a positive `n` (`-7 % 3` is 2).
 - **`round(x)`** rounds half away from zero (`round(2.5)` is 3, `round(-2.5)` is -3); `floor` goes down.
@@ -45,7 +48,7 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Rows, order and groups
 
-- A table query lists rows **newest first** (by `at`, then by id). `sort FORMULA` orders by the formula evaluated for each row (`it` is the row, and bare names are its fields), smallest first, empty values last; `desc` reverses. `top N` keeps the first N after sorting.
+- A table query lists rows **newest first** (by `at`, then by id), except **inside a `plot`, where rows go oldest first** so time runs left to right (the std `trend` and `bars` over a table read naturally). `sort FORMULA` orders by the formula evaluated for each row (`it` is the row, and bare names are its fields), smallest first; `desc` gives largest first. **Empty values always come last**, with or without `desc`. `top N` keeps the first N after sorting.
 - `by` groups rows in the order their first row appears; the group's `key` is the date (day, the Monday of the week, the 1st of the month), the field value, or the value at the end of a link path (`by dish.cuisine`).
 - A row shown as text lists its filled fields joined by ` · ` (a link shows the linked row's first field; a ticked `bool` shows its name; an untouched row shows when it was added).
 
@@ -68,7 +71,9 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Events
 
-- `every D [if c]` runs while the app is open, every D after the previous run, only while `c` is yes. The evaluator steps the clock by the shortest active period and jumps when nothing is active.
+- `every D [if c]` runs while the app is open, every D after the previous run, only while `c` is yes.
+- In an action chain, **each `after D` is measured from the previous step, and the actions after it wait with it**: `tap set s = 1 then after 2s set s = 2 then set s = 3 then after 2s set s = 4` sets 1 now, 2 and 3 two seconds later, 4 after four seconds.
+- `now` and everything computed from it are re-evaluated on every tick: a renderer calls `tree()` again after `tick()` and the clock-dependent texts repaint. The evaluator steps the clock by the shortest active period and jumps when nothing is active.
 - `when c` runs its actions once each time `c` changes from no to yes (checked after every event and every tick). A `when` cannot trigger itself more than 5 times in a row.
 - Hidden screens still run their `state`, `every` and `when` lines.
 - `remind` lines are listed by `app.reminders()` with their resolved times: `at T.f - 3d at 9:00` gives one moment per row (a date field without a time uses 9:00); `at T.f` on a time field is daily at that time; `monthly on 31` fires on the last day of shorter months.

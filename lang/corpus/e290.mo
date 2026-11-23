@@ -6,7 +6,7 @@ each client as c
   stack card gap 1
     row
       c.name bold grow
-      text owed bold color if(owed > 0, bad, good)
+      owed bold color if(owed > 0, bad, good)
     each c.order where paid = no sort due as o
       row gap 1
         toggle o.paid

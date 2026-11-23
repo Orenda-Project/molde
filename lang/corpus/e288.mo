@@ -9,5 +9,5 @@ each 0..7 as k
     sum(income.amount week of d0) - sum(expense.amount week of d0) bold
 form income, "Add income"
 form expense, "Add expense"
-log income month
-log expense month
+list income month by day
+list expense month by day

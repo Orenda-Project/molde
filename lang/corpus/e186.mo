@@ -31,4 +31,4 @@ screen repairs "Repairs" pen
       toggle r.done
       r.flat.name r.what grow
   form repair, "Add repair"
-  log repair where done = yes
+  list repair where done = yes by day

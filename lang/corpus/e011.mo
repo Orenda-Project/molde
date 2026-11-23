@@ -5,4 +5,4 @@ row gap 3
   stat sum(donation.amount today), "today"
   stat sum(donation.amount month), "this month"
 form donation, "Add donation"
-log donation
+list donation by day

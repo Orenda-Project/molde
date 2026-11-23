@@ -7,6 +7,6 @@ each goat sort next_due as g
       g.name bold grow
       if g.next_due <= today
         box radius 6 pad 1 fill bad
-          "Due" size small bold color bg
+          "Due" small bold color bg
     "Vaccinated" g.vaccinated ", next" g.next_due faint
 form goat, "Add goat"

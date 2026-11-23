@@ -8,7 +8,7 @@ row gap 3
     rect 8, 104 - 100 * p, 40, 100 * p fill accent
     path "M6 4h44l-6 100H12z" stroke ink thick 2
   stack grow
-    text ml "ml" big
+    ml "ml" big
     "Goal" goal "ml" faint tap edit goal
 quick drink, ml, [200, 330, 500]
 form drink

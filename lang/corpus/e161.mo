@@ -8,4 +8,4 @@ each wash where folded = no as w
     w.at faint
     toggle w.folded
 stat count(wash week), "loads this week"
-log wash
+list wash by day

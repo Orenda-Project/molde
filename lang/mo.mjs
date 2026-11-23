@@ -5,6 +5,7 @@
 //   node lang/mo.mjs describe FILE            the plain-English plan
 //   node lang/mo.mjs diff V1 ... VN NEW        verdict against the whole history (oldest first); exit 1 if refused
 //   node lang/mo.mjs diff --history LIST NEW   the same, with the earlier files listed one per line in LIST
+//   add --restore to go back to an earlier version (never refused; the reverse of later option renames is applied)
 //   node lang/mo.mjs migrate FILE... [--write] rewrite older text into the current spelling
 //   node lang/mo.mjs expand FILE              the program with every component expanded to level 1
 //   node lang/mo.mjs tokens [FILE...]         token counts (runs lang/tokens.py)
@@ -75,7 +76,7 @@ if (isCli) switch (cmd) {
       next = files.filter(f => f !== listFile).pop();
     } else { hist = files.slice(0, -1); next = files[files.length - 1]; }
     if (!next || !hist.length) { console.error('usage: mo.mjs diff OLDEST ... PREVIOUS NEW  or  mo.mjs diff --history LIST NEW'); process.exit(2); }
-    const r = diff(hist.map(read), read(next));
+    const r = diff(hist.map(read), read(next), { restore: args.includes('--restore') });
     console.log(`history used (oldest first): ${hist.map((h, i) => `${h}${r.historyUsed[i] ? '' : ' (was refused, skipped)'}`).join(', ')}`);
     console.log(`new program: ${next}`);
     process.stdout.write(diffText(r));

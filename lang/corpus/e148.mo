@@ -1,6 +1,6 @@
 app "Loans lent" wallet slate
 table loan person text, amount money, given date = today, due date, returned money = 0
-let owed = sumof(loan, it.amount - it.returned)
+let owed = sum(loan, it.amount - it.returned)
 "Still owed to you" owed big
 "Overdue people" head color bad
 each loan where due < today and returned < amount sort due as l

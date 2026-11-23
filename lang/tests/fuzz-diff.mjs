@@ -69,7 +69,7 @@ export function runFuzz(chains = 5000, seed = 7, steps = 8) {
         else if (op === 14) m.settings.push({ name: 'g' + (n++), type: pickOne(['num', 'text', 'money']) });
         src = prog(m);
       }
-      const r = evolve(ever, src);
+      const r = evolve(ever, src, op === 15 && history.length > 1 ? { restore: true } : {});
       stats.edits++;
       if (op === 15 && history.length > 1 && r.verdict !== 'restore') stats.violations.push({ c, st, why: `a restore was ${r.verdict}`, refused: r.refused });
       if (r.verdict === 'refused') { stats.refused++; if (JSON.stringify(r.ever) !== JSON.stringify(ever)) stats.violations.push({ c, st, why: 'refused edit changed the schema' }); continue; }

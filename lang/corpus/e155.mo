@@ -6,7 +6,7 @@ table waste what text, cost money
 screen daily "Today" bread
   stat sum(sale.amount today), "sales today"
   form sale, "Add sale"
-  log sale today
+  list sale today by day
 screen stock "Stock" package
   each ingredient sort qty as i
     row card gap 1 tap edit i

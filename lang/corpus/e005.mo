@@ -3,7 +3,7 @@ table goat tag text, breed text, born date
 table weight goat ref goat, kg num 0..200 unit "kg"
 table vaccine goat ref goat, name text, due date
 table deworm goat ref goat
-"Vaccines due in 7 days" countof(vaccine, it.due - today <= 7 and it.due >= today) big color if(countof(vaccine, it.due - today <= 7 and it.due >= today) > 0, warn, ink)
+"Vaccines due in 7 days" count(vaccine, it.due - today <= 7 and it.due >= today) big color if(count(vaccine, it.due - today <= 7 and it.due >= today) > 0, warn, ink)
 each vaccine where due - today <= 7 and due >= today sort due
   row card
     it.goat.tag it.name grow

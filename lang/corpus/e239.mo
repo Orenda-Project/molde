@@ -4,4 +4,4 @@ sum(verse.ayahs today) "ayahs today" big
 streak(verse) "day streak, total" sum(verse.ayahs) "ayahs" faint
 daybars last 7 days, sum(verse.ayahs on it)
 form verse, "Log verses"
-log verse
+list verse by day

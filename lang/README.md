@@ -59,11 +59,30 @@ In a browser: `import { load } from './lang/eval.mjs'` (see UITREE.md). The llam
 The GBNF fixes the syntax but cannot know which names exist, so a name that was never declared, or a field of the wrong table, passes the grammar and fails the checker. `constrain.mjs` closes that gap:
 
 - `nameContext(textSoFar)` says whether the cursor is at a name position and, if so, which names may come: declared tables after `ref`, `add`, `options`; the fields of the row in scope after `it.` or `h.`; the queried table's fields first inside `where` and `sort`; your states and settings after `set`, `field`, `choice`, `slider`; components (or a dotted value) at the start of a line; the right kind for each component value (`form` takes a table, `quick`'s second value a field of its table). Declarations (`table NAME`, field names, `state NAME`, `as NAME` ...) are free.
-- `allowedWords(textSoFar)` filters by what is already typed of the word; `tokenMask(textSoFar, vocab)` turns that into allowed vocabulary indices (tokens that keep the word a prefix of an allowed name or keyword; tokens that end the word only when it is complete).
+- `allowedWords(textSoFar)` filters by what is already typed of the word; `tokenMask(textSoFar, vocab)` turns that into a `Mask` over the vocabulary (`mask.bits` is a `Uint8Array`, 1 = allowed; `mask.has(i)`; iterable as indices).
+- Where only names can stand (after `ref`, `add`, `go`, `icon`, a dot, `set`, a component's table or name value) no keyword is allowed either; elsewhere keywords and numbers stay open and the GBNF decides.
+- A token is read as `[boundary][word][rest]`. The boundary is a leading space, `Ġ` (GPT-2/Qwen byte BPE) or `▁` (SentencePiece): such a token starts a new word, so it is checked against the names allowed at the *next* position, and it is blocked right after a space. A dot after a name is blocked when nothing can follow it (a table with no links).
 
-A llama.cpp sampler keeps the GBNF sampler unchanged and, at every step, masks the logits of tokens outside `tokenMask(text, vocab)` before the grammar sampler runs. Scope comes from running the checker on the complete lines above (cached per line) plus one probe of the current line, so the cost is one check per generated name, on programs of about 20 lines.
+### How a phone runtime calls it
 
-`tests/constrain.test.mjs` checks both directions on the 30 examples and a sample of the corpus: the name each real program uses is always allowed, and decoding left to right with a random allowed choice at every leaf name position (a name that nothing written later depends on) gives programs with no unknown-name or link errors. Names that later lines depend on (an `each` source, a `let`, a head before a dot) are constrained the same way, but the test keeps the original continuation, so it only randomises leaves; a real decoder chooses the continuation under the new context.
+The decoding loop runs in a JS engine (Hermes or JSC on the phone, a WebView, or QuickJS next to llama.cpp):
+
+```js
+import { prepareVocab, tokenMask } from './lang/constrain.mjs';
+const V = prepareVocab(vocab);           // once per model: vocab[i] = the token's text (Ġ/▁ markers allowed)
+let text = '';
+for (;;) {
+  const mask = tokenMask(text, V);       // Mask: mask.bits[i] === 1 when token i may come next
+  // native side: logits[i] = -Infinity where mask.bits[i] === 0, then the GBNF sampler, then sample
+  const id = sampleNative(mask.bits);
+  if (id === EOS) break;
+  text += vocab[id];
+}
+```
+
+`tokenMask` takes the full text so far; the runtime does not keep any other state. Inside it, the scope of the finished lines is computed once per new line (a checker pass over the lines above, kept in a small cache keyed by those lines), each line's parse is cached, the allowed names become a trie (cached by the name set), and the vocabulary is indexed by word, so a step costs the walk over the allowed names, not over the vocabulary. Measured on this laptop (Node 22, a 151,000-token vocabulary, decoding 11 corpus programs 3 characters at a time): **median 0.28 ms per step, p90 about 3 ms, p99 about 10 ms**; the slow steps are the first step of each new line (one checker pass over the program so far, about 20 lines). `prepareVocab` takes about 0.3 s once per vocabulary.
+
+`tests/constrain.test.mjs` checks both directions on all 30 examples and all 300 corpus programs: the name each real program uses is always allowed (0 false refusals over about 6,700 name positions), and decoding left to right with a random allowed choice at every name position, the later text following the new choices (when a choice ends a dotted path, the rest of the path is dropped, as the mask forces), gives programs with no unknown-name or link errors (330 of 330).
 
 ## What the tests check
 
@@ -81,7 +100,7 @@ A llama.cpp sampler keeps the GBNF sampler unchanged and, at every step, masks t
 - **Two levels, one runtime.** The runtime implements level 1 only; charts, lists, forms, timers and calendars are MoldeScript components.
 - **Lines and indentation**, declare before use: every prefix is a valid program, and SPEC 2.1 says how a half-written program or edit is handled.
 - **One grammar file** drives the parser and the GBNF. **Keywords are contextual**: the parser prefers the keyword reading of a word and otherwise treats it as a name; only 12 words are reserved.
-- **One spelling per idea**: the formatter rewrites the alternatives, so training data and model output stay uniform.
+- **One spelling per idea**: the formatter rewrites the alternatives, so training data and model output stay uniform. Round 4 merged: bare-name text lines (no `text` unless the name is a component), bare sizes, `sum/count/min/max(source, formula)` instead of `sumof/countof/maxof/minof`, `goal` instead of `ring`, `list X by day` instead of `log X`, and dropped `compact/grouped/monthshort` (the phone formats numbers from typed text parts). `node lang/mo.mjs migrate` rewrites all of them. Size, before and after round 4: 170 to 169 keyword literals, 47 to 40 functions, 237 to 229 grammar literals, 37 statements (unchanged; `ytick` joined `tick`'s rule, `alt` and `bar` are line modifiers), 15 to 14 std defs, 13 of them documented components (`log` remains only as the body of `list X by day`).
 - **Meaning is executable**: `eval.mjs` is the reference; the phone runtime must give the same UI tree.
 - **Data is never at risk**: no statement deletes data; the diff uses the whole schema history; renames are explicit.
 

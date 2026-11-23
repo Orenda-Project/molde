@@ -8,8 +8,8 @@ let since_oil = max(refuel.odo) - last(oil.odo)
 round(km / used * 10) / 10 "km per liter" big
 "Since last oil change" since_oil "km" head
 if(since_oil >= interval, "Oil change due now", "Km to next oil change") color if(since_oil >= interval, bad, muted)
-text interval - since_oil "km left" faint
+interval - since_oil "km left" faint
 when since_oil >= interval notify "Oil change is due"
 button "Oil changed now" tap add oil odo = max(refuel.odo)
 form refuel, "Add fill"
-log refuel
+list refuel by day

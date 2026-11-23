@@ -10,7 +10,7 @@ const SPOT = `app "Spot" plant mint
 table plant name text, photo image?, every_days num 1..60 = 7
 table water plant ref plant
 state view pick Grid|List = Grid
-remind "Water the plants" every 2h from 9:00 to 21:00 if countof(plant, since(it.water) >= it.every_days) > 0
+remind "Water the plants" every 2h from 9:00 to 21:00 if count(plant, since(it.water) >= it.every_days) > 0
 choice view
 if view = Grid
   grid 2 gap 1
@@ -31,4 +31,17 @@ form plant
 test('spec features outside the examples check and are canonical', () => {
   assert.deepEqual(check(SPOT).errors.map(String), []);
   assert.equal(format(SPOT), SPOT);
+});
+
+test('toggle X all: a mark that does not depend on the day', async () => {
+  const { load } = await import('../eval.mjs');
+  const a = load('app "x"\ntable book title text\ntable fav book ref book\neach book\n  toggle it.fav all\n  it.title\n"favs" count(fav)\n', { now: '2026-11-23T10:00:00Z' });
+  a.addRow('book', { title: 'A' });
+  const t = () => a.find(n => n.t === 'toggle');
+  a.dispatch(t().id, 'tap');
+  a.tick(3 * 86400);
+  assert.equal(t().on, true);
+  a.dispatch(t().id, 'tap');
+  assert.equal(t().on, false);
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === 'favs 0'));
 });

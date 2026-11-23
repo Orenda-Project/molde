@@ -1,6 +1,6 @@
 app "Grocery list" cart mint
 table item name text, price money?, qty num 1.. = 1, got bool
-count(item where got = no) "to buy. Total" sumof(item, it.price * it.qty) head
+count(item where got = no) "to buy. Total" sum(item, it.price * it.qty) head
 each item where got = no as i
   row card swipe remove i
     toggle i.got

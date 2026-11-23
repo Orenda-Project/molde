@@ -5,7 +5,7 @@ each options zikr.phrase
   state base num = 0
   let n = count(zikr where phrase = it) - base
   row card gap 1
-    text it bold grow
-    text n big
+    it bold grow
+    n big
     button "+1" tap add zikr phrase = it
     button "Reset" tap set base = count(zikr where phrase = it)

@@ -11,4 +11,4 @@ button "Save" tap add spend what = ln, amount = amt, category = last(rule.catego
 "Teach the helper a word" head
 form rule, "Add rule"
 share spend month by category, sum(it.amount), it.key
-log spend
+list spend by day

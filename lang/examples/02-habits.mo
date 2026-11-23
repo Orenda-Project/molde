@@ -14,6 +14,6 @@ each habit
 row gap 2
   stat round(count(check week) * 100 / (n * weekday(today))), "% this week"
   stat round(count(check last 30 days) * 100 / (n * 30)), "% in 30 days"
-  stat maxof(habit, streak(it.check)), "best streak"
+  stat max(habit, streak(it.check)), "best streak"
 heat last 70 days, count(check on it), n
 form habit

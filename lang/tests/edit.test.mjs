@@ -93,3 +93,57 @@ test('evaluator edit-chain fuzz: 150 chains, every value stays readable with its
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
   assert.ok(r.values > 500, JSON.stringify(r));
 });
+
+test('undo after an option rename: rows read under the old option; renaming again moves all rows', () => {
+  const v1 = 'app "C"\ntable s cat pick Food|Bills\nbutton "f" tap add s cat = Food\n"food" count(s where cat = Food)\n';
+  const a = load(v1);
+  tapText(a, 'f'); tapText(a, 'f');
+  a.applyEdit('app "C"\ntable s cat pick Meals was Food|Bills\nbutton "m" tap add s cat = Meals\n"meals" count(s where cat = Meals)\n');
+  tapText(a, 'm');
+  assert.ok(texts(a).includes('meals 3'));
+  assert.equal(a.revert().verdict, 'restore');
+  assert.ok(texts(a).includes('food 3'), JSON.stringify(texts(a)));
+  assert.equal(a.applyEdit('app "C"\ntable s cat pick Meals was Food|Bills\n"meals" count(s where cat = Meals) "all" count(s)\n').verdict, 'safe');
+  assert.ok(texts(a).includes('meals 3 all 3'), JSON.stringify(texts(a)));
+});
+
+test('restore an older backup into a newer app, then edit: rows still shown', () => {
+  const a = load('app "T"\ntable t a num\n"n" count(t)\n');
+  a.addRow('t', { a: 1 }); a.addRow('t', { a: 2 });
+  const old = a.snapshot();
+  a.applyEdit('app "T"\ntable t b num was a\n"n" count(t)\n');
+  a.restore(old);
+  assert.equal(a.applyEdit('app "T"\ntable t b num was a, c text?\n"n" count(t) sum(t.b)\n').verdict, 'safe');
+  assert.ok(texts(a).includes('n 2 3'), JSON.stringify(texts(a)));
+});
+
+test('load never throws on a damaged history; the data is left untouched', () => {
+  for (const d of [{ ever: {} }, { ever: 'x' }, { data: { tables: null } }, { data: { tables: { t: [{ id: 1, at: 1, a: 1 }] } }, ever: { tables: {}, versions: [] } }, 'nonsense']) {
+    const copy = JSON.stringify(d);
+    const a = load('app "T"\ntable t a num\nlist t\n', { data: d });
+    assert.equal(a.ok, false);
+    assert.match(a.errors[0], /cannot be read safely/);
+    assert.equal(JSON.stringify(d), copy);
+  }
+});
+
+test('a table renamed with was and a new table with its old name in the same edit', () => {
+  const a = load('app "T"\ntable drink ml num\n"n" count(drink)\n');
+  a.addRow('drink', { ml: 5 });
+  assert.equal(a.applyEdit('app "T"\ntable drinks was drink ml num\ntable drink cc text\n"n" count(drinks) count(drink)\n').verdict, 'safe');
+  assert.ok(texts(a).includes('n 1 0'));
+});
+
+test('revert at the first version says there is nothing to undo; state was works before =', () => {
+  const a = load('app "T"\nstate m num = 0\n"m" m\nbutton "i" tap set m = m + 1\n');
+  assert.equal(a.revert().verdict, 'none');
+  tapText(a, 'i');
+  assert.equal(a.applyEdit('app "T"\nstate month num was m = 0\n"m" month\n').verdict, 'safe');
+  assert.ok(texts(a).includes('m 1'));
+});
+
+test('program-level model fuzz: 150 chains, what the program shows matches the data', async () => {
+  const { runModelFuzz } = await import('./fuzz-model.mjs');
+  const r = runModelFuzz(150, 9);
+  assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
+});

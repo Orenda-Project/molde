@@ -8,4 +8,4 @@ row gap 1
   button "😄" tap add mood score = 5
 "Aaj ka mood" avg(mood.score today) big
 daybars last 7 days, avg(mood.score on it)
-log mood
+list mood by day
