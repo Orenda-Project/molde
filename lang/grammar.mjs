@@ -112,7 +112,7 @@ export function walk(n, f) {
 export function literals(g) {
   const set = new Set();
   for (const [name, node] of g.map) {
-    if (['string', 'time', 'dur', 'number', 'ident', 'word', 'cword', 'snum', 'sp'].includes(name)) continue;
+    if (['string', 'time', 'datelit', 'dur', 'number', 'ident', 'word', 'cword', 'snum', 'sp'].includes(name)) continue;
     walk(node, n => { if (n.t === 'lit') set.add(n.s); });
   }
   return [...set];

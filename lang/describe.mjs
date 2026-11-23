@@ -110,6 +110,7 @@ export function ex(e) {
     case 'str': return `"${e.v}"`;
     case 'word': return nice(e.v);
     case 'time': return e.v;
+    case 'date': return e.v;
     case 'dur': return dur(e.v);
     case 'bool': return e.v ? 'yes' : 'no';
     case 'today': return 'today';

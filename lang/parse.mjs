@@ -67,7 +67,28 @@ export function asTextLine(text) {
   return r.tree ? r.tree : null;
 }
 
+// Slips from other languages, with the MoldeScript way to write them.
+export function slip(text, hardOnly = false) {
+  let m;
+  if (/^else if\b/.test(text)) return ['"else if" is not one line here: else stands alone.', 'write else on its own line and put the if under it, two spaces in (or write a second if with the opposite condition).'];
+  if (/&&/.test(text)) return ['MoldeScript writes "and", not &&.', 'write: a > 1 and b < 9.'];
+  if (/\|\|/.test(text)) return ['MoldeScript writes "or", not ||.', 'write: a = 1 or b = 2.'];
+  if (/==/.test(text)) return ['= already compares; there is no ==.', 'write a single =, for example if count(t) = 3.'];
+  if (/!(?!=)/.test(text)) return ['MoldeScript writes "not", not !.', 'write: not done, or a != b.'];
+  if ((m = text.match(/\bset ([a-z][a-z0-9_.]*) ?([-+*\/])= ?(.+?)$/))) return [`there is no ${m[2]}=.`, `write set ${m[1]} = ${m[1]} ${m[2]} ${m[3]}.`];
+  if ((m = text.match(/\b([a-z][a-z0-9_.]*) ?(\+\+|--)/))) return [`there is no ${m[2]}.`, `write set ${m[1]} = ${m[1]} ${m[2][0]} 1.`];
+  if ((m = text.match(/^for ([a-z][a-z0-9_]*) in (.+)$/))) return ['there is no for loop; each repeats its lines for every item.', `write each ${m[2]} as ${m[1]}.`];
+  if (/^(while|loop|repeat) /.test(text)) return [`there is no ${text.split(' ')[0]}; lines repeat with each, and actions repeat with every.`, 'write each SOURCE (a table, 1..n, days last 7 days) or every 1s if CONDITION ACTION.'];
+  if (hardOnly) return null; // the slips below can also be valid MoldeScript
+  if (/"[^"]*" \+ |\+ "[^"]*"/.test(text)) return ['texts are not joined with +.', 'write the parts side by side: "Total:" amount "rupees" (or join(a, b) to join without a space).'];
+  if (/\b\d{1,2}\/\d{1,2}\/\d{4}\b|\b\d{4}\/\d{1,2}\/\d{1,2}\b/.test(text)) return ['a date is written year-month-day.', 'write 2026-11-30.'];
+  if (/^button\b/.test(text) && !/ tap /.test(text)) return ['a button needs tap and an action.', 'write button "Add" tap add drink ml = 250 (or set, toggle, go, remove ...).'];
+  return null;
+}
+
 function syntaxError(no, text, r) {
+  const sl = slip(text);
+  if (sl) return new MoError('E_SYNTAX', no, sl[0], sl[1]);
   const col = r.far;
   const near = text.slice(col).split(' ')[0] || '(end of line)';
   const E = (msg, hint, code = 'E_SYNTAX') => new MoError(code, no, msg, hint);
@@ -148,10 +169,12 @@ export function parse(src, { lib = false, comps = null } = {}) {
   };
   for (const ln of lines) {
     if (ln.comment) { prog.comments.push(ln); continue; }
+    const hard = slip(ln.body.replace(/"(?:[^"\\]|\\.)*"/g, '""'), true); // never valid: else if, &&, ||, ==, +=, ++, for x in, while
+    if (hard) { errors.push(new MoError('E_SYNTAX', ln.no, hard[0], hard[1])); first = false; skip(ln); continue; }
     let canon;
     try { canon = join(lex(ln.body)); }
     catch (e) {
-      if (e instanceof LexError) { errors.push(new MoError('E_SYNTAX', ln.no, e.message + '.', 'remove or quote the character.')); first = false; skip(ln); continue; }
+      if (e instanceof LexError) { const sl = slip(ln.body); errors.push(sl ? new MoError('E_SYNTAX', ln.no, sl[0], sl[1]) : new MoError('E_SYNTAX', ln.no, e.message + '.', 'remove or quote the character.')); first = false; skip(ln); continue; }
       throw e;
     }
     ln.canon = canon;
@@ -357,6 +380,7 @@ function lit(n) {
   if (k.r === 'snum') return { k: 'num', v: snum(k) };
   if (k.r === 'string') return { k: 'str', v: str(k) };
   if (k.r === 'time') return { k: 'time', v: k.v };
+  if (k.r === 'datelit') return { k: 'date', v: k.v };
   if (k.r === 'dur') return { k: 'dur', v: durSec(k.v) };
   if (k.r === 'word') return { k: 'word', v: k.v };
   throw new Error('bad literal');
@@ -485,6 +509,7 @@ function primary(n) {
   if (k.r === 'number') return { k: 'num', v: +k.v };
   if (k.r === 'string') return { k: 'str', v: str(k) };
   if (k.r === 'time') return { k: 'time', v: k.v };
+  if (k.r === 'datelit') return { k: 'date', v: k.v };
   if (k.r === 'dur') return { k: 'dur', v: durSec(k.v) };
   if (k.r === 'path') return path(k);
   if (k.r === 'func') { const f = func(k); const parts = children(n, 'ident').map(id); return parts.length ? { k: 'member', e: f, parts } : f; } // last(t).name

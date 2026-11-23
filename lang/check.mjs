@@ -46,6 +46,9 @@ const isAny = t => !t || tname(t) === 'any';
 const AGG_NUM = ['count', 'streak', 'best', 'since', 'gap'];
 const PKIND_TYPE = { num: 'num', money: 'money', text: 'text', bool: 'bool', date: 'date', time: 'time', dur: 'dur', color: 'color', icon: 'text' };
 
+// a date written another way: "2026-11-30" in quotes, or 30/11/2026 (which reads as a division)
+const dateSlip = e => e && ((e.k === 'str' && /^\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}$/.test(e.v)) || (e.k === 'bin' && ['/', '-'].includes(e.op) && e.a.k === 'bin' && e.a.a.k === 'num'));
+
 export function check(src, opts = {}) {
   let prog, errors, defs = new Map();
   try {
@@ -249,7 +252,7 @@ class Checker {
       }
       case 'button':
         this.parts(s.parts); this.mods(s.mods);
-        if (!s.mods.some(m => m.m === 'tap')) this.err('E_ACTION', 'a button needs tap and an action.', 'add: tap add/set/toggle/...');
+        if (!s.mods.some(m => m.m === 'tap')) this.err('E_ACTION', 'a button needs tap and an action.', 'write button "Add" tap add drink ml = 250 (or tap set, toggle, remove, edit, go, notify).');
         return;
       case 'icon': {
         const e = s.icon;
@@ -303,7 +306,7 @@ class Checker {
     const fields = new Map();
     const was = new Set();
     for (const f of s.fields) {
-      if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, 'every row already has at (when it was added); remove this field or rename it.');
+      if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, `every row already has id (its number) and at (when it was added); remove ${f.name} or rename it, for example ${f.name === 'id' ? 'code' : 'when_done'}.`);
       if (fields.has(f.name)) this.err('E_DUP', `field "${f.name}" appears twice in ${s.name}.`, 'remove one or rename it.');
       if (f.was && was.has(f.was)) this.err('E_DUP', `two fields say they were ${f.was}; only one can take its values.`, 'keep one was.');
       else if (f.was && s.fields.some(g => g.name === f.was && !g.was)) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (and not renamed itself).`, `remove the field ${f.was} or the "was"; to swap two names, give both fields a was.`);
@@ -339,7 +342,7 @@ class Checker {
         const v = d.k === 'word' || d.k === 'str' ? d.v : null;
         if (v === null || !f.type.options.includes(v)) this.err('E_DEFAULT', `the default of ${f.name} must be one of its options (${f.type.options.join(', ')}).`, `write = ${f.type.options[0]}.`);
       } else {
-        const lt = { num: 'num', str: 'text', time: 'time', dur: 'dur', bool: 'bool', today: 'date', now: 'when', word: 'text' }[d.k];
+        const lt = { num: 'num', str: 'text', time: 'time', date: 'date', dur: 'dur', bool: 'bool', today: 'date', now: 'when', word: 'text' }[d.k];
         if (!this.compatible(t, lt)) this.err('E_DEFAULT', `the default of ${f.name} is ${show(lt)} but the field is ${show(t)}.`, 'make the default match the type.');
         if (d.k === 'num' && f.range && (d.v < f.range.lo || (f.range.hi !== null && d.v > f.range.hi))) this.err('E_RANGE', `the default ${d.v} is outside ${f.range.lo}..${f.range.hi ?? ''}.`, 'pick a default inside the range.');
       }
@@ -577,7 +580,7 @@ class Checker {
     if (tname(t) === 'rows') {
       if (t.field) return this.err('E_TYPE', 'toggle on a table marks a day; it takes the table, not a column.', `write toggle ${t.table}.`);
       this.query({ path: s.target, win: s.win, where: s.where });
-      if (s.win && ['all', 'last'].includes(s.win.k)) this.err('E_WINDOW', 'toggle marks one day; use today, yesterday, on DATE (or week/month for a once-a-period mark).', 'write toggle X today or toggle X on d.');
+      if (s.win && s.win.k === 'last') this.err('E_WINDOW', 'toggle marks one day; use today, yesterday, on DATE, week/month for a once-a-period mark, or all for a mark that does not depend on the day.', 'write toggle X today, toggle X on d or toggle X all.');
       if (s.where) this.whereEq(s.where, t.table);
       return;
     }
@@ -651,7 +654,7 @@ class Checker {
     const o = this.optionOf(e);
     if (tname(target) === 'pick' && o !== null && !target.options.includes(o)) { this.err('E_OPTION', `"${o}" is not an option of ${what} (${target.options.join(', ')}).`, 'use one of the options, spelled the same.'); return; }
     if (tname(target) === 'draft') { this.err('E_TARGET', 'a new row cannot be set directly.', 'use field d or save d.'); return; }
-    if (!this.compatible(target, val)) this.err('E_TYPE', `${what} is ${show(target)} but the value is ${show(val)}.`, 'give it a value of the same type.');
+    if (!this.compatible(target, val)) this.err('E_TYPE', `${what} is ${show(target)} but the value is ${show(val)}.`, family(target) === 'date' && dateSlip(e) ? 'write a date as year-month-day without quotes, for example 2026-11-30.' : 'give it a value of the same type.');
   }
 
   compatible(a, b) {
@@ -679,6 +682,7 @@ class Checker {
       case 'pi': return 'num';
       case 'str': case 'word': return 'text';
       case 'time': return 'time';
+      case 'date': { const [y, m, d] = e.v.split('-').map(Number); const ok = m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(y, m, 0)).getUTCDate(); return ok ? 'date' : this.err('E_TYPE', `${e.v} is not a real date.`, 'write year-month-day, for example 2026-11-30.'); }
       case 'dur': return 'dur';
       case 'bool': return 'bool';
       case 'today': return 'date';
@@ -732,7 +736,7 @@ class Checker {
     const a = this.expr(e.a), b = this.expr(e.b);
     if (isAny(a) || isAny(b)) return ['and', 'or', '=', '!=', '<', '>', '<=', '>='].includes(e.op) ? 'bool' : ANY;
     const na = tname(a), nb = tname(b);
-    const bad = () => this.err('E_TYPE', `cannot use ${e.op} between ${show(a)} and ${show(b)}.`, 'make both sides the same kind of value.');
+    const bad = () => this.err('E_TYPE', `cannot use ${e.op} between ${show(a)} and ${show(b)}.`, e.op === '+' && (tname(a) === 'text' || tname(b) === 'text') ? 'texts are joined by writing the parts side by side, without +: "Total:" amount "rupees" (or join(a, b) to join without a space).' : 'make both sides the same kind of value.');
     switch (e.op) {
       case 'and': case 'or':
         if (na !== 'bool' || nb !== 'bool') bad();

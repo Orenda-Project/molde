@@ -26,6 +26,7 @@ export function lex(line) {
       if (!m) throw new LexError('a text in quotes is not closed (or has a bad \\ escape)', i);
       push({ t: 'str', v: m[0] }); i += m[0].length; continue;
     }
+    if ((m = rest.match(/^[0-9]{4}-[0-1][0-9]-[0-3][0-9](?![0-9A-Za-z_])/))) { push({ t: 'date', v: m[0] }); i += m[0].length; continue; }
     if ((m = rest.match(/^[0-9][0-9]?:[0-5][0-9](?![0-9A-Za-z_])/))) { push({ t: 'time', v: m[0] }); i += m[0].length; continue; }
     if ((m = rest.match(/^[0-9]+[smhd](?![0-9A-Za-z_])/))) { push({ t: 'dur', v: m[0] }); i += m[0].length; continue; }
     if ((m = rest.match(/^[0-9]+(?:\.[0-9]+)?/))) { push({ t: 'num', v: m[0] }); i += m[0].length; continue; }

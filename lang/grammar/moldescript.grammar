@@ -34,7 +34,7 @@ type ::= "text" | "long" | "num" | "money" | "bool" | "date" | "time" | "when" |
 option ::= (word | string) (sp "was" sp word)?
 fmod ::= range-lit | "=" sp lit | string | "unit" sp string | "was" sp ident
 range-lit ::= snum ".." snum?
-lit ::= "yes" | "no" | "today" | "now" | snum | string | time | dur | word
+lit ::= "yes" | "no" | "today" | "now" | datelit | snum | string | time | dur | word
 
 # ---------- components and screens ----------
 def-stmt ::= "def" sp ident (sp param ("," sp param)*)?
@@ -127,7 +127,7 @@ add-op ::= "+" | "-"
 prod-expr ::= unary (sp mul-op sp unary)*
 mul-op ::= "*" | "/" | "%"
 unary ::= "-" unary | primary
-primary ::= "yes" | "no" | "today" | "now" | "index" | "pi" | color | func ("." ident)* | "(" expr ")" | number | string | time | dur | path | cword
+primary ::= "yes" | "no" | "today" | "now" | "index" | "pi" | color | func ("." ident)* | "(" expr ")" | datelit | number | string | time | dur | path | cword
 color ::= "accent" | "ink" | "muted" | "soft" | "good" | "warn" | "bad" | "bg" | "surface" | "edge"
   | "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey" | "black" | "white"
 path ::= ("it" | ident) ("." ident)*
@@ -155,4 +155,6 @@ number ::= [0-9]+ ("." [0-9]+)?
 snum ::= "-"? number
 string ::= "\"" ( [^"\\\x00-\x1F] | "\\" ["\\n] )* "\""
 time ::= [0-9] [0-9]? ":" [0-5] [0-9]
+# a date: 2026-11-30 (year, month, day)
+datelit ::= [0-9] [0-9] [0-9] [0-9] "-" [0-1] [0-9] "-" [0-3] [0-9]
 dur ::= [0-9]+ ("s" | "m" | "h" | "d")

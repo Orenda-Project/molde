@@ -257,6 +257,7 @@ class App {
       case 'str': case 'word': return l.v;
       case 'bool': return l.v;
       case 'time': return parseTime(l.v);
+      case 'date': return type && type.t === 'when' ? msOfLocal(l.v) : l.v;
       case 'dur': return l.v;
       case 'today': return type && type.t === 'when' ? this.clock : dateOf(this.clock);
       case 'now': return type && type.t === 'date' ? dateOf(this.clock) : this.clock;
@@ -782,7 +783,7 @@ class App {
 
   // which rows a table toggle matches; at of a new row: now if the day is today, else noon of that day
   toggleDay(win, env) {
-    if (!win || win.k === 'today') return this.today();
+    if (!win || win.k === 'today' || win.k === 'all') return this.today(); // all: a mark for good (a favourite); a new row is added now
     if (win.k === 'yesterday') return addDays(this.today(), -1);
     if (win.k === 'on') { const v = this.evalIn(win.e, env); return v instanceof DateV ? v.s : v instanceof When ? dateOf(v.ms) : this.today(); }
     const [a] = this.windowRange(win, env); return a;
@@ -1061,6 +1062,7 @@ class App {
       case 'pi': return Math.PI;
       case 'str': case 'word': return e.v;
       case 'time': return new TimeV(parseTime(e.v));
+      case 'date': return new DateV(e.v);
       case 'dur': return new Dur(e.v);
       case 'bool': return e.v;
       case 'today': return new DateV(this.today());

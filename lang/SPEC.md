@@ -219,7 +219,7 @@ A function's result can be followed by a field: `last(item).name`, `random(card)
 | `space [N]`, `divider` | empty space; a thin line |
 | `field TARGET ["Label"]` | an input for a setting, a state, a field of a new row (`d.note`) or a field of a row (`it.qty`). `field d` (a whole new row) shows one input per field |
 | `toggle TARGET` | a tick box for a yes/no setting, state or row field |
-| `toggle TABLE [window] [where field = value ...]` | a tick box that is on when the table has a row in the window (default today); tapping adds or removes that row. Inside `each`, `toggle it.check` links the new row to `it`. `where` values are copied into the new row |
+| `toggle TABLE [window] [where field = value ...]` | a tick box that is on when the table has a row in the window (default today); tapping adds or removes that row. With `all` the mark does not depend on the day (a favourite: `toggle it.fav all`); tapping it off removes every matching row. Inside `each`, `toggle it.check` links the new row to `it`. `where` values are copied into the new row |
 | `choice TARGET` | tap chips for a `pick`, `ref` or yes/no value |
 | `slider TARGET LO..HI` | a slider for a number |
 

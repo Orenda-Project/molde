@@ -32,3 +32,16 @@ test('spec features outside the examples check and are canonical', () => {
   assert.deepEqual(check(SPOT).errors.map(String), []);
   assert.equal(format(SPOT), SPOT);
 });
+
+test('toggle X all: a mark that does not depend on the day', async () => {
+  const { load } = await import('../eval.mjs');
+  const a = load('app "x"\ntable book title text\ntable fav book ref book\neach book\n  toggle it.fav all\n  it.title\n"favs" count(fav)\n', { now: '2026-11-23T10:00:00Z' });
+  a.addRow('book', { title: 'A' });
+  const t = () => a.find(n => n.t === 'toggle');
+  a.dispatch(t().id, 'tap');
+  a.tick(3 * 86400);
+  assert.equal(t().on, true);
+  a.dispatch(t().id, 'tap');
+  assert.equal(t().on, false);
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === 'favs 0'));
+});

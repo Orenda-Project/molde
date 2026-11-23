@@ -27,7 +27,7 @@ type ::= "text" | "long" | "num" | "money" | "bool" | "date" | "time" | "when" |
 option ::= (word | string) (sp "was" sp word)?
 fmod ::= range-lit | "=" sp lit | string | "unit" sp string | "was" sp ident
 range-lit ::= snum ".." snum?
-lit ::= "yes" | "no" | "today" | "now" | snum | string | time | dur | word
+lit ::= "yes" | "no" | "today" | "now" | datelit | snum | string | time | dur | word
 def-stmt ::= "def" sp ident (sp param ("," sp param)*)?
 param ::= ident sp (pkind | ident) (sp "=" sp arg)?
 pkind ::= "num" | "money" | "text" | "bool" | "date" | "time" | "dur" | "color" | "icon" | "table" | "name" | "src" | "win" | "act"
@@ -260,7 +260,7 @@ add-op ::= "+" | "-"
 prod-expr ::= unary (sp mul-op sp unary)*
 mul-op ::= "*" | "/" | "%"
 unary ::= "-" unary | primary
-primary ::= "yes" | "no" | "today" | "now" | "index" | "pi" | color | func ("." ident)* | "(" expr ")" | number | string | time | dur | path | cword
+primary ::= "yes" | "no" | "today" | "now" | "index" | "pi" | color | func ("." ident)* | "(" expr ")" | datelit | number | string | time | dur | path | cword
 color ::= "accent" | "ink" | "muted" | "soft" | "good" | "warn" | "bad" | "bg" | "surface" | "edge" | "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey" | "black" | "white"
 path ::= ("it" | ident) ("." ident)*
 func ::= agg query ")" | fold source "," sp expr ")" | "if(" expr "," sp expr "," sp expr ")" | "clamp(" expr "," sp expr "," sp expr ")" | fn1 expr ")" | fn2 expr "," sp expr ")" | ("min(" | "max(") expr "," sp expr ")" | "due(" query "," sp expr ")" | "nth(" query "," sp expr ")" | "random(" query ")" | "join(" tpart ("," sp tpart)* ")" | ident "(" expr ("," sp expr)* ")"
@@ -279,4 +279,5 @@ number ::= [0-9]+ ("." [0-9]+)?
 snum ::= "-"? number
 string ::= "\"" ( [^"\\\x00-\x1F] | "\\" ["\\n] )* "\""
 time ::= [0-9] [0-9]? ":" [0-5] [0-9]
+datelit ::= [0-9] [0-9] [0-9] [0-9] "-" [0-1] [0-9] "-" [0-3] [0-9]
 dur ::= [0-9]+ ("s" | "m" | "h" | "d")
