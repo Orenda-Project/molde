@@ -100,6 +100,7 @@ export function load(source, opts = {}) {
 class App {
   constructor(source, opts) {
     this.currency = opts.currency || '';
+    this.freezeTree = !!opts.freezeTree || !!globalThis.MOLDE_FREEZE_TREE; // tests freeze trees to prove nobody changes a reused one
     this.off = opts.tz === 'local' ? -new Date().getTimezoneOffset() : (typeof opts.tz === 'number' ? opts.tz : 0);
     OFF = this.off;
     // the host's clock: `now` when given; else (tests, a host without a clock) the time the data was saved; else a fixed day
@@ -278,7 +279,7 @@ class App {
   }
 
   // ----- data -----
-  snapshot() { return JSON.parse(JSON.stringify({ data: this.data, seq: this.seq, clock: this.clock, ever: this.ever, when: [...this.lastWhen].filter(([, v]) => v) })); } // when: conditions already true (they do not notify again after a reload)
+  snapshot() { return JSON.parse(JSON.stringify({ data: this.data, seq: this.seq, clock: this.clock, ever: this.ever, when: [...this.lastWhen].filter(([, v]) => v), every: [...this.everyAcc] })); } // when: conditions already true (they do not notify again after a reload)
   // Load a backup into this app. Its schema history is MERGED with the app's (never replaced by an
   // older one), so the next edit still knows every slot the program uses.
   // Load a backup. A backup is a whole app: by default it brings its own stored program, map and
@@ -309,6 +310,7 @@ class App {
     this.data = { tables: {}, settings: {}, state: {}, ...s.data };
     this.seq = Math.max(s.seq ?? 0, ...Object.values(this.data.tables).flat().map(r => r.id || 0), this.seq || 0);
     // the clock belongs to the host: a snapshot's clock only says when it was taken (see catchUp)
+    if (Array.isArray(s.every)) this._ea = new Map(s.every.filter(x => Array.isArray(x) && typeof x[0] === 'string' && isFinite(x[1]))); // how far each every is into its period
     if (Array.isArray(s.when)) this.lastWhen = new Map(s.when.filter(x => Array.isArray(x) && typeof x[0] === 'string').map(([k]) => [k, true]));
     if (!early) {
       if (bE) { // the backup's history, program and map come with it; slots are the identity
@@ -388,7 +390,7 @@ class App {
     if (this.journal && !this.journal.lens.has(arr)) this.journal.lens.set(arr, arr.length);
     arr.push(r); this.gen++;
   }
-  undo() { this.lastChange = null; this.undoGroup = null; const s = this.undoStack.pop(); if (!s) return false; undoJournal(this, s.journal); this.pending = (this.pending || []).filter(p => p.step !== s.journal.id); this.gen++; this.initData(); this.undoEdges(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
+  undo() { this.lastChange = null; this.undoGroup = null; const s = this.undoStack.pop(); if (!s) return false; undoJournal(this, s.journal); this.pending = (this.pending || []).filter(p => p.step !== s.journal.id); this.gen++; this.initData(); this.dropOrphanState(); this.undoEdges(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
   // saves made before the flag existed: derive it ONCE from the data (any row, any setting or literal
   // state off its default, or more than one version) and record it; from then on it is recorded
   deriveTouched() {
@@ -491,7 +493,7 @@ class App {
     this.lastChange = null; this.undoGroup = null;
     const tb = this.env.tables.get(table);
     if (!tb) return null;
-    const r = { id: this.seq + 1, at: atMs ?? this.clock, _rnd: Math.round(this.random() * 1e6) / 1e6 };
+    const r = { id: this.seq + 1, at: atMs ?? this.clock, _rnd: rowRandom(this.seq + 1, atMs ?? this.clock) };
     for (const [name, f] of tb.fields) {
       let v = values[name];
       if (v === undefined && f.dflt) v = this.wrap(this.litValue(f.dflt, f.type), f.type);
@@ -686,7 +688,7 @@ class App {
     const bk = this._bk;
     if (bk && bk.gen === this.gen && bk.prog === this.prog && bk.clock === this.clock && bk.screen === this.screen && bk.data === this.data) { this.H = bk.res.handlers; return bk.res; }
     const res = this.buildNow();
-    deepFreeze(res.tree); // a caller may hold a tree; nobody can change it, so the reused one stays right
+    if (this.freezeTree) deepFreeze(res.tree); // tests freeze it; a renderer must treat a tree as read-only (it is reused while nothing changed)
     this._bk = { gen: this.gen, prog: this.prog, clock: this.clock, screen: this.screen, data: this.data, res }; // after the render's own writes (new states)
     return res;
   }
@@ -793,18 +795,25 @@ class App {
       const key = `${nk}|${sn}`;
       if (key !== k) { const v = st[k]; this.del(st, k); if (!(key in st)) this.w(st, key, v); }
     }
-    // state of rows that no longer exist goes
+    const all2 = all;
+    // a component instance's own state saved by its inner name (|left_3, before round 11)
+    for (const n of all2) if (n.kind === 'use') for (const x of this.flatStatements({ body: n.children })) {
+      const outer = x.kind === 'state' && this.prog.renamedLocals && this.prog.renamedLocals.get(x.name);
+      if (outer && `|${x.name}` in st) { const key = `/u${n.sid}|${outer}`; if (!(key in st)) this.w(st, key, st[`|${x.name}`]); this.del(st, `|${x.name}`); }
+    }
+    this.dropOrphanState();
+  }
+  // state of rows that no longer exist goes (after a load, a restore, an Undo of an add)
+  dropOrphanState() {
+    const st = this.data.state || {}, eachById = new Map();
+    for (const n of this.flatStatements(this.prog)) if (n.kind === 'each') eachById.set(String(n.sid), n);
     for (const k of Object.keys(st)) {
       if (!k.startsWith('/')) continue;
       const m = /\/(\d+)@r(\d+)[^/]*$/.exec(k.slice(0, k.lastIndexOf('|')));
       const each = m && eachById.get(m[1]);
       if (each && each.source.k === 'query' && this.env.tables.has(each.source.q.path.head) && !this.rowById(this.tk(each.source.q.path.head), +m[2])) this.del(st, k);
     }
-    // a component instance's own state saved by its inner name (|left_3, before round 11)
-    for (const n of all) if (n.kind === 'use') for (const x of this.flatStatements({ body: n.children })) {
-      const outer = x.kind === 'state' && this.prog.renamedLocals && this.prog.renamedLocals.get(x.name);
-      if (outer && `|${x.name}` in st) { const key = `/u${n.sid}|${outer}`; if (!(key in st)) this.w(st, key, st[`|${x.name}`]); this.del(st, `|${x.name}`); }
-    }
+
   }
   // `state NEW ... was OLD` inside an each: the per-item values move to the new name (once: the
   // stored program has no was)
@@ -1188,8 +1197,8 @@ class App {
   run(actions, env, user) {
     let delay = 0;
     for (const a of actions) {
-      if (a.a === 'after') { delay += a.every; (this.pending ||= []).push({ due: this.clock + delay * 1000, act: a.act, env }); continue; }
-      if (delay > 0) (this.pending ||= []).push({ due: this.clock + delay * 1000, act: a, env });
+      if (a.a === 'after') { delay += a.every; (this.pending ||= []).push({ due: this.clock + delay * 1000, act: a.act, env, step: this.curStep }); continue; }
+      if (delay > 0) (this.pending ||= []).push({ due: this.clock + delay * 1000, act: a, env, step: this.curStep });
       else this.act(a, env);
     }
   }
@@ -1773,6 +1782,9 @@ export function undoJournal(app, j) {
 }
 export const isOptRef = v => v !== null && typeof v === 'object' && !Array.isArray(v) && typeof v.o === 'string' && Object.keys(v).length === 1;
 
+// a row's fixed random number (its place in a shuffle) comes from its id and time, so it is the same
+// whatever happened before (a reloaded app and the running one agree)
+const rowRandom = (id, at) => { let h = (id * 2654435761 ^ Math.floor(at / 1000) * 40503) >>> 0; h = Math.imul(h ^ h >>> 15, 2246822507) >>> 0; h = Math.imul(h ^ h >>> 13, 3266489909) >>> 0; return Math.round(((h ^ h >>> 16) >>> 0) / 4294967296 * 1e6) / 1e6; };
 // small seeded random, so tests are repeatable
 function mulberry(a) {
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
