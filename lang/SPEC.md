@@ -229,7 +229,7 @@ plot X0..X1, Y0..Y1 [axes] [gridlines]   # a chart frame in data units (y grows 
   tick X, PART ...                       # a label under the x axis at X (y labels come from the range)
 ```
 
-`axes` draws both axes with labels; `gridlines` draws lines at the y labels. The std `daybars`, `bars` and `trend` are plots.
+`axes` draws both axes with labels; `gridlines` draws lines at the y labels. Inside a plot, rows of a table come oldest first (time left to right) unless you sort them. The std `daybars`, `bars` and `trend` are plots.
 
 
 ```
@@ -323,7 +323,7 @@ Theme roles `accent ink muted soft good warn bad bg surface edge`; named colours
 | `go SCREEN` | opens a screen |
 | `notify PART ...` | shows a notice (and a phone notification if the app is closed) |
 | `remind "Text" in DURATION` | schedules one reminder |
-| `after DURATION ACTION` | does the action later, while the app is open (`tap set flash = yes then after 2s set flash = no`) |
+| `after DURATION ACTION` | does the action later, while the app is open (`tap set flash = yes then after 2s set flash = no`); in a chain each `after` counts from the previous step and the actions after it wait too |
 
 Values written to a field are kept inside its range (a stock count cannot go below `0..`).
 

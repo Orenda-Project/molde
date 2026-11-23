@@ -13,7 +13,7 @@ const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 // ---------- values ----------
-export class Money { constructor(v) { this.v = Math.round(v * 100) / 100; } }
+export class Money { constructor(v) { this.v = v; } } // full precision in formulas; rounded to cents when shown or stored
 export class DateV { constructor(s) { this.s = s; } }            // 'YYYY-MM-DD' (UTC)
 export class When { constructor(ms) { this.ms = ms; } }          // ms since epoch (UTC)
 export class TimeV { constructor(sec) { this.sec = ((sec % 86400) + 86400) % 86400; } } // seconds of the day
@@ -68,7 +68,7 @@ export function fmt(v, ev) {
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (typeof v === 'string') return ev && ev.env.options && ev.env.options.has(v) ? v.replace(/_/g, ' ') : v;
   if (v instanceof Money && ev && ev.currency) return ev.currency + ' ' + fmt(v, null);
-  if (v instanceof Money) return Number.isInteger(v.v) ? fmtNum(v.v) : (Math.abs(v.v) >= 10000 ? v.v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v.v.toFixed(2)); // cents show as 2 decimals
+  if (v instanceof Money) { const c = Math.round(v.v * 100) / 100; return Number.isInteger(c) ? fmtNum(c) : (Math.abs(c) >= 10000 ? c.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : c.toFixed(2)); } // rounded to cents only when shown
   if (v instanceof DateV) { const d = new Date(msOf(v.s)); const yr = ev && v.s.slice(0, 4) !== dateOf(ev.clock).slice(0, 4) ? ' ' + v.s.slice(0, 4) : ''; return `${WD[weekdayOf(v.s) - 1]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}${yr}`; }
   if (v instanceof When) { const d = new Date(shift(v.ms)); return `${fmt(new DateV(dateOf(v.ms)), ev)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
   if (v instanceof TimeV) return `${pad2(Math.floor(v.sec / 3600))}:${pad2(Math.floor(v.sec % 3600 / 60))}`;
@@ -508,7 +508,7 @@ class App {
         const node = { id, t: 'plot', x, y, axes: !!st.axes, gridlines: !!st.gridlines, style: st };
         delete st.axes; delete st.gridlines;
         this.events(s.mods, env, id, node);
-        const kids = this.render(s.children, this.child(env, { draw: { w: x[1] - x[0], h: y[1] - y[0], cx: (x[0] + x[1]) / 2, cy: (y[0] + y[1]) / 2 } }), id, cx);
+        const kids = this.render(s.children, this.child(env, { draw: { w: x[1] - x[0], h: y[1] - y[0], cx: (x[0] + x[1]) / 2, cy: (y[0] + y[1]) / 2 }, oldestFirst: true }), id, cx);
         const xt = kids.filter(k => k.t === 'tick').map(k => ({ v: k.x, label: k.text }));
         node.children = kids.filter(k => k.t !== 'tick');
         node.ticks = { x: xt.length ? xt : (node.axes ? niceTicks(x[0], x[1]).map(v => ({ v, label: fmt(v) })) : []), y: node.axes || node.gridlines ? niceTicks(y[0], y[1]).map(v => ({ v, label: fmt(v) })) : [] };
@@ -731,8 +731,15 @@ class App {
   }
 
   // ----- actions -----
+  // a chain runs in order; each `after` is measured from the previous step, and everything after it
+  // in the chain waits with it (tap A then after 2s B then C: B and C come 2s later)
   run(actions, env, user) {
-    for (const a of actions) this.act(a, env);
+    let delay = 0;
+    for (const a of actions) {
+      if (a.a === 'after') { delay += a.every; (this.pending ||= []).push({ due: this.clock + delay * 1000, act: a.act, env }); continue; }
+      if (delay > 0) (this.pending ||= []).push({ due: this.clock + delay * 1000, act: a, env });
+      else this.act(a, env);
+    }
   }
   act(a, env) {
     switch (a.a) {
@@ -819,6 +826,7 @@ class App {
     for (const part of p.parts) v = this.stepVal(v, part);
     return v;
   }
+  inPlot(env) { for (let e = env; e; e = e.parent) if (e.oldestFirst) return true; return false; }
   nearestIt(env) { for (let e = env; e; e = e.parent) if (e.it !== undefined && e.it !== null) return e.it; return null; }
   whereOf(env) { for (let e = env; e; e = e.parent) if (e.where) return e.where; return null; }
   fieldOf(row, f) {
@@ -939,8 +947,11 @@ class App {
       }
       case 'query': {
         const set = this.queryRows(s.q, env);
-        if (s.q.by) return this.groups(set, s.q.by).map(({ k, g }) => ({ key: k, v: g }));
-        return set.rows.map(r => ({ key: 'r' + r.id, v: new Row(set.table, r) }));
+        // inside a plot (and in folds used by one) rows go oldest first, so time runs left to right
+        let rows = set.rows;
+        if (!s.q.sort && !s.q.shuffle && this.inPlot(env)) rows = rows.slice().reverse();
+        if (s.q.by) { const gs = this.groups(new RowSet(set.table, rows), s.q.by); return gs.map(({ k, g }) => ({ key: k, v: g })); }
+        return rows.map(r => ({ key: 'r' + r.id, v: new Row(set.table, r) }));
       }
     }
     return [];

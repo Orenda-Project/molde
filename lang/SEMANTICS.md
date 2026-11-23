@@ -29,7 +29,7 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Values
 
-- **Money** is stored as a decimal number rounded to 2 places in the currency's main unit (rupees, not paisa). Arithmetic with numbers keeps it money; the currency sign is a display setting of the runtime.
+- **Money** is stored as a decimal number rounded to 2 places in the currency's main unit (rupees, not paisa). Inside formulas it keeps full precision (`1 / 3 * 3` is 1) and is rounded to cents only when shown or stored. Arithmetic with numbers keeps it money; the currency sign is a display setting of the runtime.
 - **Durations** are whole seconds; **times of day** are seconds after midnight (they wrap at 24:00); **dates** are calendar days; **date and time** values are moments.
 - **Empty**: an optional field nobody filled in, `last()`/`first()` of no rows, `min()`/`max()`/`avg()` of no values, `since()` of no rows and `gap()` with fewer than two days are empty. Empty plus, minus, times or divided by anything is empty. Every comparison with empty (`=`, `<`, `>=` ...) is no, and `!=` is yes only when exactly one side is empty. `sum()`, `sumof()`, `count()` skip empty values, so they are 0 for nothing.
 - **`since(T)` with no rows is empty, never 0**, so a never-watered plant does not look "just watered". `since(water) >= 3` is no for it; write `due(water, 3)` when never should count as overdue.
@@ -48,7 +48,7 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Rows, order and groups
 
-- A table query lists rows **newest first** (by `at`, then by id). `sort FORMULA` orders by the formula evaluated for each row (`it` is the row, and bare names are its fields), smallest first, empty values last; `desc` reverses. `top N` keeps the first N after sorting.
+- A table query lists rows **newest first** (by `at`, then by id), except **inside a `plot`, where rows go oldest first** so time runs left to right (the std `trend` and `bars` over a table read naturally). `sort FORMULA` orders by the formula evaluated for each row (`it` is the row, and bare names are its fields), smallest first; `desc` gives largest first. **Empty values always come last**, with or without `desc`. `top N` keeps the first N after sorting.
 - `by` groups rows in the order their first row appears; the group's `key` is the date (day, the Monday of the week, the 1st of the month), the field value, or the value at the end of a link path (`by dish.cuisine`).
 - A row shown as text lists its filled fields joined by ` · ` (a link shows the linked row's first field; a ticked `bool` shows its name; an untouched row shows when it was added).
 
@@ -71,7 +71,9 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Events
 
-- `every D [if c]` runs while the app is open, every D after the previous run, only while `c` is yes. The evaluator steps the clock by the shortest active period and jumps when nothing is active.
+- `every D [if c]` runs while the app is open, every D after the previous run, only while `c` is yes.
+- In an action chain, **each `after D` is measured from the previous step, and the actions after it wait with it**: `tap set s = 1 then after 2s set s = 2 then set s = 3 then after 2s set s = 4` sets 1 now, 2 and 3 two seconds later, 4 after four seconds.
+- `now` and everything computed from it are re-evaluated on every tick: a renderer calls `tree()` again after `tick()` and the clock-dependent texts repaint. The evaluator steps the clock by the shortest active period and jumps when nothing is active.
 - `when c` runs its actions once each time `c` changes from no to yes (checked after every event and every tick). A `when` cannot trigger itself more than 5 times in a row.
 - Hidden screens still run their `state`, `every` and `when` lines.
 - `remind` lines are listed by `app.reminders()` with their resolved times: `at T.f - 3d at 9:00` gives one moment per row (a date field without a time uses 9:00); `at T.f` on a time field is daily at that time; `monthly on 31` fires on the last day of shorter months.
