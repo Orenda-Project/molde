@@ -23,6 +23,9 @@ ap.add_argument("--data-dir", default="data/out", help="dataset folder under tra
 ap.add_argument("--final-parts", type=int, default=1, help="parts of final.tar (900 MB each): 1 for <=0.4B models in bf16, 2 for 0.8B")
 ap.add_argument("--eval-bs", type=int, default=8, help="1 for hybrid-attention models (Qwen3.5): batched left-padded generation breaks linear-attention layers")
 ap.add_argument("--save-f16", action="store_true")
+ap.add_argument("--epoch-range", default="", help="A:B  train epochs A..B in one-epoch chunks (pause_at_epoch), save bf16 weights to Drive after each; when B < total epochs the session ends with a full checkpoint save (--ckpt-parts) instead of final/eval/export")
+ap.add_argument("--total-epochs", type=int, default=0)
+ap.add_argument("--epoch-save", default="bf16", help="bf16 | none (per-epoch Drive save of the weights)")
 ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--gguf-parts", type=int, default=1, help="parts per f16 GGUF when it exceeds 900 MB")
 a = ap.parse_args()
 d = pathlib.Path(a.jobs); d.mkdir(parents=True, exist_ok=True)
@@ -79,7 +82,24 @@ def heart(logpath, pattern, maxsec, proc):
             print("hb", int(time.time() - t0), txt.strip().splitlines()[-1][:160] if txt.strip() else "(no output yet)", flush=True); last = time.time()
     return open(logpath).read() if os.path.exists(logpath) else ""
 '''
-if "train" in stages:
+EP_A, EP_B = (map(int, a.epoch_range.split(":")) if a.epoch_range else (0, 0))
+SESSION_END = bool(a.epoch_range) and a.total_epochs and EP_B < a.total_epochs
+if "train" in stages and a.epoch_range:
+    for e in range(EP_A, EP_B + 1):
+        cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets} pause_at_epoch={e} > {RUN}.train.log 2>&1 &"
+        (d / f"36{e:02d}_train.py").write_text(HEART + f'''
+os.makedirs("{RUN}", exist_ok=True)
+subprocess.Popen({cmd!r}, shell=True)
+log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
+print(log[-1200:])
+assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
+assert ("SFT_DONE" in log) or ("PAUSE" in log), "train did not finish in the job time"
+print("TRAIN_END", "SFT_DONE" in log)
+''')
+        if a.epoch_save == "bf16":
+            (d / f"36{e:02d}b_savewts.py").write_text(f'import subprocess, os\nsrc = "{RUN}/ckpt/model" if os.path.exists("{RUN}/ckpt/model/model.safetensors") else "{RUN}/final"\nr = subprocess.run("python3 {ROOT}/train/colab/save_bf16.py " + src + " {RUN}/ep{e}.bf16.safetensors; cp {RUN}/log.jsonl {RUN}/log.ep{e}.jsonl", shell=True, capture_output=True, text=True)\nprint(r.stdout[-300:], r.stderr[-500:])\nassert r.returncode == 0, "bf16 save failed"\n')
+            (d / f"36{e:02d}c_ep{e}.drivesave.json").write_text(json.dumps({f"{RUN}/ep{e}.bf16.safetensors": DR + "/epochs", f"{RUN}/log.ep{e}.jsonl": DR + "/epochs"}))
+elif "train" in stages:
     extra = " max_minutes=40" if a.train_chunks > 1 else ""
     cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets}{extra} > {RUN}.train.log 2>&1 &"
     for ci in range(a.train_chunks):
@@ -93,6 +113,10 @@ assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
 assert ("SFT_DONE" in log) or ("PAUSE" in log), "train did not finish in the job time"
 print("TRAIN_END", "SFT_DONE" in log)
 ''')
+if SESSION_END:
+    (d / "37_pack_ckpt.py").write_text(f'import subprocess\nfor c in ["python3 {ROOT}/train/colab/pack.py pack {RUN}/ckpt {RUN}/ckpt", "cp {RUN}.train.log {RUN}/train.stdout.log"]:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-200:], r.stderr[-300:])\n    assert r.returncode == 0, c\n')
+    (d / "37_save_ckpt.drivesave.json").write_text(json.dumps({f"{RUN}/log.jsonl": DR, f"{RUN}/ckpt.tar.SHA256SUMS": DR} | {f"{RUN}/ckpt.tar.part{i:02d}": DR for i in range(a.ckpt_parts)}))
+    print("SESSION_END jobs written (no eval/export)"); raise SystemExit(0)
 if "train" in stages:
     (d / "37_pack_model.py").write_text(f'import subprocess, os\nfor c in ["python3 {ROOT}/train/colab/pack.py pack {RUN}/final {RUN}/final", "cp {RUN}.train.log {RUN}/train.stdout.log"]:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-200:], r.stderr[-300:])\n    assert r.returncode == 0, c\n')
     (d / "37_save_model.drivesave.json").write_text(json.dumps({f"{RUN}/log.jsonl": DR, f"{RUN}/train.stdout.log": DR, f"{RUN}/final.tar.SHA256SUMS": DR} | {f"{RUN}/final.tar.part{i:02d}": DR for i in range(a.final_parts)}))

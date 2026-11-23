@@ -19,7 +19,7 @@ def avail_mb():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("gguf"); ap.add_argument("--data", default=str(HERE / "data/out")); ap.add_argument("--lang", default=str(HERE.parent / "lang"))
-    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--chat-kwargs", default="{}", help='JSON for the chat template, e.g. {"enable_thinking": false} for Qwen3.5'); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
+    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--decoder", default="grammar", help="grammar (llama-server GBNF, default) or cmd:<shell command>: the command reads one JSON object {system,user,max_tokens} on stdin and prints the program on stdout (hook for the line-stepped constrained decoder of branch phase-2-decode)"); ap.add_argument("--chat-kwargs", default="{}", help='JSON for the chat template, e.g. {"enable_thinking": false} for Qwen3.5'); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
     ap.add_argument("--full", action="store_true", help="run the whole test split (create + edit) and score it with score.mjs")
     ap.add_argument("--nogrammar", action="store_true", help="with --full: no grammar (raw model quality)")
     ap.add_argument("--metrics", help="with --full: write metrics JSON here")
@@ -67,15 +67,19 @@ def main():
             body["chat_template_kwargs"] = json.loads(a.chat_kwargs)
             if not a.nogrammar:
                 body["grammar"] = grammar
-            q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
             t_req = time.time()
-            d = json.load(urllib.request.urlopen(q, timeout=600))
+            if a.decoder.startswith("cmd:"):
+                o = subprocess.run(a.decoder[4:], shell=True, input=json.dumps({"system": system, "user": user, "max_tokens": a.n_predict, "gguf": a.gguf, "port": port}), capture_output=True, text=True, timeout=1200)
+                d = {"choices": [{"message": {"content": o.stdout}}], "timings": {}}
+            else:
+                q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
+                d = json.load(urllib.request.urlopen(q, timeout=1200))
             secs = time.time() - t_req
             text = d["choices"][0]["message"]["content"]
             tm = d.get("timings", {})
             p = pathlib.Path("/tmp") / f"molde-lt-{r['id']}.mo"; p.write_text(text)
             ck = subprocess.run(["node", str(pathlib.Path(a.lang) / "mo.mjs"), "check", str(p)], capture_output=True, text=True)
-            rows.append({"id": r["id"], "task": r["task"], "ref": r["ref"], "output": text, "request": r["request"], "program": text, "gen_tokens": tm.get("predicted_n"), "tok_s": tm.get("predicted_per_second"),
+            rows.append({"id": r["id"], "task": r["task"], "kind": r.get("kind", r["task"]), "ref": r["ref"], "output": text, "request": r["request"], "program": text, "gen_tokens": tm.get("predicted_n"), "tok_s": tm.get("predicted_per_second"),
                          "prompt_tok_s": tm.get("prompt_per_second"), "check_ok": ck.returncode == 0, "secs": round(secs, 2),
                          "err": next((l for l in (ck.stdout + ck.stderr).splitlines() if re.search(r"E_[A-Z_]+", l)), "")[:400], "user": user})
             print(f"--- {r['id']}: {r['request']}\n{text}\n[{tm.get('predicted_n')} tokens, {tm.get('predicted_per_second', 0):.1f} tok/s, checker {'OK' if ck.returncode == 0 else 'FAIL'}]")
@@ -113,7 +117,13 @@ def main():
             for x in sd:
                 x["exact"] = canon(x["output"]) == canon(x["ref"])
             mean = lambda k, f=float: round(sum(f(x[k]) for x in sd) / len(sd), 3)
-            m = {"file": os.path.basename(a.gguf), "grammar": not a.nogrammar, "n": len(sd), "checker_pass_raw": mean("pass_raw"), "checker_pass_formatted": mean("pass_fmt"),
+            kinds = {}
+            for x, row in zip(sd, rows):
+                kd = kinds.setdefault(row["kind"], {"n": 0, "pass": 0, "intent": 0.0, "asked": 0, "exact": 0})
+                kd["n"] += 1; kd["pass"] += int(x["pass_raw"]); kd["intent"] += (x.get("score") or 0); kd["exact"] += int(x["exact"])
+                kd["asked"] += int(row["output"].lstrip().startswith("ask "))
+            by_kind = {k: {"n": v["n"], "checker_pass": round(v["pass"] / v["n"], 3), "intent_score": round(v["intent"] / v["n"], 3), "exact": round(v["exact"] / v["n"], 3), "output_is_ask": round(v["asked"] / v["n"], 3)} for k, v in kinds.items()}
+            m = {"by_kind": by_kind, "load_avg": os.getloadavg()[0], "file": os.path.basename(a.gguf), "grammar": not a.nogrammar, "n": len(sd), "checker_pass_raw": mean("pass_raw"), "checker_pass_formatted": mean("pass_fmt"),
                  "exact_match": mean("exact"), "intent_score": mean("score", lambda v: v or 0), "intent_auto": mean("intent_auto"),
                  "median_gen_tokens": statistics.median(x["gen_tokens"] for x in rows if x["gen_tokens"]), "mean_tok_s": summary["mean_tok_s"],
                  "checker_pass_after_repair": round(sum(x["repaired_ok"] for x in rows) / len(rows), 3), "median_secs_per_app": round(statistics.median(x["secs"] for x in rows), 1),

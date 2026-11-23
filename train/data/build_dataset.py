@@ -34,7 +34,9 @@ def node(lang, *args, inp=None):
 
 
 def normalise(lang, progs, migrate):
-    """progs: dict key->text. returns dict key->canonical text or None (with reasons)."""
+    """progs: dict key->text. returns (dict key->canonical text, dict key->error).
+    With migrate: `mo.mjs migrate --write` (migrate + canonical format) then a batched `check` (fast: one process per 150 files).
+    Without: per-file check + format."""
     out, bad = {}, {}
     with tempfile.TemporaryDirectory() as td:
         paths = {}
@@ -42,8 +44,26 @@ def normalise(lang, progs, migrate):
             p = pathlib.Path(td) / f"{i:06d}.mo"
             p.write_text(t if t.endswith("\n") else t + "\n")
             paths[k] = p
+        items = list(paths.items())
         if migrate:
-            node(lang, "migrate", *map(str, paths.values()), "--write")
+            from concurrent.futures import ThreadPoolExecutor
+            batches = [items[i:i + 150] for i in range(0, len(items), 150)]
+            def run(b):
+                node(lang, "migrate", *[str(p) for _, p in b], "--write")
+                c = node(lang, "check", *[str(p) for _, p in b])
+                res, cur = {}, None
+                for line in c.stdout.splitlines():
+                    if line.startswith("OK "): res[line[3:].strip()] = None; cur = None
+                    elif line.startswith("ERRORS "): cur = line[7:].strip(); res[cur] = ""
+                    elif cur is not None: res[cur] += line.strip() + " "
+                return b, res
+            with ThreadPoolExecutor(6) as ex:
+                for b, res in ex.map(run, batches):
+                    for k, p in b:
+                        if str(p) not in res: bad[k] = "no check result"
+                        elif res[str(p)]: bad[k] = res[str(p)][:300]
+                        else: out[k] = p.read_text()
+            return out, bad
         def one(kp):
             k, p = kp
             c = node(lang, "check", str(p))
@@ -55,13 +75,13 @@ def normalise(lang, progs, migrate):
             return k, (f.stdout if f.stdout.endswith("\n") else f.stdout + "\n"), None
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(8) as ex:
-            for k, text, err in ex.map(one, paths.items()):
+            for k, text, err in ex.map(one, items):
                 if err: bad[k] = err
                 else: out[k] = text
     return out, bad
 
 
-def collect(lang, requests_path, root):
+def collect(lang, requests_path, root, skip=()):
     rows = []
     reqs = {}
     if requests_path and os.path.exists(requests_path):
@@ -80,7 +100,7 @@ def collect(lang, requests_path, root):
         if d.is_dir():
             rows.append(dict(id="ed-" + d.name, src="edits", task="edit", request=(d / "request.txt").read_text().strip(),
                              before=(d / "before.mo").read_text(), program=(d / "after.mo").read_text(), meta={}))
-    for p in ([] if NO_SOURCES else sorted((root / "data/sources").glob("*.jsonl"))):
+    for p in ([] if NO_SOURCES else [q for q in sorted((root / "data/sources").glob("*.jsonl")) if q.name not in skip]):
         for n, l in enumerate(open(p)):
             if l.strip():
                 r = json.loads(l)
@@ -107,12 +127,14 @@ def main():
     ap.add_argument("--requests", default="/tmp/molde-requests-en-1/requests.jsonl")
     ap.add_argument("--out", default=None)
     ap.add_argument("--migrate", action="store_true")
+    ap.add_argument("--heldout2", default=None, help="second test set (JSONL: id, task, request, before, program, meta.kind) written as test2_refs.jsonl")
+    ap.add_argument("--exclude-sources", nargs="*", default=[], help="source file names to skip (e.g. an older data version)")
     ap.add_argument("--no-sources", action="store_true", help="only corpus, examples and edits (the small committed base set)")
     a = ap.parse_args()
     global NO_SOURCES; NO_SOURCES = a.no_sources
     root = pathlib.Path(__file__).resolve().parent.parent
     out = pathlib.Path(a.out or root / "data/out"); out.mkdir(parents=True, exist_ok=True)
-    rows = collect(a.lang, a.requests, root)
+    rows = collect(a.lang, a.requests, root, set(a.exclude_sources))
     progs = {}
     for r in rows:
         progs[(r["id"], "p")] = r["program"]
@@ -161,6 +183,18 @@ def main():
     with open(out / "templ_refs.jsonl", "w") as f:
         for r in sorted([r for r in split["val"] if r["src"].startswith("sources/")], key=lambda r: r["id"])[:60]:
             f.write(json.dumps({"id": r["id"], "task": r["task"], "request": r["request"], "before": r.get("before"), "ref": r["program"]}, ensure_ascii=False) + "\n")
+    if a.heldout2:
+        h2 = [json.loads(l) for l in open(a.heldout2) if l.strip()]
+        progs2 = {}
+        for r in h2:
+            progs2[r["id"] + "|p"] = r["program"]
+            if r["task"] == "edit": progs2[r["id"] + "|b"] = r["before"]
+        g2, b2 = normalise(a.lang, progs2, True)
+        with open(out / "test2_refs.jsonl", "w") as f:
+            for r in h2:
+                if r["id"] + "|p" not in g2 or (r["task"] == "edit" and r["id"] + "|b" not in g2):
+                    dropped.append({"id": r["id"], "why": "heldout2: " + str(b2.get(r["id"] + "|p") or b2.get(r["id"] + "|b"))}); continue
+                f.write(json.dumps({"id": r["id"], "task": r["task"], "kind": r["meta"].get("kind", r["task"]), "request": r["request"], "before": g2.get(r["id"] + "|b"), "ref": g2[r["id"] + "|p"]}, ensure_ascii=False) + "\n")
     commit = subprocess.run(["git", "-C", a.lang, "log", "-1", "--format=%h", "--", "."], capture_output=True, text=True).stdout.strip()
     cnt = lambda rs, k: sum(1 for r in rs if r[k[0]] == k[1])
     by_src = {}

@@ -46,7 +46,7 @@ def main():
     ap.add_argument("--model", required=True); ap.add_argument("--data", default="data/out")
     ap.add_argument("--out", default=None); ap.add_argument("--lang", default=str(HERE.parent / "lang"))
     ap.add_argument("--max_new", type=int, default=768); ap.add_argument("--bs", type=int, default=8)
-    ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--chat_kwargs", default="{}"); ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--decoder", default="grammar", help="HF eval has no grammar; kept for symmetry with local_load_test.py"); ap.add_argument("--chat_kwargs", default="{}"); ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()
     from transformers import AutoModelForCausalLM, AutoTokenizer
     out = pathlib.Path(a.out or pathlib.Path(a.model).parent / "eval"); out.mkdir(parents=True, exist_ok=True)
@@ -111,7 +111,12 @@ def main():
     def by(task, key, fn=lambda v: v):
         v = [fn(x[key]) for x in scored if task in (None, x["task"])]
         return round(sum(v) / len(v), 3) if v else None
-    m = {"model": a.model, "n": n, "n_create": sum(x["task"] == "create" for x in scored), "n_edit": sum(x["task"] == "edit" for x in scored),
+    kinds = {}
+    for x, r in zip(scored, refs):
+        kd = kinds.setdefault(r.get("kind", r["task"]), {"n": 0, "pass": 0, "intent": 0.0, "asked": 0, "exact": 0})
+        kd["n"] += 1; kd["pass"] += int(x["pass_raw"]); kd["intent"] += (x.get("score") or 0); kd["exact"] += int(x["exact"]); kd["asked"] += int(x["output"].lstrip().startswith("ask "))
+    by_kind = {k: {"n": v["n"], "checker_pass": round(v["pass"] / v["n"], 3), "intent_score": round(v["intent"] / v["n"], 3), "exact": round(v["exact"] / v["n"], 3), "output_is_ask": round(v["asked"] / v["n"], 3)} for k, v in kinds.items()}
+    m = {"by_kind": by_kind, "model": a.model, "n": n, "n_create": sum(x["task"] == "create" for x in scored), "n_edit": sum(x["task"] == "edit" for x in scored),
          "checker_pass_raw": by(None, "pass_raw", float), "checker_pass_formatted": by(None, "pass_fmt", float), "checker_pass_after_repair": by(None, "pass_after_repair", float),
          "exact_match": by(None, "exact", float), "intent_score": by(None, "score"), "intent_auto": by(None, "intent_auto", float),
          "by_task": {t: {"checker_pass_raw": by(t, "pass_raw", float), "exact": by(t, "exact", float), "intent_score": by(t, "score")} for t in ("create", "edit")},

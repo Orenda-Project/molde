@@ -26,7 +26,7 @@ from common import encode_example, read_jsonl  # noqa: E402
 DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False, token_mode="full",
                 epochs=3, max_steps=0, lr=5e-5, min_lr_ratio=0.1, warmup_steps=10, weight_decay=0.0, batch_size=8,
                 grad_accum=1, max_len=1536, precision="auto", grad_checkpointing=False, eval_every=20, save_every=50,
-                max_minutes=0, seed=1234, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
+                max_minutes=0, seed=1234, pause_at_epoch=0, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
 
 
 def load_cfg(argv):
@@ -218,6 +218,8 @@ def main():
                     best["epoch_bad"] += 1
                     if best["epoch_bad"] >= cfg["es_patience"]:
                         log(event="early_stop", step=step); step_stop = True; break
+            if cfg["pause_at_epoch"] and step % spe == 0 and step // spe >= cfg["pause_at_epoch"] and step < total:
+                save_ckpt(); (out / "PAUSED").write_text(str(step)); log(event="PAUSE", step=step, epoch=step // spe); return
             if step % cfg["save_every"] == 0 and step < total:
                 save_ckpt()
             if step >= total: break
