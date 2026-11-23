@@ -42,22 +42,41 @@ export function splitLines(src) {
   return { lines: out, errors };
 }
 
+const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
+const WINDOW_RE = /\b(today|yesterday|week|month|year|prev \w+|last \d+ \w+|on \w+)\)?$/;
+
 function syntaxError(no, text, r) {
   const col = r.far;
   const near = text.slice(col).split(' ')[0] || '(end of line)';
-  const decl = text.match(/^(?:table|setting|state|def|screen) ([a-z]+)\b/) || text.match(/^table [a-z][a-z0-9_]*(?: "[^"]*")? (?:.*, )?([a-z]+) /);
-  if (decl && RESERVED.has(decl[1])) {
-    return new MoError('E_RESERVED', no, `"${decl[1]}" is a keyword and cannot be used as a name.`, `pick another name, for example "${decl[1]}s" or "my_${decl[1]}".`);
-  }
-  const callKw = /^[a-z][a-z0-9_]* /.test(text) && !KEYWORDS.has(text.split(' ')[0]) && text.split(' ')[0] !== 'text'
-    ? text.slice(text.indexOf(' ') + 1).split(', ').find(a => RESERVED.has(a)) : null;
-  if (callKw) return new MoError('E_RESERVED', no, `"${callKw}" is a keyword and cannot be used as a name.`, `rename the table or field "${callKw}", for example "${callKw}s".`);
+  const E = (msg, hint, code = 'E_SYNTAX') => new MoError(code, no, msg, hint);
+  const decl = text.match(/^(?:table|setting|state|def|screen|let) ([a-z]+)\b/) || text.match(/^table [a-z][a-z0-9_]*(?: "[^"]*")? (?:.*, )?([a-z]+) /);
+  if (decl && RESERVED.has(decl[1])) return E(`"${decl[1]}" is one of the 12 reserved words (${[...RESERVED].join(', ')}) and cannot be a name.`, `use another word, for example "${decl[1]}_value".`, 'E_RESERVED');
   const word = text.slice(col).match(/^[a-z]+/)?.[0];
-  if (word && RESERVED.has(word)) {
-    return new MoError('E_RESERVED', no, `"${word}" is a keyword and cannot be used as a name here.`, `pick another name, for example "${word}s" or "my_${word}".`);
+  if (word && RESERVED.has(word) && /^(table|setting|state|let|def|screen|each .* as)\b/.test(text)) return E(`"${word}" is one of the 12 reserved words and cannot be a name.`, `use another word, for example "${word}_value".`, 'E_RESERVED');
+  // the third word of app must be a theme
+  const app = text.match(/^app "(?:[^"\\]|\\.)*" ([a-z][a-z0-9_]*) ([a-z]+)$/);
+  if (app && !THEMES.includes(app[2])) return E(`"${app[2]}" is not a theme.`, `the third word of app is a theme: ${THEMES.join(', ')} (colours like ${app[2]} go on lines, for example fill ${app[2]}).`);
+  // ? goes right after the type
+  if (/\b(num|money|text|long|date|time|when|dur|bool|image)\b[^,]*?(\.\.\??|\d|") ?\?/.test(text) || /\.\.\?/.test(text)) return E('the optional mark ? is in the wrong place.', 'put ? right after the type, for example: seat num? 1..10.');
+  // a window after where
+  const inside = text.match(/\b(count|sum|avg|min|max|last|first|streak|best|since|gap)\(([^()]*)\)/g) || [];
+  for (const call of inside) {
+    const body = call.slice(call.indexOf('(') + 1, -1);
+    const w = body.indexOf(' where ');
+    if (w >= 0 && WINDOW_RE.test(body.slice(w))) return E('the time window comes after where.', 'put the window first, then where: sum(t.amount last 30 days where kind = Food).');
   }
+  if (/ where .* (today|yesterday|this week|last \d+ \w+)$/.test(text) && /^each /.test(text)) return E('the time window comes after where.', 'put the window first: each t last 7 days where ....');
+  // text parts inside if()
+  if (/\bif\([^()]*"[^"]*" [^,)]/.test(text) || /\bif\([^()]*[a-z0-9)] "[^"]*"/.test(text)) return E('if() gives one value, so it cannot join words and numbers inside its brackets.', 'write the parts outside: "Left" if(x > 0, x, 0) "days", or use if/else lines.');
+  // a field without a type
+  if (/^table /.test(text)) {
+    const fields = text.replace(/^table [a-z][a-z0-9_]*( was [a-z][a-z0-9_]*)?( "[^"]*")? ?/, '').split(', ');
+    const bad = fields.find(f => f && /^[a-z][a-z0-9_]*$/.test(f.trim()));
+    if (bad) return E(`field "${bad.trim()}" has no type.`, `${fields[0] === bad ? 'the first word after table is the table name, then fields. ' : ''}every field is NAME TYPE, for example "${bad.trim()} text" or "${bad.trim()} date"; types: text long num money bool date time when dur image pick ref.`);
+  }
+  if (/^(min|max)\(/.test(text.slice(col)) || /\b(min|max)\([^()]*,/.test(text)) return E('min() and max() take one table column (min(t.price)) or two numbers (min(a, b)).', 'check the brackets and the comma.');
   const exp = r.expected.filter(x => x !== 'a character').slice(0, 6).join(', ');
-  return new MoError('E_SYNTAX', no, `cannot read the line from "${near}" (column ${col + 1}).`, exp ? `expected ${exp}.` : 'check the statement form in SPEC.md.');
+  return E(`cannot read the line from "${near}" (column ${col + 1}).`, exp ? `expected ${exp}.` : 'check the statement form in SPEC.md.');
 }
 
 export function parse(src, { lib = false } = {}) {
@@ -369,6 +388,7 @@ function expr(n) {
       if (k.lit === '-') return { k: 'neg', a: expr(child(n, 'unary')) };
       if (k.lit === '(') return { k: 'paren', a: expr(child(n, 'expr')) };
       if (k.r === 'number') return { k: 'num', v: +k.v };
+      if (k.r === 'ident' || k.lit === 'it') { const ids = children(n, 'ident').map(id); return k.lit === 'it' ? { k: 'path', head: 'it', parts: ids } : { k: 'path', head: ids[0], parts: ids.slice(1) }; }
       return func(k);
     }
   }

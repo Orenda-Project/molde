@@ -52,7 +52,8 @@ function eq(a, b) {
 }
 
 // ---------- formatting (what a text part shows) ----------
-const fmtNum = n => (Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+// thousands separators from 10,000 up, so years and small amounts read naturally (2026, 2000 ml, 80,000)
+const fmtNum = n => { const r = Math.round(n * 100) / 100; return Math.abs(r) >= 10000 ? r.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(r); };
 export function fmt(v, ev) {
   if (v === null || v === undefined || (typeof v === 'number' && !isFinite(v))) return '–';
   if (typeof v === 'number') return fmtNum(v);
@@ -901,7 +902,7 @@ class App {
   }
 
   fn(e, env, inAction) {
-    if (e.fn === 'words') return words(e.args[0]).replace(/[()]/g, '');
+    if (e.fn === 'words') return words(e.args[0]).replace(/^the /, '');
     const A = e.args.map(a => this.ev(a, env, inAction));
     const d = v => v instanceof DateV ? v.s : v instanceof When ? dateOf(v.ms) : null;
     switch (e.fn) {

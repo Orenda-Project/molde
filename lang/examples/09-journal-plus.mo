@@ -1,7 +1,7 @@
 app "Journal" book plum
 table entry mood num 1..5, note long
 state d new entry
-text "How are you feeling?" head
+"How are you feeling?" head
 row gap 1
   each ["Awful", "Low", "Okay", "Good", "Great"]
     stack grow align center tap set d.mood = index + 1
@@ -17,11 +17,11 @@ row gap 2
 row gap 1
   each days last 14 days
     box grow height 10 radius 5 fill if(count(entry on it) > 0, accent, soft)
-text "Mood this week" round(avg(entry.mood week)) "vs" round(avg(entry.mood prev week)) "last week" faint
+"Mood this week" round(avg(entry.mood week)) "vs" round(avg(entry.mood prev week)) "last week" faint
 trend entry last 30 days sort at, it.mood
 state q text = ""
 field q "Search entries"
 if q != "" and count(entry where has(note, q)) = 0
-  text "Nothing found. Try a shorter word." faint
+  "Nothing found. Try a shorter word." faint
 log entry where has(note, q)
-text "Saved on this device only." faint
+"Saved on this device only." faint

@@ -107,7 +107,7 @@ test('08 budget plus: pace line has a point per day of the month', () => {
   fill(a, { amount: 3000 }); btn(a, 'Add expense');
   const poly = node(a, n => n.t === 'poly');
   assert.equal(poly.points.length, 30);
-  has(a, /^3,000$/);
+  has(a, /^3000$/);
 });
 
 test('09 journal plus: days written strip and streak text', () => {
@@ -230,7 +230,7 @@ test('23 quran: juz grid fills', () => {
 
 test('24 savings: quick deposit raises the thermometer', () => {
   const a = L('24-savings-thermometer');
-  btn(a, '5,000');
+  btn(a, '5000');
   has(a, /^5% of 100,000$/);
 });
 
@@ -269,11 +269,11 @@ test('29 zakat and tip: calculators', () => {
   const ins = a.findAll(n => n.t === 'input');
   a.dispatch(ins.find(n => n.label === 'Cash and bank').id, 'change', 200000);
   a.dispatch(ins.find(n => n.label === 'Silver price per gram').id, 'change', 100);
-  has(a, /^5,000$/); // 2.5% of 200,000 (above nisab 61,236)
+  has(a, /^5000$/); // 2.5% of 200,000 (above nisab 61,236)
   assert.deepEqual(a.tree().screens.map(s => s.name), ['zakat', 'split']);
   assert.ok(a.dispatch('tab:split', 'tap'));
   a.dispatch(node(a, n => n.t === 'input' && n.label === 'Bill').id, 'change', 1000);
-  has(a, /^Each pays 1,100$/);
+  has(a, /^Each pays 1100$/);
 });
 
 test('30 attendance: tap marks absent for the chosen day', () => {

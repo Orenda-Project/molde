@@ -10,8 +10,8 @@ row gap 3
     circle 20, 106, 12 fill accent
   stack grow
     text total big
-    text round(p * 100) "% of" goal faint tap edit goal
-    text "This month" sum(deposit.amount month) faint
+    round(p * 100) "% of" goal faint tap edit goal
+    "This month" sum(deposit.amount month) faint
 quick deposit, amount, [500, 1000, 5000]
 form deposit
 log deposit

@@ -136,8 +136,10 @@ class Checker {
       case 'state': {
         let t;
         if (s.draft) {
-          if (!this.tb(s.draft)) { if (this.followOn(s.draft)) return; return this.err('E_UNKNOWN_TABLE', `there is no table "${s.draft}" (tables must be declared above).`, `add "table ${s.draft} ..." above this line.`); }
-          t = { t: 'draft', table: s.draft };
+          if (!this.tb(s.draft)) {
+            if (!this.followOn(s.draft)) this.err('E_UNKNOWN_TABLE', `there is no table "${s.draft}" (tables must be declared above).`, `add "table ${s.draft} ..." above this line.`);
+            t = ANY; // keep the name so its uses do not cascade
+          } else t = { t: 'draft', table: s.draft };
         } else t = this.fieldType(s.type);
         if (s.init && tname(t) === 'pick' && s.init.k === 'path' && !s.init.parts.length && t.options.includes(s.init.head)) s.init = { k: 'word', v: s.init.head };
         if (s.init) { const it = this.expr(s.init); this.assignable(t, it, `the start value of ${s.name}`, s.init); }
@@ -279,6 +281,8 @@ class Checker {
       if (f.was && (fields.has(f.was) || s.fields.some(g => g.name === f.was) || was.has(f.was))) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (or renamed twice).`, `keep only one of them.`);
       if (f.was) was.add(f.was);
       if (f.type.t === 'ref' && !this.tables.has(f.type.table) && f.type.table !== s.name) {
+        this.failed.set(`${s.name}.${f.name}`, this.failed.get(f.type.table) || this.line);
+        this.reportedFailed.add(`${s.name}.${f.name}`);
         if (!this.followOn(f.type.table)) this.err('E_REF', `field ${f.name} links to table "${f.type.table}", which is not declared above.`, `declare table ${f.type.table} on an earlier line.`);
         continue; // a broken link is left out so later lines do not trip on it
       }
@@ -340,6 +344,7 @@ class Checker {
     let t;
     if (p.head === 'it') {
       t = this.curIt();
+      if (!t && this.failed.has('it')) { this.followOn('it'); return ANY; }
       if (!t) return this.err('E_CONTEXT', '"it" only exists inside each (and inside folds such as maxof).', this.itHint());
     } else {
       const wt = this.whereTable && this.tb(this.whereTable);
@@ -372,10 +377,11 @@ class Checker {
 
   step(t, part, p) {
     const n = tname(t);
-    const itNote = p && p.head === 'it' ? ' ' + this.itHint() : '';
+    const itNote = p && p.head === 'it' && (this.via || this.asNames().length) ? ' ' + this.itHint() : '';
     if (n === 'row' || n === 'ref' || n === 'draft') {
       const tb = this.tb(t.table);
       if (!tb) return ANY;
+      if (this.failed.has(`${t.table}.${part}`)) return ANY; // that field's line failed; already reported
       if (tb.fields.has(part) || part === 'at' || part === 'id') return this.rowField(t.table, part);
       if (n !== 'draft') {
         const back = this.tb(part);
@@ -405,7 +411,7 @@ class Checker {
       if (tb && (tb.fields.has(part) || part === 'at')) return { t: 'rows', table: t.table, field: part, ftype: this.rowField(t.table, part) };
       return this.err('E_UNKNOWN_FIELD', `a group has .key and the columns of ${t.table}; "${part}" is neither.`, 'use g.key, count(g) or sum(g.field).');
     }
-    return this.err('E_TYPE', `${show(t)} has no part "${part}".`, 'remove the .' + part + '.');
+    return this.err('E_TYPE', `${show(t)} has no part "${part}"${p && p.head === 'it' ? ' (here "it" is ' + show(t) + ')' : ''}.`, itNote.trim() || 'remove the .' + part + '.');
   }
 
   // ---------- queries, windows, sources ----------
@@ -531,6 +537,7 @@ class Checker {
         if (!tb) { if (this.followOn(a.table)) return; return this.err('E_UNKNOWN_TABLE', `there is no table "${a.table}" declared above.`, `declare table ${a.table} first.`); }
         const set = new Set();
         for (const s of a.assigns) {
+          if (!tb.fields.has(s.name) && s.name !== 'at' && this.failed.has(`${a.table}.${s.name}`)) continue;
           if (!tb.fields.has(s.name) && s.name !== 'at') { this.err('E_UNKNOWN_FIELD', `${a.table} has no field "${s.name}".`, `fields of ${a.table}: ${[...tb.fields.keys()].join(', ')}.`); continue; }
           set.add(s.name);
           this.assignable(this.rowField(a.table, s.name), this.expr(s.e), `${a.table}.${s.name}`, s.e);
@@ -561,7 +568,7 @@ class Checker {
         return;
       }
       case 'remove': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `remove needs a row (like it), got ${show(t)}.`, 'write remove it inside each, or remove all TABLE where ....'); return; }
-      case 'save': { const t = this.lookup(a.name); if (!t || tname(t) !== 'draft') { if (this.followOn(a.name)) return; this.err('E_TARGET', `save needs a state made with "state ${a.name} new TABLE".`, `add: state ${a.name} new TABLE.`); } return; }
+      case 'save': { const t = this.lookup(a.name); if (isAny(t) && t) return; if (!t || tname(t) !== 'draft') { if (this.followOn(a.name)) return; this.err('E_TARGET', `save needs a state made with "state ${a.name} new TABLE".`, `add: state ${a.name} new TABLE.`); } return; }
       case 'go': if (!this.screens.has(a.name)) this.err('E_UNKNOWN_NAME', `there is no screen "${a.name}" declared above.`, 'declare the screen first, or remove go (screens already get tabs).'); return;
       case 'notify': return this.parts(a.parts);
       case 'remind': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'dur') this.err('E_TYPE', 'remind ... in needs a duration like 10m.', 'write remind "Text" in 10m.'); return; }

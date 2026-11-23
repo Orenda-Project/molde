@@ -6,12 +6,12 @@ text score "of" count(answer) "right" big
 each item as x
   if count(x.answer) = 0
     stack card gap 1
-      text x.question head
-      button x.a tap add answer item = x, chose = "A"
-      button x.b tap add answer item = x, chose = "B"
-      button x.c tap add answer item = x, chose = "C"
+      x.question head
+      button x.a tap add answer item = x, chose = A
+      button x.b tap add answer item = x, chose = B
+      button x.c tap add answer item = x, chose = C
 each answer as r
   row
-    text r.item.question grow
-    text if(r.chose = r.item.right, "Right", "Wrong") color if(r.chose = r.item.right, good, bad)
+    r.item.question grow
+    if(r.chose = r.item.right, "Right", "Wrong") color if(r.chose = r.item.right, good, bad)
 form item, "Add question"

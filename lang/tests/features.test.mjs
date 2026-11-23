@@ -12,18 +12,18 @@ table water plant ref plant
 state view pick Grid|List = Grid
 remind "Water the plants" every 2h from 9:00 to 21:00 if countof(plant, since(it.water) >= it.every_days) > 0
 choice view
-if view = "Grid"
+if view = Grid
   grid 2 gap 1
     each plant as p
       stack card tap toggle p.water
         image p.photo height 80
-        text p.name bold
-        text "watered" since(p.water) "days ago" faint
+        p.name bold
+        "watered" since(p.water) "days ago" faint
         icon if(since(p.water) >= p.every_days, "drop", "check") color if(since(p.water) >= p.every_days, warn, good)
 else
   scroll gap 1
     each plant sort name
-      text it.name span 2
+      it.name span 2
 remind "Check plants" at 8:00 on mon thu
 form plant
 `;

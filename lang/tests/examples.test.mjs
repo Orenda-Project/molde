@@ -24,7 +24,7 @@ for (const p of allPrograms()) {
 
 test('formatter canonicalises messy spacing and stays idempotent', () => {
   const messy = 'app   "W"  drop\ntable drink ml  num 1 .. 5000\n\ntext sum( drink.ml  today )  "ml"\n';
-  const want = 'app "W" drop\ntable drink ml num 1..5000\ntext sum(drink.ml today) "ml"\n';
+  const want = 'app "W" drop\ntable drink ml num 1..5000\nsum(drink.ml today) "ml"\n';
   assert.equal(format(messy), want);
   assert.equal(format(want), want);
   assert.ok(check(want).ok);

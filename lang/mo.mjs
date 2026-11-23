@@ -4,6 +4,7 @@
 //   node lang/mo.mjs format FILE [--write]    canonical text (or rewrite the file)
 //   node lang/mo.mjs describe FILE            the plain-English plan
 //   node lang/mo.mjs diff OLD NEW             what changes + data-safety verdict; exit 1 if refused
+//   node lang/mo.mjs migrate FILE... [--write] rewrite older text into the current spelling
 //   node lang/mo.mjs expand FILE              the program with every component expanded to level 1
 //   node lang/mo.mjs tokens [FILE...]         token counts (runs lang/tokens.py)
 //   node lang/mo.mjs tree FILE [--now=ISO]     the UI tree from the reference evaluator (UITREE.md)
@@ -65,6 +66,16 @@ switch (cmd) {
     for (const f of files) { const a = load(read(f), { now: args.find(x => x.startsWith('--now='))?.slice(6) }); for (const e of a.errors) console.error(e); console.log(JSON.stringify(a.tree(), null, 1)); }
     break;
   }
+  case 'migrate': {
+    // rewrite older MoldeScript v0 text into the current canonical spelling (the formatter's
+    // one-spelling rules: implicit text lines, style roles, bare option values); prints what changed
+    for (const f of files) {
+      const before = read(f); const after = format(before);
+      if (args.includes('--write')) writeFileSync(f, after); else process.stdout.write(after);
+      if (before !== after) console.error(`migrated ${f}`);
+    }
+    break;
+  }
   case 'expand': for (const f of files) { const r = expandedText(read(f)); process.stdout.write(r.text); for (const e of r.errors) console.error(String(e)); } break;
   case 'tokens': {
     const r = spawnSync('python3', [join(here, 'tokens.py'), ...args], { stdio: 'inherit' });
@@ -72,6 +83,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.log('usage: node lang/mo.mjs check|format|describe|diff|expand|tree|tokens FILE...');
+    console.log('usage: node lang/mo.mjs check|format|migrate|describe|diff|expand|tree|tokens FILE...');
     process.exit(cmd ? 2 : 0);
 }

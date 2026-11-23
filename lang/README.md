@@ -1,27 +1,31 @@
 # MoldeScript v0 (Phase 0 of plan v2)
 
-The language the tiny on-device model writes. The reference is [`SPEC.md`](SPEC.md); this page says how to run things and what the language cannot do.
+The language the tiny on-device model writes. The reference is [`SPEC.md`](SPEC.md); what each statement means when it runs is [`SEMANTICS.md`](SEMANTICS.md); what a renderer receives is [`UITREE.md`](UITREE.md). This page says how to run things and what the language cannot do.
 
 ## Files
 
 | Path | What |
 |---|---|
-| `SPEC.md` | the language reference (level 1 core, level 2 std library, runtime defaults, errors, version) |
+| `SPEC.md` | the language reference (level 1 core, level 2 std library, streaming rules, runtime defaults, data safety, errors, version) |
+| `SEMANTICS.md` | the meaning of every statement (time, empty values, toggle, actions, events, drawing) |
+| `UITREE.md` | the UI tree contract a renderer draws from |
 | `grammar/moldescript.grammar` | **the one grammar source** (llama.cpp GBNF syntax, one statement per line) |
-| `gen-gbnf.mjs` | writes `moldescript.gbnf` (adds the root and the indentation structure) and `grammar/added-tokens.json` |
+| `gen-gbnf.mjs` | writes `moldescript.gbnf`, `sources.gen.mjs` (grammar and std embedded for the browser) and `grammar/added-tokens.json` |
 | `moldescript.gbnf` | generated; use it for grammar-constrained decoding |
-| `engine.mjs`, `grammar.mjs`, `lex.mjs` | the parser runs the grammar file itself, so parser and GBNF cannot drift |
+| `engine.mjs`, `grammar.mjs`, `lex.mjs` | the parser runs the grammar file itself, so parser and GBNF cannot drift; keywords are contextual |
 | `parse.mjs` | text to typed AST with line numbers |
-| `expand.mjs` | component (`def`) expansion; loads the std library |
-| `check.mjs` | type checker; errors as `line N: CODE: message. Fix: hint.` |
-| `format.mjs` | canonical formatter (idempotent; its output is what the GBNF accepts) |
-| `describe.mjs` | fixed-template English summary of a program (the plan shown to the user) |
-| `diff.mjs` | old program vs new: changes and a data-safety verdict |
+| `expand.mjs` | component (`def`) and formula (`let f(x)`) expansion; loads the std library |
+| `check.mjs` | type checker; errors as `line N: CODE: message. Fix: hint.`; never throws |
+| `format.mjs` | canonical formatter (idempotent; writes the one spelling of each idea; its output is what the GBNF accepts) |
+| `describe.mjs` | plain-English summary of a program for non-programmers (the plan shown to the user) |
+| `diff.mjs` | edit verdict against the whole schema history: hide, never drop; renames only with `was`; type changes refused |
+| `eval.mjs` | the reference evaluator: runs a program headless and builds the UI tree (plain ES modules, no Node APIs: runs in a browser) |
 | `mo.mjs` | the CLI |
 | `std/*.mo` | the standard library, written in MoldeScript |
 | `tokens.py`, `TOKENS.md` | token counts (stock Qwen3.5 and planned tokenizer) and the gates |
-| `examples/NN-name.mo`, `examples/INDEX.json` | 30 programs; `edits/NN-name/{before.mo,request.txt,after.mo}`: 20 edits |
-| `tests/` | `node --test lang/tests/` |
+| `examples/` | 30 programs (`INDEX.json`), `edits/`: 20 edits (`before.mo`, `request.txt`, `after.mo`) |
+| `corpus/` | the 300 coverage programs other agents wrote from SPEC.md, migrated to the current spelling |
+| `tests/` | `node --test lang/tests/`; `fuzz-diff.mjs` and `fuzz-check.mjs` also run on their own |
 | `tools/gbnf-check.cpp` | a small checker that runs llama.cpp's own grammar engine on files |
 
 ## Run
@@ -29,76 +33,78 @@ The language the tiny on-device model writes. The reference is [`SPEC.md`](SPEC.
 Node 20, no npm install needed. From the repo root:
 
 ```
-node --test lang/tests/                         # 340 tests
-node lang/gen-gbnf.mjs                          # regenerate moldescript.gbnf after editing the grammar
-node lang/mo.mjs check lang/examples/*.mo       # OK, or errors with line, code and fix
+node --test lang/tests/                          # all tests
+node lang/gen-gbnf.mjs                           # after editing the grammar or std/*.mo
+node lang/mo.mjs check lang/examples/*.mo        # OK, or errors with line, code and fix
 node lang/mo.mjs format FILE [--write]
+node lang/mo.mjs migrate FILE... --write         # rewrite older text into the current spelling
 node lang/mo.mjs describe lang/examples/01-water.mo
-node lang/mo.mjs diff lang/examples/edits/16-add-table/before.mo lang/examples/edits/16-add-table/after.mo
-node lang/mo.mjs expand lang/examples/28-pomodoro.mo   # the level-1 program after std expansion
-python3 lang/tokens.py                          # or: node lang/mo.mjs tokens  (needs the `tokenizers` package)
-UPDATE_SNAPSHOTS=1 node --test lang/tests/describe.test.mjs   # after changing describe.mjs on purpose
+node lang/mo.mjs diff OLD NEW                    # data-safety verdict (exit 1 if refused)
+node lang/mo.mjs expand lang/examples/28-pomodoro.mo   # the level-1 program after expansion
+node lang/mo.mjs tree lang/examples/01-water.mo [--now=2026-11-23T10:00:00Z]   # the UI tree
+node lang/tests/fuzz-diff.mjs 5000               # data-safety fuzz over random edit chains
+node lang/tests/fuzz-check.mjs 20000             # checker crash fuzz (+ checker vs GBNF)
+python3 lang/tokens.py [FILES]                   # token counts (needs the `tokenizers` package)
+UPDATE_SNAPSHOTS=1 node --test lang/tests/describe.test.mjs   # after changing describe on purpose
 ```
 
-The llama.cpp grammar test compiles `tools/gbnf-check.cpp` against `libllama.so` from `LLAMA_LIB_DIR` (default: Kamal's `~/llama.cpp-b12144/llama-b12144`) and is skipped when g++ or the library is missing. The same GBNF file is always also checked by our own engine.
+In a browser: `import { load } from './lang/eval.mjs'` (see UITREE.md). The llama.cpp grammar test compiles `tools/gbnf-check.cpp` against `libllama.so` from `LLAMA_LIB_DIR` (default: Kamal's `~/llama.cpp-b12144/llama-b12144`) and is skipped when g++ or the library is missing; the GBNF is always also checked by our own engine.
 
 ## What the tests check
 
-- all 30 examples and all 40 edit programs parse, type-check and are already in canonical form; the formatter is idempotent;
-- prefix-valid: every one of those programs cut after every line still parses and type-checks;
-- the GBNF is up to date, accepts every valid program (in llama.cpp and in our engine) and rejects broken syntax;
-- 52 invalid programs, each rejected with the expected error code and line;
-- every std component expands to level-1 statements only, and the expansion checks on its own; user `def` with `slot`; two timers do not share state;
-- 15 diff cases (added field safe, removed field hidden, type change refused, widenings allowed, pick options) and every edit pair is safe;
-- describe snapshots for all 30 examples; every complete program in SPEC.md checks.
+- all 30 examples, 40 edit programs and 300 corpus programs parse, type-check, are canonical and GBNF-valid; the formatter is idempotent;
+- prefix-valid: every example and edit program cut after every line still parses and type-checks;
+- behaviour: every example runs in the evaluator and is driven like a user (quick adds sum and fill the water glass, a habit tick moves the streak, 33 tasbeeh taps give round 2 and one notice, tic-tac-toe detects a win, timers count down and notify, undo, snapshot/restore); every corpus program runs with taps and a clock tick and no error nodes; each new feature (reminders before a date and monthly, sort by a formula, group through a link, time parts, random, sin/cos, colours, set all and remove all, pie wedges, formulas with values, default captions, empty `since`);
+- data safety: every critic case (drop and re-add with another type, renames with and without `was`, option renames, ref changes, narrowed ranges) and a 300-chain fuzz (5,000 on its own);
+- learnability: everyday names are legal; at most 15 reserved words; self-compare is an error; a failed declaration is reported once; internal names never show; right hints for `it` and `each ... as`; clear errors for common slips; the checker never crashes (1,000 mutations in the suite, 20,000 on its own) and what it accepts the GBNF accepts once formatted;
+- 52 invalid programs, each with the expected error code and line;
+- every std component expands to level 1 only; describe snapshots read as plain English (no brackets or code words); SPEC programs check; the evaluator's import graph uses no Node-only API.
 
 ## Design decisions (short)
 
-- **Two levels, one runtime.** The runtime implements level 1 only. Charts, lists, forms, timers and calendars are MoldeScript components (`def` with typed parameters, call-by-name substitution, `slot`), so the model can use a shorthand or build its own UI from the same parts.
-- **Lines and indentation.** One statement per line and declare-before-use make every prefix a valid program, so the screen can build while the model writes. Indentation gives nesting without closing brackets (a closing line would break prefix validity).
-- **One grammar file drives both the parser and the GBNF.** The parser is a small engine that runs the GBNF rules directly; the generator only adds the root and the depth-bounded indentation rules.
-- **`let` and text roles** (`big`, `head`, `faint`) were added after measuring: repeated formulas and repeated style words were the largest avoidable token cost.
-- **Keywords as single tokens, measured honestly.** Qwen's tokenizer already encodes nearly every English keyword as one token; only bracketed function words (`sum(`), two std names and indentation needed adding. That saves 3 to 6 percent; the rest of the saving comes from the language itself.
-- **Data is never at risk.** No statement deletes data; `remove` is a soft delete with undo; `diff` hides removed fields and refuses type changes.
-- **Typed and checked.** The checker knows tables, fields, refs and back links, windows, pick options, required fields and where each statement may appear, and writes errors meant to be pasted into a repair prompt.
-- **English only for now.** Strings are Unicode-safe; Urdu and Roman Urdu come later.
+- **Two levels, one runtime.** The runtime implements level 1 only; charts, lists, forms, timers and calendars are MoldeScript components.
+- **Lines and indentation**, declare before use: every prefix is a valid program, and SPEC 2.1 says how a half-written program or edit is handled.
+- **One grammar file** drives the parser and the GBNF. **Keywords are contextual**: the parser prefers the keyword reading of a word and otherwise treats it as a name; only 12 words are reserved.
+- **One spelling per idea**: the formatter rewrites the alternatives, so training data and model output stay uniform.
+- **Meaning is executable**: `eval.mjs` is the reference; the phone runtime must give the same UI tree.
+- **Data is never at risk**: no statement deletes data; the diff uses the whole schema history; renames are explicit.
 
 ## Gates (details in TOKENS.md)
 
 | Gate | Result |
 |---|---|
 | 30/30 examples valid | met |
-| prefix-valid property | met (every line cut of 70 programs) |
+| prefix-valid property | met |
 | formatter idempotent | met |
-| median 150 tokens or fewer, std-style apps | **missed**: 159 with the planned tokenizer (165 stock) |
-| 5x fewer tokens than the v1 HTML fixtures | **met in total** with the planned tokenizer (5.10x; stock 4.93x); water 2.8x and budget 3.9x miss on their own |
-| custom level-1 apps (target 350 or fewer) | median 243, max 442 (tic-tac-toe 423, budget-plus 442 are over 350) |
-
-The coverage gate (300 blind requests) is run later by other agents from SPEC.md and the CLI.
+| median 150 tokens or fewer, std-style examples | **missed by 1**: 151 planned (156 stock) |
+| median 150 tokens or fewer, the 300 programs other agents wrote | met: 133 planned (137.5 stock) |
+| 5x fewer tokens than the v1 HTML fixtures | **met in total with the planned tokenizer** (5.16x; stock 4.98x); water 2.8x and budget 3.9x miss on their own |
+| custom level-1 apps (target 350 or fewer) | median 224; budget-plus 433 and habits-plus 357 are over |
+| checker crash fuzz, 20,000 mutations | 0 crashes, 0 accepted programs the GBNF rejects after formatting |
+| diff fuzz, 5,000 edit chains (30,000 edits) | 0 lost or retyped stored values |
 
 ## What MoldeScript v0 cannot express (honest list)
 
-Outside a 2D data-and-UI app, by design:
+Outside a 2D data-and-UI app, by design (out of scope for v0):
 
-- network and internet, accounts, sync or sharing between phones, cloud backup;
-- camera, microphone, location, sensors, other apps' data, files other than the app's own export;
-- heavy algorithms: searching over many possibilities, optimisation, statistics beyond sum/avg/min/max/streak/gap, prediction.
+- network and internet, accounts, sync or sharing between phones, messaging (WhatsApp, SMS, email), maps and navigation, live outside data (prices, prayer times, scores);
+- camera (including QR and barcode scanning), microphone, location, sensors, other apps' data;
+- printing and PDF, files other than the app's own export, bundled images;
+- drag and drop; text splitting and parsing (no substring, split or pattern matching);
+- heavy algorithms: searching over many possibilities, optimisation, prediction, AI.
 
-Inside the app's domain, but not in v0:
+Inside the app's domain, but still missing:
 
-- loops other than over rows, days, pick options, a literal list or a bounded range; recursion; functions that return values (a `def` draws UI);
-- deleting data for good, bulk actions ("clear all", "reset the quiz"), moving data when a field is renamed;
-- text building: no joining without spaces except around punctuation, no substrings, no number-to-text formatting choices;
-- sorting by a formula (only by a field), joins other than `ref` and back links, more than one link between the same two tables via `it.T` (use `where`);
-- prayer times or anything that needs outside data; reminders whose time is computed from a formula;
-- raw colours, fonts, images bundled with the app, animation, drag and drop, gestures other than tap and swipe;
-- timers keep running only while the app is open (a `remind ... in` covers the notification).
+- loops other than over rows, days, pick options, a literal list or a bounded range; recursion;
+- deleting data for good; moving data except by an explicit `was` rename;
+- number-to-text formatting choices (decimals, padding), raw colour codes, fonts, animation;
+- timers keep running only while the app is open (a `remind ... in` covers the notification);
+- more than one link between the same two tables via `it.T` (use `where`).
 
 Weak spots I know about:
 
-- The GBNF accepts a superset: it cannot tell keywords from names, so a constrained model can still write `text` as a component name or `table set ...`; the checker catches these and the repair step fixes them.
-- Call-by-name arguments are powerful but subtle: an argument that says `it` means the component's loop item. A model must learn which std pieces bind `it` (SPEC section 11 says so per component).
-- `each ... as NAME` keeps `it` for the outer item; this is useful but easy to get wrong.
-- Some custom apps are long (tic-tac-toe's win check is two dense lines).
-- Text parts are joined with spaces, so "3/5" needs the `/` as a text part.
-- Three topics from the brief were swapped to cover Kamal's custom-UI list: mood (covered by the journal apps), gratitude (same shape as the journal) and kids' pocket money (same shape as khata and savings) were replaced by a cricket scoreboard, a quiz and tic-tac-toe.
+- The GBNF accepts a superset (it cannot tell keywords from names); the checker catches the rest and the repair step fixes it.
+- Call-by-name component values: a value that says `it` means the component's own item. The error message now says to use `each X as NAME`, but it is still a thing a model must learn.
+- Contextual keywords make `text x bold` read `bold` as a style even if a state is called bold; write `(bold)` for the value. This is predictable but surprising.
+- Dates in the evaluator are UTC; the phone runtime will use local time.
+- The evaluator is a reference, not the phone runtime; a renderer for the UI tree is being built separately.

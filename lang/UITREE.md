@@ -1,6 +1,7 @@
 # The UI tree (renderer contract)
 
 Changes (newest first):
+- 2026-11-23 (later): numbers show thousands separators only from 10,000 up (`2000`, `80,000`); an empty value is left out of a multi-part text; with several screens and no main content, `screens` no longer lists `_main`; `input` may carry `unit`; `circle`/`arc` written with one or three values arrive already centred (`cx`, `cy` filled in). No node type or property was removed.
 - 2026-11-23: first version.
 
 `lang/eval.mjs` is the reference evaluator. It runs a program and hands a renderer one plain JSON tree. The renderer only draws this tree and sends events back; it never reads MoldeScript, never evaluates formulas, and never sees standard-library components (they are expanded to level-1 nodes before the tree is built).
@@ -69,4 +70,4 @@ A shape with `tap` is hit when the tap lands inside its shape (for `arc` with a 
 
 ## Text formatting (done by the evaluator)
 
-Numbers: up to 2 decimals with thousands separators (`2,000`, `2.5`). Money: the same (the currency sign is the runtime's locale setting, not in the tree). Dates `Mon 23 Nov`; date and time `Mon 23 Nov 10:00`; time of day `08:30`; durations `1:30` (minutes:seconds) or `1:05` (hours:minutes from one hour up); yes/no `Yes`/`No`; a row shows its filled fields joined by ` · `; an empty value is left out of a text with other parts and shows as `–` alone. Text parts join with one space, except before `, . ; : ! ? % ) /` and after `( / #`.
+Numbers: up to 2 decimals, with thousands separators from 10,000 up (`2000`, `80,000`, `2.5`). Money: the same (the currency sign is the runtime's locale setting, not in the tree). Dates `Mon 23 Nov`; date and time `Mon 23 Nov 10:00`; time of day `08:30`; durations `1:30` (minutes:seconds) or `1:05` (hours:minutes from one hour up); yes/no `Yes`/`No`; a row shows its filled fields joined by ` · `; an empty value is left out of a text with other parts and shows as `–` alone. Text parts join with one space, except before `, . ; : ! ? % ) /` and after `( / #`.

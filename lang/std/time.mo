@@ -1,7 +1,7 @@
 lib "time"
 # Time pieces from level-1 parts: state, every, when, toggle actions and grids of days.
 
-# describe: a countdown timer of {secs} ({caption}); when it ends: {done}
+# describe: a countdown timer of {secs}, labelled {caption}; when it ends it {done}
 def timer secs dur, caption text = "Timer", done act = notify "Time is up"
   state left dur = secs
   state going bool = no

@@ -9,7 +9,7 @@ row gap 3
     path "M6 4h44l-6 100H12z" stroke ink thick 2
   stack grow
     text ml "ml" big
-    text "Goal" goal "ml" faint tap edit goal
+    "Goal" goal "ml" faint tap edit goal
 quick drink, ml, [250, 500]
 form drink
 daybars last 7 days, sum(drink.ml on it)

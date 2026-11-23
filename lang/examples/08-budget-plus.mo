@@ -11,27 +11,27 @@ row gap 2
   stat round(spent / day), "daily average"
   stat round((budget - spent) / (monthdays(m) - day + 1)), "left per day"
   stat sum(spend.amount prev month where monthday(at) <= monthday(today)), "same point last month"
-text "Spending through the month" head
+"Spending through the month" head
 draw 100, 50
   line 0, 50, 100, 0 stroke edge
   poly stroke accent thick 2
     each days month of m
       pt 100 * monthday(it) / monthdays(m), 50 - 50 * clamp(sum(spend.amount month of m where at <= it) / budget, 0, 1)
-text "By category (tap to filter)" head
+"By category (tap to filter)" head
 each spend month of m by category
   stack tap set cat = if(cat = it.key, "", it.key)
     row
-      text it.key grow
-      text round(sum(it.amount) * 100 / spent) "%" faint
-      text sum(it.amount) bold
+      it.key grow
+      round(sum(it.amount) * 100 / spent) "%" faint
+      sum(it.amount) bold
     draw 100, 3
       rect 0, 0, 100 * sum(it.amount) / spent, 3 fill if(cat = it.key, accent, muted)
 form spend, "Add expense"
 each spend month of m where cat = "" or category = cat by day as g
   row
-    text g.key bold grow
-    text sum(g.amount) faint
+    g.key bold grow
+    sum(g.amount) faint
   each g as r
     row card tap edit r swipe remove r
-      text r.category r.note grow
-      text r.amount bold
+      r.category r.note grow
+      r.amount bold

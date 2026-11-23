@@ -17,13 +17,13 @@ screen zakat "Zakat" coin
   field gold_rate
   field silver_rate
   field debts
-  text if(wealth >= nisab, "Zakat due (2.5%)", "Below nisab: no zakat due") faint
-  text round(if(wealth >= nisab, wealth * 0.025, 0)) big
+  if(wealth >= nisab, "Zakat due (2.5%)", "Below nisab: no zakat due") faint
+  round(if(wealth >= nisab, wealth * 0.025, 0)) big
 screen split "Tip" calc
   field bill "Bill"
-  text "Tip" tip "%" faint
+  "Tip" tip "%" faint
   slider tip 0..30
-  text "People" people faint
+  "People" people faint
   slider people 1..20
-  text "Tip" round(bill * tip / 100) head
-  text "Each pays" round(bill * (1 + tip / 100) / people) big
+  "Tip" round(bill * tip / 100) head
+  "Each pays" round(bill * (1 + tip / 100) / people) big

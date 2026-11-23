@@ -55,6 +55,7 @@ function localStates(def) {
 }
 
 let counter = 0;
+let failedNames = new Map();
 let renamed = new Map(); // inner name -> the name the def used, so errors never show d_3
 
 // Expand every call in a statement list. defs: Map name -> {def, doc, std}. Returns new list.
@@ -89,12 +90,16 @@ function expandCall(call, defs, errors, stack) {
   for (let i = 0; i < def.params.length; i++) {
     const p = def.params[i];
     let a = call.args[i];
+    let usedDefault = false;
     if (a === undefined) {
+      usedDefault = true;
       if (p.dflt === null) return err('E_ARGS', `"${call.name}" needs a value for ${p.name} (${p.kind}).`, `write: ${call.name} ${def.params.map(q => q.name).join(', ')}`);
       a = p.dflt;
     }
     let toks = lex(a);
+    if ((p.kind === 'table' || p.kind === 'name') && toks.length === 1 && failedNames.has(toks[0].v)) return null; // its declaring line failed; reported there
     if ((p.kind === 'table' || p.kind === 'name') && !(toks.length === 1 && toks[0].t === 'word')) return err('E_KIND', `"${call.name}" expects a ${p.kind === 'table' ? 'table' : 'name'} for ${p.name}, got "${a}".`, 'pass a single name.');
+    if (usedDefault) toks = toks.flatMap(t => (t.t === 'word' && subst.has(t.v)) ? subst.get(t.v) : [t]); // a default may use earlier parameters
     if (VALUE_KINDS.has(p.kind) && toks.length > 1) toks = [{ t: 'p', v: '(' }, ...toks, { t: 'p', v: ')' }];
     subst.set(p.name, toks);
   }
@@ -181,6 +186,7 @@ function expandFormulas(list, fns, errors) {
 export function expandProgram(prog) {
   counter = 0; // deterministic names per program
   renamed = new Map();
+  failedNames = prog.failed || new Map();
   const defs = new Map(stdDefs());
   const errors = [];
   prog.body = expandList(prog.body, defs, errors);

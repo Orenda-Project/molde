@@ -5,7 +5,7 @@ let legal = count(ball today where wide = no)
 let runs = sum(ball.runs today) + count(ball today where wide = yes)
 let wkts = count(ball today where out = yes)
 text runs "/" wkts big
-text "Overs" floor(legal / 6) + legal % 6 / 10 "of" overs ". Run rate" round(runs * 6 / legal) faint
+"Overs" floor(legal / 6) + legal % 6 / 10 "of" overs ". Run rate" round(runs * 6 / legal) faint
 row gap 1
   each [0, 1, 2, 3, 4, 6]
     button it tap add ball runs = it
@@ -13,7 +13,7 @@ row gap 1
   button "Wide" tap add ball wide = yes
   button "Out" fill bad tap add ball out = yes
   button "Undo" tap remove last(ball today)
-text "Last balls" faint
+"Last balls" faint
 row gap 1
   each ball today sort at desc top 6
     draw width 36

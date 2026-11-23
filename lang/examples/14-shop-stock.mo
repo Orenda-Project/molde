@@ -4,9 +4,9 @@ let short = countof(item, it.qty <= it.low)
 text short "items running low" head color if(short > 0, warn, good)
 each item sort qty as i
   row card gap 1 tap edit i swipe remove i
-    text i.name bold grow color if(i.qty <= i.low, warn, ink)
+    i.name bold grow color if(i.qty <= i.low, warn, ink)
     button "-" tap set i.qty = i.qty - 1
-    text i.qty bold
+    i.qty bold
     button "+" tap set i.qty = i.qty + 1
-text "Stock value" sumof(item, it.qty * it.price) faint
+"Stock value" sumof(item, it.qty * it.price) faint
 form item

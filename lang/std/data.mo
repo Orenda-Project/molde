@@ -2,7 +2,7 @@ lib "data"
 # Lists and forms built from level-1 parts. The editor sheet (edit) and remove-with-undo
 # are runtime actions; nothing here deletes data for good.
 
-# describe: a list of {src} (tap to edit, swipe to remove)
+# describe: a list of {src}; tap one to edit it, swipe to remove it
 def list src src
   if countof(src, yes) = 0
     text "Nothing here yet." color muted
@@ -10,7 +10,7 @@ def list src src
     row card tap edit r swipe remove r
       text r grow
 
-# describe: a list of {src} grouped by day (tap to edit, swipe to remove)
+# describe: a list of {src} by day; tap one to edit it, swipe to remove it
 def log src src
   if countof(src, yes) = 0
     text "Nothing here yet." color muted
