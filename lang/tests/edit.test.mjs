@@ -442,3 +442,90 @@ test('round 8 S3: screen-level state picks have option slots; unknown slots in a
   const b = load(a.source, { data: snap });
   assert.equal(b.ok, false); assert.match(b.errors[0], /names an option the schema history does not have/);
 });
+
+// ---- round 9: Undo groups, drafts by slot, input validation, when across reloads, clock steps ----
+test('round 9 S2a: a change group ends with any other operation, undo included', () => {
+  const a = load('app "T"\ntable s t text\nsetting g num = 1\nfield g\nbutton "add" tap add s t = "r"\n"n" count(s)\n');
+  const tapAdd = () => a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  const g = () => a.find(n => n.t === 'input');
+  tapAdd(); tapAdd();
+  a.dispatch(g().id, 'change', 5);
+  a.undo();
+  assert.deepEqual([a.rows('s').length, a.data.settings.g], [2, 1]);
+  a.dispatch(g().id, 'change', 9);
+  a.undo();
+  assert.deepEqual([a.rows('s').length, a.data.settings.g], [2, 1], 'the second change is its own step');
+});
+
+test('round 9 S2b: form drafts follow slots across edits; a refused Add says which field is missing', () => {
+  const P = f => `app "T"\ntable s ${f}\nform s\n`;
+  const a = load(P('title text, n num?'));
+  const fld = name => a.find(n => n.t === 'form').fields.find(f => f.name === name);
+  a.dispatch(fld('title').id, 'change', 'typed'); a.dispatch(fld('n').id, 'change', 3);
+  a.applyEdit(P('name text was title, n num?, tag pick Home|Work = Home'));
+  assert.deepEqual(['name', 'n', 'tag'].map(n => fld(n).value), ['typed', 3, 'Home']);
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  assert.equal(a.rows('s').length, 1);
+  assert.deepEqual([a.cell('s', a.rows('s')[0], 'name'), a.cell('s', a.rows('s')[0], 'tag')], ['typed', 'Home']);
+  a.applyEdit(P('name text, tag pick Home|Work = Home'));
+  a.dispatch(fld('name').id, 'change', ''); // the std form keeps its draft after Add; empty the name
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap'); // refused
+  const f = a.find(n => n.t === 'form');
+  assert.match(f.error, /Fill in name/); assert.equal(f.fields.find(x => x.name === 'name').error, 'needed');
+});
+
+test('round 9 S2c: an option rename compared with a text state warns and names it (27-tasbeeh)', () => {
+  const src = readFileSync(new URL('../examples/27-tasbeeh.mo', import.meta.url), 'utf8');
+  const a = load(src);
+  const r = a.applyEdit(src.replace('pick SubhanAllah|', 'pick Tasbih was SubhanAllah|').replace('= SubhanAllah\n', '= Tasbih\n'));
+  assert.equal(r.verdict, 'warn');
+  assert.match(r.warnings.join(' '), /compares phrase with ph, which is text.*pick/);
+});
+
+test('round 9 S2d: touched is derived once for saves without the flag, then recorded', () => {
+  const a = load('app "T"\nsetting g num = 1\nfield g\n"g" g\n');
+  a.setField('g', null, 7);
+  const snap = a.snapshot(); delete snap.ever.touched;
+  const b = load(a.source, { data: snap });
+  assert.equal(b.ever.touched, true);
+  const c = load('app "T"\nsetting g num = 1\n"g" g\n'); const s2 = c.snapshot(); delete s2.ever.touched;
+  assert.equal(load(c.source, { data: s2 }).ever.touched, false, 'a save with nothing changed stays untouched');
+});
+
+test('round 9 S3: setField and change reject what a form would: empty required, missing ref, garbage numbers', () => {
+  const a = load('app "T"\ntable p name text\ntable s t text, n num?, m money?, d dur?, r ref p?\nstate q text = ""\nfield q\n');
+  const p = a.addRow('p', { name: 'x' }); const r = a.addRow('s', { t: 'a', n: 1, m: 2, d: 3, r: p.id });
+  const t = { table: 's', id: r.id };
+  const before = JSON.stringify(a.data);
+  assert.equal(a.setField(t, 't', ''), false); assert.equal(a.setField(t, 't', null), false);
+  assert.equal(a.setField(t, 'r', 999), false);
+  for (const g of ['abc', NaN, {}, [], true, '  ', '1e999', Infinity]) for (const f of ['n', 'm', 'd']) assert.equal(a.setField(t, f, g), false, `${f} ${String(g)}`);
+  assert.equal(JSON.stringify(a.data), before);
+  const q = a.find(n => n.t === 'input');
+  a.dispatch(q.id, 'change', q.value);
+  assert.equal(a.data.state['|q'], '', 'echo of an empty text stays empty text');
+});
+
+test('round 9 S3: a when already true does not notify after a reload; every writes are their own undo steps and touch the app', () => {
+  const S = 'app "T"\ntable log x num\nsetting g num = 9\nevery 60s if g > 5 add log x = 1\nwhen count(log) > 1 notify "many"\nbutton "b" tap add log x = 5\n';
+  const a = load(S);
+  assert.ok(!a.ever.touched);
+  a.tick(60000);
+  assert.equal(a.ever.touched, true);
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  a.tick(60000);
+  assert.equal(a.log.filter(e => e.kind === 'notify').length, 1);
+  assert.equal(a.rows('log').length, 3);
+  a.undo();
+  assert.equal(a.rows('log').length, 2, 'undo takes back only the tick write');
+  const b = load(a.source, { data: a.snapshot() });
+  b.tick(1);
+  assert.equal(b.log.filter(e => e.kind === 'notify').length, 0);
+});
+
+test('UI fuzz: 200 chains through tree and dispatch only (undo groups, drafts across edits, garbage, reloads, ticks)', async () => {
+  const { runUiFuzz } = await import('./fuzz-ui.mjs');
+  const r = runUiFuzz(200, 5);
+  assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
+  assert.ok(r.undos > 50 && r.draftChecks > 100 && r.garbage > 50 && r.reloads > 50);
+});
