@@ -10,6 +10,13 @@ export const ICONS = new Set(('drop check wallet dumbbell book clock heart star 
   + 'bus plane bike walk run baby paw plant tree cloud rain snow fire coffee food apple bread fish egg milk tooth eye brain '
   + 'mosque beads school pencil alarm hourglass dice cards ball game board shield key lock seat plus minus tool box grid').split(' '));
 export const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
+// the closest icon name, for "unknown icon" hints
+export function nearestIcon(w) {
+  const d = (a, b) => { const m = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) m[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return m[a.length][b.length]; };
+  const pre = a => { let i = 0; while (i < a.length && a[i] === w[i]) i++; return i; };
+  return [...ICONS].sort((a, b) => d(w, a) - d(w, b) || pre(b) - pre(a) || a.localeCompare(b))[0];
+}
+const iconHint = w => `use a known icon; the closest is ${nearestIcon(w)}. All icons are listed in SPEC.md section 8.4.`;
 export const COLORS = ['accent', 'ink', 'muted', 'soft', 'good', 'warn', 'bad', 'bg', 'surface', 'edge', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'grey', 'black', 'white'];
 
 const NUMERIC = new Set(['num', 'money']);
@@ -50,9 +57,11 @@ export function check(src, opts = {}) {
       errors.push(...ex.errors);
       defs = ex.defs;
       const C = new Checker(errors, prog);
+      C.probeName = opts.probe || null;
       C.header(prog.header);
       C.list(prog.body, { top: true });
       prog.env = { tables: C.tables, settings: C.settings, states: C.states, screens: C.screens, lets: C.lets, options: C.options };
+      if (C.probe) prog.probe = C.probe;
       // never show internal names made by component expansion (d_3 -> d)
       for (const e of errors) for (const [inner, outer] of ex.renamed) {
         const re = new RegExp(`\\b${inner}\\b`, 'g');
@@ -99,7 +108,7 @@ class Checker {
 
   header(h) {
     this.line = h.line;
-    if (h.icon && !ICONS.has(h.icon)) this.err('E_ICON', `unknown icon "${h.icon}".`, `use one of: ${[...ICONS].slice(0, 30).join(', ')} ...`);
+    if (h.icon && !ICONS.has(h.icon)) this.err('E_ICON', `unknown icon "${h.icon}".`, iconHint(h.icon));
   }
 
   // ---------- statements ----------
@@ -114,6 +123,7 @@ class Checker {
   }
 
   declare(name, t, cx) {
+    if (this.options.has(name)) this.err('E_OPTION', `"${name}" is already an option of a pick field, so a bare ${name} would be ambiguous.`, `rename this (for example chosen_${name}) or write the option with a capital letter.`);
     if (cx.top) {
       if (this.taken(name)) { this.err('E_DUP', `the name "${name}" is already used (tables, settings, states, lets and screens share one set of names).`, 'pick a different name.'); return false; }
       return true;
@@ -149,7 +159,8 @@ class Checker {
       case 'let': {
         if (s.params) {
           // a formula with values: check its body with the parameters' types
-          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, PKIND_TYPE[p.kind] || ANY])), each: false });
+          for (const p of s.params) if (p.kind === 'row' && !this.tb(p.table)) this.err('E_UNKNOWN_TABLE', `value ${p.name} is a row of "${p.table}", which is not a table declared above.`, 'write NAME TABLE with a declared table, or a kind: num money text bool date time dur.');
+          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, p.kind === 'row' ? { t: 'row', table: p.table } : (PKIND_TYPE[p.kind] || ANY)])), each: false });
           const t = this.expr(s.e);
           this.scopes.pop();
           if (!cx.top) return this.err('E_CONTEXT', 'a let with values (a formula you call) must be at the top level.', 'move it to column 1.');
@@ -168,7 +179,7 @@ class Checker {
       case 'screen': {
         if (!cx.top) return this.err('E_CONTEXT', 'screen must be at the top level.', 'move it to column 1.');
         if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used (screens share names with tables, settings and states).`, 'pick a different screen name.');
-        if (s.icon && !ICONS.has(s.icon)) this.err('E_ICON', `unknown icon "${s.icon}".`, 'use an icon name from SPEC.md.');
+        if (s.icon && !ICONS.has(s.icon)) this.err('E_ICON', `unknown icon "${s.icon}".`, iconHint(s.icon));
         this.screens.set(s.name, s);
         return this.block(s.children, { ...cx, top: false });
       }
@@ -202,10 +213,15 @@ class Checker {
         return this.block(s.children, { ...cx, top: false });
       case 'box': this.mods(s.mods); return this.block(s.children, { ...cx, top: false });
       case 'use': return this.block(s.children, { ...cx, top: false });
-      case 'draw':
-        if (cx.draw) this.err('E_CONTEXT', 'a draw cannot be inside another draw.', 'close the first draw first.');
+      case 'draw': case 'plot':
+        if (cx.draw) this.err('E_CONTEXT', `a ${s.kind} cannot be inside a draw or plot.`, 'close the first one first.');
+        if (s.kind === 'plot') [...s.x, ...s.y].forEach((e, i) => this.num(e, `the plot ${i < 2 ? 'x' : 'y'} range`));
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, draw: s });
+      case 'tick':
+        if (!cx.draw || cx.draw.kind !== 'plot') this.err('E_CONTEXT', 'tick labels the x axis of a plot; it must be inside plot.', 'indent it under a plot line.');
+        this.num(s.x, 'tick x'); this.parts(s.parts);
+        return;
       case 'poly':
         if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw line.');
         this.mods(s.mods);
@@ -226,7 +242,7 @@ class Checker {
         return;
       case 'icon': {
         const e = s.icon;
-        if (e.k === 'path' && !e.parts.length && !this.lookup(e.head)) { if (!ICONS.has(e.head)) this.err('E_ICON', `unknown icon "${e.head}".`, 'use an icon name from SPEC.md.'); }
+        if (e.k === 'path' && !e.parts.length && !this.lookup(e.head)) { if (!ICONS.has(e.head)) this.err('E_ICON', `unknown icon "${e.head}".`, iconHint(e.head)); }
         else { const t = this.expr(e); if (!isAny(t) && !TEXTUAL.has(tname(t)) && tname(t) !== 'icon') this.err('E_TYPE', 'icon needs an icon name or a text holding one.', 'write icon heart.'); }
         return this.mods(s.mods);
       }
@@ -272,13 +288,14 @@ class Checker {
   table(s) {
     if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different table name.');
     if (s.was && s.was === s.name) this.err('E_DUP', `table ${s.name} cannot be renamed from itself.`, 'remove "was".');
-    if (s.was && this.tables.has(s.was)) this.err('E_DUP', `table ${s.name} says it was ${s.was}, but ${s.was} is still declared.`, `remove "table ${s.was}" or the "was ${s.was}".`);
+    if (s.was && this.tables.has(s.was) && !this.tables.get(s.was).decl.was) this.err('E_DUP', `table ${s.name} says it was ${s.was}, but ${s.was} is still declared (and not renamed itself).`, `remove "table ${s.was}" or the "was ${s.was}"; to swap two names, give both tables a was.`);
     const fields = new Map();
     const was = new Set();
     for (const f of s.fields) {
       if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, 'every row already has at (when it was added); remove this field or rename it.');
       if (fields.has(f.name)) this.err('E_DUP', `field "${f.name}" appears twice in ${s.name}.`, 'remove one or rename it.');
-      if (f.was && (fields.has(f.was) || s.fields.some(g => g.name === f.was) || was.has(f.was))) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (or renamed twice).`, `keep only one of them.`);
+      if (f.was && was.has(f.was)) this.err('E_DUP', `two fields say they were ${f.was}; only one can take its values.`, 'keep one was.');
+      else if (f.was && s.fields.some(g => g.name === f.was && !g.was)) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (and not renamed itself).`, `remove the field ${f.was} or the "was"; to swap two names, give both fields a was.`);
       if (f.was) was.add(f.was);
       if (f.type.t === 'ref' && !this.tables.has(f.type.table) && f.type.table !== s.name) {
         this.failed.set(`${s.name}.${f.name}`, this.failed.get(f.type.table) || this.line);
@@ -296,7 +313,12 @@ class Checker {
     const t = this.fieldType(f.type);
     if (f.type.t === 'pick') {
       const seen = new Set();
-      for (const o of f.type.options) { if (seen.has(o)) this.err('E_DUP', `option "${o}" appears twice.`, 'remove the repeat.'); seen.add(o); this.options.add(o); }
+      for (const o of f.type.options) {
+        if (seen.has(o)) this.err('E_DUP', `option "${o}" appears twice.`, 'remove the repeat.');
+        seen.add(o); this.options.add(o);
+        if (COLORS.includes(o)) this.err('E_OPTION', `option "${o}" is also a colour word, so ${f.name} = ${o} would read as the colour.`, `write the option with a capital letter: ${o[0].toUpperCase() + o.slice(1)}.`);
+        else if (this.lookup(o) || this.tables.has(o)) this.err('E_OPTION', `option "${o}" has the same name as your ${this.tables.has(o) ? 'table' : 'state, setting or let'} ${o}, so a bare ${o} would mean that.`, `write the option with a capital letter (${o[0].toUpperCase() + o.slice(1)}) or rename the ${this.tables.has(o) ? 'table' : 'value'}.`);
+      }
     }
     if (f.range && !isNum(t) && tname(t) !== 'dur') this.err('E_RANGE', `a range like 1..10 only fits number fields, not ${show(t)}.`, 'remove the range.');
     if (f.range && f.range.hi !== null && f.range.hi < f.range.lo) this.err('E_RANGE', 'the range is backwards.', 'write the small number first, like 1..10.');
@@ -340,8 +362,31 @@ class Checker {
   }
 
   // mode: 'value' (a value), 'rows' (a table query), 'target' (something to write)
+  // constrain.mjs puts a probe name where the model is about to write a name; record what fits there
+  probeHere(mode) {
+    const names = new Set();
+    for (const sc of this.scopes) for (const k of sc.names.keys()) names.add(k);
+    for (const m of [this.states, this.settings, this.lets]) for (const [k, v] of m) if (tname(v) !== 'fn') names.add(k);
+    const tables = [...this.tables.keys()];
+    const wt = this.whereTable && this.tb(this.whereTable);
+    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt() };
+  }
+  probePart(t) {
+    const n = tname(t);
+    const out = [];
+    if (n === 'row' || n === 'ref' || n === 'draft') {
+      const tb = this.tb(t.table);
+      if (tb) out.push(...tb.fields.keys(), 'at', 'id');
+      if (n !== 'draft') for (const [name, b] of this.tables) if ([...b.fields.values()].filter(f => f.type.t === 'ref' && f.type.table === t.table).length === 1) out.push(name);
+    } else if (n === 'rows' && !t.field) { const tb = this.tb(t.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    else if (n === 'rows' && t.field && tname(t.ftype) === 'ref') { const tb = this.tb(t.ftype.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    else if (n === 'group') { out.push('key'); const tb = this.tb(t.table); if (tb) out.push(...tb.fields.keys(), 'at'); }
+    this.probe = { kind: 'part', parts: [...new Set(out)] };
+  }
+
   path(p, mode = 'value') {
     let t;
+    if (this.probeName && p.head === this.probeName) { this.probeHere(mode); return ANY; }
     if (p.head === 'it') {
       t = this.curIt();
       if (!t && this.failed.has('it')) { this.followOn('it'); return ANY; }
@@ -361,6 +406,7 @@ class Checker {
       if (tname(t) === 'fn') return this.err('E_TYPE', `${p.head} is a formula with values; call it like ${p.head}(...).`, `write ${p.head}(value, ...).`);
     }
     for (const part of p.parts) {
+      if (this.probeName && part === this.probeName) { this.probePart(t); return ANY; }
       if (isAny(t)) return t;
       t = this.step(t, part, p);
     }
@@ -572,6 +618,7 @@ class Checker {
       case 'go': if (!this.screens.has(a.name)) this.err('E_UNKNOWN_NAME', `there is no screen "${a.name}" declared above.`, 'declare the screen first, or remove go (screens already get tabs).'); return;
       case 'notify': return this.parts(a.parts);
       case 'remind': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'dur') this.err('E_TYPE', 'remind ... in needs a duration like 10m.', 'write remind "Text" in 10m.'); return; }
+      case 'after': return this.action(a.act);
       case 'param': return this.err('E_UNKNOWN_NAME', `"${a.name}" is not an action.`, 'use add, set, toggle, remove, edit, save, go, notify or remind.');
     }
   }
@@ -634,7 +681,20 @@ class Checker {
       case 'agg': return this.agg(e);
       case 'fold': return this.fold(e);
       case 'fn': return this.fn(e);
-      case 'ucall': return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
+      case 'member': { let t = this.expr(e.e); for (const part of e.parts) { if (isAny(t)) return t; t = this.step(t, part, null); } return t; }
+      case 'join': this.parts(e.parts); return 'text';
+      case 'qfn': {
+        const t = this.query(e.q, false);
+        if (e.fn === 'due') { const n = this.expr(e.e); if (!isAny(n) && !isNum(n)) this.err('E_TYPE', 'due(table, days) needs a number of days.', 'write due(water, 3).'); return 'bool'; }
+        if (e.fn === 'nth') { this.num(e.e, 'nth position'); return isAny(t) ? ANY : { t: 'row', table: t.table }; }
+        if (e.fn === 'anyrow') { if (!this.inAction) this.err('E_CONTEXT', 'random(table) picks a row, so it can only be used inside an action (tap, every, when).', 'store it: tap set pick = random(card).'); return isAny(t) ? ANY : { t: 'row', table: t.table }; }
+        return ANY;
+      }
+      case 'ucall': {
+        const ARITY = { if: 'three values: if(condition, value when yes, value when no)', clamp: 'three values: clamp(x, low, high)', min: 'one column (min(t.price)) or two numbers (min(a, b))', max: 'one column (max(t.price)) or two numbers (max(a, b))', has: 'two values: has(text, part)', pow: 'two values: pow(base, power)', addmonths: 'two values: addmonths(date, months)', plural: 'two values: plural(n, "day")', fixed: 'two values: fixed(x, decimals)', round: 'one value: round(x)', floor: 'one value', abs: 'one value', len: 'one value', due: 'a table and a number of days: due(water, 3)', nth: 'a table and a position: nth(card, 1)' };
+        if (ARITY[e.name]) return this.err('E_ARGS', `${e.name}() has the wrong number of values.`, `${e.name}() needs ${ARITY[e.name]}.`);
+        return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
+      }
     }
     return ANY;
   }
@@ -677,7 +737,7 @@ class Checker {
         if (family(a) === 'date' && isNum(b)) return a;
         if (family(a) === 'date' && nb === 'dur') return 'when';
         if (na === 'time' && nb === 'dur') return 'time';
-        if (e.op === '-' && na === 'date' && nb === 'date') return 'num';
+        if (e.op === '-' && family(a) === 'date' && family(b) === 'date' && (na === 'date' || nb === 'date')) return 'num'; // whole days between
         if (e.op === '-' && na === 'when' && nb === 'when') return 'dur';
         if (e.op === '-' && na === 'time' && nb === 'time') return 'dur';
         return bad();
@@ -712,7 +772,7 @@ class Checker {
       return this.err('E_TYPE', `${f}() needs a number column like ${t.table}.amount (or two numbers: ${f}(a, b)).`, `write ${f}(${t.table}.FIELD ...).`);
     }
     if (f === 'last' || f === 'first') return t.ftype;
-    if (!isNum(t.ftype) && tname(t.ftype) !== 'dur') return this.err('E_TYPE', `${f}() needs a number column; ${t.table}.${t.field} is ${show(t.ftype)}.`, 'use count() for non-numbers.');
+    if (!isNum(t.ftype) && tname(t.ftype) !== 'dur') return this.err('E_TYPE', `${f}() needs a number column; ${t.table}.${t.field} is ${show(t.ftype)}.`, tname(t.ftype) === 'time' ? `times of day cannot be added up; store a duration (dur) or a number, or use count() / last(${t.table}.${t.field}).` : `use count(${t.table}) for how many, or last(${t.table}.${t.field}) for the latest value.`);
     return t.ftype;
   }
 
@@ -742,10 +802,16 @@ class Checker {
       case 'sin': case 'cos': need(0, isNum, 'a number of degrees'); return 'num';
       case 'hue': need(0, isNum, 'a number from 0 to 360'); return 'color';
       case 'random':
-        need(0, isNum, 'a whole number');
+        if (tname(A[0]) === 'rows' && !A[0].field) { if (!this.inAction) this.err('E_CONTEXT', 'random(table) picks a row, so it can only be used inside an action (tap, every, when).', 'store it: tap set pick = random(card).front.'); return { t: 'row', table: A[0].table }; }
+        need(0, isNum, 'a whole number or a table');
         if (!this.inAction) this.err('E_CONTEXT', 'random() can only be used inside an action (tap, every, when), so the screen does not change by itself.', 'store it: tap set roll = random(6), then show roll.');
         return 'num';
       case 'words': return 'text';
+      case 'pow': need(0, isNum, 'a number'); need(1, isNum, 'a number'); return A[0];
+      case 'plural': need(0, isNum, 'a number'); need(1, t => TEXTUAL.has(tname(t)), 'a word in quotes'); return 'text';
+      case 'fixed': need(0, t => isNum(t) || tname(t) === 'dur', 'a number'); need(1, isNum, 'a number of decimals'); return 'text';
+      case 'compact': case 'grouped': need(0, isNum, 'a number'); return 'text';
+      case 'monthshort': need(0, isDate, 'a date'); return 'text';
       case 'len': need(0, t => TEXTUAL.has(tname(t)), 'text'); return 'num';
       case 'has': need(0, t => TEXTUAL.has(tname(t)), 'text'); need(1, t => TEXTUAL.has(tname(t)), 'text'); return 'bool';
       case 'weekday': case 'monthday': case 'monthdays': case 'month': case 'year': need(0, isDate, 'a date'); return 'num';

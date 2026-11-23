@@ -1,8 +1,8 @@
 app "Income split" chart mint
 setting income money = 100000 "Monthly income"
-setting rent money = 30000 "Rent"
-setting food money = 25000 "Food"
-setting transport money = 10000 "Transport"
+setting rent money = 30000
+setting food money = 25000
+setting transport money = 10000
 let savings = income - rent - food - transport
 "Savings" savings big color if(savings < 0, bad, good)
 draw 100, 14

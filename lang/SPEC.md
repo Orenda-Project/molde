@@ -109,9 +109,10 @@ state NAME TYPE [= formula] [keep]                  # a value the screen holds (
 state NAME new TABLE [keep]                         # a new row being filled in (a form); keep keeps values after saving
 let NAME = formula                                  # a name for a formula; read-only, always up to date
 let NAME(value kind, ...) = formula                 # a formula with values, used as NAME(...) anywhere below
+                                                    # a value can be a row: let worth(r item) = r.qty * r.price
 ```
 
-`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
+`TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. An edit that changes a setting's `= default` also sets the stored value (the user asked for it in the chat); otherwise a value the user set is kept. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = countof(...)` then `win(X)`.
 
 ## 5. Formulas
 
@@ -121,7 +122,8 @@ Formulas always finish: there are no loops except over data, a bounded range or 
 
 - Arithmetic: `+ - * / %` and brackets. `x / 0` is `0`.
 - Comparison: `= != < > <= >=` give yes/no. Join with `and`, `or`, `not`.
-- Dates: `date + 3` (days later), `date - date` (days between), `date + 2h` (a date and time), `time - time` and `when - when` (a length of time).
+- Dates: `date + 3` (days later), `date - date` and `date - when` (whole days between), `date + 2h` (a date and time), `when - when` (a length of time). A date compared with a date and time compares whole days (`at <= today` includes all of today).
+- `time - time` is the forward length from the second time to the first, wrapping past midnight: bed `23:00` to wake `7:00` is `wake - bed` = 8 hours.
 - Durations: `dur + dur`, `dur * num`, `dur / num`, `dur / dur` (a number: `slept / 1h` is hours).
 - Money mixes with numbers and stays money.
 - Names: a setting, state or let; `it` (the current item, section 7.1); `index` (0, 1, 2 … inside `each`); `pi`; paths with `.`: `it.name`, `it.habit.name` (follow a `ref`), `d.mood` (a field of a new row).
@@ -137,6 +139,7 @@ last(T.field ...)   first(T.field ...)   (latest or earliest value; last(T) is t
 streak(T ...)   days in a row, up to today, with at least one row (yesterday counts if today has none yet)
 best(T ...)     the longest such run ever
 since(T ...)    whole days since the latest row (empty if there are none: never 0 by accident)
+due(T ..., n)   yes when there are no rows or the latest is n or more days ago (never done counts as overdue)
 gap(T ...)      average days between the days that have rows (empty with fewer than 2 days)
 ```
 
@@ -168,7 +171,7 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 |---|---|
 | `if(condition, a, b)` | `a` or `b` (one value, both the same type; to mix words and numbers use two text parts) |
 | `min(a, b)`, `max(a, b)` | the smaller or larger of two values (with one column inside, they are aggregates) |
-| `round(x)`, `floor(x)`, `abs(x)`, `clamp(x, lo, hi)` | numbers |
+| `round(x)`, `floor(x)`, `abs(x)`, `clamp(x, lo, hi)` | numbers (`round` goes half away from zero; `x % n` is never negative) |
 | `sin(deg)`, `cos(deg)`, `pi` | for placing things on a circle (degrees, 0 at the top when used as `x + r * sin`, `y - r * cos`) |
 | `len(text)`, `has(text, part)` | length; yes if `part` is in `text` (ignores case; `has(x, "")` is yes) |
 | `weekday(d)` | 1 (Monday) to 7 |
@@ -177,8 +180,16 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 | `hour(t)`, `minute(t)`, `second(t)` | parts of a time, a date and time, or a length of time |
 | `addmonths(d, n)` | the same day n months later (or earlier, with a minus) |
 | `hue(n)` | a colour from 0 to 360 (section 8.2) |
-| `random(n)` | a whole number from 1 to n; only inside actions (`tap set roll = random(6)`) |
+| `random(n)`, `random(TABLE ...)` | a whole number from 1 to n, or a random row; only inside actions (`tap set roll = random(6)`) |
+| `nth(TABLE ..., n)` | the nth row (from 1) in the query's order (`nth(card sort front, 1)`) |
+| `pow(x, y)` | x to the power y |
+| `join(a, b, ...)` | the parts joined with no spaces: `join(runs, "/", wickets)` |
+| `fixed(x, n)`, `compact(x)`, `grouped(x)` | x with n decimals; `81.5k`, `1.2M`; `1,234` with separators |
+| `plural(n, "day")` | `1 day`, `3 days` |
+| `monthshort(d)` | `"Nov"` |
 | `words(formula)` | the formula read out in plain English (used for default captions) |
+
+A function's result can be followed by a field: `last(item).name`, `random(card).front`.
 
 ## 6. Showing things
 
@@ -209,7 +220,17 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 | `choice TARGET` | tap chips for a `pick`, `ref` or yes/no value |
 | `slider TARGET LO..HI` | a slider for a number |
 
-### 6.3 Drawing
+### 6.3 Charts and drawing
+
+```
+plot X0..X1, Y0..Y1 [axes] [gridlines]   # a chart frame in data units (y grows upward); the ranges may be formulas
+  rect X, Y, W, H                        # in data units: rect index + 0.15, 0, 0.7, value is a bar standing on the axis
+  poly                                   # pt X, Y in data units: a line chart
+  tick X, PART ...                       # a label under the x axis at X (y labels come from the range)
+```
+
+`axes` draws both axes with labels; `gridlines` draws lines at the y labels. The std `daybars`, `bars` and `trend` are plots.
+
 
 ```
 draw [W, H] [mods]        # a canvas W wide and H tall in its own units (default 100, 100), scaled to fit
@@ -236,12 +257,14 @@ each SOURCE [as NAME]
 
 | Source | Items |
 |---|---|
-| `TABLE [window] [where ...] [by GROUP] [sort FORMULA [desc]] [top N]` | rows (newest first unless sorted). `sort` takes any formula of the row (`sort count(it.goal) desc`). With `by day\|week\|month\|FIELD\|LINK.FIELD` the items are groups: `it.key`, `count(it)`, `sum(it.amount)`, and `each it` for the group's rows |
+| `TABLE [window] [where ...] [by GROUP] [sort FORMULA [desc] \| shuffle] [top N]` | rows (newest first unless sorted). `sort` takes any formula of the row (`sort count(it.goal) desc`); `shuffle` gives a random order that stays the same while the app runs (each row gets its place when it is added). With `by day\|week\|month\|FIELD\|LINK.FIELD` the items are groups: `it.key`, `count(it)`, `sum(it.amount)`, and `each it` for the group's rows |
 | back link `it.check ...` | rows linked to `it` |
 | `days WINDOW` | dates, oldest first, for calendars and charts (`each days last 70 days`) |
 | `options T.field` | the options of a `pick` field |
 | `[250, 500, 1000]` | the listed values |
 | `1..9`, `1..n` | whole numbers (at most 1000) |
+
+`each SOURCE ... empty "No entries yet"` shows that text when there are no items.
 
 Inside the block, `it` is the item and `index` its position from 0. **`as NAME` names the item and leaves `it` alone**, so an inner `each` (or a chart's own loop) can still reach the outer item: `each habit as h` then `daybars last 7 days, count(h.check on it)`.
 
@@ -268,6 +291,7 @@ else
 | `pad N`, `gap N`, `span N` | inner space; space between children (both 0 to 6); columns to span in a grid |
 | `align start\|center\|end` | alignment |
 | `card` | a raised surface |
+| `ratio N`, `middle`, `full` | keep width / height at N (`ratio 1` makes square cells); centre the block in the free space; take the full screen height |
 | `tap ACTION`, `swipe ACTION` | what a tap or a sideways swipe does |
 
 ### 8.2 Colours
@@ -299,6 +323,7 @@ Theme roles `accent ink muted soft good warn bad bg surface edge`; named colours
 | `go SCREEN` | opens a screen |
 | `notify PART ...` | shows a notice (and a phone notification if the app is closed) |
 | `remind "Text" in DURATION` | schedules one reminder |
+| `after DURATION ACTION` | does the action later, while the app is open (`tap set flash = yes then after 2s set flash = no`) |
 
 Values written to a field are kept inside its range (a stock count cannot go below `0..`).
 
@@ -412,7 +437,7 @@ There is no statement that deletes data.
 
 | Code | Meaning |
 |---|---|
-| `E_SYNTAX` | the line does not match any statement (with targeted hints for a window after `where`, `?` in the wrong place, a theme word, text parts inside `if()`, a field without a type) |
+| `E_SYNTAX` | the line does not match any statement, with one targeted fix for common slips: a line that starts with a bare name (start it with `text`), shape or component values without commas or with one missing, a capital letter in a name, a window after `where`, `?` in the wrong place, a theme word, text parts inside `if()`, a field without a type |
 | `E_RESERVED` | one of the 12 reserved words used as a name, or a built-in field (`at`, `id`) redeclared |
 | `E_HEADER`, `E_ASK` | the first line is not `app`/`ask`; an `ask` program has more lines |
 | `E_INDENT`, `E_CHILD` | indentation is off; a line that cannot have children has some |
@@ -423,8 +448,8 @@ There is no statement that deletes data.
 | `E_DUP` | a name, field, option or modifier used twice; a `was` that clashes |
 | `E_CONTEXT` | a statement in the wrong place (`it` outside `each`, a shape outside `draw`, `table` inside a block, `else` without `if`, `random` outside an action) |
 | `E_ARGS`, `E_KIND`, `E_RECURSION` | wrong values for a component or formula; a component that uses itself |
-| `E_OPTION`, `E_DEFAULT`, `E_RANGE` | a value that is not one of a `pick`'s options; a bad default; a bad range |
-| `E_ICON`, `E_ACTION`, `E_TARGET`, `E_REQUIRED` | unknown icon; button without `tap`; something that cannot be changed; an `add` missing a required field |
+| `E_OPTION`, `E_DEFAULT`, `E_RANGE` | a value that is not one of a `pick`'s options, or an option that is a colour word or a name you declared (write it with a capital); a bad default; a bad range |
+| `E_ICON`, `E_ACTION`, `E_TARGET`, `E_REQUIRED` | unknown icon (the hint names the closest); button without `tap`; something that cannot be changed; an `add` missing a required field |
 | `E_SELF_COMPARE` | a `where` that compares a field with itself because the field hides your state or setting |
 | `E_INTERNAL` | a checker bug (never expected; the fuzz tests count it as a crash) |
 

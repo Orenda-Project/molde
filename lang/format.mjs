@@ -5,6 +5,7 @@
 //   size huge bold          ->  big     size large bold -> head     size small color muted -> faint
 //   = "Food" (a pick option) -> = Food  (option values are written bare, as in their declaration)
 //   pick "Eating out"|...   ->  pick Eating_out|... (an underscore shows as a space)
+//   setting goal num "Goal" ->  setting goal num   (a label that repeats the name is the default label)
 // The output is exactly the text the GBNF accepts, and format(format(x)) === format(x).
 import { splitLines } from './parse.mjs';
 import { lex, join } from './lex.mjs';
@@ -51,6 +52,17 @@ function rewrite(toks, opts) {
     if (v(0) === 'size' && v(1) === 'small' && v(2) === 'color' && v(3) === 'muted') { out.push({ ...toks[i], v: 'faint' }); i += 3; continue; }
     if (v(0) === 'color' && v(1) === 'muted' && v(2) === 'size' && v(3) === 'small') { out.push({ ...toks[i], v: 'faint' }); i += 3; continue; }
     out.push(toks[i]);
+  }
+  // a label that only repeats the name is the default label: drop it (setting goal ... "Goal")
+  if (out[0] && out[0].t === 'word' && (out[0].v === 'setting' || out[0].v === 'table')) {
+    const dflt = n => n.replace(/_/g, ' ').toLowerCase();
+    let start = out[0].v === 'setting' ? 1 : 2; // where the first field starts
+    if (out[0].v === 'table') { while (out[start] && (out[start].v === 'was' || out[start - 1].v === 'was')) start++; if (out[start] && out[start].t === 'str') start++; }
+    for (let i = start, fieldName = out[start] && out[start].v; i < out.length; i++) {
+      const t = out[i];
+      if (t.v === ',' && t.t === 'p') { fieldName = out[i + 1] && out[i + 1].v; continue; }
+      if (t.t === 'str' && i > start && !['unit', '=', '|', 'pick'].includes(out[i - 1].v) && !(out[i + 1] && out[i + 1].v === '|') && fieldName && JSON.parse(t.v).toLowerCase() === dflt(fieldName)) { out.splice(i, 1); i--; }
+    }
   }
   // implicit text line
   if (out[0] && out[0].t === 'word' && out[0].v === 'text' && out[1] && (out[1].t === 'str' || out[1].t === 'num' || (out[1].t === 'func' && out[1].known) || out[1].v === '('

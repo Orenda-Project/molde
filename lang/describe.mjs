@@ -128,6 +128,7 @@ export function ex(e) {
       NOUNS.pop();
       return e.fn === 'countof' ? `how many of ${source(e.src).replace(/^each /, 'the ')} have ${inner}` : `the ${{ sumof: 'sum', maxof: 'highest', minof: 'lowest' }[e.fn]} of ${inner} over ${source(e.src).replace(/^each /, 'the ')}`;
     }
+    case 'qfn': return e.fn === 'due' ? `${query(e.q)} is due: never done, or ${ex(e.e)} days or more since the last` : e.fn === 'nth' ? `entry number ${ex(e.e)} of ${query(e.q)}` : `a random one of ${query(e.q)}`;
     case 'ucall': return `${nice(e.name)} of ${e.args.map(ex).join(' and ')}`;
     case 'fn': {
       const A = e.args.map(ex);

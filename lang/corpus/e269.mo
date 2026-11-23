@@ -1,7 +1,7 @@
 app "Sleep diary" bed ink
 table night bed time, asleep time, woke time, rested num 1..5 = 3
 "Average sleep, this week" faint
-sumof(night week, if(it.woke < it.asleep, it.woke - it.asleep + 24h, it.woke - it.asleep)) / count(night week) big
+sumof(night week, (it.woke - it.asleep)) / count(night week) big
 "Rested by weekday (lowest is worst)" head
 each ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as w
   row

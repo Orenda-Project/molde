@@ -1,7 +1,7 @@
 app "Savings" coin mint
 table deposit amount money, note text?
 setting monthly money = 5000 "Saved each month"
-setting goal money = 100000 "Goal"
+setting goal money = 100000
 let total = sum(deposit.amount)
 let left = goal - total
 let nm = if(left <= 0, 0, floor(left / monthly) + if(left % monthly > 0, 1, 0))

@@ -38,7 +38,7 @@ test('group by a field reached through a link', () => {
 });
 
 test('time parts, durations, date setting', () => {
-  const a = run('app "Clock" clock ink\nsetting start date = today "Start"\nhour(now) ":" minute(now) month(today) year(today)\ntext today - start "days"\nminute(90m) second(75s)\n', { now: '2026-11-23T10:05:00Z' });
+  const a = run('app "Clock" clock ink\nsetting start date = today\nhour(now) ":" minute(now) month(today) year(today)\ntext today - start "days"\nminute(90m) second(75s)\n', { now: '2026-11-23T10:05:00Z' });
   assert.deepEqual(texts(a), ['10: 5 11 2026', '0 days', '30 15']);
 });
 

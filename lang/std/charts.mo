@@ -4,28 +4,24 @@ lib "charts"
 
 # describe: a bar chart of {value} for each day {win}
 def daybars win win, value num
-  row gap 1 align end
+  plot 0..countof(days win, yes), 0..maxof(days win, value) axes
     each days win
-      stack grow gap 0 align center
-        draw 10, 60
-          rect 0, 60 - 60 * value / maxof(days win, value), 10, 60 * value / maxof(days win, value) fill accent radius 2
-        text dayname(it) size tiny color muted
+      rect index + 0.15, 0, 0.7, value fill accent radius 2
+      tick index + 0.5, dayname(it)
 
 # describe: a bar chart of {value} for each of {src}
 def bars src src, value num, key text = ""
-  row gap 1 align end
+  plot 0..countof(src, yes), 0..maxof(src, value) axes
     each src
-      stack grow gap 0 align center
-        draw 10, 60
-          rect 0, 60 - 60 * value / maxof(src, value), 10, 60 * value / maxof(src, value) fill accent radius 2
-        text key size tiny color muted
+      rect index + 0.15, 0, 0.7, value fill accent radius 2
+      tick index + 0.5, key
 
 # describe: a line chart of {value} over {src}
 def trend src src, value num
-  draw 100, 40
-    poly stroke accent thick 1
+  plot 0..countof(src, yes) - 1, minof(src, value)..maxof(src, value) axes
+    poly stroke accent thick 2
       each src
-        pt 100 * index / (countof(src, yes) - 1), 38 - 36 * value / maxof(src, value)
+        pt index, value
 
 # describe: a heat map of {value} for each day {win}
 def heat win win, value num, peak num = 1
