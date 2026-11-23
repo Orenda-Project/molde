@@ -1,18 +1,21 @@
-// MoldeScript v0 type checker. check(src) parses, expands components, and checks meaning.
-// Every error has a code, a line number, a message and a fix hint, written so it can be pasted
-// into a repair prompt as is.
+// MoldeScript v0 type checker. check(src) parses, expands components and formulas (let with
+// parameters), and checks meaning. Every error has a code, a line number, a message and a fix
+// hint, written so it can be pasted into a repair prompt as is. The checker never throws: an
+// internal failure becomes one E_INTERNAL error (the fuzz tests count those as crashes).
 import { parse, MoError } from './parse.mjs';
 import { expandProgram } from './expand.mjs';
 
 export const ICONS = new Set(('drop check wallet dumbbell book clock heart star moon sun leaf cart list calendar pill money user users bell timer '
   + 'calc home cup bed scale smile note pen gift tag package chart flame bolt target trophy coin bag phone pin flag music map car '
   + 'bus plane bike walk run baby paw plant tree cloud rain snow fire coffee food apple bread fish egg milk tooth eye brain '
-  + 'mosque beads school pencil alarm hourglass dice cards ball game board shield key lock seat plus minus').split(' '));
+  + 'mosque beads school pencil alarm hourglass dice cards ball game board shield key lock seat plus minus tool box grid').split(' '));
+export const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
+export const COLORS = ['accent', 'ink', 'muted', 'soft', 'good', 'warn', 'bad', 'bg', 'surface', 'edge', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'grey', 'black', 'white'];
 
 const NUMERIC = new Set(['num', 'money']);
 const TEXTUAL = new Set(['text', 'long', 'pick']);
-const tname = t => typeof t === 'string' ? t : t.t;
-const show = t => {
+export const tname = t => typeof t === 'string' ? t : t.t;
+export const show = t => {
   const n = tname(t);
   if (n === 'row') return `a ${t.table} row`;
   if (n === 'rows') return t.field ? `the ${t.field} column of ${t.table}` : `the table ${t.table}`;
@@ -23,7 +26,7 @@ const show = t => {
   return { num: 'a number', money: 'money', text: 'text', long: 'text', bool: 'yes/no', date: 'a date', time: 'a time of day', when: 'a date and time', dur: 'a duration', image: 'an image', color: 'a colour', icon: 'an icon', any: 'something' }[n] || n;
 };
 const isNum = t => NUMERIC.has(tname(t));
-const family = t => {
+export const family = t => {
   const n = tname(t);
   if (NUMERIC.has(n)) return 'num';
   if (TEXTUAL.has(n)) return 'text';
@@ -32,39 +35,67 @@ const family = t => {
   return n;
 };
 const ANY = { t: 'any' };
-const isAny = t => tname(t) === 'any';
+const isAny = t => !t || tname(t) === 'any';
+const AGG_NUM = ['count', 'streak', 'best', 'since', 'gap'];
+const PKIND_TYPE = { num: 'num', money: 'money', text: 'text', bool: 'bool', date: 'date', time: 'time', dur: 'dur', color: 'color', icon: 'text' };
 
 export function check(src, opts = {}) {
-  const prog = parse(src, opts);
-  const errors = [...prog.errors];
-  if (!prog.header && !errors.length) errors.push(new MoError('E_HEADER', 1, 'the program is empty.', 'start with app "Name".'));
-  let defs = new Map();
-  if (prog.header && prog.header.kind === 'app') {
-    const ex = expandProgram(prog);
-    errors.push(...ex.errors);
-    defs = ex.defs;
-    const C = new Checker(errors);
-    C.header(prog.header);
-    C.list(prog.body, { top: true });
-    prog.env = { tables: C.tables, settings: C.settings, states: C.states, screens: C.screens };
+  let prog, errors, defs = new Map();
+  try {
+    prog = parse(src, opts);
+    errors = [...prog.errors];
+    if (!prog.header && !errors.length) errors.push(new MoError('E_HEADER', 1, 'the program is empty.', 'start with app "Name".'));
+    if (prog.header && prog.header.kind === 'app') {
+      const ex = expandProgram(prog);
+      errors.push(...ex.errors);
+      defs = ex.defs;
+      const C = new Checker(errors, prog);
+      C.header(prog.header);
+      C.list(prog.body, { top: true });
+      prog.env = { tables: C.tables, settings: C.settings, states: C.states, screens: C.screens, lets: C.lets, options: C.options };
+      // never show internal names made by component expansion (d_3 -> d)
+      for (const e of errors) for (const [inner, outer] of ex.renamed) {
+        const re = new RegExp(`\\b${inner}\\b`, 'g');
+        e.msg = e.msg.replace(re, outer); e.hint = (e.hint || '').replace(re, outer);
+      }
+    }
+  } catch (e) {
+    errors = errors || [];
+    errors.push(new MoError('E_INTERNAL', 0, `the checker failed: ${e && e.message}`, 'please report this program.'));
+    prog = prog || { header: null, body: [] };
   }
   errors.sort((a, b) => a.line - b.line);
   return { ok: errors.length === 0, errors, ast: prog, defs };
 }
 
 class Checker {
-  constructor(errors) {
+  constructor(errors, prog) {
     this.errors = errors;
+    this.failed = prog.failed || new Map();
+    this.reportedFailed = new Set();
     this.tables = new Map(); this.settings = new Map(); this.states = new Map(); this.screens = new Map(); this.lets = new Map(); this.readonly = new Set();
-    this.scopes = []; // {it, names: Map, each: bool}
-    this.line = 0; this.via = null;
+    this.options = new Set(); // every pick option word, so a bare option word reads as that option
+    this.scopes = []; // {it, names: Map, each: bool, asName}
+    this.line = 0; this.via = null; this.inAction = 0;
+    this.whereTable = null;
   }
   err(code, msg, hint) {
     const pre = this.via ? `inside "${this.via}": ` : '';
     if (!this.errors.some(e => e.line === this.line && e.code === code && e.msg === pre + msg)) this.errors.push(new MoError(code, this.line, pre + msg, hint));
     return ANY;
   }
+  // A name whose declaring line failed: say so once, then stay quiet.
+  followOn(name) {
+    if (!this.failed.has(name)) return false;
+    if (!this.reportedFailed.has(name)) {
+      this.reportedFailed.add(name);
+      const l = this.failed.get(name);
+      this.err('E_UNKNOWN_NAME', `"${name}" is unknown because line ${l}, which declares it, failed.`, `fix line ${l} first; later uses of ${name} are not reported again.`);
+    }
+    return true;
+  }
   taken(name) { return this.lets.has(name) || this.tables.has(name) || this.settings.has(name) || this.states.has(name) || this.screens.has(name); }
+  tb(name) { return this.tables.get(name) || null; }
 
   header(h) {
     this.line = h.line;
@@ -82,6 +113,15 @@ class Checker {
     }
   }
 
+  declare(name, t, cx) {
+    if (cx.top) {
+      if (this.taken(name)) { this.err('E_DUP', `the name "${name}" is already used (tables, settings, states, lets and screens share one set of names).`, 'pick a different name.'); return false; }
+      return true;
+    }
+    this.scopes[this.scopes.length - 1].names.set(name, t);
+    return false;
+  }
+
   stmt(s, cx, prev) {
     const topOnly = () => { if (!cx.top) this.err('E_CONTEXT', `"${s.kind}" must be at the top level (not indented).`, 'move it to the start of a line with no indentation.'); };
     switch (s.kind) {
@@ -96,31 +136,36 @@ class Checker {
       case 'state': {
         let t;
         if (s.draft) {
-          if (!this.tables.has(s.draft)) return this.err('E_UNKNOWN_TABLE', `there is no table "${s.draft}" (tables must be declared above).`, `add "table ${s.draft} ..." above this line.`);
+          if (!this.tb(s.draft)) { if (this.followOn(s.draft)) return; return this.err('E_UNKNOWN_TABLE', `there is no table "${s.draft}" (tables must be declared above).`, `add "table ${s.draft} ..." above this line.`); }
           t = { t: 'draft', table: s.draft };
         } else t = this.fieldType(s.type);
-        if (s.init && tname(t) === 'pick' && s.init.k === 'path' && !s.init.parts.length && t.options.includes(s.init.head)) s.init = { k: 'str', v: s.init.head, word: true };
+        if (s.init && tname(t) === 'pick' && s.init.k === 'path' && !s.init.parts.length && t.options.includes(s.init.head)) s.init = { k: 'word', v: s.init.head };
         if (s.init) { const it = this.expr(s.init); this.assignable(t, it, `the start value of ${s.name}`, s.init); }
-        if (cx.top) {
-          if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different name.');
-          this.states.set(s.name, t);
-        } else this.scopes[this.scopes.length - 1].names.set(s.name, t);
+        if (this.declare(s.name, t, cx)) this.states.set(s.name, t);
         return;
       }
       case 'let': {
+        if (s.params) {
+          // a formula with values: check its body with the parameters' types
+          this.scopes.push({ it: null, names: new Map(s.params.map(p => [p.name, PKIND_TYPE[p.kind] || ANY])), each: false });
+          const t = this.expr(s.e);
+          this.scopes.pop();
+          if (!cx.top) return this.err('E_CONTEXT', 'a let with values (a formula you call) must be at the top level.', 'move it to column 1.');
+          if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different name.');
+          this.lets.set(s.name, { t: 'fn', ret: t });
+          this.readonly.add(s.name);
+          return;
+        }
         const t = this.expr(s.e);
         if (['rows', 'draft', 'group'].includes(tname(t))) this.err('E_TYPE', `let names a value; ${show(t)} is not one.`, 'name a number, text, date or row.');
-        if (cx.top) {
-          if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different name.');
-          this.lets.set(s.name, t);
-        } else this.scopes[this.scopes.length - 1].names.set(s.name, t);
+        if (this.declare(s.name, t, cx)) this.lets.set(s.name, t);
         this.readonly.add(s.name);
         return;
       }
       case 'def': if (!cx.top) this.err('E_CONTEXT', 'def must be at the top level.', 'move the def to column 1.'); return;
       case 'screen': {
         if (!cx.top) return this.err('E_CONTEXT', 'screen must be at the top level.', 'move it to column 1.');
-        if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different name.');
+        if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used (screens share names with tables, settings and states).`, 'pick a different screen name.');
         if (s.icon && !ICONS.has(s.icon)) this.err('E_ICON', `unknown icon "${s.icon}".`, 'use an icon name from SPEC.md.');
         this.screens.set(s.name, s);
         return this.block(s.children, { ...cx, top: false });
@@ -131,7 +176,9 @@ class Checker {
           const t = this.path(s.at, 'rows');
           if (!isAny(t) && !(tname(t) === 'rows' && t.field && ['time', 'date', 'when'].includes(tname(t.ftype))))
             this.err('E_TYPE', 'remind at needs times like 8:00 or a time/date column like med.time.', 'write remind "Text" at 8:00 or at table.field.');
+          else if (!isAny(t) && s.time && tname(t.ftype) === 'time') this.err('E_TYPE', `${t.table}.${t.field} is already a time; "at TIME" after it is for date columns.`, 'remove the second at.');
         }
+        if (s.monthly && s.monthly.some(d => d < 1 || d > 31)) this.err('E_RANGE', 'monthly days must be 1 to 31 (31 means the last day in short months).', 'write monthly on 1 at 9:00.');
         if (s.cond) this.bool(s.cond, 'the remind condition');
         return;
       }
@@ -140,7 +187,7 @@ class Checker {
         return this.actions(s.actions);
       case 'each': {
         const item = this.source(s.source);
-        const scope = { it: s.as ? this.curIt() : item, names: new Map(), each: true };
+        const scope = { it: s.as ? this.curIt() : item, names: new Map(), each: true, asName: s.as || null, asItem: item };
         if (s.as) { scope.names.set(s.as, item); this.readonly.add(s.as); }
         this.scopes.push(scope);
         this.list(s.children, { ...cx, top: false });
@@ -158,7 +205,7 @@ class Checker {
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, draw: s });
       case 'poly':
-        if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw W, H line.');
+        if (!cx.draw) this.err('E_CONTEXT', 'poly is a drawing shape; it must be inside draw.', 'indent it under a draw line.');
         this.mods(s.mods);
         return this.block(s.children, { ...cx, top: false, poly: true });
       case 'pt':
@@ -166,7 +213,7 @@ class Checker {
         this.num(s.x, 'pt x'); this.num(s.y, 'pt y');
         return;
       case 'shape':
-        if (!cx.draw) this.err('E_CONTEXT', `${s.shape} is a drawing shape; it must be inside draw.`, 'indent it under a draw W, H line.');
+        if (!cx.draw) this.err('E_CONTEXT', `${s.shape} is a drawing shape; it must be inside draw.`, 'indent it under a draw line.');
         s.args.forEach((a, i) => this.num(a, `${s.shape} value ${i + 1}`));
         if (s.parts) this.parts(s.parts);
         return this.mods(s.mods);
@@ -191,7 +238,7 @@ class Checker {
       case 'toggle': this.toggleT(s); return this.mods(s.mods);
       case 'choice': {
         const t = this.target(s.target);
-        if (!isAny(t) && tname(t) !== 'pick' && tname(t) !== 'bool' && tname(t) !== 'ref') this.err('E_TYPE', `choice needs a pick, ref or yes/no value, got ${show(t)}.`, 'give the state or field a pick type.');
+        if (!isAny(t) && tname(t) !== 'pick' && tname(t) !== 'bool' && tname(t) !== 'ref') this.err('E_TYPE', `choice needs a pick, ref or yes/no value, got ${show(t)}.`, 'give the state a pick type: state x pick A|B = A.');
         return this.mods(s.mods);
       }
       case 'slider': {
@@ -210,7 +257,7 @@ class Checker {
       if (seen.has(m.m)) this.err('E_DUP', `"${m.m}" appears twice on this line.`, 'keep one.');
       seen.add(m.m);
       if (m.m === 'tap' || m.m === 'swipe') this.actions(m.actions);
-      else if (['color', 'fill', 'stroke'].includes(m.m)) { const t = this.expr(m.e); if (!isAny(t) && t !== 'color') this.err('E_TYPE', `${m.m} needs a colour (accent, ink, muted, soft, good, warn, bad, bg, surface, edge), got ${show(t)}.`, `write ${m.m} accent, or ${m.m} if(x > 0, good, bad).`); }
+      else if (['color', 'fill', 'stroke'].includes(m.m)) { const t = this.expr(m.e); if (!isAny(t) && t !== 'color') this.err('E_TYPE', `${m.m} needs a colour (${COLORS.join(', ')} or hue(0..360)), got ${show(t)}.`, `write ${m.m} accent, or ${m.m} if(x > 0, good, bad).`); }
       else if (m.e) this.num(m.e, m.m);
     }
   }
@@ -218,14 +265,23 @@ class Checker {
   block(children, cx) { this.scopes.push({ it: this.curIt(), names: new Map(), each: this.inEach() }); this.list(children || [], cx); this.scopes.pop(); }
   curIt() { for (let i = this.scopes.length - 1; i >= 0; i--) if (this.scopes[i].it) return this.scopes[i].it; return null; }
   inEach() { return this.scopes.some(s => s.each); }
+  asNames() { return this.scopes.filter(s => s.asName).map(s => s.asName); }
 
   table(s) {
     if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different table name.');
+    if (s.was && s.was === s.name) this.err('E_DUP', `table ${s.name} cannot be renamed from itself.`, 'remove "was".');
+    if (s.was && this.tables.has(s.was)) this.err('E_DUP', `table ${s.name} says it was ${s.was}, but ${s.was} is still declared.`, `remove "table ${s.was}" or the "was ${s.was}".`);
     const fields = new Map();
+    const was = new Set();
     for (const f of s.fields) {
       if (f.name === 'at' || f.name === 'id') this.err('E_RESERVED', `"${f.name}" is a built-in field of every row.`, 'every row already has at (when it was added); remove this field or rename it.');
       if (fields.has(f.name)) this.err('E_DUP', `field "${f.name}" appears twice in ${s.name}.`, 'remove one or rename it.');
-      if (f.type.t === 'ref' && !this.tables.has(f.type.table) && f.type.table !== s.name) this.err('E_REF', `field ${f.name} links to table "${f.type.table}", which is not declared above.`, `declare table ${f.type.table} on an earlier line.`);
+      if (f.was && (fields.has(f.was) || s.fields.some(g => g.name === f.was) || was.has(f.was))) this.err('E_DUP', `field ${f.name} says it was ${f.was}, but ${f.was} is still a field (or renamed twice).`, `keep only one of them.`);
+      if (f.was) was.add(f.was);
+      if (f.type.t === 'ref' && !this.tables.has(f.type.table) && f.type.table !== s.name) {
+        if (!this.followOn(f.type.table)) this.err('E_REF', `field ${f.name} links to table "${f.type.table}", which is not declared above.`, `declare table ${f.type.table} on an earlier line.`);
+        continue; // a broken link is left out so later lines do not trip on it
+      }
       this.fieldDecl(f, s.name);
       fields.set(f.name, f);
     }
@@ -236,7 +292,7 @@ class Checker {
     const t = this.fieldType(f.type);
     if (f.type.t === 'pick') {
       const seen = new Set();
-      for (const o of f.type.options) { if (seen.has(o)) this.err('E_DUP', `option "${o}" appears twice.`, 'remove the repeat.'); seen.add(o); }
+      for (const o of f.type.options) { if (seen.has(o)) this.err('E_DUP', `option "${o}" appears twice.`, 'remove the repeat.'); seen.add(o); this.options.add(o); }
     }
     if (f.range && !isNum(t) && tname(t) !== 'dur') this.err('E_RANGE', `a range like 1..10 only fits number fields, not ${show(t)}.`, 'remove the range.');
     if (f.range && f.range.hi !== null && f.range.hi < f.range.lo) this.err('E_RANGE', 'the range is backwards.', 'write the small number first, like 1..10.');
@@ -252,7 +308,11 @@ class Checker {
       }
     }
   }
-  fieldType(type) { return type.t === 'pick' ? { t: 'pick', options: type.options } : type.t === 'ref' ? { t: 'ref', table: type.table } : type.t; }
+  fieldType(type) {
+    if (!type) return ANY;
+    if (type.t === 'pick') { type.options.forEach(o => this.options.add(o)); return { t: 'pick', options: type.options }; }
+    return type.t === 'ref' ? { t: 'ref', table: type.table } : type.t;
+  }
 
   lookup(name) {
     for (let i = this.scopes.length - 1; i >= 0; i--) if (this.scopes[i].names.has(name)) return this.scopes[i].names.get(name);
@@ -262,29 +322,42 @@ class Checker {
     return null;
   }
   writable(name) {
-    if (this.readonly.has(name) && !this.states.has(name) && !this.settings.has(name)) return false;
-    for (let i = this.scopes.length - 1; i >= 0; i--) if (this.scopes[i].names.has(name)) return !this.scopes[i].each || true;
+    for (let i = this.scopes.length - 1; i >= 0; i--) if (this.scopes[i].names.has(name)) return !this.readonly.has(name) || this.states.has(name);
+    if (this.lets.has(name)) return false;
     return this.states.has(name) || this.settings.has(name);
   }
 
   // ---------- paths ----------
+  itHint() {
+    const as = this.asNames();
+    if (this.via) return `inside "${this.via}", "it" means that component's own item (for example each day of a chart). To use the item of an outer each, write "each X as NAME" and pass NAME.field (for example: each habit as h, then ${this.via} ..., count(h.check on it)).`;
+    if (as.length) return `this each names its item "${as[as.length - 1]}"; write ${as[as.length - 1]}.field (with "as", "it" stays the outer item).`;
+    return 'wrap this in each, or name the table instead.';
+  }
+
   // mode: 'value' (a value), 'rows' (a table query), 'target' (something to write)
   path(p, mode = 'value') {
     let t;
     if (p.head === 'it') {
       t = this.curIt();
-      if (!t) return this.err('E_CONTEXT', '"it" only exists inside each (and inside fold functions such as maxof).', 'wrap this in each, or name the table instead.');
-    } else if (this.whereTable && this.tables.get(this.whereTable).fields.has(p.head) || (this.whereTable && (p.head === 'at' || p.head === 'id'))) {
-      t = this.rowField(this.whereTable, p.head);
-    } else if (this.lookup(p.head)) t = this.lookup(p.head);
-    else if (this.tables.has(p.head)) t = { t: 'rows', table: p.head };
-    else {
-      const known = [...this.tables.keys(), ...this.settings.keys(), ...this.states.keys(), ...this.lets.keys()];
-      return this.err(mode === 'rows' ? 'E_UNKNOWN_TABLE' : 'E_UNKNOWN_NAME', `"${p.head}" is not a table, setting or state declared above${this.whereTable ? `, nor a field of ${this.whereTable}` : ''}.`, known.length ? `use one of: ${known.join(', ')}; or declare it first.` : 'declare it first (table, setting or state).');
+      if (!t) return this.err('E_CONTEXT', '"it" only exists inside each (and inside folds such as maxof).', this.itHint());
+    } else {
+      const wt = this.whereTable && this.tb(this.whereTable);
+      const isField = wt && (wt.fields.has(p.head) || p.head === 'at' || p.head === 'id');
+      if (isField) t = this.rowField(this.whereTable, p.head);
+      else if (this.lookup(p.head)) t = this.lookup(p.head);
+      else if (this.tables.has(p.head)) t = { t: 'rows', table: p.head };
+      else if (!p.parts.length && this.options.has(p.head) && mode === 'value') return 'text'; // a bare pick option word
+      else {
+        if (this.followOn(p.head)) return ANY;
+        const known = [...this.tables.keys(), ...this.settings.keys(), ...this.states.keys(), ...this.lets.keys()];
+        return this.err(mode === 'rows' ? 'E_UNKNOWN_TABLE' : 'E_UNKNOWN_NAME', `"${p.head}" is not a table, setting, state or let declared above${this.whereTable ? `, nor a field of ${this.whereTable}` : ''}.`, known.length ? `use one of: ${known.join(', ')}; or declare it first.` : 'declare it first (table, setting or state).');
+      }
+      if (tname(t) === 'fn') return this.err('E_TYPE', `${p.head} is a formula with values; call it like ${p.head}(...).`, `write ${p.head}(value, ...).`);
     }
     for (const part of p.parts) {
       if (isAny(t)) return t;
-      t = this.step(t, part);
+      t = this.step(t, part, p);
     }
     return t;
   }
@@ -292,35 +365,44 @@ class Checker {
   rowField(table, f) {
     if (f === 'at') return 'when';
     if (f === 'id') return 'num';
-    const fd = this.tables.get(table).fields.get(f);
-    return this.fieldType(fd.type);
+    const tb = this.tb(table);
+    const fd = tb && tb.fields.get(f);
+    return fd ? this.fieldType(fd.type) : ANY;
   }
 
-  step(t, part) {
+  step(t, part, p) {
     const n = tname(t);
+    const itNote = p && p.head === 'it' ? ' ' + this.itHint() : '';
     if (n === 'row' || n === 'ref' || n === 'draft') {
-      const tb = this.tables.get(t.table);
+      const tb = this.tb(t.table);
+      if (!tb) return ANY;
       if (tb.fields.has(part) || part === 'at' || part === 'id') return this.rowField(t.table, part);
       if (n !== 'draft') {
-        const back = this.tables.get(part);
+        const back = this.tb(part);
         if (back) {
           const refs = [...back.fields.values()].filter(f => f.type.t === 'ref' && f.type.table === t.table);
           if (refs.length === 1) return { t: 'rows', table: part, via: refs[0].name };
-          if (refs.length > 1) return this.err('E_REF', `${part} has more than one link to ${t.table}, so it.${part} is unclear.`, `use: ${part} where ${refs[0].name} = it.`);
-          return this.err('E_REF', `${part} has no ref field pointing at ${t.table}.`, `add a field like "${t.table} ref ${t.table}" to table ${part}.`);
+          if (refs.length > 1) return this.err('E_REF', `${part} has more than one link to ${t.table}, so .${part} is unclear.`, `use: ${part} where ${refs[0].name} = it.`);
+          return this.err('E_REF', `${part} has no ref field pointing at ${t.table}${p && p.head === 'it' ? ` (here "it" is a ${t.table})` : ''}.`, (itNote.trim() || `add a field like "${t.table} ref ${t.table}" to table ${part}.`));
         }
       }
-      return this.err('E_UNKNOWN_FIELD', `${t.table} has no field "${part}".`, `fields of ${t.table}: ${[...tb.fields.keys(), 'at'].join(', ')}.`);
+      return this.err('E_UNKNOWN_FIELD', `${t.table} has no field "${part}"${p && p.head === 'it' ? ` (here "it" is a ${t.table})` : ''}.`, `fields of ${t.table}: ${[...tb.fields.keys(), 'at'].join(', ')}.${itNote}`);
     }
     if (n === 'rows' && !t.field) {
-      const tb = this.tables.get(t.table);
+      const tb = this.tb(t.table);
+      if (!tb) return ANY;
       if (tb.fields.has(part) || part === 'at') return { ...t, field: part, ftype: this.rowField(t.table, part) };
       return this.err('E_UNKNOWN_FIELD', `${t.table} has no field "${part}".`, `fields of ${t.table}: ${[...tb.fields.keys(), 'at'].join(', ')}.`);
     }
+    if (n === 'rows' && t.field && tname(t.ftype) === 'ref') {
+      // a column of links followed further: drink.kind.name -> the name column of the linked rows
+      const tb = this.tb(t.ftype.table);
+      if (tb && (tb.fields.has(part) || part === 'at')) return { t: 'rows', table: t.table, field: t.field + '.' + part, ftype: this.rowField(t.ftype.table, part) };
+    }
     if (n === 'group') {
       if (part === 'key') return t.key;
-      const tb = this.tables.get(t.table);
-      if (tb.fields.has(part) || part === 'at') return { t: 'rows', table: t.table, field: part, ftype: this.rowField(t.table, part) };
+      const tb = this.tb(t.table);
+      if (tb && (tb.fields.has(part) || part === 'at')) return { t: 'rows', table: t.table, field: part, ftype: this.rowField(t.table, part) };
       return this.err('E_UNKNOWN_FIELD', `a group has .key and the columns of ${t.table}; "${part}" is neither.`, 'use g.key, count(g) or sum(g.field).');
     }
     return this.err('E_TYPE', `${show(t)} has no part "${part}".`, 'remove the .' + part + '.');
@@ -331,16 +413,41 @@ class Checker {
     let t = this.path(q.path, 'rows');
     if (isAny(t)) return t;
     if (tname(t) === 'group') t = { t: 'rows', table: t.table };
-    if (tname(t) !== 'rows') return this.err('E_TYPE', `expected a table here, got ${show(t)}.`, 'name a table, like count(drink today).');
+    if (tname(t) !== 'rows') {
+      const shadow = q.path.parts.length && this.tb(q.path.parts[q.path.parts.length - 1]);
+      return this.err('E_TYPE', `expected a table here, got ${show(t)}.`, shadow ? `"${q.path.parts[q.path.parts.length - 1]}" is read as a field, which hides the table of the same name; rename the field.` : 'name a table, like count(drink today).');
+    }
     if (t.field && !allowField) this.err('E_TYPE', 'expected a table, not a column.', `drop .${t.field}.`);
     if (q.win) this.window(q.win);
-    if (q.where) { const o = this.whereTable; this.whereTable = t.table; this.bool(q.where, 'the where condition'); this.whereTable = o; }
-    const tb = this.tables.get(t.table);
-    if (q.by && !['day', 'week', 'month'].includes(q.by) && !tb.fields.has(q.by)) this.err('E_UNKNOWN_FIELD', `cannot group by "${q.by}": ${t.table} has no such field.`, `group by day, week, month or a field of ${t.table}.`);
-    if (q.sort) {
-      if (q.sort.parts.length || !(tb.fields.has(q.sort.head) || q.sort.head === 'at')) this.err('E_UNKNOWN_FIELD', `cannot sort by "${q.sort.head}": ${t.table} has no such field.`, `sort by a field of ${t.table} or at.`);
+    const tb = this.tb(t.table);
+    if (q.where) this.inWhere(t.table, () => this.bool(q.where, 'the where condition'));
+    if (q.by && tb) {
+      if (typeof q.by === 'string') {
+        if (!['day', 'week', 'month'].includes(q.by) && !tb.fields.has(q.by)) this.err('E_UNKNOWN_FIELD', `cannot group by "${q.by}": ${t.table} has no such field.`, `group by day, week, month or a field of ${t.table}.`);
+      } else this.byPath(t.table, q.by);
     }
+    if (q.sort) this.inWhere(t.table, () => {
+      this.scopes.push({ it: { t: 'row', table: t.table }, names: new Map(), each: true });
+      const st = this.expr(q.sort);
+      this.scopes.pop();
+      if (!isAny(st) && !['num', 'text', 'date', 'time', 'dur', 'bool'].includes(family(st))) this.err('E_TYPE', `cannot sort by ${show(st)}.`, `sort by a field of ${t.table}, at, or a formula of it.`);
+    });
     return t;
+  }
+
+  inWhere(table, f) { const o = this.whereTable; this.whereTable = table; try { f(); } finally { this.whereTable = o; } }
+
+  // by a field reached through links: by dish.cuisine
+  byPath(table, p) {
+    let cur = table; let ft = null;
+    for (const part of [p.head, ...p.parts]) {
+      const tb = this.tb(cur);
+      const f = tb && tb.fields.get(part);
+      if (!f) { this.err('E_UNKNOWN_FIELD', `cannot group by ${[p.head, ...p.parts].join('.')}: ${cur} has no field "${part}".`, `group by a field of ${cur}, or follow a ref field with a dot.`); return ANY; }
+      ft = this.fieldType(f.type);
+      if (f.type.t === 'ref') cur = f.type.table;
+    }
+    return ft;
   }
 
   window(w) {
@@ -370,8 +477,10 @@ class Checker {
         const t = this.query(s.q, false);
         if (isAny(t)) return t;
         if (s.q.by) {
-          const tb = this.tables.get(t.table);
-          const key = ['day', 'week', 'month'].includes(s.q.by) ? 'date' : this.fieldType(tb.fields.get(s.q.by)?.type || { t: 'text' });
+          const tb = this.tb(t.table);
+          let key;
+          if (typeof s.q.by !== 'string') key = this.byPath(t.table, s.q.by);
+          else key = ['day', 'week', 'month'].includes(s.q.by) ? 'date' : this.fieldType(tb?.fields.get(s.q.by)?.type || { t: 'text' });
           return { t: 'group', table: t.table, key };
         }
         return { t: 'row', table: t.table };
@@ -385,9 +494,8 @@ class Checker {
     const t = this.path(p, 'target');
     if (isAny(t)) return t;
     if (!p.parts.length && p.head !== 'it') {
-      if (!this.writable(p.head) && !this.tables.has(p.head)) return this.err('E_TARGET', `"${p.head}" cannot be changed${this.readonly.has(p.head) ? ' (it is a let formula)' : ''}.`, 'change a state, a setting, or a row field like it.done.');
+      if (!this.writable(p.head) && !this.tables.has(p.head)) return this.err('E_TARGET', `"${p.head}" cannot be changed${this.lets.has(p.head) || this.readonly.has(p.head) ? ' (it is a let formula or an each item name)' : ''}.`, 'change a state, a setting, or a row field like it.done.');
     } else {
-      // row field or draft field are fine; a whole row is not
       const n = tname(t);
       if (n === 'row' || n === 'group') return this.err('E_TARGET', 'a whole row cannot be set; set one of its fields.', 'write it.field.');
     }
@@ -401,7 +509,7 @@ class Checker {
     if (tname(t) === 'rows') {
       if (t.field) return this.err('E_TYPE', 'toggle on a table marks a day; it takes the table, not a column.', `write toggle ${t.table}.`);
       this.query({ path: s.target, win: s.win, where: s.where });
-      if (s.win && ['all', 'last'].includes(s.win.k)) this.err('E_WINDOW', 'toggle marks one day; use today, yesterday or on DATE.', 'write toggle X today or toggle X on d.');
+      if (s.win && ['all', 'last'].includes(s.win.k)) this.err('E_WINDOW', 'toggle marks one day; use today, yesterday, on DATE (or week/month for a once-a-period mark).', 'write toggle X today or toggle X on d.');
       if (s.where) this.whereEq(s.where, t.table);
       return;
     }
@@ -410,17 +518,17 @@ class Checker {
     if (tname(t) !== 'bool') this.err('E_TYPE', `toggle needs a yes/no value or a table, got ${show(t)}.`, 'use a bool state, setting or field.');
   }
   whereEq(e, table) {
-    // toggle where: only field = value (joined by and), so a new row can be filled in
-    const ok = x => (x.k === 'bin' && x.op === 'and' && ok(x.a) && ok(x.b)) || (x.k === 'bin' && x.op === '=' && x.a.k === 'path' && !x.a.parts.length && this.tables.get(table).fields.has(x.a.head));
+    const tb = this.tb(table);
+    const ok = x => (x.k === 'bin' && x.op === 'and' && ok(x.a) && ok(x.b)) || (x.k === 'bin' && x.op === '=' && x.a.k === 'path' && !x.a.parts.length && tb && tb.fields.has(x.a.head));
     if (!ok(e)) this.err('E_TYPE', 'a toggle where may only say field = value (joined with and).', 'write where name = it.');
   }
 
-  actions(list) { for (const a of list) this.action(a); }
+  actions(list) { this.inAction++; try { for (const a of list) this.action(a); } finally { this.inAction--; } }
   action(a) {
     switch (a.a) {
       case 'add': {
-        const tb = this.tables.get(a.table);
-        if (!tb) return this.err('E_UNKNOWN_TABLE', `there is no table "${a.table}" declared above.`, `declare table ${a.table} first.`);
+        const tb = this.tb(a.table);
+        if (!tb) { if (this.followOn(a.table)) return; return this.err('E_UNKNOWN_TABLE', `there is no table "${a.table}" declared above.`, `declare table ${a.table} first.`); }
         const set = new Set();
         for (const s of a.assigns) {
           if (!tb.fields.has(s.name) && s.name !== 'at') { this.err('E_UNKNOWN_FIELD', `${a.table} has no field "${s.name}".`, `fields of ${a.table}: ${[...tb.fields.keys()].join(', ')}.`); continue; }
@@ -431,11 +539,29 @@ class Checker {
         return;
       }
       case 'set': { const t = this.target(a.target); this.assignable(t, this.expr(a.e), 'this set', a.e); return; }
+      case 'setall': {
+        const t = this.path(a.target, 'rows');
+        if (isAny(t)) return;
+        if (tname(t) !== 'rows' || !t.field || t.field.includes('.')) return this.err('E_TARGET', 'set all needs a column like item.got.', 'write set all item.got = no.');
+        this.scopes.push({ it: { t: 'row', table: t.table }, names: new Map(), each: true });
+        this.inWhere(t.table, () => { this.assignable(t.ftype, this.expr(a.e), `${t.table}.${t.field}`, a.e); if (a.where) this.bool(a.where, 'the where condition'); });
+        this.scopes.pop();
+        return;
+      }
+      case 'removeall': this.query(a.q, false); return;
       case 'toggle': return this.toggleT({ target: a.target, win: a.win, where: a.where });
-      case 'edit': if (a.e.k === 'path' && !a.e.parts.length && a.e.head !== 'it' && (this.settings.has(a.e.head) || this.lookup(a.e.head))) { const t = this.lookup(a.e.head); if (tname(t) === 'row') return; return; } // falls through for rows
-      // eslint-disable-next-line no-fallthrough
-      case 'remove': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `${a.a} needs a row (like it), got ${show(t)}.`, `write ${a.a} it inside each.`); return; }
-      case 'save': { const t = this.lookup(a.name); if (!t || tname(t) !== 'draft') this.err('E_TARGET', `save needs a state made with "state ${a.name} new TABLE".`, `add: state ${a.name} new TABLE.`); return; }
+      case 'edit': {
+        if (a.e.k === 'path' && !a.e.parts.length && a.e.head !== 'it') {
+          const t = this.lookup(a.e.head);
+          if (t && tname(t) === 'row') return;
+          if (this.settings.has(a.e.head) || (t && this.writable(a.e.head))) return;
+        }
+        const t = this.expr(a.e);
+        if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `edit needs a row (like it), a setting or a state, got ${show(t)}.`, 'write edit it inside each, or edit goal.');
+        return;
+      }
+      case 'remove': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `remove needs a row (like it), got ${show(t)}.`, 'write remove it inside each, or remove all TABLE where ....'); return; }
+      case 'save': { const t = this.lookup(a.name); if (!t || tname(t) !== 'draft') { if (this.followOn(a.name)) return; this.err('E_TARGET', `save needs a state made with "state ${a.name} new TABLE".`, `add: state ${a.name} new TABLE.`); } return; }
       case 'go': if (!this.screens.has(a.name)) this.err('E_UNKNOWN_NAME', `there is no screen "${a.name}" declared above.`, 'declare the screen first, or remove go (screens already get tabs).'); return;
       case 'notify': return this.parts(a.parts);
       case 'remind': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'dur') this.err('E_TYPE', 'remind ... in needs a duration like 10m.', 'write remind "Text" in 10m.'); return; }
@@ -443,23 +569,28 @@ class Checker {
     }
   }
 
+  optionOf(e) {
+    if (!e) return null;
+    if (e.k === 'str' || e.k === 'word') return e.v;
+    if (e.k === 'path' && !e.parts.length && !this.lookup(e.head) && !this.tables.has(e.head) && this.options.has(e.head)) return e.head;
+    return null;
+  }
+
   assignable(target, val, what, e) {
     if (isAny(target) || isAny(val)) return;
-    if (tname(target) === 'pick' && e && e.k === 'str' && !target.options.includes(e.v)) { this.err('E_OPTION', `"${e.v}" is not an option of ${what} (${target.options.join(', ')}).`, 'use one of the options.'); return; }
+    const o = this.optionOf(e);
+    if (tname(target) === 'pick' && o !== null && !target.options.includes(o)) { this.err('E_OPTION', `"${o}" is not an option of ${what} (${target.options.join(', ')}).`, 'use one of the options, spelled the same.'); return; }
     if (tname(target) === 'draft') { this.err('E_TARGET', 'a new row cannot be set directly.', 'use field d or save d.'); return; }
     if (!this.compatible(target, val)) this.err('E_TYPE', `${what} is ${show(target)} but the value is ${show(val)}.`, 'give it a value of the same type.');
   }
 
   compatible(a, b) {
     if (isAny(a) || isAny(b)) return true;
-    const fa = family(a), fb = family(b);
-    if (fa === fb) return true;
-    if (fa === 'date' && fb === 'date') return true;
-    return false;
+    return family(a) === family(b);
   }
 
   // ---------- expressions ----------
-  bool(e, what) { const t = this.expr(e); if (!isAny(t) && tname(t) !== 'bool') this.err('E_TYPE', `${what} must be yes/no, got ${show(t)}.`, 'compare it, like x > 0 or name = "Fajr".'); }
+  bool(e, what) { const t = this.expr(e); if (!isAny(t) && tname(t) !== 'bool') this.err('E_TYPE', `${what} must be yes/no, got ${show(t)}.`, 'compare it, like x > 0 or name = Fajr.'); }
   num(e, what) { const t = this.expr(e); if (!isAny(t) && !isNum(t)) this.err('E_TYPE', `${what} must be a number, got ${show(t)}.`, 'use a number or a formula that gives one.'); return t; }
 
   parts(ps) {
@@ -467,37 +598,52 @@ class Checker {
       const t = this.expr(p);
       const n = tname(t);
       if (n === 'rows') this.err('E_TYPE', `a table cannot be shown as text; show a number from it.`, `use count(${t.table}) or each ${t.table}.`);
-      if (n === 'draft' || n === 'color') this.err('E_TYPE', `${show(t)} cannot be shown as text.`, 'show one of its fields.');
+      if (n === 'draft' || n === 'color' || n === 'fn') this.err('E_TYPE', `${show(t)} cannot be shown as text.`, 'show one of its fields or call it.');
     }
   }
 
   expr(e) {
+    if (!e) return ANY;
     switch (e.k) {
       case 'num': return 'num';
-      case 'str': return 'text';
+      case 'pi': return 'num';
+      case 'str': case 'word': return 'text';
       case 'time': return 'time';
       case 'dur': return 'dur';
       case 'bool': return 'bool';
       case 'today': return 'date';
       case 'now': return 'when';
-      case 'color': return 'color';
+      case 'color': {
+        // your own names win over colour words
+        if (this.lookup(e.v)) return this.path({ k: 'path', head: e.v, parts: [] });
+        return 'color';
+      }
       case 'index': if (!this.inEach()) this.err('E_CONTEXT', 'index only exists inside each.', 'use it inside an each block.'); return 'num';
       case 'paren': return this.expr(e.a);
-      case 'path': {
-        const t = this.path(e);
-        return t;
-      }
+      case 'path': return this.path(e);
       case 'not': this.bool(e.a, 'not'); return 'bool';
       case 'neg': { const t = this.expr(e.a); if (!isAny(t) && !isNum(t) && tname(t) !== 'dur') this.err('E_TYPE', `cannot negate ${show(t)}.`, 'use a number.'); return t; }
       case 'bin': return this.bin(e);
       case 'agg': return this.agg(e);
       case 'fold': return this.fold(e);
       case 'fn': return this.fn(e);
+      case 'ucall': return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
     }
     return ANY;
   }
 
+  selfCompare(e) {
+    // where team = team: the field hides a state/setting/let of the same name
+    if (!this.whereTable || e.a.k !== 'path' || e.b.k !== 'path' || e.a.parts.length || e.b.parts.length || e.a.head !== e.b.head || e.a.head === 'it') return false;
+    const tb = this.tb(this.whereTable);
+    if (!tb || !tb.fields.has(e.a.head)) return false;
+    const hidden = this.lookup(e.a.head);
+    this.err('E_SELF_COMPARE', `"${e.a.head} ${e.op} ${e.b.head}" compares the field ${e.a.head} of ${this.whereTable} with itself${hidden ? `; inside where, the field hides your ${this.states.has(e.a.head) ? 'state' : this.settings.has(e.a.head) ? 'setting' : 'name'} ${e.a.head}` : ''}.`, hidden ? `rename the ${this.states.has(e.a.head) ? 'state' : 'setting'} (for example "chosen_${e.a.head}") and compare with that.` : 'compare the field with a value or a state.');
+    return true;
+  }
+
   bin(e) {
+    if (['=', '!=', '<', '>', '<=', '>='].includes(e.op) && this.selfCompare(e)) return 'bool';
     const a = this.expr(e.a), b = this.expr(e.b);
     if (isAny(a) || isAny(b)) return ['and', 'or', '=', '!=', '<', '>', '<=', '>='].includes(e.op) ? 'bool' : ANY;
     const na = tname(a), nb = tname(b);
@@ -508,7 +654,8 @@ class Checker {
         return 'bool';
       case '=': case '!=': {
         const pick = na === 'pick' ? [a, e.b] : nb === 'pick' ? [b, e.a] : null;
-        if (pick && pick[1].k === 'str' && !pick[0].options.includes(pick[1].v)) this.err('E_OPTION', `"${pick[1].v}" is not one of the options (${pick[0].options.join(', ')}).`, 'compare with one of the options, spelled the same.');
+        const o = pick && this.optionOf(pick[1]);
+        if (pick && o !== null && !pick[0].options.includes(o)) this.err('E_OPTION', `"${o}" is not one of the options (${pick[0].options.join(', ')}).`, 'compare with one of the options, spelled the same.');
         if (!this.compatible(a, b)) bad();
         return 'bool';
       }
@@ -521,6 +668,8 @@ class Checker {
         if (isNum(a) && isNum(b)) return na === 'money' || nb === 'money' ? 'money' : 'num';
         if (na === 'dur' && nb === 'dur') return 'dur';
         if (family(a) === 'date' && isNum(b)) return a;
+        if (family(a) === 'date' && nb === 'dur') return 'when';
+        if (na === 'time' && nb === 'dur') return 'time';
         if (e.op === '-' && na === 'date' && nb === 'date') return 'num';
         if (e.op === '-' && na === 'when' && nb === 'when') return 'dur';
         if (e.op === '-' && na === 'time' && nb === 'time') return 'dur';
@@ -545,15 +694,15 @@ class Checker {
 
   agg(e) {
     const t = this.query(e.q, true);
-    if (isAny(t)) return ['count', 'streak', 'best', 'since', 'gap'].includes(e.fn) ? 'num' : ANY;
+    if (isAny(t)) return AGG_NUM.includes(e.fn) ? 'num' : ANY;
     const f = e.fn;
-    if (f === 'count' || f === 'streak' || f === 'best' || f === 'since' || f === 'gap') {
+    if (AGG_NUM.includes(f)) {
       if (f !== 'count' && t.field) this.err('E_TYPE', `${f}() counts days with rows; give it the table, not a column.`, `write ${f}(${t.table}).`);
       return 'num';
     }
     if (!t.field) {
       if (f === 'last' || f === 'first') return { t: 'row', table: t.table };
-      return this.err('E_TYPE', `${f}() needs a number column like ${t.table}.amount.`, `write ${f}(${t.table}.FIELD ...).`);
+      return this.err('E_TYPE', `${f}() needs a number column like ${t.table}.amount (or two numbers: ${f}(a, b)).`, `write ${f}(${t.table}.FIELD ...).`);
     }
     if (f === 'last' || f === 'first') return t.ftype;
     if (!isNum(t.ftype) && tname(t.ftype) !== 'dur') return this.err('E_TYPE', `${f}() needs a number column; ${t.table}.${t.field} is ${show(t.ftype)}.`, 'use count() for non-numbers.');
@@ -574,19 +723,28 @@ class Checker {
     const A = e.args.map(a => this.expr(a));
     const need = (i, ok, what) => { if (!isAny(A[i]) && !ok(A[i])) this.err('E_TYPE', `${e.fn}() needs ${what} as value ${i + 1}, got ${show(A[i])}.`, `check ${e.fn}() in SPEC.md.`); };
     const isDate = t => family(t) === 'date';
+    const timeLike = t => ['time', 'when', 'dur'].includes(tname(t));
     switch (e.fn) {
       case 'if':
         need(0, t => tname(t) === 'bool', 'a yes/no condition');
-        if (!this.compatible(A[1], A[2])) this.err('E_TYPE', `if() gives ${show(A[1])} or ${show(A[2])}; both answers must be the same type.`, 'make both answers the same kind.');
+        if (!this.compatible(A[1], A[2])) this.err('E_TYPE', `if() gives ${show(A[1])} or ${show(A[2])}; both answers must be the same type.`, 'if() gives one value; to mix words and numbers write two text parts, or use if/else lines.');
         return isAny(A[1]) ? A[2] : A[1];
+      case 'min': case 'max': [0, 1].forEach(i => need(i, t => isNum(t) || tname(t) === 'dur' || isDate(t), 'a number')); return A[0];
       case 'clamp': [0, 1, 2].forEach(i => need(i, isNum, 'a number')); return A[0];
       case 'round': case 'floor': case 'abs': need(0, t => isNum(t) || tname(t) === 'dur', 'a number'); return A[0];
+      case 'sin': case 'cos': need(0, isNum, 'a number of degrees'); return 'num';
+      case 'hue': need(0, isNum, 'a number from 0 to 360'); return 'color';
+      case 'random':
+        need(0, isNum, 'a whole number');
+        if (!this.inAction) this.err('E_CONTEXT', 'random() can only be used inside an action (tap, every, when), so the screen does not change by itself.', 'store it: tap set roll = random(6), then show roll.');
+        return 'num';
+      case 'words': return 'text';
       case 'len': need(0, t => TEXTUAL.has(tname(t)), 'text'); return 'num';
       case 'has': need(0, t => TEXTUAL.has(tname(t)), 'text'); need(1, t => TEXTUAL.has(tname(t)), 'text'); return 'bool';
-      case 'weekday': case 'monthday': case 'monthdays': need(0, isDate, 'a date'); return 'num';
+      case 'weekday': case 'monthday': case 'monthdays': case 'month': case 'year': need(0, isDate, 'a date'); return 'num';
       case 'dayname': case 'monthname': need(0, isDate, 'a date'); return 'text';
-      case 'hour': need(0, t => tname(t) === 'time' || tname(t) === 'when', 'a time'); return 'num';
-      case 'addmonths': need(0, isDate, 'a date'); need(1, isNum, 'a number'); return 'date';
+      case 'hour': case 'minute': case 'second': need(0, timeLike, 'a time, date and time, or duration'); return 'num';
+      case 'addmonths': need(0, isDate, 'a date'); need(1, isNum, 'a number'); return A[0];
     }
     return ANY;
   }

@@ -1,14 +1,11 @@
 // Loads lang/grammar/moldescript.grammar (GBNF syntax) into rule trees.
 // Used by gen-gbnf.mjs (to write moldescript.gbnf) and engine.mjs (to parse lines).
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
-const here = dirname(fileURLToPath(import.meta.url));
-export const GRAMMAR_PATH = join(here, 'grammar', 'moldescript.grammar');
+// Browser-safe: the grammar text comes from sources.gen.mjs (written by gen-gbnf.mjs from
+// grammar/moldescript.grammar), so no file system is needed at run time.
+import { GRAMMAR_SOURCE } from './sources.gen.mjs';
 
 // Join continuation lines; drop comments and blanks. Returns [{name, body}] in file order.
-export function readRules(src = readFileSync(GRAMMAR_PATH, 'utf8')) {
+export function readRules(src = GRAMMAR_SOURCE) {
   const out = [];
   for (const raw of src.split('\n')) {
     if (/^\s*#/.test(raw) || !raw.trim()) continue;
@@ -115,22 +112,21 @@ export function walk(n, f) {
 export function literals(g) {
   const set = new Set();
   for (const [name, node] of g.map) {
-    if (['string', 'time', 'dur', 'number', 'ident', 'word', 'snum', 'sp'].includes(name)) continue;
+    if (['string', 'time', 'dur', 'number', 'ident', 'word', 'cword', 'snum', 'sp'].includes(name)) continue;
     walk(node, n => { if (n.t === 'lit') set.add(n.s); });
   }
   return [...set];
 }
 
-// Soft keywords: words that only appear where a name cannot, so names may reuse them
-// (a field can be called `name`, `date` or `max`). Function words like `sum(` carry their
-// bracket, so `sum` alone stays free too.
-export const SOFT = new Set(['long', 'num', 'money', 'bool', 'date', 'time', 'when', 'dur',
-  'pick', 'ref', 'name', 'src', 'win', 'act',
-  'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun', 'tiny', 'small', 'large', 'huge', 'start', 'center', 'end', 'day', 'at']);
+// Keywords are contextual: a word is a keyword only where the grammar expects that keyword.
+// Any other word is a name. When a line can be read both ways, the parser prefers the reading
+// with fewer keyword-shaped names (so `text a bold` makes bold a style, not a second part).
+// Only these words are truly reserved: they could stand where a name stands with another meaning.
+export const RESERVED = new Set(['it', 'index', 'yes', 'no', 'today', 'now', 'and', 'or', 'not', 'then', 'where', 'as']);
 
-// Hard keywords: an ident may never be one of these.
+// Every alphabetic literal of the grammar (used to rank readings and in messages).
 export function keywords(g) {
   const ks = new Set();
-  for (const l of literals(g)) if (/^[a-z]+$/.test(l) && !SOFT.has(l)) ks.add(l);
+  for (const l of literals(g)) { const w = l.replace(/\($/, ''); if (/^[a-z]+$/.test(w)) ks.add(w); }
   return ks;
 }

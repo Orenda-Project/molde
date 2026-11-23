@@ -6,6 +6,7 @@
 //   node lang/mo.mjs diff OLD NEW             what changes + data-safety verdict; exit 1 if refused
 //   node lang/mo.mjs expand FILE              the program with every component expanded to level 1
 //   node lang/mo.mjs tokens [FILE...]         token counts (runs lang/tokens.py)
+//   node lang/mo.mjs tree FILE [--now=ISO]     the UI tree from the reference evaluator (UITREE.md)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +60,11 @@ switch (cmd) {
     process.exit(r.verdict === 'refused' ? 1 : 0);
     break;
   }
+  case 'tree': {
+    const { load } = await import('./eval.mjs');
+    for (const f of files) { const a = load(read(f), { now: args.find(x => x.startsWith('--now='))?.slice(6) }); for (const e of a.errors) console.error(e); console.log(JSON.stringify(a.tree(), null, 1)); }
+    break;
+  }
   case 'expand': for (const f of files) { const r = expandedText(read(f)); process.stdout.write(r.text); for (const e of r.errors) console.error(String(e)); } break;
   case 'tokens': {
     const r = spawnSync('python3', [join(here, 'tokens.py'), ...args], { stdio: 'inherit' });
@@ -66,6 +72,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.log('usage: node lang/mo.mjs check|format|describe|diff|expand|tokens FILE...');
+    console.log('usage: node lang/mo.mjs check|format|describe|diff|expand|tree|tokens FILE...');
     process.exit(cmd ? 2 : 0);
 }

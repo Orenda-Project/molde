@@ -7,18 +7,19 @@ import { existsSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { generate, GBNF_PATH } from '../gen-gbnf.mjs';
+import { generate, GBNF_PATH, SOURCES_PATH, sourcesText } from '../gen-gbnf.mjs';
 import { loadGrammar } from '../grammar.mjs';
 import { parseText } from '../engine.mjs';
 import { allPrograms, LANG } from './lib.mjs';
 
 // The GBNF is a superset of the language (it cannot tell keywords from names), so these are
-// plain syntax breaks: a name starting with a digit, a line that starts with a quoted text, an
+// plain syntax breaks: a name starting with a digit, a line that starts with =, an
 // indented line with no parent, no app line, an open quote, a missing comma.
-const BAD = ['app "x"\ntable 9 a num\n', 'app "x"\n"loose text"\n', 'app "x"\n    text "a"\n', 'table t a num\n', 'app "x"\ntext "a\n', 'app "x"\ndraw\n  rect 0 0 1 1\n'];
+const BAD = ['app "x"\ntable 9 a num\n', 'app "x"\n= 3\n', 'app "x"\n    text "a"\n', 'table t a num\n', 'app "x"\ntext "a\n', 'app "x"\ndraw\n  rect 0 0 1 1\n'];
 
-test('moldescript.gbnf is up to date with the grammar source', () => {
+test('moldescript.gbnf and sources.gen.mjs are up to date with the grammar and std sources', () => {
   assert.equal(readFileSync(GBNF_PATH, 'utf8'), generate());
+  assert.equal(readFileSync(SOURCES_PATH, 'utf8'), sourcesText());
 });
 
 test('generated GBNF (run by our engine) accepts every valid program and rejects broken syntax', () => {

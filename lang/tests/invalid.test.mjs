@@ -10,7 +10,7 @@ export const CASES = [
   ['open quote', A + 'text "hello\n', 'E_SYNTAX', 2],
   ['stray character', A + 'text "a" @\n', 'E_SYNTAX', 2],
   ['shape args without commas', A + 'draw\n  rect 0 0 10 10\n', 'E_SYNTAX', 3],
-  ['keyword as table name', A + 'table set n num\n', 'E_RESERVED', 2],
+  ['reserved word as table name', A + 'table it n num\n', 'E_RESERVED', 2],
   ['built-in field redeclared', A + 'table t at date\n', 'E_RESERVED', 2],
   ['dedent to unknown level', A + 'row\n    text "a"\n  text "b"\n', 'E_INDENT', 4],
   ['indented first line', '  app "x"\n', 'E_INDENT', 1],
@@ -55,7 +55,7 @@ export const CASES = [
   ['toggle a number', A + 'state v num = 1\ntoggle v\n', 'E_TYPE', 3],
   ['image of text', A + 'table t n text\neach t\n  image it.n\n', 'E_TYPE', 4],
   ['countof with a number', A + 'table t n num\ntext countof(t, it.n)\n', 'E_TYPE', 3],
-  ['sort by unknown field', A + 'table t n num\neach t sort colour\n  text it\n', 'E_UNKNOWN_FIELD', 3],
+  ['sort by unknown name', A + 'table t n num\neach t sort colour\n  text it\n', 'E_UNKNOWN_NAME', 3],
   ['bad add value type', A + 'table t n num\nbutton "b" tap add t n = "a"\n', 'E_TYPE', 3],
 ];
 

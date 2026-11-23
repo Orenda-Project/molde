@@ -1,7 +1,14 @@
 // MoldeScript v0 parser: text -> typed AST with line numbers.
 // Each line is lexed, joined with canonical spacing, and matched against the grammar file by
 // engine.mjs. Indentation gives the tree. Errors carry a code, line, message and fix hint.
-import { parseText, child, children, kids, lits, KEYWORDS } from './engine.mjs';
+import { parseText, child, children, kids, lits, KEYWORDS, RESERVED } from './engine.mjs';
+import { loadGrammar } from './grammar.mjs';
+
+const GR = loadGrammar();
+const altNames = r => (GR.map.get(r).items || [GR.map.get(r)]).map(n => n.name);
+// statements other than a component call, and the words that start them
+export const NONCALL = [...altNames('leaf-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')];
+export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
 import { lex, join, LexError } from './lex.mjs';
 
 export const MAX_DEPTH = 8;
@@ -39,14 +46,14 @@ function syntaxError(no, text, r) {
   const col = r.far;
   const near = text.slice(col).split(' ')[0] || '(end of line)';
   const decl = text.match(/^(?:table|setting|state|def|screen) ([a-z]+)\b/) || text.match(/^table [a-z][a-z0-9_]*(?: "[^"]*")? (?:.*, )?([a-z]+) /);
-  if (decl && KEYWORDS.has(decl[1])) {
+  if (decl && RESERVED.has(decl[1])) {
     return new MoError('E_RESERVED', no, `"${decl[1]}" is a keyword and cannot be used as a name.`, `pick another name, for example "${decl[1]}s" or "my_${decl[1]}".`);
   }
   const callKw = /^[a-z][a-z0-9_]* /.test(text) && !KEYWORDS.has(text.split(' ')[0]) && text.split(' ')[0] !== 'text'
-    ? text.slice(text.indexOf(' ') + 1).split(', ').find(a => KEYWORDS.has(a)) : null;
+    ? text.slice(text.indexOf(' ') + 1).split(', ').find(a => RESERVED.has(a)) : null;
   if (callKw) return new MoError('E_RESERVED', no, `"${callKw}" is a keyword and cannot be used as a name.`, `rename the table or field "${callKw}", for example "${callKw}s".`);
   const word = text.slice(col).match(/^[a-z]+/)?.[0];
-  if (word && KEYWORDS.has(word)) {
+  if (word && RESERVED.has(word)) {
     return new MoError('E_RESERVED', no, `"${word}" is a keyword and cannot be used as a name here.`, `pick another name, for example "${word}s" or "my_${word}".`);
   }
   const exp = r.expected.filter(x => x !== 'a character').slice(0, 6).join(', ');
@@ -58,7 +65,13 @@ export function parse(src, { lib = false } = {}) {
   const prog = { kind: 'program', header: null, body: [], comments: [], errors };
   const stack = [{ node: prog, depth: -1, block: true }];
   let first = true;
+  prog.failed = new Map(); // name -> line, for declarations whose line failed (to report follow-on uses once)
+  const noteFailed = (ln, text) => {
+    const m = (text || '').match(/^(?:table|setting|state|let|def|screen)\s+([a-z][a-z0-9_]*)/);
+    if (m && !prog.failed.has(m[1])) prog.failed.set(m[1], ln.no);
+  };
   const skip = ln => { // a line that failed still owns its indented children, so they do not cascade
+    noteFailed(ln, ln.canon || ln.body);
     while (stack.length > 1 && stack[stack.length - 1].depth >= ln.depth) stack.pop();
     stack.push({ node: { kind: 'error', children: [] }, depth: ln.depth, block: true, dead: true });
   };
@@ -77,6 +90,13 @@ export function parse(src, { lib = false } = {}) {
       if (first && !/^(app|ask|lib)\b/.test(canon)) errors.push(new MoError('E_HEADER', ln.no, lib ? 'a library starts with lib "name".' : 'a program starts with app "Name" (or is a single ask line).', lib ? 'add lib "name" as line 1.' : 'add app "My app" as line 1.'));
       else errors.push(syntaxError(ln.no, canon, r));
       first = false;
+      skip(ln);
+      continue;
+    }
+    const top = kids(r.tree)[0];
+    if (top && top.r === 'call-stmt' && STMT_WORDS.has(child(top, 'ident').v)) {
+      // `table drink ml` is a broken table line, not a component called "table"
+      errors.push(syntaxError(ln.no, canon, parseText(canon, NONCALL)));
       skip(ln);
       continue;
     }
@@ -137,7 +157,7 @@ const BUILD = {
     const s = children(n, 'string').map(str);
     return { kind: 'ask', question: s[0], options: s.slice(1) };
   },
-  'table-stmt': n => ({ kind: 'table', name: id(child(n, 'ident')), label: child(n, 'string') ? str(child(n, 'string')) : null, fields: children(n, 'field').map(field) }),
+  'table-stmt': n => { const ids = children(n, 'ident'); return { kind: 'table', name: id(ids[0]), was: lits(n).includes('was') ? id(ids[1]) : null, label: child(n, 'string') ? str(child(n, 'string')) : null, fields: children(n, 'field').map(field) }; },
   'setting-stmt': n => ({ kind: 'setting', ...field(child(n, 'field')) }),
   'state-stmt': n => {
     const st = child(n, 'state-type');
@@ -145,7 +165,7 @@ const BUILD = {
     if (child(st, 'type')) o.type = type(child(st, 'type')); else o.draft = id(child(st, 'ident'));
     return o;
   },
-  'let-stmt': n => ({ kind: 'let', name: id(child(n, 'ident')), e: expr(child(n, 'expr')) }),
+  'let-stmt': n => ({ kind: 'let', name: id(child(n, 'ident')), params: children(n, 'param').length ? children(n, 'param').map(p => ({ name: id(child(p, 'ident')), kind: lits(child(p, 'pkind'))[0] })) : null, e: expr(child(n, 'expr')) }),
   'def-stmt': (n, src) => ({ kind: 'def', name: id(child(n, 'ident')), params: children(n, 'param').map(p => ({ name: id(child(p, 'ident')), kind: lits(child(p, 'pkind'))[0], dflt: child(p, 'arg') ? src.slice(child(p, 'arg').s, child(p, 'arg').e) : null })) }),
   'call-stmt': (n, src) => ({ kind: 'call', name: id(child(n, 'ident')), args: children(n, 'arg').map(a => src.slice(a.s, a.e)) }),
   'slot-stmt': () => ({ kind: 'slot' }),
@@ -159,7 +179,11 @@ const BUILD = {
     if (lits(w)[0] === 'at') {
       o.at = child(w, 'path') ? path(child(w, 'path')) : null;
       o.times = children(w, 'time').map(t => t.v);
+      if (o.at) { o.offset = child(w, 'dur') ? (lits(child(w, 'add-op'))[0] === '-' ? -1 : 1) * durSec(child(w, 'dur').v) : 0; o.time = o.times[0] || null; o.times = []; }
       o.days = children(w, 'dayname').map(d => lits(d)[0]);
+    } else if (lits(w)[0] === 'monthly') {
+      o.monthly = children(w, 'number').map(x => +x.v);
+      o.times = children(w, 'time').map(t => t.v);
     } else {
       o.every = durSec(child(w, 'dur').v);
       const ts = children(w, 'time').map(t => t.v);
@@ -181,11 +205,13 @@ const BUILD = {
     const o = { kind: 'shape', shape, args: [], mods: mods(n) };
     const ek = child(n, 'e3') || child(n, 'e4') || child(n, 'e5');
     if (ek) o.args = flatE(ek).map(expr);
+    else if ((shape === 'circle') && child(n, 'expr')) o.args = [expr(child(n, 'expr'))];
     if (shape === 'path') o.d = str(child(n, 'string'));
     if (shape === 'label') { o.args = children(n, 'expr').map(expr); o.parts = tparts(child(n, 'tparts')); }
     return o;
   },
   'text-stmt': n => ({ kind: 'text', parts: tparts(child(n, 'tparts')), mods: mods(n) }),
+  'itext-stmt': n => ({ kind: 'text', implicit: true, parts: [child(n, 'string') ? { k: 'str', v: str(child(n, 'string')) } : expr(child(n, 'lead-expr')), ...children(n, 'tpart').map(p => child(p, 'string') ? { k: 'str', v: str(child(p, 'string')) } : expr(child(p, 'expr')))], mods: mods(n) }),
   'button-stmt': n => ({ kind: 'button', parts: tparts(child(n, 'tparts')), mods: mods(n) }),
   'icon-stmt': n => ({ kind: 'icon', icon: primary(child(n, 'primary')), mods: mods(n) }),
   'image-stmt': n => ({ kind: 'image', e: expr(child(n, 'expr')), mods: mods(n) }),
@@ -207,12 +233,13 @@ const DUR = { s: 1, m: 60, h: 3600, d: 86400 };
 export const durSec = v => +v.slice(0, -1) * DUR[v.slice(-1)];
 
 function field(n) {
-  const o = { name: id(child(n, 'ident')), type: type(child(n, 'type')), optional: lits(n).includes('?'), range: null, dflt: null, label: null, unit: null };
+  const o = { name: id(child(n, 'ident')), type: type(child(n, 'type')), optional: lits(n).includes('?'), range: null, dflt: null, label: null, unit: null, was: null };
   for (const fm of children(n, 'fmod')) {
     const l = lits(fm)[0];
     if (child(fm, 'range-lit')) o.range = rangeLit(child(fm, 'range-lit'));
     else if (l === '=') o.dflt = lit(child(fm, 'lit'));
     else if (l === 'unit') o.unit = str(child(fm, 'string'));
+    else if (l === 'was') o.was = id(child(fm, 'ident'));
     else o.label = str(child(fm, 'string'));
   }
   return o;
@@ -220,7 +247,17 @@ function field(n) {
 
 function type(n) {
   const l = lits(n)[0];
-  if (l === 'pick') return { t: 'pick', options: children(n, 'option').map(o => child(o, 'string') ? str(child(o, 'string')) : child(o, 'word').v) };
+  if (l === 'pick') {
+    const opts = children(n, 'option');
+    const words = o => children(o, 'word').map(w => w.v);
+    const renames = {};
+    const options = opts.map(o => {
+      const v = child(o, 'string') ? str(child(o, 'string')) : words(o)[0];
+      if (lits(o).includes('was')) renames[v] = words(o)[child(o, 'string') ? 0 : 1];
+      return v;
+    });
+    return { t: 'pick', options, renames };
+  }
   if (l === 'ref') return { t: 'ref', table: id(child(n, 'ident')) };
   return { t: l };
 }
@@ -260,9 +297,12 @@ function action(n) {
   const l = lits(n)[0];
   switch (l) {
     case 'add': return { a: 'add', table: id(child(n, 'ident')), assigns: children(n, 'assign').map(s => ({ name: id(child(s, 'ident')), e: expr(child(s, 'expr')) })) };
-    case 'set': return { a: 'set', target: path(child(n, 'path')), e: expr(child(n, 'expr')) };
+    case 'set':
+      if (lits(n)[1] === 'all') { const es = children(n, 'expr'); return { a: 'setall', target: path(child(n, 'path')), e: expr(es[0]), where: es[1] ? expr(es[1]) : null }; }
+      return { a: 'set', target: path(child(n, 'path')), e: expr(child(n, 'expr')) };
     case 'toggle': return { a: 'toggle', target: path(child(n, 'path')), win: child(n, 'window') ? windowN(child(n, 'window')) : null, where: child(n, 'expr') ? expr(child(n, 'expr')) : null };
-    case 'remove': case 'edit': return { a: l, e: expr(child(n, 'expr')) };
+    case 'remove': if (child(n, 'query')) return { a: 'removeall', q: query(child(n, 'query')) }; return { a: 'remove', e: expr(child(n, 'expr')) };
+    case 'edit': return { a: l, e: expr(child(n, 'expr')) };
     case 'save': case 'go': return { a: l, name: id(child(n, 'ident')) };
     case 'notify': return { a: 'notify', parts: tparts(child(n, 'tparts')) };
     case 'remind': return { a: 'remind', text: str(child(n, 'string')), e: expr(child(n, 'expr')) };
@@ -281,10 +321,11 @@ function source(n) {
 }
 
 function query(n) {
-  const q = { path: path(child(n, 'path')), win: child(n, 'window') ? windowN(child(n, 'window')) : null, where: child(n, 'expr') ? expr(child(n, 'expr')) : null, by: null, sort: null, desc: false, top: null };
-  if (child(n, 'group')) { const g = child(n, 'group'); q.by = child(g, 'ident') ? id(child(g, 'ident')) : lits(g)[0]; }
-  const ps = children(n, 'path');
-  if (ps[1]) { q.sort = path(ps[1]); q.desc = lits(n).includes('desc'); }
+  const ls = lits(n);
+  const es = children(n, 'expr');
+  const q = { path: path(child(n, 'path')), win: child(n, 'window') ? windowN(child(n, 'window')) : null, where: ls.includes('where') ? expr(es[0]) : null, by: null, sort: null, desc: false, top: null };
+  if (child(n, 'group')) { const g = child(n, 'group'); q.by = child(g, 'path') ? path(child(g, 'path')) : lits(g)[0]; if (q.by.k === 'path' && !q.by.parts.length && q.by.head !== 'it') q.by = q.by.head; }
+  if (ls.includes('sort')) { q.sort = expr(es[ls.includes('where') ? 1 : 0]); q.desc = ls.includes('desc'); }
   if (child(n, 'number')) q.top = +child(n, 'number').v;
   return q;
 }
@@ -321,6 +362,15 @@ function expr(n) {
     case 'prod-expr': return opchain(n, 'unary', 'mul-op');
     case 'unary': return child(n, 'unary') ? { k: 'neg', a: expr(child(n, 'unary')) } : primary(child(n, 'primary'));
     case 'primary': return primary(n);
+    case 'lead-expr': return opchain(n, 'lead-prod', 'add-op', 'prod-expr');
+    case 'lead-prod': return opchain(n, 'lead-unary', 'mul-op', 'unary');
+    case 'lead-unary': {
+      const k = only(n)[0];
+      if (k.lit === '-') return { k: 'neg', a: expr(child(n, 'unary')) };
+      if (k.lit === '(') return { k: 'paren', a: expr(child(n, 'expr')) };
+      if (k.r === 'number') return { k: 'num', v: +k.v };
+      return func(k);
+    }
   }
   throw new Error('bad expr ' + n.r);
 }
@@ -328,8 +378,8 @@ function chain(n, sub, op) {
   const xs = children(n, sub).map(expr);
   return xs.reduce((a, b) => ({ k: 'bin', op, a, b }));
 }
-function opchain(n, sub, opRule) {
-  const parts = only(n).filter(k => k.r === sub || k.r === opRule);
+function opchain(n, sub, opRule, sub2) {
+  const parts = only(n).filter(k => k.r === sub || k.r === opRule || k.r === sub2);
   let acc = expr(parts[0]);
   for (let j = 1; j < parts.length; j += 2) acc = { k: 'bin', op: lits(parts[j])[0], a: acc, b: expr(parts[j + 1]) };
   return acc;
@@ -338,7 +388,8 @@ const COLORS = new Set(['accent', 'ink', 'muted', 'soft', 'good', 'warn', 'bad',
 function primary(n) {
   const k = only(n)[0];
   if (k.lit === 'yes' || k.lit === 'no') return { k: 'bool', v: k.lit === 'yes' };
-  if (k.lit === 'today' || k.lit === 'now' || k.lit === 'index') return { k: k.lit };
+  if (k.lit === 'today' || k.lit === 'now' || k.lit === 'index' || k.lit === 'pi') return { k: k.lit };
+  if (k.r === 'cword') return { k: 'word', v: k.v };
   if (k.lit === '(') return { k: 'paren', a: expr(child(n, 'expr')) };
   if (k.r === 'color') return { k: 'color', v: lits(k)[0] };
   if (k.r === 'number') return { k: 'num', v: +k.v };
@@ -353,6 +404,7 @@ function func(n) {
   const f = only(n)[0];
   if (f.r === 'agg') return { k: 'agg', fn: lits(f)[0].slice(0, -1), q: query(child(n, 'query')) };
   if (f.r === 'fold') return { k: 'fold', fn: lits(f)[0].slice(0, -1), src: source(child(n, 'source')), e: expr(child(n, 'expr')) };
+  if (f.r === 'ident') return { k: 'ucall', name: f.v, args: children(n, 'expr').map(expr) };
   const name = f.r === 'fn1' || f.r === 'fn2' ? lits(f)[0] : f.lit;
   return { k: 'fn', fn: name.slice(0, -1), args: children(n, 'expr').map(expr) };
 }

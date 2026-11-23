@@ -1,18 +1,21 @@
 // A small parser that runs the grammar in lang/grammar/moldescript.grammar directly.
-// It explores every alternative (memoised per rule and position), keeps the first tree for each
-// end position, and prefers longer repetitions and present optionals. A line parses when some
-// tree ends exactly at the end of the line.
-import { loadGrammar, keywords } from './grammar.mjs';
+// It explores every alternative (memoised per rule and position). For each end position it keeps
+// the tree with the lowest penalty (a penalty of 1 for every name that is spelled like a keyword),
+// and among equals the first one found, preferring longer repetitions and present optionals.
+// A line parses when some tree ends exactly at the end of the line.
+import { loadGrammar, keywords, RESERVED } from './grammar.mjs';
 
 const G = loadGrammar();
 export const KEYWORDS = keywords(G);
+export { RESERVED };
 const IDCH = /[A-Za-z0-9_]/;
 
 // Terminals matched by regex. Same character sets as the grammar file, plus:
-// ident is never a keyword; nothing runs into a following letter or digit.
+// ident is never a reserved word; nothing runs into a following letter or digit.
 const TERMINALS = {
   ident: /[a-z][a-z0-9_]*/y,
   word: /[A-Za-z][A-Za-z0-9_]*/y,
+  cword: /[A-Z][A-Za-z0-9_]*/y,
   number: /[0-9]+(?:\.[0-9]+)?/y,
   string: /"(?:[^"\\\x00-\x1F]|\\["\\n])*"/y,
   time: /[0-9][0-9]?:[0-5][0-9]/y,
@@ -26,8 +29,8 @@ function term(name, text, pos) {
   if (!m) return null;
   const end = pos + m[0].length;
   if (name !== 'string' && end < text.length && IDCH.test(text[end])) return null;
-  if (name === 'ident' && KEYWORDS.has(m[0])) return null;
-  return { r: name, s: pos, e: end, v: m[0] };
+  if (name === 'ident' && RESERVED.has(m[0])) return null;
+  return { r: name, s: pos, e: end, v: m[0], pen: name === 'ident' && KEYWORDS.has(m[0]) ? 1 : 0 };
 }
 
 const SILENT = new Set(['sp']);
@@ -42,8 +45,12 @@ export function parseText(text, startNames, g = G) {
   };
 
   function dedupe(list) {
-    const seen = new Set(); const out = [];
-    for (const x of list) if (!seen.has(x.end)) { seen.add(x.end); out.push(x); }
+    const at = new Map(); const out = [];
+    for (const x of list) {
+      const i = at.get(x.end);
+      if (i === undefined) { at.set(x.end, out.length); out.push(x); }
+      else if (x.pen < out[i].pen) out[i] = x;
+    }
     return out;
   }
 
@@ -53,7 +60,7 @@ export function parseText(text, startNames, g = G) {
         if (text.startsWith(node.s, pos)) {
           const end = pos + node.s.length;
           if (IDCH.test(node.s[node.s.length - 1]) && end < text.length && IDCH.test(text[end])) { fail(pos, JSON.stringify(node.s)); return []; }
-          return [{ end, kids: node.s === ' ' ? [] : [{ lit: node.s, s: pos, e: end }] }];
+          return [{ end, pen: 0, kids: node.s === ' ' ? [] : [{ lit: node.s, s: pos, e: end }] }];
         }
         fail(pos, JSON.stringify(node.s));
         return [];
@@ -64,14 +71,14 @@ export function parseText(text, startNames, g = G) {
         let hit = node.ranges.some(([lo, hi]) => cp >= lo && cp <= hi);
         if (node.neg) hit = !hit;
         if (!hit) { fail(pos, 'a character'); return []; }
-        return [{ end: pos + (cp > 0xffff ? 2 : 1), kids: [] }];
+        return [{ end: pos + (cp > 0xffff ? 2 : 1), pen: 0, kids: [] }];
       }
       case 'ref': return ref(node.name, pos);
       case 'seq': {
-        let cur = [{ end: pos, kids: [] }];
+        let cur = [{ end: pos, pen: 0, kids: [] }];
         for (const it of node.items) {
           const next = [];
-          for (const c of cur) for (const x of m(it, c.end)) next.push({ end: x.end, kids: c.kids.concat(x.kids) });
+          for (const c of cur) for (const x of m(it, c.end)) next.push({ end: x.end, pen: c.pen + x.pen, kids: c.kids.concat(x.kids) });
           cur = dedupe(next);
           if (!cur.length) return [];
         }
@@ -84,11 +91,11 @@ export function parseText(text, startNames, g = G) {
       }
       case 'rep': {
         const levels = [];
-        if (node.min === 0) levels.push([{ end: pos, kids: [] }]);
-        let cur = [{ end: pos, kids: [] }];
+        if (node.min === 0) levels.push([{ end: pos, pen: 0, kids: [] }]);
+        let cur = [{ end: pos, pen: 0, kids: [] }];
         for (let n = 1; n <= node.max; n++) {
           const next = [];
-          for (const c of cur) for (const x of m(node.item, c.end)) if (x.end > c.end) next.push({ end: x.end, kids: c.kids.concat(x.kids) });
+          for (const c of cur) for (const x of m(node.item, c.end)) if (x.end > c.end) next.push({ end: x.end, pen: c.pen + x.pen, kids: c.kids.concat(x.kids) });
           cur = dedupe(next);
           if (!cur.length) break;
           if (n >= node.min) levels.push(cur);
@@ -106,20 +113,22 @@ export function parseText(text, startNames, g = G) {
     if (TERMINALS[name]) {
       const t = term(name, text, pos);
       if (!t) fail(pos, name === 'ident' ? 'a name' : name);
-      res = t ? [{ end: t.e, kids: [t] }] : [];
+      res = t ? [{ end: t.e, pen: t.pen, kids: [t] }] : [];
     } else {
       memo.set(key, []); // guards accidental left recursion
       const inner = m(g.map.get(name), pos);
-      res = SILENT.has(name) ? inner : inner.map(x => ({ end: x.end, kids: [{ r: name, s: pos, e: x.end, k: x.kids }] }));
+      res = SILENT.has(name) ? inner : inner.map(x => ({ end: x.end, pen: x.pen, kids: [{ r: name, s: pos, e: x.end, k: x.kids }] }));
     }
     memo.set(key, res);
     return res;
   }
 
+  let best = null;
   for (const start of startNames) {
     const hit = ref(start, 0).find(x => x.end === text.length);
-    if (hit) return { tree: hit.kids[0] };
+    if (hit && (!best || hit.pen < best.pen)) best = hit;
   }
+  if (best) return { tree: best.kids[0], pen: best.pen };
   return { tree: null, far, expected: [...expected] };
 }
 
