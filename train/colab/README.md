@@ -48,15 +48,23 @@ molde-train/
 
 `train.py` writes `ckpt/` (model fp32 + AdamW state + step) every `save_every` steps and on `max_minutes`. Free runtimes live 55 to 90 minutes, so for long runs: set `--set max_minutes=40`, make the jobs with `--ckpt-parts N` (N = ceil(ckpt size / 0.9 GB); about 12 bytes per parameter: 270M = 3.3 GB = 4 parts, 0.8B = 10 GB = 12 parts) and `--stages train` (skip eval/export), run the session, then for the next session add `--resume-parts N`. Repeat until `SFT_DONE` is in the log, then a last session with `--resume-parts N --stages eval,export`. (In this task the resume path was tested locally: pause at step 1, resume to the end.)
 
-## Expected time and units (T4 unless stated; measured numbers are in the PR description)
+## Measured time (this project, 2026-11-23/24; units are estimates, the balance is not readable through the connector)
 
 | base | params | precision | fits | note |
 |---|---|---|---|---|
-| Gemma 3 270M | 268M | fp32 (T4) | T4 | smoke run measured |
+| Gemma 3 270M | 268M | fp32 on T4 (3.8 min for 3 epochs of 292 pairs, 0.26 s per pair); bf16 on L4 | T4 or L4 | L4: 5 epochs of 5,493 pairs = 24 min (about 1 unit), eval 2 sets 3 min, export 1 min, save 2 min |
 | SmolLM2-135M / 360M | 135M / 362M | fp32 | T4 | about 0.5x / 1.3x the Gemma time |
-| Qwen3.5-0.8B | 873M | fp16 autocast or bf16 on L4/A100, grad checkpointing | L4 (T4 tight: fp32 weights + Adam = 14 GB) | 3x to 4x the Gemma time |
+| Qwen3.5-0.8B (752M trainable text part) | 873M | bf16 autocast on L4, fp32 master weights, gradient checkpointing REQUIRED (batch 4 without it ran out of 22 GB memory) | L4 | about 7.7 s per optimizer step of 16 pairs = 45 min per epoch of 5.5k pairs: far slower than Gemma (24 min for 5 epochs) |
 
 Rule of thumb: tokens per example about 400 to 700 (prompt + program). Training FLOPs about 6 x params x tokens; a T4 sustains roughly 20 to 30 percent of its 8 TFLOPs in fp32.
+
+## Lessons from the r1 runs (read before the next run)
+
+- **A Colab runtime was reclaimed about 83 minutes after assignment** (kernel websocket 404 at the end of the second 40-minute chunk): a Qwen run lost 83 minutes (about 2.8 units) because the checkpoint lived only on the VM. Keep one runtime under about 70 minutes, and for longer work save the checkpoint to Drive (pack.py parts) at every chunk boundary before starting the next chunk. The model is saved to Drive (job 37) right after training, before eval and export, for the same reason.
+- GPU assignment: L4 and A100 often answer HTTP 503 for 15 to 30 minutes; T4 was granted at once. The runner caps tries at 20 (one per 3 minutes).
+- A laptop suspend kills the runner's websocket ("Connection to remote host was lost"): the runner aborts and releases; nothing is left running.
+- Gemma val checker pass by epoch (48 val requests, 5,493 training pairs): 0.67, 0.71, 0.75, 0.83, 0.83: still rising at epoch 4; use 6 to 8 epochs next time.
+- llama.cpp converter facts: Gemma needs tokenizer.model next to the weights (train.py copies it) and added_tokens.json for added tokens; tokens that carry whitespace or newlines (`token_mode: full`) tokenize differently in llama.cpp than in Hugging Face (34 of 180 programs differ), `token_mode: safe` gave 180 of 180 identical (checked with `tokens/check_gguf_tokenizer.py` on the real GGUF), and full mode also breaks the BPE pre-tokenizer detection for Qwen.
 
 ## What changes for the 20k and 300k datasets
 

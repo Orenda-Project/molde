@@ -13,3 +13,19 @@ for d in map(pathlib.Path, sys.argv[1:]):
         g = lambda k: m.get(k, "-")
         rows.append(f"| {d.name} | {lab} | {g('n')} | {g('checker_pass_raw')} | {g('checker_pass_after_repair')} | {g('exact_match')} | {g('intent_score')} | {g('intent_auto')} | {g('median_gen_tokens')} | {g('mean_tok_s')} | {g('median_secs_per_app')} | {g('size_mb')} |")
 print("\n".join(rows))
+
+
+def samples(load_json, n_good=5, n_bad=5):
+    """10 sample outputs (good and bad) from a local_load_test.py --full JSON."""
+    rows = json.load(open(load_json))["rows"]
+    good = [r for r in rows if r["check_ok"] and r["task"] == "create"][:n_good]
+    bad = [r for r in rows if not r["check_ok"]][:n_bad]
+    out = []
+    for tag, rs in (("GOOD (checker passes)", good), ("BAD (checker fails)", bad)):
+        for r in rs:
+            out.append(f"#### {tag}: {r['id']}\n\nRequest: {r['request']}\n\n```\n{r['output'].rstrip()}\n```\n" + ("" if r["check_ok"] else f"\nChecker: `{r['err'].strip()}`\n"))
+    return "\n".join(out)
+
+
+if len(sys.argv) > 2 and sys.argv[1] == "--samples":
+    print(samples(sys.argv[2]))
