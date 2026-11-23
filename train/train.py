@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Full fine-tune of a small causal LM on Molde chat data. Loss on the assistant part only. Resumable.
+
+  python3 train.py --config configs/gemma270m.yaml [--set key=value ...]
+
+Config keys (YAML, CLI --set overrides):
+  model, tokenizer (default = model), data_dir (train.jsonl/val.jsonl), out_dir, lang (for added tokens),
+  add_molde_tokens (bool), epochs, max_steps (0 = from epochs), lr, min_lr_ratio, warmup_steps, weight_decay,
+  batch_size, grad_accum, max_len, precision (auto|bf16|fp16|fp32), grad_checkpointing, eval_every, save_every,
+  max_minutes (pause after this wall time with a ckpt; 0 = no limit), seed, save_dtype (bf16|fp16|fp32),
+  chat_kwargs (extra apply_chat_template kwargs, e.g. enable_thinking: false)
+
+Output (out_dir): log.jsonl, ckpt/ (model + optimizer + state, for resume), final/ (HF model + tokenizer) when finished,
+DONE (written when the schedule is complete), PAUSED (when max_minutes hit; run again to resume).
+Precision: auto = bf16 on Ampere+, else fp32 for <=400M params, else fp16 autocast with GradScaler.
+"""
+import argparse, json, math, os, pathlib, random, sys, time
+
+import torch
+import torch.utils.checkpoint
+import yaml
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from common import encode_example, read_jsonl  # noqa: E402
+
+DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False,
+                epochs=3, max_steps=0, lr=5e-5, min_lr_ratio=0.1, warmup_steps=10, weight_decay=0.0, batch_size=8,
+                grad_accum=1, max_len=1536, precision="auto", grad_checkpointing=False, eval_every=20, save_every=50,
+                max_minutes=0, seed=1234, save_dtype="bf16", chat_kwargs={})
+
+
+def load_cfg(argv):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", required=True)
+    ap.add_argument("--set", nargs="*", default=[])
+    a = ap.parse_args(argv)
+    cfg = dict(DEFAULTS); cfg.update(yaml.safe_load(open(a.config)))
+    for kv in a.set:
+        k, v = kv.split("=", 1)
+        cfg[k] = yaml.safe_load(v)
+    return cfg
+
+
+def batches(rows, bs, rng):
+    """length-bucketed shuffled batches (sorted inside chunks of 8*bs to cut padding)."""
+    idx = list(range(len(rows))); rng.shuffle(idx)
+    out = []
+    for i in range(0, len(idx), bs * 8):
+        ch = sorted(idx[i:i + bs * 8], key=lambda j: len(rows[j][0]))
+        out += [ch[k:k + bs] for k in range(0, len(ch), bs)]
+    rng.shuffle(out)
+    return out
+
+
+def collate(rows, ids, pad, dev):
+    L = max(len(rows[i][0]) for i in ids)
+    x = torch.full((len(ids), L), pad, dtype=torch.long); y = torch.full((len(ids), L), -100, dtype=torch.long); m = torch.zeros((len(ids), L), dtype=torch.long)
+    for r, i in enumerate(ids):
+        a, b, _ = rows[i]
+        x[r, :len(a)] = torch.tensor(a); y[r, :len(b)] = torch.tensor(b); m[r, :len(a)] = 1
+    return x.to(dev), y.to(dev), m.to(dev)
+
+
+def main():
+    cfg = load_cfg(sys.argv[1:])
+    t0 = time.time()
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    out = pathlib.Path(cfg["out_dir"]); out.mkdir(parents=True, exist_ok=True)
+    logf = open(out / "log.jsonl", "a")
+    def log(**k):
+        k["t"] = round(time.time() - t0, 1); print(json.dumps(k), flush=True); logf.write(json.dumps(k) + "\n"); logf.flush()
+    if (out / "DONE").exists():
+        print("already DONE"); return
+    random.seed(cfg["seed"]); torch.manual_seed(cfg["seed"])
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    ck = out / "ckpt"
+    src = str(ck / "model") if (ck / "state.json").exists() else cfg["model"]
+    tok = AutoTokenizer.from_pretrained(src if (ck / "state.json").exists() else (cfg["tokenizer"] or cfg["model"]))
+    model = AutoModelForCausalLM.from_pretrained(src, torch_dtype=torch.float32)
+    nparams = sum(p.numel() for p in model.parameters())
+    if cfg["add_molde_tokens"] and not (ck / "state.json").exists():
+        sys.path.insert(0, str(pathlib.Path(__file__).parent / "tokens"))
+        from molde_tokens import add_molde_tokens
+        new, _ = add_molde_tokens(tok, model, cfg["lang"])
+        log(event="added_tokens", n=len(new), vocab=len(tok))
+    model.to(dev)
+    if cfg["grad_checkpointing"]:
+        model.gradient_checkpointing_enable(); model.config.use_cache = False
+    prec = cfg["precision"]
+    if prec == "auto":
+        cc = torch.cuda.get_device_capability()[0] if dev == "cuda" else 0
+        prec = "bf16" if cc >= 8 else ("fp32" if nparams < 400e6 else "fp16")
+    amp_dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(prec)
+    scaler = torch.amp.GradScaler("cuda", enabled=(prec == "fp16"))
+    pad = tok.pad_token_id if tok.pad_token_id is not None else (tok.eos_token_id or 0)
+
+    ck_args = cfg["chat_kwargs"]
+    def enc(rows):
+        res = [encode_example(tok, r["messages"], cfg["max_len"], ck_args) for r in rows]
+        return res
+    train = enc(read_jsonl(pathlib.Path(cfg["data_dir"]) / "train.jsonl"))
+    val = enc(read_jsonl(pathlib.Path(cfg["data_dir"]) / "val.jsonl"))
+    trunc = sum(1 for r in train if r[2])
+    spe = math.ceil(len(train) / cfg["batch_size"]) // cfg["grad_accum"]
+    total = cfg["max_steps"] or spe * cfg["epochs"]
+    log(event="start", model=cfg["model"], params=nparams, precision=prec, device=dev, train=len(train), val=len(val),
+        truncated=trunc, max_len_seen=max(len(r[0]) for r in train), steps_per_epoch=spe, total_steps=total,
+        gpu=torch.cuda.get_device_name(0) if dev == "cuda" else None)
+
+    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"], betas=(0.9, 0.95))
+    def lr_at(s):
+        if s < cfg["warmup_steps"]:
+            return cfg["lr"] * (s + 1) / cfg["warmup_steps"]
+        p = (s - cfg["warmup_steps"]) / max(1, total - cfg["warmup_steps"])
+        return cfg["lr"] * (cfg["min_lr_ratio"] + (1 - cfg["min_lr_ratio"]) * 0.5 * (1 + math.cos(math.pi * min(1, p))))
+    step = 0
+    if (ck / "state.json").exists():
+        st = json.load(open(ck / "state.json")); step = st["step"]
+        opt.load_state_dict(torch.load(ck / "opt.pt", map_location=dev))
+        log(event="resumed", step=step)
+
+    def fwd(x, y, m):
+        """summed CE over assistant tokens; logits only at those positions (Gemma's 262k vocab would OOM a T4 otherwise)."""
+        ctx = torch.autocast("cuda", dtype=amp_dtype) if amp_dtype and dev == "cuda" else torch.autocast("cpu", enabled=False)
+        tgt = y[:, 1:]; sel = tgt != -100
+        base = getattr(model, "model", None)
+        with ctx:
+            if base is not None and model.get_output_embeddings() is not None:
+                hs = base(input_ids=x, attention_mask=m).last_hidden_state[:, :-1][sel]
+                head = model.get_output_embeddings()
+                loss = 0.0
+                for i in range(0, hs.size(0), 1024):
+                    part = lambda h: head(h).float()
+                    lg = torch.utils.checkpoint.checkpoint(part, hs[i:i + 1024], use_reentrant=False) if model.training else part(hs[i:i + 1024])
+                    loss = loss + torch.nn.functional.cross_entropy(lg, tgt[sel][i:i + 1024], reduction="sum")
+                return loss, sel.sum()
+            logits = model(input_ids=x, attention_mask=m).logits[:, :-1].float()
+        return torch.nn.functional.cross_entropy(logits.reshape(-1, logits.size(-1)), tgt.reshape(-1), ignore_index=-100, reduction="sum"), sel.sum()
+
+    @torch.no_grad()
+    def evaluate():
+        model.eval(); tl = 0.0; tn = 0
+        for i in range(0, len(val), cfg["batch_size"]):
+            ids = list(range(i, min(len(val), i + cfg["batch_size"])))
+            l, n = fwd(*collate(val, ids, pad, dev)); tl += l.item(); tn += n.item()
+        model.train(); return tl / max(1, tn)
+
+    def save_ckpt():
+        tmp = out / "ckpt_tmp"; tmp.mkdir(exist_ok=True)
+        model.save_pretrained(tmp / "model", safe_serialization=True); tok.save_pretrained(tmp / "model")
+        torch.save(opt.state_dict(), tmp / "opt.pt"); json.dump({"step": step}, open(tmp / "state.json", "w"))
+        import shutil
+        if ck.exists(): shutil.rmtree(ck)
+        tmp.rename(ck); log(event="ckpt", step=step)
+
+    model.train()
+    if step == 0:
+        log(event="eval", step=0, val_loss=round(evaluate(), 4))
+    last_loss = []
+    while step < total:
+        ep, within = divmod(step, spe)
+        order = batches(train, cfg["batch_size"], random.Random(cfg["seed"] + ep))
+        ga = cfg["grad_accum"]
+        for k in range(within * ga, len(order) - ga + 1, ga):
+            for g in opt.param_groups: g["lr"] = lr_at(step)
+            group = order[k:k + ga]
+            ntok = sum(sum(1 for t in train[i][1][1:] if t != -100) for b in group for i in b)
+            tot = 0.0
+            for b in group:
+                l, n = fwd(*collate(train, b, pad, dev))
+                scaler.scale(l / ntok).backward(); tot += l.item()
+            scaler.unscale_(opt); gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            if not math.isfinite(gn.item()):
+                log(event="NONFINITE", step=step); 
+                if prec == "fp16": opt.zero_grad(set_to_none=True); scaler.update(); continue
+                sys.exit("NONFINITE loss: use precision fp32")
+            scaler.step(opt); scaler.update(); opt.zero_grad(set_to_none=True)
+            step += 1; last_loss.append(tot / ntok)
+            if step % 5 == 0 or step == total:
+                log(event="train", step=step, epoch=round(step / spe, 2), loss=round(sum(last_loss) / len(last_loss), 4), lr=round(lr_at(step), 8), gnorm=round(gn.item(), 3)); last_loss = []
+            if step % cfg["eval_every"] == 0 or step == total:
+                log(event="eval", step=step, val_loss=round(evaluate(), 4))
+            if step % cfg["save_every"] == 0 and step < total:
+                save_ckpt()
+            if step >= total: break
+            if cfg["max_minutes"] and (time.time() - t0) / 60 > cfg["max_minutes"]:
+                save_ckpt(); (out / "PAUSED").write_text(str(step)); log(event="PAUSE", step=step); return
+    dt = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[cfg["save_dtype"]]
+    model.to(dt).save_pretrained(out / "final", safe_serialization=True); tok.save_pretrained(out / "final")
+    json.dump({k: v for k, v in cfg.items()}, open(out / "final" / "train_config.json", "w"), indent=1)
+    (out / "DONE").write_text(f"steps={step}"); (out / "PAUSED").unlink(missing_ok=True)
+    log(event="SFT_DONE", step=step, minutes=round((time.time() - t0) / 60, 1))
+
+
+if __name__ == "__main__":
+    main()
