@@ -4,4 +4,4 @@ stat sum(fare.amount today), "today"
 stat sum(fare.amount month), "this month"
 quick fare, amount, [200, 300, 500]
 form fare, "Add fare"
-log fare
+list fare by day

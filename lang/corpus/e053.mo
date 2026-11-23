@@ -12,4 +12,4 @@ grid 7 gap 1
   each days month of m as d
     box height 36 radius 6 fill if(count(entry on d) = 0, soft, if(count(entry on d where mood = "😀" or mood = "🙂") > 0, good, if(count(entry on d where mood = "😐") > 0, warn, bad)))
       monthday(d) small align center
-log entry
+list entry by day

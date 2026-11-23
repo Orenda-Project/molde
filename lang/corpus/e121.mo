@@ -11,4 +11,4 @@ stack align center gap 1
   "Balance left" faint
   if(loan > paid, loan - paid, 0) big huge
 form payment, "Add payment"
-log payment
+list payment by day

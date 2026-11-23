@@ -20,4 +20,4 @@ each options expense.category as k
       rect 0, 0, 100, 4 fill soft radius 2
       rect 0, 0, 100 * clamp(spent / lim, 0, 1), 4 fill if(spent > lim, bad, accent) radius 2
 form expense
-log expense month of m
+list expense month of m by day

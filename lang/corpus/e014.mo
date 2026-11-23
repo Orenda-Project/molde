@@ -9,4 +9,4 @@ each loan sort due
     "due" it.due color if(it.due < today, bad, ink)
 form loan, "Add loan"
 form payback, "He paid back"
-log payback
+list payback by day

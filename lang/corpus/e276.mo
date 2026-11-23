@@ -7,4 +7,4 @@ each kid as k
     sum(k.move.amount where kind = Got) - sum(k.move.amount where kind = Spent) big
 form kid, "Add child"
 form move, "Add entry"
-log move
+list move by day

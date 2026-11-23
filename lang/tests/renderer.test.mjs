@@ -30,8 +30,8 @@ test('std daybars is a plot with axes, a bar and a day label per day', () => {
 });
 
 test('joining and number formatting', () => {
-  const a = run('app "F" calc slate\nstate r num = 120\nstate w num = 3\njoin(r, "/", w) fixed(2.5, 2) compact(81500) grouped(1234) plural(1, "day") plural(3, "day") monthshort(today) pow(2, 10)\n');
-  assert.deepEqual(texts(a), ['120/3 2.50 81.5k 1,234 1 day 3 days Nov 1024']);
+  const a = run('app "F" calc slate\nstate r num = 120\nstate w num = 3\njoin(r, "/", w) fixed(2.5, 2) plural(1, "day") plural(3, "day") monthname(today) pow(2, 10)\n');
+  assert.deepEqual(texts(a), ['120/3 2.50 1 day 3 days November 2026 1024']);
 });
 
 test('currency comes from the locale option; cents show 2 decimals; other years show the year', () => {

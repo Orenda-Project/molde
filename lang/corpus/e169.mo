@@ -12,4 +12,4 @@ interval - since_oil "km left" faint
 when since_oil >= interval notify "Oil change is due"
 button "Oil changed now" tap add oil odo = max(refuel.odo)
 form refuel, "Add fill"
-log refuel
+list refuel by day

@@ -11,4 +11,4 @@ each brother as b
     if(bal >= 0, "gets back", "owes") abs(bal) bold color if(bal >= 0, good, bad)
 form brother, "Add brother"
 form spend, "Add expense"
-log spend
+list spend by day

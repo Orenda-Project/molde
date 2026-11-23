@@ -15,4 +15,4 @@ row gap 3
     round(p * 100) "% of the target" faint
 quick donation, amount, [500, 1000, 5000]
 form donation
-log donation
+list donation by day

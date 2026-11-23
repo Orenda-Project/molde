@@ -7,4 +7,4 @@ button "Repeat last set" tap add sets exercise = last(sets.exercise), kg = last(
 state ex text = last(sets.exercise)
 field ex "Progress for"
 trend sets where exercise = ex sort at, it.kg
-log sets
+list sets by day

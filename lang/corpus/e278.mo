@@ -8,4 +8,4 @@ form drink
 "Daily totals" head
 daybars last 7 days, sum(drink.ml on it)
 "Weekly average" round(sum(drink.ml last 7 days) / 7) "ml a day" faint
-log drink
+list drink by day

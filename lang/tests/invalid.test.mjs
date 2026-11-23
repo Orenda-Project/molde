@@ -36,7 +36,7 @@ export const CASES = [
   ['else without if', A + 'else\n  text "a"\n', 'E_CONTEXT', 2],
   ['table inside a row', A + 'row\n  table t a text\n', 'E_CONTEXT', 3],
   ['index outside each', A + 'text index\n', 'E_CONTEXT', 2],
-  ['missing component value', A + 'ring 3\n', 'E_ARGS', 2],
+  ['missing component value', A + 'goal 3\n', 'E_ARGS', 2],
   ['too many component values', A + 'stat 1, "a", 3\n', 'E_ARGS', 2],
   ['formula where a table is needed', A + 'form 3 + 4\n', 'E_KIND', 2],
   ['unknown component', A + 'chart 3\n', 'E_UNKNOWN_COMPONENT', 2],

@@ -10,4 +10,4 @@ goal total, goal, "saved"
 if(left <= 0, "Goal reached", "You reach it around") if(left <= 0, "", monthname(addmonths(today, nm))) head
 quick deposit, amount, [5000]
 form deposit
-log deposit
+list deposit by day

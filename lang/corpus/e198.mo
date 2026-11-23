@@ -6,7 +6,7 @@ screen menu "Menu" food
   form dish, "Add dish"
 screen orders "Orders" list
   form order, "Take order"
-  log order
+  list order by day
 screen kitchen "Kitchen" bell
   count(order where served = no) "orders to cook" head
   each order where served = no sort at as o

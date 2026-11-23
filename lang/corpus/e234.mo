@@ -4,4 +4,4 @@ quick fare, amount, [50, 100]
 "This month" sum(fare.amount month) big
 "This week" sum(fare.amount week) faint
 form fare
-log fare
+list fare by day

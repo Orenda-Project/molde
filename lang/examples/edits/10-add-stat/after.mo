@@ -12,4 +12,4 @@ each person as p
     "Last entry" last(p.entry.at) faint
 form person, "Add person"
 form entry, "Add entry"
-log entry
+list entry by day

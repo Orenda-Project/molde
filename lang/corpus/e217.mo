@@ -6,10 +6,10 @@ state m date = today
 "Balance" sum(donation.amount) - sum(expense.amount) big
 screen donations "Donations" money
   form donation
-  log donation
+  list donation by day
 screen expenses "Expenses" wallet
   form expense
-  log expense
+  list expense by day
 screen statement "Statement" chart
   monthnav m
   stat sum(donation.amount month of m), "donations"

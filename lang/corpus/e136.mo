@@ -5,4 +5,4 @@ stat count(shift month where kind = Night), "night shifts this month"
 stat count(shift month), "shifts this month"
 calendar shift
 form shift, "Add shift"
-log shift
+list shift by day

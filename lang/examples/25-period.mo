@@ -5,4 +5,4 @@ let cyc = round(gap(period))
 "Next period in about" cyc - since(period) "days. Average cycle" cyc "days." faint
 button "Period started today" tap add period
 calendar period
-log period
+list period by day

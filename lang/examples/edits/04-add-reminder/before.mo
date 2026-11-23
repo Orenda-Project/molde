@@ -6,4 +6,4 @@ kg "kg" big
 abs(round(kg - target)) "kg to target," round(kg - first(weigh.kg last 30 days)) "kg in 30 days" faint
 trend weigh last 90 days sort at, it.kg
 form weigh
-log weigh
+list weigh by day

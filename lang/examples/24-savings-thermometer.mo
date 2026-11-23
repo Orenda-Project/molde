@@ -14,4 +14,4 @@ row gap 3
     "This month" sum(deposit.amount month) faint
 quick deposit, amount, [500, 1000, 5000]
 form deposit
-log deposit
+list deposit by day

@@ -10,4 +10,4 @@ each farmer as f
     sum(f.pickup.liters month) * f.rate bold
 form farmer, "Add farmer"
 form pickup, "Record milk"
-log pickup
+list pickup by day

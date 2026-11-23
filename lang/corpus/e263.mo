@@ -20,7 +20,7 @@ screen meetings "Meetings" calendar
           p.name
 screen donations "Donations" money
   form gift, "Add donation"
-  log gift
+  list gift by day
 screen report "Report" chart
   monthnav m
   stat sum(gift.amount month of m), "donations this month"

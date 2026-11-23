@@ -77,6 +77,9 @@ export function expandList(list, defs, errors, stack = []) {
 
 function expandCall(call, defs, errors, stack) {
   const err = (code, msg, hint) => { errors.push(new MoError(code, call.line, msg, hint)); return null; };
+  // list SRC by day is the day-grouped list (the std log body)
+  if (call.name === 'list' && call.args[0] && / by day(?= sort| top| shuffle|$)/.test(call.args[0]) && defs.has('log') && defs.get('list') && defs.get('list').std)
+    call = { ...call, name: 'log', args: [call.args[0].replace(/ by day(?= sort| top| shuffle|$)/, ''), ...call.args.slice(1)] };
   const entry = defs.get(call.name);
   // `goal faint`, `x big`: a value followed by a style, not a component call
   const asText = asTextLine(call.src);

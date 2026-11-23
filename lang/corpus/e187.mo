@@ -15,4 +15,4 @@ each session by subject
     it.key grow
     sum(it.mins) "min" bold
 daybars last 7 days, sum(session.mins on it)
-log session
+list session by day

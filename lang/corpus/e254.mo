@@ -16,4 +16,4 @@ row gap 3
     "At this pace:" monthname(addmonths(today, nm)) faint
 quick deposit, amount, [5000, 10000]
 form deposit
-log deposit
+list deposit by day

@@ -4,4 +4,4 @@ stat sum(run.km week), "km this week"
 stat sum(run.km month), "km this month"
 daybars last 7 days, sum(run.km on it)
 form run, "Log run"
-log run
+list run by day

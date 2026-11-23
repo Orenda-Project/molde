@@ -11,4 +11,4 @@ grid 10 gap 1
 heat last 28 days, sum(read.pages on it), daily
 "At this pace you finish in" round((604 - done) * 30 / sum(read.pages last 30 days)) "days" faint
 form read
-log read
+list read by day

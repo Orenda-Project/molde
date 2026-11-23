@@ -5,5 +5,5 @@ monthnav m
 "Spent this month" sum(spend.amount month of m) big
 share spend month of m by category, sum(it.amount), it.key
 form spend
-log spend month of m
+list spend month of m by day
 "A bank connection is not possible here; add spending by hand." faint

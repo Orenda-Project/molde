@@ -7,4 +7,4 @@ avg7 big color if(avg7 >= need, good, warn)
 "Last wake-up" last(night.woke) faint
 daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
 form night
-log night
+list night by day

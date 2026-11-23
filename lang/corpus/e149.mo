@@ -13,4 +13,4 @@ each student as s
 stat sum(expense.amount month), "total this month"
 form expense, "Add expense"
 form student, "Add student"
-log expense
+list expense by day

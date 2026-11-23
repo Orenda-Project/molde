@@ -4,4 +4,4 @@ setting goal_g num = 80 "Daily protein (g)"
 goal sum(meal.grams today), goal_g, "protein today", "g"
 daybars last 7 days, sum(meal.grams on it)
 form meal
-log meal
+list meal by day

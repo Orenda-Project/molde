@@ -4,7 +4,7 @@ table check habit ref habit
 let n = count(habit)
 let done = count(check today)
 row gap 2
-  ring done, n, "done today"
+  goal done, n, "done today"
   stack grow
     if(done = n and n > 0, "All done today", "Keep going") head
     "Best streak" max(habit, streak(it.check)) "days" faint

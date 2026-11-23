@@ -5,4 +5,4 @@ share meal by kind, avg(it.feel), it.key
 "After each dish" head
 share meal by what, avg(it.feel), it.key
 form meal, "Log a meal"
-log meal
+list meal by day

@@ -69,6 +69,10 @@ Line by line: the app is called Water with the `drop` icon and the `ocean` theme
 | `big`, `head`, `faint` | `size huge bold`, `size large bold`, `size small color muted` |
 | `where kind = Food` (option values bare) | `where kind = "Food"` |
 | `pick Eating_out\|Home` (an underscore shows as a space) | `pick "Eating out"\|Home` |
+| `tiny` `small` `large` `huge` | `size tiny` ... |
+| `sum(t, it.a * it.b)`, `count(habit, streak(it.check) > 3)`, `max(src, f)`, `min(src, f)` | `sumof(...)`, `countof(...)`, `maxof(...)`, `minof(...)` |
+| `goal value, target` | `ring value, target` (one way to show progress toward a target) |
+| `list t by day` | `log t` |
 
 ## 4. Data
 
@@ -184,9 +188,8 @@ sum(SOURCE, formula)   max(SOURCE, formula)   min(SOURCE, formula)   count(SOURC
 | `nth(TABLE ..., n)` | the nth row (from 1) in the query's order (`nth(card sort front, 1)`) |
 | `pow(x, y)` | x to the power y |
 | `join(a, b, ...)` | the parts joined with no spaces: `join(runs, "/", wickets)` |
-| `fixed(x, n)`, `compact(x)`, `grouped(x)` | x with n decimals; `81.5k`, `1.2M`; `1,234` with separators |
+| `fixed(x, n)` | x with n decimals (otherwise the phone formats numbers: separators, currency, short forms) |
 | `plural(n, "day")` | `1 day`, `3 days` |
-| `monthshort(d)` | `"Nov"` |
 | `words(formula)` | the formula read out in plain English (used for default captions) |
 
 A function's result can be followed by a field: `last(item).name`, `random(card).front`.
@@ -284,7 +287,7 @@ else
 | Modifier | Effect |
 |---|---|
 | `big` / `head` / `faint` | text roles: the main number; a heading; small quiet text |
-| `size tiny\|small\|large\|huge`, `bold` | text size and weight |
+| `tiny` / `small` / `large` / `huge`, `bold` | text size and weight |
 | `color C`, `fill C`, `stroke C` | text colour; background or shape fill; outline |
 | `thick N`, `radius N`, `opacity N` | line width; corner radius; 0 to 1 |
 | `width N`, `height N` | size in screen points; `grow` takes the free space in a row |
@@ -371,14 +374,13 @@ Written in MoldeScript in `lang/std/*.mo`; read those files to see exactly what 
 |---|---|
 | `stat value [, caption]` | a big number with a caption (default: the value read out, for example "total ml of drink today") |
 | `goal value, target [, caption, suffix]` | "value of target" and a progress bar (turns `warn` above the target) |
-| `ring value, target [, caption]` | a progress ring with the value in the middle |
 | `daybars WINDOW, value` | a bar per day of the window (`it` = the day) |
 | `bars SOURCE, value [, key]` | a bar per item of any source (`it` = the item) |
 | `trend SOURCE, value` | a line through the items (`it` = the item) |
 | `heat WINDOW, value [, peak]` | a 7-column heat map of the days (`it` = the day); darker as value nears peak |
 | `share SOURCE, value, key` | labelled bars comparing items: `share spend month by category, sum(it.amount), it.key` |
 | `list SOURCE` | rows (tap to edit, swipe to remove), with an empty message |
-| `log SOURCE` | rows grouped by day (the source may not use `by`, `sort` or `top`) |
+| `list SOURCE by day` | the same rows grouped by day, newest day first (the source may not use `sort` or `top`) |
 | `form TABLE [, button text]` | inputs for every field and a save button; keeps the last values |
 | `quick TABLE, field, [values]` | one-tap buttons that add a row with that field set |
 | `timer DURATION [, caption, actions when done]` | a countdown with start, pause and reset; default end action `notify "Time is up"` |

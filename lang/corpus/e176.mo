@@ -9,4 +9,4 @@ timer rest, "Break", add session task = Break, kind = Break then notify "Break o
 count(session today where kind = Work) "work sessions today" head
 "Focus time today:" count(session today where kind = Work) * work / 1m "min" faint
 daybars last 7 days, count(session on it where kind = Work)
-log session where kind = Work
+list session where kind = Work by day

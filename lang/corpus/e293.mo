@@ -8,4 +8,4 @@ each kid as k
       "Home today at" last(k.arrival.at today) faint
     button "Home now" tap add arrival kid = k
 form kid, "Add child"
-log arrival
+list arrival by day

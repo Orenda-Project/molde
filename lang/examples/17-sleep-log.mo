@@ -8,4 +8,4 @@ daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
 "Average quality" round(avg(night.quality last 7 days)) "of 5" faint
 remind "Time to wind down" at 22:30
 form night
-log night
+list night by day

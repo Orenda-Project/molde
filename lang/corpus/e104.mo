@@ -9,4 +9,4 @@ each load where collected = no sort pickup
     "pickup" it.pickup
     it.price bold
     toggle it.collected
-log load where collected = yes
+list load where collected = yes by day

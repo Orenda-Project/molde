@@ -5,4 +5,4 @@ each visit where next >= today sort next top 1
   row card
     "Next visit" it.next bold
 form visit, "Add visit"
-log visit
+list visit by day

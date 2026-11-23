@@ -17,4 +17,4 @@ each customer as c
         button v "L" tap add delivery customer = c, litres = v
 form customer, "Add customer"
 form payment, "Payment received"
-log delivery month of m
+list delivery month of m by day

@@ -12,4 +12,4 @@ draw 100, 6
 "At this pace you reach the goal on" addmonths(today, 0 - floor(0 - left / monthly)) faint
 button "Add monthly deposit" tap add deposit amount = monthly
 form deposit
-log deposit
+list deposit by day

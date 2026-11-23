@@ -23,5 +23,5 @@ state q text = ""
 field q "Search entries"
 if q != "" and count(entry where has(note, q)) = 0
   "Nothing found. Try a shorter word." faint
-log entry where has(note, q)
+list entry where has(note, q) by day
 "Saved on this device only." faint

@@ -12,4 +12,4 @@ heat last 7 days, count(entry on it)
 trend entry last 30 days sort at, it.mood
 state q text = ""
 field q "Search entries"
-log entry where has(note, q)
+list entry where has(note, q) by day

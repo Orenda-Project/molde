@@ -7,4 +7,4 @@ abs(round(kg - target)) "kg to target," round(kg - first(weigh.kg last 30 days))
 trend weigh last 90 days sort at, it.kg
 daybars last 7 days, count(weigh on it)
 form weigh
-log weigh
+list weigh by day

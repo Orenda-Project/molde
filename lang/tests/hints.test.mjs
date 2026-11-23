@@ -11,7 +11,7 @@ const CASES = [
   ['shape values without commas', 'draw\n  rect 0 0 10 10', 'E_SYNTAX', /values of rect must be separated by commas/],
   ['a shape with a missing value', 'draw\n  rect 0, 0, 10', 'E_SYNTAX', /rect needs 4 values \(X, Y, W, H\) but has 3/],
   ['a std call without commas', 'daybars last 7 days sum(t.n on it)', 'E_SYNTAX', /values of daybars.*separated by commas/],
-  ['a std call with a missing value', 'ring 3', 'E_ARGS', /needs a value for target/],
+  ['a std call with a missing value', 'goal 3', 'E_ARGS', /needs a value for target/],
   ['an unknown icon', 'icon hart', 'E_ICON', /closest is heart/],
   ['an uppercase table name', 'table Drinks ml num', 'E_SYNTAX', /small letters.*table drinks/],
   ['a one-value if()', '"a" if(n > 1)', 'E_ARGS', /if\(\) needs three values/],

@@ -34,4 +34,4 @@ screen money "Income" wallet
   stat income, "this month"
   stat sum(visit.paid prev month), "last month"
   daybars last 7 days, sum(visit.paid on it)
-  log visit
+  list visit by day

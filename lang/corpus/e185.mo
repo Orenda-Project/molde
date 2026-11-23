@@ -9,4 +9,4 @@ each options lesson.skill as s
     round(avg(lesson.confidence where skill = s)) "/ 5" bold
 form lesson, "Log lesson"
 trend lesson sort at, it.confidence
-log lesson
+list lesson by day

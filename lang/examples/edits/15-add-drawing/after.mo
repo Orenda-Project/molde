@@ -9,4 +9,4 @@ draw width 160
   label 50, 50, "Day" since(period) + 1 bold
 button "Period started today" tap add period
 calendar period
-log period
+list period by day

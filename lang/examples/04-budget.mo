@@ -21,4 +21,4 @@ each spend month of m by category
     draw 100, 3
       rect 0, 0, 100 * sum(it.amount) / spent, 3 fill if(cat = it.key, accent, muted)
 form spend
-log spend month of m where cat = "" or category = cat
+list spend month of m where cat = "" or category = cat by day

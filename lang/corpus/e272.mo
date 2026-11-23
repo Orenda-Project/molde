@@ -15,4 +15,4 @@ each customer as c
       button "Paid" tap edit c
 form customer, "Add customer"
 form payment, "Add payment"
-log delivery
+list delivery by day

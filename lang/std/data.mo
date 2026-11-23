@@ -8,6 +8,7 @@ def list src src
     row card tap edit r swipe remove r
       text r grow
 
+# written list SRC by day (the formatter turns the older log SRC into that)
 # describe: a list of {src} by day; tap one to edit it, swipe to remove it
 def log src src
   each src by day as g empty "Nothing here yet. Add one to see it here."

@@ -18,4 +18,4 @@ field ex "Progress for"
 trend lift where exercise = ex sort at, it.kg
 "Best" max(lift.kg where exercise = ex) "kg" faint
 daybars last 7 days, count(lift on it)
-log lift
+list lift by day

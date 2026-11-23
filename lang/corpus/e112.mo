@@ -14,4 +14,4 @@ each child as c
     else
       button "Mark paid" tap add paid child = c
 form child, "Add child"
-log paid
+list paid by day

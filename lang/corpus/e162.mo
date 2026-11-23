@@ -12,4 +12,4 @@ each student sort name as s
     else
       "Paid" color good
 form student, "Add student"
-log paid
+list paid by day
