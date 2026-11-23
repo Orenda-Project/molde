@@ -121,7 +121,8 @@ Formulas always finish: there are no loops except over data, a bounded range or 
 
 - Arithmetic: `+ - * / %` and brackets. `x / 0` is `0`.
 - Comparison: `= != < > <= >=` give yes/no. Join with `and`, `or`, `not`.
-- Dates: `date + 3` (days later), `date - date` (days between), `date + 2h` (a date and time), `time - time` and `when - when` (a length of time).
+- Dates: `date + 3` (days later), `date - date` and `date - when` (whole days between), `date + 2h` (a date and time), `when - when` (a length of time). A date compared with a date and time compares whole days (`at <= today` includes all of today).
+- `time - time` is the forward length from the second time to the first, wrapping past midnight: bed `23:00` to wake `7:00` is `wake - bed` = 8 hours.
 - Durations: `dur + dur`, `dur * num`, `dur / num`, `dur / dur` (a number: `slept / 1h` is hours).
 - Money mixes with numbers and stays money.
 - Names: a setting, state or let; `it` (the current item, section 7.1); `index` (0, 1, 2 … inside `each`); `pi`; paths with `.`: `it.name`, `it.habit.name` (follow a `ref`), `d.mood` (a field of a new row).
@@ -137,6 +138,7 @@ last(T.field ...)   first(T.field ...)   (latest or earliest value; last(T) is t
 streak(T ...)   days in a row, up to today, with at least one row (yesterday counts if today has none yet)
 best(T ...)     the longest such run ever
 since(T ...)    whole days since the latest row (empty if there are none: never 0 by accident)
+due(T ..., n)   yes when there are no rows or the latest is n or more days ago (never done counts as overdue)
 gap(T ...)      average days between the days that have rows (empty with fewer than 2 days)
 ```
 
@@ -168,7 +170,7 @@ sumof(SOURCE, formula)   maxof(SOURCE, formula)   minof(SOURCE, formula)   count
 |---|---|
 | `if(condition, a, b)` | `a` or `b` (one value, both the same type; to mix words and numbers use two text parts) |
 | `min(a, b)`, `max(a, b)` | the smaller or larger of two values (with one column inside, they are aggregates) |
-| `round(x)`, `floor(x)`, `abs(x)`, `clamp(x, lo, hi)` | numbers |
+| `round(x)`, `floor(x)`, `abs(x)`, `clamp(x, lo, hi)` | numbers (`round` goes half away from zero; `x % n` is never negative) |
 | `sin(deg)`, `cos(deg)`, `pi` | for placing things on a circle (degrees, 0 at the top when used as `x + r * sin`, `y - r * cos`) |
 | `len(text)`, `has(text, part)` | length; yes if `part` is in `text` (ignores case; `has(x, "")` is yes) |
 | `weekday(d)` | 1 (Monday) to 7 |

@@ -13,6 +13,6 @@ each surah sort revised as s
     stack grow
       s.name bold
       s.verses "verses memorised" faint
-    if(count(s.revision) = 0, "never revised", "revised days ago:") color if(since(s.revision) > 7, warn, ink)
+    if(count(s.revision) = 0, "never revised", "revised days ago:") color if(due(s.revision, 8), warn, ink)
     since(s.revision) bold
 form surah, "Add surah"

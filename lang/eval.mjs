@@ -969,6 +969,17 @@ class App {
       case 'agg': return this.agg(e, env);
       case 'fold': return this.fold(e, env);
       case 'fn': return this.fn(e, env, inAction);
+      case 'qfn': {
+        if (e.fn === 'due') { // never done, or at least n days since the last row
+          const n = num(this.ev(e.e, env, inAction));
+          const since = this.agg({ fn: 'since', q: e.q }, env);
+          return since === null || (n !== null && since >= n);
+        }
+        const rows = this.queryRows(e.q, env);
+        if (e.fn === 'nth') { const i = Math.round(num(this.ev(e.e, env, inAction)) ?? 0); const r = rows.rows[i - 1]; return r ? new Row(rows.table, r) : null; }
+        if (e.fn === 'anyrow') { if (!rows.rows.length) return null; return new Row(rows.table, rows.rows[Math.floor(this.random() * rows.rows.length)]); }
+        return null;
+      }
     }
     return null;
   }
@@ -981,7 +992,7 @@ class App {
       case 'if': return A[0] === true ? A[1] : A[2];
       case 'min': case 'max': if (A[0] === null) return A[1]; if (A[1] === null) return A[0]; return (e.fn === 'min' ? cmpVal(A[0], A[1]) <= 0 : cmpVal(A[0], A[1]) >= 0) ? A[0] : A[1];
       case 'clamp': { if (A[0] === null) return null; const v = Math.min(Math.max(num(A[0]), num(A[1])), num(A[2])); return this.like(A[0], v); }
-      case 'round': return A[0] === null ? null : this.like(A[0], Math.round(num(A[0])));
+      case 'round': return A[0] === null ? null : this.like(A[0], Math.sign(num(A[0])) * Math.round(Math.abs(num(A[0])))); // half away from zero: -2.5 -> -3
       case 'floor': return A[0] === null ? null : this.like(A[0], Math.floor(num(A[0])));
       case 'abs': return A[0] === null ? null : this.like(A[0], Math.abs(num(A[0])));
       case 'sin': return A[0] === null ? null : Math.round(Math.sin(num(A[0]) * Math.PI / 180) * 1e9) / 1e9;

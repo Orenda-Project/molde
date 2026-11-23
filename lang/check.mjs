@@ -635,6 +635,13 @@ class Checker {
       case 'agg': return this.agg(e);
       case 'fold': return this.fold(e);
       case 'fn': return this.fn(e);
+      case 'qfn': {
+        const t = this.query(e.q, false);
+        if (e.fn === 'due') { const n = this.expr(e.e); if (!isAny(n) && !isNum(n)) this.err('E_TYPE', 'due(table, days) needs a number of days.', 'write due(water, 3).'); return 'bool'; }
+        if (e.fn === 'nth') { this.num(e.e, 'nth position'); return isAny(t) ? ANY : { t: 'row', table: t.table }; }
+        if (e.fn === 'anyrow') { if (!this.inAction) this.err('E_CONTEXT', 'random(table) picks a row, so it can only be used inside an action (tap, every, when).', 'store it: tap set pick = random(card).'); return isAny(t) ? ANY : { t: 'row', table: t.table }; }
+        return ANY;
+      }
       case 'ucall': return this.err('E_UNKNOWN_NAME', `there is no formula "${e.name}(...)" declared above.`, `declare it first: let ${e.name}(x num) = ...`);
     }
     return ANY;
@@ -713,7 +720,7 @@ class Checker {
       return this.err('E_TYPE', `${f}() needs a number column like ${t.table}.amount (or two numbers: ${f}(a, b)).`, `write ${f}(${t.table}.FIELD ...).`);
     }
     if (f === 'last' || f === 'first') return t.ftype;
-    if (!isNum(t.ftype) && tname(t.ftype) !== 'dur') return this.err('E_TYPE', `${f}() needs a number column; ${t.table}.${t.field} is ${show(t.ftype)}.`, 'use count() for non-numbers.');
+    if (!isNum(t.ftype) && tname(t.ftype) !== 'dur') return this.err('E_TYPE', `${f}() needs a number column; ${t.table}.${t.field} is ${show(t.ftype)}.`, tname(t.ftype) === 'time' ? `times of day cannot be added up; store a duration (dur) or a number, or use count() / last(${t.table}.${t.field}).` : `use count(${t.table}) for how many, or last(${t.table}.${t.field}) for the latest value.`);
     return t.ftype;
   }
 

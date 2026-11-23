@@ -22,14 +22,17 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 - **`time - time` is the forward duration from the second time to the first, wrapping past midnight**: bed 23:00 to wake 07:00 is `07:00 - 23:00 = 8:00`, always between 0 and 24 hours.
 - A row's `at` is the moment it was added. **Windows always filter on `at`'s date**: `today` matches rows whose `at` falls on today's date, `last 7 days` the 7 dates ending today, `month of d` the calendar month of `d`.
 - `each days WINDOW` gives the window's dates oldest first (at most 400).
+- `last N months` is the dates after the same day N months ago, up to today (`last 1 months` on 23 November is 24 October to 23 November).
 
 ## Values
 
 - **Money** is stored as a decimal number rounded to 2 places in the currency's main unit (rupees, not paisa). Arithmetic with numbers keeps it money; the currency sign is a display setting of the runtime.
 - **Durations** are whole seconds; **times of day** are seconds after midnight (they wrap at 24:00); **dates** are calendar days; **date and time** values are moments.
 - **Empty**: an optional field nobody filled in, `last()`/`first()` of no rows, `min()`/`max()`/`avg()` of no values, `since()` of no rows and `gap()` with fewer than two days are empty. Empty plus, minus, times or divided by anything is empty. Every comparison with empty (`=`, `<`, `>=` ...) is no, and `!=` is yes only when exactly one side is empty. `sum()`, `sumof()`, `count()` skip empty values, so they are 0 for nothing.
-- **`since(T)` with no rows is empty, never 0**, so a never-watered plant does not look "just watered". `since(water) >= 3` is no for it; test "never" with `count(water) = 0`.
-- **Division by zero** gives 0. `x % 0` gives 0.
+- **`since(T)` with no rows is empty, never 0**, so a never-watered plant does not look "just watered". `since(water) >= 3` is no for it; write `due(water, 3)` when never should count as overdue.
+- **Division by zero** gives 0. `x % 0` gives 0. `x % n` is never negative for a positive `n` (`-7 % 3` is 2).
+- **`round(x)`** rounds half away from zero (`round(2.5)` is 3, `round(-2.5)` is -3); `floor` goes down.
+- **`due(T, n)`** is yes when `T` has no rows at all or the last one is at least `n` days ago: the one-word way to treat never-done as overdue.
 - Text shows empty as nothing inside a line with other parts, and as `–` when it is the only part.
 
 ## Aggregates
