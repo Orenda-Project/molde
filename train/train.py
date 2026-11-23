@@ -70,7 +70,7 @@ def main():
     def log(**k):
         k["t"] = round(time.time() - t0, 1); print(json.dumps(k), flush=True); logf.write(json.dumps(k) + "\n"); logf.flush()
     if (out / "DONE").exists():
-        print("already DONE"); return
+        print("SFT_DONE already"); return
     random.seed(cfg["seed"]); torch.manual_seed(cfg["seed"])
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     ck = out / "ckpt"
@@ -81,7 +81,7 @@ def main():
     if cfg["add_molde_tokens"] and not (ck / "state.json").exists():
         sys.path.insert(0, str(pathlib.Path(__file__).parent / "tokens"))
         from molde_tokens import add_molde_tokens
-        orig_vocab = len(tok)
+        orig_vocab = len(tok); (out / "orig_vocab.txt").write_text(str(orig_vocab))
         new, _ = add_molde_tokens(tok, model, cfg["lang"], cfg["token_mode"])
         log(event="added_tokens", n=len(new), vocab=len(tok))
     model.to(dev)
@@ -170,6 +170,8 @@ def main():
         return sum(ok) / max(1, len(ok))
 
     best = {"score": -1.0, "epoch_bad": 0}
+    if (out / "best.json").exists():
+        best["score"] = json.load(open(out / "best.json"))["checker_pass"]
     def save_ckpt():
         tmp = out / "ckpt_tmp"; tmp.mkdir(exist_ok=True)
         model.save_pretrained(tmp / "model", safe_serialization=True); tok.save_pretrained(tmp / "model")
@@ -231,6 +233,7 @@ def main():
     model.to(dt).save_pretrained(out / "final", safe_serialization=True); tok.save_pretrained(out / "final")
     json.dump({k: v for k, v in cfg.items()}, open(out / "final" / "train_config.json", "w"), indent=1)
     if cfg["add_molde_tokens"] and (out / "final" / "tokenizer.json").exists():
+        orig_vocab = int((out / "orig_vocab.txt").read_text())
         # llama.cpp's SentencePiece path reads added tokens from added_tokens.json (tokenizer.json alone would export [PAD] placeholders)
         json.dump({t: i for t, i in tok.get_vocab().items() if i >= orig_vocab}, open(out / "final" / "added_tokens.json", "w"))
     if True:   # llama.cpp's converter needs the SentencePiece file for Gemma (tokenizer.json alone fails an assert)

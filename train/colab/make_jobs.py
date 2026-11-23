@@ -18,6 +18,7 @@ ap.add_argument("jobs"); ap.add_argument("--name", required=True); ap.add_argume
 ap.add_argument("--set", nargs="*", default=[]); ap.add_argument("--stages", default="train,eval,export")
 ap.add_argument("--quants", default="Q8_0 Q4_K_M"); ap.add_argument("--resume-parts", type=int, default=0); ap.add_argument("--ckpt-parts", type=int, default=0)
 ap.add_argument("--inputs", default="molde-train/inputs/molde_inputs.tgz"); ap.add_argument("--extra-fetch", nargs="*", default=[])
+ap.add_argument("--train-chunks", type=int, default=1, help="N sequential train jobs in ONE runtime, each paused after 40 min and resumed by the next (a cell may not run longer than 50 min)")
 ap.add_argument("--data-dir", default="data/out", help="dataset folder under train/ (train.jsonl, val.jsonl, test_refs.jsonl, dataset_card.json)")
 ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--gguf-parts", type=int, default=1, help="parts per f16 GGUF when it exceeds 900 MB")
 a = ap.parse_args()
@@ -76,8 +77,11 @@ def heart(logpath, pattern, maxsec, proc):
     return open(logpath).read() if os.path.exists(logpath) else ""
 '''
 if "train" in stages:
-    cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets} > {RUN}.train.log 2>&1 &"
-    (d / "36_train.py").write_text(HEART + f'''
+    extra = " max_minutes=40" if a.train_chunks > 1 else ""
+    cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets}{extra} > {RUN}.train.log 2>&1 &"
+    for ci in range(a.train_chunks):
+        nm = "36_train.py" if ci == 0 else f"36{chr(97 + ci)}_train.py"
+        (d / nm).write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
 subprocess.Popen({cmd!r}, shell=True)
 log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
