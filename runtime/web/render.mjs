@@ -333,6 +333,9 @@ class Renderer {
       else if (cc) el.setAttribute('data-color', cc); else el.removeAttribute('data-color');
       if (n.t === 'button' && (st.fill === 'accent' || n.primary)) cls.push('mo-primary');
       if (n.t === 'row' && n.children && !n.children.some(c => c.style && c.style.grow) && n.children.filter(c => c.t === 'stack').length >= 2) cls.push('mo-row-even');
+      // a row whose children are all growing stacks (a week strip, a mood picker) is a strip:
+      // its columns stay side by side at any text size
+      if (n.t === 'row' && n.children && n.children.length >= 3 && n.children.every(c => c.t === 'stack' && c.style && c.style.grow)) cls.push('mo-strip');
 
       // events on blocks and texts
       const tappable = n.tap && n.t !== 'button' && n.t !== 'toggle';

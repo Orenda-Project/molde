@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-/F6YxOS4FlQ0ma53xk8hmR+tgZIh/95wC7zSx+Y0H+Q='; style-src 'sha256-/Rg9CtrxTCVwZ4WU75FwRFD5bwO5RhjDwp4qHgVB3LU='; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-BpIGYqJ4ZBk1xhj7d1z2t3HH7bBa0+C45yRSes5hfXc='; style-src 'sha256-JrHxlT/5p1JKcAtJR2Q9rffDJeKgBh7pr/fkC4+kIWE='; img-src data:; base-uri 'none'; form-action 'none'">
 <title>Molde live demo</title>
 <link rel="icon" href="data:,">
 <style>/* Molde runtime design system for MoldeScript level-1 nodes.
@@ -367,6 +367,8 @@ textarea.mo-input { min-height: 104px; resize: vertical; line-height: 1.5; }
    system text the row wraps instead of squeezing the column to a sliver */
 .mo-row > .mo-stack.mo-grow { min-width: min(100%, 8rem); }
 .mo-app [hidden] { display: none !important; }
+.mo-row.mo-strip { flex-wrap: nowrap; }
+.mo-row.mo-strip > .mo-stack.mo-grow { min-width: 0; }
 
 /* Demo page chrome. Quiet neutrals; the app in the frame carries the colour. */
 :root {
@@ -4521,6 +4523,9 @@ class Renderer {
       else if (cc) el.setAttribute('data-color', cc); else el.removeAttribute('data-color');
       if (n.t === 'button' && (st.fill === 'accent' || n.primary)) cls.push('mo-primary');
       if (n.t === 'row' && n.children && !n.children.some(c => c.style && c.style.grow) && n.children.filter(c => c.t === 'stack').length >= 2) cls.push('mo-row-even');
+      // a row whose children are all growing stacks (a week strip, a mood picker) is a strip:
+      // its columns stay side by side at any text size
+      if (n.t === 'row' && n.children && n.children.length >= 3 && n.children.every(c => c.t === 'stack' && c.style && c.style.grow)) cls.push('mo-strip');
 
       // events on blocks and texts
       const tappable = n.tap && n.t !== 'button' && n.t !== 'toggle';

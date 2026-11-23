@@ -11,7 +11,7 @@ The first real renderer for MoldeScript. `lang/eval.mjs` runs a program and hand
 | `icons.mjs` | the 84 MoldeScript icon names (one Lucide icon each; a few names share one) plus runtime chrome, as Lucide line icons (ISC licence) |
 | `demo/` | the demo page: `index.html` (development), `main.mjs`, `demo.css`, `catalog.mjs` (15 programs), `seed.mjs` (deterministic history), `requests.mjs` (scripted chat requests), `programs/` (richer water, habits, budget, workouts and journal programs) |
 | `build.mjs` | writes `dist/molde-demo.html`: one file, all JS, CSS and program sources inlined |
-| `tests/check.mjs` | Playwright machine checks and interaction tests on the built file (192 checks) |
+| `tests/check.mjs` | Playwright machine checks and interaction tests on the built file (208 checks) |
 | `shots/` | every demo program at 412x915, light and dark, app only |
 
 ## Run and build
@@ -28,62 +28,66 @@ Open `dist/molde-demo.html` straight from disk. It makes no network requests, us
 
 ## The demo
 
-The page has the picker and the program source outside the phone frame. Inside the frame is only the app and one round chat button, the product shell Kamal described: tap it, ask for a change or a new app. **The chat is scripted, because the model is not trained yet.** The requests offered come from real edit pairs in `lang/examples/edits` where the program matches, or from small hand-written patches. The change itself is real: the new program is diffed with `lang/diff.mjs`, explained in plain words, swapped in live with the user's data kept, the changed lines are marked in the source, and Undo puts the old program and data back. "Make me a new app" requests switch to another example (described with `lang/describe.mjs`).
+The page has the picker, the program source and a **Reset demo data** button outside the phone frame. Inside the frame is only the app and, in a strip of its own at the bottom, one round chat button: the product shell Kamal described. **The chat is scripted, because the model is not trained yet.** Each request maps to a hand-written program change (`demo/requests.mjs`). The change itself is real: the evaluator applies it (`app.applyEdit`, data kept by storage slot), the reply says in a sentence what changed, the changed lines are marked in the source, and chat Undo (`app.revert`) puts back the previous program while keeping everything entered since. Every change message keeps its own Undo in turn. "Make me a new app" switches to another program; each app keeps its own data for the session, so going back, or asking for that app again, finds it as it was left. The picker never reseeds an app; only Reset demo data does.
 
-Each program opens with a few weeks of lived-in data. `demo/seed.mjs` adds rows through the evaluator's own `addRow` with a fixed seed and a fixed clock (Thursday 26 November 2026, 15:30 UTC), so the screens are the same every time.
+All fifteen programs are written for the demo in `demo/programs/` (plain level 1 plus the standard library; `node lang/mo.mjs check` passes on each). Each opens with a few weeks of lived-in data: `demo/seed.mjs` adds rows through the evaluator's public `addRow` with a fixed seed and clock (Thursday 26 November 2026, 15:30 UTC).
 
 ## Level-1 nodes implemented
 
-`app` (header with the app's icon, date and a settings button when the program has settings), `screen` (tab bar), `stack`, `row` (wraps), `grid`, `box`, `scroll`, `text` (roles `big`, `head`, `faint`; sizes; `bold`; `color`; `align`; tappable text), `button`, `icon`, `image`, `space`, `divider`, `input` (text, long, num, money, date, time, when, dur in minutes, bool, pick and ref as chips, image), `form`, `toggle`, `choice`, `slider`, `draw` with `rect`, `circle`, `arc` (stroke arc or filled wedge), `line`, `path`, `label`, `poly`, and `error`. Every style key in UITREE.md: theme roles, the named colours, `hue:N`, `thick`, `radius`, `opacity`, `width`, `height`, `pad`, `gap`, `span`, `grow`, `card`, `tap`, `swipe`.
+`app` (an app bar with the name and, when the program has settings, a settings button), `screen` (tab bar), `stack`, `row`, `grid`, `box`, `scroll`, `text` (roles, sizes, `bold`, `color`, `align`, tappable text), `button`, `icon`, `image`, `space`, `divider`, `input` (text, long, num, money, date, time, when, dur, bool, pick and ref as chips, image), `form`, `toggle`, `choice`, `slider`, `draw` with `rect`, `circle`, `arc` (stroke arc or filled wedge), `line`, `path`, `label`, `poly`, and `error`; every style key in UITREE.md.
 
-Runtime pieces from SPEC section 12: an editor sheet for rows (`edit it`) and settings (`edit goal`, the header's settings button), remove with an Undo toast, `notify` as a toast, required-field messages, swipe to remove (pointer drag, or Delete on a focused row), timers (the renderer calls `app.tick` once a second while the page is visible), focus and scroll kept across updates (keyed patching by node id).
+Runtime pieces from SPEC section 12: editor sheets for rows and settings, remove with an Undo toast that names the row ("Removed Petrol, Rs 5,740"), `notify` as a toast, swipe to remove (or Delete on a focused row), timers (`app.tick` once a second), focus and scroll kept across updates (keyed patching by node id; a focused or pressed control is never replaced).
 
-Generic layout rules the renderer adds, none app-specific:
+## Generic rules the renderer applies (and why each is generic)
 
-- a `row` with two or more `stack` children and no `grow` shares the width evenly (stat rows);
-- a `draw` with no width fills its column but never grows taller than 120 points for a tall canvas (a bar in a chart) or 280 for a wide one (a chart);
-- a `box` with no width fills its column;
-- `label` text inside a drawing is HTML, so it keeps real sizes, and its colour follows the shape under it (white on an accent circle, ink on a soft one);
-- a `button` with `fill accent` is the primary button; every other button is a quiet neutral one.
+None of these names an app, a table or a field; each reads only node types and styles from the tree.
+
+1. **Points follow the system text size** (16 points = 1rem), so a drawing grows with its labels.
+2. **Numbers in the runtime's locale** (SPEC 12 says the runtime formats numbers): thousands separators from 1,000 (the evaluator starts at 10,000), never inside a year after a month name, a time or a date; a 1 to 3 letter word before a number and a unit after it do not wrap away ("Rs 5,322", "250 ml"); a number never breaks inside.
+3. **A first row of small controls joins the app bar** (at most 4 buttons, short texts, icons, empty boxes): the month switcher, the app's one main action.
+4. **`<` and `>` buttons are drawn as chevrons** named Previous and Next.
+5. **Centring only for a one-block screen**: a screen that is a single board or drawing sits in the middle of the free height; everything else starts at the top. A drawing on its own line is centred across.
+6. **Strips and columns**: a row whose children are all growing stacks is a strip and keeps its columns; a growing column beside other things keeps about 8 characters so rows wrap at large text; grid cells that hold words keep 4.5rem.
+7. **Invisible text is read aloud only**: a `text` with `opacity 0` becomes screen-reader text (used to name heat-map cells and board squares).
+8. **Big grids are one tab stop**: a grid with more than 12 tappable cells has one tab stop and arrow keys (roving tabindex).
+9. **`stroke` on a block is an outline ring** (inset, so the layout does not move).
+10. **Labels in drawings** are HTML with real sizes; their colour follows the shape under them.
+11. **Primary button**: a button with `fill accent` is primary; others are quiet.
+12. **Even stat rows**: a row of two or more stacks with no `grow` shares the width.
+13. **Drawing height caps**: a canvas with no width fills its column but stays under 120 points for a tall canvas, 280 for a wide one.
+14. **Scroll cue**: a sideways row fades on the side that has more.
+15. **Reserved inset**: a host can reserve a strip at the bottom (`mount(..., { insetBottom })`) for its own controls; the app never draws under it.
 
 ## Design system
 
-Direction: personal tools on a cheap phone; calm, exact, a little warm; a pocket notebook and a pen. Surfaces stay neutral; colour goes into what the program draws. Spacing on a 4 px scale (`gap`/`pad` 0 to 6 = 0, 8, 12, 16, 24, 32, 48 px), one type scale (14, 16, 18, 22, 32, 44 px; weights 400, 500, 600), nested radii (cards 16, controls 10), a visible focus ring, touch targets of at least 44 px, no text under 14 px, text contrast of at least 4.5:1 in all five themes in light and dark (checked by the tests). No gradients, glows, emoji or brown. The `ink` theme of the v1 kit was lime on black; here it is indigo on near-white, and a calm dark navy in dark mode.
+Direction: personal tools on a cheap phone; calm, exact, a little warm. Surfaces stay neutral; colour goes into what the program draws. Spacing on a 4 px scale (`gap`/`pad` 0 to 6 = 0, 8, 12, 16, 24, 32, 48 px), one type scale in rem (14, 16, 18, 22, 32, 44 px at 100%; weights 400 to 600), nested radii (cards 16, controls 10), a visible focus ring, targets of at least 44 px, no text under 14 px, text contrast of at least 4.5:1 in all five themes, light and dark. No gradients, glows, emoji or brown.
 
-## Checks (tests/check.mjs)
+## Checks (tests/check.mjs, 208)
 
-- every demo program at 360x640, 412x915, 600x960, 800x1280 and 1440x900, light and dark: no console output and no network request, no horizontal overflow, every visible interactive element at least 44x44, no text under 14 px, computed text contrast at least 4.5:1 (also for labels over drawn shapes); at 412x915 the same with the chat sheet open;
-- interactions: water quick add raises the total and the glass; tasbeeh tap counts and the arc grows; tic-tac-toe detects a win; a removed row comes back from the Undo toast; a swipe removes a row; the focus timer counts down in real time; the row editor saves a change; a form adds a row; tabs switch after a chat edit adds a screen; a chat request swaps the program, keeps data and undoes; a new-app request switches programs; every scripted request yields a program that checks; the file runs in a sandboxed iframe with its CSP.
+- every program at 360x640, 412x915, 600x960, 800x1280 and 1440x900, light and dark (and with the chat sheet open): no console output or network request, no overflow, targets of at least 44 px, text of at least 14 px, contrast of at least 4.5:1;
+- 200% system text at 360 px (no overflow, no letter-per-line, numbers whole, drawing labels inside their drawings) and 300 px wide;
+- the chat button is never over any control at the top, middle and end of every app (`elementFromPoint`);
+- sheets: Done closes on the first real mouse click after typing, also at its right edge; Tab then Enter works;
+- data: chat Undo keeps data entered after a change; a hidden field comes back on redo; undoing a new-app request keeps that app's data; the picker never reseeds; Reset demo data does; a second Undo is reachable;
+- the app bar (chevrons, main actions), act-first order, heat grid (one tab stop, arrows, named cells, ring selection, legend), one-row exercise picker, number format, chart ticks and month names, warnings in words, named board cells, toast phrases, empty states without noise, plurals, primary actions, centring, dates and times as text;
+- interactions: quick add, tasbeeh, tic-tac-toe win, undo toast, swipe, timer, row editor, form, tabs, chat changes, every scripted request checks, sandboxed iframe with CSP.
 
 ## What still looks weak (honest list)
 
-- **Axis labels cost a lot of program text.** Every label, gridline and latest-point dot is placed by hand with `label`, `line` and `circle`, repeating the chart's formulas; a tiny model will rarely write that.
-- **Number formatting:** no "80k" (text parts always join with a space), no thousands separator under 10,000 ("Rs 5322"), no currency sign from the runtime, no short month name for month bars.
-- **Plurals and empty states are written by hand** in each program; std `list` and `log` still say "Nothing here yet."
-- Reading, to-do, attendance and medicine (the unchanged language examples) keep the plainer round 1 look.
-- The heat grid needs 44 px cells to be tappable, so it shows 6 weeks, not 10, and sits outside a card.
-- Dates are UTC in the evaluator.
-- The editor and settings sheets read declarations from the `App` object (gap 1 below).
-
-## Round 2 changes (after the round 1 verdict, issue #37)
-
-- **Chat Undo never loses data.** It puts back the previous *program* and keeps every row and setting the user has now. Values in a field the older program lacks stay stored (hidden) and come back when the field returns; the reply says so. Edits are diffed against every earlier version of the app; only a data action's own Undo toast reverts data.
-- **Charts are labelled** in the demo programs with plain `label` nodes: budget (y values, days 1/15/30, a legend, the current point), workouts (best and lowest kg, first date and Today, the latest point), journal (Great/Okay/Rough, first date and Today), water, savings and focus (value over each bar). The habits heat grid has weekday headers and shows the value of a tapped day.
-- **Generic renderer rules:** a short screen sits in the middle of the free height; a `draw` on its own line is centred; a `scroll` shows a fade on the side that has more; grid cells that hold words keep at least 4.5rem (large system text drops a column instead of breaking names); `align` on a row is the cross axis only.
-- **Shell:** the chat button hides under sheets and scrims, while a field is being typed in, and while the user scrolls down (it returns on the way up); the Undo toast has its own place beside it, on one line.
-- **One primary action per app**, the only accent button: Log exercise, Add expense, Save entry, Add habit, + 250 ml, + 1,000, Start, New game.
-- **Replies are sentences** written per request; "Everything you saved is still here." appears only when the change touched stored data; new apps are described in plain words; the button says Undo.
-- **Empty states and plurals** in every demo program; the quiz shows the right answer after a wrong one and can start again (`remove all`); budget cannot page into future months.
-- **Font sizes in rem**, tested at 200% root size at 360 px and at 300 px wide.
-- **Date and time inputs** read "Thu 26 Nov 2026" and "08:30"; the browser's picker opens on tap.
-- **Less template:** the runtime bar is just the app's name (and settings); each program leads with its own element.
+- **Charts cost a lot of program text**: every tick, gridline and point is placed by hand with `label`, `line` and `circle`; the language's chart frame (`plot`, `tick`) is not finished yet.
+- **Short month names** are a 12-level `if` in the savings program; plurals and empty states are written by hand everywhere.
+- **The number rule is a heuristic**: a 4-digit year that does not follow a month name would get a comma ("in 2026" would show as "in 2,026"); no demo program shows one. A typed number in the tree would remove the guess.
+- **Heat-map cells and board squares are named with invisible text** (rule 7); a real accessible-name modifier would be cleaner.
+- The heat grid needs 44 px cells to be tappable, so it shows 6 weeks, not 10.
+- Dates are UTC in the evaluator; the demo does not pass `tz: 'local'` so screenshots stay fixed.
+- The editor and settings sheets still read declarations from the `App` object (gap 1 below).
 
 ## Contract gaps and language needs
 
-1. `edit` logs a target, but there is no public way to list a row's or setting's fields and change them; the renderer's `bridge` reads `app.env`, `app.prog`, `app.data` and calls `app.pushUndo` directly.
-2. `app.restore(snapshot)` replaces data wholesale; `demo/main.mjs` `loadWithData` adds new tables and settings itself.
-3. `toggle` and `choice` nodes carry no label, so a tick box's accessible name is a guess.
-4. A button's action kind is not in the tree; programs mark the primary button with `fill accent`.
-5. Every `dispatch` (each keystroke too) is one undo step; the renderer drops the Undo toast as soon as anything else is dispatched.
-6. Seeding history needs `app.addRow(table, values, atMs)`, which is not documented.
-7. A changed setting default does nothing for a user who already has the setting stored, so "count to 100" cannot be done as an edit.
+1. A public editor API: list a row's or setting's fields with their values and types, and set one (with one undo step). The `bridge` in render.mjs reads `app.env`, `app.prog`, `app.data` through `tk/fk/sk` and calls `app.pushUndo`.
+2. Typed text parts in the tree (number, money, date), so the runtime formats numbers and currency without guessing (rule 2).
+3. An accessible name for any node (`say "..."`), replacing rule 7.
+4. Labels on `toggle` and `choice`; the action kind on buttons (save, add, go), so primary actions need no `fill accent`.
+5. The chart frame (`plot`, `tick`), `plural`, a short month name, `each ... empty`, aspect ratio for `box`, centre and fill on blocks.
+6. One undo step per field edit rather than per keystroke.
+7. A way for an edit to set a stored setting's value (a new default does nothing once a value is stored).

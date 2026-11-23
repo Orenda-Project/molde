@@ -108,6 +108,7 @@ for (const mode of ['light', 'dark']) for (const [w, h] of SIZES) {
     report(`${c.id} ${w}x${h} ${mode}`, logs.splice(0), await page.evaluate(audit));
     if (w === 412 && mode === 'light') {     // the chat sheet over the app
       await page.click('.dm-fab');
+      await page.waitForTimeout(300);   // after the sheet's rise animation
       report(`${c.id} chat open ${w}x${h}`, logs.splice(0), await page.evaluate(audit));
       await page.keyboard.press('Escape');
     }
