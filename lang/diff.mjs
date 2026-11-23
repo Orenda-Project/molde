@@ -1,23 +1,20 @@
 // diff(history, newSrc): what an edit changes, and whether it is safe for the user's data.
 //
-// Stored data is keyed by STORAGE SLOTS, not by program names. The "ever" schema keeps every
-// slot that has ever held data (tables, fields, settings, persisted states), visible or hidden,
-// with its stored type and EVERY name it has had (and the version each name was last seen).
+// Stored data is keyed by STORAGE SLOTS, not by program names. The "ever" schema keeps every slot
+// that has ever held data (tables, fields, pick options, settings, persisted states), visible or
+// hidden, with its stored type and every name it has had (and the version each name was last seen).
 //
-// - A name resolves to the slot last seen under that name (newest first). Two slots last seen
-//   under one name in the same version is ambiguous and is refused.
-// - `was` (table, field, setting, state, pick option) moves a slot to a new name. Renames inside
-//   one edit happen at once, so swaps and rotations are fine; one slot claimed twice is refused.
-// - A slot that disappears is HIDDEN; re-adding its name (same or wider type) shows it again;
-//   another type is REFUSED. A slot that disappears while a new one of the same shape appears
-//   is refused as "looks like a rename" (write `was`).
-// - No accepted edit may leave a slot that no name can reach (every slot keeps at least one name
-//   that still resolves to it).
+// - `was` acts once: `X was Y` renames the slot the PREVIOUS program calls Y (all clauses of one edit
+//   at once, so swaps and rotations work); a Y it does not have makes the clause a no-op. The stored
+//   program is the text with every `was` removed (format.strip), so nothing is ever renamed twice.
+// - A name without `was` resolves to the slot last seen under it (a hidden slot comes back). A slot
+//   that disappears is HIDDEN; re-adding it with another type is REFUSED; a slot that disappears
+//   while a new one of the same shape appears is refused as "looks like a rename" (write `was`).
+// - No accepted edit may leave a slot that no name can reach.
 // - Stored types only widen: text->long, pick->text/long, num<->money, date->when; a ref keeps its
-//   target slot. Pick option values are never dropped: rows keep a removed option (it is no longer offered).
-// - RESTORE: going back to an earlier version (its exact program text) is always allowed: the
-//   version's own name->slot map is used, data entered since stays, slots unknown to it are hidden,
-//   and widened values stay readable (the evaluator reads them with the old declared type).
+//   target slot. Rows keep pick option slot ids, so option renames move no row.
+// - Every version records its stored text and its name->slot map; restore (Undo, or any version
+//   backward or forward) uses them as recorded.
 import { check } from './check.mjs';
 import { typeWords } from './describe.mjs';
 import { strip } from './format.mjs';
