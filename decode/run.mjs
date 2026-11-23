@@ -68,8 +68,9 @@ async function armWhole(r) { // A and Atok
   return { output: d.content, calls: 1, gen_tokens: d.predicted_n, gen_ms: d.predicted_ms, prompt_tokens: d.prompt_n, wall_s: (performance.now() - t0) / 1000, rejected: 0, fallbacks: 0 };
 }
 
-const NAMES = ARM === 'C' || ARM === 'D';
-const RESAMPLE = ARM === 'B' || ARM === 'D';
+const NAMES = ARM === 'C' || ARM === 'D' || ARM === 'E';
+const TYPES = ARM === 'E';
+const RESAMPLE = ARM === 'B' || ARM === 'D' || ARM === 'E';
 const MAXLINES = 70;
 async function armLines(r) {
   const t0 = performance.now();
@@ -78,7 +79,7 @@ async function armLines(r) {
   const hashSeed = [...r.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
   for (let n = 0; n < MAXLINES; n++) {
     let g, t1 = performance.now();
-    try { g = buildLineGrammar(prefix, { names: NAMES }).grammar; } catch (e) { gramFail++; g = buildLineGrammar(prefix, { names: false }).grammar; }
+    try { g = buildLineGrammar(prefix, { names: NAMES, types: TYPES }).grammar; } catch (e) { gramFail++; g = buildLineGrammar(prefix, { names: false }).grammar; }
     gramMs += performance.now() - t1;
     const lineNo = prefix ? prefix.split('\n').length : 1; // 1-based number of the line being written
     let first = null, accepted = null, ended = false;

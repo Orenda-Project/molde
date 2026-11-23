@@ -23,6 +23,7 @@ const alt = names => [...new Set(names)].filter(Boolean).map(q).join(' | ');
 const BLOCK_WORDS = new Set(['def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'plot', 'poly']);
 const ROWISH = new Set(['rows', 'group']);
 const MAXD = 4;
+let TYPES = false; // arm E: end-type filters for toggle / remind at / sum / avg
 
 // ---- which indents may the next line use? ----
 function allowedIndents(prefix, defs) {
@@ -57,7 +58,14 @@ function makePathBuilder(S, extra) {
   const memo = new Map();
   let n = 0;
   const anyParts = [...S.allFields, ...S.tables, 'key'];
-  const rowish = ty => ty === 'any' || ROWISH.has(tname(ty));
+  const fn = ty => (tname(ty) === 'rows' && ty.field) ? tname(ty.ftype) : null; // column type of a rows-with-field
+  const OK = {
+    rows: ty => ROWISH.has(tname(ty)),
+    toggle: ty => tname(ty) === 'bool' || (tname(ty) === 'rows' && (!ty.field || fn(ty) === 'bool')),
+    remind: ty => ['time', 'date', 'when'].includes(tname(ty)) || ['time', 'date', 'when'].includes(fn(ty)),
+    numcol: ty => ['num', 'money', 'dur'].includes(fn(ty)),
+  };
+  const rowish = (ty, filter) => ty === 'any' || OK[filter === true ? 'rows' : filter](ty);
   const partsFor = ty => ty === 'any' ? anyParts : partsOf(env, ty);
   const stepFor = (ty, p) => ty === 'any' ? 'any' : step(env, ty, p);
   function cont(ty, depth, filter, sfx) { // returns rule name for "." parts, or null
@@ -72,7 +80,7 @@ function makePathBuilder(S, extra) {
       const nt = stepFor(ty, p);
       if (nt == null) continue;
       const sub = cont(nt, depth + 1, filter, sfx);
-      if (!filter || rowish(nt)) alts.push(sub ? `${q(p)} ( ${sub} )?` : q(p));
+      if (!filter || rowish(nt, filter)) alts.push(sub ? `${q(p)} ( ${sub} )?` : q(p));
       else if (sub) alts.push(`${q(p)} ${sub}`);
     }
     if (!alts.length) { return null; }
@@ -87,7 +95,7 @@ function makePathBuilder(S, extra) {
     for (const h of heads) {
       const ty = h.type == null ? 'any' : h.type;
       const sub = cont(ty, 0, filter, sfx);
-      if (!filter || rowish(ty)) alts.push(sub ? `${q(h.name)} ( ${sub} )?` : q(h.name));
+      if (!filter || rowish(ty, filter)) alts.push(sub ? `${q(h.name)} ( ${sub} )?` : q(h.name));
       else if (sub) alts.push(`${q(h.name)} ${sub}`);
     }
     return alts;
@@ -128,6 +136,12 @@ function overrides(S, sfx) {
   R['path'] = pathAlts.join(' | ');
   R['lpath'] = P.path(lheads, false, 'p').join(' | ');
   R['qpath'] = P.path(heads, true, 'q').join(' | ');
+  if (TYPES) {
+    R['tpath'] = P.path(heads, 'toggle', 't').join(' | ');
+    R['rpath'] = P.path(heads, 'remind', 'r').join(' | ');
+    R['nqpath'] = P.path(heads, 'numcol', 'n').join(' | ');
+    R['nquery'] = STATIC.get('query').replace('path (sp window)?', 'nqpath (sp window)?');
+  }
   // pick-field paths for "each options t.f"
   const optAlts = [];
   for (const t of S.tables) for (const [f, fd] of fieldsOf(env, t)) if (fd.type.t === 'pick') optAlts.push(`${q(t)} "." ${q(f)}`);
@@ -202,6 +216,11 @@ function patchedStatic(R) {
   rep('action', '"go" sp ident', has('screenname') ? '"go" sp screenname' : '"go" sp ident');
   rep('action', '"save" sp ident', has('draftname') ? '"save" sp draftname' : '"save" sp ident');
   rep('action', '| ident', has('compname') ? '| compname' : '');
+  if (TYPES) {
+    if (has('tpath')) { rep('toggle-stmt', '"toggle" sp path', '"toggle" sp tpath'); rep('action', '"toggle" sp path', '"toggle" sp tpath'); }
+    if (has('rpath')) rep('remind-when', '| path (sp add-op sp dur)?', '| rpath (sp add-op sp dur)?');
+    if (has('nqpath')) rep('func', 'agg query ")"', '( "count(" | "min(" | "max(" | "last(" | "first(" | "streak(" | "best(" | "since(" | "gap(" ) query ")" | ( "sum(" | "avg(" ) nquery ")"');
+  }
   S.delete('lead-ident');
   for (const k of [...S.keys()]) if (/^lead-ident-/.test(k)) S.delete(k);
   return S;
@@ -220,7 +239,8 @@ function reachable(rules, start) {
   return seen;
 }
 
-export function buildLineGrammar(prefix, { names = false } = {}) {
+export function buildLineGrammar(prefix, { names = false, types = false } = {}) {
+  TYPES = !!types;
   const t0 = performance.now();
   // header line
   if (!prefix) {

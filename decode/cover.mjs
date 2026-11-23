@@ -20,7 +20,7 @@ for (const s of sets) {
     for (let i = 0; i < lines.length; i++) {
       tot++;
       let g, acc = false, err = '';
-      try { g = buildLineGrammar(prefix, { names }).grammar; acc = accepts(parseGbnf(g), 'root', lines[i] + '\n'); } catch (e) { err = String(e).slice(0, 100); }
+      try { g = buildLineGrammar(prefix, { names, types: process.env.TYPES === '1' }).grammar; acc = accepts(parseGbnf(g), 'root', lines[i] + '\n'); } catch (e) { err = String(e).slice(0, 100); }
       if (acc) ok++; else { all = false; bad.push({ id: r.id, n: i + 1, line: lines[i], err }); }
       prefix += lines[i] + '\n';
     }

@@ -1,0 +1,26 @@
+| arm | quant | set | n | checker pass | intent score | intent auto | median lines (ref) | median s/app | median tok/s | calls/app (mean) | first-error classes | load avg start-end |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | Q8_0 | real 44 | 44 | 50.0% | 0.629 | 18.2% | 10 (11.5) | 2.46 | 57.3 | 1 | UNKNOWN_FIELD:7 TYPE:4 UNKNOWN_NAME:3 DUP:2 UNKNOWN_COMPONENT:2 CHILD:1 DEFAULT:1 UNKNOWN_TABLE:1 SYNTAX:1 | 4.98-12.56 |
+| A2 | Q8_0 | real 44 | 44 | 45.5% | 0.626 | 18.2% | 11 (11.5) | 2.33 | 59.5 | 1 | UNKNOWN_NAME:7 TYPE:6 UNKNOWN_FIELD:5 UNKNOWN_COMPONENT:2 SYNTAX:1 DUP:1 CONTEXT:1 REF:1 | 12.19-13.04 |
+| B | Q8_0 | real 44 | 44 | 56.8% | 0.615 | 20.5% | 11 (11.5) | 3.43 | 66.6 | 15.8 | UNKNOWN_FIELD:8 TYPE:5 UNKNOWN_NAME:3 SYNTAX:1 DUP:1 UNKNOWN_COMPONENT:1 | 13.04-11.37 |
+| C | Q8_0 | real 44 | 44 | 70.5% | 0.615 | 20.5% | 10 (11.5) | 2.58 | 70.4 | 11.9 | TYPE:8 UNKNOWN_FIELD:3 DUP:1 UNKNOWN_NAME:1 | 11.37-7.49 |
+| D | Q8_0 | real 44 | 44 | 70.5% | 0.631 | 22.7% | 11 (11.5) | 2.73 | 71.3 | 14.5 | TYPE:7 UNKNOWN_FIELD:2 UNKNOWN_NAME:2 DUP:1 SYNTAX:1 | 7.49-7.69 |
+| E | Q8_0 | real 44 | 44 | 77.3% | 0.622 | 22.7% | 11 (11.5) | 3.18 | 59 | 13.6 | TYPE:3 UNKNOWN_FIELD:2 UNKNOWN_NAME:2 DUP:1 SYNTAX:1 HEADER:1 | 18.42-5.54 |
+| A | Q4_K_M | real 44 | 44 | 43.2% | 0.651 | 11.4% | 10 (11.5) | 2.32 | 59.2 | 1 | TYPE:8 UNKNOWN_FIELD:7 UNKNOWN_NAME:4 UNKNOWN_TABLE:2 REF:1 CONTEXT:1 ARGS:1 SYNTAX:1 | 5.82-14.24 |
+| A2 | Q4_K_M | real 44 | 44 | 45.5% | 0.637 | 13.6% | 10.5 (11.5) | 4.83 | 55.9 | 1 | UNKNOWN_NAME:10 UNKNOWN_FIELD:5 TYPE:4 DUP:2 UNKNOWN_COMPONENT:2 CONTEXT:1 | 13.5-17.64 |
+| B | Q4_K_M | real 44 | 44 | 52.3% | 0.634 | 18.2% | 10 (11.5) | 12.13 | 50.1 | 15.1 | TYPE:6 UNKNOWN_NAME:4 UNKNOWN_FIELD:4 REF:2 WINDOW:1 DUP:1 UNKNOWN_TABLE:1 ACTION:1 UNKNOWN_COMPONENT:1 | 17.64-15.65 |
+| C | Q4_K_M | real 44 | 44 | 56.8% | 0.662 | 20.5% | 10 (11.5) | 3.54 | 46.3 | 12 | TYPE:12 DUP:2 UNKNOWN_FIELD:2 CONTEXT:1 ACTION:1 UNKNOWN_NAME:1 | 15.65-14.19 |
+| D | Q4_K_M | real 44 | 44 | 72.7% | 0.654 | 25.0% | 10.5 (11.5) | 5 | 41.4 | 13.8 | TYPE:7 DUP:1 CONTEXT:1 UNKNOWN_FIELD:1 ACTION:1 UNKNOWN_NAME:1 | 13.78-17.45 |
+| E | Q4_K_M | real 44 | 44 | 75.0% | 0.662 | 25.0% | 10 (11.5) | 7.05 | 29.9 | 13.4 | TYPE:5 UNKNOWN_FIELD:2 DUP:1 CONTEXT:1 ACTION:1 UNKNOWN_NAME:1 | 19.02-20.22 |
+| A | Q8_0 | templ 60 | 60 | 86.7% | 0.887 | 73.3% | 10 (10) | 2.2 | 66 | 1 | DUP:3 UNKNOWN_FIELD:2 REQUIRED:1 ICON:1 UNKNOWN_NAME:1 | 7.69-9.13 |
+| A2 | Q8_0 | templ 60 | 60 | 88.3% | 0.873 | 78.3% | 10 (10) | 1.98 | 64.8 | 1 | DUP:2 REQUIRED:1 SYNTAX:1 UNKNOWN_TABLE:1 TYPE:1 UNKNOWN_NAME:1 | 9.13-8.33 |
+| B | Q8_0 | templ 60 | 60 | 91.7% | 0.875 | 76.7% | 10 (10) | 2.41 | 68.2 | 13.1 | DUP:2 ICON:1 TYPE:1 UNKNOWN_NAME:1 | 8.33-10.09 |
+| C | Q8_0 | templ 60 | 60 | 93.3% | 0.87 | 78.3% | 10 (10) | 2.5 | 72.1 | 12.6 | DUP:2 TYPE:1 UNKNOWN_NAME:1 | 10.09-12.38 |
+| D | Q8_0 | templ 60 | 60 | 95.0% | 0.871 | 78.3% | 10 (10) | 2.33 | 73.9 | 12.8 | DUP:2 UNKNOWN_NAME:1 | 11.79-8.59 |
+| E | Q8_0 | templ 60 | 60 | 95.0% | 0.871 | 80.0% | 10 (10) | 4.23 | 44.5 | 12.9 | DUP:2 UNKNOWN_NAME:1 | 5.54-21.05 |
+| A | Q4_K_M | templ 60 | 60 | 83.3% | 0.874 | 75.0% | 10 (10) | 2.64 | 51.4 | 1 | TYPE:3 DUP:2 RANGE:1 SYNTAX:1 REQUIRED:1 ICON:1 UNKNOWN_FIELD:1 | 17.45-13.61 |
+| A2 | Q4_K_M | templ 60 | 60 | 85.0% | 0.882 | 76.7% | 10 (10) | 2.92 | 48.1 | 1 | TYPE:3 RANGE:1 SYNTAX:1 ICON:1 DUP:1 INTERNAL:1 UNKNOWN_FIELD:1 | 13.61-18.52 |
+| B | Q4_K_M | templ 60 | 60 | 86.7% | 0.887 | 76.7% | 10.5 (10) | 6.29 | 35.5 | 13.5 | TYPE:2 REQUIRED:1 ICON:1 DUP:1 UNKNOWN_NAME:1 INTERNAL:1 UNKNOWN_FIELD:1 | 17.43-27.06 |
+| C | Q4_K_M | templ 60 | 60 | 90.0% | 0.874 | 76.7% | 10 (10) | 5.81 | 34.3 | 12.5 | DUP:2 RANGE:1 REQUIRED:1 TYPE:1 CONTEXT:1 | 26.17-20.34 |
+| D | Q4_K_M | templ 60 | 60 | 91.7% | 0.875 | 78.3% | 10 (10) | 5.27 | 35 | 13 | DUP:2 REQUIRED:1 TYPE:1 CONTEXT:1 | 20.34-19.29 |
+| E | Q4_K_M | templ 60 | 60 | 91.7% | 0.882 | 78.3% | 10 (10) | 5.68 | 38.3 | 13 | DUP:2 REQUIRED:1 TYPE:1 CONTEXT:1 | 20.22-20.9 |
