@@ -67,6 +67,7 @@ export function check(src, opts = {}) {
       C.list(prog.body, { top: true });
       prog.env = { tables: C.tables, settings: C.settings, states: C.states, screens: C.screens, lets: C.lets, options: C.options };
       if (C.probe) prog.probe = C.probe;
+      prog.renamedLocals = ex.renamed; // inner state names of component instances -> their names in the def
       // never show internal names made by component expansion (d_3 -> d)
       for (const e of errors) for (const [inner, outer] of ex.renamed) {
         const re = new RegExp(`\\b${inner}\\b`, 'g');

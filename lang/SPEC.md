@@ -103,7 +103,7 @@ A table holds rows the user adds. A field is `name type[?] [range] [= default] [
 
 **Every row also has `at`** (when it was added; type `when`, editable) and `id`. Time windows (section 5.3) look at `at`. A table with no fields (`table zikr`) is a plain log of moments.
 
-`was` is for renaming without losing data (section 14): `table drinks was drink`, `amount num was ml`, `pick Meals was Food|Bills`. A `was` that has already been applied is harmless and may stay.
+`was` is for renaming without losing data (section 14): `table drinks was drink`, `amount num was ml`, `pick Meals was Food|Bills`. It acts **once, in the edit that writes it**: `X was Y` gives the values the previous program calls `Y` the name `X` (all at once, so `b was a, a was b` swaps). A `Y` the previous program does not have is harmless (nothing happens). The app then stores the program **without** its `was` words, and that stored text is what you see and edit next, so writing the same swap again swaps back.
 
 ### 4.2 Settings, state and named formulas
 
@@ -420,11 +420,13 @@ To change an app, the model writes the whole new program. `node lang/mo.mjs diff
 
 - a new table or field is **safe** (old rows get the default or stay empty; a new required field without a default gets a note);
 - a table, field or setting that disappears is **hidden, never dropped**; adding it back with the same (or a wider) type shows the old data again; adding it back with another type is **refused**;
-- a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename";
+- a **rename** must be written with `was` (`table drinks was drink`, `amount num was ml`, `pick Meals was Food|...`) and moves the data. It acts once; the stored program drops the `was` words. A table or field that disappears while one of the same shape appears in the same edit is **refused** as "looks like a rename"; a `was` naming something the previous program does not have changes nothing (said in a note);
 - a stored type may only **widen**: `text` to `long`, `pick` to `text`/`long`, `num` to/from `money`, `date` to `when`; a `ref` keeps its target table (a renamed target is followed);
-- a `pick` option that disappears stays available: rows keep it and it stays selectable and filterable;
+- a `pick` option that disappears stays on the rows that have it (they keep showing it); it is no longer offered for new rows and formulas cannot name it (write `NEW was OLD` to rename it). The verdict is a **warning**; so is a table name used again after it was removed;
+- options of a `setting` or `state` pick follow the same rules; renaming an option onto the name of another option, even a dropped one, is **refused** (list the dropped one again without `was` to bring it back);
+- restoring a backup brings back that whole app: its data and its program;
 - a narrower range keeps old values that fall outside it;
-- going back to an earlier version (chat Undo) is an explicit restore and is never refused: data entered since stays, and pick options renamed since are renamed back.
+- going to any recorded version (chat Undo, backward or forward) is an explicit restore and is never refused: it uses that version's text and names as recorded; data entered since stays.
 
 There is no statement that deletes data.
 

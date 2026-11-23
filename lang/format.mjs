@@ -103,3 +103,18 @@ export function format(src) {
   }
   return out.join('\n') + '\n';
 }
+
+// The stored form of a program: canonical, with every `was OLD` removed. `was` is an instruction
+// for one edit only (rename the slot the previous program calls OLD); once applied, the stored text
+// and every later version are written without it, so nothing is ever renamed twice.
+export function strip(src) {
+  const { lines } = splitLines(src);
+  const out = [];
+  for (const ln of lines) {
+    if (ln.comment) { out.push('  '.repeat(ln.depth || 0) + ln.comment); continue; }
+    let toks; try { toks = lex(ln.body); } catch { out.push('  '.repeat(ln.depth) + ln.body); continue; }
+    const kept = toks.filter((t, i) => !(t.t === 'word' && t.v === 'was' && toks[i + 1] && toks[i + 1].t === 'word') && !(i > 0 && toks[i - 1].t === 'word' && toks[i - 1].v === 'was' && t.t === 'word'));
+    out.push('  '.repeat(ln.depth) + join(kept));
+  }
+  return format(out.join('\n') + '\n');
+}

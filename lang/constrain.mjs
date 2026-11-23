@@ -165,7 +165,7 @@ export function nameContext(text) {
   const E = envOf(done, line.match(/^ */)[0]);
   const env = E.env;
   const tables = [...env.tables.keys()];
-  const names = n => ({ mode: 'names', names: [...new Set(n)] });
+  const names = (n, not) => ({ mode: 'names', names: [...new Set(n)], ...(not && not.length ? { not } : {}) }); // not: keywords that cannot stand here
   const strict = n => ({ mode: 'names', names: [...new Set(n)], strict: true }); // no keyword can stand here either
   if (!done) { // the header line
     let t0; try { t0 = lex(line); } catch { return { mode: 'free' }; }
@@ -207,7 +207,7 @@ export function nameContext(text) {
   // the field names of an add: add T f = ..., g = ...
   const depth0 = (() => { let d = 0; for (const t of toks) { if (t.t === 'func' || t.v === '(') d++; else if (t.v === ')') d--; } return d === 0; })();
   const add = depth0 && body.match(/\badd ([a-z][a-z0-9_]*)((?: [a-z][a-z0-9_]* = [^,]*?,)*)( |, )$/);
-  if (add && (prev === add[1] || prev === ',')) return strict([...fieldsOf(env, add[1]).keys(), 'at']);
+  if (add && (prev === add[1] || prev === ',')) return names( /* or then, tap ... */[...fieldsOf(env, add[1]).keys(), 'at']);
   // the values of a component call: the parameter's kind decides
   const comp = E.defMap.get(first);
   if (comp && (prev === ',' || (toks.length === 1 && /\s$/.test(body)))) {
@@ -261,8 +261,8 @@ export function nameContext(text) {
   }
   // things that are changed or opened
   const itOk = scope.itType || st.foldIt ? ['it'] : [];
-  if (TARGETS.has(prev)) return strict([...itOk, ...scope.writable, ...values.filter(v => ['row', 'draft'].includes(tname(scope.types[v]))), ...(scope.itType && ['row'].includes(tname(scope.itType)) ? [] : [])]);
-  if (prev === 'edit' || prev === 'remove') return strict([...itOk, 'all', ...scope.writable, ...values.filter(v => ['row', 'group'].includes(tname(scope.types[v])))]);
+  if (TARGETS.has(prev)) return strict([...itOk, ...(prev === 'set' ? ['all'] : []) /* set all ... */, ...scope.writable, ...values.filter(v => ['row', 'draft'].includes(tname(scope.types[v]))), ...(scope.itType && ['row'].includes(tname(scope.itType)) ? [] : [])]);
+  if (prev === 'edit' || prev === 'remove') return names( /* a formula: last(t), first(t) ... */[...itOk, ...(prev === 'remove' ? ['all'] : []), ...scope.writable, ...values.filter(v => ['row', 'group'].includes(tname(scope.types[v])))], prev === 'edit' ? ['all'] : []);
   if (prev === 'toggle') return names([...scope.writable, ...values, ...tables]);
   if (st.query && st.query.afterBy) return names([...fieldsOf(env, st.query.table).keys()]); // day, week, month are keywords
   if (st.query && st.query.atHead && (AGGS.has(prev) || FOLDS.has(prev) || prev === 'each' || (prev === 'all' && toks[toks.length - 2] && toks[toks.length - 2].v === 'set'))) return names([...tables, ...values]);
@@ -293,7 +293,7 @@ export function allowedWords(text) {
   if (/^[0-9]/.test(partial)) return { mode: 'free', partial };
   const ctx = nameContext(text.slice(0, i));
   if (ctx.mode === 'free') return { mode: 'free', partial };
-  return { mode: 'names', partial, names: ctx.names.filter(n => n.startsWith(partial)), all: ctx.names };
+  return { mode: 'names', partial, names: ctx.names.filter(n => n.startsWith(partial)), all: ctx.names, strict: !!ctx.strict, not: ctx.not };
 }
 
 // ---- vocabulary masks ----
@@ -337,7 +337,7 @@ const walk = (n, s) => { for (const ch of s) { n = n.c.get(ch); if (!n) return n
 const trieCache = new Map(); // the same name sets come back again and again
 function allowedTrie(a) {
   if (a.mode === 'free') return null;
-  const words = a.strict ? (a.all || a.names) : [...(a.all || a.names), ...KW];
+  const words = a.strict ? (a.all || a.names) : [...(a.all || a.names), ...(a.not ? KW.filter(w => !a.not.includes(w)) : KW)];
   const key = (a.strict ? 's' : 'k') + words.join(',');
   let t = trieCache.get(key);
   if (!t) { if (trieCache.size > 256) trieCache.clear(); t = { trie: trieOf(words), numbers: !a.strict }; trieCache.set(key, t); }
@@ -370,7 +370,7 @@ export function tokenMask(text, vocab) {
   if (!cur) return new Mask(endsSpace ? V.notBoundary.slice() : new Uint8Array(V.size).fill(1));
   const numericPartial = /^[0-9]/.test(partial);
   const node = numericPartial ? null : walk(cur.trie, partial);
-  const complete = partial === '' || numericPartial || !!(node && node.end);
+  const complete = (partial === '' && !now.strict) || numericPartial || !!(node && node.end); // where only a name can stand, a name must come first
   // tokens without a word end the current word (or do not start one)
   const bits = complete ? V.noWordNoB.slice() : new Uint8Array(V.size);
   // a dot after a name only when something can follow it (a table with no parts cannot take one)

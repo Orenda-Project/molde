@@ -2,6 +2,7 @@
 // MoldeScript v0 command line.
 //   node lang/mo.mjs check FILE...            errors (code, line, fix) or OK; exit 1 on errors
 //   node lang/mo.mjs format FILE [--write]    canonical text (or rewrite the file)
+//   node lang/mo.mjs strip FILE [--write]     the stored form: canonical with every `was OLD` removed
 //   node lang/mo.mjs describe FILE            the plain-English plan
 //   node lang/mo.mjs diff V1 ... VN NEW        verdict against the whole history (oldest first); exit 1 if refused
 //   node lang/mo.mjs diff --history LIST NEW   the same, with the earlier files listed one per line in LIST
@@ -15,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { check } from './check.mjs';
-import { format } from './format.mjs';
+import { format, strip } from './format.mjs';
 import { describe } from './describe.mjs';
 import { diff, diffText } from './diff.mjs';
 
@@ -57,6 +58,9 @@ if (isCli) switch (cmd) {
     process.exit(bad ? 1 : 0);
     break;
   }
+  case 'strip': // the stored form: canonical, every `was OLD` removed (what the model sees as program_before)
+    for (const f of files) { const t = strip(read(f)); if (args.includes('--write')) writeFileSync(f, t); else process.stdout.write(t); }
+    break;
   case 'format': {
     for (const f of files) {
       const t = format(read(f));
@@ -105,6 +109,6 @@ if (isCli) switch (cmd) {
     break;
   }
   default:
-    console.log('usage: node lang/mo.mjs check|format|migrate|describe|diff|expand|tree|tokens FILE...');
+    console.log('usage: node lang/mo.mjs check|format|strip|migrate|describe|diff|expand|tree|tokens FILE...');
     process.exit(cmd ? 2 : 0);
 }
