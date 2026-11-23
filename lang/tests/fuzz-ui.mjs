@@ -34,7 +34,20 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
     let stack = [], lastChange = null;
     const V = (st, why) => stats.violations.push({ c, st, why });
     const data = () => JSON.stringify(app.data);
-    const push = () => { stack.push(data()); if (stack.length > 50) stack.shift(); };
+    const push = d => { stack.push(d); if (stack.length > 50) stack.shift(); };
+    let group = null; // the input whose change group is on top of the Undo stack
+    // a change: consecutive changes to one input join its step (back to the start undoes the step);
+    // any other change that alters data is a new step; a change that alters nothing records none
+    const change = (n, v) => {
+      const before = data(), joining = lastChange === n.id && group === n.id;
+      app.dispatch(n.id, 'change', v);
+      const after = data();
+      if (joining) { if (after === stack[stack.length - 1]) { stack.pop(); group = null; } }
+      else if (after !== before) { push(before); group = n.id; }
+      else group = null;
+      lastChange = n.id;
+    };
+    const other = fn => { const before = data(); fn(); if (data() !== before) push(before); group = null; lastChange = null; };
     const form = () => app.find(n => n.t === 'form');
     for (let st = 0; st < steps; st++) {
       stats.steps++;
@@ -47,15 +60,12 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         n = n || all[ri(all.length)];
         if (!n) continue;
         const v = n.kind === 'num' ? (rnd() < 0.2 ? '' : 1 + ri(9)) : n.kind === 'pick' ? ['Home', 'Work'][ri(2)] : (rnd() < 0.2 ? '' : 'v' + ri(5));
-        if (lastChange !== n.id) push();
-        app.dispatch(n.id, 'change', v); stats.changes++;
-        lastChange = n.id;
+        change(n, v); stats.changes++;
         if (fm && fm.fields.includes(n)) { const f = F.find(x => x.name === n.name); if (f) typed[f.slot] = form().fields.find(x => x.name === n.name).value; }
       } else if (op === 4) { // a tap
         const b = app.find(x => x.t === 'button' && (x.text === 'plus' || x.text === 'Add'));
         if (!b) continue;
-        push(); lastChange = null;
-        app.dispatch(b.id, 'tap'); stats.taps++;
+        other(() => app.dispatch(b.id, 'tap')); stats.taps++;
         if (b.text === 'Add' && app.rows('s').length > 0) { const fm = form(); if (fm && !fm.error) for (const k of Object.keys(typed)) delete typed[k]; }
       } else if (op === 5) { // garbage of every JS type into one input
         const fm = form(); const all = [...app.findAll(n => n.t === 'input'), ...(fm ? fm.fields : [])];
@@ -63,8 +73,7 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         const list = GARBAGE[n.kind === 'long' ? 'text' : n.kind] || GARBAGE.num, g = list[ri(list.length)];
         {
           const before = data();
-          if (lastChange !== n.id) push();
-          app.dispatch(n.id, 'change', g); stats.garbage++; lastChange = n.id;
+          change(n, g); stats.garbage++;
           if (data() !== before && !(n.kind === 'text' || n.kind === 'long') ) V(st, `garbage ${JSON.stringify(String(g))} into ${n.kind} input ${n.id} changed stored data`);
           if (data() !== before && (n.kind === 'text' || n.kind === 'long') && typeof g !== 'string' && typeof g !== 'number') V(st, `garbage of type ${typeof g} into a text input changed stored data`);
           if (data() !== before && (n.kind === 'text' || n.kind === 'long')) { const f = F.find(x => x.name === n.name); if (fm && f && fm.fields.includes(n)) typed[f.slot] = form().fields.find(x => x.name === n.name)?.value; }
@@ -73,20 +82,24 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         stats.undos++;
         const want = stack.pop();
         const ok = app.undo();
-        lastChange = null;
+        lastChange = null; group = null;
         if (!want) { if (ok) V(st, 'undo with no step did something'); continue; }
         if (!ok) { V(st, 'undo refused while a step exists'); continue; }
         const w = JSON.parse(want), got = app.data;
         if (JSON.stringify(got.tables) !== JSON.stringify(w.tables)) V(st, 'undo did not restore the rows');
         for (const k of Object.keys(w.settings)) if (JSON.stringify(got.settings[k]) !== JSON.stringify(w.settings[k])) V(st, `undo did not restore setting ${k}`);
-        for (const k of Object.keys(w.state)) if (JSON.stringify(got.state[k]) !== JSON.stringify(w.state[k])) V(st, `undo did not restore state ${k}`);
+        // a form draft is compared field by field: undo restores its values, then it is reconciled with the
+        // current form (fields added by an edit since get their default), so compare the shared fields
+        for (const k of Object.keys(w.state)) {
+          const x = got.state[k], y = w.state[k];
+          if (y && typeof y === 'object' && '_t' in y) { for (const f of Object.keys(y)) if (f !== '_missing' && f in x && JSON.stringify(x[f]) !== JSON.stringify(y[f])) V(st, `undo did not restore draft ${k}.${f}`); }
+          else if (JSON.stringify(x) !== JSON.stringify(y)) V(st, `undo did not restore state ${k}`);
+        }
         // what the form shows is what was in the restored draft
         const fm = form(); if (fm) for (const f of F) { const fd = fm.fields.find(x => x.name === f.name); if (fd) { if (fd.value === null || fd.value === undefined) delete typed[f.slot]; else typed[f.slot] = fd.value; } }
       } else if (op === 7) { // tick one minute: an every write is its own step
         stats.ticks++;
-        const before = data(); lastChange = null;
-        app.tick(60000);
-        if (data() !== before) { stack.push(before); if (stack.length > 50) stack.shift(); }
+        other(() => app.tick(60000)); // a tick is one step
       } else if (op <= 9) { // a safe edit of the form's table
         const N = F.map(f => ({ ...f })), ren = {};
         const k = ri(4);
@@ -94,7 +107,7 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         else if (k === 1) { const sl = 'p' + (fresh++); N.push(rnd() < 0.5 ? { slot: sl, name: sl, type: 'pick', dflt: 'Home' } : { slot: sl, name: sl, type: 'num', dflt: 3 }); }
         else if (k === 2 && N.length > 2) { const i = 1 + ri(N.length - 1); N.splice(i, 1); }
         else { const f = N.find(x => x.type === 'text' && !x.req); if (f) f.type = 'long'; else continue; }
-        const r = app.applyEdit(prog(N, ren)); stats.edits++; lastChange = null;
+        const r = app.applyEdit(prog(N, ren)); stats.edits++; lastChange = null; group = null;
         if (r.verdict === 'refused') { stats.refused++; if (process.env.UIDEBUG) console.error(r.refused[0]); continue; }
         const dropped = F.filter(f => !N.some(x => x.slot === f.slot)).map(f => f.slot);
         for (const sl of dropped) delete typed[sl];
@@ -113,7 +126,7 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         const was = app.find(x => x.text === 'logs')?.text;
         const condTrue = app.rows('log').length > 2;
         app = load(app.source, { data: app.snapshot() });
-        stack = []; lastChange = null; // data Undo does not survive a restart
+        stack = []; lastChange = null; group = null; // data Undo does not survive a restart
         app.tick(1);
         stats.whenChecks++;
         if (condTrue && app.log.some(e => e.kind === 'notify')) V(st, 'a when that was already true notified again after a reload');
@@ -121,9 +134,9 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
       } else { // set g so the every runs or stops (through the setting's input)
         const n = app.find(x => x.t === 'input' && x.label === 'g');
         if (!n) continue;
-        if (lastChange !== n.id) push();
-        app.dispatch(n.id, 'change', rnd() < 0.5 ? 9 : 1); lastChange = n.id; stats.changes++;
+        change(n, rnd() < 0.5 ? 9 : 1); stats.changes++;
       }
+      if (process.env.UICHAIN == c) console.error(st, op, 'model', stack.length, 'app', app.undoStack.length);
       void tree;
     }
   }

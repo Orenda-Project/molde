@@ -30,7 +30,9 @@ class Draft { constructor(table, key) { this.table = table; this.key = key; } }
 // offset (minutes east of UTC) set per app (load(src, {tz: 'local'}) or {tz: 300}).
 let OFF = 0;
 const shift = ms => ms + OFF * 60000;
-const dateOf = ms => new Date(shift(ms)).toISOString().slice(0, 10);
+// dateOf runs for every row of many queries: the day number is arithmetic, its text is remembered
+const DAY_TEXT = new Map();
+const dateOf = ms => { const n = Math.floor((ms + OFF * 60000) / 86400000); let d = DAY_TEXT.get(n); if (d === undefined) { d = new Date(n * 86400000).toISOString().slice(0, 10); DAY_TEXT.set(n, d); } return d; };
 const msOfLocal = s => Date.parse(s + 'T00:00:00Z') - OFF * 60000; // the moment local midnight of s happens
 const msOf = s => Date.parse(s + 'T00:00:00Z');
 const addDays = (s, n) => dateOf(msOf(s) + n * DAY);
@@ -100,7 +102,9 @@ class App {
     this.currency = opts.currency || '';
     this.off = opts.tz === 'local' ? -new Date().getTimezoneOffset() : (typeof opts.tz === 'number' ? opts.tz : 0);
     OFF = this.off;
-    this.clock = typeof opts.now === 'number' ? opts.now : Date.parse(opts.now || '2026-11-23T10:00:00Z');
+    // the host's clock: `now` when given; else (tests, a host without a clock) the time the data was saved; else a fixed day
+    const taken = opts.data && typeof opts.data.clock === 'number' ? opts.data.clock : null;
+    this.clock = opts.now !== undefined ? (typeof opts.now === 'number' ? opts.now : Date.parse(opts.now)) : taken ?? Date.parse('2026-11-23T10:00:00Z');
     this.log = [];
     this.undoStack = [];
     this.seq = 0;
@@ -152,7 +156,9 @@ class App {
       }
       convertOptionRows(this.data, this.ever);
       this.annotateOptions();
+      this.migrateBlockState();
       this.deriveTouched();
+      if (taken !== null && taken < this.clock) { this.catchUp(taken); this.undoStack = []; }
       this.edit = r;
     } catch (e) {
       this.ok = false; this.errors = ['the saved data could not be read (an unexpected shape); it was left untouched.'];
@@ -164,7 +170,7 @@ class App {
   // Load a program against the schema history: data stays keyed by storage slot.
   setProgram(source, opts = {}) {
     OFF = this.off;
-    this.lastChange = null;
+    this.lastChange = null; this.undoGroup = null;
     const c = check(source);
     if (!c.ok) {
       if (!this.prog) { this.source = source; this.ok = false; this.errors = c.errors.map(String); this.prog = c.ast; this.env = { tables: new Map(), settings: new Map() }; this.map = { tables: {}, fields: {}, settings: {}, states: {} }; }
@@ -177,6 +183,7 @@ class App {
     this.ok = c.ok && r.verdict !== 'refused'; this.errors = [...c.errors.map(String), ...(r.verdict === 'refused' ? r.refused : [])];
     this.prog = c.ast; this.env = c.ast.env || { tables: new Map(), settings: new Map() };
     if (r.verdict !== 'refused') this.ever = r.ever;
+    if (r.verdict !== 'refused' && !opts.restore) this.renameBlockStates(c.ast);
     this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : { tables: {}, fields: {}, settings: {}, states: {} };
     // the stored program is the recorded version's text: canonical, with no was (rule 2)
     if (r.verdict !== 'refused' && this.ever.versions.length) { this.source = this.ever.versions[this.ever.versions.length - 1].src; r.stored = this.source; }
@@ -191,6 +198,7 @@ class App {
       r.settingWrites[key] = key in this.data.settings ? this.data.settings[key] : null;
       this.data.settings[key] = this.litValue(sd.dflt, sd.type);
     }
+    this.hasWhen = JSON.stringify(this.prog.body).includes('"kind":"when"');
     this.initData();
     // conditions that are already true stay known across edits and reloads, so they do not fire twice
     return r;
@@ -236,7 +244,7 @@ class App {
   // program is one of the backup's versions (then that version's map is used). A backup of another
   // app is refused. Refusals leave everything as it was.
   restore(snap, early, opts = {}) {
-    this.lastChange = null;
+    this.lastChange = null; this.undoGroup = null;
     if (early && typeof early === 'object') { opts = early; early = false; }
     const bad = badSnapshot(snap);
     if (bad) return { ok: false, reason: bad };
@@ -258,7 +266,7 @@ class App {
     const before = count(this.data);
     this.data = { tables: {}, settings: {}, state: {}, ...s.data };
     this.seq = Math.max(s.seq ?? 0, ...Object.values(this.data.tables).flat().map(r => r.id || 0), this.seq || 0);
-    if (s.clock) this.clock = s.clock;
+    // the clock belongs to the host: a snapshot's clock only says when it was taken (see catchUp)
     if (Array.isArray(s.when)) this.lastWhen = new Map(s.when.filter(x => Array.isArray(x) && typeof x[0] === 'string').map(([k]) => [k, true]));
     if (!early) {
       if (bE) { // the backup's history, program and map come with it; slots are the identity
@@ -274,6 +282,7 @@ class App {
       this.initData();
       this.screen = null;
       this.undoStack = []; // data Undo steps belonged to the data that was replaced
+      if (typeof s.clock === 'number' && s.clock < this.clock) { this.catchUp(s.clock); this.undoStack = []; } // schedules catch up from when the backup was taken
     }
     return { ok: true, program: this.source, replaced: { before, after: count(this.data) } };
   }
@@ -295,8 +304,31 @@ class App {
       if (st.kind === 'state' && !st.draft) learn(st.type, this.ever.states[this.stk(st.name)]);
     }
   }
-  pushUndo() { this.undoStack.push(JSON.stringify({ data: this.data, seq: this.seq })); if (this.undoStack.length > 50) this.undoStack.shift(); }
-  undo() { this.lastChange = null; const s = this.undoStack.pop(); if (!s) return false; const o = JSON.parse(s); this.data = o.data; this.seq = o.seq; this.initData(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
+  // ---- data Undo: each step stores a DELTA (the cells, rows, settings and states it changed, as they
+  // were), not a copy of all data. An operation that leaves the data as it was records no step.
+  // step(fn, group): run fn as one step; with the same group key as the step on top (consecutive
+  // changes to one input), it joins that step instead.
+  step(fn, group = null) {
+    const joining = group !== null && this.undoGroup === group && this.undoStack.length && this.undoStack[this.undoStack.length - 1].group === group;
+    const base = joining ? this.undoStack[this.undoStack.length - 1].base : JSON.stringify({ data: this.data, seq: this.seq });
+    const before = joining ? null : base;
+    const out = fn();
+    const now = JSON.stringify({ data: this.data, seq: this.seq });
+    let open = false; // is the step on top this group's, so the next change of the same input may join it
+    if (joining) { // the group's delta grows from the group's start
+      const top = this.undoStack[this.undoStack.length - 1];
+      top.delta = makeDelta(JSON.parse(base), this);
+      if (now === base) this.undoStack.pop(); else open = true;
+    } else if (now !== before) {
+      this.undoStack.push({ delta: makeDelta(JSON.parse(before), this), group, base: group !== null ? before : undefined });
+      if (this.undoStack.length > 50) this.undoStack.shift();
+      open = true;
+    }
+    if (now !== (joining ? base : before)) this.touch();
+    this.undoGroup = open ? group : null;
+    return out;
+  }
+  undo() { this.lastChange = null; this.undoGroup = null; const s = this.undoStack.pop(); if (!s) return false; applyDelta(this, s.delta); this.initData(); this.undoEdges(); this.log.push({ kind: 'undo', at: this.clock }); return true; } // settings the program declares since get their starting value
   // saves made before the flag existed: derive it ONCE from the data (any row, any setting or literal
   // state off its default, or more than one version) and record it; from then on it is recorded
   deriveTouched() {
@@ -317,6 +349,14 @@ class App {
   ext(raw, type) { return isOptRef(raw) ? (type && type.ids && raw.o in type.ids ? type.ids[raw.o] : raw.o.slice(1)) : raw; }
   // a stored cell as the program reads it; {raw: true} gives the stored form
   cell(table, row, f, opts = {}) { const fd = this.fieldDef(table, f); const v = row[this.fk(table, f)]; return opts.raw ? v : this.ext(v, fd && fd.type); }
+  // a row by id, through an index kept per stored table (rebuilt when the table array or its length changes)
+  rowById(tk, id) {
+    const arr = this.data.tables[tk]; if (!arr) return null;
+    const ix = (this._ids ||= new Map()).get(tk);
+    let m = ix && ix.arr === arr && ix.len === arr.length ? ix.m : null;
+    if (!m) { m = new Map(arr.map(r => [r.id, r])); this._ids.set(tk, { arr, len: arr.length, m }); }
+    return m.get(id) || null;
+  }
   fieldDef(table, f) { return this.env.tables.get(table)?.fields.get(f) || null; }
   emptyOf(type) { return type && type.t === 'bool' ? false : null; }
 
@@ -330,7 +370,7 @@ class App {
       case 'when': return new When(typeof raw === 'string' ? msOfLocal(raw) + 12 * 3600000 : raw);
       case 'time': return new TimeV(raw);
       case 'dur': return new Dur(raw);
-      case 'ref': { const r = (this.data.tables[this.tk(type.table)] || []).find(x => x.id === raw && !x.deleted); return r ? new Row(type.table, r) : null; }
+      case 'ref': { const r = this.rowById(this.tk(type.table), raw); return r && !r.deleted ? new Row(type.table, r) : null; }
       default: return raw;
     }
   }
@@ -388,10 +428,10 @@ class App {
   }
 
   addRow(table, values, atMs) {
-    this.lastChange = null;
+    this.lastChange = null; this.undoGroup = null;
     const tb = this.env.tables.get(table);
     if (!tb) return null;
-    const r = { id: ++this.seq, at: atMs ?? this.clock, _rnd: Math.round(this.random() * 1e6) / 1e6 };
+    const r = { id: this.seq + 1, at: atMs ?? this.clock, _rnd: Math.round(this.random() * 1e6) / 1e6 };
     for (const [name, f] of tb.fields) {
       let v = values[name];
       if (v === undefined && f.dflt) v = this.wrap(this.litValue(f.dflt, f.type), f.type);
@@ -402,37 +442,46 @@ class App {
     if (values.at !== undefined) r.at = this.unwrap(values.at, { t: 'when' });
     const missing = [...tb.fields].filter(([n, f]) => !f.optional && f.type.t !== 'bool' && (r[this.fk(table, n)] === null || r[this.fk(table, n)] === '')).map(([n]) => n);
     if (missing.length) { this.log.push({ kind: 'error', text: `${table} needs ${missing.join(', ')}`, at: this.clock }); return null; }
-    (this.data.tables[this.tk(table)] ||= []).push(r); this.touch();
+    this.seq = r.id; (this.data.tables[this.tk(table)] ||= []).push(r); this.touch(); // an id is used only when the row is stored
     return r;
   }
 
   // ----- clock and events -----
   today() { return dateOf(this.clock); }
-  // a write made by the clock (every, after, when) is its own undo step and marks the app touched
-  asStep(fn) {
-    const before = JSON.stringify({ data: this.data, seq: this.seq }), data0 = JSON.stringify(this.data);
-    fn();
-    if (JSON.stringify(this.data) !== data0) { this.undoStack.push(before); if (this.undoStack.length > 50) this.undoStack.shift(); this.touch(); }
-  }
+  // time passed between a save and now: schedules catch up (P2) as if the clock had run from `from`
+  catchUp(from) { const now = this.clock; this.clock = from; this.tick(now - from); this.clock = now; }
+  // A tick moves the host clock and is ONE undo step (if it changed data). Schedules catch up without
+  // stepping second by second: each `every` fires as many times as its period fits into the interval,
+  // at most CATCH_UP times per tick (the rest are skipped and noted in the log); `after` actions run
+  // in due order; `when` conditions are evaluated once at the end.
   tick(ms) {
     this.lastChange = null;
-    // advance the clock; while an every is active, step by its period; otherwise jump
-    let left = ms;
-    while (left > 0) {
+    if (!(ms > 0)) { this.step(() => this.runWhen()); return; }
+    this.step(() => {
+      const end = this.clock + ms;
       const { handlers } = this.build();
-      const active = handlers.every.filter(h => !h.cond || this.truthy(h.cond()));
-      const pend = (this.pending || []).map(p => p.due - this.clock).filter(x => x > 0);
-      if (!active.length && !pend.length) { this.clock += left; left = 0; this.asStep(() => { this.runPending(); this.runWhen(); }); break; }
-      const step = Math.min(left, ...active.map(h => h.period - (this.everyAcc.get(h.key) || 0)), ...pend);
-      this.clock += step; left -= step;
-      this.asStep(() => this.runPending());
-      for (const h of active) {
-        const acc = (this.everyAcc.get(h.key) || 0) + step;
-        if (acc >= h.period) { this.everyAcc.set(h.key, acc - h.period); this.asStep(() => { this.run(h.actions, h.env, false); this.runWhen(); }); }
-        else this.everyAcc.set(h.key, acc);
+      // after: run in due order, with the clock at each due time
+      for (const p of (this.pending || []).filter(p => p.due <= end).sort((a, b) => a.due - b.due)) {
+        this.pending = this.pending.filter(x => x !== p);
+        this.clock = Math.max(this.clock, p.due); this.act(p.act, p.env);
       }
-      this.asStep(() => this.runWhen());
-    }
+      const start = this.clock;
+      for (const h of handlers.every) {
+        const acc0 = this.everyAcc.get(h.key) || 0;
+        const all = Math.floor((acc0 + ms) / h.period);
+        this.everyAcc.set(h.key, (acc0 + ms) % h.period);
+        const skip = Math.max(0, all - CATCH_UP);
+        if (skip) this.log.push({ kind: 'skipped', every: h.key, fires: skip, at: end });
+        for (let i = skip; i < all; i++) { // the latest fires run, each at its own time
+          this.clock = start + (i + 1) * h.period - acc0;
+          if (h.cond && !this.truthy(h.cond())) continue;
+          this.run(h.actions, h.env, false);
+        }
+        this.clock = start;
+      }
+      this.clock = end;
+      this.runWhen();
+    });
   }
   // actions scheduled with `after DUR` run when the clock reaches them
   runPending() {
@@ -442,6 +491,7 @@ class App {
   }
   get everyAcc() { return this._ea || (this._ea = new Map()); }
   runWhen() {
+    if (!this.hasWhen) return;
     for (let guard = 0; guard < 5; guard++) {
       const { handlers } = this.build();
       let fired = false;
@@ -455,6 +505,8 @@ class App {
     }
   }
   truthy(v) { return v === true; }
+  // after Undo a condition that is no longer true may fire again
+  undoEdges() { if (!this.hasWhen) return; for (const h of this.build().handlers.when) if (!this.truthy(h.cond())) this.lastWhen.set(h.key, false); }
 
   // ----- UI -----
   tree() { return this.build().tree; }
@@ -463,12 +515,10 @@ class App {
     const h = handlers.nodes.get(id);
     if (!h || !h[event]) { this.log.push({ kind: 'error', text: `no ${event} on ${id}`, at: this.clock }); return false; }
     // typing into one input is one undo step: consecutive changes of the same node share it
-    if (!(event === 'change' && this.lastChange === id)) this.pushUndo();
+    const group = event === 'change' && this.lastChange === id ? id : event === 'change' ? id : null;
+    if (!(event === 'change' && this.lastChange === id)) this.undoGroup = null;
     this.lastChange = event === 'change' ? id : null;
-    const before = JSON.stringify(this.data);
-    h[event](payload);
-    this.runWhen();
-    if (JSON.stringify(this.data) !== before) this.touch();
+    this.step(() => { h[event](payload); this.runWhen(); }, group);
     return true;
   }
   find(pred, node = this.tree()) {
@@ -516,8 +566,20 @@ class App {
   rootEnv() { return { vars: new Map(), it: null, index: null, scope: '', where: null, parent: null, draw: null }; }
   child(env, o) { return { ...env, vars: new Map(), parent: env, ...o }; }
 
+  // build() renders the tree and its handlers. The result is reused while the program, the clock,
+  // the screen and the stored data are the same (a render can be most of the cost of a tap).
   build() {
     OFF = this.off;
+    const bk = this._bk;
+    if (bk && bk.prog === this.prog && bk.clock === this.clock && bk.screen === this.screen) {
+      const key = JSON.stringify(this.data);
+      if (key === bk.data) { this.H = bk.res.handlers; return bk.res; }
+    }
+    const res = this.buildNow();
+    this._bk = { prog: this.prog, clock: this.clock, screen: this.screen, data: JSON.stringify(this.data), res };
+    return res;
+  }
+  buildNow() {
     const handlers = { nodes: new Map(), every: [], when: [] };
     this.H = handlers;
     const h = this.prog.header || {};
@@ -580,6 +642,53 @@ class App {
     this.H.nodes.set(id, h);
   }
 
+  // what an each goes over, independent of where the each is written: a table (its slot), a link
+  // path, the options of a pick (its slot), days, or a list
+  eachSig(src) {
+    if (src.k === 'query') { const p = src.q.path; return 'q:' + (p.head !== 'it' && this.env.tables.has(p.head) ? this.tk(p.head) : p.head) + (p.parts.length ? '.' + p.parts.join('.') : ''); }
+    if (src.k === 'options') return 'o:' + (src.path.parts.length ? `${this.tk(src.path.head)}.${this.fk(src.path.head, src.path.parts[0])}` : src.path.head);
+    if (src.k === 'days') return 'd';
+    return 'l';
+  }
+  // keys of state inside an each made before round 10 (by line position: /n.4.1@r12|open) become
+  // keys by what the each goes over; state of rows that are gone is dropped
+  migrateBlockState() {
+    const st = this.data.state || {};
+    for (const k of Object.keys(st)) {
+      if (!k.startsWith('/')) continue;
+      const bar = k.lastIndexOf('|'), segs = k.slice(1, bar).split('/'), name = k.slice(bar + 1);
+      let nk = '', ok = true;
+      for (const seg of segs) {
+        const at = seg.lastIndexOf('@'); if (at < 0) { ok = false; break; }
+        const id = seg.slice(0, at), item = seg.slice(at + 1);
+        if (/^[a-z]:|^[dl]$/.test(id)) { nk += '/' + seg; continue; } // already the new form
+        const path = id.replace(/@[^.]*/g, '').split('.').slice(1).map(Number);
+        let node = null, list = this.prog.body;
+        for (const ix of path) { node = list && list[ix]; list = node && node.children; }
+        if (!node || node.kind !== 'each') { ok = false; break; }
+        const sig = this.eachSig(node.source);
+        const it2 = node.source.k === 'options' ? (this.sourceItems(node.source, this.rootEnv()).find(x => x.v === item)?.key ?? item) : item;
+        nk += `/${sig}@${it2}`;
+      }
+      const v = st[k]; delete st[k];
+      if (ok) st[`${nk}|${name}`] = v;
+    }
+    // state of rows that no longer exist goes
+    for (const k of Object.keys(st)) {
+      if (!k.startsWith('/')) continue;
+      const m = /\/q:([^/@.]+)@r(\d+)[^/]*$/.exec(k.slice(0, k.lastIndexOf('|')));
+      if (m && this.data.tables[m[1]] && !this.rowById(m[1], +m[2])) delete st[k];
+    }
+  }
+  // `state NEW ... was OLD` inside an each: the per-item values move to the new name (once: the
+  // stored program has no was)
+  renameBlockStates(ast) {
+    const walk = (list, inEach) => { for (const s of list || []) {
+      if (s.kind === 'state' && s.was && inEach) for (const k of Object.keys(this.data.state || {})) if (k.startsWith('/') && k.endsWith('|' + s.was)) { this.data.state[k.slice(0, -s.was.length) + s.name] = this.data.state[k]; delete this.data.state[k]; }
+      walk(s.children, inEach || s.kind === 'each');
+    } };
+    walk(ast.body, false);
+  }
   stateKey(env, name) { return env.scope === '' ? `|${this.stk(name)}` : `${env.scope}|${name}`; }
   declareState(s, env) {
     const key = this.stateKey(env, s.name);
@@ -612,7 +721,7 @@ class App {
       if (v === undefined) { out[fk] = this.draftDefault(f); continue; }
       out[fk] = v === null || this.fits(v, f.type) ? v : this.draftDefault(f);
     }
-    if (out._missing) out._missing = out._missing.filter(n => tb.fields.has(n) && (out[this.fk(table, n)] === null || out[this.fk(table, n)] === ''));
+    if (out._missing) out._missing = out._missing.filter(k => k in out && (out[k] === null || out[k] === '')); // field slots: a renamed field keeps its message
     return out;
   }
   // can a stored value be read as this type?
@@ -648,10 +757,13 @@ class App {
       case 'else': return { nodes: lastIf === false ? this.render(s.children, this.child(env, {}), id, cx) : [] };
       case 'each': {
         const items = this.sourceItems(s.source, env);
+        const sig = this.eachSig(s.source);
         const out = [];
         items.forEach((item, i) => {
           const key = item.key;
-          const e2 = this.child(env, s.as ? { index: i, scope: `${env.scope}/${id}@${key}` } : { it: item.v, index: i, scope: `${env.scope}/${id}@${key}` });
+          // state inside an each is kept per (what the each goes over, the item): not by line position, so edits above it keep it
+          const scope = `${env.scope}/${sig}@${key}`;
+          const e2 = this.child(env, s.as ? { index: i, scope } : { it: item.v, index: i, scope });
           if (s.as) e2.vars.set(s.as, { value: item.v });
           out.push(...this.render(s.children, e2, `${id}@${key}`, cx));
         });
@@ -737,7 +849,7 @@ class App {
         const ref = this.target(s.target, env);
         const type = ref.type;
         const options = type.t === 'pick' ? type.options : type.t === 'bool' ? [true, false] : type.t === 'ref' ? this.rows(type.table).map(r => r.id) : [];
-        const labels = type.t === 'ref' ? options.map(i => this.summary(new Row(type.table, this.rows(type.table).find(r => r.id === i)))) : options.map(o => fmt(o));
+        const labels = type.t === 'ref' ? options.map(i => this.summary(new Row(type.table, this.rowById(this.tk(type.table), i)))) : options.map(o => fmt(o));
         this.H.nodes.set(id, { change: v => { if (v === ref.raw()) return; ref.set(this.fromInput(v, type)); } });
         return N({ id, t: 'choice', label: (ref.label || s.target.parts[s.target.parts.length - 1] || s.target.head).replace(/_/g, ' '), value: ref.raw(), options, labels, style: this.style(s.mods, env) });
       }
@@ -789,28 +901,29 @@ class App {
   // setField({table, id}, field, value) or setField('settingName', null, value); one undo step per call
   setField(target, field, value) {
     OFF = this.off;
-    this.lastChange = null; // any other operation ends a group of changes to one input
-    this.pushUndo();
-    if (typeof target === 'string') {
-      const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === target);
-      if (!sd) return false;
-      const key = this.sk(target);
-      if (value === this.ext(this.data.settings[key], sd.type)) { this.undoStack.pop(); return true; } // its own value back: nothing changes
-      const v = this.unwrap(this.fromInput(value, sd.type), sd.type);
-      if (v === REJECT) { this.undoStack.pop(); return false; }
-      this.data.settings[key] = this.clampTo(v, sd); this.touch();
-    } else {
-      const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
-      const f = field === 'at' ? { type: { t: 'when' } } : this.fieldDef(target.table, field);
-      if (!row || !f) return false;
-      const key = field === 'at' ? 'at' : this.fk(target.table, field);
-      if (value === this.ext(row[key], f.type)) { this.undoStack.pop(); return true; }
-      const v = this.unwrap(this.fromInput(value, f.type), f.type);
-      if (v === REJECT || (v === null && field !== 'at' && !f.optional && f.type.t !== 'bool')) { this.undoStack.pop(); return false; } // not a value of the field, or a required field emptied
-      row[key] = this.clampTo(v, f); this.touch();
-    }
-    this.runWhen();
-    return true;
+    this.lastChange = null; this.undoGroup = null; // any other operation ends a group of changes to one input
+    return this.step(() => {
+      if (typeof target === 'string') {
+        const sd = this.prog.body.find(x => x.kind === 'setting' && x.name === target);
+        if (!sd) return false;
+        const key = this.sk(target);
+        if (value === this.ext(this.data.settings[key], sd.type)) return true; // its own value back: nothing changes
+        const v = this.unwrap(this.fromInput(value, sd.type), sd.type);
+        if (v === REJECT) return false;
+        this.data.settings[key] = this.clampTo(v, sd);
+      } else {
+        const row = (this.data.tables[this.tk(target.table)] || []).find(r => r.id === target.id);
+        const f = field === 'at' ? { type: { t: 'when' } } : this.fieldDef(target.table, field);
+        if (!row || !f) return false;
+        const key = field === 'at' ? 'at' : this.fk(target.table, field);
+        if (value === this.ext(row[key], f.type)) return true;
+        const v = this.unwrap(this.fromInput(value, f.type), f.type);
+        if (v === REJECT || (v === null && !f.optional && f.type.t !== 'bool') || (field === 'at' && !okMoment(v))) return false; // not a value of the field, a required field emptied, or an impossible added time
+        row[key] = this.clampTo(v, f);
+      }
+      this.runWhen();
+      return true;
+    });
   }
 
   fieldNode(s, env, id) {
@@ -825,8 +938,9 @@ class App {
         fields.push({ ...this.inputDesc(fid, f.label || n, { ...f, optional: !!f.optional || f.type.t === 'bool' || !!f.dflt }, sub.raw()), name: n });
       }
       const miss = this.data.state[ref.state ?? '']?._missing || (this.lookup(s.target.head, env)?.state && this.data.state[this.lookup(s.target.head, env).state]?._missing) || [];
-      for (const fd of fields) if (miss.includes(fd.name)) fd.error = 'needed';
-      return { id, t: 'form', table: ref.type.table, fields, style: this.style(s.mods, env), ...(miss.length ? { error: `Fill in ${miss.map(n => (tb.fields.get(n)?.label || n).replace(/_/g, ' ')).join(', ')} first.` } : {}) };
+      const missN = [...(tb ? tb.fields : [])].filter(([n]) => miss.includes(this.fk(ref.type.table, n))).map(([n, f]) => [n, f]);
+      for (const fd of fields) if (missN.some(([n]) => n === fd.name)) fd.error = 'needed';
+      return { id, t: 'form', table: ref.type.table, fields, style: this.style(s.mods, env), ...(missN.length ? { error: `Fill in ${missN.map(([n, f]) => (f.label || n).replace(/_/g, ' ')).join(', ')} first.` } : {}) };
     }
     this.H.nodes.set(id, { change: v => { if (v === ref.raw()) return; ref.set(this.fromInput(v, ref.type)); } });
     return { ...this.inputDesc(id, s.label || ref.label || s.target.parts[s.target.parts.length - 1] || s.target.head, { type: ref.type, range: ref.range, optional: true }, ref.raw()), style: this.style(s.mods, env) };
@@ -835,7 +949,7 @@ class App {
     const t = f.type.t;
     const o = { id, t: 'input', kind: t, label: label.replace(/_/g, ' '), value: this.ext(raw, f.type) ?? null };
     if (t === 'pick') o.options = f.type.options;
-    if (t === 'ref') { o.options = this.rows(f.type.table).map(r => r.id); o.labels = o.options.map(i => this.summary(new Row(f.type.table, this.rows(f.type.table).find(r => r.id === i)))); }
+    if (t === 'ref') { o.options = this.rows(f.type.table).map(r => r.id); o.labels = o.options.map(i => this.summary(new Row(f.type.table, this.rowById(this.tk(f.type.table), i)))); }
     if (f.range) { o.min = f.range.lo; if (f.range.hi !== null) o.max = f.range.hi; }
     if (f.unit) o.unit = f.unit;
     if (f.optional === false) o.required = true;
@@ -851,8 +965,8 @@ class App {
       case 'num': return number();
       case 'money': { const n = number(); return n === REJECT ? n : new Money(n); }
       case 'dur': { const n = number(); return n === REJECT ? n : new Dur(n); }
-      case 'date': return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) && !isNaN(Date.parse(v.slice(0, 10))) ? new DateV(v.slice(0, 10)) : REJECT;
-      case 'when': { const ms = typeof v === 'number' ? v : typeof v === 'string' ? Date.parse(v) : NaN; return isFinite(ms) ? new When(ms) : REJECT; }
+      case 'date': return typeof v === 'string' && realDate(v.slice(0, 10)) ? new DateV(v.slice(0, 10)) : REJECT;
+      case 'when': { const ms = typeof v === 'number' ? v : typeof v === 'string' ? Date.parse(v) : NaN; return okMoment(ms) && (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(v) || realDate(v.slice(0, 10))) ? new When(ms) : REJECT; }
       case 'time': return typeof v === 'number' && isFinite(v) ? new TimeV(v) : typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim()) ? new TimeV(parseTime(v.trim())) : REJECT;
       case 'bool': return typeof v === 'boolean' ? v : REJECT;
       case 'ref': { const id = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? +v : NaN; const r = this.rows(type.table).find(x => x.id === id); return r ? new Row(type.table, r) : REJECT; }
@@ -921,11 +1035,11 @@ class App {
     const f = p.parts[p.parts.length - 1];
     if (base instanceof Draft) {
       const fd = this.fieldDef(base.table, f), dk = this.fk(base.table, f);
-      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(self.data.state[base.key][dk], fd.type), set: x => { const d = self.data.state[base.key]; if (x === self.ext(d[dk], fd.type)) return; const u = self.unwrap(x, fd.type); if (u === REJECT) return; d[dk] = self.clampTo(u, fd); if (d._missing) d._missing = d._missing.filter(n => n !== f); } };
+      return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(self.data.state[base.key][dk], fd.type), set: x => { const d = self.data.state[base.key]; if (x === self.ext(d[dk], fd.type)) return; const u = self.unwrap(x, fd.type); if (u === REJECT) return; d[dk] = self.clampTo(u, fd); if (d._missing) d._missing = d._missing.filter(k => k !== dk); } };
     }
     if (base instanceof Row) {
       const fd = this.fieldDef(base.table, f) || (f === 'at' ? { type: { t: 'when' } } : null);
-      const row = this.data.tables[this.tk(base.table)].find(r => r.id === base.r.id);
+      const row = base.r; // the stored row itself (a render's rows are the stored objects); no search per row
       const key = f === 'at' ? 'at' : this.fk(base.table, f);
       return { type: fd.type, label: fd.label, range: fd.range, raw: () => self.ext(row[key], fd.type), set: x => { if (x === self.ext(row[key], fd.type)) return; // its own value back changes nothing
         const u = self.unwrap(x, fd.type); if (u === REJECT) return; if (u === null && !fd.optional && fd.type.t !== 'bool') return; /* a required field is never emptied */ row[key] = self.clampTo(u, fd); } };
@@ -974,7 +1088,7 @@ class App {
         for (const [n, f] of tb.fields) vals[n] = this.wrap(d[this.fk(v.type.table, n)], f.type);
         const r = this.addRow(v.type.table, vals);
         if (r) { if (!v.keep) this.data.state[v.state] = this.newDraft(v.type.table); else delete d._missing; }
-        else d._missing = [...tb.fields].filter(([, f]) => !f.optional && f.type.t !== 'bool' && !f.dflt).filter(([n]) => vals[n] === null || vals[n] === undefined || vals[n] === '').map(([n]) => n); // shown on the form
+        else d._missing = [...tb.fields].filter(([, f]) => !f.optional && f.type.t !== 'bool' && !f.dflt).filter(([n]) => vals[n] === null || vals[n] === undefined || vals[n] === '').map(([n]) => this.fk(v.type.table, n)); // field slots, shown on the form
         return;
       }
       case 'go': this.screen = a.name; return;
@@ -1097,15 +1211,21 @@ class App {
     if (base instanceof Group) base = new RowSet(base.table, base.rows);
     if (base instanceof Column) base = base.set;
     if (!(base instanceof RowSet)) return new RowSet(null, []);
-    let rows = base.rows.filter(r => this.inWindow(r, q.win, env));
-    if (q.where) rows = rows.filter(r => this.truthy(this.ev(q.where, this.child(env, { where: { table: base.table, row: r } }))));
+    let rows = base.rows;
+    if (q.win && q.win.k !== 'all') { // the window once per query, then a number compare per row
+      const [a, b] = this.windowRange(q.win, env);
+      if (a === null && b === null) rows = [];
+      else { const lo = a === null ? -Infinity : msOfLocal(a), hi = b === null ? Infinity : msOfLocal(b) + DAY; rows = rows.filter(r => r.at >= lo && r.at < hi); }
+    }
+    if (q.where) { const we = this.child(env, { where: null }); rows = rows.filter(r => { we.where = { table: base.table, row: r }; return this.truthy(this.ev(q.where, we)); }); } // one scope per query, the row changes
     rows = rows.slice().sort((x, y) => y.at - x.at || y.id - x.id); // newest first
     if (q.shuffle) { // a fixed random order per row (chosen when the row was added), so the screen does not jump
       const key = r => r._rnd ?? ((r.id * 2654435761) % 1000003) / 1000003;
       rows = rows.slice().sort((x, y) => key(x) - key(y));
     }
     if (q.sort) {
-      const key = r => this.ev(q.sort, this.child(env, { it: new Row(base.table, r), where: { table: base.table, row: r } }));
+      const se = this.child(env, { it: null, where: null });
+      const key = r => { se.it = new Row(base.table, r); se.where = { table: base.table, row: r }; return this.ev(q.sort, se); };
       const keyed = rows.map(r => [key(r), r]);
       keyed.sort((x, y) => { if (x[0] === null) return 1; if (y[0] === null) return -1; const c = cmpVal(x[0], y[0]); return q.desc ? -c : c; });
       rows = keyed.map(k => k[1]);
@@ -1141,7 +1261,8 @@ class App {
       case 'options': {
         const fd = s.path.parts.length ? this.fieldDef(s.path.head, s.path.parts[0]) : null;
         const st = !fd && !s.path.parts.length ? this.prog.body.find(x => (x.kind === 'setting' || x.kind === 'state') && x.name === s.path.head) : null; // the options of a pick setting or state
-        return ((fd || st)?.type.options || []).map(o => ({ key: o, v: o }));
+        const ty = (fd || st)?.type;
+        return (ty?.options || []).map(o => ({ key: ty.oid?.[o] ?? o, v: o })); // an option item is known by its option slot (follows renames)
       }
       case 'list': return s.items.map((l, i) => ({ key: i, v: this.wrap(this.litValue(l), { t: { time: 'time', dur: 'dur', today: 'date', now: 'when' }[l.k] }) }));
       case 'range': {
@@ -1222,7 +1343,8 @@ class App {
 
   fold(e, env) {
     const items = this.sourceItems(e.src, env);
-    const vals = items.map((it, i) => this.ev(e.e, this.child(env, { it: it.v, index: i })));
+    const fe = this.child(env, { it: null, index: 0 });
+    const vals = items.map((it, i) => { fe.it = it.v; fe.index = i; return this.ev(e.e, fe); });
     if (e.fn === 'countof') return vals.filter(v => v === true).length;
     const ns = vals.filter(v => v !== null && v !== undefined);
     if (e.fn === 'sumof') return this.like(ns[0], ns.reduce((a, v) => a + num(v), 0));
@@ -1496,6 +1618,39 @@ export function convertOptionRows(data, ever) {
 }
 // a stored reference to a pick option: an object, so no typed text can ever look like one
 const REJECT = Symbol('reject');
+export const CATCH_UP = 600; // an every fires at most this many times per tick (a resume after a long sleep: 10 minutes of a 1s timer); the rest are skipped and logged
+// a moment that can be an added time: a finite number of ms between the years 1900 and 3000
+// a calendar date that exists (no 2026-02-30), between the years 1900 and 2999
+const realDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (!m) return false; const y = +m[1], mo = +m[2], d = +m[3]; return y >= 1900 && y < 3000 && mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(Date.UTC(y, mo, 0)).getUTCDate(); };
+const okMoment = v => typeof v === 'number' && isFinite(v) && v > -2208988800000 && v < 32503680000000;
+// the delta of one undo step: what the tables (row by row), settings, states and seq were before it
+export function makeDelta(b, app) {
+  const d = { tables: {}, settings: {}, state: {}, seq: b.seq };
+  const cur = app.data;
+  for (const tk of new Set([...Object.keys(b.data.tables || {}), ...Object.keys(cur.tables || {})])) {
+    const ba = b.data.tables[tk], aa = cur.tables[tk];
+    if (!ba) { d.tables[tk] = { absent: true }; continue; }
+    const rows = [];
+    for (let i = 0; i < Math.max(ba.length, aa ? aa.length : 0); i++) if (i >= ba.length || !aa || i >= aa.length || JSON.stringify(ba[i]) !== JSON.stringify(aa[i])) rows.push([i, i < ba.length ? ba[i] : null]);
+    if (rows.length || !aa || aa.length !== ba.length) d.tables[tk] = { len: ba.length, rows };
+  }
+  for (const g of ['settings', 'state']) for (const k of new Set([...Object.keys(b.data[g] || {}), ...Object.keys(cur[g] || {})])) {
+    const x = (b.data[g] || {})[k], y = (cur[g] || {})[k];
+    if (JSON.stringify(x) !== JSON.stringify(y)) d[g][k] = x === undefined ? { absent: true } : { v: x };
+  }
+  return d;
+}
+export function applyDelta(app, d) {
+  const D = app.data;
+  for (const [tk, t] of Object.entries(d.tables)) {
+    if (t.absent) { delete D.tables[tk]; continue; }
+    const arr = D.tables[tk] ||= [];
+    for (const [i, r] of t.rows) if (r !== null && i < t.len) arr[i] = JSON.parse(JSON.stringify(r));
+    arr.length = t.len;
+  }
+  for (const g of ['settings', 'state']) for (const [k, x] of Object.entries(d[g])) { D[g] ||= {}; if (x.absent) delete D[g][k]; else D[g][k] = JSON.parse(JSON.stringify(x.v)); }
+  app.seq = d.seq;
+}
 export const isOptRef = v => v !== null && typeof v === 'object' && !Array.isArray(v) && typeof v.o === 'string' && Object.keys(v).length === 1;
 
 // small seeded random, so tests are repeatable

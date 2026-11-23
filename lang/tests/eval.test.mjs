@@ -259,7 +259,7 @@ test('27 tasbeeh: 33 taps make round 2 and one notice', () => {
 test('28 pomodoro: the focus timer logs a session when it ends', () => {
   const a = L('28-pomodoro');
   btn(a, 'Start');
-  a.tick(25 * 60 * 1000);
+  for (let m = 0; m < 25; m++) a.tick(60 * 1000); // the app ticks while open; one long tick is a resume after sleep and catches up at most CATCH_UP fires
   has(a, /^1 focus sessions today$/);
   assert.ok(a.log.some(l => l.text === 'Take a short break'));
 });
