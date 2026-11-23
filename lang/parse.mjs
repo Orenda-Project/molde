@@ -18,6 +18,16 @@ export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind',
 import { lex, join, LexError } from './lex.mjs';
 
 export const MAX_DEPTH = 8;
+
+// Parsing one line is the expensive part; the same line text always parses the same way, so
+// results are cached (decoding re-checks a growing program line by line).
+const LINE_CACHE = new Map();
+function parseCached(canon, starts) {
+  const key = starts.join(',') + '\u0000' + canon;
+  let r = LINE_CACHE.get(key);
+  if (!r) { r = parseText(canon, starts); if (LINE_CACHE.size > 20000) LINE_CACHE.clear(); LINE_CACHE.set(key, r); }
+  return r;
+}
 export const BLOCK = new Set(['def', 'screen', 'each', 'if', 'else', 'box', 'draw', 'plot', 'poly', 'call']);
 
 export class MoError {
@@ -137,7 +147,7 @@ export function parse(src, { lib = false } = {}) {
     }
     ln.canon = canon;
     const starts = first ? [lib ? 'lib-first' : 'first-stmt'] : ['leaf-stmt', 'block-stmt'];
-    const r = parseText(canon, starts);
+    const r = parseCached(canon, starts);
     if (!r.tree) {
       if (first && !/^(app|ask|lib)\b/.test(canon)) errors.push(new MoError('E_HEADER', ln.no, lib ? 'a library starts with lib "name".' : 'a program starts with app "Name" (or is a single ask line).', lib ? 'add lib "name" as line 1.' : 'add app "My app" as line 1.'));
       else errors.push(syntaxError(ln.no, canon, r));

@@ -370,7 +370,12 @@ class Checker {
     for (const m of [this.states, this.settings, this.lets]) for (const [k, v] of m) if (tname(v) !== 'fn') names.add(k);
     const tables = [...this.tables.keys()];
     const wt = this.whereTable && this.tb(this.whereTable);
-    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt() };
+    const types = {};
+    for (const sc of this.scopes) for (const [k, v] of sc.names) types[k] = v;
+    for (const m of [this.settings, this.lets, this.states]) for (const [k, v] of m) if (tname(v) !== 'fn') types[k] = v;
+    for (const sc of this.scopes) for (const [k, v] of sc.names) types[k] = v; // inner scopes win
+    const writable = [...names].filter(n => this.writable(n) && !this.lets.has(n));
+    this.probe = { kind: 'head', mode, values: [...names], tables, whereFields: wt ? [...wt.fields.keys(), 'at', 'id'] : [], options: [...this.options], it: !!this.curIt(), itType: this.curIt(), types, writable };
   }
   probePart(t) {
     const n = tname(t);
