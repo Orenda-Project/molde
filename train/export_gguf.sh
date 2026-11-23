@@ -20,5 +20,7 @@ export PYTHONPATH="$SRC/gguf-py:${PYTHONPATH:-}"
 python3 -c "import numpy, sentencepiece" 2>/dev/null || pip install -q numpy sentencepiece gguf || pip install -q --break-system-packages numpy sentencepiece
 python3 "$SRC/convert_hf_to_gguf.py" "$MODEL_DIR" --outtype f16 --outfile "$OUT/$NAME-f16.gguf"
 for q in $QUANTS; do LD_LIBRARY_PATH="$(dirname "$Q")" "$Q" "$OUT/$NAME-f16.gguf" "$OUT/$NAME-$q.gguf" "$q"; done
+HERE=$(cd "$(dirname "$0")" && pwd)
+for q in $QUANTS; do LLAMA_SRC="$SRC" python3 "$HERE/tokens/fix_gguf_control.py" "$OUT/$NAME-$q.gguf"; done
 ( cd "$OUT" && sha256sum "$NAME"-*.gguf > SHA256SUMS && cat SHA256SUMS && ls -la )
 echo EXPORT_OK

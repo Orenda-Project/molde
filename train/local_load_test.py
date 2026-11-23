@@ -19,11 +19,13 @@ def avail_mb():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("gguf"); ap.add_argument("--data", default=str(HERE / "data/out")); ap.add_argument("--lang", default=str(HERE.parent / "lang"))
-    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--decoder", default="grammar", help="grammar (llama-server GBNF, default) or cmd:<shell command>: the command reads one JSON object {system,user,max_tokens} on stdin and prints the program on stdout (hook for the line-stepped constrained decoder of branch phase-2-decode)"); ap.add_argument("--chat-kwargs", default="{}", help='JSON for the chat template, e.g. {"enable_thinking": false} for Qwen3.5'); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600)
+    ap.add_argument("-n", type=int, default=5); ap.add_argument("--refs", default="test_refs.jsonl"); ap.add_argument("--decoder", default="grammar", help="grammar (llama-server GBNF, default) or cmd:<shell command>: the command reads one JSON object {system,user,max_tokens} on stdin and prints the program on stdout (hook for the line-stepped constrained decoder of branch phase-2-decode)"); ap.add_argument("--chat-kwargs", default="{}", help='JSON for the chat template, e.g. {"enable_thinking": false} for Qwen3.5'); ap.add_argument("--json"); ap.add_argument("--n_predict", type=int, default=600); ap.add_argument("--req-timeout", type=int, default=240, help="seconds per request; a stalled request counts as a failed (empty) program")
     ap.add_argument("--full", action="store_true", help="run the whole test split (create + edit) and score it with score.mjs")
     ap.add_argument("--nogrammar", action="store_true", help="with --full: no grammar (raw model quality)")
     ap.add_argument("--metrics", help="with --full: write metrics JSON here")
     a = ap.parse_args()
+    if a.decoder.startswith("runner:"):   # line-stepped decoder of branch phase-2-decode (decode_eval.py wraps decode/run.mjs)
+        sys.exit(subprocess.run([sys.executable, str(HERE / "decode_eval.py"), a.gguf, "--data", a.data, "--refs", a.refs, "--arm", a.decoder.split(":", 1)[1], "--out", a.metrics or "/tmp/molde-decoder.metrics.json"] + (["--route", "text"])).returncode)
     size = os.path.getsize(a.gguf) // (1 << 20)
     print(subprocess.run(["free", "-h"], capture_output=True, text=True).stdout)
     need = size * 2 + 600
@@ -73,7 +75,11 @@ def main():
                 d = {"choices": [{"message": {"content": o.stdout}}], "timings": {}}
             else:
                 q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
-                d = json.load(urllib.request.urlopen(q, timeout=1200))
+                try:
+                    d = json.load(urllib.request.urlopen(q, timeout=a.req_timeout))
+                except Exception as ex:   # timeout or dropped connection: record a failed program and go on
+                    print("REQUEST FAILED", r["id"], type(ex).__name__, flush=True)
+                    d = {"choices": [{"message": {"content": ""}}], "timings": {}, "timeout": True}
             secs = time.time() - t_req
             text = d["choices"][0]["message"]["content"]
             tm = d.get("timings", {})
@@ -94,7 +100,10 @@ def main():
                 body["chat_template_kwargs"] = json.loads(a.chat_kwargs)
                 if not a.nogrammar: body["grammar"] = grammar
                 q = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", json.dumps(body).encode(), {"Content-Type": "application/json"})
-                t2 = json.load(urllib.request.urlopen(q, timeout=600))["choices"][0]["message"]["content"]
+                try:
+                    t2 = json.load(urllib.request.urlopen(q, timeout=a.req_timeout))["choices"][0]["message"]["content"]
+                except Exception:
+                    t2 = ""
                 p = pathlib.Path("/tmp") / f"molde-lt-{x['id']}-rep.mo"; p.write_text(t2)
                 x["repaired_ok"] = subprocess.run(["node", str(pathlib.Path(a.lang) / "mo.mjs"), "check", str(p)], capture_output=True).returncode == 0
         speeds = [x["tok_s"] for x in rows if x["tok_s"]]
@@ -131,7 +140,7 @@ def main():
             print(json.dumps(m))
             if a.metrics:
                 json.dump(m, open(a.metrics, "w"), indent=1)
-        if not summary["all_nonempty"]:
+        if not a.full and not summary["all_nonempty"]:
             sys.exit("FAILED: empty output")
     finally:
         srv.terminate()
