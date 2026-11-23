@@ -100,7 +100,7 @@ for (;;) {
 - **Two levels, one runtime.** The runtime implements level 1 only; charts, lists, forms, timers and calendars are MoldeScript components.
 - **Lines and indentation**, declare before use: every prefix is a valid program, and SPEC 2.1 says how a half-written program or edit is handled.
 - **One grammar file** drives the parser and the GBNF. **Keywords are contextual**: the parser prefers the keyword reading of a word and otherwise treats it as a name; only 12 words are reserved.
-- **One spelling per idea**: the formatter rewrites the alternatives, so training data and model output stay uniform.
+- **One spelling per idea**: the formatter rewrites the alternatives, so training data and model output stay uniform. Round 4 merged: bare-name text lines (no `text` unless the name is a component), bare sizes, `sum/count/min/max(source, formula)` instead of `sumof/countof/maxof/minof`, `goal` instead of `ring`, `list X by day` instead of `log X`, and dropped `compact/grouped/monthshort` (the phone formats numbers from typed text parts). `node lang/mo.mjs migrate` rewrites all of them. Size, before and after round 4: 170 to 169 keyword literals, 47 to 40 functions, 237 to 229 grammar literals, 37 statements (unchanged; `ytick` joined `tick`'s rule, `alt` and `bar` are line modifiers), 15 to 14 std defs, 13 of them documented components (`log` remains only as the body of `list X by day`).
 - **Meaning is executable**: `eval.mjs` is the reference; the phone runtime must give the same UI tree.
 - **Data is never at risk**: no statement deletes data; the diff uses the whole schema history; renames are explicit.
 
