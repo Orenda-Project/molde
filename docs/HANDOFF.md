@@ -12,6 +12,10 @@ Read this first when resuming. It says what exists, what was running, and the ne
 - Do not ask Kamal questions; decide, say so in one line, continue. Never run `rm`; use new uniquely named folders.
 - Colab is allowed for training. Flow: free images only, never spend credits, never `flow_retry`.
 
+## Standing goal (Kamal, 2026-11-23)
+
+"Do not stop. I want a working model and app, fully tested, ready for real use." Drive every track to that end without asking. Order of work: (1) language passes its critic, (2) renderer passes its critic on the final language, (3) pilot dataset, training ladder on Colab, eval on the quantised file, upload to Hugging Face, (4) Android app (Flutter shell + on-device model + runtime in a WebView + storage), built as an APK and tested on an emulator and on Kamal's phone, (5) app-essentials checklist and a closed test. Usage limits: six agents at once exhausted the 5-hour limit; run at most three or four heavy agents at a time and have each commit and push in small steps.
+
 ## Tracks and state
 
 | Track | Branch / place | State | Issue / PR |
