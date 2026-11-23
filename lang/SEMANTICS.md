@@ -22,6 +22,9 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 - `when`: conditions that are already true are saved with the data (`snapshot().when`), so they do not notify again after a reload.
 - `touched` for saves made before the flag existed is derived once from the data (any row, a setting or a literal state off its default, or more than one version) and then recorded.
 - Stored states are the top-level states and the states of a screen; their pick options are slots like a setting's.
+- **State inside an `each`** is kept per (what the each goes over: a table, a link, the options of a pick, days or a list) and per item (a row's id, an option's slot, a day), not by the line it is written on: a heading added above the each, or an option renamed with `was`, keeps every value. `state NEW ... was OLD` inside an each moves its values. Keys saved by line position (before round 10) are converted once at load; values of rows that no longer exist are dropped.
+- Data Undo steps store only what an operation changed (rows, settings, states, as they were), not a copy of all data; an operation that changes nothing records no step. After Undo a `when` whose condition is false again may fire again.
+- An added time (`at`) must be a moment between the years 1900 and 3000; a date must exist (no 2026-02-30).
 - **Older backups (rule 5)**: a snapshot without `ever.format` (rounds 4 and 5, or with its bookkeeping missing) is rebuilt by replaying its recorded versions in order (each edit applied to the one before, restores by index; the same text twice in a row is one version), and rows holding option names get option slot ids. If the replay fails, the backup is not loaded: `ok: false` with the reason, data untouched.
 - **Loading never acts as an edit.** `load(src, {data})` runs the data's stored program. If `src` is not that program (after removing `was`), the stored program runs anyway and `app.edit` is a warning saying so; send the new program as an edit to change it.
 - **History with a backup (rule 6)**: the snapshot's own maps win. `history` (programs as written, oldest first) is used only to add the steps after the snapshot's program (each replayed as an edit, `was` included); if it does not contain the snapshot's program it is not used, with a warning. A snapshot with no schema history is read with the schema the history builds.
@@ -33,7 +36,7 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Time
 
-- The evaluator runs on a fixed clock (`load(src, {now})`); `tick(ms)` moves it. Calendar days are UTC by default so tests are repeatable; `load(src, {tz: 'local'})` uses the device's local time and `{tz: 300}` a fixed offset in minutes east of UTC (the phone uses local time).
+- **The clock belongs to the host.** `load(src, {now})` takes `now` (without it, the time the data was saved, else a fixed day for tests); `tick(ms)` moves it. Saved data only records when it was taken (`snapshot().clock`); `restore()` never changes the clock, and every new row is dated with the host clock. When the host clock is later than a snapshot's on load or restore, schedules catch up for the time in between. Calendar days are UTC by default so tests are repeatable; `load(src, {tz: 'local'})` uses the device's local time and `{tz: 300}` a fixed offset in minutes east of UTC (the phone uses local time).
 - `today` is the date of the clock; `now` the date and time. Weeks start on Monday (`weekday` 1 to 7).
 - **A date compared with a date and time compares whole days**: `at <= today` includes every row of today, `at = d` is true all day, and `date - when` is whole days between the two dates.
 - **`time - time` is the forward duration from the second time to the first, wrapping past midnight**: bed 23:00 to wake 07:00 is `07:00 - 23:00 = 8:00`, always between 0 and 24 hours.
@@ -85,7 +88,7 @@ What every statement means when it runs. The reference evaluator `lang/eval.mjs`
 
 ## Events
 
-- `every D [if c]` runs while the app is open, every D after the previous run, only while `c` is yes.
+- `every D [if c]` runs while the app is open, every D after the previous run, only while `c` is yes. A tick does not step second by second: each `every` fires as many times as D fits into the time passed, **at most 600 times per tick** (a resume after a long sleep: ten minutes of a 1-second timer); earlier fires beyond that are skipped and logged (`{kind: 'skipped', fires}`). Each fire runs at its own time; `after` actions run in due order; `when` conditions are evaluated once, at the end. A tick is one Undo step.
 - In an action chain, **each `after D` is measured from the previous step, and the actions after it wait with it**: `tap set s = 1 then after 2s set s = 2 then set s = 3 then after 2s set s = 4` sets 1 now, 2 and 3 two seconds later, 4 after four seconds.
 - `now` and everything computed from it are re-evaluated on every tick: a renderer calls `tree()` again after `tick()` and the clock-dependent texts repaint. The evaluator steps the clock by the shortest active period and jumps when nothing is active.
 - `when c` runs its actions once each time `c` changes from no to yes (checked after every event and every tick). A `when` cannot trigger itself more than 5 times in a row.

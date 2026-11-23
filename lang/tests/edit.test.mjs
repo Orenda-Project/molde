@@ -529,3 +529,73 @@ test('UI fuzz: 200 chains through tree and dispatch only (undo groups, drafts ac
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
   assert.ok(r.undos > 50 && r.draftChecks > 100 && r.garbage > 50 && r.reloads > 50);
 });
+
+// ---- round 10: the host clock, block state by identity, at and dates, Undo deltas ----
+test('round 10 S1: the clock belongs to the host: restore keeps it, load takes now, schedules catch up', () => {
+  const S = 'app "T"\ntable log x num\nbutton "plus" tap add log x = 1\n"n" count(log today)\n';
+  const a = load(S, { now: '2026-11-23T10:00:00Z' });
+  const old = a.snapshot();
+  const b = load(a.source, { data: old, now: '2026-11-28T10:00:00Z' });
+  assert.equal(new Date(b.clock).toISOString(), '2026-11-28T10:00:00.000Z');
+  b.restore(old);
+  assert.equal(new Date(b.clock).toISOString(), '2026-11-28T10:00:00.000Z', 'restore never moves the clock');
+  b.dispatch(b.find(n => n.t === 'button').id, 'tap');
+  assert.equal(new Date(b.rows('log')[0].at).toISOString(), '2026-11-28T10:00:00.000Z');
+  const E = 'app "T"\ntable log x num\nevery 1h add log x = 1\n';
+  const c = load(E, { now: '2026-11-23T10:00:00Z' });
+  const d = load(c.source, { data: c.snapshot(), now: '2026-11-23T15:30:00Z' });
+  assert.equal(d.rows('log').length, 5, 'an hourly every caught up 5 times');
+  assert.ok(d.rows('log').every(r => r.at <= d.clock));
+});
+
+test('round 10 S2a: state inside each keeps its value across safe edits (a heading above, an option rename)', () => {
+  const P = (opts, head = '') => `app "T"\ntable cat c pick ${opts}\ntable s n num\n${head}each options cat.c\n  state base num = 0\n  row\n    "b" it base\n    button "inc" tap set base = base + 1\neach s\n  state open bool = no\n  toggle open\n`;
+  const a = load(P('A|B'));
+  const r = a.addRow('s', { n: 1 });
+  a.dispatch(a.findAll(n => n.t === 'button')[1].id, 'tap'); // B's baseline 1
+  a.dispatch(a.find(n => n.t === 'toggle').id, 'tap');
+  const shown = () => [a.findAll(n => n.t === 'text').map(n => n.text).filter(t => t.startsWith('b ')), a.find(n => n.t === 'toggle').on];
+  assert.deepEqual(shown(), [['b A 0', 'b B 1'], true]);
+  a.applyEdit(P('A|B', '"Heading"\n'));
+  assert.deepEqual(shown(), [['b A 0', 'b B 1'], true], 'a line above the each');
+  a.applyEdit(P('A|Beta was B', '"Heading"\n'));
+  assert.deepEqual(shown(), [['b A 0', 'b Beta 1'], true], 'an option renamed');
+  assert.deepEqual(load(a.source, { data: a.snapshot() }).findAll(n => n.t === 'text').map(n => n.text).filter(t => t.startsWith('b ')), ['b A 0', 'b Beta 1']);
+  void r;
+});
+
+test('round 10 S2a: block state saved by line position (before round 10) is migrated at load; state of gone rows is dropped', () => {
+  const S = 'app "T"\ntable s n num\neach s\n  state open bool = no\n  toggle open\n';
+  const a = load(S); const r1 = a.addRow('s', { n: 1 }); const r2 = a.addRow('s', { n: 2 });
+  a.tree();
+  const snap = a.snapshot();
+  const keys = Object.keys(snap.data.state).filter(k => k.startsWith('/'));
+  for (const k of keys) { const v = snap.data.state[k]; delete snap.data.state[k]; snap.data.state[k.replace(/^\/q:s@/, '/n.1@')] = k.includes('@r' + r1.id) ? true : v; }
+  snap.data.state[`/n.1@r999|open`] = true; // a row that is gone
+  const b = load(a.source, { data: snap });
+  assert.deepEqual(b.findAll(n => n.t === 'toggle').map(n => n.on).sort(), [false, true]);
+  assert.ok(!Object.keys(b.data.state).some(k => k.includes('r999')));
+  void r2;
+});
+
+test('round 10 S2b: the added time and dates reject impossible values; the stored value stays', () => {
+  const a = load('app "T"\ntable s d date?, w when?\nlist s\n'); const r = a.addRow('s', {});
+  const t = { table: 's', id: r.id };
+  for (const v of ['', null, NaN, Infinity, 1e20, 'abc']) assert.equal(a.setField(t, 'at', v), false, String(v));
+  for (const v of ['2026-02-30', '2026-13-01', '0000-00-00', '10000-01-01']) assert.equal(a.setField(t, 'd', v), false, v);
+  for (const v of [1e20, -8640000000000001, 'x']) assert.equal(a.setField(t, 'w', v), false, String(v));
+  assert.equal(a.setField(t, 'd', '2026-02-28'), true);
+  assert.equal(a.rows('s')[0].at, r.at);
+});
+
+test('round 10 S3: Undo clears the edge of a when that is false again; an operation that changes nothing records no step', () => {
+  const a = load('app "T"\ntable log x num\nsetting g num 0..10 = 5\nbutton "b" tap add log x = 1\nwhen count(log) > 1 notify "many"\n');
+  const tap = () => a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  tap(); tap();
+  assert.equal(a.log.filter(e => e.kind === 'notify').length, 1);
+  a.undo(); tap();
+  assert.equal(a.log.filter(e => e.kind === 'notify').length, 2, 'it may notify again after Undo made it false');
+  const n = a.undoStack.length;
+  a.setField('g', null, 5);
+  assert.equal(a.undoStack.length, n, 'setting the same value records no step');
+});

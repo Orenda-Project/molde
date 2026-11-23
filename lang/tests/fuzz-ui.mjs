@@ -23,14 +23,25 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
     let F = [{ slot: 't', name: 't', type: 'text', req: true }, { slot: 'n', name: 'n', type: 'num' }, { slot: 'w', name: 'w', type: 'text' }];
     let fresh = 0;
     const decl = (F, ren = {}) => F.map(f => `${f.name} ${f.type === 'pick' ? 'pick Home|Work' : f.type}${f.req || f.dflt !== undefined ? '' : '?'}${f.dflt !== undefined ? ' = ' + f.dflt : ''}${ren[f.slot] ? ' was ' + ren[f.slot] : ''}`).join(', ');
-    const prog = (F, ren) => [
-      'app "U"', `table s ${decl(F, ren)}`, 'table log x num', 'setting g num = 1', 'state q text = ""',
+    // a second part: per-option state (a baseline per option of cat.c) and per-row state (an open flag)
+    let O = ['A', 'B', 'C'], H = false;
+    const prog = (F, ren, oren = {}) => [
+      'app "U"', `table s ${decl(F, ren)}`, 'table log x num', `table cat c pick ${O.map((o, i) => oren[i] ? `${o} was ${oren[i]}` : o).join('|')}`, 'setting g num = 1', 'state q text = ""',
       'form s', 'field g', 'field q', '"rows" count(s)', '"logs" count(log)', '"g" g',
       'button "plus" tap add log x = 1', 'every 60s if g > 5 add log x = 2', 'when count(log) > 2 notify "many"',
-      'each s', '  field it.t',
+      ...(H ? ['"Heading"'] : []),
+      'each options cat.c', '  state base num = 0', '  row', '    "b" it base', '    button "inc" tap set base = base + 1',
+      'each s', '  state open bool = no', '  toggle open', '  field it.t',
     ].join('\n') + '\n';
+    // the block state as shown: per option slot (index in O) and per row id
+    const blockState = () => {
+      const opt = {}; for (const t of app.findAll(n => n.t === 'text' && /^b \S+ \d+$/.test(n.text))) { const [, name, v] = t.text.split(' '); opt[O.indexOf(name)] = +v; }
+      const rows = {}; for (const t of app.findAll(n => n.t === 'toggle')) { const m = /@r(\d+)/.exec(t.id); if (m) rows[m[1]] = t.on; }
+      return JSON.stringify({ opt, rows });
+    };
     let app = load(prog(F));
     const typed = {}; // slot -> what the person typed into the form (as shown)
+    const backups = [];
     let stack = [], lastChange = null;
     const V = (st, why) => stats.violations.push({ c, st, why });
     const data = () => JSON.stringify(app.data);
@@ -63,7 +74,8 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         change(n, v); stats.changes++;
         if (fm && fm.fields.includes(n)) { const f = F.find(x => x.name === n.name); if (f) typed[f.slot] = form().fields.find(x => x.name === n.name).value; }
       } else if (op === 4) { // a tap
-        const b = app.find(x => x.t === 'button' && (x.text === 'plus' || x.text === 'Add'));
+        const bs = [...app.findAll(x => x.t === 'button' && ['plus', 'Add', 'inc'].includes(x.text)), ...app.findAll(x => x.t === 'toggle')];
+        const b = bs[ri(bs.length)];
         if (!b) continue;
         other(() => app.dispatch(b.id, 'tap')); stats.taps++;
         if (b.text === 'Add' && app.rows('s').length > 0) { const fm = form(); if (fm && !fm.error) for (const k of Object.keys(typed)) delete typed[k]; }
@@ -101,14 +113,20 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         stats.ticks++;
         other(() => app.tick(60000)); // a tick is one step
       } else if (op <= 9) { // a safe edit of the form's table
-        const N = F.map(f => ({ ...f })), ren = {};
-        const k = ri(4);
+        const N = F.map(f => ({ ...f })), ren = {}, oren = {};
+        const k = ri(6);
+        const shownBefore = blockState(), O0 = O.slice(), H0 = H;
         if (k === 0) { const f = N[1 + ri(N.length - 1)]; ren[f.slot] = f.name; f.name = 'f' + (fresh++); }
         else if (k === 1) { const sl = 'p' + (fresh++); N.push(rnd() < 0.5 ? { slot: sl, name: sl, type: 'pick', dflt: 'Home' } : { slot: sl, name: sl, type: 'num', dflt: 3 }); }
         else if (k === 2 && N.length > 2) { const i = 1 + ri(N.length - 1); N.splice(i, 1); }
+        else if (k === 4) { const i = ri(3); oren[i] = O[i]; O[i] = 'Q' + (fresh++); } // rename an option of cat.c
+        else if (k === 5) H = !H; // a line added or removed above the each blocks
         else { const f = N.find(x => x.type === 'text' && !x.req); if (f) f.type = 'long'; else continue; }
-        const r = app.applyEdit(prog(N, ren)); stats.edits++; lastChange = null; group = null;
-        if (r.verdict === 'refused') { stats.refused++; if (process.env.UIDEBUG) console.error(r.refused[0]); continue; }
+        const r = app.applyEdit(prog(N, ren, oren)); stats.edits++; lastChange = null; group = null;
+        if (r.verdict === 'refused') { stats.refused++; O = O0; H = H0; if (process.env.UIDEBUG) console.error(r.refused[0]); continue; }
+        stats.blockChecks = (stats.blockChecks || 0) + 1;
+        if (/:[1-9]|true/.test(shownBefore)) stats.blockChecksWithState = (stats.blockChecksWithState || 0) + 1;
+        if (blockState() !== shownBefore) V(st, `a safe edit changed block state: ${shownBefore} -> ${blockState()}`);
         const dropped = F.filter(f => !N.some(x => x.slot === f.slot)).map(f => f.slot);
         for (const sl of dropped) delete typed[sl];
         F = N;
@@ -125,12 +143,32 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
         stats.reloads++;
         const was = app.find(x => x.text === 'logs')?.text;
         const condTrue = app.rows('log').length > 2;
-        app = load(app.source, { data: app.snapshot() });
+        const jump = rnd() < 0.5 ? 0 : ri(3 * 86400) * 1000; // the host clock moved on while the app was closed
+        const host = app.clock + jump;
+        app = load(app.source, { data: app.snapshot(), now: host });
         stack = []; lastChange = null; group = null; // data Undo does not survive a restart
-        app.tick(1);
-        stats.whenChecks++;
-        if (condTrue && app.log.some(e => e.kind === 'notify')) V(st, 'a when that was already true notified again after a reload');
+        if (app.clock !== host) V(st, 'load did not take the host clock');
+        if (!jump) { app.tick(1); stats.whenChecks++; if (condTrue && app.log.some(e => e.kind === 'notify')) V(st, 'a when that was already true notified again after a reload'); }
+        // a new row is dated with the host clock
+        other(() => app.dispatch(app.find(x => x.t === 'button' && x.text === 'plus').id, 'tap'));
+        const newest = app.rows('log').reduce((m, r) => (m && m.id > r.id ? m : r), null);
+        if (newest && newest.at !== app.clock) V(st, `a new row is dated ${newest.at}, not the host clock ${app.clock}`);
+        stats.clockChecks = (stats.clockChecks || 0) + 1;
         void was;
+      } else if (rnd() < 0.5) { // a backup now, or restore an earlier one: the host clock does not move back
+        if (backups.length && rnd() < 0.6) {
+          const b = backups[ri(backups.length)];
+          const host = app.clock;
+          const r = app.restore(b.snap);
+          if (!r.ok) { V(st, 'restore refused: ' + r.reason); continue; }
+          if (app.clock !== host) V(st, 'restore changed the clock');
+          F = b.F; O = b.O; H = b.H; for (const k of Object.keys(typed)) delete typed[k]; Object.assign(typed, b.typed);
+          stack = []; lastChange = null; group = null;
+          other(() => app.dispatch(app.find(x => x.t === 'button' && x.text === 'plus').id, 'tap'));
+          const newest = app.rows('log').reduce((m, r) => (m && m.id > r.id ? m : r), null);
+          if (newest && newest.at !== app.clock) V(st, `after a restore a new row is dated ${newest.at}, not the host clock ${app.clock}`);
+          stats.restores = (stats.restores || 0) + 1;
+        } else backups.push({ snap: app.snapshot(), F: F.map(f => ({ ...f })), O: O.slice(), H, typed: { ...typed } });
       } else { // set g so the every runs or stops (through the setting's input)
         const n = app.find(x => x.t === 'input' && x.label === 'g');
         if (!n) continue;
