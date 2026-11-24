@@ -18,6 +18,7 @@ import { decodeRandom } from './constrain-lib.mjs';
 const NAME_CODES = new Set(['E_UNKNOWN_TABLE', 'E_UNKNOWN_FIELD', 'E_UNKNOWN_NAME', 'E_UNKNOWN_COMPONENT', 'E_REF']);
 const progs = (n = 300) => [
   ...readdirSync(join(LANG, 'examples')).filter(f => f.endsWith('.mo')).sort().map(f => ({ f, src: readFileSync(join(LANG, 'examples', f), 'utf8') })),
+  ...readdirSync(join(LANG, 'examples', 'demo15')).filter(f => f.endsWith('.mo')).sort().map(f => ({ f: 'demo15/' + f, src: readFileSync(join(LANG, 'examples', 'demo15', f), 'utf8') })),
   ...readdirSync(join(LANG, 'corpus')).filter(f => f.endsWith('.mo')).sort().filter((_, i) => i % Math.ceil(300 / n) === 0).map(f => ({ f: 'corpus/' + f, src: readFileSync(join(LANG, 'corpus', f), 'utf8') })),
 ];
 

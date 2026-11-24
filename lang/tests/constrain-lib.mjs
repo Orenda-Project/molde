@@ -44,7 +44,8 @@ export function decodeRandom(src, seed, leafOnly = false) {
     if (ctx.groups) names = ctx.groups.component.includes(p.word) ? ctx.groups.component.filter(n => SIG.get(n) === SIG.get(p.word)) : ctx.groups.dotted; // a component call, or a text line that starts with a value
     const dotNext = out[at + p.word.length] === '.' && out[at + p.word.length + 1] !== '.';
     const canDot = n => { const c = nameContext(out.slice(0, at) + n + '.'); return c.mode === 'free' || c.names.length > 0; };
-    let pool = names.filter(n => !STRUCTURE.has(n) && (!dotNext || canDot(n))); // as the mask does: no dot after a name nothing can follow
+    const call = out[at + p.word.length] === '(', calls = ctx.calls || [];
+    let pool = names.filter(n => !STRUCTURE.has(n) && (!dotNext || canDot(n)) && calls.includes(n) === call); // a formula with parameters only before `(` // as the mask does: no dot after a name nothing can follow
     if (!pool.length && dotNext) { // every choice ends the path here: the decoder writes the name and drops the rest of the dotted path
       pool = names.filter(n => !STRUCTURE.has(n));
       if (pool.length) {

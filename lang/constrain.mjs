@@ -124,6 +124,7 @@ function lineState(toks, env, scope) {
     const f = stack[j];
     itAt[j] = it;
     if (FOLDS.has(f.fn) && f.comma >= 1) it = sourceItemType(env, scope, f.headTok, it);
+    else if (f.sort && f.comma === 0) { const r = sourceItemType(env, scope, f.headTok, it); if (r && r !== 'date') it = r; } // after `sort`, `it` is the row being sorted: sort count(it.absent) desc
   }
   // the innermost frame with a table query
   let query = null;
@@ -230,7 +231,7 @@ export function nameContext(text) {
     const kind = comp.params[idx] && comp.params[idx].kind;
     if (kind === 'src' || kind === 'table') {
       let at; try { at = lex('each ' + parts[idx].trim()); } catch { at = null; }
-      if (at) { const q = lineState(at, env, scope); if (q.query && !(at.length === 1)) st.query = q.query; }
+      if (at) { const q = lineState(at, env, scope); if (q.query && !(at.length === 1)) st.query = q.query; if (q.foldIt && !st.foldIt) st.foldIt = q.foldIt; }
     }
   }
   if (comp && !st.foldIt) { // inside a component's values, `it` is the component's item (each day of daybars, each row of trend)
@@ -262,13 +263,15 @@ export function nameContext(text) {
   // things that are changed or opened
   const itOk = scope.itType || st.foldIt ? ['it'] : [];
   if (TARGETS.has(prev)) return strict([...itOk, ...(prev === 'set' ? ['all'] : []) /* set all ... */, ...scope.writable, ...values.filter(v => ['row', 'draft'].includes(tname(scope.types[v]))), ...(scope.itType && ['row'].includes(tname(scope.itType)) ? [] : [])]);
+  if (prev === 'all' && toks[toks.length - 2] && toks[toks.length - 2].v === 'remove') return strict(tables); // remove all TABLE
   if (prev === 'edit' || prev === 'remove') return names( /* a formula: last(t), first(t) ... */[...itOk, ...(prev === 'remove' ? ['all'] : []), ...scope.writable, ...values.filter(v => ['row', 'group'].includes(tname(scope.types[v])))], prev === 'edit' ? ['all'] : []);
   if (prev === 'toggle') return names([...scope.writable, ...values, ...tables]);
   if (st.query && st.query.afterBy) return names([...fieldsOf(env, st.query.table).keys()]); // day, week, month are keywords
   if (st.query && st.query.atHead && (AGGS.has(prev) || FOLDS.has(prev) || prev === 'each' || (prev === 'all' && toks[toks.length - 2] && toks[toks.length - 2].v === 'set'))) return names([...tables, ...values]);
   // any formula: your values, tables, option words, and inside where/sort the queried table's fields
   const whereFields = st.query && st.query.inWhere ? [...fieldsOf(env, st.query.table).keys(), 'at', 'id'] : [];
-  return names([...whereFields, ...values, ...tables, ...scope.options]);
+  const calls = [...env.lets].filter(([, l]) => l && l.t === 'fn').map(([k]) => k); // formulas with parameters: `won(` comes next
+  return { ...names([...whereFields, ...values, ...tables, ...scope.options, ...calls]), calls };
 }
 
 // parts of a function result: last(t).name, random(card).front, nth(t, 1).x
