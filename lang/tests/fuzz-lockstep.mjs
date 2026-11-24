@@ -11,7 +11,8 @@ globalThis.MOLDE_FREEZE_TREE = true;
 const LANG = new URL('..', import.meta.url).pathname;
 // programs with buttons, inputs, refs, timers, when and every rules (at least 30)
 export function lockstepPrograms() {
-  const ex = readdirSync(LANG + 'examples').filter(f => f.endsWith('.mo')).map(f => readFileSync(LANG + 'examples/' + f, 'utf8'));
+  const ex = readdirSync(LANG + 'examples').filter(f => f.endsWith('.mo')).map(f => readFileSync(LANG + 'examples/' + f, 'utf8'))
+    .concat(readdirSync(LANG + 'examples/demo15').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'examples/demo15/' + f, 'utf8')));
   const co = readdirSync(LANG + 'corpus').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'corpus/' + f, 'utf8'));
   const stateful = co.filter(s => /\bevery \d|\bwhen |\bafter \d|ref |timer /.test(s));
   // small programs that put the stateful statements next to each other (when that adds rows, every
