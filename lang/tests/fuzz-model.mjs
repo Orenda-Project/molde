@@ -120,10 +120,10 @@ export function boundaryLeak(A) {
 export function echoChanges(A) {
   const nodes = A.findAll(n => (n.t === 'input' || n.t === 'choice') && n.value !== undefined).slice(0, 4);
   for (const n of nodes) {
-    const before = JSON.stringify(A.data);
+    const before = JSON.stringify(A.data), steps = A.undoStack.length;
     A.dispatch(n.id, 'change', n.value);
-    A.undoStack.pop();
     if (JSON.stringify(A.data) !== before) return `${n.id} (${JSON.stringify(n.value)})`;
+    if (A.undoStack.length !== steps) return `${n.id}: an echo recorded an undo step`;
   }
   return null;
 }
