@@ -32,7 +32,7 @@ def quick t table, f name, values src
 
 # An app bar: the title and one button that opens a form for a new row; Save adds it and closes.
 # describe: a bar with {title} and a button that opens a form to add a {t}
-def topbar t table, caption text = "Add"
+def topbar t table, caption text = "Add", done text = "Save"
   state adding bool = no
   state d new t keep
   row bar
@@ -40,4 +40,4 @@ def topbar t table, caption text = "Add"
   if adding
     stack card gap 2
       field d
-      button "Save" fill accent tap save d then set adding = no
+      button done fill accent tap save d then set adding = no
