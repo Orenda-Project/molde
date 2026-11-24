@@ -1,0 +1,480 @@
+[
+ {
+  "key": "w1-c09|a81b88966423",
+  "uid": "aefcaf08",
+  "category_hint": "change",
+  "request": "also show how much silver zakat would be if i add silver",
+  "program_before": "app \"Jewellery\" star plum\nsetting rate money = 250000 \"Price per tola\"\nstate tola num = 1\nfield tola \"Tola\"\n\"Savings to pay\" round(tola * rate) big\n\"Gold in tola\" fixed(tola * rate / 100, 1) faint\n\"Silver in\" fixed(tola * rate / 100, 1) faint\n\"Cash\" fixed(tola * rate / 100, 1) faint\n\"Paid to pay\" round(tola * rate / 100) * rate / 100 big\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "has an input for silver",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "silver is included in the zakat total",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing cash and gold inputs still present",
+    "must": true
+   }
+  ],
+  "program": "app \"Jewellery\" star plum\nsetting rate money = 250000 \"Price per tola\"\nstate tola num = 1\nfield tola \"Tola\"\n\"Savings to pay\" round(tola * rate) big\n\"Gold in tola\" fixed(tola * rate / 100, 1) faint\n\"Silver in\" fixed(tola * rate / 100, 1) faint\n\"Cash\" fixed(tola * rate / 100, 1) faint\n\"Paid to pay\" round(tola * rate / 100) * rate / 100 big\nsetting silver_rate money = 50000 \"Silver price per tola\"\n",
+  "describe": "Jewellery, in the plum colours.\nYou can change: \"Price per tola\": money, starts at 250000; \"Silver price per tola\": money, starts at 50000.\nRemembers while you use it: tola, starting at 1.\nShows:\n- a box to fill in tola, labelled \"Tola\".\n- text: \"Savings to pay\", tola times rate rounded.\n- text: \"Gold in tola\", the fixed of tola times rate divided by 100.\n- text: \"Silver in\", the fixed of tola times rate divided by 100.\n- text: \"Cash\", the fixed of tola times rate divided by 100.\n- text: \"Paid to pay\", tola times rate divided by 100 rounded times rate divided by 100.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a81b88966423.png"
+ },
+ {
+  "key": "w2-u15|890d17bc5b65",
+  "uid": "326d1d03",
+  "category_hint": "create",
+  "request": "tasbeeh counter big button, target 33, 99 or 100",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a big count number",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "large tap button increments",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "can choose target 33, 99 or 100",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "reset button",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows progress toward target",
+    "must": false
+   }
+  ],
+  "program": "app \"Tasbeeh\" beads ocean\ntable zikr phrase pick SubhanAllah|Alhamdulillah|AllahuAkbar = SubhanAllah\nsetting target num = 33 \"Count to\"\nstate ph text = SubhanAllah\nlet n = count(zikr today where phrase = ph)\nrow gap 1\n  each options zikr.phrase\n    button it fill if(ph = it, accent, soft) tap set ph = it\ndraw width 240 tap add zikr phrase = ph\n  circle 44 stroke soft thick 8\n  arc 44, 0, 360 * (n % target) / target stroke accent thick 8\n  label 50, 46, n % target big\n  label 50, 64, \"Round\" floor(n / target) + 1 faint\nwhen n > 0 and n % target = 0 notify \"Round complete\"\n\"Tap the circle to count.\" count(zikr today) \"today in all.\" faint\n",
+  "describe": "Tasbeeh, in the ocean colours.\nKeeps:\n- zikr: phrase: one of SubhanAllah, Alhamdulillah, AllahuAkbar, starts at SubhanAllah. Every entry also keeps when it was added.\nYou can change: \"Count to\": number, starts at 33.\nWorks out:\n- n is how many zikr entries today where phrase is ph.\nRemembers while you use it: ph, starting at SubhanAllah.\nShows:\n- for each choice of the phrase of the zikr:\n  - a button the choice; a tap sets ph to the choice.\n- a drawing made of circles, arcs, labels; a tap adds a zikr with phrase set to ph.\n- when n is more than 0 and n leaves over when divided by target is 0, it shows the notice \"Round complete\".\n- text: \"Tap the circle to count.\", how many zikr entries today, \"today in all.\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/890d17bc5b65.png"
+ },
+ {
+  "key": "w2-d03|f0931e401b05",
+  "uid": "1a9c12f9",
+  "category_hint": "create",
+  "request": "deploy checklist for prod release: run tests, db backup, migrate, deploy, smoke test, notify team. tick each, then a reset button for next release.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "list of the named checklist steps with tick boxes",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows how many steps are done of total",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has a reset/clear all button",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows a clear ready/all done state",
+    "must": false
+   }
+  ],
+  "program": "app \" Deployments\" cloud ocean\ntable deploy_out name text, target_on date, status pick Pro|Deploy|Smoke|Rest = Pro\neach deploy_out where status = Pro sort at as o\n  row card tap edit o\n    stack grow\n      o.name bold\n      o.target_on faint\n    o.status bold\n    button \" Restore\" tap set o.status = Rest\n\"Count to\" count(deploy_out) \"deployments,\" count(deploy_out where status = Smoke) \"smoke\" faint\nform deploy_out, \"New deployment\"\n",
+  "describe": " Deployments, in the ocean colours.\nKeeps:\n- deploy out: name: text; target on: date; status: one of Pro, Deploy, Smoke, Rest, starts at Pro. Every entry also keeps when it was added.\nShows:\n- for each deploy out where status is Pro sorted by at:\n  - a group; a tap opens the deploy out for editing:\n    - text: the name of the deploy out.\n    - text: the target on of the deploy out.\n    - text: the status of the deploy out.\n    - a button \" Restore\"; a tap sets the status of the deploy out to Rest.\n- text: \"Count to\", how many deploy out entries, \"deployments,\", how many deploy out entries where status is Smoke, \"smoke\".\n- a form to add a deploy out.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f0931e401b05.png"
+ },
+ {
+  "key": "w2-d02|20f8d308a39e",
+  "uid": "ba4f07c6",
+  "category_hint": "create",
+  "request": "bug list with severity",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a bug with title and severity pick (e.g. Low/Medium/High/Critical)",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can mark a bug fixed",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows count of open bugs",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list sorted or grouped by severity",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "open critical count highlighted",
+    "must": false
+   }
+  ],
+  "program": "app \"Bug log\" bolt slate\ntable bug title text, sev pick Low|Medium|High = Medium, fixed bool\ncount(bug where fixed = no) \"open bugs\" big\ncount(bug where fixed = no and sev = High) \"high\" faint color bad\neach bug where fixed = no sort at as b\n  row card gap 2 tap edit b swipe remove b\n    toggle b.fixed\n    b.title bold grow\n    b.sev faint\n\"Fixed this week\" count(bug week where fixed = yes) faint\nform bug, \"Add bug\"\n",
+  "describe": "Bug log, in the slate colours.\nKeeps:\n- bug: title: text; sev: one of Low, Medium, High, starts at Medium; fixed: yes or no. Every entry also keeps when it was added.\nShows:\n- text: how many bug entries where fixed is no, \"open bugs\".\n- text: how many bug entries where fixed is no and sev is High, \"high\".\n- for each bug where fixed is no sorted by at:\n  - a group; a tap opens the bug for editing; a swipe removes the bug, with undo:\n    - a tick box for the fixed of the bug.\n    - text: the title of the bug.\n    - text: the sev of the bug.\n- text: \"Fixed this week\", how many bug entries this week where fixed is yes.\n- a form to add a bug.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/20f8d308a39e.png"
+ },
+ {
+  "key": "w1-t26|a83e8aa5e6a4",
+  "uid": "f07ed13b",
+  "category_hint": "create",
+  "request": "wedding card orders for my print shop. customer, qty of cards, rate per card, design chosen, delivery date",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an order with customer, quantity and rate per card",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes total price from qty times rate",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has delivery date",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of orders shown",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows orders due soon",
+    "must": false
+   }
+  ],
+  "program": "app \"Cards\" tag plum\ntable job customer text, qty num 1..100 = 1, design pick Wedding|Bill|Other = Wedding, price money, delivered bool\neach job where delivered = no sort at as j\n  row card tap edit j\n    j.customer bold grow\n    j.qty \"cards\"\n    j.design faint\n    toggle j.delivered\n\"Cards in hand\" sum(job.qty where delivered = yes) head\nform job, \"New order\"\n",
+  "describe": "Cards, in the plum colours.\nKeeps:\n- job: customer: text; qty: number, 1 to 100, starts at 1; design: one of Wedding, Bill, Other, starts at Wedding; price: money; delivered: yes or no. Every entry also keeps when it was added.\nShows:\n- for each job where delivered is no sorted by at:\n  - a group; a tap opens the job for editing:\n    - text: the customer of the job.\n    - text: the qty of the job, \"cards\".\n    - text: the design of the job.\n    - a tick box for the delivered of the job.\n- text: \"Cards in hand\", the total qty of job where delivered is yes.\n- a form to add a job.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a83e8aa5e6a4.png"
+ },
+ {
+  "key": "w1-t11|7660d9922b73",
+  "uid": "d6514293",
+  "category_hint": "create",
+  "request": "Track solar panel output. Each day I type kWh produced and whether it was sunny, cloudy or rainy. Show me a bar chart for the last 14 days and the best day so far. Also would love it to pull the weather automatically.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a daily kWh entry with weather option sunny/cloudy/rainy",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows a bar chart of recent days",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows the best day or max kWh",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of entries visible",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows monthly total kWh",
+    "must": false
+   }
+  ],
+  "program": "app \"Solar Panels\" sun mint\ntable reading kwh num 0..200\n\"Today\" sum(reading.kwh today) \"kWh\" big\nbars reading last 14 days, it.kwh, dayname(it.at)\n\"Rainy days\" count(reading last 14 days where at <= today + 7) faint\nform reading, \"Add today\"\nlist reading by day\n",
+  "describe": "Solar Panels, in the mint colours.\nKeeps:\n- reading: kwh: number, 0 to 200. Every entry also keeps when it was added.\nShows:\n- text: \"Today\", the total kwh of reading today, \"kWh\".\n- a bar chart of its kwh for each of reading in the last 14 days.\n- text: \"Rainy days\", how many reading entries in the last 14 days where at is at most today plus 7.\n- a form to add a reading.\n- a list of reading by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/7660d9922b73.png"
+ },
+ {
+  "key": "w2-u06|f9796d450b40",
+  "uid": "cac1cb5c",
+  "category_hint": "create",
+  "request": "habit grid for last 30 days, namaz fajr, quran, exercise. tap a day to mark done",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a grid of days with one row or column per habit (at least the 3 named)",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tapping a cell marks the day done",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "done cells visually different",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "streak shown per habit",
+    "must": false
+   }
+  ],
+  "program": "app \"Habit Dots\" check mint\ntable done habit pick Yoga|Quran|Exercise|Prayer\neach options done.habit as h\n  row gap 1\n    h bold width 6\n    each days last 30 days as d\n      box grow height 24 radius 12 fill if(count(done on d where habit = h) > 0, accent, soft) tap toggle done on d where habit = h\nrow gap 1\n  \"\" width 6\n  each days last 30 days\n    dayname(it) tiny grow align center\n",
+  "describe": "Habit Dots, in the mint colours.\nKeeps:\n- done: habit: one of Yoga, Quran, Exercise, Prayer. Every entry also keeps when it was added.\nShows:\n- for each choice of the habit of the done:\n  - text: the choice.\n  - for each day in the last 30 days:\n    - a group; a tap marks or unmarks done on the day:\n- text: \"\".\n- for each day in the last 30 days:\n  - text: the weekday of the day.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f9796d450b40.png"
+ },
+ {
+  "key": "w2-u07|a2ce1eb8bd0f",
+  "uid": "7a0f3d3c",
+  "category_hint": "create",
+  "request": "quiz with 5 questions on general knowledge, multiple choice, shows score at the end",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a question with multiple choice options",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tapping an option records the answer",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows correct/incorrect feedback or final score",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "has about 5 questions",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "restart button",
+    "must": false
+   }
+  ],
+  "program": "app \"GK quiz\" star plum\ntable q topic pick Sports|History|Science|Other = Other, ask text, a text, b text, c text, right pick A|B|C\ntable got q ref q, ok bool\nlet score = count(got where ok = yes)\n\"Score\" score \"of\" count(got) big\neach q as x\n  if count(x.got) = 0\n    stack card gap 1\n      x.ask head\n      button x.a tap add got q = x, ok = (x.right = A)\n      button x.b tap add got q = x, ok = (x.right = B)\n      button x.c tap add got q = x, ok = (x.right = C)\nform q, \"Add question\"\nbutton \"Play again\" tap remove all got\n",
+  "describe": "GK quiz, in the plum colours.\nKeeps:\n- q: topic: one of Sports, History, Science, Other, starts at Other; ask: text; a: text; b: text; c: text; right: one of A, B, C. Every entry also keeps when it was added.\n- got: q: a q; ok: yes or no. Every entry also keeps when it was added.\nWorks out:\n- score is how many got entries where ok is yes.\nShows:\n- text: \"Score\", score, \"of\", how many got entries.\n- for each q:\n  - if how many the q's got entries is 0:\n    - text: the ask of the q.\n    - a button the a of the q; a tap adds a got with q set to the q, ok set to the result of the right of the q is A.\n    - a button the b of the q; a tap adds a got with q set to the q, ok set to the result of the right of the q is B.\n    - a button the c of the q; a tap adds a got with q set to the q, ok set to the result of the right of the q is C.\n- a form to add a q.\n- a button \"Play again\"; a tap removes all got entries, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a2ce1eb8bd0f.png"
+ },
+ {
+  "key": "w1-k11|d570885de83a",
+  "uid": "79fd909f",
+  "category_hint": "create",
+  "request": "how many litres of emulsion for the drawing room? 14 ft by 12 ft, 10 ft high, 2 doors 1 window, two coats, a litre covers about 100 sq ft",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for length, width, height, doors, windows, coats",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "subtracts door and window area",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "uses coverage of about 100 sq ft per litre",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows litres needed",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "rounds up to whole litres",
+    "must": false
+   }
+  ],
+  "program": "app \"Emulsion\" drop plum\ntable coats n num 1..30\nsetting concentra num = 14 \" \u0446\u0435\u043d\u0442rom per litre\"\nstate litres num = 100\nfield litres \"Litres of water\"\nslider litres 1..100\n\"Emulsion thickest\" max(coats.n) * concentra / 100 \"ft\" faint\n\"Sales\" round(litres * concentra / 100) \"today\" big\nheat prev month, 14, 40\n",
+  "describe": "Emulsion, in the plum colours.\nKeeps:\n- coats: n: number, 1 to 30. Every entry also keeps when it was added.\nYou can change: \" \u0446\u0435\u043d\u0442rom per litre\": number, starts at 14.\nRemembers while you use it: litres, starting at 100.\nShows:\n- a box to fill in litres, labelled \"Litres of water\".\n- a slider for litres from 1 to 100.\n- text: \"Emulsion thickest\", the highest n of coats times concentra divided by 100, \"ft\".\n- text: \"Sales\", litres times concentra divided by 100 rounded, \"today\".\n- a heat map of 14 for each day last month.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/d570885de83a.png"
+ },
+ {
+  "key": "w2-u14|57d2e253ad6a",
+  "uid": "8d0e4c2c",
+  "category_hint": "create",
+  "request": "generator diesel tank picture that empties as I log hours run. tank is 20 litres, uses 1.5 L an hour, refill button",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a visual tank or fill meter",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can log hours run",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows litres left based on 1.5 L per hour from 20 L",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "a refill action resets the tank",
+    "must": false
+   }
+  ],
+  "program": "app \"Tank\" bolt ocean\ntable refilled liters num 1..20\nlet km = sum(refilled.liters)\nlet used = sum(refilled.liters) - first(refilled.liters)\n\"Ramps\" round(km / used) \"L per head\" big\n\"Spent\" used \"L\" head\n\"Days since last refill\" used - since(refilled) \"days\" faint\ndraw 90, 100 width 260\n  rect 5, 5, 50, 90 stroke ink thick 2\n  rect 6, 94 - 88 * clamp(km / used, 0, 1), 8, 88 * clamp(km / used, 0, 1) fill accent opacity 0.7\n  km \"L\" bold\n  \"Spent\" used \"L\" head\nform refilled, \"Add refilled\"\nlist refilled by day\n",
+  "describe": "Tank, in the ocean colours.\nKeeps:\n- refilled: liters: number, 1 to 20. Every entry also keeps when it was added.\nWorks out:\n- km is the total liters of refilled.\n- used is the total liters of refilled minus the first liters of refilled.\nShows:\n- text: \"Ramps\", km divided by used rounded, \"L per head\".\n- text: \"Spent\", used, \"L\".\n- text: \"Days since last refill\", used minus days since the last of refilled entries, \"days\".\n- a drawing made of rectangles.\n- a form to add a refilled.\n- a list of refilled by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/57d2e253ad6a.png"
+ },
+ {
+  "key": "w1-r12|a044d6c8ced9",
+  "uid": "0ac82a23",
+  "category_hint": "create",
+  "request": "Boil egg timer - soft (6 min), medium (8 min), hard (11 min). big start button. play alarm when done",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "three options with 6, 8 and 11 minutes",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "start button",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "countdown display",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "alarm or notification at the end",
+    "must": true
+   }
+  ],
+  "program": "app \"Egg timer\" food mint\ntable egg_done\nsetting length dur = 8m \"Boil length\"\nsetting target num = 3 \"Daily goal\"\ntimer length, \"Boil\", add egg_done then notify \"Boil done\"\ncount(egg_done today) \"today\" head\ngoal count(egg_done today), target, \"today\", \"done\"\ntimer 5m, \"Rest\"\nlist egg_done today\n",
+  "describe": "Egg timer, in the mint colours.\nKeeps:\n- egg done: just the time of each entry. Every entry also keeps when it was added.\nYou can change: \"Boil length\": length of time, starts at 8 minutes; \"Daily goal\": number, starts at 3.\nShows:\n- a countdown timer of length, labelled \"Boil\"; when it ends it adds a egg done, then shows the notice \"Boil done\".\n- text: how many egg done entries today, \"today\".\n- how many egg done entries today out of target with a progress bar, labelled \"today\".\n- a countdown timer of 5 minutes, labelled \"Rest\"; when it ends it shows the notice \"Time is up\".\n- a list of egg done today; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a044d6c8ced9.png"
+ },
+ {
+  "key": "w1-t19|c895885ca76f",
+  "uid": "dd24ef08",
+  "category_hint": "create",
+  "request": "Hajj savings goal 750000 rs. I deposit whenever I can. show progress bar and how much left",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a deposit with amount and date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows a progress bar toward 750000",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows remaining amount",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of deposits",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "goal is editable setting",
+    "must": false
+   }
+  ],
+  "program": "app \"Hajj\" mosque mint\ntable deposit amount money, note text?\nsetting goal money = 750000 \"Hajj target\"\nlet total = sum(deposit.amount)\nlet p = clamp(total / goal, 0, 1)\nrow gap 3\n  draw 40, 120 width 60\n    rect 14, 6, 12, 92 fill soft radius 6\n    rect 14, 98 - 92 * p, 12, 92 * p fill accent radius 6\n    circle 20, 106, 12 fill accent\n  stack grow\n    total big\n    round(p * 100) \"% of\" goal faint tap edit goal\n    \"Goal\" goal \"faint\" faint tap edit goal\nquick deposit, amount, [500, 1000, 2000]\nform deposit\nlist deposit by day\n",
+  "describe": "Hajj, in the mint colours.\nKeeps:\n- deposit: amount: money; note: text, optional. Every entry also keeps when it was added.\nYou can change: \"Hajj target\": money, starts at 750000.\nWorks out:\n- total is the total amount of deposit.\n- p is total divided by goal kept between 0 and 1.\nShows:\n- a drawing made of rectangles, circles.\n- text: total.\n- text: p times 100 rounded, \"% of\", goal; a tap opens goal for editing.\n- text: \"Goal\", goal, \"faint\"; a tap opens goal for editing.\n- one-tap buttons that add a deposit with amount set to each of 500, 1000, 2000.\n- a form to add a deposit.\n- a list of deposit by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/c895885ca76f.png"
+ },
+ {
+  "key": "w2-d10|ad000ed03601",
+  "uid": "78489441",
+  "category_hint": "create",
+  "request": "incident timeline. add events with time, what happened, who did it. incident has a status open/mitigated/resolved. need to see them in time order",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a timeline event with time, description and person",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "events listed in time order",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "incident status pick open/mitigated/resolved that can be changed",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows elapsed time since first event",
+    "must": false
+   }
+  ],
+  "program": "app \" Incidentaken\" shield ink\ntable attack on_time time, what text, who text?, status pick Open|Mitigated|resolved = Open\n\"Events open\" count(attack where status = Open) big\neach attack where status != resolved sort at as a\n  row card tap edit a\n    stack grow\n      a.on_time bold\n      a.what faint\n    a.who faint\n    a.status bold\nform attack, \"Log an attack\"\n",
+  "describe": " Incidentaken, in the ink colours.\nKeeps:\n- attack: on time: time of day; what: text; who: text, optional; status: one of Open, Mitigated, resolved, starts at Open. Every entry also keeps when it was added.\nShows:\n- text: \"Events open\", how many attack entries where status is Open.\n- for each attack where status is not resolved sorted by at:\n  - a group; a tap opens the attack for editing:\n    - text: the on time of the attack.\n    - text: the what of the attack.\n    - text: the who of the attack.\n    - text: the status of the attack.\n- a form to add a attack.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/ad000ed03601.png"
+ },
+ {
+  "key": "w1-k10|4b8aaea0f189",
+  "uid": "a33e5174",
+  "category_hint": "create",
+  "request": "meeting time helper for Islamabad, London and New York",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "input for a time in one city",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows the equivalent time in all three cities",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "handles the offsets for PKT, London and New York",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "day change indicated",
+    "must": false
+   }
+  ],
+  "program": "app \"Interview prep\" bag ink\ntable prep question text, role text, status pick Todo|Doing|Done = Todo\ncount(prep where status = Done) \"of\" count(prep) \"ready\" head\neach prep sort at desc as p\n  row card gap 2 tap edit p swipe remove p\n    stack grow\n      p.question bold\n      p.role faint\n    p.status bold\nform prep, \"Add question\"\n",
+  "describe": "Interview prep, in the ink colours.\nKeeps:\n- prep: question: text; role: text; status: one of Todo, Doing, Done, starts at Todo. Every entry also keeps when it was added.\nShows:\n- text: how many prep entries where status is Done, \"of\", how many prep entries, \"ready\".\n- for each prep sorted by at, highest first:\n  - a group; a tap opens the prep for editing; a swipe removes the prep, with undo:\n    - text: the question of the prep.\n    - text: the role of the prep.\n    - text: the status of the prep.\n- a form to add a prep.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/4b8aaea0f189.png"
+ }
+]

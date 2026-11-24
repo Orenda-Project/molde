@@ -26,8 +26,12 @@ const OUT = `${HERE}/runs/${TAG}.jsonl`;
 const done = new Map();
 if (existsSync(OUT)) for (const l of readFileSync(OUT, 'utf8').split('\n').filter(Boolean)) { const r = JSON.parse(l); done.set(r.id, r); }
 
+class Timeout extends Error {}
 const post = async (path, body) => {
-  const r = await fetch(`http://127.0.0.1:${PORT}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const ms = body.stop ? 30000 : 90000; // client-side caps: a grammar blow-up can run at <1 tok/s for many minutes
+  let r;
+  try { r = await fetch(`http://127.0.0.1:${PORT}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(ms) }); }
+  catch (e) { if (e.name === 'TimeoutError') throw new Timeout(`generation over ${ms / 1000} s`); throw e; }
   if (!r.ok) throw new Error(`${path} ${r.status} ${(await r.text()).slice(0, 300)}`);
   return r.json();
 };
@@ -35,7 +39,7 @@ const userText = r => r.task === 'edit' ? `Edit request: ${r.request}\n\nCurrent
 const promptFor = (r, accepted) => [2, 105, `user\n${SYSTEM}\n\n${userText(r)}`, 106, '\n', 105, 'model\n' + accepted];
 
 async function complete(r, accepted, grammar, { seed = 1, temp = 0, stopNl = true, nPredict = 600, cache = true } = {}) {
-  const body = { prompt: promptFor(r, accepted), grammar, temperature: temp, seed, n_predict: nPredict, cache_prompt: cache };
+  const body = { prompt: promptFor(r, accepted), grammar, temperature: temp, seed, n_predict: nPredict, cache_prompt: cache, t_max_predict_ms: stopNl ? 30000 : 90000 }; // time caps: a grammar blow-up can drop to <1 tok/s
   if (stopNl) body.stop = ['\n'];
   if (temp > 0) { body.top_k = 40; body.top_p = 0.95; }
   const d = await post('/completion', body);
@@ -46,7 +50,7 @@ async function complete(r, accepted, grammar, { seed = 1, temp = 0, stopNl = tru
 async function armPlain(r) {
   const t0 = performance.now();
   const x = await complete(r, '', STATIC_GBNF, { stopNl: false, cache: false, nPredict: 700 });
-  return { output: x.content, calls: 1, gen_tokens: x.predicted_n, gen_ms: x.predicted_ms, prompt_tokens: x.prompt_n, prompt_ms: x.prompt_ms, wall_s: (performance.now() - t0) / 1000, rejected: 0, fallbacks: 0, truncated: !!x.truncated || x.stop === 'limit' };
+  return { output: x.content, calls: 1, gen_tokens: x.predicted_n, gen_ms: x.predicted_ms, prompt_tokens: x.prompt_n, prompt_ms: x.prompt_ms, wall_s: (performance.now() - t0) / 1000, rejected: 0, fallbacks: 0, truncated: !!x.truncated || x.stop === 'limit', capped: (performance.now() - t0) > 89000 };
 }
 
 const MAXLINES = 70;
@@ -101,7 +105,19 @@ for (const it of list) {
   const l0 = os.loadavg()[0];
   let res;
   try { res = ARM === 'P' ? await armPlain(r) : await armLines(r); }
-  catch (e) { res = { output: '', error: String(e).slice(0, 300), calls: 0, wall_s: 0, gen_tokens: 0, gen_ms: 0 }; }
+  catch (e) {
+    if (e instanceof Timeout) { // counted as a failed generation (empty output); the server is restarted so the slot is free
+      appendFileSync(OUT, JSON.stringify({ id: it.id, model: MODEL, quant: QUANT, arm: ARM, task: r.task, before: r.before ?? null, before_from, output: '', timeout: true, error_detail: e.message, calls: 0, wall_s: null, load_start: +l0.toFixed(2) }) + '\n');
+      console.error('TIMEOUT on', it.id); process.exit(3);
+    }
+    // the server is gone: llama-server crashed on this input (or was killed). Check whether it is still up.
+    let up = false; try { up = (await fetch(`http://127.0.0.1:${PORT}/health`)).ok; } catch {}
+    if (!up) { // record the crash as this item's (empty) result and exit 3 so the chain restarts the server and goes on
+      appendFileSync(OUT, JSON.stringify({ id: it.id, model: MODEL, quant: QUANT, arm: ARM, task: r.task, before: r.before ?? null, before_from, output: '', server_crash: true, error_detail: String(e).slice(0, 200), calls: 0, wall_s: null, load_start: +l0.toFixed(2) }) + '\n');
+      console.error('SERVER CRASH on', it.id); process.exit(3);
+    }
+    res = { output: '', error: String(e).slice(0, 300), calls: 0, wall_s: 0, gen_tokens: 0, gen_ms: 0 };
+  }
   const row = { id: it.id, model: MODEL, quant: QUANT, arm: ARM, task: r.task, before: r.before ?? null, before_from, ...res, tok_s: res.gen_ms > 0 ? +(res.gen_tokens / (res.gen_ms / 1000)).toFixed(1) : null, load_start: +l0.toFixed(2), load_end: +os.loadavg()[0].toFixed(2) };
   appendFileSync(OUT, JSON.stringify(row) + '\n');
   done.set(it.id, row);

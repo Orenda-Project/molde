@@ -1,0 +1,867 @@
+[
+ {
+  "key": "w1-k09|19241424e568",
+  "uid": "4dc00db9",
+  "category_hint": "create",
+  "request": "Loan EMI: amount, yearly interest rate, months. Show monthly payment and total interest paid. I'd like it to fetch today's bank rates too.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for amount, annual rate and months",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes monthly EMI",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total interest paid",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total repayment",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows total repayment",
+    "must": false
+   }
+  ],
+  "program": "app \"EMI\" calc ocean\nstate amount num = 450000\nstate rate num = 12\nstate months num = 24\nfield amount \"Loan amount\"\nfield rate \"Yearly interest %\"\nfield months \"Months\"\nlet interest = amount * rate / 100 * months / 12\n\"Monthly payment\" round((amount + interest) / max(months, 1)) big\n\"Total interest paid\" round(interest) faint\n",
+  "describe": "EMI, in the ocean colours.\nWorks out:\n- interest is amount times rate divided by 100 times months divided by 12.\nRemembers while you use it: amount, starting at 450000; rate, starting at 12; months, starting at 24.\nShows:\n- a box to fill in amount, labelled \"Loan amount\".\n- a box to fill in rate, labelled \"Yearly interest %\".\n- a box to fill in months, labelled \"Months\".\n- text: \"Monthly payment\", the result of amount plus interest divided by the larger of months and 1 rounded.\n- text: \"Total interest paid\", interest rounded.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/19241424e568.png"
+ },
+ {
+  "key": "w2-m10|2d6604b4b7e6",
+  "uid": "b4e1264f",
+  "category_hint": "create",
+  "request": "home expenses: spending by category (food, bills, fuel, kids, other), monthly budget per category with warning when over, pie or bars of this month's spend, and a recurring bills reminder on the 1st",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an expense with amount and category pick",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "budget per category",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "warning when category over budget",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "chart of this month's spend by category",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "reminder on the 1st for bills",
+    "must": true
+   }
+  ],
+  "program": "app \"Home expenses\" wallet ocean\ntable spend what text, amount money, category pick Food|Bills|Fuel|Kids|Other = Food\nsetting budget money = 60000 \"Monthly budget\"\nlet spent = sum(spend.amount month)\nif(spent > budget, \"Over budget by\", \"Left to spend\") abs(budget - spent) big\ngoal spent, budget, \"spent\"\nform spend\nshare spend month by category, sum(it.amount), it.key\nlist spend month by day\n",
+  "describe": "Home expenses, in the ocean colours.\nKeeps:\n- spend: what: text; amount: money; category: one of Food, Bills, Fuel, Kids, Other, starts at Food. Every entry also keeps when it was added.\nYou can change: \"Monthly budget\": money, starts at 60000.\nWorks out:\n- spent is the total amount of spend this month.\nShows:\n- text: \"Over budget by\" when spent is more than budget, otherwise \"Left to spend\", budget minus spent without its sign.\n- spent out of budget with a progress bar, labelled \"spent\".\n- a form to add a spend.\n- bars that compare the total amount of the item across group of spend entries this month by category.\n- a list of spend this month by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/2d6604b4b7e6.png"
+ },
+ {
+  "key": "w2-l05|7571493111de",
+  "uid": "ac8a8793",
+  "category_hint": "create",
+  "request": "kids school supplies for new term, 2 kids (Hamza and Zara). each item has price in rupees and bought or not. show total cost and how much is still to buy.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add item with name, child (pick Hamza/Zara), price",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "bought tick per item",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total cost of all items",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows remaining amount still to buy",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "subtotal per child",
+    "must": false
+   }
+  ],
+  "program": "app \"School supplies\" school ocean\ntable kid name text\ntable supply_buy kid ref kid, item text, price money\ntable purchase kid ref kid, item ref supply_buy, price money\neach kid sort name as k\n  let cost = sum(k.supply_buy.price)\n  stack card gap 1\n    row\n      k.name head grow\n      cost big\n    \"Still to buy\" sum(k.supply_buy.price) - sum(k.purchase.price) head color if(sum(k.supply_buy.price) - sum(k.purchase.price) < cost, warn, good)\n    \"Bought\" sum(k.purchase.price) faint\nform kid, \"Add kid\"\nform supply_buy, \"Add item\"\nform purchase, \"Add purchase\"\n",
+  "describe": "School supplies, in the ocean colours.\nKeeps:\n- kid: name: text. Every entry also keeps when it was added.\n- supply buy: kid: a kid; item: text; price: money. Every entry also keeps when it was added.\n- purchase: kid: a kid; item: a supply buy; price: money. Every entry also keeps when it was added.\nShows:\n- for each kid sorted by name:\n  - text: the name of the kid.\n  - text: cost.\n  - text: \"Still to buy\", the total price of the kid's supply buy entries minus the total price of the kid's purchase entries.\n  - text: \"Bought\", the total price of the kid's purchase entries.\n- a form to add a kid.\n- a form to add a supply buy.\n- a form to add a purchase.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/7571493111de.png"
+ },
+ {
+  "key": "w1-k06|f6b53b12d8b7",
+  "uid": "73ccb2de",
+  "category_hint": "create",
+  "request": "Electricity bill estimator. Enter units used this month. Slabs: first 100 units at 7 rs, next 100 at 11 rs, anything above 200 at 20 rs. Add 17 percent GST at the end.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "input for units",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "slab rates 7, 11, 20 applied correctly",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "adds 17 percent GST",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total bill",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows cost per slab",
+    "must": false
+   }
+  ],
+  "program": "app \"Electricity\" bolt ocean\ntable bill units num 0.., cost money?\n\"This month\" sum(bill.units month) \"units\" big\nbars bill last 12 months by month, sum(it.units), it.key\nform bill\nlist bill by day\n",
+  "describe": "Electricity, in the ocean colours.\nKeeps:\n- bill: units: number, at least 0; cost: money, optional. Every entry also keeps when it was added.\nShows:\n- text: \"This month\", the total units of bill this month, \"units\".\n- a bar chart of the total units of the item for each of group of bill entries in the last 12 months by month.\n- a form to add a bill.\n- a list of bill by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f6b53b12d8b7.png"
+ },
+ {
+  "key": "w2-l10|586ff1ea6721",
+  "uid": "09ac167a",
+  "category_hint": "create",
+  "request": "ramadan iftar duty roster for our mohalla masjid. 30 days, who brings iftar each day, and a tick when done",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a roster entry with day number or date, person and a note of what they bring",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "done tick per entry",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "entries ordered by day",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows count of days done",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows today's person at top",
+    "must": false
+   }
+  ],
+  "program": "app \"Iftar Roster\" mosque mint\ntable masjid_member name text\ntable bring masjid_member ref masjid_member, dish text, done bool\neach masjid_member sort name as m\n  row card tap edit m\n    m.name bold grow\n    count(m.bring where done = no) \"to Iftar\" faint\n    toggle m.bring\n\"Iftar days left\" count(bring where done = no) head\nform bring, \"Iftar brought\"\nform masjid_member, \"Add member\"\n",
+  "describe": "Iftar Roster, in the mint colours.\nKeeps:\n- masjid member: name: text. Every entry also keeps when it was added.\n- bring: masjid member: a masjid member; dish: text; done: yes or no. Every entry also keeps when it was added.\nShows:\n- for each masjid member sorted by name:\n  - a group; a tap opens the masjid member for editing:\n    - text: the name of the masjid member.\n    - text: how many the masjid member's bring entries where done is no, \"to Iftar\".\n    - a tick box for the bring of the masjid member.\n- text: \"Iftar days left\", how many bring entries where done is no.\n- a form to add a bring.\n- a form to add a masjid member.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/586ff1ea6721.png"
+ },
+ {
+  "key": "w2-l14|bd97ade20045",
+  "uid": "c2d0864f",
+  "category_hint": "create",
+  "request": "things to buy for eid: clothes, shoes, eidi money envelopes, sweets",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an item with name and category",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "bought tick",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows count bought of total",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "price field and total spent",
+    "must": false
+   }
+  ],
+  "program": "app \"Eidi\" gift plum\ntable eidi name text, amount money\ntable purchase eidi ref eidi, amount money, item text?\n\"Collected\" sum(purchase.amount) \"of\" sum(eidi.amount) big\neach eidi sort name as e\n  row card tap edit e\n    e.name bold grow\n    sum(e.purchase.amount) bold\n    button \"+500\" tap add purchase eidi = e, amount = 500\nform eidi, \"Add item\"\nform purchase, \"Add purchase\"\n",
+  "describe": "Eidi, in the plum colours.\nKeeps:\n- eidi: name: text; amount: money. Every entry also keeps when it was added.\n- purchase: eidi: a eidi; amount: money; item: text, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Collected\", the total amount of purchase, \"of\", the total amount of eidi.\n- for each eidi sorted by name:\n  - a group; a tap opens the eidi for editing:\n    - text: the name of the eidi.\n    - text: the total amount of the eidi's purchase entries.\n    - a button \"+500\"; a tap adds a purchase with eidi set to the eidi, amount set to 500.\n- a form to add a eidi.\n- a form to add a purchase.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/bd97ade20045.png"
+ },
+ {
+  "key": "w2-c05|36e4ab057e2a",
+  "uid": "e2817efe",
+  "category_hint": "change",
+  "request": "can I search by person? list is getting long",
+  "program_before": "app \"Gift ideas\" gift plum\ntable gift person text, idea text, budget money, store text, bought bool\nstat sum(gift.budget where bought = no), \"budget still to spend\"\nform gift, \"Add idea\"\neach gift by person as g empty \"No ideas yet\"\n  g.key head\n  each g as r\n    row card swipe remove r\n      toggle r.bought\n      r.idea grow\n      r.budget\n      r.store faint\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a search or filter input matching the person name (or idea)",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "list filters as text typed",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing add form and list still present",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "clearing search shows everything",
+    "must": false
+   }
+  ],
+  "program": "app \"Gift ideas\" gift plum\ntable gift person text, idea text, budget money, store text, bought bool, paid bool\nstat sum(gift.budget where bought = no), \"budget still to spend\"\nform gift, \"Add idea\"\neach gift by person as g empty \"No ideas yet\"\n  g.key head\n  each g as r\n    row card swipe remove r\n      toggle r.bought\n      r.idea grow\n      r.budget\n      r.store faint\n\"Spent on ethical\" sum(gift.budget where paid = no) faint\n",
+  "describe": "Gift ideas, in the plum colours.\nKeeps:\n- gift: person: text; idea: text; budget: money; store: text; bought: yes or no; paid: yes or no. Every entry also keeps when it was added.\nShows:\n- a big number: the total budget of gift where bought is no, labelled \"budget still to spend\".\n- a form to add a gift.\n- for each group of gift entries by person:\n  - text: the key of the group.\n  - for each the group:\n    - a group; a swipe removes the g, with undo:\n      - a tick box for the bought of the g.\n      - text: the idea of the g.\n      - text: the budget of the g.\n      - text: the store of the g.\n- text: \"Spent on ethical\", the total budget of gift where paid is no.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/36e4ab057e2a.png"
+ },
+ {
+  "key": "w2-m05|79926131641c",
+  "uid": "ef492212",
+  "category_hint": "create",
+  "request": "pocket money app for my kids Ali and Sara. each has weekly allowance, they can spend or save, show balance for each, chores that earn extra rupees and a savings goal bar",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "two kids as selectable or separate entries",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can record spending and savings per kid",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows balance for each kid",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "chores table that adds earnings",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "savings goal progress bar",
+    "must": true
+   },
+   {
+    "n": 6,
+    "item": "weekly allowance",
+    "must": false
+   }
+  ],
+  "program": "app \"Pocket Money\" coin mint\nsetting allowance money = 500 \"Weekly allowance\"\ntable kid name text\ntable entry kid ref kid, kind pick Allowance|Spent|Saved, amount money\neach kid as k\n  let sv = sum(k.entry.amount where kind = Saved)\n  stack card gap 1\n    k.name head\n    \"Savings balance\" sv big\n    \"Spent\" sum(k.entry.amount where kind = Spent) \"| Allowance given\" sum(k.entry.amount where kind = Allowance) faint\n    goal sum(k.entry.amount where kind = Saved), allowance, \"saved\"\nform kid, \"Add child\"\nform entry, \"Log money\"\n",
+  "describe": "Pocket Money, in the mint colours.\nKeeps:\n- kid: name: text. Every entry also keeps when it was added.\n- entry: kid: a kid; kind: one of Allowance, Spent, Saved; amount: money. Every entry also keeps when it was added.\nYou can change: \"Weekly allowance\": money, starts at 500.\nShows:\n- for each kid:\n  - text: the name of the kid.\n  - text: \"Savings balance\", sv.\n  - text: \"Spent\", the total amount of the kid's entry entries where kind is Spent, \"| Allowance given\", the total amount of the kid's entry entries where kind is Allowance.\n  - the total amount of the kid's entry entries where kind is Saved out of allowance with a progress bar, labelled \"saved\".\n- a form to add a kid.\n- a form to add a entry.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/79926131641c.png"
+ },
+ {
+  "key": "w1-t23|09ea0a547e98",
+  "uid": "e5be7cee",
+  "category_hint": "create",
+  "request": "Blood pressure for mum, morning and evening, systolic/diastolic/pulse. Flag anything above 140/90 in red. Can it send the readings to her doctor on whatsapp?",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add reading with systolic, diastolic and pulse",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has morning/evening choice",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "readings above 140/90 are highlighted",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of readings shown",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "chart of systolic over time",
+    "must": false
+   }
+  ],
+  "program": "app \"Blood pressure\" pill ocean\ntable reading high num 50..250, low num 30..150, pulse num? 30..220, memo text?\nscreen main \"Add\" plus\n  stat since(reading), \"days since the last entry\"\n  form reading\nscreen charts \"Charts\" chart\n  list reading by day\nremind \"Time to add blood pressure\" at 12:00, 18:00\n",
+  "describe": "Blood pressure, in the ocean colours.\nKeeps:\n- reading: high: number, 50 to 250; low: number, 30 to 150; pulse: number, 30 to 220, optional; memo: text, optional. Every entry also keeps when it was added.\nShows:\n- a screen \"Add\":\n  - a big number: days since the last of reading entries, labelled \"days since the last entry\".\n  - a form to add a reading.\n- a screen \"Charts\":\n  - a list of reading by day; tap one to edit it, swipe to remove it.\nReminder \"Time to add blood pressure\" at 12:00, 18:00 every day.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/09ea0a547e98.png"
+ },
+ {
+  "key": "w2-m04|9236f4f115e2",
+  "uid": "abd8435e",
+  "category_hint": "create",
+  "request": "gym log: workouts with exercise, sets, reps, weight; body weight entries; a weekly chart of workouts and a streak counter; reminder at 6pm",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can log a workout with exercise, sets, reps and weight",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can log body weight entries",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "chart over time (workouts per week or weight)",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows workout streak",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "reminder at 18:00",
+    "must": true
+   }
+  ],
+  "program": "app \"Gym log\" dumbbell ink\ntable sets exercise text, sets num 1..20 = 3, reps num 1.., kg num 0.. = 0\ncount(sets today) \"exercises today\" head\nstat last(sets.kg), \"latest\"\nform sets\ntrend sets last 90 days sort at, it.kg\nlist sets by day\nremind \"Time to add workouts\" at 12:00, 18:00\n",
+  "describe": "Gym log, in the ink colours.\nKeeps:\n- sets: exercise: text; sets: number, 1 to 20, starts at 3; reps: number, at least 1; kg: number, at least 0, starts at 0. Every entry also keeps when it was added.\nShows:\n- text: how many sets entries today, \"exercises today\".\n- a big number: the latest kg of sets, labelled \"latest\".\n- a form to add a sets.\n- a line chart of its kg over sets in the last 90 days sorted by at.\n- a list of sets by day; tap one to edit it, swipe to remove it.\nReminder \"Time to add workouts\" at 12:00, 18:00 every day.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/9236f4f115e2.png"
+ },
+ {
+  "key": "w1-c07|f43bedb53a68",
+  "uid": "74484f27",
+  "category_hint": "change",
+  "request": "add total of all balance due at the top",
+  "program_before": "app \"Mehndi bookings\" pen plum\ntable booking bride text, event date, people num 1..50 \"Hands / people\", price money, advance money = 0, travel bool \"Travel needed\"\n\"Upcoming this month:\" count(booking where event >= today and event <= today + 30) faint\nform booking, \"Add booking\"\neach booking where event >= today sort it.event empty \"No upcoming bookings\"\n  row card tap edit it\n    stack grow gap 0\n      it.bride bold\n      it.event \"for\" it.people faint\n      if it.travel\n        \"Travel needed\" faint color warn\n    stack gap 0 align end\n      it.price bold\n      \"balance\" it.price - it.advance faint\nlist booking\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a total balance due stat is shown",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "total equals sum of price minus advance",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing booking form and list still present",
+    "must": true
+   }
+  ],
+  "program": "app \"Mehndi bookings\" pen plum\ntable booking bride text, event date, people num 1..50 \"Hands / people\", price money, advance money = 0, travel bool \"Travel needed\"\n\"Upcoming this month:\" count(booking where event >= today and event <= today + 30) faint\n\"Total balance\" sum(booking.price) - sum(booking.advance) big\nform booking, \"Add booking\"\neach booking where event >= today sort it.event empty \"No upcoming bookings\"\n  row card tap edit it\n    stack grow gap 0\n      it.bride bold\n      it.event \"for\" it.people faint\n      if it.travel\n        \"Travel needed\" faint color warn\n    stack gap 0 align end\n      it.price bold\n      \"balance\" it.price - it.advance faint\nlist booking\n",
+  "describe": "Mehndi bookings, in the plum colours.\nKeeps:\n- booking: bride: text; event: date; \"Hands / people\": number, 1 to 50; price: money; advance: money, starts at 0; \"Travel needed\": yes or no. Every entry also keeps when it was added.\nShows:\n- text: \"Upcoming this month:\", how many booking entries where event is at least today and event is at most today plus 30.\n- text: \"Total balance\", the total price of booking minus the total advance of booking.\n- a form to add a booking.\n- for each booking where event is at least today sorted by its event:\n  - a group; a tap opens the booking for editing:\n    - text: its bride.\n    - text: its event, \"for\", its people.\n    - if its travel:\n      - text: \"Travel needed\".\n    - text: its price.\n    - text: \"balance\", its price minus its advance.\n- a list of booking; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f43bedb53a68.png"
+ },
+ {
+  "key": "w2-c02|b417ca05af50",
+  "uid": "86d15993",
+  "category_hint": "change",
+  "request": "remove the blockers box, we never use it",
+  "program_before": "app \"Standup\" note ink\ntable standup did text, plan text, blocker text?\n\" dzia\u0142ania today\" head\neach standup today as d\n  row card tap edit d swipe remove d\n    d.did grow\n    d.blocker faint\nform standup, \"Today's standup\"\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "blockers field removed from form",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "yesterday and today fields and entry list still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "no leftover mention of blockers in the screen",
+    "must": true
+   }
+  ],
+  "program": "app \"Standup\" note ink\ntable standup did text, plan text, blocker text?\n\" dzia\u0142ania today\" head\neach standup today as d\n  row card tap edit d swipe remove d\n    d.did grow\n    d.blocker faint\nform standup, \"Today's standup\"\n",
+  "describe": "Standup, in the ink colours.\nKeeps:\n- standup: did: text; plan: text; blocker: text, optional. Every entry also keeps when it was added.\nShows:\n- text: \" dzia\u0142ania today\".\n- for each standup today:\n  - a group; a tap opens the standup for editing; a swipe removes the standup, with undo:\n    - text: the did of the standup.\n    - text: the blocker of the standup.\n- a form to add a standup.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/b417ca05af50.png"
+ },
+ {
+  "key": "w2-c07|beb77ab60394",
+  "uid": "354b633a",
+  "category_hint": "change",
+  "request": "under the gauge also write how much i have burned this month",
+  "program_before": "app \"Fuel\" car mint\ntable refuel litres num 1..120 unit \"L\"\nsetting cost money = 5000 \"Petrol cost per litre\"\nlet litres = sum(refuel.litres month)\n\"Monthly budget\" round(litres * cost) big\n\"Spent this month\" sum(refuel.litres month) * cost faint\n\"Last month\" sum(refuel.litres prev month) * cost faint\nform refuel, \"Add expense\"\nlist refuel\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a total of spent amounts shown",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can still add a spend and gauge still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "remaining budget still shown",
+    "must": true
+   }
+  ],
+  "program": "app \"Fuel\" car mint\ntable refuel litres num 1..120 unit \"L\"\nsetting cost money = 5000 \"Petrol cost per litre\"\nlet litres = sum(refuel.litres month)\n\"Monthly budget\" round(litres * cost) big\n\"Spent this month\" sum(refuel.litres month) * cost faint\n\"Last month\" sum(refuel.litres prev month) * cost faint\nform refuel, \"Add expense\"\nlist refuel\n\"Burned this month\" sum(refuel.litres month) * cost faint\n",
+  "describe": "Fuel, in the mint colours.\nKeeps:\n- refuel: litres: number, 1 to 120, in L. Every entry also keeps when it was added.\nYou can change: \"Petrol cost per litre\": money, starts at 5000.\nWorks out:\n- litres is the total litres of refuel this month.\nShows:\n- text: \"Monthly budget\", litres times cost rounded.\n- text: \"Spent this month\", the total litres of refuel this month times cost.\n- text: \"Last month\", the total litres of refuel last month times cost.\n- a form to add a refuel.\n- a list of refuel; tap one to edit it, swipe to remove it.\n- text: \"Burned this month\", the total litres of refuel this month times cost.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/beb77ab60394.png"
+ },
+ {
+  "key": "w1-c09|08a7d5f3d20d",
+  "uid": "153923da",
+  "category_hint": "change",
+  "request": "also show how much silver zakat would be if i add silver",
+  "program_before": "app \"Zakat\" coin mint\nstate gold num = 0\nstate gold_rate money = 0\nstate silver num = 0\nstate silver_rate money = 0\nstate cash money = 0\nlet total = gold * gold_rate + silver * silver_rate + cash\nlet nisab = 52.5 * silver_rate\nstack card gap 2\n  field gold \"Gold (tola)\"\n  field gold_rate \"Gold rate per tola\"\n  field silver \"Silver (tola)\"\n  field silver_rate \"Silver rate per tola\"\n  field cash \"Cash at home and savings\"\n\"Total wealth\" total head\nstat total * 0.025, \"zakat due (2.5 percent)\"\nif silver_rate > 0\n  if total >= nisab\n    \"Above nisab (52.5 tola silver = \" nisab \"): zakat is due\" color good\n  else\n    \"Below nisab (\" nisab \"): no zakat due\" color warn\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "has an input for silver",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "silver is included in the zakat total",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing cash and gold inputs still present",
+    "must": true
+   }
+  ],
+  "program": "app \"Zakat\" coin mint\nstate gold num = 0\nstate gold_rate money = 0\nstate silver num = 0\nstate silver_rate money = 0\nstate cash money = 0\nlet total = gold * gold_rate + silver * silver_rate + cash\nlet nisab = 52.5 * silver_rate\nstack card gap 2\n  field gold \"Gold (tola)\"\n  field gold_rate \"Gold rate per tola\"\n  field silver \"Silver (tola)\"\n  field silver_rate \"Silver rate per tola\"\n  field cash \"Cash at home and savings\"\n\"Total wealth\" total head\nstat total * 0.025, \"zakat due (2.5 percent)\"\nif silver_rate > 0\n  if total >= nisab\n    \"Above nisab (52.5 tola silver = \" nisab \"): zakat is due\" color good\n  else\n    \"Below nisab ('now serving)\" nisab - 52.5 * silver_rate big\n",
+  "describe": "Zakat, in the mint colours.\nWorks out:\n- total is gold times gold rate plus silver times silver rate plus cash.\n- nisab is 52.5 times silver rate.\nRemembers while you use it: gold, starting at 0; gold rate, starting at 0; silver, starting at 0; silver rate, starting at 0; cash, starting at 0.\nShows:\n- a box to fill in gold, labelled \"Gold (tola)\".\n- a box to fill in gold rate, labelled \"Gold rate per tola\".\n- a box to fill in silver, labelled \"Silver (tola)\".\n- a box to fill in silver rate, labelled \"Silver rate per tola\".\n- a box to fill in cash, labelled \"Cash at home and savings\".\n- text: \"Total wealth\", total.\n- a big number: total times 0.025, labelled \"zakat due 2.5 percent\".\n- if silver rate is more than 0:\n  - if total is at least nisab:\n    - text: \"Above nisab (52.5 tola silver = \", nisab, \"): zakat is due\".\n  - otherwise:\n    - text: \"Below nisab ('now serving)\", nisab minus 52.5 times silver rate.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/08a7d5f3d20d.png"
+ },
+ {
+  "key": "w1-t28|2098f002600f",
+  "uid": "580276f7",
+  "category_hint": "create",
+  "request": "Chicken coop egg count. Number of eggs each day from 12 hens, how many cracked. Weekly total and avg per hen per day. Sell eggs at 40 rs each so show income too.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a day with eggs collected and cracked count",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows weekly total eggs",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows average per hen per day using 12 hens",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows income at 40 rs per egg",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "chart of eggs per day",
+    "must": false
+   }
+  ],
+  "program": "app \"Hen Eggs\" egg mint\ntable egg\ntable cracked egg ref egg, n num 1..200\neach egg sort at desc as e\n  row card tap edit e\n    e.at bold grow\n    sum(e.cracked.n week) \"h this week\" faint\n    round(sum(e.cracked.n week) * 100 / count(e.cracked week)) \"% eggs\" faint\ndaybars last 7 days, sum(cracked.n on it)\nform cracked, \"Eggs cracked\"\nform egg, \"Add eggs\"\n",
+  "describe": "Hen Eggs, in the mint colours.\nKeeps:\n- egg: just the time of each entry. Every entry also keeps when it was added.\n- cracked: egg: a egg; n: number, 1 to 200. Every entry also keeps when it was added.\nShows:\n- for each egg sorted by at, highest first:\n  - a group; a tap opens the egg for editing:\n    - text: the at of the egg.\n    - text: the total n of the egg's cracked entries this week, \"h this week\".\n    - text: the total n of the egg's cracked entries this week times 100 divided by how many the egg's cracked entries this week rounded, \"% eggs\".\n- a bar chart of the total n of cracked on that day for each day in the last 7 days.\n- a form to add a cracked.\n- a form to add a egg.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/2098f002600f.png"
+ },
+ {
+  "key": "w2-l18|12a92edc7627",
+  "uid": "c8fd043a",
+  "category_hint": "create",
+  "request": "Plant watering schedule for my balcony plants. each plant gets watered every N days, show which ones are due today and let me tap watered.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a plant with name and water-every-N-days number",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "a button or tick marks a plant as watered now",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows which plants are due today or overdue",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "uses last watered date to compute due status",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "count of plants due",
+    "must": false
+   }
+  ],
+  "program": "app \"Balcony\" plant mint\ntable plant name text, gap_days num 1..60 = 3 \"Water every (days)\"\ntable watered plant ref plant\nlet due = count(plant, due(it.watered, it.gap_days))\ndue \"plants to water\" head color if(due > 0, warn, good)\nremind \"Water the plants\" at 8:00 if due > 0\neach plant as p\n  row card gap 1 tap edit p swipe remove p\n    stack grow\n      p.name bold\n      \"Last watered\" last(p.watered.at) faint\n    button \"Watered\" tap add watered plant = p\nform plant, \"Add plant\"\n",
+  "describe": "Balcony, in the mint colours.\nKeeps:\n- plant: name: text; \"Water every (days)\": number, 1 to 60, starts at 3. Every entry also keeps when it was added.\n- watered: plant: a plant. Every entry also keeps when it was added.\nWorks out:\n- due is how many of the plant have its watered entries is due: never done, or its gap days days or more since the last.\nShows:\n- text: due, \"plants to water\".\n- for each plant:\n  - a group; a tap opens the plant for editing; a swipe removes the plant, with undo:\n    - text: the name of the plant.\n    - text: \"Last watered\", the latest at of the plant's watered entries.\n    - a button \"Watered\"; a tap adds a watered with plant set to the plant.\n- a form to add a plant.\nReminder \"Water the plants\" at 8:00 every day, only if due is more than 0.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/12a92edc7627.png"
+ },
+ {
+  "key": "w2-c10|78849bab09f8",
+  "uid": "38ab58f3",
+  "category_hint": "change",
+  "request": "put rate for each sauda and show the total bill per shop",
+  "program_before": "app \"Grocery by shop\" cart mint\ntable item name text, shop pick Imtiaz|Sabzi_mandi|Dairy|Pharmacy, bought bool\nstat count(item where bought = no), \"items left\"\nform item, \"Add item\"\neach options item.shop as sh\n  if count(item where shop = sh) > 0\n    sh head\n    each item where shop = sh as i\n      row card swipe remove i\n        toggle i.bought\n        i.name grow\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "items have a price field",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "a total of prices is shown",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing item form, shop pick and bought tick still present",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "total per shop",
+    "must": false
+   }
+  ],
+  "program": "app \"Grocery by shop\" cart mint\ntable item name text, shop pick Imtiaz|Sabzi_mandi|Dairy|Pharmacy, rate money = 0, bought bool\nstat count(item where bought = no), \"items left\"\n\"Bill per shop\" head\neach options item.shop as s\n  row\n    s grow\n    sum(item.rate where shop = s) bold\nform item, \"Add item\"\neach options item.shop as s\n  row\n    s grow\n    sum(item.rate where shop = s) bold\n",
+  "describe": "Grocery by shop, in the mint colours.\nKeeps:\n- item: name: text; shop: one of Imtiaz, Sabzi mandi, Dairy, Pharmacy; rate: money, starts at 0; bought: yes or no. Every entry also keeps when it was added.\nShows:\n- a big number: how many item entries where bought is no, labelled \"items left\".\n- text: \"Bill per shop\".\n- for each choice of the shop of the item:\n  - text: the choice.\n  - text: the total rate of item where shop is the choice.\n- a form to add a item.\n- for each choice of the shop of the item:\n  - text: the choice.\n  - text: the total rate of item where shop is the choice.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/78849bab09f8.png"
+ },
+ {
+  "key": "w1-t19|50109f9c2571",
+  "uid": "ac2d4f26",
+  "category_hint": "create",
+  "request": "Hajj savings goal 750000 rs. I deposit whenever I can. show progress bar and how much left",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a deposit with amount and date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows a progress bar toward 750000",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows remaining amount",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of deposits",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "goal is editable setting",
+    "must": false
+   }
+  ],
+  "program": "app \"Hajj\" mosque mint\ntable deposit amount money, note text?\nsetting goal money = 750000 \"Hajj target\"\nlet total = sum(deposit.amount)\nlet p = clamp(total / goal, 0, 1)\nrow gap 3\n  draw 40, 120 width 60\n    rect 14, 6, 12, 92 fill soft radius 6\n    rect 14, 98 - 92 * p, 12, 92 * p fill accent radius 6\n    circle 20, 106, 12 fill accent\n  stack grow\n    total big\n    round(p * 100) \"% of\" goal faint tap edit goal\n    \"Goal\" goal \"+p\" faint\nquick deposit, amount, [500, 1000, 2000]\nform deposit\nlist deposit by day\n",
+  "describe": "Hajj, in the mint colours.\nKeeps:\n- deposit: amount: money; note: text, optional. Every entry also keeps when it was added.\nYou can change: \"Hajj target\": money, starts at 750000.\nWorks out:\n- total is the total amount of deposit.\n- p is total divided by goal kept between 0 and 1.\nShows:\n- a drawing made of rectangles, circles.\n- text: total.\n- text: p times 100 rounded, \"% of\", goal; a tap opens goal for editing.\n- text: \"Goal\", goal, \"+p\".\n- one-tap buttons that add a deposit with amount set to each of 500, 1000, 2000.\n- a form to add a deposit.\n- a list of deposit by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/50109f9c2571.png"
+ },
+ {
+  "key": "w2-d13|6ee79ee71d56",
+  "uid": "a3af86db",
+  "category_hint": "create",
+  "request": "interview candidate pipeline with stages applied, phone screen, onsite, offer, rejected. drag the cards between columns as they move along. plus a score out of 5.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a candidate with name, role and score 1-5",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "stage is a pick with the five named stages",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "candidates grouped by stage or count per stage shown",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "stage can be changed after adding",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "average score",
+    "must": false
+   }
+  ],
+  "program": "app \"InterviewPipeline\" bag slate\ntable stage name text, applied date = today\ntable offer stage ref stage, quality num 1..5, price money?\ntable rejected stage ref stage, nofame bool\ngrid 4 gap 1\n  each stage sort applied as s\n    stack card gap 1 tap edit s\n      s.name bold\n      s.applied faint\n      count(s.offer where quality = 5) \"low\" tiny color warn\neach stage sort applied as s\n  row\n    s.name grow\n    count(s.offer where quality = 5) \"lowest\" faint\nform stage, \"Add stage\"\nform offer, \"Log a job\"\nform rejected, \"Log a counter\"\n",
+  "describe": "InterviewPipeline, in the slate colours.\nKeeps:\n- stage: name: text; applied: date, starts at today. Every entry also keeps when it was added.\n- offer: stage: a stage; quality: number, 1 to 5; price: money, optional. Every entry also keeps when it was added.\n- rejected: stage: a stage; nofame: yes or no. Every entry also keeps when it was added.\nShows:\n- a grid of 4 columns:\n  - for each stage sorted by applied:\n    - a group; a tap opens the stage for editing:\n      - text: the name of the stage.\n      - text: the applied of the stage.\n      - text: how many the stage's offer entries where quality is 5, \"low\".\n- for each stage sorted by applied:\n  - text: the name of the stage.\n  - text: how many the stage's offer entries where quality is 5, \"lowest\".\n- a form to add a stage.\n- a form to add a offer.\n- a form to add a rejected.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/6ee79ee71d56.png"
+ },
+ {
+  "key": "w2-u14|2981c21a8916",
+  "uid": "1f4d7dcb",
+  "category_hint": "create",
+  "request": "generator diesel tank picture that empties as I log hours run. tank is 20 litres, uses 1.5 L an hour, refill button",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a visual tank or fill meter",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can log hours run",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows litres left based on 1.5 L per hour from 20 L",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "a refill action resets the tank",
+    "must": false
+   }
+  ],
+  "program": "app \"Tank\" bolt ocean\ntable refilled liters num 1..20\nlet km = sum(refilled.liters)\nlet used = sum(refilled.liters) - first(refilled.liters)\n\"Ramps\" round(km / used) \"L per head\" big\n\"Cost\" round(km / used * 1000) / 1000 \"Profit\" round(km / used * 1000 - first(refilled.liters)) / 1000 head\n\"Spent this month\" sum(refilled.liters month) \"L\" faint\nbutton \"Refilled today\" tap add refilled liters = 1\nform refilled, \"Add fill\"\nlist refilled\n",
+  "describe": "Tank, in the ocean colours.\nKeeps:\n- refilled: liters: number, 1 to 20. Every entry also keeps when it was added.\nWorks out:\n- km is the total liters of refilled.\n- used is the total liters of refilled minus the first liters of refilled.\nShows:\n- text: \"Ramps\", km divided by used rounded, \"L per head\".\n- text: \"Cost\", km divided by used times 1000 rounded divided by 1000, \"Profit\", km divided by used times 1000 minus the first liters of refilled rounded divided by 1000.\n- text: \"Spent this month\", the total liters of refilled this month, \"L\".\n- a button \"Refilled today\"; a tap adds a refilled with liters set to 1.\n- a form to add a refilled.\n- a list of refilled; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/2981c21a8916.png"
+ },
+ {
+  "key": "w1-t18|56e0a8fd4986",
+  "uid": "a41282c4",
+  "category_hint": "create",
+  "request": "Rickshaw daily earnings. Each evening I enter total earned, petrol spent, and hours worked. Show profit per day and average per hour, plus a weekly chart.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a day with earned, petrol spent and hours",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows profit per day (earned minus petrol)",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows average profit per hour",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows a weekly or daily chart",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "total profit this week",
+    "must": false
+   }
+  ],
+  "program": "app \"Rickshaw\" car ink\ntable fare amount money, note text?\ntable fuel cost money, litres num 0.5..20\nlet earned = sum(fare.amount today)\nlet spent = sum(fuel.cost today)\n\"Profit today\" earned - spent big\n\"Average hours\" round(sum(fuel.cost today) / max(count(fare today), 1)) faint\ndaybars last 7 days, sum(fare.amount on it) - sum(fuel.cost on it)\nform fare, \"Earned\"\nform fuel, \"Petrol\"\n",
+  "describe": "Rickshaw, in the ink colours.\nKeeps:\n- fare: amount: money; note: text, optional. Every entry also keeps when it was added.\n- fuel: cost: money; litres: number, 0.5 to 20. Every entry also keeps when it was added.\nWorks out:\n- earned is the total amount of fare today.\n- spent is the total cost of fuel today.\nShows:\n- text: \"Profit today\", earned minus spent.\n- text: \"Average hours\", the total cost of fuel today divided by the larger of how many fare entries today and 1 rounded.\n- a bar chart of the total amount of fare on that day minus the total cost of fuel on that day for each day in the last 7 days.\n- a form to add a fare.\n- a form to add a fuel.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/56e0a8fd4986.png"
+ },
+ {
+  "key": "w2-m02|58362105580b",
+  "uid": "9910997b",
+  "category_hint": "create",
+  "request": "small bakery: orders (customer, item, qty, delivery date), ingredient stock that warns when low, today's deliveries, weekly sales total",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an order with customer, item, quantity and delivery date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "ingredient stock table with quantity and low threshold",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "low stock warning or count",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "view of today's deliveries",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "weekly sales total or chart",
+    "must": true
+   },
+   {
+    "n": 6,
+    "item": "mark order delivered",
+    "must": false
+   }
+  ],
+  "program": "app \"Bakery\" bread plum\ntable customer name text, phone text?\ntable order customer ref customer, item text, qty num 1.. = 1, delivery date, price money, received bool\n\"Sales today\" sum(order.price today where received = yes) big\ncount(order today) \"orders finished today\" faint\neach order today where received = no sort delivery as o\n  row card gap 2\n    stack grow\n      o.customer.name bold\n      o.item \"due\" o.delivery faint\n    o.qty \"x\" o.price bold\n    toggle o.received\nform customer, \"Add customer\"\nform order, \"Add order\"\n",
+  "describe": "Bakery, in the plum colours.\nKeeps:\n- customer: name: text; phone: text, optional. Every entry also keeps when it was added.\n- order: customer: a customer; item: text; qty: number, at least 1, starts at 1; delivery: date; price: money; received: yes or no. Every entry also keeps when it was added.\nShows:\n- text: \"Sales today\", the total price of order today where received is yes.\n- text: how many order entries today, \"orders finished today\".\n- for each order today where received is no sorted by delivery:\n  - text: the customer name of the order.\n  - text: the item of the order, \"due\", the delivery of the order.\n  - text: the qty of the order, \"x\", the price of the order.\n  - a tick box for the received of the order.\n- a form to add a customer.\n- a form to add a order.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/58362105580b.png"
+ },
+ {
+  "key": "w1-k08|2d8a696198d6",
+  "uid": "66b0ea10",
+  "category_hint": "create",
+  "request": "tola to grams and back. also ratti and masha",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "converts tola to grams",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "converts grams to tola",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "covers ratti and masha",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "input for gold price per tola gives value",
+    "must": false
+   }
+  ],
+  "program": "app \"Gold\" coin ink\nsetting rate money = 250000 \"Price per tola\"\nstate tola num = 1\nfield tola \"Tola\"\n\"Grams\" round(tola * 11.664 * 100) / 100 big\n\"Back\" round(tola * 11.664 * 100) / 100 head\n\"Price per gram\" round(rate / 11.664) faint\n",
+  "describe": "Gold, in the ink colours.\nYou can change: \"Price per tola\": money, starts at 250000.\nRemembers while you use it: tola, starting at 1.\nShows:\n- a box to fill in tola, labelled \"Tola\".\n- text: \"Grams\", tola times 11.664 times 100 rounded divided by 100.\n- text: \"Back\", tola times 11.664 times 100 rounded divided by 100.\n- text: \"Price per gram\", rate divided by 11.664 rounded.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/2d8a696198d6.png"
+ },
+ {
+  "key": "w1-c01|12ce01ef87d1",
+  "uid": "d46bd6b1",
+  "category_hint": "change",
+  "request": "can you also add fabric colour",
+  "program_before": "app \"Tailor\" pen plum\ntable client name text, phone text?\ntable order client ref client, item text, due date, ready bool, price money?\nremind \"Order due\" at order.due\neach order where ready = no sort due\n  row card tap edit it\n    stack grow\n      it.client.name it.item bold\n      \"due\" it.due faint color if(it.due < today, bad, muted)\n    toggle it.ready\n\"Balance\" sum(order.price where ready = no) big\nform client, \"Add client\"\nform order, \"Add order\"\n\"All orders\" head\nlist order\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "order form has a fabric colour field",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "fabric colour shown in the order list",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing order list and form still present",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "total owed still shown",
+    "must": true
+   }
+  ],
+  "program": "app \"Tailor\" pen plum\ntable client name text, phone text?\ntable order client ref client, item text, due date, ready bool, price money?, fabric pick Red|Blue|Green|Yellow|Black|Grey = Blue\nremind \"Order due\" at order.due\neach order where ready = no sort due\n  row card tap edit it\n    stack grow\n      it.client.name it.item bold\n      \"due\" it.due faint color if(it.due < today, bad, muted)\n    toggle it.ready\n\"Balance\" sum(order.price where ready = no) big\nform client, \"Add client\"\nform order, \"Add order\"\n\"All orders\" head\nlist order\n",
+  "describe": "Tailor, in the plum colours.\nKeeps:\n- client: name: text; phone: text, optional. Every entry also keeps when it was added.\n- order: client: a client; item: text; due: date; ready: yes or no; price: money, optional; fabric: one of Red, Blue, Green, Yellow, Black, Grey, starts at Blue. Every entry also keeps when it was added.\nShows:\n- for each order where ready is no sorted by due:\n  - a group; a tap opens the order for editing:\n    - text: its client name, its item.\n    - text: \"due\", its due.\n    - a tick box for its ready.\n- text: \"Balance\", the total price of order where ready is no.\n- a form to add a client.\n- a form to add a order.\n- text: \"All orders\".\n- a list of order; tap one to edit it, swipe to remove it.\nReminder \"Order due\" on each due of the order entries.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/12ce01ef87d1.png"
+ },
+ {
+  "key": "w1-t25|c41eba4479cb",
+  "uid": "9b8dfe50",
+  "category_hint": "create",
+  "request": "Rent collection from 5 flats: tenant, flat no, rent, due day, paid/not paid, electricity bill share. total expected vs collected this month pls",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a tenant with flat number and rent",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has paid/not paid status",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total expected vs total collected",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "has electricity share field",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows unpaid tenants",
+    "must": false
+   }
+  ],
+  "program": "app \"Rent collection\" home slate\ntable tenant name text, flat text, rent money, due_day num 1..31 = 1\ntable paid tenant ref tenant, amount money\nlet expected = sum(tenant.rent)\nlet got = sum(paid.amount month)\ngoal got, expected, \"collected this month\"\neach tenant sort due_day as t\n  let ok = count(t.paid month) > 0\n  row card gap 2\n    stack grow\n      t.name bold\n      t.flat faint\n    if ok\n      \"Paid\" color good bold\n    else\n      button \"Got rent\" tap add paid tenant = t, amount = t.rent\nremind \"Rent day\" monthly on 1 at 10:00\nform tenant, \"Add tenant\"\n",
+  "describe": "Rent collection, in the slate colours.\nKeeps:\n- tenant: name: text; flat: text; rent: money; due day: number, 1 to 31, starts at 1. Every entry also keeps when it was added.\n- paid: tenant: a tenant; amount: money. Every entry also keeps when it was added.\nWorks out:\n- expected is the total rent of tenant.\n- got is the total amount of paid this month.\nShows:\n- got out of expected with a progress bar, labelled \"collected this month\".\n- for each tenant sorted by due day:\n  - text: the name of the tenant.\n  - text: the flat of the tenant.\n  - if ok:\n    - text: \"Paid\".\n  - otherwise:\n    - a button \"Got rent\"; a tap adds a paid with tenant set to the tenant, amount set to the rent of the tenant.\n- a form to add a tenant.\nReminder \"Rent day\" every month on day 1 at 10:00.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/c41eba4479cb.png"
+ }
+]
