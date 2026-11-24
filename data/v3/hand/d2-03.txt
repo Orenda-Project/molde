@@ -1,0 +1,440 @@
+@rich domain=d2_course_progress topic=online_course_lessons style=detailed
+I bought three video courses and finish none. add each course with its number of lessons, tap plus one when I finish a lesson, and show percent done per course with a bar and the lessons finished this week
+needs: add a course with total lessons | plus one lesson button | percent done per course | lessons finished this week
+---
+app "Courses" school ocean
+table course name text, lessons num 1..500 = 20
+table lesson course ref course
+topbar "Courses", course, "Add course"
+statcard count(lesson week), "lessons finished this week across" plural(count(course), "course")
+each course sort name as c empty "No courses yet. Add the one you keep postponing."
+  stack card gap 2 tap edit c swipe remove c
+    row gap 2
+      c.name bold grow
+      round(count(c.lesson) * 100 / c.lessons) "%" bold
+    goal count(c.lesson), c.lessons, "lessons done"
+    button "Finished a lesson" tap add lesson course = c
+===
+@rich domain=d2_leetcode_log topic=coding_practice_problem_log style=multi_feature
+log for my interview prep: every problem I solve with a name, difficulty Easy Medium Hard, and the topic. show the streak of days, solved per difficulty and a grid of the last 6 weeks
+needs: log a solved problem with difficulty and topic | streak of days | count per difficulty | grid of the last 6 weeks
+---
+app "Practice" brain red
+table solved name text, level pick Easy|Medium|Hard = Medium, topic text?
+topbar "Problem log", solved, "Log problem"
+statcard streak(solved), "day streak, best" best(solved) "· total" count(solved)
+row gap 1
+  each options solved.level as l
+    stack card grow gap 0 align center
+      count(solved where level = l) big
+      l faint
+section "Last 6 weeks"
+  daygrid last 42 days, count(solved on it), 3
+list solved by day, "No problems yet. Solve one easy one to start."
+===
+@rich domain=d2_command_cards topic=git_command_flashcards style=custom_ui
+flashcards for terminal commands I keep forgetting, like git rebase flags or docker prune. card has the task on the front and the command on the back. show the front, tap to reveal, then next card. count how many I got right today
+needs: add a card with task and command | reveal the answer | next card | got it button counting today | list of cards
+---
+app "Command cards" cards teal dark
+table card front text, back text
+table got card ref card
+state i num = 0
+state open bool = no
+let cur = nth(card sort at, i + 1)
+topbar "Command cards", card, "Add card"
+if count(card) > 0
+  stack card gap 2 align center
+    cur.front head
+    if open
+      cur.back big
+    else
+      button "Show command" tap set open = yes
+  row gap 1
+    button "Got it" fill good grow tap add got card = cur then set i = (i + 1) % count(card) then set open = no
+    button "Again" grow tap set i = (i + 1) % count(card) then set open = no
+  "Got right today:" count(got today) faint
+else
+  "No cards yet. Add the first command you always google." faint
+===
+@rich domain=d2_coding_streak topic=daily_coding_streak style=short
+did I code today? one button, streak and a grid of the last 6 weeks
+needs: one tap to mark coded today | current and best streak | grid of last 6 weeks
+---
+app "Code streak" flame orange
+table code
+statcard streak(code), "day streak, best" best(code)
+button if(count(code today) > 0, "Coded today", "I coded today") fill if(count(code today) > 0, good, accent) tap toggle code today
+section "Last 6 weeks", join(count(code last 42 days), " days")
+  daygrid last 42 days, count(code on it)
+===
+@rich domain=d2_tutorial_projects topic=portfolio_projects_checklist style=multi_feature
+building a portfolio: projects with name, stack text, and status Idea, Building, Live. tap the status chips, show how many are live, and a note field for the repo name
+needs: add a project with stack and repo note | status chips per project | count of live projects | filter by status
+---
+app "Portfolio" tool yellow
+table proj name text, stack text?, repo text?, status pick Idea|Building|Live = Idea
+state tab pick All|Idea|Building|Live = All
+topbar "Portfolio", proj, "Add project"
+statcard count(proj where status = Live), "live of" count(proj) "projects", count(proj)
+choice tab
+each proj where tab = All or status = tab sort name as p empty "No projects here. Add one you want to ship."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.name bold grow
+      p.stack faint
+    p.repo faint
+    choice p.status
+===
+@rich domain=d2_project_ideas topic=side_project_idea_stars style=custom_ui
+parking lot for side project ideas. each idea gets an excitement from 1 to 5 stars and an effort Weekend, Month or Forever. show the top ideas by excitement, and one button to start an idea
+needs: add an idea with excitement and effort | start button | top ideas by excitement | filter started ideas
+---
+app "Idea parking" bolt purple
+table idea name text, stars num 1..5 = 3, effort pick Weekend|Month|Forever = Weekend, started bool
+topbar "Ideas", idea, "Add idea"
+statcard count(idea where started = yes), "started of" count(idea) "ideas", count(idea)
+section "Most exciting", "stars"
+  bars idea where started = no sort stars desc top 4, it.stars, it.name
+each idea where started = no sort stars desc as i empty "No parked ideas. Go and build something."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      i.stars "stars ·" i.effort faint
+    button "Start" tap set i.started = yes
+===
+@rich domain=d2_ship_log topic=weekly_shipping_log style=multi_feature
+a log of everything I ship, small or big: what, and type Feature, Fix, Doc, Talk. count per week, the streak of days with something shipped, and a bar chart of the last 8 weeks
+needs: add shipped item with type | streak of days shipping | shipped this week | chart of last 8 weeks
+---
+app "Shipped" package green
+table ship what text, kind pick Feature|Fix|Doc|Talk = Feature
+topbar "Ship log", ship, "Add shipped"
+statcard count(ship week), "shipped this week, streak" streak(ship) "days"
+section "Per week", "last 8 weeks"
+  plot 0..8, 0..max(count(ship), 1) axes
+    each 0..7 as k
+      let d0 = today - 7 * (7 - k)
+      rect k + 0.15, 0, 0.7, count(ship week of d0) fill accent radius 2
+      tick k + 0.5, k + 1
+list ship by day, "Nothing shipped yet. Small things count."
+===
+@rich domain=d2_quote_calculator topic=freelance_quote_calculator style=custom_ui
+quote calculator for freelance work. set hours with a slider, my hourly rate, a buffer percent for surprises and show the total I should quote. save the quote with the client name so I can see what I quoted before
+needs: slider for hours | hourly rate and buffer percent | total quote with buffer | save quote with client name | list of saved quotes
+---
+app "Quote" calc ink
+table quote client text, amount money
+state who text = ""
+state hrs num = 40
+state rate money = 50
+state buf num = 20
+let base = hrs * rate
+let total = round(base * (1 + buf / 100))
+screen calc "Quote" calc
+  "Hours" hrs faint
+  slider hrs 1..400
+  field rate "Hourly rate"
+  "Buffer" buf "%" faint
+  slider buf 0..60
+  statcard total, "to quote (" base "+" buf "%)"
+  field who "Client"
+  button "Save quote" fill accent tap add quote client = who, amount = total
+screen saved "Saved" list
+  "Average quote" round(avg(quote.amount)) big
+  list quote, "No quotes saved yet."
+===
+@rich domain=d2_retainer_burn topic=client_retainer_hours style=detailed
+two clients are on monthly retainers, 20 and 30 hours. log hours worked with the client, show for each how much of the retainer is burnt this month, and turn red when we go over
+needs: log hours for a client | retainer hours per client | burn percent this month | red when over the retainer
+---
+app "Retainers" clock slate
+table client name text, hours num 1..300 = 20 "Retainer hours"
+table work client ref client, h num 0.25..24 = 1, what text?
+topbar "Retainers", client, "Add client"
+each client sort name as c empty "No retainer clients yet. Add the first one."
+  stack card gap 2 tap edit c swipe remove c
+    row
+      c.name bold grow
+      round(sum(c.work.h month) * 100 / c.hours) "% used" bold color if(sum(c.work.h month) > c.hours, bad, ink)
+    goal sum(c.work.h month), c.hours, "hours this month", "h"
+    row gap 1
+      each [0.5, 1, 2] as n
+        button "+" n "h" fill soft grow tap add work client = c, h = n
+form work, "Log hours"
+===
+@rich domain=d2_scope_creep topic=scope_creep_log style=multi_feature
+client keeps asking for small extras. log each request with the project, hours it took and if it was in scope. total of the extra hours I did for free and what that is worth at my rate
+needs: log a request with project, hours and in-scope tick | total unpaid extra hours | value at my hourly rate | set hourly rate | list by day
+---
+app "Scope creep" shield red
+table extra project text, what text, hours num 0.25..40 = 1, inscope bool "In scope"
+setting rate money = 40 "My hourly rate"
+let free = sum(extra.hours where inscope = no)
+topbar "Scope creep", extra, "Log request"
+statcard free, "unpaid extra hours, worth" free * rate
+section "Free work by project", "hours"
+  share extra where inscope = no by project, sum(it.hours), it.key
+list extra by day, "No extras logged. Either a great client or no tracking."
+===
+@rich domain=d2_timesheet_billable topic=weekly_timesheet_billable style=detailed
+weekly timesheet: client, hours, whether it's billable, and a note. show the hours per day this week, billable percent and the hours per client
+needs: log hours with client and billable tick | hours per day for the last 7 days | billable percent | hours per client this week
+---
+app "Timesheet" timer blue
+table entry client text, h num 0.25..16 = 1, billable bool, note text?
+topbar "Timesheet", entry, "Log time"
+statcard sum(entry.h week), "hours this week,"  round(sum(entry.h week where billable = yes) * 100 / max(sum(entry.h week), 1)) "% billable"
+section "Per day", "hours"
+  daybars last 7 days, sum(entry.h on it)
+section "Per client", "this week"
+  share entry week by client, sum(it.h), it.key
+list entry by day, "No hours yet this week."
+===
+@rich domain=d2_invoice_dues topic=invoice_tracker_overdue style=detailed
+tracker for my invoices: client, amount, date sent, due date, and paid tick. show the total unpaid, flag overdue invoices and remind me on the due date
+needs: add an invoice with client, amount and due date | paid tick | total unpaid | overdue flagged | reminder on due date
+---
+app "Invoices" money mint
+table invoice client text, amount money, due date, paid bool
+remind "An invoice is due today. Check if it was paid." at invoice.due
+topbar "Invoices", invoice, "Add invoice"
+statcard sum(invoice.amount where paid = no), "unpaid,"  count(invoice where paid = no and due < today) "overdue"
+each invoice sort due as i empty "No invoices yet. Add the one you just sent."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.paid
+    stack grow gap 0
+      i.client bold
+      "due" i.due faint color if(i.due < today and i.paid = no, bad, muted)
+    i.amount bold
+===
+@rich domain=d2_latency_log topic=endpoint_latency_checks style=custom_ui
+manual latency checks of our endpoints: I paste the endpoint and the milliseconds from curl. alert limit setting (default 300 ms), average per endpoint, a line chart of the latest checks and red when over the limit
+needs: log a check with endpoint and milliseconds | set the limit in ms | average per endpoint | line chart of recent checks | red when over the limit
+---
+app "Latency" bolt teal
+table ping endpoint text, ms num 1..60000
+setting limit num = 300 "Limit (ms)"
+topbar "Latency", ping, "Log check"
+statcard round(avg(ping.ms)), "ms average,"  count(ping where ms > limit) "checks over the limit"
+section "Latest checks", "ms"
+  trend ping top 12, it.ms
+each ping by endpoint empty "No checks yet. Run curl and log the time."
+  row card gap 2
+    it.key bold grow
+    round(avg(it.ms)) "ms" bold color if(avg(it.ms) > limit, bad, ink)
+===
+@rich domain=d2_webhook_deliveries topic=webhook_delivery_results style=multi_feature
+webhooks keep failing for some customers. log each delivery with the customer and result OK, Failed or Retry. show success rate as a bar, results by customer and the last failures at the top
+needs: log a delivery with customer and result | success rate | counts per result | failed deliveries listed
+---
+app "Webhooks" cloud pink
+table hook customer text, result pick OK|Failed|Retry = OK
+topbar "Webhooks", hook, "Log delivery"
+goal count(hook where result = OK), count(hook), "deliveries OK"
+row gap 1
+  each options hook.result as r
+    stack card grow gap 0 align center
+      count(hook where result = r) big color if(r = Failed, bad, ink)
+      r faint
+section "Failures", "by customer"
+  share hook where result = Failed by customer, count(it), it.key
+list hook where result = Failed, "No failed deliveries. Nice."
+===
+@rich domain=d2_rate_limit_plan topic=api_rate_limit_planner style=custom_ui
+planning the API rate limit. set the limit per minute for the whole key pool, list the clients with their calls per minute, and show how much of the limit is used in total and which client uses over a quarter of it
+needs: set the limit per minute | add a client with calls per minute | total usage against the limit | flag heavy clients over 25 percent
+---
+app "Rate limit" key ink
+table client name text, calls num 0..100000 "Calls per minute"
+setting limit num 1..1000000 = 1000 "Limit per minute"
+topbar "Rate limit", client, "Add client"
+goal sum(client.calls), limit, "calls per minute used"
+each client sort calls desc as c empty "No clients yet. Add who calls your API."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      round(c.calls * 100 / limit) "% of the limit" faint
+    if c.calls * 4 > limit
+      "heavy" bold color warn
+    c.calls big
+===
+@rich domain=d2_license_audit topic=dependency_license_audit style=multi_feature
+license audit for our packages: package name, license MIT, Apache, BSD, GPL or Unknown, and a tick when legal has approved it. GPL and Unknown must stand out, and I want to see how many still need approval
+needs: add a package with license | GPL and unknown highlighted | approval tick | count needing approval | breakdown by license
+---
+app "Licenses" shield purple dark
+table pkg name text, license pick MIT|Apache|BSD|GPL|Unknown = MIT, approved bool
+let risky = count(pkg where approved = no and (license = GPL or license = Unknown))
+topbar "License audit", pkg, "Add package"
+statcard count(pkg where approved = no), "waiting for approval,"  risky "risky"
+section "By license"
+  bars options pkg.license, count(pkg where license = it), it
+each pkg where approved = no sort name as p empty "Everything is approved."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.license bold color if(p.license = GPL or p.license = Unknown, bad, muted)
+    toggle p.approved
+===
+@rich domain=d2_runtime_eol topic=runtime_end_of_life_dates style=detailed
+which of our services run on old runtimes? service name, runtime text like Node 18, and the end of life date. sort by nearest EOL, color the ones under 90 days or already dead, and remind me a month before
+needs: add a service with runtime and EOL date | sorted by nearest EOL | colour under 90 days | reminder 30 days before | count of expired
+---
+app "Runtime EOL" tool orange
+table svc name text, runtime text, eol date
+remind "A service runtime reaches end of life in 30 days" at svc.eol - 30d at 9:00
+topbar "Runtime EOL", svc, "Add service"
+statcard count(svc where eol < today), "past end of life,"  count(svc where eol >= today and eol - today < 90) "within 90 days"
+each svc sort eol as s empty "No services listed. Add what you run."
+  row card gap 2 tap edit s swipe remove s fill if(s.eol < today, bad, if(s.eol - today < 90, warn, soft))
+    stack grow gap 0
+      s.name bold
+      s.runtime faint
+    text s.eol - today "days" bold
+===
+@rich domain=d2_bundle_size topic=bundle_size_budget style=short
+log the JS bundle size in KB for each build, a budget in KB, and a line chart
+needs: log a build with version and KB | set the budget | line chart of sizes | red when over budget
+---
+app "Bundle size" box blue
+table build ver text, kb num 1..100000
+setting budget num = 250 "Budget (KB)"
+topbar "Bundle size", build, "Log build"
+statcard last(build.kb), "KB in the latest build, budget" budget
+section "Last builds", "KB"
+  trend build top 10, it.kb
+each build sort at desc top 6 as b empty "No builds logged yet."
+  row card gap 2
+    b.ver bold grow
+    b.kb "KB" bold color if(b.kb > budget, bad, ink)
+===
+@rich domain=d2_status_updates topic=incident_status_page_updates style=custom_ui
+drafting status page updates during an outage. each update has the service, a message and a state: Investigating, Identified, Monitoring, Resolved. show a banner if anything is not resolved and a list of updates in time order
+needs: add an update with service, message and state | banner when something is unresolved | list of updates by day | change state with chips | count unresolved
+---
+app "Status notes" bell red
+table upd service text, msg text, state pick Investigating|Identified|Monitoring|Resolved = Investigating
+let live = count(upd where state != Resolved)
+topbar "Status notes", upd, "Add update"
+if live > 0
+  row card fill warn pad 2
+    live "unresolved" bold
+    "Keep the page updated." grow
+else
+  "All systems normal." big color good
+each upd sort at desc as u empty "No updates posted. Add one when something breaks."
+  stack card gap 1 tap edit u swipe remove u
+    row
+      u.service bold grow
+      u.at faint
+    u.msg
+    choice u.state
+===
+@rich domain=d2_cloud_cost topic=cloud_cost_by_service style=multi_feature
+cloud bill tracker. add each charge with service name (EC2, S3, RDS...), amount and the day, set the monthly budget, and show what share of the bill each service takes
+needs: add a charge with service and amount | monthly budget progress | share of each service | chart of spending per day
+---
+app "Cloud cost" cloud green
+table charge service text, amount money
+setting budget money = 500 "Monthly budget"
+topbar "Cloud cost", charge, "Add charge"
+goal sum(charge.amount month), budget, if(sum(charge.amount month) > budget, "over budget", "spent this month")
+section "By service", "this month"
+  share charge month by service, sum(it.amount), it.key
+section "Per day"
+  daybars last 14 days, sum(charge.amount on it)
+list charge by day, "No charges yet this month."
+===
+@rich domain=d2_support_macros topic=canned_reply_macros style=detailed
+my canned replies for support: title and text. every time I use one I tap used, so the most used macros float to the top and I can find stale ones that nobody uses
+needs: add a macro with title and text | tap used to count | sorted by most used | show uses this week | find unused macros
+---
+app "Macros" note grey
+table macro title text, body long
+table used macro ref macro
+topbar "Macros", macro, "Add macro"
+statcard count(used week), "replies sent this week,"  count(macro, count(it.used) = 0) "macros never used"
+each macro sort count(it.used) desc as m empty "No macros yet. Save the reply you type every day."
+  stack card gap 1 tap edit m swipe remove m
+    row gap 2
+      m.title bold grow
+      count(m.used) "uses" faint
+    m.body faint
+    button "Used" tap add used macro = m
+===
+@rich domain=d2_escalation_log topic=support_escalation_log style=multi_feature
+log of tickets I escalate to Dev, PM or Ops: ticket number, who, why, and a tick when resolved. show open escalations per team and how many days each has been open
+needs: log an escalation with ticket, team and reason | resolved tick | open escalations per team | days open
+---
+app "Escalations" flag yellow
+table esc ticket text, team pick Dev|PM|Ops = Dev, why text, resolved bool
+topbar "Escalations", esc, "Escalate"
+section "Open per team"
+  bars options esc.team, count(esc where team = it and resolved = no), it
+each esc where resolved = no sort at as e empty "Nothing escalated right now."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.ticket bold
+      e.team "·" e.why faint
+    text today - e.at "days" color if(today - e.at > 3, bad, muted)
+    toggle e.resolved
+===
+@rich domain=d2_nps_tally topic=nps_survey_tally style=custom_ui
+tap tally for NPS survey answers 0 to 10 as customers call in. work out the NPS: percent promoters (9 and 10) minus percent detractors (0 to 6). show the distribution of scores as bars
+needs: tap a score from 0 to 10 to tally | NPS number | promoters, passives and detractors counts | distribution bars
+---
+app "NPS" star pink
+table answer score num 0..10
+let prom = count(answer where score >= 9)
+let det = count(answer where score <= 6)
+let nps = round((prom - det) * 100 / max(count(answer), 1))
+statcard nps, "NPS from" plural(count(answer), "answer")
+grid 6 gap 1
+  each 0..10 as n
+    button n fill if(n >= 9, good, if(n <= 6, soft, edge)) tap add answer score = n
+row gap 1
+  stat prom, "promoters"
+  stat count(answer) - prom - det, "passives"
+  stat det, "detractors"
+section "Distribution"
+  bars 0..10, count(answer where score = it), it
+button "Remove last answer" tap remove last(answer)
+===
+@rich domain=d2_okr_progress topic=okr_key_results style=detailed
+our team OKRs: objectives with key results that each have a current number and a target. show progress per objective as the average of its key results and let me update the current numbers with a field
+needs: add an objective | add key results with target and current | progress per key result | average progress per objective | edit current value
+---
+app "OKRs" target mint
+table okr name text
+table kr okr ref okr, what text, now_val num 0.. "Current", goal_val num 1.. "Target"
+topbar "OKRs", okr, "Add objective"
+each okr as o empty "No objectives yet. Add one for this quarter."
+  stack card gap 2 swipe remove o
+    row
+      o.name bold grow
+      round(sum(o.kr, min(it.now_val / it.goal_val, 1)) * 100 / max(count(o.kr), 1)) "%" big
+    each o.kr as k empty "No key results yet."
+      stack gap 0
+        k.what small
+        goal k.now_val, k.goal_val
+        field k.now_val "Update current"
+form kr, "Add key result"
+===
+@rich domain=d2_hackathon_judging topic=hackathon_judging_scoreboard style=custom_ui
+judging a hackathon with 3 judges. each score is a team, a criterion (Idea, Tech, Design, Pitch) and points 1 to 10. total per team, leaderboard with the winner on top and how many scores each team got
+needs: add a team | add a score with criterion and points | total per team | leaderboard with winner first | scores count per team
+---
+app "Judging" trophy purple
+table team name text
+table score team ref team, crit pick Idea|Tech|Design|Pitch = Idea, pts num 1..10 = 7
+topbar "Judging", team, "Add team"
+statcard count(score), "scores given to" plural(count(team), "team")
+each team sort sum(it.score.pts) desc as t empty "No teams yet. Add the teams that demo."
+  row card gap 2 swipe remove t
+    text index + 1 big
+    stack grow gap 0
+      t.name bold
+      count(t.score) "scores · avg" round(avg(t.score.pts) * 10) / 10 faint
+    sum(t.score.pts) big
+form score, "Add score"

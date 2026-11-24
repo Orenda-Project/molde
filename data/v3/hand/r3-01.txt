@@ -1,0 +1,505 @@
+@rich domain=canal_turns topic=canal_and_tubewell_turns style=multi_feature
+our warabandi turn comes at odd hours so I log every turn with field, start time and hours, canal or tubewell. tubewell costs me per hour so show the cost this month, and a bar chart of hours per day
+needs: log a turn with field, start, hours and source | tubewell cost this month | canal hours this month | bar chart of hours per day | list to edit or remove
+---
+app "Water turns" drop blue
+table turn field text, start when, hours num 0.5..24 = 2, source pick Canal|Tubewell = Canal
+setting rate money = 300 "Tubewell cost per hour"
+let canalhrs = sum(turn.hours month where source = Canal)
+let wellcost = sum(turn.hours month where source = Tubewell) * rate
+topbar "Water turns", turn, "Log a turn"
+row gap 2
+  statcard canalhrs, "canal hours this month"
+  statcard wellcost, "tubewell cost this month"
+section "Hours per day", "last 7 days"
+  daybars last 7 days, sum(turn.hours on it)
+list turn top 12, "No turns logged yet. Add the next water turn you get."
+===
+@rich domain=tubewell_power topic=tubewell_electric_units style=detailed
+three tubewells on the farm, I note each time a motor runs: which well, hours, and the kW of the motor. I want units used this month, the bill at my rate per unit, and which well eats the most power
+needs: log a run with well, hours and motor kW | units used this month | bill at rate per unit | comparison of wells | change the rate
+---
+app "Tubewell power" bolt orange
+table run well pick North|Canal_side|Old_well = North, hours num 0.25..24 = 3, kw num 1..40 = 7.5 unit "kW"
+setting rate money = 42 "Rate per unit"
+let units = sum(run month, it.hours * it.kw)
+topbar "Tubewell power", run, "Log a run"
+row gap 2
+  statcard round(units), "units used this month"
+  statcard round(units * rate), "bill at the current rate"
+section "Power by well", "units this month"
+  each options run.well as w
+    row gap 1
+      text w grow
+      round(sum(run month where well = w, it.hours * it.kw)) bold
+list run top 8, "No motor runs yet. Log the first one."
+===
+@rich domain=dairy_cows topic=milk_per_cow style=custom_ui
+I keep 6 buffaloes and cows. each one gets a name, and morning or evening I put in litres for that animal. show me today's total litres, milk money at my price, a chart of the last 14 days and who gave the most
+needs: add an animal by name | record litres per animal and shift | today total litres | money at price per litre | chart of litres per day | animals ranked by litres this week
+---
+app "Dairy" milk mint
+table cow name text, kind pick Buffalo|Cow = Buffalo
+table milking cow ref cow, litres num 0.5..40, shift pick Morning|Evening = Morning
+setting price money = 190 "Price per litre"
+let today_l = sum(milking.litres today)
+topbar "Dairy", cow, "Add animal"
+row gap 2
+  statcard today_l, "litres today"
+  statcard round(today_l * price), "earned today"
+each cow sort name as c empty "No animals yet. Add each buffalo or cow by name."
+  stack card gap 1
+    row gap 1
+      text c.name bold grow
+      text c.kind faint
+    row gap 1
+      text "Today" sum(c.milking.litres today) "L" grow
+      button "+ Morning" tap add milking cow = c, litres = 5, shift = Morning
+      button "+ Evening" tap add milking cow = c, litres = 5, shift = Evening
+section "Litres per day", "last 14 days"
+  daybars last 14 days, sum(milking.litres on it)
+section "Best milkers this week"
+  share cow sort sum(it.milking.litres week) desc top 5, sum(it.milking.litres week), it.name
+===
+@rich domain=poultry_eggs topic=daily_egg_count style=detailed
+I have around 300 hens and collect eggs twice a day. put in the count and how many broke, tell me how many I got today against what I should get (80 percent of the hens), and a chart for the week
+needs: enter eggs collected and broken | number of hens setting | today eggs against expected | weekly bar chart with goal line | list of collections
+---
+app "Egg count" egg yellow
+table collect eggs num 0..2000, broken num 0..200 = 0, round pick Morning|Evening = Morning
+setting hens num 1..5000 = 300 "Hens in the shed"
+let expected = round(hens * 0.8)
+let good = sum(collect.eggs today) - sum(collect.broken today)
+topbar "Egg count", collect, "Add collection"
+statcard good, "good eggs today, expected" expected, expected
+section "Last 7 days", "good eggs per day"
+  goalbars last 7 days, sum(collect.eggs on it) - sum(collect.broken on it), expected
+row gap 2
+  statcard sum(collect.broken week), "broken this week"
+  statcard round(sum(collect.eggs week) * 100 / max(hens * 7, 1)), "% laying rate this week"
+list collect top 10, "No eggs counted yet. Add the morning collection."
+===
+@rich domain=goat_health topic=goat_vaccine_dates style=multi_feature
+goat herd health: each goat has an ear tag, and I need to note vaccine, deworming or hoof trim with the next due date. show overdue ones in red, soon ones in orange, and remind me the day before
+needs: add goat with ear tag | record vaccine, deworming or hoof care with next due date | overdue in red and soon in orange | reminder before due date | count of overdue jobs
+---
+app "Goat health" paw green
+table goat tag text, sex pick Doe|Buck|Kid = Doe
+table care goat ref goat, kind pick Vaccine|Deworm|Hoof_trim|Treatment = Vaccine, due date
+let late = count(care where due < today)
+remind "Goat care due tomorrow" at care.due - 1d at 8:00
+topbar "Goat health", goat, "Add goat"
+statcard late, "jobs overdue of" count(care) "planned", count(care)
+section "Add a care job"
+  form care, "Save job"
+each care sort due as c empty "No care jobs yet. Add a vaccine or deworming date."
+  row card gap 2 fill if(c.due < today, bad, if(c.due - today <= 7, warn, soft)) tap edit c swipe remove c
+    stack grow gap 0
+      text c.goat.tag bold
+      text c.kind faint
+    text c.due bold
+===
+@rich domain=bee_hives topic=beehive_inspections style=detailed
+I have 12 beehives and walk through them every week. record each inspection: which hive, queen seen or not, frames of brood, honey kg taken. show days since I last looked at each hive and total honey this season
+needs: add hive by name | record inspection with queen seen, brood frames and honey | days since last inspection per hive | total honey this season | warning when a hive is overdue
+---
+app "Bee hives" leaf yellow
+table hive name text
+table look hive ref hive, queen bool, brood num 0..20 = 0 "Brood frames", honey num 0..40 = 0 unit "kg"
+setting every num 3..30 = 10 "Inspect every (days)"
+topbar "Bee hives", hive, "Add hive"
+statcard sum(look.honey year), "kg of honey this year"
+count(hive, due(it.look, every)) "hives overdue for a look" head color if(count(hive, due(it.look, every)) > 0, warn, good)
+each hive sort name as h empty "No hives yet. Add your first hive."
+  stack card gap 1 fill if(due(h.look, every), soft, surface)
+    row gap 2
+      text h.name bold grow
+      text "Looked" since(h.look) "days ago" faint
+    row gap 1
+      text sum(h.look.honey) "kg honey" grow
+      toggle h.look
+section "Inspections", "queen seen = ticked"
+  list look top 8, "No inspections yet. Tick a hive when you check it."
+===
+@rich domain=fish_pond_feed topic=fish_pond_feeding style=multi_feature
+fish ponds: I feed twice a day by kg of feed, check water pond by pond, and sell fish at harvest by kg. show feed cost this month, sales this month and what is left after feed
+needs: add ponds by name | record feed kg per pond | record fish sold in kg and price | feed cost this month | profit after feed this month | feed chart
+---
+app "Fish ponds" fish teal
+table pond name text, size num 0.1..50 = 1 unit "acres"
+table feed pond ref pond, kg num 1..500
+table sale pond ref pond, kg num 1..5000, price money = 400 "Price per kg"
+setting feedrate money = 120 "Feed cost per kg"
+let cost = sum(feed.kg month) * feedrate
+let sold = sum(sale month, it.kg * it.price)
+topbar "Fish ponds", pond, "Add pond"
+row gap 2
+  statcard sold, "sales this month"
+  statcard sold - cost, "left after feed"
+section "Feed given", "kg per day"
+  daybars last 14 days, sum(feed.kg on it)
+each pond as p empty "No ponds yet. Add a pond with its size."
+  stack card gap 1 tap edit p
+    row
+      text p.name bold grow
+      text p.size "acres" faint
+    row gap 1
+      text sum(p.feed.kg month) "kg feed this month" grow
+      button "Feed 20 kg" tap add feed pond = p, kg = 20
+section "Add a sale"
+  form sale, "Save sale"
+===
+@rich domain=mango_orchard topic=mango_picking_record style=detailed
+mango orchard with rows of trees. I enter each picking: which row, crates, and the crate price from the buyer. I want crates this season, money so far, and a trend line of crates per picking
+needs: add a picking with row, crates and price | crates this season | money this season | trend of crates per picking | list to edit or remove
+---
+app "Mango orchard" apple orange
+table picking row text, crates num 1..500, price money = 2400 "Price per crate"
+let crates = sum(picking.crates year)
+let money = sum(picking year, it.crates * it.price)
+topbar "Mango orchard", picking, "Add picking"
+row gap 2
+  statcard crates, "crates this season"
+  statcard money, "money from buyers"
+section "Crates per picking", "oldest to newest"
+  trend picking top 20, it.crates
+section "By row"
+  share picking year by row, sum(it.crates), it.key
+list picking top 10, "No pickings yet. Add the first crates you send."
+===
+@rich domain=kitchen_garden_beds topic=garden_bed_sowing style=custom_ui
+small kitchen garden on the roof with 5 beds. for each sowing I write bed, vegetable, date sown and days to harvest. show when each will be ready, green when it is ready now and a count of what is ready this week
+needs: add a sowing with bed, vegetable, date and days to harvest | harvest date for each | ready now colour | count ready this week | tap to edit
+---
+app "Garden beds" plant green
+table sowing bed pick Bed_1|Bed_2|Bed_3|Bed_4|Bed_5 = Bed_1, veg text, sown date = today, days num 10..200 = 45 "Days to harvest"
+let ready = count(sowing, it.sown + it.days <= today)
+let soon = count(sowing, it.sown + it.days > today and it.sown + it.days <= today + 7)
+topbar "Garden beds", sowing, "New sowing"
+row gap 2
+  statcard ready, "ready to pick now"
+  statcard soon, "ready within a week"
+grid 2 gap 1
+  each sowing sort sown + days as s empty "Nothing sown yet. Add what you planted in a bed."
+    stack card gap 0 fill if(s.sown + s.days <= today, good, soft) tap edit s swipe remove s
+      text s.veg bold
+      text s.bed faint
+      if s.sown + s.days <= today
+        text "Ready now" bold
+      else
+        text "Ready in" s.sown + s.days - today "days" faint
+===
+@rich domain=plant_nursery_stock topic=nursery_plant_stock style=multi_feature
+my nursery sells plants in pots. keep name, how many pots, price, and a low stock number. tap plus and minus when I sell or add. warn when stock is low and show the total value of all pots
+needs: add a plant with count, price and low level | plus and minus buttons for stock | low stock warning colour | total stock value | count of plants running low
+---
+app "Nursery stock" plant teal
+table plant name text, pots num 0.., price money, low num 0.. = 5
+let value = sum(plant, it.pots * it.price)
+let short = count(plant, it.pots <= it.low)
+topbar "Nursery stock", plant, "Add plant"
+row gap 2
+  statcard value, "worth of pots in stock"
+  statcard short, "plants running low"
+each plant sort pots as p empty "No plants yet. Add roses, ferns or whatever you grow."
+  row card gap 1 fill if(p.pots <= p.low, warn, surface) tap edit p swipe remove p
+    stack grow gap 0
+      text p.name bold
+      text p.price "each" faint
+    button "-" tap set p.pots = p.pots - 1
+    text p.pots bold
+    button "+" tap set p.pots = p.pots + 1
+===
+@rich domain=rain_gauge topic=rainfall_notes style=short
+rain gauge notes in mm, with a chart per month and the total for the season
+needs: add rainfall in mm for a day | total for the season | rainy days this month | chart of rainfall per day
+---
+app "Rain gauge" cloud ink
+table rain mm num 0.5..400 unit "mm", note text?
+topbar "Rain gauge", rain, "Add rain"
+row gap 2
+  statcard sum(rain.mm year), "mm this year"
+  statcard count(days month, count(rain on it) > 0), "rainy days this month"
+section "Rain per day", "this month"
+  daybars month, sum(rain.mm on it)
+list rain by day, "No rain noted yet. Add the mm after each shower."
+===
+@rich domain=mandi_rates topic=mandi_price_log style=custom_ui
+I note the mandi rate per 40 kg for wheat, rice, maize and cotton whenever I go, with the market name. let me tap a crop to see only that one, the highest price, and a line of the rate going up or down
+needs: add a rate with crop, market and price | filter by crop | highest price for the crop | line of price over visits | latest price shown
+---
+app "Mandi rates" tag purple
+table rate crop pick Wheat|Rice|Maize|Cotton = Wheat, market text, price money
+state c pick Wheat|Rice|Maize|Cotton = Wheat
+topbar "Mandi rates", rate, "Add rate"
+row gap 1
+  each options rate.crop
+    button it fill if(c = it, accent, soft) tap set c = it
+row gap 2
+  statcard last(rate.price where crop = c), "latest rate per 40 kg"
+  statcard max(rate.price where crop = c), "highest rate noted"
+section "Price over time", c
+  trend rate where crop = c top 15, it.price
+each rate where crop = c top 10 as r empty "No rates for this crop yet. Add what you hear at the mandi."
+  row card gap 2 tap edit r swipe remove r
+    text r.market grow
+    text r.price bold
+===
+@rich domain=fertiliser_plan topic=fertiliser_schedule style=detailed
+fertiliser plan per field. enter field, product (urea, DAP or potash), bags and the date it is due. I want a list sorted by date, colours when overdue, a note when it is within 5 days, and total bags still to apply
+needs: add a job with field, product, bags and due date | sorted by due date | overdue and within 5 days colours | mark applied | total bags still to apply
+---
+app "Fertiliser" bag mint
+table job field text, product pick Urea|DAP|Potash|Zinc = Urea, bags num 1..200, due date = today, applied bool
+let pending = sum(job.bags where applied = no)
+remind "Fertiliser due today" at job.due at 7:00
+topbar "Fertiliser", job, "Add job"
+row gap 2
+  statcard pending, "bags still to apply"
+  statcard count(job where applied = no and due < today), "jobs overdue"
+each job where applied = no sort due as j empty "Nothing to apply. Add the next fertiliser job."
+  row card gap 2 fill if(j.due < today, bad, if(j.due - today <= 5, warn, surface)) tap edit j swipe remove j
+    stack grow gap 0
+      text j.field j.product bold
+      text j.bags "bags, due" j.due faint
+    toggle j.applied
+===
+@rich domain=spray_schedule topic=pesticide_spray_waiting style=multi_feature
+before picking I must wait some days after a spray. log each spray: field, chemical and waiting days. show the first date I can pick again, red until then, and when the spray was done
+needs: log a spray with field, chemical, date and waiting days | safe to pick date | red until safe | days left to wait | count of fields not yet safe
+---
+app "Spray log" shield red
+table spray field text, chemical text, done date = today, wait num 0..60 = 7 "Waiting days"
+let blocked = count(spray, it.done + it.wait > today)
+topbar "Spray log", spray, "Log spray"
+statcard blocked, "fields not safe to pick yet", count(spray)
+each spray sort done desc as s empty "No sprays yet. Log one after each spray."
+  row card gap 2 fill if(s.done + s.wait > today, bad, good) tap edit s swipe remove s
+    stack grow gap 0
+      text s.field bold
+      text s.chemical "on" s.done faint
+    stack gap 0 align end
+      if s.done + s.wait > today
+        text "Wait" s.done + s.wait - today "days" bold
+      else
+        text "Safe to pick" bold
+      text "from" s.done + s.wait faint
+===
+@rich domain=sharecropper_ledger topic=tenant_account_book style=detailed
+my tenants work my land on half share. for each tenant I put what I gave as advance, what I received as share and any payment back. show who owes me and who I owe, as a balance, with the last entry date
+needs: add tenant by name | record advance, share or payment with amount | balance per tenant | total owed to me | last entry date
+---
+app "Tenant ledger" users slate
+table tenant name text, land text?
+table entry tenant ref tenant, kind pick Advance|Share|Payment = Advance, amount money, note text?
+let owed = sum(entry.amount where kind = Advance) - sum(entry.amount where kind = Share) - sum(entry.amount where kind = Payment)
+topbar "Tenant ledger", tenant, "Add tenant"
+statcard owed, "owed to me by all tenants"
+each tenant sort name as t empty "No tenants yet. Add the people who farm your land."
+  let bal = sum(t.entry.amount where kind = Advance) - sum(t.entry.amount where kind = Share) - sum(t.entry.amount where kind = Payment)
+  stack card gap 1 tap edit t
+    row gap 1
+      text t.name bold grow
+      text if(bal >= 0, "owes me", "I owe") abs(bal) color if(bal >= 0, good, bad)
+    text "Last entry" last(t.entry.at) faint
+section "New entry"
+  form entry, "Save entry"
+list entry top 8, "No entries yet."
+===
+@rich domain=tractor_hire topic=tractor_hire_jobs style=multi_feature
+I hire out my tractor by the hour. record client, hours, rate per hour and diesel litres used, tick when paid. show money still unpaid, money earned this month and diesel cost so I see profit
+needs: add a job with client, hours, rate and diesel | tick when paid | money still unpaid | earned this month | diesel cost and profit
+---
+app "Tractor hire" car orange
+table job client text, hours num 0.5..24 = 2, rate money = 2500 "Rate per hour", diesel num 0..200 = 10 unit "L", paid bool
+setting diesel_price money = 280 "Diesel per litre"
+let earned = sum(job month, it.hours * it.rate)
+let fuel = sum(job.diesel month) * diesel_price
+topbar "Tractor hire", job, "Add job"
+row gap 2
+  statcard sum(job where paid = no, it.hours * it.rate), "still unpaid"
+  statcard earned - fuel, "profit this month"
+section "This month", "earned" earned "diesel" fuel
+  daybars month, sum(job on it, it.hours * it.rate)
+each job top 12 as j empty "No jobs yet. Add the first hire."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      text j.client bold
+      text j.hours "h at" j.rate faint
+    toggle j.paid
+===
+@rich domain=cat_health topic=cat_weight_vet style=custom_ui
+my cat Mishi is on a diet. weigh her weekly in grams, line chart of weight, and keep vet visits with next vaccine date, with a note when the vaccine is due within a month
+needs: log weight in grams | line chart of weight | log vet visit with reason and next due date | latest weight | vaccine due note
+---
+app "Mishi" paw pink
+table weigh grams num 1000..9000 unit "g"
+table vet reason text, next date?, cost money?
+setting target num = 4200 "Target weight (g)"
+topbar "Mishi", weigh, "Log weight"
+row gap 2
+  statcard last(weigh.grams), "grams now"
+  statcard last(weigh.grams) - target, "grams above target"
+section "Weight", "weekly"
+  trend weigh top 20, it.grams
+let nextvet = last(vet.next)
+if nextvet - today <= 30 and nextvet >= today
+  text "Vaccine due in" nextvet - today "days" bold color warn
+section "Vet visits"
+  form vet, "Save visit"
+  list vet top 5, "No vet visits yet."
+===
+@rich domain=dog_walks topic=daily_dog_walks style=multi_feature
+walk the dog every day: distance in km and minutes. goal of 3 km a day, show the week bars against the goal, my streak of days walked and the last 7 days as dots
+needs: log a walk with km and minutes | daily km goal bars | streak of walking days | last 7 days dots | total km this month
+---
+app "Dog walks" walk teal
+table walk km num 0.1..30 unit "km", mins num 5..300 = 30
+setting goal num = 3 "Daily goal (km)"
+topbar "Dog walks", walk, "Log walk"
+weekdots count(walk on it) > 0
+row gap 2
+  statcard streak(walk), "day streak"
+  statcard sum(walk.km month), "km this month"
+section "Last 7 days", "goal" goal "km"
+  goalbars last 7 days, sum(walk.km on it), goal
+list walk top 6, "No walks yet. Take the first one today."
+===
+@rich domain=aquarium_water topic=aquarium_water_tests style=detailed
+fish tank water tests: pH, ammonia and temperature each time I test, and a water change log. show the pH line, warn red if ammonia is above 0.25, and how many days since the last water change
+needs: log test with pH, ammonia and temperature | pH line chart | warning when ammonia is high | log water change | days since last water change
+---
+app "Fish tank" fish ocean
+table test ph num 5..9 unit "pH", ammonia num 0..5 = 0 unit "ppm", temp num 15..35 = 26 unit "C"
+table change litres num 1..200 = 20
+topbar "Fish tank", test, "Log test"
+if last(test.ammonia) > 0.25
+  text "Ammonia is high. Change water now." bold color bad
+row gap 2
+  statcard last(test.ph), "pH at last test"
+  statcard since(change), "days since water change"
+section "pH over time"
+  trend test top 20, it.ph
+section "Water changes"
+  quick change, litres, [10, 20, 40]
+  list change top 5, "No water change yet. Tap a size when you change water."
+===
+@rich domain=bird_sightings topic=birdwatching_life_list style=custom_ui
+birdwatching: every time I see a bird I note species, place and how many. I want my most seen species, sightings per month, and tap to filter to one place
+needs: add a sighting with species, place and count | most seen species | filter by place | sightings per month | list to edit or remove
+---
+app "Bird log" bell green
+table sight species text, place pick Park|Lake|Hills|Garden = Park, n num 1..500 = 1
+state at_place pick Park|Lake|Hills|Garden = Park
+topbar "Bird log", sight, "Add sighting"
+row gap 1
+  each options sight.place
+    button it fill if(at_place = it, accent, soft) tap set at_place = it
+statcard count(sight where place = at_place), "sightings at this place"
+section "Most seen here", "top 5"
+  share sight where place = at_place by species, sum(it.n), it.key
+section "Per day", "last 14 days"
+  daybars last 14 days, count(sight on it)
+list sight top 10, "No birds yet. Add the first sighting."
+===
+@rich domain=hiking_log topic=hike_distance_log style=multi_feature
+hiking log for the weekends: trail name, km, climb in metres and time taken. monthly goal of 60 km with progress, my longest hike and total climb this year
+needs: log a hike with trail, km, climb and time | monthly km goal progress | longest hike | total climb this year | list to edit or remove
+---
+app "Hikes" map slate
+table hike trail text, km num 0.5..100, climb num 0..5000 = 0 unit "m", time dur = 2h
+setting goal num = 60 "Monthly km goal"
+topbar "Hikes", hike, "Log hike"
+statcard sum(hike.km month), "km this month of" goal, goal
+row gap 2
+  statcard max(hike.km), "km longest hike"
+  statcard sum(hike.climb year), "m climbed this year"
+section "Distance per hike", "km, oldest to newest"
+  trend hike top 12, it.km
+list hike top 10, "No hikes yet. Log your first trail."
+===
+@rich domain=camping_pack_list topic=camping_packing_check style=custom_ui
+camping trip packing: add items with a group (shelter, food, cooking, clothes, safety), tick when packed, and see how many are packed out of all, plus a list of what is still left to pack
+needs: add an item with group | tick when packed | packed out of total progress | filter by group | items still left
+---
+app "Camp pack" bag orange
+table gear item text, grp pick Shelter|Food|Cooking|Clothes|Safety = Shelter, packed bool
+state g pick All|Shelter|Food|Cooking|Clothes|Safety = All
+let n = count(gear)
+let done = count(gear where packed = yes)
+topbar "Camp pack", gear, "Add item"
+statcard done, "packed of" n, n
+scroll
+  each options gear.grp
+    button it fill if(g = it, accent, soft) tap set g = it
+  button "All" fill if(g = All, accent, soft) tap set g = All
+each gear sort packed as i empty "Nothing on the list yet. Add the tent, stove and torch."
+  if g = All or i.grp = g
+    row card gap 2 tap edit i swipe remove i
+      stack grow gap 0
+        text i.item bold
+        text i.grp faint
+      toggle i.packed
+===
+@rich domain=horse_stable topic=horse_stable_log style=detailed
+stable log for 4 horses: each horse by name, rides with minutes, feed in kg of grain and when the farrier is next due. I want minutes ridden this week for each horse and a red mark if the farrier is overdue
+needs: add horse | log ride minutes | log grain feed | minutes ridden this week per horse | farrier due colour
+---
+app "Stable" star plum
+table horse name text, farrier date
+table ride horse ref horse, mins num 5..300 = 45
+table grain horse ref horse, kg num 0.5..20 = 2
+topbar "Stable", horse, "Add horse"
+statcard sum(ride.mins week), "minutes ridden this week"
+each horse sort name as h empty "No horses yet. Add each horse with its farrier date."
+  stack card gap 1 fill if(h.farrier < today, bad, soft) tap edit h swipe remove h
+    row gap 1
+      text h.name bold grow
+      text "Farrier" h.farrier
+    row gap 1
+      text sum(h.ride.mins week) "min this week" grow
+      button "Ride 45" tap add ride horse = h, mins = 45
+      button "Grain 2 kg" tap add grain horse = h, kg = 2
+section "Grain this week", "kg"
+  share horse sort name, sum(it.grain.kg week), it.name
+===
+@rich domain=kennel_boarding topic=dog_boarding_bills style=multi_feature
+dog kennel: guests come and go. record dog name, owner phone, check in date, nights and the nightly price, tick when paid. show who is in right now, money earned this month and unpaid bills
+needs: check a dog in with owner phone, nights and price | tick when paid | dogs in right now | earned this month | unpaid bills total
+---
+app "Kennel" home plum dark
+table stay dog text, phone text?, arrive date = today, nights num 1..60 = 2, rate money = 1500 "Price per night", paid bool
+let inside = count(stay, it.arrive <= today and it.arrive + it.nights > today)
+topbar "Kennel", stay, "Check in"
+row gap 2
+  statcard inside, "dogs inside now"
+  statcard sum(stay month, it.nights * it.rate), "earned this month"
+section "Unpaid"
+  text sum(stay where paid = no, it.nights * it.rate) "owed in all" big
+  each stay where paid = no sort arrive as s empty "All bills are paid."
+    row gap 2 tap edit s
+      stack grow gap 0
+        text s.dog bold
+        text s.nights "nights from" s.arrive faint
+      toggle s.paid
+list stay top 6, "No guests yet. Check in the first dog."
+===
+@rich domain=wheat_yield_fields topic=wheat_yield_per_field style=detailed
+wheat harvest by field. fields have acres, and every harvest I add the maunds from that field. I want yield per acre for each field, a bar chart comparing the fields and the total maunds this season
+needs: add field with acres | add harvest in maunds for a field | yield per acre per field | bar chart comparing fields | total maunds
+---
+app "Wheat yield" leaf yellow
+table field name text, acres num 0.5..500
+table harvest field ref field, maunds num 1..2000
+topbar "Wheat yield", field, "Add field"
+row gap 2
+  statcard sum(harvest.maunds year), "maunds this season"
+  statcard sum(field.acres), "acres in all"
+section "Yield per acre", "maunds"
+  bars field sort name, sum(it.harvest.maunds) / max(it.acres, 1), it.name
+each field sort name as f empty "No fields yet. Add each field with its acres."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      text f.name bold
+      text sum(f.harvest.maunds) "maunds from" f.acres "acres" faint
+    button "+ 20 maunds" tap add harvest field = f, maunds = 20

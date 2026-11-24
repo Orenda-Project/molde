@@ -10,7 +10,7 @@ topbar "Deadlines", task, "Add deadline"
 row gap 2
   statcard late, "overdue"
   statcard soon, "due in 7 days"
-section "Open work", sum(task.hours where done = no) "h left"
+section "Open work", "hours left:" sum(task.hours where done = no)
   each task where done = no sort due as t empty "Nothing due. Add a deadline with the button above."
     row gap 2 tap edit t swipe remove t
       stack grow gap 0
@@ -66,7 +66,7 @@ each tenant sort flat as t empty "No tenants yet. Add a flat and its monthly ren
 ===
 @rich domain=warranty_box topic=warranty countdown style=short
 warranty countdown for my gadgets, shows days left
-needs: add an item with purchase date and warranty months | days left until warranty ends | switch between active and expired | weekly chart of purchases
+needs: add an item with purchase date and warranty months | days left until warranty ends | switch between active and expired | chart of gadget spending for the last 7 days
 ---
 app "Warranty" shield ink dark
 table item name text, bought date, months num 1..120 = 12, price money?
@@ -93,7 +93,7 @@ state d pick Mon|Tue|Wed|Thu|Fri = Mon
 let hrs = sum(lesson, if(it.day = d, it.mins, 0)) / 60
 topbar "Timetable", lesson, "Add class"
 choice d
-statcard fixed(hrs, 1), "class hours on this day"
+statcard round(hrs * 10) / 10, "class hours on this day"
 each lesson where day = d sort start as l empty "No classes on this day. Add one with the button above."
   row card gap 2 tap edit l swipe remove l
     stack grow gap 0
@@ -115,7 +115,7 @@ topbar "Loan", instalment, "Add payment"
 goal paid, loan, "repaid so far"
 row gap 2
   statcard left, "still to pay"
-  statcard ceil(left / monthly), "instalments to go"
+  statcard floor((left + monthly - 1) / monthly), "instalments to go"
 list instalment by day, "No payments yet. Add the first instalment."
 ===
 @rich domain=shift_pay topic=shift pay style=multi_feature
@@ -150,7 +150,7 @@ topbar "Subscriptions", sub, "Add subscription"
 row gap 2
   statcard monthly, "per month"
   statcard monthly * 12, "per year"
-section "Renewing soon", count(sub where renews >= today and renews - today <= 10) "in 10 days"
+section "Renewing soon", "in 10 days:" count(sub where renews >= today and renews - today <= 10)
   each sub where renews - today <= 10 sort renews as s empty "Nothing renews in the next 10 days."
     row gap 2
       stack grow gap 0
@@ -215,7 +215,7 @@ let prevfill = nth(fill sort odometer desc, 2)
 let kpl = if(count(fill) > 1, (lastfill.odometer - prevfill.odometer) / lastfill.litres, 0)
 topbar "Fuel Log", fill, "Add fill-up"
 row gap 2
-  statcard fixed(kpl, 1), "km per litre, last fill"
+  statcard round(kpl * 10) / 10, "km per litre, last fill"
   statcard sum(fill.cost month), "spent this month"
 section "Cost per fill"
   trend fill top 10, it.cost

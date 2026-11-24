@@ -1,0 +1,224 @@
+@rich domain=r1_dry_fruit_mixed_box topic=dry_fruit_mixed_box_builder style=custom_ui
+dry fruit shop. customers want a mixed box so i tap plus 100 grams on each nut they pick and the total price shows up. need to clear the basket, and when the customer pays tap sold so it counts in today's money. every nut has its own rate per kg
+needs: add a dry fruit with rate per kg | tap plus 100 grams to build a mixed box | total price of the box from grams and rates | clear the basket | sold button records today's sale
+---
+app "Dry Fruit Shop" apple ocean
+table nut name text, rate money
+table basket nut ref nut, grams num 50..2000
+table sale amount money
+let total = sum(basket, it.grams * it.nut.rate / 1000)
+topbar "Dry Fruit Shop", nut, "Add dry fruit"
+statcard round(total), "for a box of" sum(basket.grams) "grams"
+each nut sort name as n empty "No dry fruits yet. Add almonds, cashews, pistachios and the rest."
+  row card gap 2 tap edit n swipe remove n
+    stack grow gap 0
+      n.name bold
+      n.rate "per kg" faint
+    sum(n.basket.grams) "g" bold
+    button "+100 g" tap add basket nut = n, grams = 100
+row gap 1
+  button "Clear" tap remove all basket
+  button "Sold" fill accent tap add sale amount = round(total) then remove all basket
+"Sold today" sum(sale.amount today) head
+===
+@rich domain=r1_garment_exchange_log topic=clothes_shop_returns_log style=short
+log returns and exchanges at the cloth shop and why they came back
+needs: record an exchange or refund with item and reason | refund money this month | which reasons come up most | list grouped by day
+---
+app "Returns Log" tag grey
+table swap item text, reason pick Size|Colour|Defect|Changed_mind = Size, outcome pick Exchanged|Refunded = Exchanged, refund money = 0
+topbar "Returns Log", swap, "Add return"
+row gap 2
+  stat count(swap month), "returns this month"
+  stat sum(swap.refund month), "refunded"
+section "Why things come back"
+  share swap month by reason, count(it), it.key
+list swap by day, "No returns logged. Good news."
+===
+@rich domain=r1_bridal_dress_rental topic=bridal_dress_rental_bookings style=multi_feature
+i rent out bridal and party dresses. each dress has a rent and a deposit. when someone books i note the client, the function day and mark returned later. show how many bookings each dress has coming up, deposits i am holding and rent earned this month
+needs: add a dress with rent and deposit | add a booking with dress, client and day | upcoming bookings count on each dress | mark a booking returned | deposits held and rent earned this month
+---
+app "Dress Rental" heart purple
+table dress name text, rent money, deposit money
+table booking dress ref dress, client text, day date, returned bool
+topbar "Dress Rental", booking, "New booking"
+row gap 2
+  stat sum(booking where returned = no, it.dress.deposit), "deposits held"
+  stat sum(booking month, it.dress.rent), "rent this month"
+section "Coming up"
+  each booking where returned = no sort day as b empty "No dresses are out or booked."
+    row gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.dress.name bold
+        b.client "·" b.day faint color if(b.day < today, bad, muted)
+      button "Returned" tap set b.returned = yes
+section "Dresses"
+  form dress, "Save dress"
+  each dress as d
+    row
+      d.name grow
+      count(d.booking where returned = no) "booked" faint
+===
+@rich domain=r1_mandi_commission_agent topic=mandi_commission_farmer_payout style=detailed
+commission agent in the grain market. farmers bring lots, i sell them and keep a percent commission. for every lot i note farmer, crop, kilos and the rate per kg it sold at. show what each lot made, my commission and what i must pay the farmer, with a tick when paid
+needs: add a lot with farmer, crop, kilos and rate per kg | commission percent setting | commission earned this month | amount payable to each farmer after commission | tick when the farmer is paid
+---
+app "Mandi Agent" leaf mint
+table lot farmer text, crop pick Wheat|Rice|Onion|Potato|Other = Wheat, kg num 1..100000, price money, paid bool
+setting pct num 0..10 = 2 "Commission %"
+let gross(l lot) = l.kg * l.price
+topbar "Mandi Agent", lot, "Add lot"
+row gap 2
+  stat sum(lot month, gross(it)) * pct / 100, "commission this month"
+  stat sum(lot where paid = no, gross(it) * (100 - pct) / 100), "to pay farmers"
+section "Crops this month"
+  share lot month by crop, sum(it.kg), it.key
+each lot sort at desc as l empty "No lots yet. Add the first one when it sells."
+  row card gap 2 tap edit l swipe remove l
+    toggle l.paid
+    stack grow gap 0
+      l.farmer bold
+      l.crop l.kg "kg" faint
+    gross(l) * (100 - pct) / 100 bold
+===
+@rich domain=r1_home_barber_areas topic=home_visit_barber_by_area style=detailed dark
+i cut hair at people's homes in different areas of the city. each visit has client, area, price and tips. i want to tap an area to see only those visits, my total for the week against my weekly target and which area earns the most
+needs: add a visit with client, area, price and tip | tap an area chip to filter | weekly earnings against a target | which area earns the most | list of visits
+---
+app "Home Barber" tool ink dark
+table visit client text, area pick Gulberg|Satellite|Model_town|Other = Gulberg, price money, tip money = 0
+setting goal money = 30000 "Weekly target"
+state sel text = ""
+topbar "Home Barber", visit, "Add visit"
+statcard sum(visit.price week) + sum(visit.tip week), "earned this week from" plural(count(visit week), "visit"), goal
+scroll
+  each options visit.area
+    button it fill if(sel = it, accent, soft) tap set sel = if(sel = it, "", it)
+section "Which area pays", "this month"
+  share visit month by area, sum(it.price), it.key
+each visit where sel = "" or area = sel as v empty "No visits in this area yet."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.client bold
+      v.area faint
+    v.price + v.tip bold
+===
+@rich domain=r1_shop_cashbook topic=shop_daily_cashbook style=multi_feature
+i want a simple cash book for my general store. every sale, expense and anything i take out for home goes in with a short note. show the cash at close of today from my opening cash, this month's totals, the expenses by note and a daily chart
+needs: add an entry as sale, expense or owner draw with note | opening cash setting | closing cash today | expenses grouped by note this month | bar chart of sales per day
+---
+app "Shop Cashbook" wallet yellow
+table entry kind pick Sale|Expense|Draw = Sale, amount money, note text
+setting opening money = 5000 "Opening cash today"
+let close = opening + sum(entry.amount today where kind = Sale) - sum(entry.amount today where kind = Expense) - sum(entry.amount today where kind = Draw)
+topbar "Shop Cashbook", entry, "Add entry"
+statcard close, "cash in the drawer, opened with" opening
+row gap 2
+  stat sum(entry.amount month where kind = Sale), "sales this month"
+  stat sum(entry.amount month where kind = Expense), "expenses this month"
+section "Expenses by note", "this month"
+  share entry month where kind = Expense by note, sum(it.amount), it.key
+section "Sales per day"
+  daybars last 7 days, sum(entry.amount on it where kind = Sale)
+list entry today by day, "No entries yet today."
+===
+@rich domain=r1_plant_nursery_stock topic=plant_nursery_sales_and_losses style=multi_feature
+plant nursery. i have small, medium and large plants with different prices. sold button reduces stock, a lost button for dried plants, and reminders to water at seven in the morning and five in the evening. also what i earned this month
+needs: add a plant with size, quantity and price | sold button reduces stock | lost button for dried plants | watering reminders morning and evening | earnings this month
+---
+app "Nursery" plant green
+table plant name text, size pick Small|Medium|Large = Small, qty num 0.., price money
+table sale plant ref plant
+table loss plant ref plant
+remind "Water the plants" at 7:00, 17:00
+topbar "Nursery", plant, "Add plant"
+row gap 2
+  stat sum(sale, it.plant.price), "total earned"
+  stat count(loss), "plants lost"
+each plant sort name as p empty "No plants yet. Add what is in the nursery."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.size "·" p.price faint
+    p.qty bold color if(p.qty <= 3, warn, ink)
+    button "Sold" tap add sale plant = p then set p.qty = p.qty - 1
+    button "Lost" tap add loss plant = p then set p.qty = p.qty - 1
+"Earned this month" sum(sale month, it.plant.price) head
+===
+@rich domain=r1_glass_window_quotes topic=glass_shop_area_quotes style=custom_ui
+glass and aluminium shop. i measure width and height in inches, pick plain, tinted, frosted or mirror and need the area in square feet and the price at my rate for that glass, times the number of panes. then save the quote under the customer's name
+needs: set width, height and number of panes | choose glass type | area in square feet worked out | price from the rate of that glass | save the quote with customer name
+---
+app "Glass Quote" box blue
+table quote customer text, glass pick Plain|Tinted|Frosted|Mirror = Plain, sqft num 0..1000, total money
+setting plain money = 180 "Plain glass per sq ft"
+setting tinted money = 260 "Tinted per sq ft"
+setting frosted money = 300 "Frosted per sq ft"
+setting mirror money = 350 "Mirror per sq ft"
+state who text = ""
+state kind pick Plain|Tinted|Frosted|Mirror = Plain
+state w num = 36
+state h num = 48
+state n num = 1
+let sqft = round(w * h * n / 144 * 10) / 10
+let rate = if(kind = Plain, plain, if(kind = Tinted, tinted, if(kind = Frosted, frosted, mirror)))
+topbar "Glass Quote", quote, "Add old quote"
+choice kind
+"Width" w "in" faint
+slider w 6..120
+"Height" h "in" faint
+slider h 6..120
+row gap 2 align center
+  "Panes" n bold grow
+  button "-" tap set n = max(n - 1, 1)
+  button "+" tap set n = n + 1
+statcard round(sqft * rate), "for" sqft "sq ft of" kind
+field who "Customer name"
+button "Save quote" fill accent tap add quote customer = who, glass = kind, sqft = sqft, total = round(sqft * rate) then set who = ""
+list quote top 5, "No quotes saved yet."
+===
+@rich domain=r1_staff_advances_pay topic=shop_staff_salary_advances style=detailed
+i have four boys working in my shop. i tick the ones absent today, note advances they take, and on the last day i want each one's pay after cutting advances and absent days, a day being salary divided by thirty
+needs: add a worker with monthly salary | tick a worker absent today | record an advance | pay due per worker after advances and absences | total payroll this month
+---
+app "Shop Staff" users teal
+table staff name text, salary money
+table absent staff ref staff
+table advance staff ref staff, amount money
+state adv money = 0
+let pay(s staff) = s.salary - sum(s.advance.amount month) - count(s.absent month) * s.salary / 30
+topbar "Shop Staff", staff, "Add worker"
+statcard sum(staff, pay(it)), "payroll if paid today for" count(staff) "workers"
+field adv "Advance amount"
+each staff sort name as s empty "No workers yet. Add each person with a monthly salary."
+  stack card gap 2 tap edit s swipe remove s
+    row gap 2
+      stack grow gap 0
+        s.name bold
+        count(s.absent month) "absent days · advances" sum(s.advance.amount month) faint
+      pay(s) bold
+    row gap 2 align center
+      "Absent today" grow
+      toggle s.absent
+      button "Advance" tap add advance staff = s, amount = adv
+===
+@rich domain=r1_wallet_agent_float topic=mobile_wallet_agent_cash_float style=detailed
+i am an easypaisa style agent at my shop. customers do cash in, cash out and bill payments, i earn a fee on each. i must watch two things: the cash in my drawer and the wallet balance. tap type, enter amount and fee, and show both balances and fees earned today
+needs: record a transaction as cash in, cash out or bill with amount and fee | cash in the drawer worked out | wallet balance worked out | fees earned today | warning when the drawer cash is low
+---
+app "Wallet Agent" phone red
+table txn kind pick Cash_in|Cash_out|Bill = Cash_in, amount money, fee money = 0
+setting cash0 money = 20000 "Drawer cash at the start"
+setting wallet0 money = 50000 "Wallet balance at the start"
+let drawer = cash0 + sum(txn.amount where kind = Cash_in) + sum(txn.amount where kind = Bill) - sum(txn.amount where kind = Cash_out) + sum(txn.fee)
+let wallet = wallet0 - sum(txn.amount where kind = Cash_in) - sum(txn.amount where kind = Bill) + sum(txn.amount where kind = Cash_out)
+topbar "Wallet Agent", txn, "Add transaction"
+row gap 2
+  stat drawer, "cash in the drawer"
+  stat wallet, "wallet balance"
+stat sum(txn.fee today), "fees earned today"
+if drawer < 10000
+  "Drawer cash is low. Cash out customers may have to wait." faint color warn
+section "Today's transactions", count(txn today)
+  list txn today by day, "No transactions yet today."

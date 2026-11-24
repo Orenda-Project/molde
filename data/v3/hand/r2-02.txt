@@ -1,0 +1,492 @@
+@rich domain=r2_dough_proofing topic=bread_proofing_batches style=multi_feature
+baking bread for a small shop. need a proofing countdown with start and pause that pings me when the dough is ready, a way to log each batch with the kind, loaves and flour weight, loaves baked today, and the flour used this week
+needs: proofing countdown with start and pause | log a batch with kind, loaves and flour grams | loaves baked today | flour used this week in kg | chart of loaves over the last 7 days
+---
+app "Dough Timer" bread purple
+table batch kind pick Sourdough|Naan|Pizza|Buns = Sourdough, loaves num 1..60 = 4, flour num 100..20000 = 1000 unit "g"
+setting proof dur = 90m "Proofing time"
+topbar "Dough Timer", batch, "Log a batch"
+timer proof, "Proofing", notify "Dough is ready to bake"
+row gap 2
+  statcard sum(batch.loaves today), "loaves baked today"
+  statcard sum(batch.flour week) / 1000, "kg of flour this week"
+section "Loaves", "last 7 days"
+  daybars last 7 days, sum(batch.loaves on it)
+list batch top 6, "No batches yet. Log one after each bake."
+===
+@rich domain=r2_daily_specials_board topic=restaurant_specials_board style=custom_ui
+we change the specials every day. let me enter dish, price, the day it runs and how many portions we have, flip between today and the whole week, tap sold one when a plate goes out, and show sold out in red
+needs: add a special with day, price and portions | switch between today and week | tap sold one for a plate | shows portions left and sold out in red | count of plates sold today
+---
+app "Specials Board" star pink
+table special dish text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, price money, portions num 1..200 = 20, sold num 0.. = 0
+state view pick Today|Week = Today
+topbar "Specials Board", special, "Add special"
+choice view
+statcard sum(special.sold where day = dayname(today)), "plates sold today"
+each special where view = Week or day = dayname(today) sort day as s empty "No specials for this view. Add one with its day."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.dish bold
+      s.day "·" s.price faint
+      if s.sold >= s.portions
+        "Sold out" bold color bad
+      else
+        s.portions - s.sold "left of" s.portions faint
+    button "Sold one" tap set s.sold = min(s.sold + 1, s.portions)
+===
+@rich domain=r2_butcher_pickups topic=halal_butcher_orders style=detailed
+halal butcher shop. keep the rate per kg for each cut, then take orders by customer with the weight, show each bill from weight times rate, which orders are ready today, and mark them picked up
+needs: add a cut with price per kg | add an order with customer, cut and weight | bill for each order from weight and rate | orders for pickup today | mark an order picked up
+---
+app "Butcher Orders" tag red
+table cut name text, per_kg money
+table order customer text, cut ref cut, kg num 0.1..50 = 1, ready date = today, picked bool
+let todays = sum(order today, it.kg * it.cut.per_kg)
+topbar "Butcher Orders", order, "Take an order"
+statcard count(order where ready = today and picked = no), "orders to hand over today, bills" todays
+each order where ready = today and picked = no sort customer as o empty "No pickups waiting today."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+      o.cut.name o.kg "kg" faint
+    o.kg * o.cut.per_kg bold
+    button "Picked up" tap set o.picked = yes
+section "Cuts and rates"
+  each cut sort name as c empty "No cuts yet."
+    row gap 2 tap edit c swipe remove c
+      c.name grow
+      c.per_kg "/kg" faint
+form cut, "Add a cut"
+===
+@rich domain=r2_carb_counter topic=diabetic_carb_counter style=multi_feature
+my father is diabetic so we count carbs. log each meal with the grams of carbs, show carbs today against his daily limit, split by meal, mark heavy meals over 60 g in orange, and a line of the last two weeks
+needs: log food with meal and grams of carbs | carbs today against daily limit | carbs split by meal | heavy meals highlighted | line chart of last 14 days
+---
+app "Carb Count" apple blue
+table food meal pick Breakfast|Lunch|Dinner|Snack = Breakfast, what text, carbs num 0..300 unit "g"
+setting limit num = 180 "Daily carbs (g)"
+topbar "Carb Count", food, "Log a meal"
+goal sum(food.carbs today), limit, "g of carbs today", " g"
+section "By meal today"
+  each options food.meal as ml
+    row
+      ml grow
+      sum(food.carbs today where meal = ml) "g" bold
+section "Meals today"
+  each food today as f empty "Nothing logged yet today."
+    row gap 2 tap edit f swipe remove f
+      f.what grow
+      f.carbs "g" bold color if(f.carbs > 60, warn, ink)
+section "Last 14 days", "carbs per day"
+  trend days last 14 days, sum(food.carbs on it)
+===
+@rich domain=r2_mess_fee_dues topic=mess_monthly_fee_dues style=detailed
+i keep the books for a hostel mess. each member has a plan and a monthly fee. when someone pays i tap paid and it records the payment. show who still owes this month, how much was collected, and the total expected
+needs: add a member with plan and monthly fee | tap to record a payment | list of members who still owe this month | money collected against money expected | breakdown by plan
+---
+app "Mess Fees" school slate
+table member name text, plan pick Full|Half|Lunch_only = Full, fee money
+table paid member ref member, amount money
+let expected = sum(member.fee)
+let got = sum(paid.amount month)
+topbar "Mess Fees", member, "Add member"
+statcard got, "collected this month of" expected, expected
+section "Still to pay", "this month"
+  each member sort name as m empty "No members yet. Add the people who eat at the mess."
+    if sum(m.paid.amount month) < m.fee
+      row gap 2 tap edit m
+        stack grow gap 0
+          m.name bold
+          m.plan faint
+        m.fee - sum(m.paid.amount month) bold color bad
+        button "Paid" tap add paid member = m, amount = m.fee - sum(m.paid.amount month)
+section "Members by plan"
+  share member by plan, count(it), it.key
+===
+@rich domain=r2_qaza_fasts topic=missed_fasts_makeup style=custom_ui
+i owe twelve fasts from last ramadan. i want to set how many i owe, tap a day on a calendar when i fast it, see how many are left, and see my last week as dots
+needs: setting for fasts owed | month calendar to mark a fast day | progress of fasts made up | fasts left to make up | last 7 days dots
+---
+app "Qaza Fasts" moon ink dark
+setting owed num = 12 "Fasts I owe"
+state m date = today
+table done kind pick Qaza|Voluntary = Qaza
+let made = count(done where kind = Qaza)
+monthnav m
+goal made, owed, "fasts made up", " days"
+statcard max(owed - made, 0), "left to make up before next Ramadan"
+section "Tap the days you fasted"
+  calendar done, m
+section "This week"
+  weekdots count(done on it) > 0
+===
+@rich domain=r2_freezer_meal_prep topic=sunday_meal_prep_freezer style=multi_feature
+every sunday i cook big batches and freeze portions. note each batch with the dish, how many portions and the date frozen, tap when i eat one, show portions left and how long frozen, and warn me on anything older than two months
+needs: add a batch with dish, portions and date frozen | tap to eat one portion | portions left per batch | warning for batches frozen over 60 days | total portions in the freezer
+---
+app "Freezer Prep" box mint
+table batch dish text, portions num 1..40 = 6, frozen date = today
+table eaten batch ref batch
+let left = sum(batch.portions) - count(eaten)
+topbar "Freezer Prep", batch, "Add a batch"
+statcard left, "portions in the freezer"
+each batch sort frozen as b empty "The freezer plan is empty. Add this Sunday's batch."
+  if b.portions - count(b.eaten) > 0
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.dish bold
+        b.portions - count(b.eaten) "left, frozen" today - b.frozen "days ago" faint color if(today - b.frozen > 60, warn, muted)
+      button "Eat one" tap add eaten batch = b
+===
+@rich domain=r2_meal_box_subs topic=meal_box_subscriptions style=detailed
+we run a weekly meal box with about forty subscribers. each has a plan, a price and a renewal date. show renewals due in the next 7 days, tap renewed to push the date by a month, let me pause a subscriber, and show monthly income from active ones
+needs: add a subscriber with plan, price and renewal date | renewals due in 7 days | tap renewed to move the date a month | pause a subscriber | monthly income from active subscribers
+---
+app "Meal Box" gift orange
+table sub customer text, plan pick Daily|Weekdays|Weekly = Weekdays, price money, renews date, paused bool
+topbar "Meal Box", sub, "Add subscriber"
+row gap 2
+  statcard sum(sub.price where paused = no), "monthly income"
+  statcard count(sub where paused = no), "active of" count(sub)
+section "Renewals in the next 7 days"
+  each sub where paused = no and renews <= today + 7 sort renews as s empty "No renewals due this week."
+    row gap 2 tap edit s
+      stack grow gap 0
+        s.customer bold
+        s.renews faint color if(s.renews < today, bad, muted)
+      s.price bold
+      button "Renewed" tap set s.renews = s.renews + 30
+section "Everyone", "Total:" count(sub)
+  each sub sort customer as s
+    row gap 2 swipe remove s
+      s.customer grow
+      s.plan faint
+      toggle s.paused
+===
+@rich domain=r2_mithai_stock topic=sweet_shop_kg_stock style=detailed
+sweet shop. keep each sweet with kg in the counter, the minimum kg i never want to go under, and the rate per kg. sold and restocked buttons, a reorder list for the ones that are low, and the value of everything in stock
+needs: add a sweet with kg, minimum and rate | sold 1 kg and add 5 kg buttons | reorder list of low sweets | value of stock | bar chart of kg per sweet
+---
+app "Mithai Stock" gift yellow
+table sweet name text, kg num 0..200 = 10, low num 0..50 = 2, rate money
+let worth = sum(sweet, it.kg * it.rate)
+topbar "Mithai Stock", sweet, "Add sweet"
+statcard worth, "worth of sweets on the counter"
+section "Reorder", "Low:" count(sweet where kg <= low)
+  each sweet where kg <= low as s empty "Nothing is low."
+    row gap 2
+      s.name grow
+      s.kg "kg left" faint color bad
+each sweet sort name as s
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.kg "kg at" s.rate faint
+    button "Sold 1" tap set s.kg = s.kg - 1
+    button "+5" tap set s.kg = s.kg + 5
+section "Kg per sweet"
+  bars sweet, it.kg, it.name
+===
+@rich domain=r2_juice_bar_taps topic=juice_bar_cup_sales style=custom_ui
+juice bar counter. choose small or large, then tap the fruit and it records the sale at the right price. show cups sold today, the money, and which fruit sells best
+needs: choose small or large cup size | one tap per fruit records a sale at the right price | cups sold today | money taken today | comparison of fruits sold
+---
+app "Juice Bar" cup green
+table sale fruit pick Orange|Mango|Pomegranate|Mixed = Orange, size pick Small|Large = Small, price money
+state size pick Small|Large = Small
+let price = if(size = Small, 120, 200)
+choice size
+grid 2 gap 1
+  each options sale.fruit as f
+    button f price fill accent tap add sale fruit = f, size = size, price = price
+row gap 2
+  statcard count(sale today), "cups today"
+  statcard sum(sale.price today), "taken today"
+button "Undo last cup" tap remove last(sale today)
+section "Best sellers", "this week"
+  share sale week by fruit, count(it), it.key
+===
+@rich domain=r2_espresso_dial_in topic=espresso_dial_in_log style=multi_feature
+barista practicing. log each shot with the dose in grams, the yield in grams, the seconds and how it tasted, show the ratio of the last shot, a line of extraction time, and how many shots tasted sour, balanced or bitter
+needs: log a shot with dose, yield, time and taste | ratio of the last shot | line chart of extraction time | count of shots by taste | recent shots list
+---
+app "Dial In" coffee ink
+table shot dose num 5..30 = 18 unit "g", out num 10..80 = 36 unit "g", secs num 5..60 = 27, taste pick Sour|Balanced|Bitter = Balanced
+topbar "Dial In", shot, "Log a shot"
+row gap 2
+  statcard round(last(shot.out) * 10 / last(shot.dose)) / 10, "yield ratio of the last shot"
+  statcard avg(shot.secs last 7 days), "avg seconds this week"
+section "Extraction time", "last 14 days"
+  trend shot last 14 days, it.secs
+section "How they tasted"
+  share shot by taste, count(it), it.key
+list shot top 8, "No shots yet. Pull one and log it."
+===
+@rich domain=r2_par_levels_count topic=kitchen_par_level_count style=detailed
+end of day stock count in a restaurant kitchen. each item has a par level, i count what is on the shelf with plus and minus, and it shows how many to order to get back to par and which items are short
+needs: add an item with par level and unit | count on hand with plus and minus | how many to order to reach par | list of items below par | bar showing on hand versus par
+---
+app "Par Count" list teal
+table item name text, par num 1..500, onhand num 0..500 = 0, unit text?
+let short = count(item where onhand < par)
+topbar "Par Count", item, "Add item"
+statcard short, "items below par of" count(item), count(item)
+each item sort onhand - par as i empty "No items yet. Add each thing you stock with its par level."
+  stack card gap 1 tap edit i swipe remove i
+    row gap 2
+      stack grow gap 0
+        i.name bold
+        "Order" max(i.par - i.onhand, 0) i.unit faint color if(i.onhand < i.par, bad, muted)
+      button "-" tap set i.onhand = i.onhand - 1
+      i.onhand bold
+      button "+" tap set i.onhand = i.onhand + 1
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(i.onhand / i.par, 0, 1), 4 fill if(i.onhand < i.par, warn, accent) radius 2
+===
+@rich domain=r2_food_truck_route topic=food_truck_weekly_spots style=multi_feature
+food truck owner. a weekly schedule of which spot i park at, which day and the opening and closing time, today's spot at the top, and what i earned at each spot so i can drop the bad ones
+needs: add a spot with day, opening and closing time | today's spot at the top | record takings at a spot | chart of takings per spot | schedule listed by day
+---
+app "Food Truck" car red
+table spot place text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Fri, opens time, closes time
+table takings spot ref spot, amount money
+topbar "Food Truck", spot, "Add a spot"
+section "Today", dayname(today)
+  each spot where day = dayname(today) as s empty "No spot scheduled for today. A day off?"
+    s.place head
+    s.opens "to" s.closes faint
+    button "Record takings" tap add takings spot = s, amount = 0
+section "Takings per spot", "all time"
+  bars spot, sum(it.takings.amount), it.place
+each spot sort day as s
+  row card gap 2 tap edit s swipe remove s
+    s.day bold
+    s.place grow
+    sum(s.takings.amount) faint
+===
+@rich domain=r2_event_prep_checklist topic=catering_prep_checklist style=multi_feature
+big catering job on saturday. a checklist of prep tasks split into prep, cook, pack and load, tick each one off, filter by stage, and show how much is done so i know if we are on time
+needs: add a task with a stage | filter tasks by stage | tick tasks as done | progress of tasks done | message when everything is done
+---
+app "Event Prep" check blue
+table task what text, stage pick Prep|Cook|Pack|Load = Prep, done bool
+state show pick All|Prep|Cook|Pack|Load = All
+let finished = count(task where done = yes)
+topbar "Event Prep", task, "Add task"
+goal finished, count(task), "tasks done", ""
+if count(task) > 0 and finished = count(task)
+  "Everything is done. Load the van." head color good
+choice show
+each task where show = All or stage = show sort done as t empty "No tasks here. Add the first one for this stage."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    t.what grow
+    t.stage faint
+===
+@rich domain=r2_potluck_signup topic=potluck_dish_signup style=short
+potluck at the mosque on friday, who is bringing what
+needs: add a dish with who is bringing it | dish type like main, side or dessert | count of dishes per type | guest count to compare
+---
+app "Potluck" food pink
+table dish who text, what text, kind pick Main|Rice|Side|Dessert|Drinks = Main
+setting guests num = 30 "Guests expected"
+topbar "Potluck", dish, "I will bring"
+statcard count(dish), "dishes for" guests "guests", guests
+section "Covered so far"
+  share dish by kind, count(it), it.key
+each options dish.kind as k
+  if count(dish where kind = k) = 0
+    "Nobody is bringing" k "yet" faint color warn
+list dish, "No dishes yet. Be the first to sign up."
+===
+@rich domain=r2_baby_first_foods topic=baby_new_foods_tracker style=detailed
+my daughter just started solids. note each new food with the date and how she reacted, remind me that i should wait three days before the next new food, count how many foods she has tried, and list the ones she loved
+needs: log a new food with date and reaction | tells me if it is safe to try the next food | count of foods tried | list of foods she loved | reactions listed by day
+---
+app "First Foods" baby purple
+table food name text, tried date = today, reaction pick None|Rash|Tummy|Refused|Loved = None
+let wait = 3 - since(food)
+topbar "First Foods", food, "New food"
+statcard count(food), "foods tried so far"
+if count(food) = 0 or since(food) >= 3
+  "Okay to try a new food today." head color good
+else
+  "Wait" plural(wait, "more day") "before the next new food." head color warn
+section "Loved", count(food where reaction = Loved)
+  each food where reaction = Loved as f empty "No favourites yet."
+    f.name
+section "Reactions to watch"
+  each food where reaction = Rash or reaction = Tummy as f empty "No bad reactions so far."
+    row
+      f.name grow
+      f.reaction color bad
+list food by day, "Nothing logged yet."
+===
+@rich domain=r2_sugar_free_days topic=sugar_free_streak style=custom_ui
+i am quitting sugar. when i slip i log what it was. show how many days i have been sugar free, a 6 week grid where slip days are dark, my goal of 30 days, and last week as dots
+needs: log a slip with what it was | days sugar free so far | progress toward goal days | six week grid of slip days | last 7 days dots of clean days
+---
+app "Sugar Free" apple grey
+table slip what text
+setting target num = 30 "Goal days"
+let free = if(count(slip) = 0, target, since(slip))
+topbar "Sugar Free", slip, "I slipped"
+goal min(free, target), target, "days sugar free", " d"
+section "Last 6 weeks", "dark days are slips"
+  daygrid last 42 days, count(slip on it), 1
+section "This week"
+  weekdots count(slip on it) = 0
+list slip top 5, "No slips logged. Keep going."
+===
+@rich domain=r2_kitchen_cleaning_rota topic=kitchen_deep_clean_schedule style=multi_feature
+the kitchen cleaning always gets forgotten. list jobs like oven, fridge, hood filter and bins with how often each should be done in days, tap done when finished, and show which are overdue
+needs: add a job with how many days between cleans | tap done when a job is cleaned | shows days since last clean | count of overdue jobs | overdue jobs shown in red
+---
+app "Clean Rota" tool teal
+table chore name text, every num 1..90 = 7
+table cleaned chore ref chore
+let late = count(chore, due(it.cleaned, it.every))
+topbar "Clean Rota", chore, "Add job"
+statcard late, "jobs overdue of" count(chore), count(chore)
+each chore sort name as c empty "No jobs yet. Add the oven, the fridge and the bins."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      "Every" c.every "days," if(count(c.cleaned) = 0, "never done", plural(since(c.cleaned), "day") ) faint color if(due(c.cleaned, c.every), bad, muted)
+    button "Done" tap add cleaned chore = c
+===
+@rich domain=r2_station_prep_list topic=daily_prep_list_by_station style=multi_feature
+line cook prep list. every morning the same things to prep, grouped by station (grill, salad, fry, dessert), with the quantity. tick when done and it should reset by itself the next day. show how much of the list is done
+needs: add a prep item with quantity and station | items grouped by station | tick when prepped, resets each day | progress for today | tap an item to edit
+---
+app "Prep List" list slate
+table prep what text, qty num 1..200 = 1, unit text?, station pick Grill|Salad|Fry|Dessert = Grill
+table made prep ref prep
+topbar "Prep List", prep, "Add item"
+statcard count(made today), "of" count(prep) "prepped today", count(prep)
+each options prep.station as st
+  if count(prep where station = st) > 0
+    section st, "Done:" count(made today where prep.station = st)
+      each prep where station = st sort what as p
+        row gap 2 tap edit p swipe remove p
+          toggle p.made
+          p.what grow
+          p.qty p.unit faint
+===
+@rich domain=r2_market_scale_cart topic=market_stall_weigh_price style=custom_ui
+vegetable stall. pick the item, set the weight with plus and minus half kilo buttons, see the price, tap sell to record it, and show today's total and what sold the most
+needs: choose an item with its rate per kg | change weight with plus and minus | price from weight and rate | sell button records the sale | today's total and best sellers
+---
+app "Weigh and Sell" scale green dark
+table sale item pick Tomato|Onion|Potato|Apple = Tomato, kg num 0.1..50, amount money
+state item pick Tomato|Onion|Potato|Apple = Tomato
+state kg num = 1
+let rate = if(item = Tomato, 160, if(item = Onion, 120, if(item = Potato, 90, 320)))
+choice item
+row gap 2 align center
+  button "-" tap set kg = max(kg - 0.5, 0.5)
+  kg "kg" big grow align center
+  button "+" tap set kg = kg + 0.5
+statcard kg * rate, "to pay at" rate "per kg"
+button "Sell" fill accent tap add sale item = item, kg = kg, amount = kg * rate then set kg = 1
+section "Today", sum(sale.amount today)
+  share sale today by item, sum(it.kg), it.key
+===
+@rich domain=r2_recipe_box topic=recipe_collection_favourites style=detailed
+a place for my recipes. add each one with its type, cooking time and my star rating, search by name, filter by curry, rice, dessert and so on, and a heart to mark favourites
+needs: add a recipe with type, minutes and rating | search recipes by name | filter by type | heart toggle for favourites | count of favourites
+---
+app "Recipe Box" book plum
+table recipe title text, kind pick Curry|Rice|Dessert|Snack|Salad = Curry, mins num 5..300 = 30, stars num 1..5 = 3, fav bool
+state q text = ""
+state want pick All|Curry|Rice|Dessert|Snack|Salad = All
+topbar "Recipe Box", recipe, "Add recipe"
+count(recipe where fav = yes) "favourites among" count(recipe) "recipes" head
+field q "Search by name"
+choice want
+each recipe where has(title, q) and (want = All or kind = want) sort stars desc as r empty "No recipes match. Add one or clear the search."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.title bold
+      r.kind "·" r.mins "min ·" r.stars "stars" faint
+    toggle r.fav
+===
+@rich domain=r2_grocery_price_watch topic=grocery_price_comparison style=multi_feature
+prices keep changing between shops. note the price of each item at each store, look up an item to compare, show the cheapest price i have seen, and sort the list from cheapest to dearest
+needs: add a price with item, store and amount | search by item name | cheapest price seen per item | list sorted cheapest first | number of prices recorded
+---
+app "Price Watch" tag orange
+table price item text, store text, amount money
+state q text = ""
+topbar "Price Watch", price, "Add a price"
+field q "Look up an item"
+section "Cheapest seen", "Prices:" count(price)
+  each price where has(item, q) by item as g empty "Nothing matches. Add a price first."
+    row
+      g.key grow
+      min(g.amount) bold color good
+each price where has(item, q) sort amount as p
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.item bold
+      p.store faint
+    p.amount bold
+===
+@rich domain=r2_allergy_diary topic=food_allergy_reaction_diary style=detailed
+my son has some allergies we are still figuring out. write down each food and what happened with how bad it was from 1 to 5, show the foods that caused a strong reaction, count by symptom, and keep it in a list by day to show the doctor
+needs: log a food with symptom and severity | list of foods with strong reactions | count of reactions by symptom | list by day for the doctor | count of severe reactions this month
+---
+app "Allergy Diary" shield red
+table reaction food text, symptom pick None|Itchy|Hives|Stomach|Swelling = None, severity num 1..5 = 1
+topbar "Allergy Diary", reaction, "Log a reaction"
+statcard count(reaction month where severity >= 4), "severe reactions this month"
+section "Foods to avoid", "severity 3 or more"
+  each reaction where severity >= 3 sort severity desc as r empty "No strong reactions logged."
+    row
+      r.food grow
+      r.symptom r.severity faint color bad
+section "By symptom"
+  share reaction by symptom, count(it), it.key
+list reaction by day, "Nothing logged yet. Add a food after any reaction."
+===
+@rich domain=r2_hostel_mess_ratings topic=mess_meal_ratings style=multi_feature
+students rate the mess food after every meal. collect stars from 1 to 5 for breakfast, lunch or dinner with an optional comment, show the average per meal this week, how many were below 3 stars, and a trend line
+needs: add a rating with meal, stars and comment | average stars per meal this week | count of ratings below 3 stars | trend line of stars | recent comments
+---
+app "Mess Ratings" star yellow
+table rating meal pick Breakfast|Lunch|Dinner = Lunch, stars num 1..5 = 4, comment text?
+topbar "Mess Ratings", rating, "Rate a meal"
+statcard count(rating week where stars < 3), "poor ratings this week of" count(rating week), count(rating week)
+section "Average this week", "out of 5"
+  each options rating.meal as ml
+    row
+      ml grow
+      round(avg(rating.stars week where meal = ml) * 10) / 10 bold
+section "Stars over the last 14 days"
+  trend rating last 14 days, it.stars
+each rating where stars < 3 top 5 as r
+  row card
+    r.meal r.stars "stars" bold
+    r.comment faint
+===
+@rich domain=r2_community_langar topic=community_kitchen_serving style=multi_feature
+we run a free community kitchen. count plates served with quick buttons of 50, 100 and 200, log donations of food or cash, sign up volunteers for today, and see plates served over the week
+needs: quick buttons to add plates served | plates served today | log a donation with amount | volunteers signed up for today | chart of plates over 7 days
+---
+app "Community Kitchen" heart green
+table served plates num 1..2000, shift pick Lunch|Dinner = Lunch
+table donation what text, amount money
+table volunteer name text, day date = today
+statcard sum(served.plates today), "plates served today"
+quick served, plates, [50, 100, 200]
+section "Plates over the week"
+  daybars last 7 days, sum(served.plates on it)
+section "Volunteers today", count(volunteer where day = today)
+  each volunteer where day = today as v empty "Nobody signed up yet today."
+    v.name
+form volunteer, "Sign me up"
+section "Donations", "this month" sum(donation.amount month)
+  list donation top 5, "No donations logged yet."
+===

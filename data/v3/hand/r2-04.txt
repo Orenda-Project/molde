@@ -1,0 +1,475 @@
+@rich domain=r2_coffee_punch_cards topic=cafe_loyalty_stamp_cards style=multi_feature
+small cafe. paper stamp cards keep getting lost so i want a digital one. a list of regulars, a button to add a stamp for each coffee, a row of eight dots showing the card filling up, and a redeem button when they earn a free coffee
+needs: add a regular customer | add a stamp with one button | eight dots showing the card progress | redeem a free coffee after eight stamps | count of free coffees given this month
+---
+app "Stamp Cards" coffee red
+table customer name text
+table stamp customer ref customer
+table redeem customer ref customer
+topbar "Stamp Cards", customer, "Add regular"
+statcard count(redeem month), "free coffees given this month"
+each customer sort name as c empty "No regulars yet. Add the first one."
+  stack card gap 2 tap edit c swipe remove c
+    row gap 2
+      stack grow gap 0
+        c.name bold
+        count(c.stamp) "stamps in total" faint
+      if floor(count(c.stamp) / 8) - count(c.redeem) > 0
+        button "Redeem free" fill accent tap add redeem customer = c
+      else
+        button "Add stamp" tap add stamp customer = c
+    row gap 1
+      each 1..8 as n
+        box grow height 10 radius 5 fill if(n <= min(count(c.stamp) - 8 * count(c.redeem), 8), accent, soft)
+===
+@rich domain=r2_iftar_stall_slots topic=iftar_stall_preorders style=detailed
+we sell pakoras, samosas, chana chaat and jalebi before iftar and people preorder. take the name, item, number of plates and a pickup slot, show what to fry in total, group the waiting orders by slot, and remind me to start frying at 3:30
+needs: add a preorder with name, item, plates and pickup slot | totals of plates to make per item | waiting orders grouped by slot | tick when collected | reminder at 3:30 to start frying
+---
+app "Iftar Stall" fire orange dark
+table preorder name text, item pick Pakora|Samosa|Chana_chaat|Jalebi = Pakora, plates num 1..20 = 1, slot pick Four_pm|Five_pm|Six_pm = Five_pm, collected bool
+remind "Start frying for iftar orders" at 15:30
+topbar "Iftar Stall", preorder, "New preorder"
+section "To fry today", "plates waiting" sum(preorder.plates where collected = no)
+  share preorder today where collected = no by item, sum(it.plates), it.key
+each options preorder.slot as sl
+  section sl, "Orders:" count(preorder where slot = sl and collected = no)
+    each preorder where slot = sl and collected = no as o empty "Nothing waiting for this slot."
+      row gap 2 tap edit o swipe remove o
+        toggle o.collected
+        o.name grow
+        o.plates "x" o.item faint
+===
+@rich domain=r2_tip_pool_split topic=restaurant_tip_pool style=custom_ui
+at the end of the night we split the tip jar by hours worked. i add each person's hours, type the tips collected, and want it to show what everybody gets
+needs: add staff with hours worked | enter tips collected for the night | share per person by hours | total tips and total hours today | list of staff hours
+---
+app "Tip Pool" coin yellow
+table shift staff text, hours num 0.5..14 = 6
+table jar amount money
+topbar "Tip Pool", shift, "Add staff hours"
+form jar, "Add tips collected"
+row gap 2
+  statcard sum(jar.amount today), "tips tonight"
+  statcard sum(shift.hours today), "hours worked"
+section "Each person gets", "by hours"
+  each shift today as s empty "Add the staff who worked tonight."
+    row gap 2 tap edit s swipe remove s
+      s.staff grow
+      s.hours "h" faint
+      round(sum(jar.amount today) * s.hours / max(sum(shift.hours today), 1)) bold
+===
+@rich domain=r2_cold_chain_temps topic=fridge_temperature_log style=multi_feature
+health inspector asks for fridge temperature records. log the temperature of the fridge, freezer, display chiller and walk in, flag anything outside the safe range (0 to 5, freezer minus 18 or colder), show the latest reading for each, and remind staff twice a day
+needs: log a temperature reading per unit | latest reading for each unit | flags readings outside the safe range | count of unsafe readings today | reminders at 9 and 3
+---
+app "Cold Chain" cloud green
+table reading unit pick Fridge|Freezer|Display_chiller|Walk_in = Fridge, celsius num -40..30
+remind "Log the fridge temperatures" at 9:00, 15:00
+let bad_today = count(reading today where (unit = Freezer and celsius > -18) or (unit != Freezer and (celsius > 5 or celsius < 0)))
+topbar "Cold Chain", reading, "Log a reading"
+statcard bad_today, "unsafe readings today"
+section "Latest", "safe range 0 to 5, freezer -18 or colder"
+  each options reading.unit as u
+    row
+      u grow
+      last(reading.celsius where unit = u) "C" bold
+section "Today's readings"
+  each reading today as r empty "No readings yet today."
+    row gap 2 tap edit r swipe remove r
+      r.unit grow
+      r.celsius "C" bold color if((r.unit = Freezer and r.celsius > -18) or (r.unit != Freezer and (r.celsius > 5 or r.celsius < 0)), bad, good)
+===
+@rich domain=r2_open_close_checklist topic=restaurant_open_close_checks style=detailed
+cafe manager. a checklist for opening (switch on fryer, check fridge, wipe tables) and one for closing (clean grill, bins out, lock gas). staff tick each task and the ticks reset every morning by themselves. show progress for each list
+needs: add a task to the opening or closing list | tick tasks done today | ticks reset every day | progress for opening and closing | tap to edit or remove a task
+---
+app "Open and Close" check blue
+table task what text, phase pick Opening|Closing = Opening
+table checked task ref task
+topbar "Open and Close", task, "Add task"
+each options task.phase as ph
+  section ph, "Done:" count(checked today where task.phase = ph) "of" count(task where phase = ph)
+    each task where phase = ph as t empty "No tasks on this list."
+      row gap 2 tap edit t swipe remove t
+        toggle t.checked
+        t.what grow
+if count(task) > 0 and count(checked today) = count(task)
+  "Everything is checked. Good shift." head color good
+===
+@rich domain=r2_flatmates_groceries topic=roommates_grocery_split style=multi_feature
+four of us share the kitchen groceries. whoever buys writes what and how much. at the end of the month i want to see how much each person paid, the fair share, and who owes or gets money back
+needs: log a purchase with who bought it, item and amount | total spent this month | fair share per person | what each person paid | who owes or gets back
+---
+app "Flat Groceries" cart purple
+table buy who pick Ali|Sara|Hamza|Zoya = Ali, what text, amount money
+let total = sum(buy.amount month)
+topbar "Flat Groceries", buy, "Add purchase"
+statcard total, "spent this month, fair share each" round(total / 4)
+section "Who owes what", "negative means pays in"
+  each options buy.who as w
+    row gap 2
+      w bold grow
+      sum(buy.amount month where who = w) faint
+      round(sum(buy.amount month where who = w) - total / 4) bold color if(sum(buy.amount month where who = w) >= total / 4, good, bad)
+list buy month by day, "No groceries bought this month."
+===
+@rich domain=r2_low_salt_diet topic=low_sodium_diet_tracker style=custom_ui
+doctor told dad to keep salt under 2000 mg a day. buttons for the usual foods like bread, cheese, soup and pickle that add their sodium, a way to add anything else with its mg, progress against the limit and a two week line
+needs: buttons for common foods with their sodium | add any food with sodium in mg | sodium today against the daily limit | line chart of last 14 days | list of today's foods
+---
+app "Low Salt" heart grey
+table food what text, sodium num 0..5000 unit "mg"
+setting limit num = 2000 "Sodium limit (mg a day)"
+topbar "Low Salt", food, "Add other food"
+goal sum(food.sodium today), limit, "mg of sodium today", " mg"
+grid 2 gap 1
+  button "Bread slice 150" tap add food what = "Bread slice", sodium = 150
+  button "Cheese slice 180" tap add food what = "Cheese slice", sodium = 180
+  button "Soup bowl 800" tap add food what = "Soup bowl", sodium = 800
+  button "Pickle 300" tap add food what = "Pickle", sodium = 300
+section "Last 14 days"
+  trend days last 14 days, sum(food.sodium on it)
+list food today, "Nothing logged yet today."
+===
+@rich domain=r2_pregnancy_nutrition_checks topic=pregnancy_daily_food_checks style=multi_feature
+my sister is pregnant and the doctor gave a list of foods to have daily, like milk, dates, an iron rich food and a fruit. a tick list for today, a grid of the last four weeks, and how many days to the due date
+needs: add a food to the daily list | tick the foods eaten today | grid of last four weeks | days to the due date | each food's last 7 days dots
+---
+app "Mother Food" baby pink
+setting due date = 2027-03-20 "Due date"
+table item name text
+table done item ref item
+let n = count(item)
+topbar "Mother Food", item, "Add daily food"
+statcard max(due - today, 0), "days to the due date"
+statcard count(done today), "of" n "foods ticked today", n
+each item sort name as i empty "No foods yet. Add milk, dates or whatever the doctor listed."
+  stack card gap 2 tap edit i swipe remove i
+    row gap 2
+      i.name bold grow
+      toggle i.done
+    weekdots count(i.done on it) > 0
+section "Last 4 weeks", "darker means more foods ticked"
+  daygrid last 28 days, count(done on it), max(n, 1)
+===
+@rich domain=r2_bbq_meat_calc topic=barbecue_meat_calculator style=custom_ui
+planning a bbq for friends and family. set the number of adults and kids, choose chicken heavy, balanced or beef heavy, and it should say how many kilos of chicken, beef and lamb to buy and what it will cost
+needs: set adults and kids | choose the meat mix | kilos of chicken, beef and lamb to buy | estimated cost | settings for price per kilo
+---
+app "BBQ Plan" fire red
+setting chicken_rate money = 550 "Chicken per kg"
+setting beef_rate money = 1400 "Beef per kg"
+setting lamb_rate money = 2200 "Lamb per kg"
+state adults num = 10
+state kids num = 4
+state mix pick Chicken_heavy|Balanced|Beef_heavy = Balanced
+let meat = (adults + kids / 2) * 0.35
+let chicken = meat * if(mix = Chicken_heavy, 0.6, if(mix = Balanced, 0.4, 0.2))
+let beef = meat * if(mix = Beef_heavy, 0.5, 0.3)
+let lamb = meat - chicken - beef
+section "Who is coming"
+  "Adults" adults bold
+  slider adults 1..60
+  "Kids" kids bold
+  slider kids 0..30
+choice mix
+section "Buy this much", "Total kg:" fixed(meat, 1)
+  "Chicken" fixed(chicken, 1) "kg" bold
+  "Beef" fixed(beef, 1) "kg" bold
+  "Lamb" fixed(lamb, 1) "kg" bold
+statcard round(chicken * chicken_rate + beef * beef_rate + lamb * lamb_rate), "estimated cost of meat"
+===
+@rich domain=r2_pizza_night_slices topic=pizza_night_how_many style=short
+pizza night with the cousins, how many pizzas do we order
+needs: set the number of people | slices each person eats | pizzas to order from 8 slices each | total price
+---
+app "Pizza Night" food orange
+setting price money = 1800 "Price per pizza"
+state people num = 6
+state slices num = 3
+let pizzas = floor((people * slices + 7) / 8)
+"People" people bold
+slider people 1..30
+"Slices each" slices bold
+slider slices 1..6
+statcard pizzas, "pizzas to order, total" pizzas * price
+"Slices left over:" pizzas * 8 - people * slices faint
+===
+@rich domain=r2_kitchen_timers topic=kitchen_multi_timers style=custom_ui
+cooking dinner, i need rice, daal and eggs timers going at the same time with start and pause on each, a note of what i cooked when the timer ends, and a list of what i cooked today
+needs: separate timers for rice, daal and eggs | start and pause on each timer | notice when each timer ends | records what was cooked | list of dishes cooked today
+---
+app "Kitchen Timers" timer teal
+table cooked dish text
+timer 15m, "Rice", notify "Rice is ready" then add cooked dish = "Rice"
+timer 40m, "Daal", notify "Daal is ready" then add cooked dish = "Daal"
+timer 8m, "Eggs", notify "Eggs are done" then add cooked dish = "Eggs"
+statcard count(cooked today), "dishes finished today"
+section "Cooked today"
+  list cooked today, "Nothing finished yet. Start a timer."
+===
+@rich domain=r2_caterer_vendor_bills topic=catering_vendor_payments style=detailed
+catering company. we owe the tent house, the flower man, the meat supplier and others on different dates. list each bill with vendor, amount and due date, tick when paid, show what is overdue in red, the total unpaid and remind me each morning if something is due in two days
+needs: add a bill with vendor, amount and due date | tick when paid | overdue bills in red | total still unpaid | morning reminder for bills due soon
+---
+app "Vendor Bills" money plum
+table bill vendor text, amount money, due date, paid bool
+remind "A vendor bill is due soon" at 9:00 if count(bill where paid = no and due <= today + 2) > 0
+topbar "Vendor Bills", bill, "Add a bill"
+row gap 2
+  statcard sum(bill.amount where paid = no), "still unpaid"
+  statcard count(bill where paid = no and due < today), "overdue"
+each bill where paid = no sort due as b empty "All bills are paid."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    stack grow gap 0
+      b.vendor bold
+      "Due" b.due faint color if(b.due < today, bad, muted)
+    b.amount bold
+section "Paid", count(bill where paid = yes)
+  list bill where paid = yes, "Nothing paid yet."
+===
+@rich domain=r2_office_lunch_vote topic=office_lunch_poll style=multi_feature
+we order lunch for the office and never agree. everyone casts one vote for biryani, pizza, karahi or salad, show the results as bars, who has voted, and what the order will cost at our budget per head
+needs: cast a vote with name and choice | results as bars | list of who voted | cost at budget per head | winner announced
+---
+app "Lunch Vote" food ocean
+table vote person text, choice pick Biryani|Pizza|Karahi|Salad = Biryani
+setting budget money = 700 "Budget per person"
+topbar "Lunch Vote", vote, "Cast a vote"
+statcard count(vote today), "votes today, order costs" count(vote today) * budget
+section "Results"
+  share vote today by choice, count(it), it.key
+each options vote.choice as c
+  if count(vote today where choice = c) = max(count(vote today where choice = Biryani), max(count(vote today where choice = Pizza), max(count(vote today where choice = Karahi), count(vote today where choice = Salad)))) and count(vote today) > 0
+    "Leading:" c bold color good
+section "Who voted"
+  list vote today, "Nobody has voted yet."
+===
+@rich domain=r2_delivery_check topic=grocery_delivery_receipt_check style=detailed
+the online grocery order always arrives with something missing. write what i ordered and the quantity, set how many actually arrived, and it tells me what is missing and how much to claim back
+needs: add an ordered item with quantity and price | set how many arrived | missing quantity per item | amount to claim back | button to mark everything arrived
+---
+app "Delivery Check" package teal
+table line item text, ordered num 1..50 = 1, got num 0..50 = 0, price money
+let claim = sum(line, max(it.ordered - it.got, 0) * it.price)
+topbar "Delivery Check", line, "Add ordered item"
+statcard claim, "to claim back on" count(line, it.got < it.ordered) "short items"
+each line sort item as l empty "Add the items from the order confirmation."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.item bold
+      "Ordered" l.ordered "· arrived" l.got faint color if(l.got < l.ordered, bad, good)
+    button "-" tap set l.got = l.got - 1
+    button "+" tap set l.got = l.got + 1
+    button "All" tap set l.got = l.ordered
+===
+@rich domain=r2_cash_drawer_count topic=cafe_cash_drawer_count style=custom_ui
+closing the till at the cafe. tap plus and minus for how many notes of 1000, 500, 100 and 50 are in the drawer, show the total, compare with what the till says it should be, and save the closing count
+needs: plus and minus counters per note | total cash counted | difference from expected cash | save the closing count | list of past closings
+---
+app "Cash Drawer" coin mint
+table closing total money, diff money
+setting expected money = 25000 "Expected cash"
+state n1000 num = 0
+state n500 num = 0
+state n100 num = 0
+state n50 num = 0
+let total = n1000 * 1000 + n500 * 500 + n100 * 100 + n50 * 50
+section "Notes in the drawer"
+  row gap 2 align center
+    "1000" bold grow
+    button "-" tap set n1000 = max(n1000 - 1, 0)
+    n1000 bold
+    button "+" tap set n1000 = n1000 + 1
+  row gap 2 align center
+    "500" bold grow
+    button "-" tap set n500 = max(n500 - 1, 0)
+    n500 bold
+    button "+" tap set n500 = n500 + 1
+  row gap 2 align center
+    "100" bold grow
+    button "-" tap set n100 = max(n100 - 1, 0)
+    n100 bold
+    button "+" tap set n100 = n100 + 1
+  row gap 2 align center
+    "50" bold grow
+    button "-" tap set n50 = max(n50 - 1, 0)
+    n50 bold
+    button "+" tap set n50 = n50 + 1
+statcard total, "counted, difference" total - expected
+button "Save closing count" fill accent tap add closing total = total, diff = total - expected
+list closing top 5, "No closings saved yet."
+===
+@rich domain=r2_monthly_ration_stock topic=monthly_ration_staples style=multi_feature
+every month we buy atta, rice, sugar and oil in bulk. note how much of each is left and how much we use a month, show how many days each will last, flag what runs out in under ten days, and let me tap when i use or buy some
+needs: add a staple with stock and monthly use | days each staple will last | flags staples under ten days | buttons to use 1 kg or add 10 kg | shopping list of low staples
+---
+app "Ration Stock" bag yellow
+table staple item text, stock num 0..500 = 10 unit "kg", month_use num 0.5..100 = 5
+topbar "Ration Stock", staple, "Add staple"
+statcard count(staple where stock * 30 / month_use < 10), "staples run out within 10 days"
+each staple sort stock / month_use as s empty "No staples yet. Add atta, rice, sugar and oil."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.item bold
+      s.stock "kg left, about" round(s.stock * 30 / s.month_use) "days" faint color if(s.stock * 30 / s.month_use < 10, bad, muted)
+    button "Used 1" tap set s.stock = s.stock - 1
+    button "+10" tap set s.stock = s.stock + 10
+section "Buy soon", "under 10 days"
+  each staple where stock * 30 / month_use < 10 as s empty "Nothing to buy yet."
+    s.item
+===
+@rich domain=r2_gas_cylinder_refills topic=lpg_cylinder_refill_dates style=detailed
+the gas cylinder always runs out in the middle of cooking. each time i refill i log the price, and it should tell me how many days since the last refill, the average gap between refills, and when the next one is probably due
+needs: log a refill with price | days since the last refill | average days between refills | estimate of when the next refill is due | spending on gas this year
+---
+app "Gas Cylinder" fire grey
+table refill price money
+topbar "Gas Cylinder", refill, "Log a refill"
+row gap 2
+  statcard since(refill), "days since the last refill"
+  statcard round(gap(refill)), "days between refills on average"
+if count(refill) >= 2
+  "Next refill in about" max(round(gap(refill)) - since(refill), 0) "days" head
+else
+  "Log two refills and the next date will be estimated." faint
+section "This year", sum(refill.price year)
+  list refill by day, "No refills logged yet."
+===
+@rich domain=r2_cooking_skills_ladder topic=learning_to_cook_skill_list style=custom_ui
+learning to cook properly. a list of skills like boiling rice, a basic curry, rolling rotis and frying eggs, each at never, tried, comfortable or confident. tap the level, log each practice with stars, and see how many skills are confident
+needs: add a skill to learn | choose its level | log a practice with stars | count of confident skills | practices in the last 30 days
+---
+app "Cook School" pen purple
+table skill name text, level pick Never|Tried|Comfortable|Confident = Never
+table attempt skill ref skill, stars num 1..5 = 3
+topbar "Cook School", skill, "Add skill"
+statcard count(skill where level = Confident), "of" count(skill) "skills are confident", count(skill)
+"Practices in the last 30 days:" count(attempt last 30 days) faint
+each skill sort name as s empty "No skills yet. Add the first thing you want to cook well."
+  stack card gap 2 swipe remove s
+    row gap 2
+      s.name bold grow
+      count(s.attempt) "practices" faint
+      button "Practised" tap add attempt skill = s
+    choice s.level
+===
+@rich domain=r2_starter_feeding topic=sourdough_starter_feedings style=multi_feature
+i keep a sourdough starter that dies if i forget it. log each feeding with the flour and water in grams, remind me morning and evening, and show whether it is hungry now and how many days this week i fed it
+needs: log a feeding with flour and water grams | reminders morning and evening | shows whether the starter is hungry | last 7 days dots of feeding | total flour used this week
+---
+app "Starter Log" bread orange
+table feed flour num 10..500 = 50 unit "g", water num 10..500 = 50 unit "g"
+remind "Feed your starter" at 8:00, 20:00
+topbar "Starter Log", feed, "Log a feeding"
+if due(feed, 1)
+  "Hungry. Feed it today." head color warn
+else
+  "Fed today. Happy starter." head color good
+button "Fed 50 g flour + 50 g water" fill accent tap add feed
+section "This week", "Flour g:" sum(feed.flour week)
+  weekdots count(feed on it) > 0
+list feed top 6, "No feedings logged yet."
+===
+@rich domain=r2_diet_weigh_in topic=diet_weekly_weigh_in style=detailed
+on a diet plan. weigh in once a week and tick whether i stuck to the plan that week. show my weight on a line, how much is left to my goal weight, and how many weeks i stuck to the plan
+needs: log a weigh in with kilos and a stuck to plan tick | line chart of weight | kilos left to goal weight | number of weeks stuck to the plan | goal weight setting
+---
+app "Diet Check" scale mint dark
+table weigh kg num 20..300, stuck bool
+setting goal_kg num = 70 "Goal weight (kg)"
+topbar "Diet Check", weigh, "Weigh in"
+row gap 2
+  statcard last(weigh.kg), "kg now"
+  statcard max(last(weigh.kg) - goal_kg, 0), "kg to go"
+section "Weight", "last 12 weeks"
+  trend weigh last 12 weeks, it.kg
+section "Stuck to the plan", "Weeks:" count(weigh where stuck = yes) "of" count(weigh)
+  list weigh top 8, "No weigh ins yet. Step on the scale and log it."
+===
+@rich domain=r2_ghee_yield topic=home_ghee_butter_yield style=multi_feature
+we collect cream from the buffalo milk and make ghee at home. log each batch with the litres of milk and kilos of ghee, show how much ghee i get from ten litres, and the value of ghee made at my selling price
+needs: log a batch with milk litres and ghee kilos | ghee yield per ten litres | line of yield across batches | value of ghee made this month | price per kg setting
+---
+app "Ghee Batches" milk yellow
+table churn milk num 1..500 unit "litres", ghee num 0.05..50 unit "kg"
+setting price money = 3200 "Ghee price per kg"
+topbar "Ghee Batches", churn, "Log a batch"
+row gap 2
+  statcard round(sum(churn.ghee) * 100 / max(sum(churn.milk), 1)) / 10, "kg of ghee from 10 litres"
+  statcard sum(churn.ghee month) * price, "ghee made this month"
+section "Yield per batch", "kg per 10 litres"
+  trend churn last 12 months, it.ghee * 10 / it.milk
+list churn top 6, "No batches yet. Log the first one after churning."
+===
+@rich domain=r2_recipe_scaler topic=recipe_servings_scaler style=custom_ui
+i want to type a recipe once for four people and scale it to however many i am cooking for. show every ingredient with the new amount, and let me slide the number of servings
+needs: add an ingredient with amount and unit | setting for how many the recipe serves | slider for servings wanted | scaled amount for each ingredient | count of ingredients
+---
+app "Recipe Scaler" calc blue
+table ingredient name text, base num 0.1..5000, unit text
+setting serves num 1..100 = 4 "Recipe serves"
+state want num = 4
+topbar "Recipe Scaler", ingredient, "Add ingredient"
+"Cooking for" want head
+slider want 1..40
+section "Ingredients", "scaled from" serves
+  each ingredient as g empty "No ingredients yet. Type the recipe for its original servings."
+    row gap 2 tap edit g swipe remove g
+      g.name grow
+      round(g.base * want * 10 / serves) / 10 g.unit bold
+===
+@rich domain=r2_wedding_seating topic=wedding_dinner_tables style=detailed
+walima dinner for 150 guests. list each family party with how many people and the table number, show a grid of fifteen tables that turns red when a table has more than ten, and total seated
+needs: add a party with people and table number | grid of 15 tables | table turns red when over capacity | total guests seated | list parties by table
+---
+app "Seating" users pink
+table seating party text, seat num 1..15, people num 1..12 = 4
+setting cap num = 10 "Seats per table"
+topbar "Seating", seating, "Add a party"
+statcard sum(seating.people), "guests seated at" count(seating where people > 0) "parties"
+grid 5 gap 1
+  each 1..15 as n
+    stack radius 10 pad 1 gap 0 align center fill if(sum(seating.people where seat = n) > cap, bad, if(sum(seating.people where seat = n) > 0, accent, soft))
+      n bold
+      sum(seating.people where seat = n) "/" cap tiny
+each seating sort seat as s empty "No parties yet. Add the first family."
+  row card gap 2 tap edit s swipe remove s
+    "Table" s.seat bold
+    s.party grow
+    s.people "people" faint
+===
+@rich domain=r2_homechef_parcels topic=home_chef_parcel_dispatch style=multi_feature
+i sell pickles and frozen kebabs from home and send parcels by courier. each parcel has a customer, a status of packed, shipped or delivered, a tracking number and the cash on delivery amount. show how much cash i am waiting for and tap to change status
+needs: add a parcel with customer, tracking and cash on delivery | change status to shipped or delivered | cash still to come from undelivered parcels | counts by status | search or list by customer
+---
+app "Parcels" package grey
+table parcel customer text, track text?, cod money = 0, status pick Packed|Shipped|Delivered = Packed
+topbar "Parcels", parcel, "Add parcel"
+row gap 2
+  statcard count(parcel where status = Packed), "to ship"
+  statcard count(parcel where status = Shipped), "on the way"
+statcard sum(parcel.cod where status = Shipped), "cash on delivery coming"
+each parcel sort status as p empty "No parcels yet. Add the first order you pack."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.customer bold grow
+      p.cod faint
+    p.track faint
+    choice p.status
+===
+@rich domain=r2_meatless_days topic=meatless_days_calendar style=short
+trying to eat meat free on some days to save money and be healthier
+needs: tap a calendar day for a meat free day | days this month against a monthly target | switch between months | current streak
+---
+app "Meatless Days" leaf green
+table meatless
+setting target num = 12 "Meat free days a month"
+state m date = today
+monthnav m
+goal count(meatless month of m), target, "meat free days", " d"
+calendar meatless, m
+"Current streak:" streak(meatless) "days" faint
+===

@@ -1,0 +1,469 @@
+@rich domain=d2_sprint_points_board topic=sprint_board_points style=detailed
+our two week sprint lives in my head and a sticky note. I want cards with title, points and who owns it, columns Todo Doing Review Done that I move with a tap, points done against what we committed, and a chart of points closed each day.
+needs: add a card with title, points and owner | tap to move a card to the next column | switch between the status columns | points done of the committed total | chart of points closed per day
+---
+app "Sprint board" board blue
+table card title text, points num 1..21 = 3, owner text?, status pick Todo|Doing|Review|Done = Todo, closed date?
+setting committed num = 40 "Points committed"
+state col pick Todo|Doing|Review|Done = Todo
+let donepts = sum(card.points where status = Done)
+topbar "Sprint board", card, "Add card"
+statcard donepts, "points done of" committed, committed
+section "Burn-up", "points closed per day"
+  daybars last 7 days, sum(card.points where closed = it)
+row gap 1
+  each options card.status
+    button it count(card where status = it) fill if(col = it, accent, soft) grow tap set col = it
+each card where status = col sort title as c empty "Nothing in this column. Add a card or move one over."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.title bold
+      c.owner c.points "pts" faint
+    if c.status = Todo
+      button "Start" tap set c.status = Doing
+    if c.status = Doing
+      button "Review" tap set c.status = Review
+    if c.status = Review
+      button "Done" tap set c.status = Done then set c.closed = today
+===
+@rich domain=d2_backlog_value_effort topic=backlog_grooming_scores style=multi_feature
+grooming the backlog next week and arguing over what goes first. let me score every item for value and effort from 1 to 10, mark if its a feature, bug or chore, and rank them by value per effort so the best ones float up. filter by kind too
+needs: add an item with value, effort and kind | value per effort ratio for each item | ranked list with best first | bar chart of top five | filter by kind
+---
+app "Backlog" list plum
+table item title text, value num 1..10 = 5 "Value", effort num 1..10 = 5 "Effort", kind pick Feature|Bug|Chore = Feature
+state show pick All|Feature|Bug|Chore = All
+let ratio(v num, e num) = round(v * 10 / e) / 10
+topbar "Backlog", item, "Add item"
+"Items" count(item) "· total effort" sum(item.effort) "points" faint
+section "Best value for effort", "value / effort"
+  bars item sort ratio(it.value, it.effort) desc top 5, ratio(it.value, it.effort), it.title
+choice show
+each item where show = All or kind = show sort ratio(value, effort) desc as i empty "The backlog is empty. Add the first idea to score it."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.title bold
+      i.kind "· value" i.value "· effort" i.effort faint
+    text ratio(i.value, i.effort) big
+===
+@rich domain=d2_pr_review_queue topic=pull_request_review_queue style=custom_ui
+PRs sit for days because nobody remembers them. list of open pull requests with author, reviewer and size, colour the ones that are older than 2 days, a button when it gets merged, and who is carrying the most reviews
+needs: add a pull request with author, reviewer and size | age colouring after 2 days | mark a PR merged | count of stale PRs | reviews per person chart
+---
+app "Review queue" users orange
+table pr title text, author text, reviewer text = "unassigned", size pick S|M|L|XL = M, opened date = today, merged bool
+let stale = count(pr where merged = no and today - opened > 2)
+topbar "Review queue", pr, "Add PR"
+statcard count(pr where merged = no), "open PRs," stale "waiting over 2 days"
+section "Reviews waiting", "per reviewer"
+  share pr where merged = no by reviewer, count(it), it.key
+each pr where merged = no sort opened as p empty "No open PRs. Enjoy the quiet."
+  row card gap 2 fill if(today - p.opened > 2, bad, if(today - p.opened > 0, warn, soft)) tap edit p swipe remove p
+    stack grow gap 0
+      p.title bold
+      p.author "→" p.reviewer "·" p.size faint
+    text today - p.opened "d" bold
+    button "Merged" tap set p.merged = yes
+===
+@rich domain=d2_review_checklist topic=code_review_checklist style=detailed
+I keep forgetting things when I review code. checklist for each review: tests, naming, error handling, security, docs, performance. tick them per PR and show how many of the six are done for each, plus how many reviews are fully done
+needs: add a review by PR name | tick each of six checks per review | count of checks done per review | reviews fully done
+---
+app "Review checks" check teal
+table review pr text, author text?
+table pass review ref review, item pick Tests|Naming|Errors|Security|Docs|Perf
+let full = count(review, count(it.pass) = 6)
+topbar "Code review", review, "New review"
+statcard full, "of" count(review) "reviews fully checked", count(review)
+each review as r empty "No reviews yet. Add the PR you are looking at."
+  stack card gap 2 swipe remove r
+    row gap 2
+      r.pr bold grow
+      count(r.pass) "/ 6" faint
+    goal count(r.pass), 6, "checks done"
+    grid 3 gap 1
+      each options pass.item as k
+        row gap 1 align center
+          toggle r.pass all where item = k
+          text k small
+===
+@rich domain=d2_planning_poker topic=estimation_vote_tally style=multi_feature
+planning poker on one phone, we pass it around. stories, and everyone taps their estimate 1 2 3 5 8 or 13. show the average, how many voted, and warn me if highest and lowest are far apart so we talk
+needs: add a story | tap an estimate from 1 to 13 | number of votes per story | average estimate | warning when votes are far apart | clear votes
+---
+app "Poker" cards yellow
+table story title text
+table vote story ref story, points num 1..21
+topbar "Planning poker", story, "Add story"
+each story as s empty "No stories yet. Add one and pass the phone around."
+  stack card gap 2
+    row gap 2
+      s.title bold grow
+      round(avg(s.vote.points) * 10) / 10 "avg" big
+    row gap 1
+      each [1, 2, 3, 5, 8, 13] as n
+        button n fill soft grow tap add vote story = s, points = n
+    row gap 2
+      count(s.vote) "votes" faint grow
+      button "Clear" tap remove all vote where story = s
+    if count(s.vote) > 1 and max(s.vote.points) - min(s.vote.points) >= 5
+      "Wide spread: talk it through." color warn bold
+===
+@rich domain=d2_tech_debt_map topic=tech_debt_impact_effort style=custom_ui
+tech debt tracker: each item gets impact low/medium/high and effort in days, area of the code, and a tick when fixed. Draw a little map with effort across and impact up so I see the quick wins top left
+needs: add a debt item with impact, effort and area | impact versus effort map | mark an item fixed | count of open items and total days to fix | list sorted by impact
+---
+app "Tech debt" tool ink dark
+table debt title text, impact pick Low|Medium|High = Medium, effort num 1..13 = 3 "Effort (days)", area text?, fixed bool
+let open = count(debt where fixed = no)
+topbar "Tech debt", debt, "Add debt"
+statcard open, "open items," sum(debt.effort where fixed = no) "days to clear"
+section "Quick wins top left", "effort →"
+  draw 100, 60 radius 8 fill soft
+    line 50, 0, 50, 60 stroke edge
+    line 0, 30, 100, 30 stroke edge
+    each debt where fixed = no
+      circle 6 + min(it.effort, 13) * 7, 52 - if(it.impact = High, 3, if(it.impact = Medium, 2, 1)) * 15, 3 fill if(it.impact = High, bad, accent)
+each debt where fixed = no sort if(impact = High, 0, if(impact = Medium, 1, 2)) as d empty "Nothing open. Either you are clean or you are not looking."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.title bold
+      d.area d.impact "impact ·" d.effort "days" faint
+    toggle d.fixed
+===
+@rich domain=d2_adr_log topic=architecture_decision_records style=detailed
+I want a list of architecture decisions like ADRs: title, why we chose it, status proposed accepted superseded or rejected. grouped by status, and a number of accepted ones at the top
+needs: add a decision with title, reason and status | list grouped by status | count of accepted decisions | tap to edit or change status
+---
+app "Decisions" note slate
+table adr title text, why long?, status pick Proposed|Accepted|Superseded|Rejected = Proposed, decided date = today
+topbar "Decisions", adr, "New ADR"
+statcard count(adr where status = Accepted), "accepted of" count(adr) "decisions", count(adr)
+each adr by status as g empty "No decisions written yet. Record the next one you argue about."
+  text g.key head
+  each g as a
+    stack card gap 0 tap edit a swipe remove a
+      a.title bold
+      a.decided "·" a.why faint
+===
+@rich domain=d2_meeting_action_items topic=meeting_actions_by_owner style=multi_feature
+after every meeting people say they will do things and then nothing. list of action items with what, who, due date, tick when done. show overdue ones in red and how many open items each person has
+needs: add an action with owner and due date | tick when done | overdue items in red | open items per owner | count of overdue
+---
+app "Action items" list green
+table action what text, owner text, due date, done bool
+let late = count(action where done = no and due < today)
+topbar "Action items", action, "Add action"
+statcard late, "overdue of" count(action where done = no) "open", count(action where done = no)
+section "Open per owner"
+  share action where done = no by owner, count(it), it.key
+each action sort due as a empty "No actions yet. Add what was agreed in the meeting."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.done
+    stack grow gap 0
+      a.what bold
+      a.owner "· due" a.due faint color if(a.due < today and a.done = no, bad, muted)
+===
+@rich domain=d2_one_on_one_notes topic=one_on_one_per_person style=detailed
+I lead 5 people and my 1:1 notes are scattered. add each person, write notes after each chat with a topic and a tick if it needs a follow up. show how many days since I last talked to each one so I don't skip anyone
+needs: add a person | add a note with topic for a person | follow-up tick on notes | days since last 1:1 for each person | count of people not met in two weeks
+---
+app "1:1 notes" user pink
+table person name text
+table note person ref person, topic text, follow bool "Needs follow up"
+let quiet = count(person, due(it.note, 14))
+topbar "1:1 notes", note, "Add note"
+statcard quiet, "of" count(person) "people not met in 2 weeks", count(person)
+each person sort name as p empty "Add the people you manage below."
+  row card gap 2
+    stack grow gap 0
+      p.name bold
+      count(p.note) "notes · follow ups:" count(p.note where follow = yes) faint
+    since(p.note) "days ago" bold color if(due(p.note, 14), warn, ink)
+form person, "Add person"
+list note by day, "No 1:1 notes yet."
+===
+@rich domain=d2_hiring_stages topic=hiring_pipeline_stages style=custom_ui
+hiring two devs. candidates with role and where they are: Applied, Screen, Technical, Onsite, Offer, Hired, Rejected. tap to move them on, and a bar chart that shows how many sit in each stage so I see where we are stuck
+needs: add a candidate with role | change the stage of a candidate | chart of candidates per stage | count of hired | list sorted by name
+---
+app "Hiring" users mint
+table cand name text, role text, stage pick Applied|Screen|Technical|Onsite|Offer|Hired|Rejected = Applied
+topbar "Hiring", cand, "Add candidate"
+statcard count(cand where stage = Hired), "hired," count(cand where stage != Hired and stage != Rejected) "still in the pipeline"
+section "Pipeline", "candidates per stage"
+  bars options cand.stage, count(cand where stage = it), it
+each cand sort name as c empty "No candidates yet. Add the first CV that lands in your inbox."
+  stack card gap 1 swipe remove c
+    row
+      c.name bold grow
+      c.role faint
+    choice c.stage
+===
+@rich domain=d2_interview_scores topic=interview_scorecard_averages style=detailed
+scorecard for interviews. for each candidate I give marks 1 to 5 in Coding, Design, Communication and Culture, with a note. show the average per candidate with a yes/maybe/no call and the average by area across everyone
+needs: add a mark for a candidate and area | average mark per candidate | strong yes, maybe or no verdict | average by area chart
+---
+app "Scorecards" star purple
+table score who text, area pick Coding|Design|Communication|Culture = Coding, mark num 1..5 = 3, note text?
+topbar "Scorecards", score, "Add mark"
+section "Average by area", "out of 5"
+  bars options score.area, avg(score.mark where area = it), it
+each score by who as g empty "No marks yet. Add one after the interview."
+  row card gap 2
+    stack grow gap 0
+      g.key bold
+      sum(g.mark) "points in total" faint
+    fixed(avg(g.mark), 1) big
+    if(avg(g.mark) >= 4, "Strong yes", if(avg(g.mark) >= 3, "Maybe", "No")) bold
+===
+@rich domain=d2_dev_onboarding topic=new_developer_onboarding style=multi_feature
+new dev joins monday. checklist of things to get done in four groups: Access, Setup, People, Learn. tick each, show progress per group and overall, and let me add my own steps
+needs: add a step in a group | tick steps done | progress per group | overall progress
+---
+app "Onboarding" school teal
+table task what text, group pick Access|Setup|People|Learn = Access, done bool
+topbar "Onboarding", task, "Add step"
+goal count(task where done = yes), count(task), "steps done"
+each options task.group as gr
+  section gr, join(count(task where group = gr and done = yes), "/", count(task where group = gr))
+    each task where group = gr sort at as t empty "Nothing here yet."
+      row gap 2 tap edit t swipe remove t
+        toggle t.done
+        t.what grow
+===
+@rich domain=d2_learning_hours topic=learning_hours_per_topic style=multi_feature
+trying to study 10 hours a week outside work. log hours with topic like Rust, SQL, system design, show this week against the goal, a chart of the last 7 days and which topic got the most time this month
+needs: log hours for a topic | weekly goal progress | bar chart of the last 7 days | hours per topic this month | change weekly goal
+---
+app "Learning log" book ocean
+table study topic text, hours num 0..12 = 1
+setting target num = 10 "Weekly hours goal"
+topbar "Learning log", study, "Log hours"
+goal sum(study.hours week), target, "hours this week", "h"
+section "Last 7 days", "hours"
+  daybars last 7 days, sum(study.hours on it)
+section "By topic", "this month"
+  share study month by topic, sum(it.hours), it.key
+list study by day, "Nothing logged yet. Even half an hour counts."
+===
+@rich domain=d2_sideproject_clock topic=side_project_time_tracker style=custom_ui
+start stop clock for my side project. type which project, press start, and when I press stop it saves the minutes. show total hours per project and today's minutes
+needs: start and stop a clock | save minutes for the project when stopped | total hours per project | minutes worked today
+---
+app "Side projects" bolt grey
+table work project text, mins num 1..900 = 30
+state proj text = ""
+state going bool = no
+state started when = now
+state clock when = now
+every 1s if going set clock = now
+"Today" faint
+sum(work.mins today) "min" huge
+field proj "Project"
+if going
+  clock - started big
+  button "Stop and save" fill bad tap add work project = proj, mins = round((now - started) / 1m) then set going = no
+else
+  button "Start" fill good tap set started = now then set clock = now then set going = yes
+section "Total per project", "hours"
+  share work by project, round(sum(it.mins) / 6) / 10, it.key
+list work by day, "No sessions yet. Press Start."
+===
+@rich domain=d2_freelance_clients topic=freelance_projects_invoices style=detailed
+freelancing for a few clients at different hourly rates. add each project with the rate, log hours with one tap, record when I invoice, and show how much I am still owed per project and overall
+needs: add a project with client and hourly rate | one tap hours buttons | record an invoice amount | owed per project | total still unbilled
+---
+app "Clients" money yellow
+table project client text, title text, rate money = 40 "Hourly rate"
+table hours project ref project, h num 0..24
+table invoice project ref project, amount money
+topbar "Freelance", project, "Add project"
+statcard sum(project, sum(it.hours.h) * it.rate - sum(it.invoice.amount)), "still unbilled across" count(project) "projects"
+each project as p empty "No projects yet. Add your first client job."
+  stack card gap 2 swipe remove p
+    row
+      stack grow gap 0
+        p.client bold
+        p.title faint
+      sum(p.hours.h) * p.rate - sum(p.invoice.amount) "owed" bold
+    row gap 1
+      each [1, 2, 4, 8] as n
+        button "+" n "h" fill soft grow tap add hours project = p, h = n
+      button "Invoice" tap add invoice project = p, amount = sum(p.hours.h) * p.rate - sum(p.invoice.amount)
+    sum(p.hours.h) "hours so far ·" sum(p.invoice.amount) "invoiced" faint
+===
+@rich domain=d2_api_inventory topic=api_endpoint_inventory style=multi_feature
+need an inventory of our API endpoints: path, method, status Live Beta Deprecated Planned, and the owner. search by path, filter by status, and a count per status
+needs: add an endpoint with method, status and owner | search by path | filter by status | count per status chart
+---
+app "Endpoints" map blue
+table endpoint path text, method pick GET|POST|PUT|PATCH|DELETE = GET, status pick Live|Beta|Deprecated|Planned = Live, owner text?
+state st pick All|Live|Beta|Deprecated|Planned = All
+state q text = ""
+topbar "Endpoints", endpoint, "Add endpoint"
+section "By status"
+  bars options endpoint.status, count(endpoint where status = it), it
+field q "Search path"
+choice st
+each endpoint where has(path, q) and (st = All or status = st) sort path as e empty "No endpoints match. Add one or clear the search."
+  row card gap 2 tap edit e swipe remove e
+    e.method bold fill soft pad 1
+    stack grow gap 0
+      e.path bold
+      e.status e.owner faint
+===
+@rich domain=d2_dependency_upgrades topic=dependency_upgrade_tracker style=detailed
+tracker for package upgrades: name, current version, latest version, risk patch/minor/major, and a status Todo Testing Merged. major ones in red, one tap to push to the next status, and progress of how many are merged
+needs: add a package with versions and risk | major upgrades flagged red | tap to move status forward | progress of merged upgrades
+---
+app "Upgrades" package green
+table dep name text, current text, latest text?, risk pick Patch|Minor|Major = Minor, status pick Todo|Testing|Merged = Todo
+topbar "Upgrades", dep, "Add package"
+goal count(dep where status = Merged), count(dep), "upgrades merged"
+each dep where status != Merged sort name as d empty "All caught up. Nothing waiting to be upgraded."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.current "→" d.latest faint
+    d.risk bold color if(d.risk = Major, bad, muted)
+    if d.status = Todo
+      button "Testing" tap set d.status = Testing
+    else
+      button "Merged" fill accent tap set d.status = Merged
+===
+@rich domain=d2_uptime_sla_notes topic=uptime_sla_downtime_budget style=custom_ui dark
+SLA is 99.9 percent and the client keeps asking. log each outage with the service, minutes down and cause. show how many minutes we are allowed this month, how many used, and the availability in percent
+needs: log an outage with service, minutes and cause | allowed downtime this month from the SLA | minutes used this month | availability percent | change SLA target
+---
+app "Uptime" cloud ink dark
+table outage service text, mins num 1..10000, cause text?
+setting sla num 90..100 = 99.9 "SLA target (%)"
+let allowed = round(43200 * (100 - sla)) / 100
+let used = sum(outage.mins month)
+topbar "Uptime", outage, "Log outage"
+goal used, allowed, "minutes down this month", "min"
+statcard round((100 - used * 100 / 43200) * 1000) / 1000, "% available this month"
+section "Worst services", "minutes, this month"
+  share outage month by service, sum(it.mins), it.key
+list outage by day, "No outages logged. Long may it last."
+===
+@rich domain=d2_error_budget topic=error_budget_burn style=detailed
+SRE style error budget: I enter each day's total requests and failed requests, set the SLO, and it tells me the budget for the month, how much failed so far and how much is left. chart of failed per day
+needs: add daily total and failed requests | set the SLO percent | error budget for the month | budget left | chart of failures per day
+---
+app "Error budget" shield red
+table day total num 0.. "Total requests", failed num 0.. "Failed requests"
+setting slo num 90..100 = 99.5 "SLO (%)"
+let budget = round(sum(day.total month) * (100 - slo) / 100)
+let burnt = sum(day.failed month)
+topbar "Error budget", day, "Add day"
+statcard max(budget - burnt, 0), "failures left of" budget, budget
+if burnt > budget
+  "Budget is gone: freeze risky releases." bold color bad
+section "Failed requests", "last 14 days"
+  daybars last 14 days, sum(day.failed on it)
+list day by day, "No traffic numbers yet. Add yesterday's totals."
+===
+@rich domain=d2_support_queue topic=support_ticket_queue style=custom_ui
+support inbox for a small SaaS. tickets with priority urgent/high/normal/low, status open or solved. one button to mark replied so it saves how many minutes the first response took, and show the average first response time
+needs: add a ticket with priority | urgent first ordering | button to record first response minutes | average first response time | mark solved
+---
+app "Support" bell orange
+table ticket subject text, priority pick Low|Normal|High|Urgent = Normal, status pick Open|Solved = Open, first num? "First response (min)"
+topbar "Support", ticket, "Add ticket"
+statcard round(avg(ticket.first)), "min average first response," count(ticket where status = Open) "open"
+each ticket where status = Open sort if(priority = Urgent, 0, if(priority = High, 1, if(priority = Normal, 2, 3))) as t empty "Inbox zero. Nobody is waiting on you."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 2
+      t.subject bold grow
+      t.priority bold color if(t.priority = Urgent, bad, if(t.priority = High, warn, muted))
+    row gap 1
+      if t.first > 0
+        "Replied in" t.first "min" faint grow
+      else
+        button "Replied" grow tap set t.first = max(round((now - t.at) / 1m), 1)
+      button "Solved" fill accent tap set t.status = Solved
+===
+@rich domain=d2_feedback_tally topic=customer_feedback_tally style=multi_feature
+tally what customers keep telling us. one tap per theme: Bug, Pricing, Speed, Missing feature, Praise. show counts this month as bars and a weekly line so I can tell the roadmap meeting what is loudest
+needs: one tap tally per feedback theme | add an optional note | bar chart of themes this month | count this week | list of notes
+---
+app "Feedback" smile pink
+table fb theme pick Bug|Pricing|Speed|Missing_feature|Praise = Bug, note text?
+statcard count(fb week), "pieces of feedback this week,"  count(fb month) "this month"
+grid 2 gap 1
+  each options fb.theme as t
+    button t count(fb month where theme = t) fill soft tap add fb theme = t
+section "Loudest themes", "this month"
+  share fb month by theme, count(it), it.key
+form fb, "Add with note"
+list fb by day, "No feedback yet. Tap a theme when a customer says something."
+===
+@rich domain=d2_roadmap_quarters topic=roadmap_by_quarter style=detailed
+roadmap for the team: items placed in Q1 to Q4, each Idea, Building or Shipped. grouped by quarter with how many are shipped in each, and tap to change the status
+needs: add a roadmap item with quarter | status per item | shipped over total per quarter | change status with a tap
+---
+app "Roadmap" flag mint
+table item title text, quarter pick Q1|Q2|Q3|Q4 = Q1, status pick Idea|Building|Shipped = Idea
+topbar "Roadmap", item, "Add item"
+each options item.quarter as q
+  section q, join(count(item where quarter = q and status = Shipped), "of", count(item where quarter = q), "shipped")
+    each item where quarter = q sort title as i empty "Nothing planned yet."
+      stack gap 1 swipe remove i
+        i.title bold
+        choice i.status
+===
+@rich domain=d2_changelog_versions topic=changelog_by_version style=multi_feature
+keep a changelog like keepachangelog: version number, type Added Fixed Changed Removed, and a line of text. group by version, and show how many of each type I shipped this month
+needs: add an entry with version, type and text | entries grouped by version | count per type this month | tap to edit
+---
+app "Changelog" note purple
+table entry ver text, kind pick Added|Fixed|Changed|Removed = Added, line text
+topbar "Changelog", entry, "Add entry"
+section "Shipped this month"
+  bars options entry.kind, count(entry month where kind = it), it
+each entry by ver as g empty "No entries yet. Write what changed in the next release."
+  text "Version" g.key head
+  each g as e
+    row card gap 2 tap edit e swipe remove e
+      e.kind bold
+      e.line grow
+===
+@rich domain=d2_hackathon_board topic=hackathon_team_tasks style=custom_ui
+48 hour hackathon with four of us. list teammates, tasks assigned to a teammate with a tick when done, a countdown timer for each checkpoint hour, and how many tasks each person still has open
+needs: add a teammate | add a task for a teammate | tick tasks done | open tasks per teammate | countdown timer
+---
+app "Hackathon" trophy orange
+table member name text
+table task member ref member, what text, done bool
+topbar "Hackathon", member, "Add teammate"
+timer 1h, "Next checkpoint"
+statcard count(task where done = yes), "of" count(task) "tasks done", count(task)
+each member as m empty "Add your teammates to hand out tasks."
+  section m.name, join(count(m.task where done = no), " open")
+    each m.task as t empty "No tasks yet."
+      row gap 2 swipe remove t
+        toggle t.done
+        t.what grow
+form task, "Add task"
+===
+@rich domain=d2_kanban_wip topic=kanban_wip_limit style=custom_ui
+kanban for just me with a WIP limit. lanes Backlog, Doing, Done. I can set the limit for Doing, and it should shout when I have too many things going. move cards by tapping the lane chips
+needs: add a card | move a card between lanes | set the WIP limit | warning when Doing is over the limit | count per lane
+---
+app "Kanban" grid slate
+table card title text, lane pick Backlog|Doing|Done = Backlog
+setting wip num 1..10 = 3 "WIP limit for Doing"
+topbar "Kanban", card, "Add card"
+row gap 1
+  each options card.lane as l
+    stack card grow gap 0 align center
+      count(card where lane = l) big
+      l faint
+if count(card where lane = Doing) > wip
+  "Too much in progress. Finish something first." bold color bad
+each card where lane != Done sort lane as c empty "Nothing planned. Add the next card."
+  stack card gap 1 swipe remove c
+    c.title bold
+    choice c.lane

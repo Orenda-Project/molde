@@ -1,0 +1,467 @@
+@rich domain=clinic_slots topic=clinic appointments style=detailed
+small clinic front desk. list our doctors, then book patients with a doctor, a start time and length in minutes. show each booking with the doctor name and the finish time, and how many patients each doctor has today
+needs: add a doctor | book a patient with doctor, start time and minutes | each booking shows doctor name and end time | patients per doctor today
+---
+app "Clinic Desk" heart blue
+table doctor name text
+table appt patient text, doc ref doctor, start time, mins num 10..120 = 20
+topbar "Clinic Desk", appt, "Book patient"
+section "Doctors", "patients today"
+  each doctor sort name as d empty "No doctors yet."
+    row
+      d.name grow tap edit d
+      count(appt today where doc = d) bold
+each appt today sort start as a empty "Nobody is booked today."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.patient bold
+      a.doc.name faint
+    a.start "to" a.start + a.mins * 1m bold
+form doctor, "Add doctor"
+===
+@rich domain=equipment_hire topic=equipment hire charges style=multi_feature
+we hire out scaffolding and mixers. each hire has item, customer, daily rate, days and a deposit. show the charge as rate times days, total out on hire and total deposits held
+needs: add a hire with item, customer, daily rate, days and deposit | charge as rate times days | total value on hire | total deposits held | tick returned
+---
+app "Hire Desk" tool slate
+table hire item text, customer text, rate money, days num 1..90 = 1, deposit money = 0, returned bool
+let out = sum(hire, if(it.returned, 0, it.rate * it.days))
+topbar "Hire Desk", hire, "New hire"
+row gap 2
+  statcard out, "value on hire"
+  statcard sum(hire.deposit where returned = no), "deposits held"
+each hire where returned = no sort at desc as h empty "Nothing is out on hire right now."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.item bold
+      h.customer "for" plural(h.days, "day") faint
+    h.rate * h.days bold
+    toggle h.returned
+===
+@rich domain=client_notes topic=client notes search style=custom_ui
+notes about clients with a search box. type any word and only the notes containing it show. each note has the client name, the note and a follow up date, and i want to see how many notes are overdue for follow up
+needs: add a note with client, text and follow-up date | search box filters notes by word | count of overdue follow-ups | notes sorted by follow-up date
+---
+app "Client Notes" note plum
+table note client text, body long, follow date
+state q text = ""
+topbar "Client Notes", note, "Add note"
+field q "Search notes"
+statcard count(note where follow < today), "follow-ups overdue"
+each note where has(client, q) or has(body, q) sort follow as n empty "No notes match. Try a different word or add a note."
+  stack card gap 1 tap edit n swipe remove n
+    row
+      n.client bold grow
+      n.follow faint color if(n.follow < today, bad, muted)
+    n.body faint
+===
+@rich domain=recipe_box topic=recipe box search style=multi_feature
+recipes with title, minutes to cook, and a type of meal. search by name, filter by breakfast lunch or dinner chips, and show the average cooking time of what is shown
+needs: add a recipe with title, minutes and meal type | search by title | meal type chips | average cooking minutes | recipes sorted by time
+---
+app "Recipes" food orange
+table recipe title text, mins num 5..300 = 30, meal pick Breakfast|Lunch|Dinner = Dinner
+state q text = ""
+state m pick Breakfast|Lunch|Dinner = Dinner
+topbar "Recipes", recipe, "Add recipe"
+field q "Search recipes"
+choice m
+statcard round(avg(recipe.mins where meal = m)), "average minutes for this meal"
+each recipe where meal = m and has(title, q) sort mins as r empty "No recipes here. Add a favourite."
+  row card gap 2 tap edit r swipe remove r
+    r.title bold grow
+    r.mins "min" faint
+===
+@rich domain=cleaning_rota topic=house cleaning rota style=short
+cleaning jobs around the house that should be done every few days
+needs: add a job with how many days between cleans | mark a job done | highlight jobs that are overdue | days since last clean
+---
+app "Cleaning" home teal
+table job name text, every num 1..60 = 7
+table did job ref job
+topbar "Cleaning", job, "Add job"
+statcard count(job, due(it.did, it.every)), "jobs to do now"
+each job sort name as j empty "No jobs yet. Add the first one."
+  row card gap 2 tap edit j swipe remove j fill if(due(j.did, j.every), soft, surface)
+    stack grow gap 0
+      j.name bold
+      if(since(j.did) >= 0, join(plural(since(j.did), "day"), " ago"), "Never done") faint
+    button "Done" tap add did job = j
+===
+@rich domain=courier_runs topic=courier deliveries style=detailed
+courier deliveries with customer, address area, parcel fee and a status that is packed, out or delivered. tap through the stages, show cash to collect from out for delivery parcels, and a share chart of parcels by area
+needs: add a parcel with customer, area, fee and status | button to advance stage | cash to collect for parcels out | chart of parcels by area
+---
+app "Courier" package green
+table parcel customer text, area text, fee money, stage pick Packed|Out|Delivered = Packed
+topbar "Courier", parcel, "Add parcel"
+statcard sum(parcel.fee where stage = Out), "cash to collect from parcels out"
+section "Parcels by area", "pending"
+  share parcel where stage != Delivered by area, count(it), it.key
+each parcel where stage != Delivered sort at as p empty "No pending parcels."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.customer bold
+      p.area faint
+    p.stage faint
+    if p.stage = Packed
+      button "Out" tap set p.stage = Out
+    if p.stage = Out
+      button "Delivered" tap set p.stage = Delivered
+===
+@rich domain=petty_cash topic=petty cash book style=multi_feature
+office petty cash. each entry is an amount and a category from stationery, tea, transport or repairs. show total this month, a breakdown per category as bars and the average spend per day so far this month
+needs: add an entry with amount and category | total this month | breakdown by category | average spend per day this month
+---
+app "Petty Cash" wallet ink
+table cash note text, amount money, kind pick Stationery|Tea|Transport|Repairs = Tea
+topbar "Petty Cash", cash, "Add entry"
+row gap 2
+  statcard sum(cash.amount month), "spent this month"
+  statcard round(sum(cash.amount month) / monthday(today)), "per day so far"
+section "By category", "this month"
+  share cash month by kind, sum(it.amount), it.key
+list cash month by day, "Nothing spent this month."
+===
+@rich domain=exam_marks topic=exam marks average style=detailed
+marks for my class: student name, subject and marks out of 100. show the class average, the number who scored below 40, the highest mark, and a bar for each subject average
+needs: add a mark with student, subject and marks | class average | count of marks below 40 | highest mark | bar chart of subject averages
+---
+app "Marks" pencil purple
+table mark student text, subject pick Maths|Urdu|Science|English = Maths, score num 0..100
+topbar "Marks", mark, "Add marks"
+row gap 2
+  statcard round(avg(mark.score)), "class average"
+  statcard count(mark where score < 40), "below 40"
+  statcard max(mark.score), "highest mark"
+section "Average by subject"
+  bars options mark.subject, avg(mark.score where subject = it), it
+each mark sort score desc top 10 as m empty "No marks yet."
+  row card gap 2 tap edit m swipe remove m
+    m.student bold grow
+    m.subject faint
+    m.score bold color if(m.score < 40, bad, ink)
+===
+@rich domain=street_football topic=five-a-side league style=custom_ui
+five-a-side league table. enter each match as home team, away team and goals. points are 3 for a win, 1 for a draw. show every team with played, goal difference and points, sorted by points
+needs: add a match with teams and goals | points 3 for a win and 1 for a draw | goal difference per team | table sorted by points
+---
+app "League" ball red
+table team name text
+table game home ref team, away ref team, hg num 0..20, ag num 0..20
+let pts(t team) = 3 * (count(game where home = t and hg > ag) + count(game where away = t and ag > hg)) + count(game where (home = t or away = t) and hg = ag)
+let gd(t team) = sum(game.hg where home = t) + sum(game.ag where away = t) - sum(game.ag where home = t) - sum(game.hg where away = t)
+topbar "League", game, "Add match"
+section "Table", "played - GD - points"
+  each team sort pts(it) desc as t empty "No teams yet. Add teams, then matches."
+    row gap 2 tap edit t
+      t.name bold grow
+      count(game where home = t or away = t) faint
+      gd(t) faint
+      pts(t) bold
+form team, "Add team"
+===
+@rich domain=driver_earnings topic=ride driver earnings style=detailed
+i drive for a ride app. log each ride with the fare and tip, and each day's hours online as a duration. show today's earnings, average earned per hour online, and a goal chart against 8000 a day
+needs: log a ride with fare and tip | log hours online | earnings today | earnings per hour online | bar chart against a daily goal
+---
+app "Rides" car yellow
+table ride fare money, tip money = 0
+table online len dur
+setting goal money = 8000 "Daily earnings goal"
+let earn = sum(ride.fare today) + sum(ride.tip today)
+topbar "Rides", ride, "Log ride"
+row gap 2
+  statcard earn, "earned today", goal
+  statcard round(earn / max(0.1, sum(online.len today) / 1h)), "per hour online"
+section "Last 7 days"
+  goalbars last 7 days, sum(ride.fare on it) + sum(ride.tip on it), goal
+form online, "Log hours online"
+===
+@rich domain=milk_delivery topic=milk delivery bill style=detailed
+milk delivery route. each customer takes some litres a day. i tap a button to add today's delivery with the litres, and at month end see each customer's bill at the per litre price i set
+needs: add a customer with daily litres | tap to log a delivery | bill per customer this month at a litre price | total litres this month
+---
+app "Milkman" milk mint
+table customer name text, litres num 0.5..10 = 1
+table drop customer ref customer, litres num 0.5..10
+setting price money = 220 "Price per litre"
+topbar "Milkman", customer, "Add customer"
+row gap 2
+  statcard sum(drop.litres month), "litres this month"
+  statcard sum(drop.litres month) * price, "billed this month"
+each customer sort name as c empty "No customers yet. Add the first one."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      sum(c.drop.litres month) "litres so far" faint
+    sum(c.drop.litres month) * price bold
+    button "Delivered" tap add drop customer = c, litres = c.litres
+===
+@rich domain=sales_targets topic=rep sales targets style=multi_feature
+sales team with a monthly target for each rep. log a sale with the rep and amount, show how far each rep is toward their target as a bar, and the team total
+needs: add a rep with monthly target | log a sale for a rep | progress toward target per rep | team total this month
+---
+app "Sales Reps" chart blue dark
+table rep name text, target money
+table sale rep ref rep, amount money
+topbar "Sales Reps", rep, "Add rep"
+statcard sum(sale.amount month), "team total this month", sum(rep.target)
+each rep sort name as r empty "No reps yet. Add each rep with a monthly target."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 2
+      r.name bold grow
+      sum(r.sale.amount month) "of" r.target faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(r.sale.amount month) / r.target, 0, 1), 4 fill if(sum(r.sale.amount month) >= r.target, good, accent) radius 2
+    button "Log sale" tap add sale rep = r, amount = 1000
+===
+@rich domain=salon_bookings topic=salon bookings end times style=detailed
+hair salon bookings. client, service from cut, colour or facial with a price and its length in minutes, plus start time. show the end time for every booking, takings today, and the minutes booked today
+needs: add a booking with client, service, price, start and minutes | end time for each booking | takings today | minutes booked today
+---
+app "Salon" smile pink
+table booking client text, service pick Cut|Colour|Facial = Cut, price money, start time, mins num 15..240 = 45
+topbar "Salon", booking, "New booking"
+row gap 2
+  statcard sum(booking.price today), "takings today"
+  statcard sum(booking.mins today), "minutes booked today"
+each booking today sort start as b empty "No bookings today."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.client bold
+      b.service faint
+    stack gap 0 align end
+      b.start "-" b.start + b.mins * 1m bold
+      b.price tiny color muted
+===
+@rich domain=fasting_window topic=fasting eating window style=multi_feature
+intermittent fasting. log the first meal and last meal times each day. show my eating window in hours, how many days i kept it under 8 hours, and how long my fast was overnight
+needs: log first and last meal times | eating window hours | days under 8 hours | overnight fast length
+---
+app "Fasting" moon ink
+table meal day date = today, first time, last time
+let win(d meal) = (d.last - d.first) / 1h
+let fast(d meal) = 24 - win(d)
+topbar "Fasting", meal, "Log day"
+statcard count(meal, win(it) <= 8), "days with window under 8h", count(meal)
+each meal sort day desc top 10 as d empty "No days logged yet."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.day bold
+      d.first "to" d.last faint
+    stack gap 0 align end
+      round(win(d) * 10) / 10 "h eating" bold
+      round(fast(d) * 10) / 10 "h fast" tiny color muted
+===
+@rich domain=nurse_roster topic=night shift roster style=detailed
+ward roster. nurse name, date, start time and end time which can pass midnight like 21:00 to 7:00. show the hours on duty for each shift, night shifts counted separately when the shift starts after 18:00, and total hours this month
+needs: add a shift with nurse, date, start and end | hours per shift even past midnight | count of night shifts | total hours this month
+---
+app "Ward Roster" bed teal
+table duty nurse text, day date, start time, stop time
+let hrs(d duty) = (d.stop - d.start) / 1h
+topbar "Ward Roster", duty, "Add shift"
+row gap 2
+  statcard count(duty month, hour(it.start) >= 18), "night shifts this month"
+  statcard sum(duty month, hrs(it)), "hours this month"
+each duty sort day desc top 12 as d empty "No shifts yet. Add the first one."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.nurse bold
+      d.day d.start "to" d.stop faint
+    hrs(d) "h" bold
+===
+@rich domain=school_bus topic=school bus pickups style=short
+school bus route pickups with stop names and times
+needs: add a stop with pickup time | stops sorted by pickup time | children at each stop | total children on the route
+---
+app "School Bus" bus orange
+table stop place text, at_time time, kids num 0..30 = 1
+topbar "School Bus", stop, "Add stop"
+statcard sum(stop.kids), "children on the route"
+each stop sort at_time as s empty "No stops yet. Add the first pickup."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.place bold
+      s.kids "children" faint
+    s.at_time bold
+===
+@rich domain=kameti_committee topic=kameti committee payments style=detailed
+our neighbourhood kameti: each member pays a fixed amount every month and one member takes the pot each month. list members with their monthly share, log payments, show who has not paid this month and the pot size
+needs: add a member with monthly share | log a payment | who has not paid this month | pot size for the month | total collected this month
+---
+app "Kameti" users green
+table member name text, share money
+table pay member ref member, amount money
+let pot = sum(member.share)
+topbar "Kameti", member, "Add member"
+row gap 2
+  statcard pot, "pot this month"
+  statcard sum(pay.amount month), "collected so far", pot
+each member sort name as m empty "No members yet. Add each member with their monthly share."
+  let paid = sum(m.pay.amount month)
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.name bold
+      if paid >= m.share
+        "paid" faint color good
+      else
+        "owes" m.share - paid faint color bad
+    if paid < m.share
+      button "Paid" tap add pay member = m, amount = m.share - paid
+===
+@rich domain=harvest_log topic=garden harvest by crop style=multi_feature
+vegetable garden harvest in kilos per crop. show the total kilos per crop as bars, total this month, and the crop i picked from most recently
+needs: log a harvest with crop and kilos | total kilos per crop | total harvested this month | most recent crop picked
+---
+app "Harvest" leaf green
+table pick crop pick Tomato|Okra|Spinach|Chilli|Mint = Tomato, kg num 0.1..100
+topbar "Harvest", pick, "Log harvest"
+row gap 2
+  statcard round(sum(pick.kg month) * 10) / 10, "kg this month"
+  statcard count(pick month), "pickings"
+if count(pick) > 0
+  "Last picked:" last(pick).crop bold
+section "Kilos per crop"
+  bars options pick.crop, sum(pick.kg where crop = it), it
+list pick by day, "Nothing harvested yet."
+===
+@rich domain=backup_checks topic=server backup checks style=detailed
+i look after four small servers. each has a name and how often it must be backed up in days. a button logs a backup. show servers whose backup is overdue in red with days since the last one
+needs: add a server with backup interval in days | button to log a backup | overdue servers in red | days since last backup
+---
+app "Backups" shield slate
+table server name text, every num 1..30 = 1
+table backup server ref server
+topbar "Backups", server, "Add server"
+statcard count(server, due(it.backup, it.every)), "servers overdue", count(server)
+each server sort name as s empty "No servers yet. Add the first one."
+  row card gap 2 tap edit s swipe remove s fill if(due(s.backup, s.every), soft, surface)
+    stack grow gap 0
+      s.name bold
+      if(since(s.backup) >= 0, join(plural(since(s.backup), "day"), " since backup"), "No backup yet") faint color if(due(s.backup, s.every), bad, muted)
+    button "Backed up" tap add backup server = s
+===
+@rich domain=bug_board topic=bug tracker age style=custom_ui
+bug list for our app. title, priority low medium or high, status open or fixed and when it was opened. show how many days each open bug has been open, count of high priority open bugs, and tabs to see open or fixed
+needs: add a bug with title, priority and status | tabs for open and fixed | age in days of each bug | count of high priority open | mark fixed
+---
+app "Bugs" tool red
+table bug title text, prio pick Low|Medium|High = Medium, state pick Open|Fixed = Open, opened date = today
+state tab pick Open|Fixed = Open
+topbar "Bugs", bug, "Report bug"
+statcard count(bug where state = Open and prio = High), "high priority open"
+choice tab
+each bug where state = tab sort opened as b empty "No bugs here. Nice."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.prio faint color if(b.prio = High, bad, muted)
+    plural(today - b.opened, "day") faint
+    if b.state = Open
+      button "Fixed" tap set b.state = Fixed
+===
+@rich domain=meeting_actions topic=meeting action items style=multi_feature
+action items from meetings: what, who owns it, due date. tick as done, show overdue ones, how many are due today, and a count per owner of open items
+needs: add an action with owner and due date | tick as done | overdue actions highlighted | count due today | open items per owner
+---
+app "Actions" check teal
+table action what text, owner text, due date, done bool
+topbar "Actions", action, "Add action"
+row gap 2
+  statcard count(action where done = no and due = today), "due today"
+  statcard count(action where done = no and due < today), "overdue"
+section "Open per owner"
+  each action where done = no by owner as g
+    row
+      g.key grow
+      count(action where done = no and owner = g.key) bold
+each action where done = no sort due as a empty "Nothing open. Add an action from your next meeting."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.what bold
+      a.owner a.due faint color if(a.due < today, bad, muted)
+    toggle a.done
+===
+@rich domain=price_alerts topic=stock price alerts style=short
+price watch list for my stocks with a target price
+needs: add a stock with current price and target | show which have reached target | gap to target | count reached
+---
+app "Price Watch" chart ocean
+table stock symbol text, price money, target money
+topbar "Price Watch", stock, "Add stock"
+statcard count(stock where price >= target), "reached target", count(stock)
+each stock sort symbol as s empty "No stocks yet. Add a symbol with your target price."
+  row card gap 2 tap edit s swipe remove s
+    s.symbol bold grow
+    s.price faint
+    if s.price >= s.target
+      "Target reached" color good bold
+    else
+      "needs" s.target - s.price faint
+===
+@rich domain=monthly_rent_chart topic=six month spend chart style=detailed
+i want to see my rent and utilities for each of the last 6 months as a bar chart, plus add each payment with a note and an amount, show this month's total and the difference from last month
+needs: add a payment with note and amount | bar chart of the last 6 months | this month total | difference from last month
+---
+app "Home Costs" home purple
+table cost note text, amount money
+let diff = sum(cost.amount month) - sum(cost.amount prev month)
+topbar "Home Costs", cost, "Add payment"
+row gap 2
+  statcard sum(cost.amount month), "this month"
+  statcard diff, "more than last month"
+section "Last 6 months"
+  plot 0..6, 0..max(1000, max(1..6, sum(cost.amount month of addmonths(today, it - 6)))) axes
+    each 0..5 as n
+      rect n + 0.15, 0, 0.7, sum(cost.amount month of addmonths(today, n - 5)) fill accent radius 2
+      tick n + 0.5, monthname(addmonths(today, n - 5))
+list cost month by day, "Nothing paid this month."
+===
+@rich domain=hostel_rooms topic=hostel room rent style=multi_feature
+hostel warden here. each room has a bed count and rent per bed. log the month's rent received per room, show rooms that have not paid in full, expected rent per room (beds times rate) and total pending
+needs: add a room with beds and rent per bed | log rent received for a room | expected rent per room as beds times rate | total pending this month
+---
+app "Hostel" bed slate
+table room name text, beds num 1..12 = 2, rate money
+table got room ref room, amount money
+let pending = sum(room, max(0, it.beds * it.rate - sum(it.got.amount month)))
+topbar "Hostel", room, "Add room"
+row gap 2
+  statcard pending, "pending this month"
+  statcard sum(got.amount month), "received this month"
+each room sort name as r empty "No rooms yet. Add each room with its beds and rent per bed."
+  let due = max(0, r.beds * r.rate - sum(r.got.amount month))
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.name bold
+      r.beds "beds x" r.rate "=" r.beds * r.rate faint
+    if due > 0
+      button "Got" tap add got room = r, amount = due
+    else
+      "Full" color good bold
+===
+@rich domain=moving_boxes topic=moving house boxes style=custom_ui
+moving house on 2026-12-20. boxes by room with a fragile tick and unpacked or packed chips. show days left to the move, how many boxes are packed out of all, and a grid of boxes coloured by packed
+needs: add a box with room, fragile tick and status | packed or unpacked chips | days left to the move | packed out of total | grid of boxes coloured by packed
+---
+app "Moving Day" box orange
+table crate room text, fragile bool, state pick Open|Packed = Open
+setting moveday date = 2026-12-20 "Moving day"
+state f pick Open|Packed = Open
+let n = count(crate)
+topbar "Moving Day", crate, "Add box"
+row gap 2
+  statcard moveday - today, "days to move"
+  statcard count(crate where state = Packed), "boxes packed of" n, n
+grid 6 gap 1
+  each crate sort room as c
+    box height 28 radius 6 fill if(c.state = Packed, accent, soft) tap set c.state = if(c.state = Packed, Open, Packed)
+choice f
+each crate where state = f sort room as c empty "No boxes here."
+  row card gap 2 tap edit c swipe remove c
+    c.room bold grow
+    if c.fragile
+      "Fragile" color warn bold

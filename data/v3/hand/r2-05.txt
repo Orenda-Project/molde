@@ -1,0 +1,189 @@
+@rich domain=r2_student_food_money topic=student_weekly_food_money style=multi_feature
+living in a hostel on a tight allowance. log every meal i pay for, say if it was the mess, canteen, outside or cooked, show how much of my weekly food money is gone, how much i can spend per day for the rest of the week, and where the money goes
+needs: log a meal with place and cost | weekly food money against allowance | what i can spend per day for the rest of the week | spending by place | bars for the last 7 days
+---
+app "Food Money" wallet slate
+table meal place pick Mess|Canteen|Outside|Cooked = Canteen, cost money
+setting allowance money = 3500 "Weekly food money"
+let spent = sum(meal.cost week)
+topbar "Food Money", meal, "Add a meal"
+goal spent, allowance, if(spent > allowance, "over this week's money", "spent this week")
+statcard max(round((allowance - spent) / (8 - weekday(today))), 0), "per day left for the rest of the week"
+section "Where it goes", "this week"
+  share meal week by place, sum(it.cost), it.key
+section "Last 7 days"
+  daybars last 7 days, sum(meal.cost on it)
+===
+@rich domain=r2_restaurant_waitlist topic=walk_in_waitlist style=custom_ui
+busy evenings at the restaurant, walk-ins give a name, party size and we quote a wait in minutes. keep the queue in order, tap seated when they go in, and show how many people are waiting and the average quoted wait
+needs: add a waiting party with size and quoted minutes | queue in order of arrival | seated button | people waiting right now | average quoted wait
+---
+app "Waitlist" users ocean dark
+table party name text, size num 1..20 = 2, quote num 5..120 = 20 unit "min", seated bool
+topbar "Waitlist", party, "Add a party"
+row gap 2
+  statcard sum(party.size where seated = no), "people waiting"
+  statcard round(avg(party.quote today)), "avg quoted minutes"
+each party where seated = no sort at as p empty "Nobody is waiting. Enjoy the quiet."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.size "people · quoted" p.quote "min" faint
+    button "Seated" fill accent tap set p.seated = yes
+section "Seated today", count(party today where seated = yes)
+  list party today where seated = yes, "Nobody seated yet."
+===
+@rich domain=r2_mandi_buy_sell topic=vegetable_mandi_trading style=detailed
+i buy crates of onions, potatoes, tomatoes and garlic at the mandi in the morning and sell to shops. log each buy with crates and cost, each sale with crates and money, and show crates still with me per crop and the profit this week
+needs: log a purchase with crop, crates and cost | log a sale with crop, crates and amount | crates left per crop | profit this week | sales chart for 7 days
+---
+app "Mandi Book" bag green
+table buy crop pick Onion|Potato|Tomato|Garlic = Onion, crates num 1..500, cost money
+table sell crop pick Onion|Potato|Tomato|Garlic = Onion, crates num 1..500, amount money
+topbar "Mandi Book", sell, "Record a sale"
+form buy, "Record a purchase"
+statcard sum(sell.amount week) - sum(buy.cost week), "profit this week"
+section "Crates with me"
+  each options buy.crop as c
+    row
+      c grow
+      sum(buy.crates where crop = c) - sum(sell.crates where crop = c) bold
+section "Sales", "last 7 days"
+  daybars last 7 days, sum(sell.amount on it)
+===
+@rich domain=r2_bottle_feeds topic=baby_bottle_feed_log style=custom_ui
+night feeds are a blur. quick buttons for 60, 90, 120 and 150 ml, choose formula or expressed milk, show how much milk today against the doctor's target, the last feed and a chart of the week
+needs: quick buttons for common amounts | choose formula or expressed | milk today against daily target | last feed amount | last 7 days chart with target line
+---
+app "Bottle Feeds" baby pink
+table feed ml num 10..300 = 120, kind pick Formula|Expressed = Formula
+setting target num = 900 "Daily milk (ml)"
+state kind pick Formula|Expressed = Formula
+choice kind
+grid 4 gap 1
+  each [60, 90, 120, 150] as v
+    button v tap add feed ml = v, kind = kind
+statcard sum(feed.ml today), "ml of" target "today, last feed" last(feed.ml) "ml", target
+section "Last 7 days", "line is the target"
+  goalbars last 7 days, sum(feed.ml on it), target
+list feed today, "No feeds logged yet today."
+===
+@rich domain=r2_masala_blend_mixer topic=spice_blend_mixer style=custom_ui
+i mix my own garam masala. set how many grams i am making and the parts of cumin, coriander, chilli and turmeric with sliders, show the grams of each, and save the blends i like with a name
+needs: set grams to make | sliders for parts of each spice | grams of each spice | save a blend with a name | list of saved blends
+---
+app "Masala Mixer" leaf red
+table blend name text, grams num
+state batch num = 200
+state cumin num = 4
+state coriander num = 3
+state chilli num = 2
+state turmeric num = 1
+state name text = ""
+let parts = max(cumin + coriander + chilli + turmeric, 1)
+"Making" batch "g" head
+slider batch 50..1000
+section "Parts"
+  "Cumin" cumin faint
+  slider cumin 0..10
+  "Coriander" coriander faint
+  slider coriander 0..10
+  "Chilli" chilli faint
+  slider chilli 0..10
+  "Turmeric" turmeric faint
+  slider turmeric 0..10
+section "Weigh out"
+  "Cumin" round(batch * cumin / parts) "g" bold
+  "Coriander" round(batch * coriander / parts) "g" bold
+  "Chilli" round(batch * chilli / parts) "g" bold
+  "Turmeric" round(batch * turmeric / parts) "g" bold
+field name "Blend name"
+button "Save blend" fill accent tap add blend name = name, grams = batch
+list blend, "No blends saved yet."
+===
+@rich domain=r2_camping_food_pack topic=camping_trip_food_list style=multi_feature
+camping with six friends for three days. list the food i must pack with how much each person eats per day, work out the total quantity from people and days, tick items as packed, and show how much is packed
+needs: set people and days | add a food with amount per person per day | total quantity for the trip | tick items as packed | progress of packing
+---
+app "Camp Food" tree teal
+setting people num = 6 "People"
+setting days num = 3 "Days"
+table need what text, per num 0.01..5000, unit text?, packed bool
+topbar "Camp Food", need, "Add food"
+goal count(need where packed = yes), count(need), "items packed", ""
+each need sort packed as n empty "No food yet. Add rice, tea, eggs and the rest."
+  row card gap 2 tap edit n swipe remove n
+    toggle n.packed
+    n.what bold grow
+    round(n.per * people * days * 10) / 10 n.unit faint
+===
+@rich domain=r2_food_bank_shelf topic=food_bank_distribution style=detailed
+we run a neighbourhood food bank. log food coming in in kilos, log each family we give a ration to with the number of members, and show kilos received this month, families and people served today, and the families served each day this week
+needs: log donated food in kg | log a family served with members | kilos received this month | families and people served today | chart of families served per day
+---
+app "Food Bank" heart purple
+table donation what text, kg num 0.5..2000
+table served family text, members num 1..15 = 4
+topbar "Food Bank", served, "Serve a family"
+form donation, "Add donated food"
+row gap 2
+  statcard sum(donation.kg month), "kg received this month"
+  statcard count(served today), "families served today"
+statcard sum(served.members today), "people fed today"
+section "Families served", "last 7 days"
+  daybars last 7 days, count(served on it)
+list served today, "No families served yet today."
+===
+@rich domain=r2_dish_tasting_notes topic=new_dish_tasting_scores style=multi_feature
+we test new dishes before they go on the menu. rate taste and looks from 1 to 5, note if the price felt too high, fair or cheap, and decide keep, tweak or drop. show the average score and how many are in each verdict
+needs: add a dish with taste and look scores | price feeling | verdict keep, tweak or drop | average taste score | count by verdict
+---
+app "Tasting Notes" star yellow
+table tasting dish text, taste num 1..5 = 3, look num 1..5 = 3, price pick Too_high|Fair|Cheap = Fair, verdict pick Keep|Tweak|Drop = Tweak
+topbar "Tasting Notes", tasting, "Add a tasting"
+row gap 2
+  statcard round(avg(tasting.taste) * 10) / 10, "average taste of 5"
+  statcard round(avg(tasting.look) * 10) / 10, "average look of 5"
+section "Verdicts"
+  share tasting by verdict, count(it), it.key
+each tasting sort taste desc as t empty "No tastings yet. Cook the first test dish."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.dish bold
+      "Taste" t.taste "· look" t.look "·" t.price faint
+    t.verdict bold color if(t.verdict = Drop, bad, if(t.verdict = Keep, good, warn))
+===
+@rich domain=r2_guesthouse_breakfast topic=guesthouse_breakfast_orders style=detailed
+small guesthouse. each room tells us what they want for breakfast, eggs fried, boiled or omelette, paratha or not, tea or coffee and the time. the kitchen needs the egg count, the times in order, and a tick when a room is served
+needs: add a room order with eggs, paratha, drink and time | egg totals for the kitchen | orders listed by time | tick when served | count of rooms still waiting
+---
+app "Breakfast Orders" coffee orange
+table order room num 1..60, eggs pick Fried|Boiled|Omelette|None = Fried, paratha bool, drink pick Chai|Coffee|None = Chai, slot pick Seven|Eight|Nine = Eight, served bool
+topbar "Breakfast Orders", order, "Add room"
+statcard count(order today where served = no), "rooms still waiting, served" count(order today where served = yes)
+section "Eggs to cook", "rooms waiting"
+  share order today where served = no by eggs, count(it), it.key
+each options order.slot as sl
+  section sl, "Rooms:" count(order today where slot = sl and served = no)
+    each order today where slot = sl and served = no as o
+      row gap 2 tap edit o swipe remove o
+        toggle o.served
+        "Room" o.room bold grow
+        o.eggs o.drink faint
+===
+@rich domain=r2_eid_plate_exchange topic=eid_sweets_plate_exchange style=short
+we send plates of sweets to neighbours on eid and they send back, i never remember who owes a plate
+needs: log a plate sent or received with neighbour and dish | list of neighbours who sent a plate but got none back | count of plates sent and received | tap to edit
+---
+app "Plate Exchange" gift plum
+table plate neighbour text, way pick Sent|Received = Sent, dish text
+topbar "Plate Exchange", plate, "Log a plate"
+row gap 2
+  statcard count(plate where way = Sent), "plates sent"
+  statcard count(plate where way = Received), "plates received"
+section "I owe a plate to"
+  each plate where way = Received as p empty "You are all square."
+    if count(plate where neighbour = p.neighbour and way = Sent) = 0
+      p.neighbour bold
+list plate by day, "No plates logged yet."
+===

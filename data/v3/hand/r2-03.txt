@@ -1,0 +1,525 @@
+@rich domain=r2_eid_dawat_guests topic=eid_dawat_guest_list style=multi_feature
+hosting eid dawat for family. keep a guest list with how many in each party, whether they are coming, and any food needs like vegetarian or no beef. tell me the headcount and what the food will cost at my budget per head
+needs: add a guest party with size, status and dietary need | headcount of confirmed guests | breakdown by dietary need | food cost from budget per head | tap to edit or swipe to remove
+---
+app "Eid Dawat" gift green
+table guest name text, party num 1..20 = 1, diet pick Anything|Vegetarian|No_beef|No_spice = Anything, coming pick Coming|Maybe|Declined = Coming
+setting per_head money = 900 "Food budget per head"
+let heads = sum(guest.party where coming = Coming)
+topbar "Eid Dawat", guest, "Add guest"
+statcard heads, "people confirmed, food budget" heads * per_head
+section "Who needs what", "confirmed guests"
+  share guest where coming = Coming by diet, sum(it.party), it.key
+each guest sort name as g empty "No guests yet. Add the first family."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.name bold
+      g.party "people ·" g.diet faint
+    g.coming faint color if(g.coming = Declined, bad, ink)
+===
+@rich domain=r2_canteen_preorders topic=school_canteen_preorders style=detailed
+school tuck shop preorders. students order a sandwich, biryani, juice or fruit cup for their class and i need to see what to prepare today, what each class gets, and tick when it is collected
+needs: add a preorder with pupil, class, item and quantity | totals to prepare today per item | orders still to collect per class | tick when collected | count of orders collected today
+---
+app "Canteen Orders" school teal
+table preorder pupil text, class pick A|B|C|D = A, item pick Sandwich|Biryani|Juice|Fruit_cup = Sandwich, qty num 1..5 = 1, collected bool
+topbar "Canteen Orders", preorder, "Add order"
+statcard count(preorder today where collected = yes), "of" count(preorder today) "orders collected", count(preorder today)
+section "Prepare today", "plates and cups"
+  share preorder today by item, sum(it.qty), it.key
+each options preorder.class as c
+  if count(preorder today where class = c and collected = no) > 0
+    section "Class" c, "Waiting:" count(preorder today where class = c and collected = no)
+      each preorder today where class = c and collected = no as o
+        row gap 2 tap edit o swipe remove o
+          toggle o.collected
+          o.pupil grow
+          o.qty "x" o.item faint
+===
+@rich domain=r2_order_ticket_board topic=kitchen_order_status_board style=custom_ui
+dine in restaurant. waiters add a ticket with the table number and what was ordered. the kitchen sees tabs for new, cooking and ready with counts, taps one button to move a ticket to the next step, and ready tickets are cleared once served
+needs: add a ticket with table number and dishes | tabs for new, cooking and ready with counts | one button moves a ticket forward | served tickets leave the board | count of tickets served today
+---
+app "Order Board" list orange
+table ticket seat num 1..40, dishes text, status pick New|Cooking|Ready|Served = New
+state tab pick New|Cooking|Ready = New
+topbar "Order Board", ticket, "New ticket"
+row gap 1
+  each options ticket.status as s
+    if s != Served
+      button s count(ticket where status = s) fill if(tab = s, accent, soft) grow tap set tab = s
+"Served today" count(ticket today where status = Served) faint
+each ticket where status = tab sort at as t empty "No tickets in this step."
+  row card gap 2 tap edit t
+    stack grow gap 0
+      "Table" t.seat bold
+      t.dishes faint
+    if t.status = New
+      button "Start cooking" tap set t.status = Cooking
+    if t.status = Cooking
+      button "Ready" tap set t.status = Ready
+    if t.status = Ready
+      button "Served" fill accent tap set t.status = Served
+===
+@rich domain=r2_five_a_day topic=fruit_veg_five_a_day style=custom_ui
+trying to get my kids to eat five fruit or veg portions a day. two big buttons to add a fruit or a veg portion, progress toward five today, dots for the last week and a heat map of the last month
+needs: buttons to add a fruit or veg portion | progress toward five a day | last 7 days dots of days that hit the goal | four week heat map | undo the last portion
+---
+app "Five a Day" apple mint
+table portion kind pick Fruit|Veg = Fruit
+setting target num = 5 "Portions a day"
+statcard count(portion today), "portions of" target "today", target
+row gap 1
+  button "+ Fruit" fill accent tap add portion kind = Fruit
+  button "+ Veg" fill accent tap add portion kind = Veg
+  button "Undo" tap remove last(portion today)
+section "Today", "fruit" count(portion today where kind = Fruit) "veg" count(portion today where kind = Veg)
+  weekdots count(portion on it) >= target
+section "Last 4 weeks", "darker is closer to five"
+  heat last 28 days, count(portion on it), target
+===
+@rich domain=r2_gelato_tub_stock topic=ice_cream_tub_stock style=detailed
+ice cream parlour. each flavour has scoops left in the tub. buttons to take off one scoop or ten, reorder list for flavours under twenty scoops, and a chart of scoops left per flavour so i can see what is selling
+needs: add a flavour with scoops in the tub | buttons for minus one and minus ten scoops | reorder list under 20 scoops | bar chart of scoops left | button to refill a tub
+---
+app "Gelato Stock" cup pink
+table tub flavour text, scoops num 0..200 = 100
+topbar "Gelato Stock", tub, "Add flavour"
+statcard sum(tub.scoops), "scoops left across" count(tub) "flavours"
+section "Reorder soon", "under 20 scoops"
+  each tub where scoops < 20 sort scoops as t empty "All tubs are well stocked."
+    row
+      t.flavour grow
+      t.scoops "left" color bad
+each tub sort flavour as t
+  row card gap 1 tap edit t swipe remove t
+    t.flavour bold grow
+    t.scoops "scoops" faint
+    button "-1" tap set t.scoops = t.scoops - 1
+    button "-10" tap set t.scoops = t.scoops - 10
+    button "Refill" fill accent tap set t.scoops = 100
+section "Scoops left"
+  bars tub, it.scoops, it.flavour
+===
+@rich domain=r2_dry_fruit_gift_box topic=dry_fruit_gift_box_pricing style=multi_feature
+we make dry fruit gift boxes for eid. choose the box size, slide the grams of almonds, pistachios and dates, see the weight and the price, and save the order with the customer name and pickup date
+needs: choose the box size | sliders for grams of almonds, pistachios and dates | total weight and price | save the order with customer and pickup date | list of saved orders by pickup date
+---
+app "Gift Boxes" gift purple
+table order customer text, pickup date, price money
+state box pick Small|Medium|Large = Medium
+state almonds num = 200
+state pistachios num = 100
+state dates num = 300
+state customer text = ""
+state pickup date = today
+let grams = almonds + pistachios + dates
+let price = almonds * 2.4 + pistachios * 4 + dates * 0.9 + if(box = Small, 150, if(box = Medium, 250, 400))
+choice box
+section "What goes inside"
+  "Almonds" almonds "g" faint
+  slider almonds 0..1000
+  "Pistachios" pistachios "g" faint
+  slider pistachios 0..1000
+  "Dates" dates "g" faint
+  slider dates 0..1500
+statcard price, "for a" box "box of" grams "g"
+field customer "Customer name"
+field pickup "Pickup date"
+button "Save order" fill accent tap add order customer = customer, pickup = pickup, price = price
+section "Orders", "Saved:" count(order)
+  each order sort pickup as o empty "No orders saved yet."
+    row gap 2 tap edit o swipe remove o
+      o.customer grow
+      o.pickup faint
+      o.price bold
+===
+@rich domain=r2_milkman_ledger topic=daily_milk_delivery_bill style=custom_ui
+the milkman never agrees with me about how many days he came. a calendar where i tap each day the milk came, litres per day set to one by default, the price per litre in settings, and the bill for the month
+needs: month calendar to mark delivery days | switch between months | price per litre setting | litres delivered this month | bill for the month
+---
+app "Milk Ledger" milk ocean
+table milk litres num 0.5..10 = 1
+setting rate money = 220 "Price per litre"
+state m date = today
+let litres = sum(milk.litres month of m)
+monthnav m
+calendar milk, m
+row gap 2
+  statcard litres, "litres this month"
+  statcard litres * rate, "bill for" monthname(m)
+section "Last 7 days"
+  weekdots count(milk on it) > 0
+===
+@rich domain=r2_roti_wala_books topic=roti_supply_ledger style=multi_feature
+i supply rotis to several shops and houses. log how many rotis i dropped to each customer, set my price per roti, show each customer's bill for this month and a bar chart of my daily total
+needs: log a delivery with customer and number of rotis | price per roti setting | each customer's bill this month | rotis per day chart | total rotis this month
+---
+app "Roti Books" bread yellow
+table drop customer text, rotis num 1..1000 = 50
+setting rate money = 25 "Price per roti"
+topbar "Roti Books", drop, "Log delivery"
+statcard sum(drop.rotis month), "rotis this month, worth" sum(drop.rotis month) * rate
+section "Bill per customer", monthname(today)
+  each drop month by customer as g empty "No deliveries this month."
+    row
+      g.key grow
+      sum(g.rotis) "rotis" faint
+      sum(g.rotis) * rate bold
+section "Rotis per day", "last 14 days"
+  daybars last 14 days, sum(drop.rotis on it)
+===
+@rich domain=r2_cook_roster_week topic=kitchen_staff_roster style=detailed
+head chef here. a weekly roster for the kitchen: which cook works which day and whether morning, evening or split. show the week in a grid and turn a day orange when there is nobody for the morning
+needs: add a shift with cook, day and part of the day | week grid of days | day highlighted when no morning cover | count of shifts this week | tap to edit or remove a shift
+---
+app "Cook Roster" users slate
+table shift cook text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, part pick Morning|Evening|Split = Morning
+topbar "Cook Roster", shift, "Add shift"
+statcard count(shift), "shifts this week"
+grid 7 gap 1
+  each options shift.day as dd
+    stack radius 8 pad 1 gap 0 fill if(count(shift where day = dd and (part = Morning or part = Split)) = 0, warn, soft)
+      dd small bold align center
+      each shift where day = dd as s
+        s.cook tiny tap edit s swipe remove s
+"Orange days have no morning cook." faint
+each shift sort day as s empty "No shifts yet. Add the first cook."
+  row gap 2
+    s.day bold
+    s.cook grow
+    s.part faint
+===
+@rich domain=r2_food_cost_percent topic=restaurant_food_cost_percent style=multi_feature
+owner of a small restaurant. enter what i buy from suppliers and the sales for each day, then show my food cost percent this month against a target of 32 and the last two weeks of purchases
+needs: log a supplier purchase with amount | log the day's sales | food cost percent this month against a target | purchases chart for 14 days | list of recent purchases
+---
+app "Food Cost" calc red
+table purchase supplier text, amount money
+table sale takings money
+setting cap num = 32 "Target food cost %"
+let pct = round(sum(purchase.amount month) * 100 / max(sum(sale.takings month), 1))
+topbar "Food Cost", purchase, "Add purchase"
+statcard pct, "% food cost this month, target" cap, cap
+if pct > cap
+  "Over target. Check portions and waste." color bad
+else
+  "On target this month." color good
+form sale, "Add the day's sales"
+section "Purchases", "last 14 days"
+  daybars last 14 days, sum(purchase.amount on it)
+list purchase top 6, "No purchases yet."
+===
+@rich domain=r2_herb_garden_care topic=kitchen_herb_garden style=multi_feature
+kitchen garden on the balcony with mint, basil, coriander and curry leaves. each plant needs watering every few days. tap watered, show what is thirsty, and record how many grams i harvest
+needs: add a plant with days between watering | tap watered | shows which plants are thirsty | record a harvest in grams | grams harvested this month
+---
+app "Herb Garden" plant green dark
+table plant name text, every num 1..14 = 2
+table watered plant ref plant
+table picked plant ref plant, grams num 5..2000 = 50
+let thirsty = count(plant, due(it.watered, it.every))
+topbar "Herb Garden", plant, "Add plant"
+row gap 2
+  statcard thirsty, "plants need water"
+  statcard sum(picked.grams month), "g harvested this month"
+each plant sort name as p empty "No plants yet. Add your first herb."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      "Every" p.every "days ·" if(count(p.watered) = 0, "never watered", plural(since(p.watered), "day") ) faint color if(due(p.watered, p.every), warn, muted)
+    button "Watered" fill if(due(p.watered, p.every), accent, soft) tap add watered plant = p
+    button "Picked" tap add picked plant = p
+===
+@rich domain=r2_pickle_jars topic=pickle_jam_ready_dates style=detailed
+i make pickles and jams in summer and forget when they are ready. record each jar with the date made and how many days it needs, show how many days are left or ready, and mark when i open it
+needs: add a jar with date made and days needed | days left until ready | ready jars highlighted | open a jar to remove it | count of jars ready
+---
+app "Pickle Jars" box orange
+table jar what text, made date = today, days num 1..120 = 14
+let ready = count(jar where made + days <= today)
+topbar "Pickle Jars", jar, "Add jar"
+statcard ready, "jars ready of" count(jar), count(jar)
+each jar sort made + days as j empty "No jars in the cupboard. Add one when you make a batch."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.what bold
+      "Made" j.made faint
+    if j.made + j.days <= today
+      "Ready" bold color good
+      button "Open" tap remove j
+    else
+      plural(j.made + j.days - today, "day") "left" color muted
+===
+@rich domain=r2_coffee_bean_freshness topic=coffee_bean_roast_freshness style=custom_ui
+i buy beans from different roasters. note the roast date and bag size, tell me if each bag is resting, at its best or fading, and let me tap to subtract a dose each time i brew so i know what is left
+needs: add a bag with origin, roast date and grams | resting, peak or fading label from roast date | tap to use one 18 g dose | grams left per bag | count of bags at peak
+---
+app "Bean Shelf" coffee plum
+table bag origin text, roasted date = today, grams num 100..5000 = 250, used num 0..5000 = 0
+let peak = count(bag where roasted <= today - 7 and roasted >= today - 28 and used < grams)
+topbar "Bean Shelf", bag, "Add a bag"
+statcard peak, "bags at their best right now"
+each bag where used < grams sort roasted desc as b empty "No bags on the shelf. Add the one you are drinking."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.origin bold
+      b.grams - b.used "g left, roasted" today - b.roasted "days ago" faint
+    if today - b.roasted < 7
+      "Resting" color muted
+    else
+      if today - b.roasted <= 28
+        "Peak" bold color good
+      else
+        "Fading" color warn
+    button "Brew 18 g" tap set b.used = b.used + 18
+===
+@rich domain=r2_macro_pie topic=daily_macro_split_pie style=custom_ui
+lifting and counting macros. log each meal with protein, carbs and fat in grams, and draw a pie of today's split by calories (4 for protein and carbs, 9 for fat) with the total calories in the middle
+needs: log a meal with protein, carbs and fat grams | pie chart of today's macro split | total calories today | legend with grams per macro | list of today's meals
+---
+app "Macro Pie" chart blue
+table meal what text, protein num 0..200, carbs num 0..400, fat num 0..200
+let p = sum(meal.protein today) * 4
+let c = sum(meal.carbs today) * 4
+let f = sum(meal.fat today) * 9
+let tot = max(p + c + f, 1)
+let a1 = 360 * p / tot
+let a2 = a1 + 360 * c / tot
+topbar "Macro Pie", meal, "Log a meal"
+row gap 3 align center
+  draw 100, 100 width 130
+    circle 50, 50, 38 stroke soft thick 16
+    arc 50, 50, 38, 0, a1 stroke accent thick 16
+    arc 50, 50, 38, a1, a2 stroke good thick 16
+    arc 50, 50, 38, a2, 360 stroke warn thick 16
+    label 50, 50, p + c + f small bold
+  stack grow gap 1
+    "Protein" sum(meal.protein today) "g" color accent bold
+    "Carbs" sum(meal.carbs today) "g" color good bold
+    "Fat" sum(meal.fat today) "g" color warn bold
+    "kcal today" faint
+list meal today, "Nothing logged yet today."
+===
+@rich domain=r2_tuck_shop_credit topic=tuck_shop_kids_credit style=detailed
+i run the tuck shop and let some kids take things on credit. keep a list of kids, write each thing they took with the price, record when they pay, and show who owes me the most and the total owed
+needs: add a child | record an item taken on credit with price | record a payment | balance owed per child | total owed across all kids
+---
+app "Tuck Credit" bag grey
+table kid name text
+table credit kid ref kid, what text, amount money
+table payment kid ref kid, amount money
+let owed = sum(credit.amount) - sum(payment.amount)
+topbar "Tuck Credit", kid, "Add child"
+statcard owed, "owed by" count(kid, sum(it.credit.amount) > sum(it.payment.amount)) "kids"
+each kid sort sum(it.payment.amount) - sum(it.credit.amount) as k empty "No kids yet. Add the first name."
+  row card gap 2 tap edit k swipe remove k
+    stack grow gap 0
+      k.name bold
+      "Balance" sum(k.credit.amount) - sum(k.payment.amount) faint color if(sum(k.credit.amount) > sum(k.payment.amount), bad, muted)
+    button "Took 50" tap add credit kid = k, what = "Snack", amount = 50
+    button "Paid 100" tap add payment kid = k, amount = 100
+===
+@rich domain=r2_fryer_oil_changes topic=fryer_oil_change_log style=multi_feature
+we deep fry all day and the oil gets dirty. count each fry batch with one tap, log when we change the oil with the litres and cost, and show how many batches since the last change with a warning at fifty
+needs: tap to count a fry batch | log an oil change with litres and cost | batches since the last oil change | warning at fifty batches | oil cost this month
+---
+app "Fryer Oil" fire red
+table fry batches num 1..10 = 1
+table change litres num 1..60 = 15, cost money
+let since_change = if(count(change) = 0, count(fry), count(fry where at >= last(change).at))
+statcard since_change, "batches since the last oil change", 50
+if since_change >= 50
+  "Time to change the oil." head color bad
+button "Count a batch" fill accent tap add fry
+button "Undo" tap remove last(fry today)
+form change, "Log an oil change"
+section "Oil spend", "this month" sum(change.cost month)
+  list change top 5, "No oil changes logged yet."
+===
+@rich domain=r2_chicken_supplier_bills topic=chicken_supplier_invoices style=detailed
+every delivery of chicken and meat comes with a different weight and rate. note the supplier, kilos and rate, show the bill for each delivery, which are unpaid, and the total i owe this month
+needs: add a delivery with supplier, kg and rate | bill for each delivery | tick when paid | total unpaid | spend per supplier this month
+---
+app "Meat Bills" tag purple
+table delivery supplier pick Poultry_farm|Butcher|Fish_market|Other = Poultry_farm, kg num 0.5..500 = 10, rate money, paid bool
+let unpaid = sum(delivery where paid = no, it.kg * it.rate)
+topbar "Meat Bills", delivery, "Add delivery"
+statcard unpaid, "still unpaid on" count(delivery where paid = no) "deliveries"
+section "Spend per supplier", "this month"
+  share delivery month by supplier, sum(it, it.kg * it.rate), it.key
+each delivery sort paid as d empty "No deliveries yet."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.paid
+    stack grow gap 0
+      d.supplier bold
+      d.kg "kg at" d.rate faint
+    d.kg * d.rate bold
+===
+@rich domain=r2_qurbani_shares topic=qurbani_meat_three_shares style=multi_feature
+after qurbani i divide the meat in three parts, family, relatives and the poor. set the total kilos, list who gets how much, tick when handed over, and show each third filling up against its target
+needs: setting for total kilos | add a person with their share and kilos | tick when given | progress for each third | list of who is still waiting
+---
+app "Qurbani Shares" heart ink
+setting total num = 60 "Total meat (kg)"
+table gift who text, share pick Family|Relatives|Poor = Poor, kg num 0.5..30 = 2, given bool
+topbar "Qurbani Shares", gift, "Add a person"
+each options gift.share as s
+  goal sum(gift.kg where share = s), total / 3, "One third for" s, " kg"
+section "Still waiting", count(gift where given = no)
+  each gift where given = no sort share as g empty "Everyone has received their share."
+    row gap 2 tap edit g swipe remove g
+      toggle g.given
+      g.who grow
+      g.kg "kg" faint
+      g.share faint
+===
+@rich domain=r2_iftar_boxes_drive topic=charity_iftar_box_packing style=multi_feature
+our group packs iftar boxes for families. we want 500 by the end of the month. one tap buttons to add ten, twenty five or fifty packed boxes, show how many are left, how many we need per day, and a reminder at 3 pm to start packing
+needs: quick buttons to add packed boxes | progress toward the goal | boxes needed per day to finish on time | chart of boxes packed per day | reminder at 3 pm
+---
+app "Iftar Boxes" gift pink
+table packed boxes num 1..500
+setting target num = 500 "Box goal"
+setting deadline date = 2027-03-10 "Hand out date"
+let left = max(target - sum(packed.boxes), 0)
+let per_day = round(left / max(deadline - today, 1))
+remind "Time to start packing iftar boxes" at 15:00
+statcard sum(packed.boxes), "boxes packed of" target, target
+quick packed, boxes, [10, 25, 50]
+"Still to pack" left "- about" per_day "a day" head
+section "Packed per day", "last 7 days"
+  daybars last 7 days, sum(packed.boxes on it)
+===
+@rich domain=r2_baking_converter topic=baking_unit_converter style=custom_ui
+my recipes come from american blogs with cups and fahrenheit and i bake in grams and celsius. a screen where i pick the ingredient and the cups and it shows grams, and another to turn oven fahrenheit into celsius
+needs: pick an ingredient | set the number of cups | grams for those cups | second screen for oven temperature | celsius from fahrenheit
+---
+app "Bake Convert" calc teal
+state item pick Flour|Sugar|Butter|Rice|Milk = Flour
+state cups num = 1
+state oven num = 350
+let per_cup = if(item = Flour, 120, if(item = Sugar, 200, if(item = Butter, 227, if(item = Rice, 185, 240))))
+screen conv "Cups" cup
+  choice item
+  "Cups" cups head
+  slider cups 1..8
+  statcard cups * per_cup, "grams of" item
+  "One cup of" item "is about" per_cup "g" faint
+screen temp "Oven" fire
+  "Fahrenheit" oven head
+  slider oven 250..500
+  statcard round((oven - 32) * 5 / 9), "degrees Celsius"
+  "Fan oven: take off about 20 degrees." faint
+===
+@rich domain=r2_smoothie_builder topic=smoothie_builder_calories style=multi_feature
+building morning smoothies. tick what goes in (banana, spinach, yogurt, dates, peanut butter), see the calories and the protein add up, and save the ones i like with a name
+needs: tick ingredients | total calories | total protein | save a smoothie with a name | list of saved smoothies
+---
+app "Smoothie Lab" cup mint
+table saved name text, kcal num, protein num
+state banana bool = no
+state spinach bool = no
+state yogurt bool = no
+state dates bool = no
+state pb bool = no
+state name text = ""
+let kcal = if(banana, 105, 0) + if(spinach, 7, 0) + if(yogurt, 100, 0) + if(dates, 66, 0) + if(pb, 95, 0)
+let protein = if(banana, 1, 0) + if(spinach, 1, 0) + if(yogurt, 6, 0) + if(pb, 4, 0)
+section "What goes in"
+  row gap 1
+    toggle banana
+    "Banana" grow
+    toggle spinach
+    "Spinach" grow
+  row gap 1
+    toggle yogurt
+    "Yogurt" grow
+    toggle dates
+    "Dates" grow
+  row gap 1
+    toggle pb
+    "Peanut butter" grow
+row gap 2
+  statcard kcal, "calories"
+  statcard protein, "g protein"
+field name "Name this smoothie"
+button "Save smoothie" fill accent tap add saved name = name, kcal = kcal, protein = protein
+section "Saved", "Total:" count(saved)
+  list saved, "Nothing saved yet."
+===
+@rich domain=r2_canteen_menu_week topic=canteen_weekly_menu_veg style=detailed
+canteen manager. publish the week menu for Monday to Friday with each dish marked vegetarian or not and any allergen. let people switch to vegetarian only and show how many vegetarian dishes there are each day
+needs: add a dish with day, vegetarian flag and allergen | week menu by day | switch to vegetarian only | vegetarian dishes per day | allergen shown on each dish
+---
+app "Canteen Menu" food slate
+table dish day pick Mon|Tue|Wed|Thu|Fri = Mon, item text, veg bool, allergen pick None|Nuts|Dairy|Gluten = None
+state vegonly bool = no
+topbar "Canteen Menu", dish, "Add dish"
+row gap 2 align center
+  toggle vegonly
+  "Vegetarian only" grow
+  count(dish where veg = yes) "of" count(dish) faint
+each options dish.day as dd
+  section dd, "Vegetarian:" count(dish where day = dd and veg = yes)
+    each dish where day = dd and (vegonly = no or veg = yes) as d empty "No dish for this day."
+      row gap 2 tap edit d swipe remove d
+        d.item grow
+        if d.veg
+          "Veg" faint color good
+        if d.allergen != None
+          "Contains" d.allergen faint color warn
+===
+@rich domain=r2_bake_sale_tally topic=school_bake_sale_fundraiser style=short
+bake sale for our school trip, count what sells and see how close we are to the target
+needs: one tap per item sold | money raised against the target | sales per item | undo the last sale
+---
+app "Bake Sale" gift orange
+table sale item pick Cookie|Brownie|Cupcake|Lemonade = Cookie, price money
+setting target money = 20000 "Fundraising target"
+statcard sum(sale.price), "raised of" target, target
+grid 2 gap 1
+  button "Cookie 100" tap add sale item = Cookie, price = 100
+  button "Brownie 150" tap add sale item = Brownie, price = 150
+  button "Cupcake 200" tap add sale item = Cupcake, price = 200
+  button "Lemonade 80" tap add sale item = Lemonade, price = 80
+button "Undo last sale" tap remove last(sale)
+section "Sold so far"
+  share sale by item, count(it), it.key
+===
+@rich domain=r2_rider_drop_earnings topic=food_rider_drop_earnings style=multi_feature
+i deliver food on a bike. after each drop i enter the restaurant, the fare, the tip and the kilometres. show today's earnings against my target, earnings for the last week, and how much i earn per kilometre
+needs: log a drop with restaurant, fare, tip and km | today's earnings against daily target | last 7 days earnings chart | earnings per kilometre | list of today's drops
+---
+app "Rider Log" bike ocean dark
+table drop restaurant text, fare money, tip money = 0, km num 0.1..60 = 3
+setting target money = 3000 "Daily target"
+let today_total = sum(drop.fare today) + sum(drop.tip today)
+topbar "Rider Log", drop, "Log a drop"
+goal today_total, target, "earned today"
+row gap 2
+  statcard count(drop today), "drops today"
+  statcard round((sum(drop.fare week) + sum(drop.tip week)) / max(sum(drop.km week), 1)), "per km this week"
+section "Last 7 days", "line is your target"
+  goalbars last 7 days, sum(drop.fare on it) + sum(drop.tip on it), target
+list drop today, "No drops yet today."
+===
+@rich domain=r2_restaurant_diary topic=restaurant_visits_diary style=detailed
+i like to remember the restaurants we try. add each visit with the place, cuisine, what the bill was, stars and whether i would go again. filter by cuisine, show how much i spent eating out this month and my average rating
+needs: add a visit with place, cuisine, bill, stars and would go again | filter by cuisine | spent eating out this month | average rating | list of places to go again
+---
+app "Eating Out" star plum
+table visit place text, cuisine pick Desi|Chinese|Fast_food|Cafe|Other = Desi, bill money, stars num 1..5 = 4, again bool
+state want pick All|Desi|Chinese|Fast_food|Cafe|Other = All
+topbar "Eating Out", visit, "Add a visit"
+row gap 2
+  statcard sum(visit.bill month), "spent eating out this month"
+  statcard round(avg(visit.stars) * 10) / 10, "average stars"
+choice want
+each visit where want = All or cuisine = want sort stars desc as v empty "No visits here yet. Add the last place you ate."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.place bold
+      v.cuisine "·" v.stars "stars ·" v.bill faint
+    toggle v.again
+===

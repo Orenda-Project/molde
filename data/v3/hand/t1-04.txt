@@ -1,0 +1,464 @@
+@rich domain=gold_stash topic=gold holdings value style=detailed
+our family keeps gold. i enter each piece with grams and karat as text, set today's price per gram, and the app shows the total grams, the current value (grams times price) and how much value was added this year
+needs: add a piece with grams and date | price per gram setting | total grams | current value | value added this year
+---
+app "Gold" coin yellow
+table piece what text, grams num 0.1..500, bought date = today
+setting price money = 21000 "Price per gram"
+let grams = sum(piece.grams)
+topbar "Gold", piece, "Add piece"
+row gap 2
+  statcard round(grams * 10) / 10, "grams held"
+  statcard grams * price, "worth today"
+statcard sum(piece.grams year) * price, "value added this year"
+each piece sort bought desc as p empty "No gold added yet."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.what bold
+      p.bought faint
+    p.grams "g" faint
+    p.grams * price bold
+===
+@rich domain=school_fee_dates topic=school fee instalments style=multi_feature
+school office: students each have three fee instalments with due dates. list instalments with the student, amount and due date, tick when paid, show overdue amount and the next due date
+needs: add an instalment with student, amount and due date | tick when paid | overdue amount | next instalment due with days to go
+---
+app "Fee Office" school blue
+table inst student text, amount money, due date, paid bool
+let overdue = sum(inst.amount where paid = no and due < today)
+let nxt = nth(inst where paid = no and due >= today sort due, 1)
+topbar "Fee Office", inst, "Add instalment"
+statcard overdue, "overdue amount"
+if count(inst where paid = no and due >= today) > 0
+  section "Next due", "in" plural(nxt.due - today, "day")
+    nxt.student big
+    nxt.amount faint
+each inst where paid = no sort due as i empty "No unpaid instalments."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.student bold
+      i.due faint color if(i.due < today, bad, muted)
+    i.amount bold
+    toggle i.paid
+===
+@rich domain=yoga_passes topic=yoga class passes style=short
+class passes for my yoga studio with remaining classes and valid until date
+needs: add a pass with member, classes and valid-until date | button to use one class | expired passes flagged | count of passes still valid
+---
+app "Yoga Passes" smile mint
+table pass member text, classes num 0..50 = 10, until date
+topbar "Yoga Passes", pass, "Add pass"
+statcard count(pass where until >= today and classes > 0), "valid passes", count(pass)
+each pass sort until as p empty "No passes yet. Sell the first one."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.member bold
+      p.classes "classes, until" p.until faint
+    if p.until < today
+      "Expired" color bad bold
+    else
+      button "Use 1" tap set p.classes = p.classes - 1
+===
+@rich domain=pledge_drive topic=donation pledges style=detailed
+our community fund raises money. donors pledge an amount by a date and pay later. record the pledge and a paid tick, show how much has been pledged, how much paid, how much is still outstanding and pledges that are late
+needs: add a pledge with donor, amount and date | tick as paid | total pledged and total paid | outstanding amount | late pledges flagged
+---
+app "Pledges" gift purple
+table pledge donor text, amount money, by date, paid bool
+let pledged = sum(pledge.amount)
+let got = sum(pledge.amount where paid = yes)
+topbar "Pledges", pledge, "Add pledge"
+goal got, pledged, "paid so far"
+statcard pledged - got, "still outstanding"
+each pledge where paid = no sort by as p empty "Every pledge is paid. Add a new one."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.donor bold
+      p.by faint color if(p.by < today, bad, muted)
+    p.amount bold
+    toggle p.paid
+===
+@rich domain=bakery_orders topic=bakery pickup slots style=custom_ui
+cake shop orders for pickup today. each has name, what, quantity, price per piece and pickup time. show orders by pickup time, total cash expected today (quantity times price) and how many pickups are still ahead of the clock
+needs: add an order with name, item, quantity, price and pickup time | orders sorted by pickup time | cash expected today | count of pickups later today
+---
+app "Bakery" bread red
+table order name text, item text, qty num 1..100 = 1, price money, pick time, done bool
+topbar "Bakery", order, "New order"
+row gap 2
+  statcard sum(order today, it.qty * it.price), "cash expected today"
+  statcard count(order today where done = no and hour(pick) >= hour(now)), "pickups still to come"
+each order today sort pick as o empty "No pickups today."
+  row card gap 2 tap edit o swipe remove o fill if(o.done, soft, surface)
+    stack grow gap 0
+      o.pick bold
+      o.name o.item "x" o.qty faint
+    o.qty * o.price bold
+    toggle o.done
+===
+@rich domain=blood_pressure topic=blood pressure readings style=multi_feature
+dad's blood pressure: top and bottom numbers with the time of day, morning or evening. flag a reading as high if the top is over 140 or the bottom over 90, show the average top and bottom for the last week, and a line of the top number
+needs: add a reading with top, bottom and time of day | high readings flagged | average of the last 7 days | line chart of the top number
+---
+app "BP Log" heart red
+table bp top num 60..250 = 120, low num 40..150 = 80, when pick Morning|Evening = Morning
+topbar "BP Log", bp, "Add reading"
+row gap 2
+  statcard round(avg(bp.top last 7 days)), "average top, 7 days"
+  statcard round(avg(bp.low last 7 days)), "average bottom"
+statcard count(bp last 30 days where top > 140 or low > 90), "high readings in 30 days"
+section "Top number", "latest 14"
+  trend bp top 14, it.top
+each bp top 10 as b empty "No readings yet. Add the first one."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.top "/" b.low bold
+      b.when b.at faint
+    if b.top > 140 or b.low > 90
+      "High" color bad bold
+    else
+      "OK" color good bold
+===
+@rich domain=glucose_log topic=glucose by meal style=detailed
+sugar readings: value in mg/dl and whether before or after a meal. show the average for before meals and the average for after meals separately, how many readings were in range (70 to 180), and a trend line
+needs: add a reading with value and before or after meal | average before meals | average after meals | count in range 70 to 180 | trend line
+---
+app "Glucose" drop teal
+table sugar mgdl num 20..600, meal pick Before|After = Before
+topbar "Glucose", sugar, "Add reading"
+row gap 2
+  statcard round(avg(sugar.mgdl where meal = Before)), "average before meals"
+  statcard round(avg(sugar.mgdl where meal = After)), "average after meals"
+statcard count(sugar where mgdl >= 70 and mgdl <= 180), "in range of", count(sugar)
+section "Recent readings"
+  trend sugar top 14, it.mgdl
+each sugar top 8 as s empty "No readings yet."
+  row card gap 2 tap edit s swipe remove s
+    s.mgdl bold color if(s.mgdl < 70 or s.mgdl > 180, bad, ink)
+    s.meal "meal" faint grow
+    s.at faint
+===
+@rich domain=screen_time topic=kids screen time limits style=multi_feature
+limit my kids' screen time to 90 minutes a day. log each session with child and length, show minutes used today against the limit, and warn when the limit is passed. weekly bars too
+needs: log a session with child and length | minutes used today against a limit | warning over the limit | bar chart of the last 7 days
+---
+app "Screen Time" phone orange
+table use child pick Sana|Bilal = Sana, len dur = 30m
+setting limit dur = 90m "Daily limit"
+let used = sum(use.len today)
+topbar "Screen Time", use, "Log session"
+goal round(used / 1m), round(limit / 1m), "minutes used today", "min"
+if used > limit
+  "Over the limit for today." color bad bold card
+section "Last 7 days", "minutes"
+  plot 0..7, 0..max(limit / 1m, max(days last 7 days, sum(use.len on it) / 1m)) axes
+    line 0, limit / 1m, 7, limit / 1m stroke ink thick 1
+    each days last 7 days as d
+      rect index + 0.15, 0, 0.7, sum(use.len on d) / 1m fill if(sum(use.len on d) > limit, bad, accent) radius 2
+      tick index + 0.5, dayname(d)
+list use today, "No screen time logged today."
+===
+@rich domain=vocab_review topic=vocabulary spaced review style=custom_ui
+language class vocab list. word, meaning, and how many days until i should review it again. a button for reviewed. show words due for review, a search by word and the total number of words
+needs: add a word with meaning and review gap | button to mark reviewed | words due for review | search by word or meaning
+---
+app "Vocab" book plum
+table word term text, meaning text, every num 1..30 = 3
+table seen word ref word
+state q text = ""
+topbar "Vocab", word, "Add word"
+field q "Search words"
+row gap 2
+  statcard count(word, due(it.seen, it.every)), "due for review"
+  statcard count(word), "words in total"
+each word where has(term, q) or has(meaning, q) sort term as w empty "No words match."
+  row card gap 2 tap edit w swipe remove w fill if(due(w.seen, w.every), soft, surface)
+    stack grow gap 0
+      w.term bold
+      w.meaning faint
+    button "Reviewed" tap add seen word = w
+===
+@rich domain=ebike_charging topic=e-bike charging style=detailed
+my e-bike battery: log each charge with the start time and end time, then work out how long it took and the average charge time. also the kilometres ridden since the previous charge as a number i enter
+needs: log a charge with start time, end time and km ridden | duration of each charge | average charge time | total km this month
+---
+app "E-Bike" bolt green
+table charge day date = today, begin time, end time, km num 0..200
+let hrs(c charge) = (c.end - c.begin) / 1h
+topbar "E-Bike", charge, "Log charge"
+row gap 2
+  statcard round(sum(charge, hrs(it)) / max(1, count(charge)) * 10) / 10, "average hours to charge"
+  statcard sum(charge.km month), "km this month"
+each charge sort day desc top 10 as c empty "No charges yet. Log the first one."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.day bold
+      c.begin "to" c.end faint
+    round(hrs(c) * 10) / 10 "h" bold
+    c.km "km" faint
+===
+@rich domain=stock_room topic=stock room reorder style=multi_feature
+shop stock room: items with quantity on hand, reorder level and cost price. show items at or below their reorder level, stock value (quantity times cost) and a button to add 10 to an item or sell 1
+needs: add an item with quantity, reorder level and cost | items at or below reorder level flagged | stock value | buttons to add 10 or sell 1
+---
+app "Stock Room" box slate
+table item name text, qty num 0.., level num 0.. = 5, cost money
+topbar "Stock Room", item, "Add item"
+row gap 2
+  statcard sum(item, it.qty * it.cost), "stock value"
+  statcard count(item where qty <= level), "items to reorder"
+each item sort name as i empty "No items yet. Add what is on your shelves."
+  row card gap 2 tap edit i swipe remove i fill if(i.qty <= i.level, soft, surface)
+    stack grow gap 0
+      i.name bold
+      i.qty "in stock, reorder at" i.level faint color if(i.qty <= i.level, bad, muted)
+    button "+10" tap set i.qty = i.qty + 10
+    button "Sell 1" tap set i.qty = i.qty - 1
+===
+@rich domain=truck_trips topic=truck trip earnings style=detailed
+i own two trucks. every trip has the truck (A or B), kilometres, freight per km and diesel cost. show profit per trip (km times rate minus diesel), total profit this month and profit for each truck
+needs: log a trip with truck, km, rate per km and diesel | profit per trip | total profit this month | profit per truck
+---
+app "Trucks" car ink
+table trip truck pick A|B = A, km num 1..3000, rate money, diesel money
+topbar "Trucks", trip, "Log trip"
+statcard sum(trip month, it.km * it.rate - it.diesel), "profit this month"
+section "Profit per truck", "this month"
+  each options trip.truck as t
+    row
+      "Truck" t grow
+      sum(trip month where truck = t, it.km * it.rate - it.diesel) bold
+each trip top 10 as t empty "No trips yet."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      "Truck" t.truck bold
+      t.km "km at" t.rate faint
+    t.km * t.rate - t.diesel bold
+===
+@rich domain=volunteer_hours topic=volunteer hours style=multi_feature
+food bank volunteers. log hours given by each volunteer as a duration. everyone has a goal of 20 hours a month. show hours per volunteer this month with a bar toward the goal and the team total
+needs: add a volunteer | log hours for a volunteer | progress toward 20 hours each | team total hours this month
+---
+app "Volunteers" users green
+table vol name text
+table shift vol ref vol, len dur = 2h
+topbar "Volunteers", vol, "Add volunteer"
+statcard round(sum(shift.len month) / 1h), "team hours this month", count(vol) * 20
+each vol sort name as v empty "No volunteers yet. Add the first one."
+  stack card gap 1 tap edit v swipe remove v
+    row gap 2
+      v.name bold grow
+      round(sum(v.shift.len month) / 1h) "of 20 h" faint
+      button "+2h" tap add shift vol = v, len = 2h
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(v.shift.len month) / 20h, 0, 1), 4 fill accent radius 2
+===
+@rich domain=garage_sale topic=garage sale prices style=short
+things for the garage sale with prices, mark sold
+needs: add an item with price | mark sold | total earned so far | value still unsold
+---
+app "Garage Sale" tag pink
+table thing name text, price money, sold bool
+topbar "Garage Sale", thing, "Add item"
+row gap 2
+  statcard sum(thing.price where sold = yes), "earned so far"
+  statcard sum(thing.price where sold = no), "still unsold"
+each thing sort sold as t empty "Nothing listed yet. Add the first item."
+  row card gap 2 tap edit t swipe remove t
+    t.name bold grow
+    t.price faint
+    toggle t.sold
+===
+@rich domain=pocket_goal topic=teen savings goal date style=detailed
+i am saving for a bike that costs 24000. every month i add what i can. show the saved total, the months still needed at my average monthly saving, and the date i will reach it
+needs: add a deposit | goal price setting | months still needed at the average | estimated date to reach the goal | progress bar
+---
+app "Bike Fund" bike blue
+table put amount money
+setting price money = 24000 "Bike price"
+let saved = sum(put.amount)
+let avgm = sum(put.amount) / max(1, count(put, yes))
+topbar "Bike Fund", put, "Add savings"
+goal saved, price, "saved for the bike"
+row gap 2
+  statcard round(max(0, price - saved) / max(1, avgm)), "more deposits needed"
+  statcard max(0, price - saved), "still to save"
+"Estimated date:" addmonths(today, round(max(0, price - saved) / max(1, avgm))) bold
+list put by day, "No savings yet. Add your first deposit."
+===
+@rich domain=photo_bookings topic=photo shoot bookings style=detailed
+wedding photographer's diary. shoot date, client, hours booked, rate per hour, deposit taken. show the fee (hours times rate), balance after deposit, shoots in the next 30 days and total balance still to collect
+needs: add a booking with client, date, hours, rate and deposit | fee and balance per booking | shoots in the next 30 days | total balance to collect
+---
+app "Shoots" eye teal
+table shoot client text, on date, hours num 1..24 = 4, rate money, deposit money = 0
+topbar "Shoots", shoot, "Add booking"
+row gap 2
+  statcard count(shoot where on >= today and on - today <= 30), "shoots in 30 days"
+  statcard sum(shoot where on >= today, it.hours * it.rate - it.deposit), "balance to collect"
+each shoot where on >= today sort on as s empty "No upcoming shoots."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.client bold
+      s.on "-" plural(s.on - today, "day") faint
+    stack gap 0 align end
+      s.hours * s.rate bold
+      "balance" s.hours * s.rate - s.deposit tiny color muted
+===
+@rich domain=coaching_sessions topic=football coaching attendance style=multi_feature
+under-12 football coaching. list players, tap to mark who came to today's session, show the count today, each player's sessions this month and a dot row of last 7 days of whether the team trained
+needs: add a player | tap to mark attended today | count attending today | sessions per player this month | dots for days the team trained
+---
+app "Coaching" ball orange dark
+table player name text
+table came player ref player
+topbar "Coaching", player, "Add player"
+statcard count(came today), "players today", count(player)
+weekdots count(came on it) > 0
+each player sort name as p empty "No players yet. Add your squad."
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    count(p.came month) "this month" faint
+    toggle p.came
+===
+@rich domain=podcast_queue topic=podcast listening queue style=custom_ui
+podcast episodes i want to hear, each with a show name and length as a duration like 45m. mark listened. total time left in my queue in hours and minutes, and a chip filter for short episodes under 30 minutes
+needs: add an episode with show and length | mark as listened | total time left in the queue | chip filter for short or all
+---
+app "Podcasts" music purple
+table ep show text, len dur = 40m, heard bool
+state f pick All|Short = All
+let left = sum(ep.len where heard = no)
+topbar "Podcasts", ep, "Add episode"
+row gap 2
+  statcard floor(left / 1h), "hours left"
+  statcard floor((left - floor(left / 1h) * 1h) / 1m), "extra minutes"
+choice f
+each ep where heard = no and (f = All or len < 30m) sort len as e empty "Queue is empty. Add an episode."
+  row card gap 2 tap edit e swipe remove e
+    e.show bold grow
+    e.len faint
+    toggle e.heard
+===
+@rich domain=car_rental_days topic=car rental days style=detailed
+car rental desk. each rental has the car, customer, date out, date back and the rate per day. show the number of days, the total charge (days times rate) and cars out today. a rental on the same day counts as one day
+needs: add a rental with car, customer, dates and daily rate | days and charge per rental | cars out today | total billed this month
+---
+app "Car Rental" car slate
+table rental car text, customer text, out date, back date, rate money
+let days(r rental) = max(1, r.back - r.out)
+topbar "Car Rental", rental, "New rental"
+row gap 2
+  statcard count(rental where out <= today and back >= today), "cars out today"
+  statcard sum(rental where out >= today - monthday(today) + 1, days(it) * it.rate), "billed this month"
+each rental sort out desc top 12 as r empty "No rentals yet."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.car bold
+      r.customer plural(days(r), "day") faint
+    days(r) * r.rate bold
+===
+@rich domain=fish_ponds topic=fish pond feeding style=short
+fish ponds feeding schedule
+needs: add a pond with feeding interval | button to log feeding with kilos | days since each pond was fed | ponds overdue highlighted
+---
+app "Fish Ponds" fish ocean
+table pond name text, every num 1..7 = 1
+table fed pond ref pond, kg num 0.5..50 = 5
+topbar "Fish Ponds", pond, "Add pond"
+statcard count(pond, due(it.fed, it.every)), "ponds to feed", count(pond)
+each pond sort name as p empty "No ponds yet. Add the first one."
+  row card gap 2 tap edit p swipe remove p fill if(due(p.fed, p.every), soft, surface)
+    stack grow gap 0
+      p.name bold
+      if(since(p.fed) >= 0, join(plural(since(p.fed), "day"), " since fed"), "Never fed") faint
+    button "Fed 5 kg" tap add fed pond = p, kg = 5
+===
+@rich domain=meal_prep topic=meal prep cost style=multi_feature
+sunday meal prep: each prep has what i cooked, total cost of groceries and how many meals it made. show cost per meal, average cost per meal this month and total spent this month
+needs: add a prep with dish, cost and meals | cost per meal | average cost per meal this month | total spent this month
+---
+app "Meal Prep" food green
+table prep dish text, cost money, meals num 1..40 = 5
+topbar "Meal Prep", prep, "Add prep"
+row gap 2
+  statcard sum(prep.cost month), "spent this month"
+  statcard round(sum(prep.cost month) / max(1, sum(prep.meals month))), "per meal on average"
+each prep sort at desc top 10 as p empty "No preps yet. Add what you cooked."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.dish bold
+      p.meals "meals" faint
+    p.cost / p.meals "each" bold
+===
+@rich domain=coop_loans topic=cooperative loan interest style=detailed
+village cooperative lends small loans. principal, monthly interest percent and months. show interest for the loan (principal times percent over 100 times months), total to repay, and the total interest earned across loans
+needs: add a loan with member, principal, percent and months | interest and total to repay per loan | total interest across loans | total principal lent
+---
+app "Co-op Loans" money teal
+table loan member text, principal money, pct num 0..20 = 2, months num 1..60 = 6
+let interest(l loan) = l.principal * l.pct / 100 * l.months
+topbar "Co-op Loans", loan, "New loan"
+row gap 2
+  statcard sum(loan.principal), "lent out"
+  statcard sum(loan, interest(it)), "interest to earn"
+each loan sort at desc as l empty "No loans yet."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.member bold
+      l.principal "at" l.pct "% for" plural(l.months, "month") faint
+    stack gap 0 align end
+      l.principal + interest(l) bold
+      "interest" interest(l) tiny color muted
+===
+@rich domain=project_estimates topic=estimate vs actual style=multi_feature
+my dev tasks: estimated time and actual time as durations. show how far over or under i run (actual divided by estimate), total estimated hours, total actual hours, and tasks that took longer than planned
+needs: add a task with estimate and actual duration | ratio of actual to estimate | total estimated and actual hours | tasks over their estimate flagged
+---
+app "Estimates" timer ink
+table task name text, est dur = 2h, actual dur = 2h
+topbar "Estimates", task, "Add task"
+row gap 2
+  statcard round(sum(task.est) / 1h), "hours estimated"
+  statcard round(sum(task.actual) / 1h), "hours actual"
+statcard round(sum(task.actual) / max(1m, sum(task.est)) * 100), "% of estimate used"
+each task sort at desc as t empty "No tasks yet."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.est "planned," t.actual "actual" faint
+    if t.actual > t.est
+      "Over" color bad bold
+    else
+      "On time" color good bold
+===
+@rich domain=gas_cylinder topic=gas cylinder refills style=short
+how often we refill the kitchen gas cylinder
+needs: log a refill with price | days since the last refill | average days between refills | spending this year
+---
+app "Gas Cylinder" fire orange
+table refill price money
+topbar "Gas Cylinder", refill, "Log refill"
+row gap 2
+  statcard since(refill), "days since last refill"
+  statcard round(gap(refill)), "days between refills"
+statcard sum(refill.price year), "spent this year"
+list refill by day, "No refills logged yet. Add the date of the last one."
+===
+@rich domain=plumber_jobs topic=plumber job invoices style=detailed
+plumbing jobs: customer, hours worked, my hourly rate, cost of parts and date. show the bill for each job (hours times rate plus parts), this month's earnings and the average bill
+needs: add a job with customer, hours, rate and parts | bill per job | earnings this month | average bill
+---
+app "Plumber" tool blue
+table job customer text, hours num 0.5..24 = 1, rate money = 1500, parts money = 0
+topbar "Plumber", job, "Add job"
+row gap 2
+  statcard sum(job month, it.hours * it.rate + it.parts), "earned this month"
+  statcard round(sum(job, it.hours * it.rate + it.parts) / max(1, count(job))), "average bill"
+each job sort at desc top 12 as j empty "No jobs yet. Add the first one."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.customer bold
+      j.hours "h at" j.rate "+ parts" j.parts faint
+    j.hours * j.rate + j.parts bold

@@ -1,0 +1,541 @@
+@rich domain=r1_ride_hail_day topic=ride_app_driver_day_net style=detailed
+i drive a car on a ride app. after each ride i want to put the fare, kilometres and the fuel i used, then see my net today against my daily target, and a switch to look at the last week as bars or the last four weeks as a heat map
+needs: add a ride with fare, kilometres and fuel | net earnings today against a daily target | earnings per kilometre | switch between a week chart and a four week heat map | list of today's rides
+---
+app "Ride Day" car slate
+table ride fare money, km num 0..300, fuel money = 0
+setting goal money = 6000 "Daily net target"
+state view pick Week|Month = Week
+let net = sum(ride.fare today) - sum(ride.fuel today)
+topbar "Ride Day", ride, "Add ride"
+statcard net, "net today from" plural(count(ride today), "ride"), goal
+"About" round(sum(ride.fare week) / max(sum(ride.km week), 1)) "earned per km this week" faint
+choice view
+if view = Week
+  goalbars last 7 days, sum(ride.fare on it) - sum(ride.fuel on it), goal
+else
+  heat last 28 days, sum(ride.fare on it), goal
+list ride today, "No rides yet today."
+===
+@rich domain=r1_rickshaw_fare_meter topic=rickshaw_driver_fares_and_cng style=multi_feature
+i drive my own rickshaw. i want three tabs: one with big fare buttons i tap after each trip, one for cng fill ups with litres and cost, and one showing how the week went after fuel
+needs: tap a fare button to record a trip | fuel fill ups with litres and cost | trips and money today | net for the day after fuel | bar chart of net per day for the week
+---
+app "Rickshaw Day" car orange
+table trip fare money
+table cng litres num 1..60, cost money
+let net(d date) = sum(trip.fare on d) - sum(cng.cost on d)
+screen trips "Trips" car
+  statcard sum(trip.fare today), "from" plural(count(trip today), "trip") "today"
+  row gap 1
+    each [100, 150, 200, 300, 500]
+      button it tap add trip fare = it
+  button "Undo last trip" tap remove last(trip today)
+screen fuel "CNG" flame
+  topbar "CNG", cng, "Add fill up"
+  "Fuel cost today" sum(cng.cost today) head
+  list cng top 6, "No fill ups yet."
+screen week "Week" chart
+  stat net(today), "net today"
+  section "Net per day"
+    daybars last 7 days, net(it)
+===
+@rich domain=r1_loader_truck_trips topic=mazda_loader_trip_log style=multi_feature
+i own a small loader truck. for each trip i write where from, where to, what load, the price and whether the customer paid. show me unpaid money, what kind of loads pay best and the trips grouped by day
+needs: add a trip with from, to, load type, price and paid | tick when the customer pays | total unpaid money | which load types earn most this month | trips grouped by day
+---
+app "Loader Trips" bus yellow
+table trip origin text, dest text, load pick Furniture|Goods|Shifting|Sand|Other = Goods, price money, paid bool
+topbar "Loader Trips", trip, "Add trip"
+row gap 2
+  stat sum(trip.price where paid = no), "unpaid"
+  stat sum(trip.price month), "earned this month"
+section "What pays", "this month"
+  share trip month by load, sum(it.price), it.key
+each trip by day as g empty "No trips yet. Add the first one."
+  g.key bold
+  each g as t
+    row card gap 2 tap edit t swipe remove t
+      toggle t.paid
+      stack grow gap 0
+        t.origin "to" t.dest bold
+        t.load faint
+      t.price bold
+===
+@rich domain=r1_cake_orders_week topic=home_baker_cake_orders style=custom_ui
+home baker. customers order cakes by flavour and pounds with a day they want it. i need a look at the next seven days showing how many cakes each day, the order list by stage from ordered to baking to ready to delivered, and the money to come in
+needs: add an order with customer, flavour, pounds, price and day | next seven days with cakes due each day | move an order through ordered, baking, ready, delivered | filter by stage | money from undelivered orders
+---
+app "Cake Orders" food pink
+table order customer text, flavour pick Chocolate|Vanilla|Pineapple|Red_velvet|Coffee = Chocolate, pounds num 1..20 = 2, price money, day date, stage pick Ordered|Baking|Ready|Delivered = Ordered
+state tab pick Ordered|Baking|Ready|Delivered = Ordered
+topbar "Cake Orders", order, "New cake order"
+statcard sum(order.price where stage != Delivered), "still to come in from" count(order where stage != Delivered) "cakes"
+section "Next 7 days"
+  grid 7 gap 1
+    each 0..6 as n
+      stack radius 8 pad 1 gap 0 align center fill if(count(order where day = today + n and stage != Delivered) > 0, accent, soft)
+        dayname(today + n) tiny
+        count(order where day = today + n and stage != Delivered) bold
+choice tab
+each order where stage = tab sort day as o empty "No cakes in this stage."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+      o.flavour o.pounds "lb · due" o.day faint color if(o.day < today and o.stage != Delivered, bad, muted)
+    if o.stage = Ordered
+      button "Bake" tap set o.stage = Baking
+    if o.stage = Baking
+      button "Ready" tap set o.stage = Ready
+    if o.stage = Ready
+      button "Delivered" fill accent tap set o.stage = Delivered
+===
+@rich domain=r1_catering_events topic=catering_event_quotes style=detailed
+small catering business. each event has a client, the number of guests, my rate per head, the day and an advance. my cost per head is in settings. show me the total for each event, the balance to collect, the estimated profit, and what is coming up
+needs: add an event with client, guests, rate per head, day and advance | cost per head setting | total and balance for each event | estimated profit on upcoming events | upcoming events in date order
+---
+app "Catering Events" food mint
+table event client text, guests num 1..2000, rate money, day date, advance money = 0
+setting cost_head money = 450 "Our cost per head"
+topbar "Catering Events", event, "New event"
+row gap 2
+  stat sum(event where day >= today, it.guests * it.rate), "billing ahead"
+  stat sum(event where day >= today, it.guests * (it.rate - cost_head)), "estimated profit"
+each event where day >= today sort day as e empty "No events coming up. Add the next booking."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.client bold
+      e.day "·" e.guests "guests" faint
+    stack gap 0 align end
+      e.guests * e.rate bold
+      "balance" e.guests * e.rate - e.advance tiny color muted
+section "Past events", count(event where day < today)
+  list event where day < today top 5, "No past events."
+===
+@rich domain=r1_tiffin_subscribers topic=tiffin_service_renewals style=multi_feature
+tiffin service for office workers. subscribers pay for thirty days at a time. i want a list with plan lunch, dinner or both and the date paid until, a renew button that adds thirty days, who is about to run out, and how many lunch and dinner boxes to cook today
+needs: add a subscriber with plan and paid until date | renew button adds thirty days | list of subscribers running out within three days | boxes to cook today for lunch and dinner | monthly price per plan setting
+---
+app "Tiffin Service" food green
+table sub name text, plan pick Lunch|Dinner|Both = Lunch, until date
+setting price money = 9000 "Price per 30 days"
+let active = count(sub where until >= today)
+topbar "Tiffin Service", sub, "Add subscriber"
+row gap 2
+  stat count(sub where until >= today and plan != Dinner), "lunch boxes today"
+  stat count(sub where until >= today and plan != Lunch), "dinner boxes today"
+section "Running out", "within 3 days"
+  each sub where until <= today + 3 sort until as s empty "Nobody is running out. Everyone is paid ahead."
+    row gap 2 tap edit s
+      stack grow gap 0
+        s.name bold
+        "Paid until" s.until faint color if(s.until < today, bad, warn)
+      button "Renew" fill accent tap set s.until = max(s.until, today) + 30
+"Active subscribers" active head
+"Renewals bring" active * price faint
+===
+@rich domain=r1_chaat_stall_ramadan topic=ramadan_fruit_chaat_stall style=custom_ui
+fruit chaat stall for ramadan. thirty days of selling before iftar. big tap to add a plate, my price and a daily plates target, a grid of the thirty days coloured by how busy, and the ingredient costs so i know the real profit
+needs: big tap target to add a plate | price per plate and plates target settings | grid of last thirty days coloured by plates sold | ingredient costs with an amount | profit so far this month
+---
+app "Chaat Stall" apple teal
+table plate
+table fruit what pick Fruit|Chickpeas|Spices|Cups|Other = Fruit, amount money
+setting price money = 150 "Price per plate"
+setting goal num = 120 "Plates target per day"
+let n = count(plate today)
+topbar "Chaat Stall", fruit, "Add cost"
+draw width 170 tap add plate
+  circle 50, 50, 46 stroke soft thick 8
+  arc 50, 50, 46, 0, 360 * clamp(n / goal, 0, 1) stroke accent thick 8
+  label 50, 46, n big
+  label 50, 66, "plates, tap to add" tiny
+button "Undo last plate" tap remove last(plate today)
+statcard count(plate month) * price - sum(fruit.amount month), "profit so far this month"
+section "Thirty days", "darker means busier"
+  daygrid last 30 days, count(plate on it), goal
+list fruit today, "No ingredient cost today."
+===
+@rich domain=r1_eid_clothes_stall topic=eid_stall_discount_sales style=custom_ui dark
+i have a chaand raat stall with ready made kurtas and caps. when it gets late i give discounts so i want a slider for the discount percent, see the price after it on each item, tap sold to cut the stock and add the sale, and know my total for the night
+needs: add an item with quantity and price | slider for the discount percent | price after discount shown on each item | sold button reduces stock and records the sale | total sales tonight
+---
+app "Eid Stall" bag red dark
+table piece name text, qty num 0.., price money
+table sale piece ref piece, amount money
+state disc num = 0
+topbar "Eid Stall", piece, "Add item"
+statcard sum(sale.amount today), "sold tonight in" plural(count(sale today), "sale")
+"Discount" disc "%" faint
+slider disc 0..50
+each piece sort name as p empty "No items yet. Add what you have on the stall."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.qty "left" faint color if(p.qty <= 2, warn, muted)
+    stack gap 0 align end
+      p.price * (100 - disc) / 100 bold
+      if disc > 0
+        "was" p.price tiny color muted
+    button "Sold" fill accent tap add sale piece = p, amount = p.price * (100 - disc) / 100 then set p.qty = p.qty - 1
+===
+@rich domain=r1_qurbani_animals topic=qurbani_animal_dealer_profit style=multi_feature
+cattle dealer before eid ul adha. i buy animals and sell them, so i record each animal with tag, kind, buying cost, asking price and the final sold price. show days left to eid, how many are unsold, profit from sold ones and the money tied up in unsold
+needs: add an animal with tag, kind, cost and asking price | set the eid date | days left to eid | tick sold and note the sold price | profit on sold animals and money tied up in unsold
+---
+app "Animal Dealer" paw purple
+table animal tag text, kind pick Goat|Sheep|Cow|Camel = Goat, cost money, ask money, sold bool, got money = 0
+setting eid date = 2027-05-27 "Eid ul Adha date"
+topbar "Animal Dealer", animal, "Add animal"
+statcard eid - today, "days left to eid"
+row gap 2
+  stat count(animal where sold = no), "unsold"
+  stat sum(animal.got where sold = yes) - sum(animal.cost where sold = yes), "profit so far"
+  stat sum(animal.cost where sold = no), "money tied up"
+each animal sort kind as a empty "No animals yet. Add each animal as you buy it."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.sold
+    stack grow gap 0
+      a.tag a.kind bold
+      "Cost" a.cost "· asking" a.ask faint
+    if a.sold
+      a.got bold color if(a.got >= a.cost, good, bad)
+===
+@rich domain=r1_mobile_accessories_profit topic=mobile_accessory_daily_profit style=detailed
+accessories counter, covers chargers earphones glass. every sale i put the category, selling price and what it cost me so that at night i see real profit and not just sales. want today's profit against a goal, profit per category and the last week
+needs: add a sale with category, selling price and cost | today's profit against a goal | profit per category this month | bar chart of profit per day | list of today's sales
+---
+app "Accessory Counter" phone blue
+table sale category pick Cover|Charger|Earphones|Glass|Cable|Other = Cover, amount money, cost money
+setting goal money = 3000 "Daily profit goal"
+topbar "Accessory Counter", sale, "Add sale"
+statcard sum(sale.amount today) - sum(sale.cost today), "profit today on" sum(sale.amount today) "sales", goal
+section "Profit per day"
+  goalbars last 7 days, sum(sale.amount on it) - sum(sale.cost on it), goal
+section "By category", "this month"
+  share sale month by category, sum(it.amount) - sum(it.cost), it.key
+list sale today, "No sales yet today."
+===
+@rich domain=r1_sim_activation_targets topic=sim_shop_network_targets style=detailed
+we sell sims for jazz, zong, telenor and ufone and each company gives a monthly target with commission per activation. i want to tap an activation for each network, see progress against each target as bars and the commission earned this month
+needs: tap a network to record an activation | monthly target per network setting | progress bar for each network target | commission earned this month | list of latest activations
+---
+app "Sim Shop" phone purple
+table act network pick Jazz|Zong|Telenor|Ufone = Jazz, tag text?
+setting target num = 40 "Monthly target per network"
+setting comm money = 75 "Commission per activation"
+topbar "Sim Shop", act, "Add with note"
+statcard count(act month) * comm, "commission this month from" plural(count(act month), "activation")
+grid 2 gap 1
+  each options act.network as n
+    button n count(act month where network = n) tap add act network = n
+section "Progress to target", "of" target "each"
+  each options act.network as n
+    goal count(act month where network = n), target, n
+list act top 6, "No activations yet this month."
+===
+@rich domain=r1_shop_rent_collection topic=landlord_shop_rent_tracking style=multi_feature
+i own a small plaza with eight shops let out. each tenant has a monthly rent and a due day. mark when they paid this month, see who is late after their due day, total collected against total due, and remind me on the first
+needs: add a tenant shop with rent and due day | mark paid for this month | tenants late after their due day | collected versus total due | reminder on the first of every month
+---
+app "Plaza Rent" home ink
+table tenant shop text, rent money, dueday num 1..28 = 5
+table rentpaid tenant ref tenant
+remind "New month. Collect the rents." monthly on 1 at 10:00
+topbar "Plaza Rent", tenant, "Add shop"
+statcard sum(tenant, it.rent * min(count(it.rentpaid month), 1)), "collected of" sum(tenant.rent) "due", sum(tenant.rent)
+each tenant sort shop as t empty "No tenants yet. Add each shop with its rent."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.rentpaid month
+    stack grow gap 0
+      t.shop bold
+      "Rent" t.rent "· due on the" t.dueday faint
+    if count(t.rentpaid month) = 0 and monthday(today) > t.dueday
+      "Late" bold color bad
+===
+@rich domain=r1_pharmacy_refill_calls topic=chronic_patient_refill_calls style=custom_ui
+pharmacy. some patients take monthly medicine for sugar or blood pressure and come back on their own, but many forget. keep their name, medicine, how many days a pack lasts, and show me who is due for a refill so i can call them. tap refilled when they come
+needs: add a patient with medicine and days per pack | list of patients due for a refill | days since last refill | tap refilled when they collect | count of patients due
+---
+app "Refill Calls" pill pink
+table patient name text, medicine text, days num 1..90 = 30, phone text?
+table refill patient ref patient
+topbar "Refill Calls", patient, "Add patient"
+count(patient, due(it.refill, it.days)) "patients are due for a call" head
+each patient sort name as p empty "No patients yet. Add the people on regular medicine."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.medicine "· every" p.days "days" faint
+      "Last refill" since(p.refill) "days ago" faint
+    if due(p.refill, p.days)
+      button "Refilled" fill accent tap add refill patient = p
+    else
+      "Fine" faint color good
+===
+@rich domain=r1_optical_frames_orders topic=optical_shop_spectacle_orders style=multi_feature
+optical shop. customer picks a frame and lens, we send for glasses and they come back in a few days. note customer, frame, lens type, price, advance and promised day. tick ready when glasses arrive and show who is late, the balance and how many are waiting for pickup
+needs: add an order with customer, frame, lens type, price, advance and promised day | tick when the glasses are ready | orders late past the promised day | balance to collect | orders waiting for pickup
+---
+app "Optical Orders" eye ocean
+table order customer text, frame text, lens pick Normal|Blue_cut|Progressive = Normal, price money, advance money = 0, due date, ready bool, taken bool
+topbar "Optical Orders", order, "New order"
+row gap 2
+  stat count(order where ready = yes and taken = no), "waiting for pickup"
+  stat count(order where ready = no and due < today), "late"
+  stat sum(order.price where taken = no) - sum(order.advance where taken = no), "balance"
+each order where taken = no sort due as o empty "No open orders."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.ready
+    stack grow gap 0
+      o.customer bold
+      o.frame "·" o.lens faint
+      "Promised" o.due faint color if(o.due < today and o.ready = no, bad, muted)
+    if o.ready
+      button "Handed over" tap set o.taken = yes
+===
+@rich domain=r1_salon_staff_commission topic=salon_product_sales_commission style=detailed
+salon with three girls who also sell hair products and get a commission on each sale. note who sold what and the amount, show each person's commission this month at my percent and total product sales so i can pay them correctly
+needs: add a sale with staff member, product and amount | commission percent setting | commission earned per person this month | total product sales this month | list of recent sales
+---
+app "Salon Products" smile plum
+table sale staff pick Sana|Mina|Hira = Sana, product text, amount money
+setting pct num 0..50 = 10 "Commission %"
+topbar "Salon Products", sale, "Add sale"
+statcard sum(sale.amount month), "product sales this month," sum(sale.amount month) * pct / 100 "in commission"
+section "Commission by person", "at" pct "%"
+  each options sale.staff as s
+    row
+      s bold grow
+      count(sale month where staff = s) "sales" faint
+      sum(sale.amount month where staff = s) * pct / 100 bold
+section "Recent sales"
+  list sale top 6, "No sales yet."
+===
+@rich domain=r1_hair_oil_batches topic=homemade_hair_oil_batch_cost style=custom_ui
+i make hair oil at home in batches and sell bottles to neighbours and online. for each batch i note what the ingredients cost and how many bottles came out. show cost per bottle, bottles left, a bar of how much is sold, and what i earned. a price per bottle setting
+needs: add a batch with cost and bottles made | tap to record a bottle sold from a batch | cost per bottle for each batch | bottles left with a bar | price per bottle and profit
+---
+app "Oil Batches" drop green
+table batch name text, cost money, bottles num 1..500
+table bsold batch ref batch
+setting price money = 600 "Price per bottle"
+topbar "Oil Batches", batch, "New batch"
+each batch sort at desc as b empty "No batches yet. Add the first one with its ingredient cost."
+  let sold = count(b.bsold)
+  stack card gap 2 tap edit b swipe remove b
+    row gap 2
+      b.name bold grow
+      "cost per bottle" round(b.cost / b.bottles) faint
+    draw 100, 6
+      rect 0, 0, 100, 6 fill soft radius 3
+      rect 0, 0, 100 * clamp(sold / b.bottles, 0, 1), 6 fill accent radius 3
+    row gap 2
+      b.bottles - sold "left" bold grow
+      "profit so far" sold * price - b.cost faint color if(sold * price < b.cost, warn, good)
+      button "Sold 1" tap add bsold batch = b
+===
+@rich domain=r1_insta_seller_orders topic=instagram_seller_order_flow style=multi_feature
+i sell bags and jewellery on instagram. orders come by dm so i write the handle, item and amount, then move them from new to paid to packed to shipped with a tracking note. i want three lists on one page so i know what to do next and my sales this week
+needs: add an order with handle, item, amount and a tracking note | lists for orders to confirm, to pack and to ship | buttons to move an order to the next step | sales this week | count of orders waiting for payment
+---
+app "Insta Orders" bag pink
+table order handle text, item text, amount money, step pick New|Paid|Packed|Shipped = New, track text?
+topbar "Insta Orders", order, "Add order"
+row gap 2
+  stat count(order where step = New), "waiting for payment"
+  stat sum(order.amount week where step != New), "paid this week"
+section "To confirm", count(order where step = New)
+  each order where step = New as o empty "No orders waiting for payment."
+    row gap 2 tap edit o swipe remove o
+      o.handle bold grow
+      o.item o.amount faint
+      button "Paid" tap set o.step = Paid
+section "To pack", count(order where step = Paid)
+  each order where step = Paid as o empty "Nothing to pack."
+    row gap 2 tap edit o
+      o.handle bold grow
+      o.item faint
+      button "Packed" tap set o.step = Packed
+section "To ship", count(order where step = Packed)
+  each order where step = Packed as o empty "Nothing to ship."
+    row gap 2 tap edit o
+      o.handle bold grow
+      o.track faint
+      button "Shipped" fill accent tap set o.step = Shipped
+===
+@rich domain=r1_pickle_jar_pricing topic=pickle_jar_cost_calculator style=custom_ui
+i make mango and lime pickle and sell in jars. before a batch i want to type what the ingredients cost and how many jars it makes, set the price i plan to sell at on a slider and see cost per jar, profit per jar and total profit. save the batch if i go ahead
+needs: type ingredient cost and jars made | slider for the selling price | cost per jar and profit per jar | total profit for the batch | save the batch to a list
+---
+app "Pickle Planner" bag orange
+table batch name text, cost money, jars num 1..1000, price money
+state nm text = ""
+state cost money = 0
+state jars num = 20
+state price num = 400
+let per = if(jars > 0, cost / jars, 0)
+field nm "Batch name"
+field cost "Ingredient cost"
+"Jars made" jars bold faint
+slider jars 5..200
+"Selling price" price faint
+slider price 100..1500
+statcard round((price - per) * jars), "profit for" jars "jars"
+"Profit per jar" round(price - per) faint
+"Cost per jar" round(per) faint
+button "Save this batch" fill accent tap add batch name = nm, cost = cost, jars = jars, price = price then set nm = ""
+section "Earlier batches"
+  list batch top 6, "No batches saved yet."
+===
+@rich domain=r1_embroidery_piece_pay topic=embroidery_workers_piece_rate style=detailed
+i give embroidery work to women at home and pay per piece. each worker brings finished pieces and sometimes takes an advance. i want weekly pay for each worker from pieces times the rate minus advances, and the total i must pay on friday
+needs: add a worker | tap to record pieces brought | record an advance taken | pay due per worker this week | total pay due this week
+---
+app "Piece Work" pencil mint
+table worker name text
+table pieces worker ref worker, count num 1..200
+table advance worker ref worker, amount money
+setting rate money = 150 "Pay per piece"
+state n num = 5
+state adv money = 0
+topbar "Piece Work", worker, "Add worker"
+statcard sum(worker, sum(it.pieces.count week) * rate - sum(it.advance.amount week)), "to pay this week for" sum(pieces.count week) "pieces"
+"Pieces in this tap" n faint
+slider n 1..50
+field adv "Advance amount"
+each worker sort name as w empty "No workers yet. Add each woman who takes work."
+  let pay = sum(w.pieces.count week) * rate - sum(w.advance.amount week)
+  stack card gap 2 tap edit w
+    row gap 2
+      stack grow gap 0
+        w.name bold
+        sum(w.pieces.count week) "pieces · advance" sum(w.advance.amount week) faint
+      pay big
+    row gap 1
+      button "Add pieces" tap add pieces worker = w, count = n
+      button "Give advance" tap add advance worker = w, amount = adv
+===
+@rich domain=r1_bike_parts_reorder topic=motorcycle_parts_reorder_list style=multi_feature
+motorcycle parts shop. thousands of small parts so i only track the fast ones. a screen for the stock with plus and minus and a second screen that makes my buying list: for every part under its low level how many to buy to reach double the low level, with the cost
+needs: add a part with quantity, low level and cost | plus and minus buttons on stock | second screen listing parts to buy | how many to buy to reach double the low level | total cost of the buying list
+---
+app "Parts Stock" tool grey
+table part name text, qty num 0.., low num 0.. = 4, cost money
+screen stock "Stock" box
+  topbar "Parts Stock", part, "Add part"
+  each part sort name as p empty "No parts yet. Add the fast moving ones."
+    row card gap 1 tap edit p swipe remove p
+      p.name bold grow color if(p.qty <= p.low, warn, ink)
+      button "-" tap set p.qty = p.qty - 1
+      p.qty bold
+      button "+" tap set p.qty = p.qty + 1
+screen buy "To buy" cart
+  statcard sum(part, max(it.low * 2 - it.qty, 0) * it.cost), "to spend on" count(part, it.qty <= it.low) "parts"
+  each part where qty <= low sort qty as p empty "Nothing to buy. Stock is above every low level."
+    row card gap 2
+      p.name bold grow
+      "buy" p.low * 2 - p.qty bold
+      p.cost "each" faint
+===
+@rich domain=r1_newspaper_hawker_bills topic=newspaper_subscriber_bills style=multi_feature
+i deliver newspapers to subscribers every morning, dawn, jang or express with different prices per day. i want each subscriber with house and paper, a tick when this month's bill is paid, the bill from the days in the month and how much is unpaid
+needs: add a subscriber with house and paper | price per day for each paper in settings | bill for the month per subscriber | tick when paid this month | total unpaid money this month
+---
+app "Paper Route" note green
+table sub house text, paper pick Dawn|Jang|Express = Dawn
+table billpaid sub ref sub
+setting dawn_price money = 40 "Dawn per day"
+setting jang_price money = 45 "Jang per day"
+setting express_price money = 35 "Express per day"
+let bill(s sub) = monthdays(today) * if(s.paper = Dawn, dawn_price, if(s.paper = Jang, jang_price, express_price))
+topbar "Paper Route", sub, "Add subscriber"
+statcard sum(sub, bill(it) * (1 - min(count(it.billpaid month), 1))), "unpaid this month from" count(sub, count(it.billpaid month) = 0) "homes"
+each sub sort house as s empty "No subscribers yet. Add the first house."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.billpaid month
+    stack grow gap 0
+      s.house bold
+      s.paper faint
+    bill(s) bold
+===
+@rich domain=r1_jumma_bazaar_stall topic=weekly_bazaar_stall_profit style=detailed
+every friday i set up a stall at the jumma bazaar. for each market day i write the sales, the stall fee and the transport. show the profit of each market day, a line over the last markets and my best day so i know if the bazaar is still worth it
+needs: add a market day with sales, stall fee and transport | profit of each market day | line chart of profit over recent markets | best market profit | average profit per market
+---
+app "Jumma Stall" tag teal
+table market sales money, fee money, transport money = 0
+let gain(m market) = m.sales - m.fee - m.transport
+topbar "Jumma Stall", market, "Add market day"
+row gap 2
+  stat round(sum(market, gain(it)) / max(count(market), 1)), "average profit"
+  stat max(market, gain(it)), "best market"
+section "Profit over the last markets"
+  trend market top 8, gain(it)
+each market as m empty "No market days yet. Add the first Friday."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.at bold
+      "Sales" m.sales "· costs" m.fee + m.transport faint
+    gain(m) bold color if(gain(m) < 0, bad, good)
+===
+@rich domain=r1_rice_godown_bags topic=rice_wholesaler_bag_stock style=multi_feature
+rice wholesale godown. varieties are basmati, sella, irri and broken. i record bags received and bags sold with the money, then want bags in stock per variety, the value of the stock at what i paid, and the money i made on sales this month
+needs: record bags received with variety, bags and cost | record bags sold with variety, bags and money | bags in stock per variety | stock value at purchase cost | sales money this month by variety
+---
+app "Rice Godown" bag yellow
+table recv variety pick Basmati|Sella|Irri|Broken = Basmati, bags num 1..2000, cost money
+table out variety pick Basmati|Sella|Irri|Broken = Basmati, bags num 1..2000, amount money
+topbar "Rice Godown", out, "Sold bags"
+statcard sum(out.amount month), "sold this month from" sum(out.bags month) "bags"
+section "Bags in stock"
+  each options recv.variety as v
+    row
+      v bold grow
+      sum(recv.bags where variety = v) - sum(out.bags where variety = v) "bags" bold
+section "Money by variety", "this month"
+  share out month by variety, sum(it.amount), it.key
+section "Received"
+  form recv, "Save received bags"
+"Bought for" sum(recv.cost) faint
+===
+@rich domain=r1_ice_block_deliveries topic=ice_block_supply_summer style=multi_feature
+i make ice blocks and supply fish shops, juice carts and weddings. note the customer, blocks delivered and whether they paid, plus the blocks that melted on the way. price per block setting. i want to see how demand moves over eight weeks in summer and what is unpaid
+needs: add a delivery with customer, blocks and paid | blocks melted entry | price per block setting | heat map of the last eight weeks | unpaid money from deliveries
+---
+app "Ice Supply" snow blue
+table delivery customer text, blocks num 1..500, paid bool
+table melt blocks num 1..100
+setting price money = 350 "Price per block"
+topbar "Ice Supply", delivery, "Add delivery"
+row gap 2
+  stat sum(delivery.blocks where paid = no) * price, "unpaid"
+  stat sum(melt.blocks month), "blocks melted this month"
+section "Last 8 weeks", "blocks delivered per day"
+  heat last 56 days, sum(delivery.blocks on it), 100
+section "Melted on the way"
+  form melt, "Save melted blocks"
+each delivery where paid = no sort at as d empty "Every delivery is paid."
+  row card gap 2 tap edit d
+    toggle d.paid
+    d.customer bold grow
+    d.blocks * price bold
+===
+@rich domain=r1_roti_tandoor_flour topic=tandoor_roti_flour_check style=short
+tandoor shop. tap rotis sold in tens and check against the flour i used
+needs: tap buttons to add rotis sold | record flour used in kg | rotis expected from the flour | difference between expected and sold
+---
+app "Tandoor" bread orange
+table roti qty num 1..500
+table flour kg num 1..100
+setting per_kg num = 14 "Rotis from one kg of flour"
+let expected = sum(flour.kg today) * per_kg
+let sold = sum(roti.qty today)
+topbar "Tandoor", flour, "Flour used"
+quick roti, qty, [10, 20, 50, 100]
+row gap 2
+  stat sold, "rotis sold today"
+  stat expected, "expected from flour"
+if expected > 0
+  abs(expected - sold) if(sold < expected, "rotis missing", "extra") head color if(sold < expected, warn, good)
+daybars last 7 days, sum(roti.qty on it)

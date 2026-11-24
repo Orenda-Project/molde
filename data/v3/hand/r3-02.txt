@@ -1,0 +1,513 @@
+@rich domain=sugarcane_cutting topic=sugarcane_trolley_weights style=detailed
+sugarcane season: every trolley that goes to the mill I note the field, weight in maunds and the mill rate. total maunds, money at the rate and a chart of maunds sent per day. I also want to see which field sent the most
+needs: add a trolley with field, maunds and rate | total maunds this season | money from the mill | chart of maunds per day | field comparison
+---
+app "Cane trolleys" car grey
+table trolley field text, maunds num 10..800, rate money = 400 "Mill rate per maund"
+let maunds = sum(trolley.maunds year)
+topbar "Cane trolleys", trolley, "Add trolley"
+row gap 2
+  statcard maunds, "maunds sent this season"
+  statcard sum(trolley year, it.maunds * it.rate), "money from the mill"
+section "Maunds per day", "last 14 days"
+  daybars last 14 days, sum(trolley.maunds on it)
+section "By field"
+  share trolley year by field, sum(it.maunds), it.key
+list trolley top 10, "No trolleys yet. Add the first load to the mill."
+===
+@rich domain=rice_transplant topic=rice_nursery_transplanting style=custom_ui
+rice: I sow nursery beds, then transplant after about 30 days. keep bed name, sowing date, and show the date to transplant, how many days left, and turn the card orange when it is within 3 days and green once ready. also acres transplanted so far
+needs: add a nursery bed with sowing date | transplant date after 30 days | days left colour | tick when transplanted | acres transplanted so far
+---
+app "Rice nursery" plant ocean
+table bed name text, sown date = today, acres num 0.25..100 = 1 "Acres it will plant", moved bool
+setting wait num 15..60 = 30 "Days in nursery"
+let planted = sum(bed.acres where moved = yes)
+topbar "Rice nursery", bed, "Add bed"
+statcard planted, "acres transplanted of" sum(bed.acres), sum(bed.acres)
+each bed where moved = no sort sown as b empty "No nursery beds waiting. Add a bed with its sowing date."
+  row card gap 2 fill if(b.sown + wait <= today, good, if(b.sown + wait - today <= 3, warn, soft)) tap edit b swipe remove b
+    stack grow gap 0
+      text b.name bold
+      text "Transplant on" b.sown + wait faint
+      if b.sown + wait <= today
+        text "Ready now" bold
+      else
+        text b.sown + wait - today "days left" faint
+    toggle b.moved
+===
+@rich domain=cotton_picking_pay topic=cotton_pickers_wages style=multi_feature
+cotton pickers are paid by the kg. each day I write the picker's name and kg picked. rate per kg changes so I keep it in settings. show what each picker earned this week, total kg today and total wages this week
+needs: add a picker | log kg picked by a picker | rate per kg setting | wages per picker this week | total kg today | total wages this week
+---
+app "Cotton pickers" users slate
+table picker name text
+table pick_kg picker ref picker, kg num 1..200
+setting rate money = 45 "Pay per kg"
+topbar "Cotton pickers", picker, "Add picker"
+row gap 2
+  statcard sum(pick_kg.kg today), "kg picked today"
+  statcard round(sum(pick_kg.kg week) * rate), "wages this week"
+each picker sort name as p empty "No pickers yet. Add the names of the people picking."
+  row card gap 1 tap edit p swipe remove p
+    stack grow gap 0
+      text p.name bold
+      text sum(p.pick_kg.kg week) "kg this week, earned" round(sum(p.pick_kg.kg week) * rate) faint
+    button "+ 10" tap add pick_kg picker = p, kg = 10
+    button "+ 20" tap add pick_kg picker = p, kg = 20
+section "Kg per day", "last 7 days"
+  daybars last 7 days, sum(pick_kg.kg on it)
+===
+@rich domain=onion_storage topic=onion_store_stock style=detailed
+onions in the storage shed: I add each lot with bags and date stored, and when I sell some I reduce the bags. warn me if a lot has been stored more than 90 days, and show total bags left and money from sales
+needs: add a lot with bags and date stored | sell bags from a lot | warning for lots stored over 90 days | total bags left | money from sales
+---
+app "Onion store" bag plum
+table lot name text, bags num 0..2000, stored date = today
+table sold lot ref lot, bags num 1..500, price money = 2000 "Price per bag"
+let left = sum(lot.bags) - sum(sold.bags)
+topbar "Onion store", lot, "Add lot"
+row gap 2
+  statcard left, "bags in store"
+  statcard sum(sold, it.bags * it.price), "money from sales"
+each lot sort stored as l empty "No lots stored. Add the first lot with its bags."
+  let remaining = l.bags - sum(l.sold.bags)
+  stack card gap 1 fill if(today - l.stored > 90 and remaining > 0, warn, soft) tap edit l swipe remove l
+    row gap 1
+      text l.name bold grow
+      text remaining "bags left" bold
+    text "Stored" today - l.stored "days ago" faint
+    row gap 1
+      button "Sell 5 bags" tap add sold lot = l, bags = 5
+      button "Sell 10 bags" tap add sold lot = l, bags = 10
+===
+@rich domain=tomato_greenhouse topic=greenhouse_temperature_yield style=multi_feature
+tomato greenhouse. morning and afternoon I read temperature and humidity and write them down. warn red if the temperature goes over 35. I also add picked kg from each picking and sell price, with a trend line of temperature
+needs: log temperature and humidity | red warning above 35 degrees | trend of temperature | log picked kg and price | money from tomatoes this month
+---
+app "Greenhouse" sun red
+table reading temp num 5..60 unit "C", humidity num 10..100 = 60 unit "%"
+table pickkg kg num 1..500, price money = 120 "Price per kg"
+topbar "Greenhouse", reading, "Log reading"
+if last(reading.temp) > 35
+  text "Too hot inside. Open the side vents." bold color bad
+row gap 2
+  statcard last(reading.temp), "C at last reading"
+  statcard last(reading.humidity), "% humidity"
+section "Temperature", "last readings"
+  trend reading top 20, it.temp
+section "Tomato picking", "this month"
+  text sum(pickkg month, it.kg * it.price) "money from tomatoes" big
+  form pickkg, "Save picking"
+  list pickkg top 5, "No tomatoes picked yet."
+===
+@rich domain=broiler_batches topic=broiler_batch_costs style=detailed
+I run broiler batches of 1000 chicks, about 40 days each. for a batch I want chick cost, feed bags used each week, and mortality count, then sale weight and rate. show feed cost and profit per batch so I know which batch was good
+needs: add a batch with chicks and chick cost | log feed bags | log dead birds | sale kg and rate | profit per batch
+---
+app "Broilers" egg orange
+table batch name text, chicks num 100..20000 = 1000, chickcost money = 150 "Cost per chick", sale_kg num 0..50000 = 0 "Sold kg", rate money = 0 "Sale rate per kg"
+table feedbag batch ref batch, bags num 1..200
+table dead batch ref batch, birds num 1..500
+setting bagprice money = 4800 "Feed bag price"
+topbar "Broilers", batch, "New batch"
+each batch as b empty "No batches yet. Add the first batch of chicks."
+  let cost = b.chicks * b.chickcost + sum(b.feedbag.bags) * bagprice
+  let income = b.sale_kg * b.rate
+  stack card gap 1 tap edit b
+    row gap 1
+      text b.name bold grow
+      text if(income - cost >= 0, "profit", "loss") abs(income - cost) bold color if(income - cost >= 0, good, bad)
+    text "Alive" b.chicks - sum(b.dead.birds) "of" b.chicks "birds, feed bags" sum(b.feedbag.bags) faint
+    row gap 1
+      button "+ 1 bag" tap add feedbag batch = b, bags = 1
+      button "1 dead" tap add dead batch = b, birds = 1
+===
+@rich domain=buffalo_breeding topic=buffalo_heat_calving style=multi_feature
+buffalo breeding record: each animal, date of heat or insemination, and expected calving date (about 310 days after). remind me a week before calving, and list which animals are due soon in orange
+needs: add buffalo by name | record insemination date | expected calving about 310 days later | reminder a week before | orange when due within 30 days
+---
+app "Breeding" heart pink
+table buf name text, tag text?
+table service buf ref buf, served date = today, bull text?
+let due_soon = count(service, it.served + 310 - today <= 30 and it.served + 310 >= today)
+remind "Calving expected in a week" at service.served + 303d at 8:00
+topbar "Breeding", buf, "Add buffalo"
+statcard due_soon, "calvings within 30 days"
+each service sort served desc as s empty "No services yet. Add an insemination for a buffalo."
+  row card gap 2 fill if(s.served + 310 - today <= 30 and s.served + 310 >= today, warn, soft) tap edit s swipe remove s
+    stack grow gap 0
+      text s.buf.name bold
+      text "Served" s.served faint
+    stack gap 0 align end
+      text "Calving about" s.served + 310
+      text s.served + 310 - today "days" faint
+section "Record a service"
+  form service, "Save service"
+===
+@rich domain=cattle_weighing topic=calf_weight_gain style=custom_ui
+weigh my calves every two weeks and see who is gaining. each calf has a name, and each weighing is in kg. show last weight, gain since the first weighing, a line chart for the chosen calf, and who is gaining slowest
+needs: add a calf | log weight in kg | gain since first weighing | line chart for chosen calf | slowest gainer
+---
+app "Calf weights" scale green
+table calf name text
+table weight calf ref calf, kg num 20..600
+state sel text = ""
+topbar "Calf weights", calf, "Add calf"
+row gap 1
+  each calf sort name as c
+    button c.name fill if(sel = c.name, accent, soft) tap set sel = c.name
+each calf where name = sel as c empty "Tap a calf to see its weight line."
+  row gap 2
+    statcard last(c.weight.kg), "kg now"
+    statcard last(c.weight.kg) - first(c.weight.kg), "kg gained"
+  section "Weight of" c.name
+    trend c.weight, it.kg
+    button "Log 5 kg more" tap add weight calf = c, kg = last(c.weight.kg) + 5
+section "Gain per calf", "kg since first weighing"
+  share calf sort name, last(it.weight.kg) - first(it.weight.kg), it.name
+===
+@rich domain=fodder_silage topic=fodder_stock_days style=detailed
+fodder stock for the animals. I note bales or wagon loads of silage, wheat straw and green fodder coming in, and what I feed daily in kg. tell me how many days the stock will last at the daily feed rate
+needs: add stock arriving with kind and kg | daily feed amount setting | days the stock will last | feed used log | stock left in kg
+---
+app "Fodder stock" leaf yellow
+table incoming kind pick Silage|Straw|Green|Bran = Silage, kg num 10..20000
+table fed kg num 1..2000
+setting daily num 10..2000 = 150 "Feed per day (kg)"
+let left = sum(incoming.kg) - sum(fed.kg)
+topbar "Fodder stock", incoming, "Add stock"
+row gap 2
+  statcard left, "kg left in store"
+  statcard floor(max(left, 0) / daily), "days it will last"
+if left < daily * 5
+  text "Less than five days of feed left." bold color warn
+section "Feed given today"
+  text sum(fed.kg today) "kg fed today" big
+  quick fed, kg, [50, 100, 150]
+section "What came in"
+  share incoming by kind, sum(it.kg), it.key
+===
+@rich domain=seed_stock topic=seed_packet_inventory style=short
+seed packets I keep for the next season, with the year bought so I know which are old
+needs: add seed with variety, packets and year bought | plus and minus packets | old seeds highlighted | count of packets
+---
+app "Seed box" leaf teal
+table seed variety text, packets num 0..200 = 1, bought num 2018..2040 = 2026 "Year bought"
+topbar "Seed box", seed, "Add seed"
+statcard sum(seed.packets), "packets in the box"
+each seed sort bought as s empty "No seeds yet. Add your packets."
+  row card gap 1 fill if(s.bought < year(today) - 2, warn, surface) tap edit s swipe remove s
+    stack grow gap 0
+      text s.variety bold
+      text "bought" s.bought faint
+    button "-" tap set s.packets = s.packets - 1
+    text s.packets bold
+    button "+" tap set s.packets = s.packets + 1
+===
+@rich domain=farm_expense_season topic=crop_season_expenses style=multi_feature
+farm expenses by season: seed, fertiliser, labour, diesel, water, spray, other. I add what I spent with a note, and the sale income, and see profit for the season with a chart of where money went
+needs: add expense with category and amount | add sale income | profit for the season | chart by category | list to edit or remove
+---
+app "Season books" wallet blue
+table cost what text, amount money, cat pick Seed|Fertiliser|Labour|Diesel|Water|Spray|Other = Seed
+table income from text, amount money
+let spent = sum(cost.amount year)
+let earned = sum(income.amount year)
+topbar "Season books", cost, "Add expense"
+row gap 2
+  statcard earned, "income this season"
+  statcard spent, "spent this season"
+statcard earned - spent, "profit so far"
+section "Where the money went"
+  share cost year by cat, sum(it.amount), it.key
+section "Add income"
+  form income, "Save income"
+list cost top 8, "No expenses yet. Add the first seed or labour cost."
+===
+@rich domain=farm_labour_days topic=daily_labour_wages style=custom_ui
+workers on the farm get a daily wage. I mark who came today with one tap and it adds a day for them. at the end of the week show days worked and money owed per worker, and tick when I paid them
+needs: add worker with daily wage | tap to mark worker present today | days worked this week | money owed this week | mark paid
+---
+app "Farm labour" users purple
+table worker name text, wage money = 1200 "Daily wage"
+table day worker ref worker, paid bool
+topbar "Farm labour", worker, "Add worker"
+statcard sum(day.worker.wage week), "total wages this week"
+each worker sort name as w empty "No workers yet. Add each person and their daily wage."
+  stack card gap 1 fill if(count(w.day today) > 0, soft, surface)
+    row gap 2
+      stack grow gap 0
+        text w.name bold
+        text count(w.day week) "days this week, owed" count(w.day week where paid = no) * w.wage faint
+      toggle w.day
+    row gap 1
+      text "Wage" w.wage faint grow
+      button "Edit" tap edit w
+===
+@rich domain=farm_diesel_log topic=machinery_diesel_usage style=multi_feature
+diesel for my tractor, thresher and generator. I note which machine took how many litres and the price, and the hours the machine ran. show litres per hour for each machine and the diesel bill this month
+needs: log diesel with machine, litres and price | hours the machine ran | litres per hour per machine | diesel bill this month | chart of litres per day
+---
+app "Farm diesel" fire ink
+table fill machine pick Tractor|Thresher|Generator|Pump = Tractor, litres num 1..300, price money = 280 "Price per litre", hours num 0..24 = 0 "Hours run"
+let bill = sum(fill month, it.litres * it.price)
+topbar "Farm diesel", fill, "Log diesel"
+row gap 2
+  statcard bill, "diesel bill this month"
+  statcard sum(fill.litres month), "litres this month"
+section "Litres per hour", "all time"
+  each options fill.machine as m
+    row gap 1
+      text m grow
+      text fixed(sum(fill.litres where machine = m) / max(sum(fill.hours where machine = m), 1), 1) "L/h" bold
+section "Litres per day"
+  daybars last 14 days, sum(fill.litres on it)
+===
+@rich domain=honey_sales topic=honey_jar_sales style=custom_ui
+I sell honey in 500 g and 1 kg jars to neighbours. one tap to add a sale of each jar size, price in settings, with a list by day. show jars sold this month, money, and what is left in my stock of jars
+needs: one tap sale for each jar size | prices in settings | jars sold and money this month | stock of jars left | list by day
+---
+app "Honey sales" cup yellow
+table jarsale size pick Half_kg|One_kg = Half_kg, qty num 1..50 = 1
+setting p_half money = 900 "Price of 500 g jar"
+setting p_one money = 1700 "Price of 1 kg jar"
+setting stock num 0..1000 = 60 "Jars filled in stock"
+let money = sum(jarsale month where size = Half_kg, it.qty) * p_half + sum(jarsale month where size = One_kg, it.qty) * p_one
+topbar "Honey sales", jarsale, "Other sale"
+row gap 2
+  statcard sum(jarsale.qty month), "jars sold this month"
+  statcard money, "money this month"
+statcard stock - sum(jarsale.qty all), "jars left in stock"
+row gap 1
+  button "Sell 500 g" tap add jarsale size = Half_kg, qty = 1
+  button "Sell 1 kg" tap add jarsale size = One_kg, qty = 1
+list jarsale by day, "No honey sold yet. Tap a jar size when you sell one."
+===
+@rich domain=mushroom_trays topic=mushroom_tray_harvest style=detailed
+growing oyster mushrooms in trays in a dark room. each tray has a start date and I pick several flushes from it, weighing in grams. show picked grams per tray, which trays are older than 30 days and should be thrown, and grams per day chart
+needs: add tray with start date | log flush weight in grams | grams per tray | warning for trays older than 30 days | chart of grams per day
+---
+app "Mushrooms" food mint
+table tray name text, started date = today
+table flush tray ref tray, grams num 50..5000
+topbar "Mushrooms", tray, "Add tray"
+statcard sum(flush.grams week), "grams picked this week"
+each tray sort started as t empty "No trays yet. Add a tray when you start it."
+  row card gap 1 fill if(today - t.started > 30, warn, soft) tap edit t swipe remove t
+    stack grow gap 0
+      text t.name bold
+      text sum(t.flush.grams) "g so far, day" today - t.started faint
+      if today - t.started > 30
+        text "Old tray. Time to replace it." bold
+    button "+ 300 g" tap add flush tray = t, grams = 300
+section "Grams per day", "last 14 days"
+  daybars last 14 days, sum(flush.grams on it)
+===
+@rich domain=hydroponic_lettuce topic=hydroponic_tank_checks style=multi_feature
+hydroponic lettuce on my balcony. daily I check the tank pH and EC, top up the water in litres and note the harvest of heads. show a pH line, a note when pH is outside 5.5 to 6.5, and heads harvested this month
+needs: log pH and EC | note when pH is outside 5.5 and 6.5 | water top up in litres | heads harvested | trend of pH
+---
+app "Hydro lettuce" drop teal
+table check ph num 4..9 unit "pH", ec num 0..5 = 1.5 "EC (mS)"
+table topup litres num 1..100 = 5
+table heads n num 1..100 = 4
+topbar "Hydro lettuce", check, "Log check"
+if last(check.ph) < 5.5 or last(check.ph) > 6.5
+  text "pH is out of range. Adjust the tank." bold color warn
+else
+  text "pH is in the good range." color good
+row gap 2
+  statcard last(check.ph), "pH now"
+  statcard sum(heads.n month), "heads harvested this month"
+section "pH line"
+  trend check top 20, it.ph
+row gap 1
+  button "Top up 5 L" tap add topup litres = 5
+  button "Harvest 4 heads" tap add heads n = 4
+text sum(topup.litres month) "litres of water added this month" faint
+===
+@rich domain=rose_cuttings topic=rose_cutting_trays style=custom_ui
+I take rose cuttings in trays. record variety, number of cuttings, date, and later how many rooted. show success percent per variety and a count of trays still waiting to be checked after 21 days
+needs: add a tray with variety, cuttings and date | record how many rooted | success percent per variety | trays waiting to be checked | tap to edit
+---
+app "Rose cuttings" plant pink
+table tray variety text, cuttings num 1..500 = 50, made date = today, rooted num? 0..500
+let waiting = count(tray, it.rooted = 0 and today - it.made >= 21)
+topbar "Rose cuttings", tray, "New tray"
+statcard waiting, "trays to check for roots", count(tray)
+each tray sort made desc as t empty "No trays yet. Add the first rose cutting tray."
+  row card gap 2 fill if(today - t.made >= 21 and t.rooted = 0, warn, soft) tap edit t swipe remove t
+    stack grow gap 0
+      text t.variety bold
+      text t.cuttings "cuttings on" t.made faint
+    stack gap 0 align end
+      if t.rooted > 0
+        text round(t.rooted * 100 / t.cuttings) "% rooted" bold
+      else
+        text "Not checked" faint
+section "Success by variety"
+  share tray by variety, sum(it.rooted) * 100 / max(sum(it.cuttings), 1), it.key
+===
+@rich domain=lawn_mowing_jobs topic=lawn_mowing_clients style=multi_feature
+small gardening service. my clients have lawns, I visit them every 2 weeks. clients with name, address and price per visit. mark a visit done, show who is due this week, and money earned this month
+needs: add client with address and price | mark visit done | clients due for a visit | money earned this month | days since last visit
+---
+app "Lawn rounds" home green
+table client name text, address text?, price money = 1500
+table visit client ref client
+setting every num 7..60 = 14 "Visit every (days)"
+topbar "Lawn rounds", client, "Add client"
+row gap 2
+  statcard count(client, due(it.visit, every)), "clients due for a visit"
+  statcard sum(visit.client.price month), "earned this month"
+each client sort name as c empty "No clients yet. Add the first lawn you look after."
+  row card gap 2 fill if(due(c.visit, every), warn, soft) tap edit c swipe remove c
+    stack grow gap 0
+      text c.name bold
+      text c.address faint
+      text "Last visit" since(c.visit) "days ago" faint
+    button "Done" tap add visit client = c
+===
+@rich domain=compost_heaps topic=compost_turning_log style=short
+compost heaps that need turning every 10 days, with the temperature
+needs: add heap | log turning with temperature | days since last turn | overdue warning
+---
+app "Compost" leaf grey
+table heap name text
+table turn heap ref heap, temp num 10..80 unit "C"
+setting gap_days num 3..30 = 10 "Turn every (days)"
+topbar "Compost", heap, "Add heap"
+each heap sort name as h empty "No heaps yet. Add your first compost heap."
+  row card gap 2 fill if(due(h.turn, gap_days), warn, soft) tap edit h swipe remove h
+    stack grow gap 0
+      text h.name bold
+      text "Turned" since(h.turn) "days ago" faint
+      text "Last temperature" last(h.turn.temp) "C" faint
+    button "Turned 55 C" tap add turn heap = h, temp = 55
+===
+@rich domain=herb_pot_watering topic=herb_pots_watering style=detailed
+balcony herbs in pots: mint, basil, curry leaf, aloe. each pot has how many days it can go without water. show which ones need water today, tap to mark watered, and weekly dots of when I watered
+needs: add pot with days between watering | tap to mark watered | which pots need water today | days since last water | weekly dots
+---
+app "Herb pots" plant mint
+table pot name text, every num 1..30 = 3 "Water every (days)"
+table water pot ref pot
+let thirsty = count(pot, due(it.water, it.every))
+topbar "Herb pots", pot, "Add pot"
+statcard thirsty, "pots need water today", count(pot)
+each pot sort name as p empty "No pots yet. Add your mint, basil or aloe."
+  stack card gap 1 fill if(due(p.water, p.every), warn, soft) tap edit p swipe remove p
+    row gap 2
+      stack grow gap 0
+        text p.name bold
+        text "Watered" since(p.water) "days ago, every" p.every "days" faint
+      button "Watered" tap toggle p.water
+    weekdots count(p.water on it) > 0
+===
+@rich domain=hen_vaccination topic=poultry_vaccine_calendar style=multi_feature
+vaccines for my layer flock: Newcastle, Gumboro, bronchitis, fowl pox. I add the date I gave one and it should tell me when the next is due using the gap days I type. orange when close, red when late, and remind me
+needs: log a vaccine given with date and gap days | next due date | orange when close and red when late | reminder | count of late vaccines
+---
+app "Flock vaccines" shield red
+table shot vaccine pick Newcastle|Gumboro|Bronchitis|Fowl_pox = Newcastle, given date = today, gap num 7..365 = 30 "Days until next", birds num 1..5000 = 300
+let late = count(shot, it.given + it.gap < today)
+remind "Flock vaccine due today" at shot.given + 30d at 8:00
+topbar "Flock vaccines", shot, "Log vaccine"
+statcard late, "vaccines overdue"
+each shot sort given + gap as s empty "No vaccines yet. Log the first one you gave."
+  row card gap 2 fill if(s.given + s.gap < today, bad, if(s.given + s.gap - today <= 7, warn, soft)) tap edit s swipe remove s
+    stack grow gap 0
+      text s.vaccine bold
+      text s.birds "birds, given" s.given faint
+    stack gap 0 align end
+      text "Next" s.given + s.gap bold
+      text s.given + s.gap - today "days" faint
+===
+@rich domain=duck_quail_birds topic=ducks_and_quail_counts style=custom_ui
+I keep ducks and quail. a tab for each: eggs per day for ducks, eggs per day for quail, and feed. let me switch between them, add the egg count and see the last 7 days chart for the chosen bird
+needs: switch between ducks and quail | add egg count for the bird | last 7 days chart | feed kg log | eggs this week
+---
+app "Ducks and quail" egg ocean
+table eggs bird pick Ducks|Quail = Ducks, n num 1..500
+table feedkg bird pick Ducks|Quail = Ducks, kg num 0.5..50
+state b pick Ducks|Quail = Ducks
+row gap 1
+  each options eggs.bird
+    button it fill if(b = it, accent, soft) grow tap set b = it
+statcard sum(eggs.n week where bird = b), "eggs this week from" b
+row gap 1
+  button "+ 10 eggs" tap add eggs bird = b, n = 10
+  button "+ 25 eggs" tap add eggs bird = b, n = 25
+  button "Feed 2 kg" tap add feedkg bird = b, kg = 2
+section "Eggs per day", b
+  daybars last 7 days, sum(eggs.n on it where bird = b)
+text "Feed this week" sum(feedkg.kg week where bird = b) "kg" faint
+===
+@rich domain=rabbit_hutch topic=rabbit_litters style=detailed
+I raise rabbits to sell. each doe has a name and each litter has birth date and kits born and kits alive. show kits alive in all, when kits are 8 weeks old and ready to sell, and total sold with money
+needs: add doe | add litter with date and kits | kits alive | ready to sell at 8 weeks | record kits sold with price
+---
+app "Rabbits" paw plum
+table doe name text
+table litter doe ref doe, born date = today, kits num 1..15 = 6, alive num 0..15 = 6
+table rsale litter ref litter, n num 1..15 = 1, price money = 1500
+topbar "Rabbits", doe, "Add doe"
+row gap 2
+  statcard sum(litter.alive), "kits alive"
+  statcard sum(rsale, it.n * it.price), "money from sales"
+each litter sort born as l empty "No litters yet. Add a litter after a doe gives birth."
+  row card gap 2 fill if(today - l.born >= 56, good, soft) tap edit l swipe remove l
+    stack grow gap 0
+      text l.doe.name bold
+      text l.alive "of" l.kits "alive, born" l.born faint
+    if today - l.born >= 56
+      text "Ready to sell" bold
+    else
+      text 56 - (today - l.born) "days to go" faint
+section "Record a sale"
+  form rsale, "Save sale"
+===
+@rich domain=sheep_lambing topic=sheep_flock_and_lambs style=multi_feature
+sheep flock: ewes with tag numbers, lambing dates with lambs born, wool kg at shearing time. I want lambs born this year, wool total, and a count of ewes that lambed
+needs: add ewe with tag | log lambing with number of lambs | log wool kg | lambs born this year | ewes that lambed
+---
+app "Flock" paw slate
+table ewe tag text, age num 1..15 = 3 unit "years"
+table lambing ewe ref ewe, lambs num 1..4 = 1
+table wool ewe ref ewe, kg num 0.5..10 = 2
+topbar "Flock", ewe, "Add ewe"
+row gap 2
+  statcard sum(lambing.lambs year), "lambs born this year"
+  statcard sum(wool.kg year), "kg of wool"
+statcard count(ewe, count(it.lambing year) > 0), "ewes lambed of" count(ewe), count(ewe)
+each ewe sort tag as e empty "No ewes yet. Add each ewe by tag number."
+  row card gap 1 tap edit e swipe remove e
+    stack grow gap 0
+      text "Ewe" e.tag bold
+      text sum(e.lambing.lambs) "lambs, wool" sum(e.wool.kg) "kg" faint
+    button "Twin lambs" tap add lambing ewe = e, lambs = 2
+    button "Sheared" tap add wool ewe = e, kg = 2
+===
+@rich domain=roadside_fruit_stall topic=roadside_fruit_stall_sales style=custom_ui
+I run a fruit stall by the road in summer. buttons for the fruits I sell, with the kg and the price per kg. at night I see the day's sales and what I earned each day this week, and what sold most
+needs: one tap sale buttons for fruits | kg and price per kg | today money | chart of money per day | fruit that sold most
+---
+app "Fruit stall" apple orange
+table sale fruit pick Mango|Melon|Peach|Plum = Mango, kg num 0.5..100 = 1, price money = 250 "Price per kg"
+state f pick Mango|Melon|Peach|Plum = Mango
+row bar
+  text "Fruit stall" head grow
+  text sum(sale today, it.kg * it.price) "today" bold
+row gap 1
+  each options sale.fruit
+    button it fill if(f = it, accent, soft) grow tap set f = it
+row gap 1
+  button "Sell 1 kg" tap add sale fruit = f, kg = 1
+  button "Sell 2 kg" tap add sale fruit = f, kg = 2
+  button "Sell 5 kg" tap add sale fruit = f, kg = 5
+section "Money per day", "last 7 days"
+  daybars last 7 days, sum(sale on it, it.kg * it.price)
+section "Kg sold by fruit", "this week"
+  share sale week by fruit, sum(it.kg), it.key
+list sale today, "Nothing sold yet today. Tap a kg button after the first customer."

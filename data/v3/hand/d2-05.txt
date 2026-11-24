@@ -1,0 +1,167 @@
+@rich domain=d2_tax_set_aside topic=freelancer_tax_set_aside style=detailed
+as a freelancer I keep spending the tax money. log every payment I receive with client and amount, set my tax percent, and show how much to set aside this month and in total, and how much is really mine
+needs: log a payment with client and amount | set the tax percent | amount to set aside this month | money that is really mine | chart of income per month
+---
+app "Tax jar" coin yellow
+table pay client text, amount money
+setting taxp num 0..60 = 20 "Tax percent"
+topbar "Tax jar", pay, "Log payment"
+statcard sum(pay.amount month) * taxp / 100, "to set aside from this month's" sum(pay.amount month)
+statcard sum(pay.amount) * (100 - taxp) / 100, "is really yours after tax from" sum(pay.amount) "total"
+section "Income", "last 6 months"
+  plot 0..6, 0..max(sum(pay.amount), 1) axes
+    each 0..5 as k
+      let d0 = addmonths(today, k - 5)
+      rect k + 0.15, 0, 0.7, sum(pay.amount month of d0) fill accent radius 2
+      tick k + 0.5, monthname(d0)
+list pay by day, "No payments yet."
+===
+@rich domain=d2_lead_followups topic=freelance_lead_followups style=multi_feature
+leads who might hire me: name, what they need, next follow up date and status Warm, Cold or Booked. remind me on the follow up day, show the overdue ones first and how many are booked
+needs: add a lead with need and follow-up date | status chips | reminder on follow-up day | overdue follow-ups highlighted | booked count
+---
+app "Leads" phone green
+table lead name text, need text?, follow date, status pick Warm|Cold|Booked = Warm
+remind "Follow up with a lead today" at lead.follow
+topbar "Leads", lead, "Add lead"
+statcard count(lead where status = Booked), "booked,"  count(lead where follow < today and status != Booked) "follow-ups overdue"
+each lead where status != Booked sort follow as l empty "No open leads. Time to go and find some."
+  stack card gap 1 tap edit l swipe remove l
+    row
+      l.name bold grow
+      l.follow faint color if(l.follow < today, bad, muted)
+    l.need faint
+    choice l.status
+===
+@rich domain=d2_saas_subscriptions topic=dev_tool_subscriptions style=multi_feature
+all the tools I pay for monthly as a dev: GitHub, hosting, domains, AI. list with cost per month, renewal date and a pause tick when cancelled. show monthly total, yearly total and the biggest ones
+needs: add a subscription with monthly cost and renewal date | cancelled tick | monthly and yearly total | biggest costs chart
+---
+app "Subscriptions" tag slate
+table sub name text, cost money, renews date, cancelled bool
+let live = sum(sub.cost where cancelled = no)
+topbar "Subscriptions", sub, "Add tool"
+statcard live, "per month, yearly" live * 12
+section "Biggest costs", "per month"
+  bars sub where cancelled = no sort cost desc top 5, it.cost, it.name
+each sub sort renews as s empty "No tools listed. Add what you pay for."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      "renews" s.renews faint
+    s.cost bold
+    toggle s.cancelled
+===
+@rich domain=d2_restore_tests topic=backup_restore_drills style=detailed
+backups mean nothing until restored. log each restore test with the system, whether it worked and how many minutes it took. show days since the last test per system and warn at 30 days
+needs: log a restore test with system, result and minutes | days since last test per system | warning after 30 days | average restore minutes
+---
+app "Restore tests" shield ocean
+table drill system text, worked bool, mins num 1..1440 = 20
+topbar "Restore tests", drill, "Log test"
+statcard round(avg(drill.mins)), "minutes average to restore,"  count(drill where worked = no) "failed"
+each drill by system empty "No restore tests yet. Try one this week."
+  row card gap 2
+    it.key bold grow
+    since(it) "days ago" bold color if(since(it) > 30, bad, good)
+list drill top 6, "No tests yet."
+===
+@rich domain=d2_runbook_reviews topic=runbook_review_dates style=short
+index of our runbooks with the service and last review date, mark the stale ones older than 90 days
+needs: add a runbook with service and review date | stale ones highlighted | button to mark reviewed today | count stale
+---
+app "Runbooks" book teal
+table runbook title text, service text, reviewed date = today
+topbar "Runbooks", runbook, "Add runbook"
+statcard count(runbook where today - reviewed > 90), "stale of" count(runbook) "runbooks", count(runbook)
+each runbook sort reviewed as r empty "No runbooks listed yet."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.title bold
+      r.service "· reviewed" r.reviewed faint color if(today - r.reviewed > 90, bad, muted)
+    button "Reviewed" tap set r.reviewed = today
+===
+@rich domain=d2_team_workload topic=team_workload_balance style=custom_ui
+I lead 6 devs and I never know who is overloaded. add people with their weekly capacity in tasks, add tasks to people with an effort, and show each person's load as a bar that turns red when over capacity
+needs: add a person with weekly capacity | add a task with effort for a person | load bar per person | red when over capacity | total open effort
+---
+app "Workload" users pink
+table dev name text, cap num 1..60 = 20 "Capacity (hours)"
+table job dev ref dev, what text, hours num 1..60 = 4, done bool
+topbar "Workload", dev, "Add person"
+statcard sum(job.hours where done = no), "hours open across" plural(count(dev), "person")
+each dev sort name as d empty "Add your team to balance the work."
+  stack card gap 1 swipe remove d
+    row
+      d.name bold grow
+      sum(d.job.hours where done = no) "of" d.cap "h" bold color if(sum(d.job.hours where done = no) > d.cap, bad, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(d.job.hours where done = no) / d.cap, 0, 1), 4 radius 2 fill if(sum(d.job.hours where done = no) > d.cap, bad, accent)
+form job, "Add task"
+===
+@rich domain=d2_brag_doc topic=career_brag_document style=multi_feature
+my brag doc for the performance review: wins with what I did, the impact and a type like Shipped, Helped, Fixed, Led. grouped by month so I can find them, and a count per type
+needs: add a win with impact and type | grouped by month | count per type | tap to edit
+---
+app "Brag doc" star orange
+table win what text, impact text?, kind pick Shipped|Helped|Fixed|Led = Shipped
+topbar "Brag doc", win, "Add win"
+section "By type", count(win)
+  bars options win.kind, count(win where kind = it), it
+each win by month as g empty "Nothing yet. Write down something you did this week."
+  text g.key bold faint
+  each g as w
+    stack card gap 0 tap edit w swipe remove w
+      w.what bold
+      w.kind "·" w.impact faint
+===
+@rich domain=d2_team_pulse topic=team_mood_pulse style=custom_ui
+daily pulse check for my team: how is everyone feeling, tap 1 to 5 and see the average today, the week as a line chart and how many answers so far
+needs: tap a mood from 1 to 5 | average today | line chart of the week | answer count
+---
+app "Pulse" smile mint
+table mood score num 1..5
+statcard round(avg(mood.score today) * 10) / 10, "average mood today from" plural(count(mood today), "answer")
+row gap 1
+  each 1..5
+    button it fill if(it >= 4, good, if(it = 3, soft, warn)) grow tap add mood score = it
+section "This week", "average mood"
+  plot 0..7, 0..5 axes
+    poly stroke accent thick 2
+      each days last 7 days as d
+        pt index, avg(mood.score on d)
+    each days last 7 days as d
+      tick index, dayname(d)
+button "Undo last answer" tap remove last(mood today)
+===
+@rich domain=d2_exploratory_sessions topic=exploratory_test_sessions style=detailed
+session based testing: write the charter, start a 45 minute timer, and when it ends save how many bugs and questions I found. show bugs per session and total this week
+needs: add a charter | countdown timer for the session | save bugs and questions found | bugs total this week | list of sessions
+---
+app "Test sessions" timer red
+table sess charter text, bugs num 0..100 = 0, questions num 0..100 = 0
+setting len dur = 45m "Session length"
+topbar "Test sessions", sess, "Add session"
+timer len, "Session", notify "Time is up. Write down what you found."
+statcard sum(sess.bugs week), "bugs found this week in" plural(count(sess week), "session")
+each sess sort at desc as s empty "No sessions yet. Write a charter and start the timer."
+  row card gap 2 tap edit s swipe remove s
+    s.charter bold grow
+    s.bugs "bugs ·" s.questions "questions" faint
+===
+@rich domain=d2_sunset_countdown topic=api_deprecation_sunset style=custom_ui
+we are sunsetting old API versions. list each version with the sunset date and how many clients still use it. show days left, color those within 30 days, and remind me a week before the sunset
+needs: add an API version with sunset date and clients left | days left until sunset | colour within 30 days | reminder a week before | clients still on old versions
+---
+app "Sunsets" clock ink dark
+table ver name text, sunset date, clients num 0..1000 = 0 "Clients still using it"
+remind "An API version sunsets in a week" at ver.sunset - 7d at 9:00
+topbar "API sunsets", ver, "Add version"
+statcard sum(ver.clients), "clients still on old versions,"  count(ver where sunset >= today and sunset - today < 30) "sunsets within 30 days"
+each ver sort sunset as v empty "No versions scheduled for sunset."
+  row card gap 2 tap edit v swipe remove v fill if(v.sunset - today < 30, soft, surface)
+    stack grow gap 0
+      v.name bold
+      v.clients "clients left" faint
+    text v.sunset - today "days" bold color if(v.sunset - today < 30, warn, ink)

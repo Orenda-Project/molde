@@ -1,0 +1,532 @@
+@rich domain=r2_family_week_meals topic=weekly_meal_planner style=multi_feature
+planning dinners for the whole family is chaos. want a week grid Monday to Sunday where i put what we eat for breakfast, lunch and dinner, see tonight's dinner at the top, and know how many slots are still empty
+needs: add a meal for a day and slot | week laid out day by day | tonight's dinner shown at the top | count of slots still empty | tap a meal to edit or swipe to remove
+---
+app "Meal Plan" food ocean
+table meal day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, slot pick Breakfast|Lunch|Dinner = Dinner, dish text
+let planned = count(meal)
+topbar "Meal Plan", meal, "Plan a meal"
+statcard planned, "of 21 slots planned, empty:" max(21 - planned, 0), 21
+section "Tonight", dayname(today)
+  each meal where day = dayname(today) and slot = Dinner as m empty "Nothing planned for dinner tonight."
+    m.dish head
+each options meal.day as dd
+  stack card gap 1
+    dd bold
+    each meal where day = dd sort slot as m empty "Free day. Tap Plan a meal."
+      row gap 2 tap edit m swipe remove m
+        m.slot faint
+        m.dish grow
+===
+@rich domain=r2_shop_aisles topic=shopping_list_by_aisle style=detailed
+need a shopping list that groups things by aisle (produce, dairy, meat, pantry, frozen) so i dont walk back and forth. add an item with a quantity, tick it when it is in the basket, see how many are left, and wipe the ticked ones at the end
+needs: add an item with aisle and quantity | items grouped by aisle | tick an item when bought | shows how many items are left | clear all bought items with one button
+---
+app "Shopping List" cart mint
+table item name text, aisle pick Produce|Dairy|Meat|Pantry|Frozen|Other = Produce, qty text?, got bool
+topbar "Shopping List", item, "Add item"
+statcard count(item where got = yes), "in the basket, left:" count(item where got = no), count(item)
+each options item.aisle as a
+  if count(item where aisle = a) > 0
+    section a, "Left:" count(item where aisle = a and got = no)
+      each item where aisle = a sort got as i
+        row gap 2 tap edit i swipe remove i
+          toggle i.got
+          i.name grow
+          i.qty faint
+if count(item) = 0
+  "The list is empty. Add what you need from the shop." faint
+button "Clear bought items" tap remove all item where got = yes
+===
+@rich domain=r2_recipe_portion_cost topic=recipe_cost_per_portion style=multi_feature
+i cook for a small lunch counter and never know what one plate really costs me. let me save a recipe with how many portions it makes, add its ingredients with their cost, and show total cost, cost per portion and the profit if i sell it at a price
+needs: save a recipe with portions and selling price | add ingredients with cost to a recipe | total cost of the recipe | cost per portion | profit per portion at the selling price
+---
+app "Plate Cost" calc slate dark
+table recipe name text, portions num 1..200 = 4, sell money = 0
+table ingredient recipe ref recipe, what text, cost money
+topbar "Plate Cost", recipe, "New recipe"
+each recipe as r empty "No recipes yet. Add a dish and say how many portions it makes."
+  section r.name, "Serves" r.portions
+    each r.ingredient as g empty "No ingredients yet."
+      row gap 2 tap edit g swipe remove g
+        g.what grow
+        g.cost faint
+    row
+      "Total cost" grow
+      sum(r.ingredient.cost) bold
+    row
+      "Cost per portion" grow
+      round(sum(r.ingredient.cost) * 100 / r.portions) / 100 big
+    if r.sell > 0
+      "Profit per portion" round((r.sell - sum(r.ingredient.cost) / r.portions) * 100) / 100 color good
+form ingredient, "Add ingredient"
+===
+@rich domain=r2_pantry_expiry topic=pantry_expiry_stock style=detailed
+my pantry is full of things that expire before i notice. i would like to add an item with quantity and expiry date, see what must be used in the next week at the top, count how many are already expired, and adjust the quantity with plus and minus as i use it
+needs: add stock with quantity, unit and expiry date | use-first list for the next 7 days | count of expired items | plus and minus buttons for quantity | full stock list sorted by name
+---
+app "Pantry" box ink
+table stock name text, qty num 0.. = 1, unit pick pcs|kg|litres|packs = pcs, expires date
+let soon = count(stock where expires >= today and expires <= today + 7)
+let gone = count(stock where expires < today)
+topbar "Pantry", stock, "Add stock"
+row gap 2
+  statcard soon, "expire within 7 days"
+  statcard gone, "already expired"
+section "Use these first", "next 7 days"
+  each stock where expires <= today + 7 sort expires as s empty "Nothing is about to expire."
+    row gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.name bold
+        s.qty s.unit faint
+      s.expires bold color if(s.expires < today, bad, warn)
+section "Everything in stock", "Items:" count(stock)
+  each stock sort name as s empty "The pantry is empty. Add the first item."
+    row gap 1
+      s.name grow
+      button "-" tap set s.qty = s.qty - 1
+      s.qty bold
+      button "+" tap set s.qty = s.qty + 1
+===
+@rich domain=r2_tiffin_dues topic=tiffin_orders_due_today style=multi_feature
+running a home tiffin service and my diary is a mess. need to add an order with customer name, number of tiffins, due date and price, see only what is due today, mark it delivered, and show how much money i still have to collect
+needs: add an order with customer, tiffins, due date and price | list of orders due today | mark an order delivered | mark a delivered order paid | total money still to collect
+---
+app "Tiffin Orders" bag plum
+table order customer text, meals num 1..10 = 1, due date, price money, delivered bool, paid bool
+let todays = count(order where due = today)
+let pending = count(order where due = today and delivered = no)
+topbar "Tiffin Orders", order, "New order"
+statcard todays - pending, "of" todays "delivered today", todays
+"To deliver today" head
+each order where due = today and delivered = no sort customer as o empty "No pending deliveries today."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+      o.meals "tiffins" faint
+    o.price bold
+    button "Delivered" tap set o.delivered = yes
+section "To collect", sum(order.price where delivered = yes and paid = no)
+  each order where delivered = yes and paid = no as o empty "Everyone has paid."
+    row gap 2
+      o.customer grow
+      o.price bold
+      button "Paid" tap set o.paid = yes
+===
+@rich domain=r2_cloud_kitchen_channels topic=cloud_kitchen_sales_channels style=custom_ui
+cloud kitchen owner. i sell through two delivery apps, my own website and phone calls. let me log sales per channel with the number of orders, flip between today and this week, see which channel brings the most, and watch the last 7 days against my daily goal
+needs: log sales with channel, amount and orders | switch between today and this week | comparison of channels | last 7 days bars against daily goal | average order value
+---
+app "Cloud Kitchen" food red
+table sale channel pick Website|App_one|App_two|Phone = Website, amount money, orders num 1..50 = 1
+setting target money = 50000 "Daily sales goal"
+state view pick Today|Week = Today
+topbar "Cloud Kitchen", sale, "Log sales"
+choice view
+let total = if(view = Today, sum(sale.amount today), sum(sale.amount week))
+let n = if(view = Today, sum(sale.orders today), sum(sale.orders week))
+statcard total, if(view = Today, "sold today", "sold this week")
+"Average order" round(total / max(n, 1)) "from" n "orders" head
+section "By channel", view
+  if view = Today
+    share sale today by channel, sum(it.amount), it.key
+  else
+    share sale week by channel, sum(it.amount), it.key
+section "Last 7 days", "goal line at" target
+  goalbars last 7 days, sum(sale.amount on it), target
+===
+@rich domain=r2_chai_stall_till topic=food_stall_quick_till style=custom_ui
+i run a small snack stall. big buttons for tea, samosa, paratha and juice so i can tap each sale quickly, an undo for wrong taps, today's takings with my starting cash, and a count of what sold
+needs: one-tap buttons for each item | undo the last sale | today's takings | cash in the box with starting float | count of items sold today
+---
+app "Stall Till" coffee orange
+table sale item pick Tea|Samosa|Paratha|Juice = Tea, qty num 1..50 = 1, price money
+setting float money = 2000 "Starting cash"
+let takings = sum(sale.price today)
+statcard takings + float, "in the box now, sales" takings
+grid 2 gap 1
+  button "Tea 30" tap add sale item = Tea, price = 30
+  button "Samosa 20" tap add sale item = Samosa, price = 20
+  button "Paratha 60" tap add sale item = Paratha, price = 60
+  button "Juice 80" fill accent tap add sale item = Juice, price = 80
+button "Undo last sale" fill bad tap remove last(sale today)
+section "Sold today", "Items:" sum(sale.qty today)
+  share sale today by item, sum(it.qty), it.key
+list sale today, "No sales yet today. Tap an item when you sell it."
+===
+@rich domain=r2_cake_orders topic=baking_orders_pickup style=detailed
+home baker here, cakes only. each order has the customer, the flavour, pounds, the pickup date, price and the advance paid. i want to see what to bake in the next week, how much i am still owed, and tap done when the cake is collected
+needs: add a cake order with flavour, pounds, pickup date, price and advance | list of cakes to bake in the next 7 days | amount still owed on open orders | tap done when collected | pounds to bake per flavour
+---
+app "Bake Orders" gift yellow
+table cake customer text, flavour pick Chocolate|Vanilla|Red_velvet|Lemon|Coffee = Chocolate, pounds num 1..20 = 2, pickup date, price money, advance money = 0, collected bool
+let open = count(cake where collected = no)
+topbar "Bake Orders", cake, "New cake order"
+row gap 2
+  statcard open, "cakes still to hand over"
+  statcard sum(cake.price where collected = no) - sum(cake.advance where collected = no), "still owed to you"
+section "Next 7 days", "soonest first"
+  each cake where collected = no and pickup <= today + 7 sort pickup as c empty "No cakes due this week."
+    row gap 2 tap edit c swipe remove c
+      stack grow gap 0
+        c.customer "-" c.flavour bold
+        c.pounds "lb, pickup" c.pickup faint
+      "Due" c.price - c.advance bold
+      button "Done" tap set c.collected = yes
+section "Pounds to bake", "all open orders"
+  share cake where collected = no by flavour, sum(it.pounds), it.key
+===
+@rich domain=r2_calorie_limit topic=daily_calorie_chart style=multi_feature
+trying to eat less. log what i eat with the meal and the calories, show how many calories are left today against my limit, break today down by meal, and chart the last week with my limit as a line
+needs: log food with meal and calories | calories eaten today against daily limit | today's calories by meal | last 7 days chart with limit line | list of today's food
+---
+app "Calories" apple green
+table eaten meal pick Breakfast|Lunch|Dinner|Snack = Breakfast, food text, kcal num 1..3000
+setting limit num = 2000 "Daily calories"
+let today_kcal = sum(eaten.kcal today)
+topbar "Calories", eaten, "Log food"
+goal today_kcal, limit, "kcal eaten today", " kcal"
+section "Today by meal"
+  each options eaten.meal as ml
+    row
+      ml grow
+      sum(eaten.kcal today where meal = ml) bold
+section "Last 7 days", "line is your limit"
+  goalbars last 7 days, sum(eaten.kcal on it), limit
+list eaten today, "Nothing logged yet today."
+===
+@rich domain=r2_ramadan_menu topic=ramadan_iftar_sehri_plan style=detailed
+ramadan is coming and i want to plan iftar and sehri for each of the thirty days, see tonight's menu on top, see which days still have no plan in a grid, and get a reminder in the afternoon to start cooking and one at night to wake for sehri
+needs: plan iftar and sehri menu for a day number | tonight's menu on top | grid of 30 days showing planned days | reminder in the afternoon to cook | reminder to wake for sehri
+---
+app "Ramadan Menu" moon teal dark
+setting first date = 2027-02-18 "First fast (date)"
+table menu night num 1..30, iftar text, sehri text
+let now_day = clamp(today - first + 1, 1, 30)
+remind "Start cooking iftar" at 16:30
+remind "Wake up for sehri" at 3:30
+topbar "Ramadan Menu", menu, "Plan a day"
+section "Tonight", "Day" now_day
+  each menu where night = now_day as m empty "No menu planned for tonight yet."
+    "Iftar:" m.iftar head
+    "Sehri after:" m.sehri faint
+section "Days planned", "Planned:" count(menu)
+  grid 6 gap 1
+    each 1..30 as n
+      box height 30 radius 6 fill if(count(menu where night = n) > 0, accent, soft)
+        n tiny align center
+each menu sort night as m
+  row card gap 2 tap edit m swipe remove m
+    "Day" m.night bold
+    stack grow gap 0
+      m.iftar
+      m.sehri faint
+===
+@rich domain=r2_weekly_grocery_cap topic=grocery_budget_per_store style=multi_feature
+every week i overspend on groceries. i need to log each purchase with the store and the cost, see how much of my weekly budget is gone, which store eats the most, and how much i spent each day
+needs: log a purchase with store, item and cost | weekly spending against budget | spending per store this week | bars of the last 7 days | purchases listed by day
+---
+app "Grocery Run" cart blue
+table buy store pick Market|Supermarket|Butcher|Bakery|Other = Market, what text, cost money
+setting weekly money = 15000 "Weekly grocery budget"
+let spent = sum(buy.cost week)
+topbar "Grocery Run", buy, "Add purchase"
+goal spent, weekly, if(spent > weekly, "over this week's budget", "spent this week")
+section "Per store", "this week"
+  share buy week by store, sum(it.cost), it.key
+section "Per day", "last 7 days"
+  daybars last 7 days, sum(buy.cost on it)
+list buy week by day, "No purchases this week."
+===
+@rich domain=r2_school_lunchbox topic=kids_lunch_box_week style=custom_ui
+packing lunch for two kids every morning. i want to put the main, a fruit and a snack for each school day, see the whole week as five boxes, and note how much came back uneaten so i learn what they actually like
+needs: pack a lunch for a weekday with main, fruit and snack | week as five day boxes | note how much was eaten | summary of how much was eaten | tap a lunch to edit
+---
+app "Lunch Box" bag purple
+table pack day pick Mon|Tue|Wed|Thu|Fri = Mon, main text, fruit text?, snack text?, eaten pick Not_yet|All|Half|None = Not_yet
+topbar "Lunch Box", pack, "Pack a lunch"
+statcard count(pack), "of 5 days packed", 5
+grid 5 gap 1
+  each options pack.day as dd
+    stack radius 10 pad 1 gap 0 fill if(count(pack where day = dd) > 0, accent, soft)
+      dd bold align center
+      each pack where day = dd as p
+        p.main tiny
+        p.fruit tiny faint
+section "How much came home", "tap a lunch below to change it"
+  share pack where eaten != Not_yet by eaten, count(it), it.key
+each pack sort day as p empty "No lunches packed yet. Tap Pack a lunch."
+  row card gap 2 tap edit p swipe remove p
+    p.day bold
+    stack grow gap 0
+      p.main p.fruit p.snack
+      p.eaten faint
+===
+@rich domain=r2_food_waste_log topic=household_food_waste style=detailed
+we throw away too much food. i want to log each thing with why it went in the bin and what it cost, see the money wasted this month against last month, the main reasons, and how many days since the last time
+needs: log wasted food with reason and cost | money wasted this month | comparison with last month | main reasons ranked | days since the last waste
+---
+app "Food Waste" leaf pink
+table waste item text, reason pick Expired|Leftover|Spoiled|Cooked_too_much|Other = Leftover, cost money
+topbar "Food Waste", waste, "Log waste"
+row gap 2
+  statcard sum(waste.cost month), "wasted this month"
+  statcard sum(waste.cost prev month), "wasted last month"
+since(waste) "days since food last went in the bin" head
+section "Why it gets thrown", "this month"
+  share waste month by reason, sum(it.cost), it.key
+section "Last 30 days"
+  daybars last 30 days, sum(waste.cost on it)
+list waste by day, "Nothing wasted yet. Log the first item when it happens."
+===
+@rich domain=r2_water_protein_goals topic=water_protein_goals style=multi_feature
+gym diet: 2.5 litres of water and 90 g protein every day. buttons to add a glass or a protein shake or an egg portion, progress for each goal today, and a chart of the last week of protein
+needs: one-tap buttons for water and protein | water progress against goal | protein progress against goal | last 7 days protein chart with goal line | settings for both goals
+---
+app "Intake Goals" cup grey
+table intake kind pick Water|Protein = Water, amount num 1..2000
+setting water_goal num = 2500 "Water goal (ml)"
+setting protein_goal num = 90 "Protein goal (g)"
+statcard sum(intake.amount today where kind = Water), "ml of" water_goal "water", water_goal
+statcard sum(intake.amount today where kind = Protein), "g of" protein_goal "protein", protein_goal
+row gap 1
+  button "Glass 250 ml" tap add intake kind = Water, amount = 250
+  button "Bottle 500 ml" tap add intake kind = Water, amount = 500
+row gap 1
+  button "Shake 25 g" tap add intake kind = Protein, amount = 25
+  button "Eggs 12 g" tap add intake kind = Protein, amount = 12
+section "Protein, last 7 days", "line is your goal"
+  goalbars last 7 days, sum(intake.amount on it where kind = Protein), protein_goal
+list intake today, "Nothing logged yet today."
+===
+@rich domain=r2_farm_stand_stock topic=farm_produce_stock_sales style=multi_feature
+small organic farm selling to restaurants. record each harvest in kg by crop, record each sale with the buyer and price per kg, and show what is still in stock per crop and how much money came in this week
+needs: record a harvest by crop and kg | record a sale with buyer and price per kg | stock left per crop | money earned this week | list of recent sales
+---
+app "Farm Stand" plant ocean
+table harvest crop pick Tomato|Spinach|Carrot|Eggplant|Herbs = Tomato, kg num 0.1..500 = 5
+table sold crop pick Tomato|Spinach|Carrot|Eggplant|Herbs = Tomato, kg num 0.1..500 = 1, per_kg money, buyer text
+let earned = sum(sold week, it.kg * it.per_kg)
+topbar "Farm Stand", sold, "Record sale"
+statcard earned, "earned this week from" sum(sold.kg week) "kg sold"
+section "In stock", "harvested minus sold"
+  each options harvest.crop as c
+    row gap 2
+      c grow
+      sum(harvest.kg where crop = c) - sum(sold.kg where crop = c) "kg" bold
+form harvest, "Add harvest"
+list sold top 8, "No sales yet. Tap Record sale after each delivery."
+===
+@rich domain=r2_mess_hall_meals topic=canteen_meal_counter style=custom_ui
+i manage the staff canteen. three big counters, breakfast lunch and dinner, with a +1 for each plate served and undo for mistakes. show total plates today against the seats we can serve and a chart of the last week
+needs: counter with plus one for each meal | undo the last plate of a meal | total plates today against capacity | last 7 days chart | capacity setting
+---
+app "Mess Counter" school mint
+table plate meal pick Breakfast|Lunch|Dinner = Lunch
+setting seats num = 120 "Plates we can serve a day"
+goal count(plate today), seats, "plates served today"
+grid 3 gap 1
+  each options plate.meal as ml
+    stack card gap 1 align center
+      ml bold
+      count(plate today where meal = ml) big
+      button "+1" fill accent tap add plate meal = ml
+      button "Undo" tap remove last(plate today where meal = ml)
+section "Last 7 days", "total plates"
+  daybars last 7 days, count(plate on it)
+===
+@rich domain=r2_cooking_class_seats topic=cooking_class_bookings style=multi_feature
+i teach weekend cooking classes. each class has a title, a date, seats and a fee. then i book students into a class and tick when they have paid. show seats left per class and the fee money collected
+needs: create a class with title, date, seats and fee | book a student into a class | tick when a student has paid | seats left per class | fee money collected per class
+---
+app "Cooking Class" food slate
+table session title text, held date, seats num 1..40 = 12, fee money
+table booking session ref session, student text, paid bool
+topbar "Cooking Class", session, "New class"
+each session sort held as s empty "No classes yet. Add the first one."
+  section s.title, s.held
+    row
+      count(s.booking) "of" s.seats "seats taken" grow
+      "Collected" count(s.booking where paid = yes) * s.fee bold
+    each s.booking as b empty "No students booked."
+      row gap 2 tap edit b swipe remove b
+        b.student grow
+        "Paid" faint
+        toggle b.paid
+form booking, "Book a student"
+===
+@rich domain=r2_fasting_timer topic=intermittent_fasting_timer style=multi_feature
+doing 16 hour fasts. start button when i finish my last meal, show how long i have been fasting against my target hours, and break fast button that saves it. i also want to see my longest fast and the last week as dots
+needs: start a fast with one button | live time fasted against target hours | break the fast and save it | longest fast so far | last 7 days dots of fasts done
+---
+app "Fasting" hourglass purple
+table fast hours num 1..96
+setting target num = 16 "Fast length (hours)"
+state began when = now
+state going bool = no
+state tick when = now
+every 30s set tick = now
+let hrs = (tick - began) / 1h
+if going
+  goal floor(hrs), target, "hours fasted so far", " h"
+  button "Break fast" fill accent tap add fast hours = clamp(round(hrs), 1, 96) then set going = no
+else
+  "Ready when you are. Press start after your last meal." faint
+  button "Start fast" fill accent tap set began = now then set tick = now then set going = yes
+section "History", "longest" max(fast.hours) "hours"
+  weekdots count(fast on it) > 0
+  list fast top 7, "No fasts saved yet."
+===
+@rich domain=r2_spice_rack topic=spice_rack_refill style=short
+which spices are running low in my kitchen, i keep forgetting to buy them
+needs: add a spice with its level | tap to change the level | list of spices to buy | count of spices running low
+---
+app "Spice Rack" leaf red
+table spice name text, level pick Full|Half|Low|Empty = Full
+let low = count(spice where level = Low or level = Empty)
+topbar "Spice Rack", spice, "Add spice"
+statcard low, "to buy on the next trip"
+grid 3 gap 1
+  each spice sort name as s empty "No spices yet. Add the ones you cook with."
+    stack radius 10 pad 1 gap 1 fill if(s.level = Empty, bad, if(s.level = Low, warn, soft)) tap edit s swipe remove s
+      s.name bold
+      s.level small
+section "Shopping list"
+  each spice where level = Low or level = Empty as s empty "Everything is stocked."
+    row
+      s.name grow
+      s.level faint
+===
+@rich domain=r2_table_reservations topic=restaurant_table_bookings style=custom_ui
+small restaurant. bookings with name, guests, slot and table number for any day. i want to flip between days, see which of my 12 tables are taken that day as a little floor map, and the number of covers booked
+needs: add a booking with name, guests, slot and table | move between days | floor map of 12 tables taken or free | total guests booked that day | list of the day's bookings
+---
+app "Reservations" users plum
+table booking name text, for_day date = today, guests num 1..20 = 2, slot pick Lunch|Early_dinner|Late_dinner = Early_dinner, seat num 1..12 = 1
+state day date = today
+topbar "Reservations", booking, "New booking"
+row gap 1 align center
+  button "<" tap set day = day - 1
+  day bold grow align center
+  button ">" tap set day = day + 1
+statcard sum(booking.guests where for_day = day), "guests booked on this day"
+section "Floor map", "tables taken" count(booking where for_day = day)
+  grid 6 gap 1
+    each 1..12 as n
+      box height 36 radius 8 fill if(count(booking where for_day = day and seat = n) > 0, accent, soft)
+        n small align center
+each booking where for_day = day sort slot as b empty "No bookings on this day."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.name bold
+      b.guests "guests, table" b.seat faint
+    b.slot faint
+===
+@rich domain=r2_menu_margins topic=cafe_menu_profit_margins style=detailed
+cafe owner. list my dishes with the selling price and the cost to make, how many i sold, and show the margin percent for each, the total profit, and which dishes make me the most money
+needs: add a dish with price and cost | margin percent per dish | counter to add one sale | total profit | bar chart of profit by dish
+---
+app "Menu Margins" tag orange
+table dish name text, price money, cost money, sold num 0.. = 0
+let revenue = sum(dish, it.price * it.sold)
+let profit = sum(dish, (it.price - it.cost) * it.sold)
+topbar "Menu Margins", dish, "Add dish"
+statcard profit, "profit from" revenue "in sales"
+each dish sort price - cost desc as d empty "No dishes yet. Add one with its price and cost."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      round((d.price - d.cost) * 100 / max(d.price, 1)) "% margin," d.sold "sold" faint color if((d.price - d.cost) * 100 / max(d.price, 1) < 40, warn, muted)
+    button "+1 sold" tap set d.sold = d.sold + 1
+section "Profit by dish"
+  bars dish, (it.price - it.cost) * it.sold, it.name
+===
+@rich domain=r2_fridge_leftovers topic=fridge_leftovers_clock style=multi_feature
+leftovers hide in the back of the fridge until they are science projects. note each dish with the day i cooked it and the portions left, flag anything older than three days, and let me tap when i eat a portion
+needs: add a leftover with date cooked and portions | flag dishes older than 3 days | tap to eat one portion | count of dishes to eat or bin | remove a dish when finished
+---
+app "Leftovers" milk yellow
+table left dish text, cooked date = today, portions num 0..12 = 2
+let stale = count(left where cooked <= today - 3 and portions > 0)
+topbar "Leftovers", left, "Add leftover"
+statcard stale, "dishes older than 3 days, eat or bin"
+each left where portions > 0 sort cooked as l empty "The fridge has no leftovers. Add a dish after dinner."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.dish bold
+      l.portions "portions, cooked" today - l.cooked "days ago" faint color if(today - l.cooked >= 3, bad, muted)
+    button "Ate one" tap set l.portions = l.portions - 1
+    button "Gone" tap remove l
+===
+@rich domain=r2_cook_tonight topic=what_to_cook_tonight style=custom_ui
+every evening the same question, what do we cook. keep my dish list with how long each takes, let me filter by quick, medium or long, tap cooking this when i pick one, and show which ones i have not cooked for the longest time
+needs: add a dish with effort level | filter dishes by effort | tap cooking this to record it | days since each dish was last cooked | dinners cooked this month
+---
+app "Cook Tonight" fire green
+table dish name text, effort pick Quick|Medium|Long = Medium
+table cooked dish ref dish
+state want pick Any|Quick|Medium|Long = Any
+topbar "Cook Tonight", dish, "Add dish"
+choice want
+statcard count(cooked month), "dinners cooked this month"
+each dish where want = Any or effort = want sort since(it.cooked) desc as d empty "No dishes here. Add what your family likes."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.effort "·" if(count(d.cooked) = 0, "never cooked", plural(since(d.cooked), "day")) faint
+    button "Cooking this" tap add cooked dish = d
+===
+@rich domain=r2_wedding_catering_quote topic=catering_quote_calculator style=multi_feature
+i do catering for weddings and parties. quote calculator: number of guests, menu choice of biryani, karahi, bbq or mixed, tick for dessert and drinks, then show the total, the price per head and the 50 percent advance. save the quote under the client name
+needs: slider for number of guests | choose the menu | tick dessert and drinks | total, per head price and 50 percent advance | save the quote with a client name
+---
+app "Catering Quote" food teal
+table quote client text, guests num, total money
+state guests num = 50
+state menu pick Biryani|Karahi|BBQ|Mixed = Biryani
+state dessert bool = no
+state drinks bool = no
+state client text = ""
+let rate = if(menu = Biryani, 450, if(menu = Karahi, 650, if(menu = BBQ, 900, 750))) + if(dessert, 120, 0) + if(drinks, 60, 0)
+let total = guests * rate
+section "The event"
+  "Guests" guests bold
+  slider guests 10..500
+  choice menu
+  row gap 3
+    row gap 1
+      toggle dessert
+      "Dessert" faint
+    row gap 1
+      toggle drinks
+      "Drinks" faint
+statcard total, "total quote, per head" rate
+"Advance to confirm (50%)" total / 2 head
+field client "Client name"
+button "Save this quote" fill accent tap add quote client = client, guests = guests, total = total
+section "Saved quotes"
+  each quote top 6 as q empty "No quotes saved yet."
+    row
+      q.client grow
+      q.guests "guests" faint
+      q.total bold
+===
+@rich domain=r2_chai_cup_counter topic=tea_stall_cup_counter style=short
+tea stall cup counter, tap to count every cup i sell
+needs: tap to add a cup | cups sold today | ten cups drawn as a row of cups | last 7 days chart
+---
+app "Chai Counter" cup orange
+table cup kind pick Chai|Green|Masala = Chai
+let n = count(cup today)
+n "cups sold today" head
+draw 100, 22 tap add cup
+  each 1..10 as k
+    circle 5 + (k - 1) * 10, 11, 4 fill if(k <= n % 10, accent, soft)
+"Tap the cups to add one. Tens so far:" floor(n / 10) faint
+row gap 1
+  button "Masala" tap add cup kind = Masala
+  button "Green" tap add cup kind = Green
+  button "Undo" tap remove last(cup today)
+daybars last 7 days, count(cup on it)
+===

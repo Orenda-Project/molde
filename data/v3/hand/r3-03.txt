@@ -1,0 +1,61 @@
+@rich domain=pump_repairs topic=pump_and_motor_repairs style=detailed
+tubewell motors and pumps keep breaking. I want to write what broke, which machine, the mechanic bill and whether it is fixed, see money spent on repairs this year, and the machine that cost me most
+needs: log a repair with machine, problem and bill | tick when fixed | repair money this year | machine that cost the most | count of unfixed repairs
+---
+app "Pump repairs" tool slate
+table repair machine pick North_well|Canal_well|Tractor|Thresher|Generator = North_well, problem text, bill money = 0, fixed bool, day date = today
+topbar "Pump repairs", repair, "Log repair"
+row gap 2
+  statcard sum(repair.bill year), "spent on repairs this year"
+  statcard count(repair where fixed = no), "repairs not fixed yet"
+section "Cost by machine", "this year"
+  share repair year by machine, sum(it.bill), it.key
+each repair sort day desc top 10 as r empty "No repairs logged. Add one when something breaks."
+  row card gap 2 fill if(r.fixed, soft, warn) tap edit r swipe remove r
+    stack grow gap 0
+      text r.machine bold
+      text r.problem faint
+    text r.bill bold
+    toggle r.fixed
+===
+@rich domain=crop_calendar topic=month_crop_sowing_calendar style=custom_ui
+a simple calendar for my farm work. I tap a month and see what is planned: sowing, spraying, harvest, with crop name. add a plan with the month and type. show how many jobs there are in the chosen month
+needs: add a plan with crop, month and type of work | tap a month to see its jobs | jobs count in the month | colours per type of work | list to edit or remove
+---
+app "Farm calendar" calendar green
+table plan crop text, month pick Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec = Nov, work pick Sow|Spray|Water|Harvest = Sow
+state m pick Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec = Nov
+topbar "Farm calendar", plan, "Add plan"
+grid 6 gap 1
+  each options plan.month as mm
+    button mm fill if(m = mm, accent, if(count(plan where month = mm) > 0, soft, surface)) tap set m = mm
+statcard count(plan where month = m), "jobs planned in" m
+each plan where month = m sort work as p empty "Nothing planned for this month. Add a sowing or a harvest."
+  row card gap 2 fill if(p.work = Harvest, good, if(p.work = Spray, warn, soft)) tap edit p swipe remove p
+    text p.crop bold grow
+    text p.work faint
+===
+@rich domain=field_watering_gap topic=days_since_field_watered style=multi_feature
+I irrigate 8 fields and forget which one is dry. for each field I want days since last watering against the gap that crop needs, in orange when the gap is over, and a one-tap button that says I just watered it
+needs: add field with crop and watering gap in days | one tap watered button | days since last watering | orange when over the gap | count of fields to water
+---
+app "Field water" drop blue
+table field name text, crop text, gap num 1..60 = 10 "Water every (days)"
+table watered field ref field
+topbar "Field water", field, "Add field"
+statcard count(field, due(it.watered, it.gap)), "fields need water", count(field)
+each field sort name as f empty "No fields yet. Add each field with how often it needs water."
+  row card gap 2 fill if(due(f.watered, f.gap), warn, soft) tap edit f swipe remove f
+    stack grow gap 0
+      text f.name f.crop bold
+      text "Last watered" since(f.watered) "days ago, needs it every" f.gap faint
+    button "Watered" tap add watered field = f
+section "Waterings", "last 7 days"
+  daybars last 7 days, count(watered on it)
+===
+@rich domain=land_lease payments topic=land_lease_receipts style=detailed
+I took 20 acres on lease for 3 years. each half year I pay rent. record each payment with date and amount, show the total paid, what is left of the full lease money, and the next payment date with a reminder
+needs: record a rent payment with date and amount | total paid | amount still to pay | next payment date | reminder
+---
+app "Land lease" home purple
+EOF_BAD

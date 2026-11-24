@@ -1,0 +1,429 @@
+@rich domain=d2_sla_targets topic=support_sla_response_targets style=detailed
+our support promises first response in 60 minutes for P1, 4 hours for P2 and a day for P3. log each ticket with its priority and the minutes it really took, let me change the targets, and show how many met the SLA and which ones broke it
+needs: log a ticket with priority and response minutes | set target minutes per priority | tickets that met the SLA | broken ones in red
+---
+app "SLA targets" timer teal
+table ticket subject text, prio pick P1|P2|P3 = P2, mins num 1..10000 "Response (min)"
+setting p1 num = 60 "P1 target (min)"
+setting p2 num = 240 "P2 target (min)"
+setting p3 num = 1440 "P3 target (min)"
+let target(r ticket) = if(r.prio = P1, p1, if(r.prio = P2, p2, p3))
+topbar "SLA targets", ticket, "Log ticket"
+goal count(ticket, it.mins <= target(it)), count(ticket), "tickets within SLA"
+each ticket sort at desc as t empty "No tickets yet. Log the first response time."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.subject bold
+      t.prio "· target" target(t) "min" faint
+    t.mins "min" bold color if(t.mins > target(t), bad, good)
+===
+@rich domain=d2_csat_agents topic=csat_thumbs_per_agent style=custom_ui
+after each chat the customer rates us. I add our support agents and tap happy or unhappy on their card, and I want the CSAT percent per agent plus the team total
+needs: add an agent | tap happy or unhappy | CSAT percent per agent | team total CSAT
+---
+app "CSAT" smile green
+table agent name text
+table vote agent ref agent, happy bool
+let all = count(vote)
+topbar "CSAT", agent, "Add agent"
+statcard round(count(vote where happy = yes) * 100 / max(all, 1)), "% team CSAT from" plural(all, "rating")
+each agent sort name as a empty "No agents yet. Add the first person on support."
+  stack card gap 2 swipe remove a
+    row gap 2
+      a.name bold grow
+      round(count(a.vote where happy = yes) * 100 / max(count(a.vote), 1)) "%" big
+    row gap 1
+      button "Happy" fill good grow tap add vote agent = a, happy = yes
+      button "Unhappy" fill bad grow tap add vote agent = a, happy = no
+===
+@rich domain=d2_now_next_later topic=now_next_later_board style=custom_ui
+a now, next, later board for our product instead of dates. cards with title, which lane, and a one line why. show lanes side by side so I can scroll across, and the count in each
+needs: add a card with lane and reason | lanes side by side | count per lane | change lane by tapping chips
+---
+app "Now Next Later" board ocean
+table card title text, lane pick Now|Next|Later = Next, why text?
+topbar "Now / Next / Later", card, "Add card"
+scroll
+  each options card.lane as l
+    stack card gap 2 width 5
+      row
+        l head grow
+        count(card where lane = l) faint
+      each card where lane = l sort title as c empty "Empty lane."
+        stack gap 0 tap edit c swipe remove c
+          c.title bold
+          c.why faint
+          choice c.lane
+===
+@rich domain=d2_code_freeze_days topic=code_freeze_calendar style=detailed
+mark the code freeze days in a calendar, month by month, tap a day to freeze or unfreeze it. show how many freeze days this month and send me a reminder on the 1st to review the calendar
+needs: month calendar of freeze days | tap a day to mark it | move between months | freeze days this month | monthly reminder
+---
+app "Freeze days" snow slate
+table freeze
+state m date = today
+remind "Review the code freeze calendar for this month" monthly on 1 at 9:00
+topbar "Code freeze", freeze, "Freeze today"
+monthnav m
+statcard count(freeze month of m), "freeze days in" monthname(m)
+calendar freeze, m
+===
+@rich domain=d2_vacation_cover topic=team_vacation_coverage style=multi_feature
+who is off when? I add my team, pick a person, and tap days in a month grid to mark their time off. show who is out today and the days off per person this month
+needs: add a team member | pick a person and tap days off | month navigation | who is out today | days off per person this month
+---
+app "Time off" plane blue
+table member name text
+table off member ref member
+state who ref member
+state m date = today
+topbar "Time off", member, "Add person"
+choice who
+monthnav m
+grid 7 gap 1
+  each days month of m as d
+    box height 32 radius 6 fill if(count(off on d where member = who) > 0, accent, soft) tap toggle off on d where member = who
+      text monthday(d) small align center
+section "This month"
+  each member sort name as p empty "Add your team above."
+    row gap 2
+      p.name grow
+      count(p.off month of m) "days off" faint
+      if count(p.off today) > 0
+        "out today" bold color warn
+===
+@rich domain=d2_team_capacity topic=sprint_capacity_calculator style=custom_ui
+sprint capacity: list people with days available in the sprint (holidays, leave), set the focus factor percent and points per person day, and show the points we can commit
+needs: add a person with available days | slider for days per person | focus factor and points per day settings | points capacity to commit
+---
+app "Capacity" users yellow
+table member name text, days num 0..10 = 10 "Days available"
+setting focus num 30..100 = 70 "Focus factor (%)"
+setting perday num 0.5..5 = 1 "Points per person day"
+let cap = round(sum(member.days) * focus / 100 * perday)
+topbar "Capacity", member, "Add person"
+statcard cap, "points to commit from" sum(member.days) "person days"
+each member sort name as m empty "No people yet. Add everyone in the sprint."
+  stack card gap 1 swipe remove m
+    row
+      m.name bold grow
+      m.days "days" faint
+    slider m.days 0..10
+===
+@rich domain=d2_mentoring_sessions topic=mentoring_sessions_log style=multi_feature
+I mentor three juniors. add them, log a session with the topic, show days since the last session with each and how many sessions this month against my goal of 4 per person
+needs: add a mentee | log a session with topic | days since last session | sessions this month | session goal
+---
+app "Mentoring" user mint
+table mentee name text
+table session mentee ref mentee, topic text
+setting goal_n num = 4 "Sessions per mentee per month"
+topbar "Mentoring", session, "Log session"
+each mentee sort name as m empty "No mentees yet. Add them below."
+  stack card gap 1 swipe remove m
+    row
+      m.name bold grow
+      since(m.session) "days since last" faint color if(since(m.session) > 14, warn, muted)
+    goal count(m.session month), goal_n, "sessions this month"
+form mentee, "Add mentee"
+===
+@rich domain=d2_talk_prep topic=conference_talk_preparation style=detailed
+speaking at a meetup. set the talk date, a checklist of prep steps (outline, slides, demo, rehearse, backup video), tick them and show how many days are left and how many steps are done
+needs: set the talk date | days left countdown | add prep steps | tick steps done | progress
+---
+app "Talk prep" book purple
+table prep what text, done bool
+setting talk date = today "Talk date"
+topbar "Talk prep", prep, "Add step"
+row card gap 3 align center
+  text max(talk - today, 0) huge
+  "days to the talk" faint grow
+goal count(prep where done = yes), count(prep), "steps done"
+each prep sort at as p empty "No steps yet. Start with the outline."
+  row gap 2 tap edit p swipe remove p
+    toggle p.done
+    p.what grow
+===
+@rich domain=d2_oss_contributions topic=open_source_pull_requests style=multi_feature
+hacktoberfest style: my open source PRs with repo, title and state Open, Merged or Closed. goal of 6 merged this month, a share chart of which repos I contribute to, and tap the state to update
+needs: add a PR with repo and state | merged this month against the goal | change state with chips | contributions per repo
+---
+app "Open source" leaf green
+table pr repo text, title text, state pick Open|Merged|Closed = Open
+setting target num = 6 "Merged goal per month"
+topbar "Open source", pr, "Add PR"
+goal count(pr month where state = Merged), target, "PRs merged this month"
+section "Repos", "all PRs"
+  share pr by repo, count(it), it.key
+each pr sort at desc as p empty "No PRs yet. Find a good first issue."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.title bold grow
+      p.repo faint
+    choice p.state
+===
+@rich domain=d2_devblog_pipeline topic=dev_blog_writing_pipeline style=multi_feature
+I want to publish one dev blog post a month. keep posts with stage Idea, Draft, Edit, Published, and log the words I write each day with a target of 500 words a day chart
+needs: add a post and set its stage | log words written | daily word goal chart | published count
+---
+app "Dev blog" pen pink
+table post title text, stage pick Idea|Draft|Edit|Published = Idea
+table write words num 1..5000 = 300
+topbar "Dev blog", write, "Log words"
+statcard count(post where stage = Published), "published of" count(post) "posts," sum(write.words week) "words this week"
+section "Words per day", "goal 500"
+  goalbars last 7 days, sum(write.words on it), 500
+each post sort title as p empty "No posts yet. Add the idea you keep not writing."
+  stack card gap 1 swipe remove p
+    p.title bold
+    choice p.stage
+form post, "Add post"
+===
+@rich domain=d2_coverage_trend topic=test_coverage_trend style=short
+test coverage percent after each release, target 80, line chart and the change since last time
+needs: log coverage percent | set the target | line chart over releases | change since the previous run
+---
+app "Coverage" shield slate dark
+table run pct num 0..100, tag text?
+setting target num = 80 "Target (%)"
+let prev = nth(run sort at desc, 2)
+topbar "Coverage", run, "Log run"
+statcard last(run.pct), "% coverage, change" last(run.pct) - prev.pct "since last run"
+goal last(run.pct), target, "of target", "%"
+section "Over releases", "%"
+  trend run, it.pct
+===
+@rich domain=d2_flaky_tests topic=flaky_test_failures style=custom_ui
+tracker of flaky tests: add the test name, tap failed again each time it flakes, and I want to see failures in the last 7 days. I can quarantine a test with a tick
+needs: add a test | tap failed again | failures in the last 7 days | quarantine tick | most flaky first
+---
+app "Flaky tests" bolt red
+table flaky name text, quarantined bool
+table fail flaky ref flaky
+topbar "Flaky tests", flaky, "Add test"
+statcard count(fail last 7 days), "flaky failures this week in" count(flaky where quarantined = no) "active tests"
+each flaky sort count(it.fail last 7 days) desc as f empty "No flaky tests tracked. Suspiciously calm."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      count(f.fail last 7 days) "this week ·" count(f.fail) "total" faint
+    button "Failed again" tap add fail flaky = f
+    toggle f.quarantined
+===
+@rich domain=d2_lighthouse_scores topic=lighthouse_audit_scores style=detailed
+I run lighthouse on our pages now and then. log page, performance, accessibility and SEO scores out of 100. show the average per page coloured red under 50 and green from 90, and the trend of performance
+needs: log an audit with page and three scores | average per page | colour thresholds | performance trend
+---
+app "Lighthouse" eye orange
+table audit page text, perf num 0..100, a11y num 0..100, seo num 0..100
+topbar "Lighthouse", audit, "Log audit"
+section "Performance trend", "score"
+  trend audit, it.perf
+each audit by page empty "No audits yet. Run lighthouse and log it."
+  row card gap 2
+    it.key bold grow
+    stack gap 0 align end
+      round(avg(it.perf)) big color if(avg(it.perf) < 50, bad, if(avg(it.perf) >= 90, good, warn))
+      "perf · a11y" round(avg(it.a11y)) "· seo" round(avg(it.seo)) faint
+===
+@rich domain=d2_a11y_issues topic=accessibility_issue_audit style=multi_feature
+accessibility audit of our site: log issues with page, WCAG rule (Contrast, Alt text, Keyboard, Labels, Focus, Headings), severity Minor, Serious or Critical, tick when fixed. show open issues per rule and criticals first
+needs: log an issue with page, rule and severity | open issues per rule chart | criticals sorted first | tick when fixed
+---
+app "A11y audit" eye purple
+table issue page text, rule pick Contrast|Alt_text|Keyboard|Labels|Focus|Headings = Contrast, severity pick Minor|Serious|Critical = Serious, fixed bool
+topbar "A11y audit", issue, "Log issue"
+statcard count(issue where fixed = no), "open issues,"  count(issue where fixed = no and severity = Critical) "critical"
+section "Open per rule"
+  bars options issue.rule, count(issue where rule = it and fixed = no), it
+each issue where fixed = no sort if(severity = Critical, 0, if(severity = Serious, 1, 2)) as i empty "No open issues. Check again with a screen reader."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.page bold
+      i.rule faint
+    i.severity bold color if(i.severity = Critical, bad, muted)
+    toggle i.fixed
+===
+@rich domain=d2_migration_promotion topic=database_migration_environments style=custom_ui
+migrations move from Dev to Staging to Prod. list each migration with its environment chips and a tick for rollback tested. warn me about any migration sitting in Prod without a tested rollback, and count per environment
+needs: add a migration | environment chips | rollback tested tick | warning for prod without rollback | count per environment
+---
+app "Migrations" box ink
+table mig name text, env pick Dev|Staging|Prod = Dev, rollback bool "Rollback tested"
+topbar "Migrations", mig, "Add migration"
+row gap 1
+  each options mig.env as e
+    stack card grow gap 0 align center
+      count(mig where env = e) big
+      e faint
+let risky = count(mig where env = Prod and rollback = no)
+if risky > 0
+  risky "in Prod without a tested rollback" bold color bad
+each mig sort at desc as m empty "No migrations yet. Add the next one."
+  stack card gap 1 swipe remove m
+    row gap 2
+      m.name bold grow
+      toggle m.rollback
+    choice m.env
+===
+@rich domain=d2_ci_duration topic=ci_pipeline_duration style=multi_feature
+CI got slow. log each pipeline run in minutes with which job was slowest, set a budget of 10 minutes, show the average, the slowest run and how many runs went over, with a line chart
+needs: log a run with minutes and slowest job | set budget in minutes | average and slowest run | runs over budget | line chart
+---
+app "CI time" hourglass grey
+table run mins num 0.5..180 = 8, job text?
+setting budget num 1..120 = 10 "Budget (minutes)"
+topbar "CI time", run, "Log run"
+statcard round(avg(run.mins) * 10) / 10, "min average, slowest" max(run.mins) "min,"  count(run where mins > budget) "over budget"
+section "Last 12 runs", "minutes"
+  trend run top 12, it.mins
+list run top 8, "No runs logged yet."
+===
+@rich domain=d2_interruptions topic=work_interruptions_log style=detailed
+how many times am I interrupted when coding? tap log with the source Slack, Meeting, Colleague, Call, Email and the minutes lost. show today's lost minutes, a chart for the week and which source costs the most
+needs: log an interruption with source and minutes | minutes lost today | chart of the last 7 days | cost per source
+---
+app "Interruptions" bell orange
+table interrupt source pick Slack|Meeting|Colleague|Call|Email = Slack, mins num 1..120 = 5
+topbar "Interruptions", interrupt, "Log one"
+statcard sum(interrupt.mins today), "minutes lost today in" plural(count(interrupt today), "interruption")
+section "This week", "minutes lost"
+  daybars last 7 days, sum(interrupt.mins on it)
+section "By source", "week"
+  share interrupt week by source, sum(it.mins), it.key
+===
+@rich domain=d2_office_days topic=hybrid_office_days style=short
+hybrid work: tap the days I went to the office, goal is 3 a week
+needs: calendar to mark office days | office days this week against goal | month navigation
+---
+app "Office days" home teal
+table office
+setting wk num 1..5 = 3 "Office days per week"
+state m date = today
+goal count(office week), wk, "office days this week"
+monthnav m
+calendar office, m
+===
+@rich domain=d2_offer_compare topic=job_offer_comparison style=multi_feature
+comparing job offers: company, base salary, yearly bonus, and remote, hybrid or office. show total pay for each offer, ranked, with a chart so I can decide
+needs: add an offer with base, bonus and work mode | total pay per offer | ranked best first | bar chart comparing offers
+---
+app "Offers" money blue
+table offer company text, base money, bonus money = 0, mode pick Remote|Hybrid|Office = Hybrid
+topbar "Offers", offer, "Add offer"
+section "Total pay", "base + bonus"
+  bars offer sort base + bonus desc, it.base + it.bonus, it.company
+each offer sort base + bonus desc as o empty "No offers yet. Add the first one you got."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.company bold
+      o.mode faint
+    o.base + o.bonus big
+===
+@rich domain=d2_cs_assignments topic=cs_assignment_grades style=detailed
+CS degree assignments: title, course, due date, weight in percent of the course, grade when I get it, and a tick for submitted. show what is due next, and my weighted average of the graded ones
+needs: add an assignment with course, due date and weight | submitted tick | weighted average grade | due soon list
+---
+app "Assignments" school plum
+table assign title text, course text, due date, weight num 1..100 = 10, grade num? 0..100, sent bool
+topbar "Assignments", assign, "Add assignment"
+statcard round(sum(assign, it.grade * it.weight) / max(sum(assign.weight where grade >= 0), 1)), "% weighted average,"  count(assign where sent = no) "to submit"
+each assign where sent = no sort due as a empty "Everything is submitted."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.sent
+    stack grow gap 0
+      a.title bold
+      a.course "·" a.weight "%" faint
+    text a.due - today "d" bold color if(a.due - today < 3, bad, ink)
+===
+@rich domain=d2_final_exam_needed topic=score_needed_on_final style=custom_ui
+what do I need on the final? set my current grade, how much the final is worth in percent and the grade I want. it tells me the score I must get, and says if that is impossible
+needs: set current grade | set final weight | set target grade | score needed on the final | warning when over 100
+---
+app "Final exam" target slate dark
+state cur num = 70
+state w num = 40
+state want num = 80
+let need = round((want - cur * (100 - w) / 100) * 100 / max(w, 1))
+"Current grade" cur "%" faint
+slider cur 0..100
+"Final is worth" w "%" faint
+slider w 5..100
+"I want" want "%" faint
+slider want 0..100
+section "You need on the final"
+  need "%" huge
+  if need > 100
+    "Not possible with this weight. Aim a bit lower." bold color bad
+  else
+    if need <= 0
+      "You already have it." bold color good
+===
+@rich domain=d2_capstone_hours topic=capstone_team_contribution style=multi_feature
+capstone project with 4 people and the teacher wants proof of who did what. log hours with name and task, show hours per person as a share chart, and the percentage of the total each one did
+needs: log hours with name and task | hours per person chart | percent of total per person | total hours
+---
+app "Capstone" users red
+table log who text, hours num 0.25..24 = 1, task text
+topbar "Capstone hours", log, "Log hours"
+statcard sum(log.hours), "total hours by" plural(count(log by who), "person")
+section "Who did what", "hours"
+  share log by who, sum(it.hours), it.key
+each log by who empty "No hours yet. Log the first task."
+  row card gap 2
+    it.key bold grow
+    round(sum(it.hours) * 100 / max(sum(log.hours), 1)) "%" big
+list log top 6, "No tasks yet."
+===
+@rich domain=d2_bootcamp_confidence topic=bootcamp_confidence_log style=detailed
+I am in a coding bootcamp and some days I feel lost. each day I write the topic and my confidence from 1 to 5. show the trend, my average per topic so I know what to revise
+needs: log topic with confidence 1 to 5 | trend of confidence | average per topic | list by day
+---
+app "Bootcamp" brain mint
+table day topic text, conf num 1..5 = 3 "Confidence"
+topbar "Bootcamp log", day, "Log topic"
+statcard round(avg(day.conf) * 10) / 10, "average confidence over" plural(count(day), "entry")
+section "Confidence over time", "1 to 5"
+  trend day, it.conf
+section "Average per topic", "1 to 5"
+  share day by topic, round(avg(it.conf) * 10) / 10, it.key
+list day by day, "Nothing logged. Write how today went."
+===
+@rich domain=d2_proposal_pipeline topic=freelance_bid_pipeline style=custom_ui
+my bids on freelance sites: job title, status Sent, Viewed, Replied, Won, Lost and how many connects each bid cost. show my win rate and total connects spent so I know if bidding pays
+needs: add a bid with connects cost | status chips | win rate | total connects spent | count per status
+---
+app "Bids" pen orange
+table bid job text, status pick Sent|Viewed|Replied|Won|Lost = Sent, connects num 0..40 = 6
+topbar "Bids", bid, "Add bid"
+statcard round(count(bid where status = Won) * 100 / max(count(bid), 1)), "% win rate,"  sum(bid.connects) "connects spent"
+section "Pipeline"
+  bars options bid.status, count(bid where status = it), it
+each bid sort at desc as b empty "No bids yet. Send your first proposal."
+  stack card gap 1 tap edit b swipe remove b
+    row
+      b.job bold grow
+      b.connects "connects" faint
+    choice b.status
+===
+@rich domain=d2_sla_credit_calc topic=sla_credit_calculator style=custom_ui
+customer claims SLA credit. I type the month's availability percent and their monthly fee, tiers: under 99.9 gives 10 percent back, under 99 gives 25 percent, under 95 gives 50 percent. show the credit amount and which tier applies, and keep a list of credits I gave
+needs: enter availability and monthly fee | tier that applies | credit amount | save the credit given with customer name | list of credits
+---
+app "SLA credit" calc purple
+table credit customer text, amount money
+state avail num = 99.95
+state fee money = 1000
+state who text = ""
+let pct = if(avail < 95, 50, if(avail < 99, 25, if(avail < 99.9, 10, 0)))
+section "Availability this month", join(avail, "%")
+  slider avail 90..100
+  field fee "Monthly fee"
+statcard fee * pct / 100, "credit due (" pct "% tier)"
+if pct = 0
+  "SLA met, no credit owed." faint
+else
+  field who "Customer"
+  button "Save credit given" fill accent tap add credit customer = who, amount = fee * pct / 100
+list credit, "No credits given yet."
+

@@ -1,0 +1,491 @@
+@rich domain=tailor_orders topic=tailor orders style=detailed
+i run a tailoring shop. every order has customer, garment, delivery date, total price and advance paid. show the balance to collect on each order, orders due in the next 3 days, and tick when delivered
+needs: add an order with customer, garment, delivery date, price and advance | balance per order | count of orders due within 3 days | tick when delivered
+---
+app "Tailor Shop" tag ocean
+table order customer text, garment text, due date, price money, advance money = 0, delivered bool
+let soon = count(order where delivered = no and due >= today and due - today <= 3)
+let toget = sum(order, if(it.delivered, 0, it.price - it.advance))
+topbar "Tailor Shop", order, "New order"
+row gap 2
+  statcard soon, "due in 3 days"
+  statcard toget, "balance to collect"
+each order where delivered = no sort due as o empty "No open orders. Add the first one."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+      o.garment "- due" o.due faint color if(o.due < today, bad, muted)
+    stack gap 0 align end
+      o.price - o.advance bold
+      "balance" tiny color muted
+    toggle o.delivered
+===
+@rich domain=commute_log topic=commute times style=multi_feature
+i take the bus to work. log the time i leave and the time i arrive each day, show how long the trip took, the average trip in minutes and my slowest day this month
+needs: log a trip with date, leave time and arrive time | trip duration per row | average trip minutes | slowest trip this month
+---
+app "Commute" bus mint
+table trip day date = today, leave time, arrive time
+let mins(t trip) = (t.arrive - t.leave) / 1m
+let avgmin = round(sum(trip, mins(it)) / max(1, count(trip)))
+topbar "Commute", trip, "Log trip"
+row gap 2
+  statcard avgmin, "average minutes"
+  statcard max(trip month, mins(it)), "slowest this month, min"
+section "Minutes per trip", "last 8"
+  trend trip top 8, mins(it)
+each trip sort day desc top 10 as t empty "No trips yet. Log your first commute."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.day bold
+      t.leave "to" t.arrive faint
+    mins(t) "min" bold
+===
+@rich domain=feeding_log topic=baby feeding gaps style=multi_feature
+newborn feeding log. one big button to log a feed with the amount in ml, show how long since the last feed, number of feeds today and total ml today with a goal line for a day
+needs: add a feed with amount | time since the last feed | feeds today | total ml today against a daily goal | bar chart of ml for last 7 days
+---
+app "Feeds" milk slate
+table feed ml num 10..300 = 90
+setting goal num = 600 "Daily ml goal"
+let ago = now - last(feed).at
+let h = floor(ago / 1h)
+let m = floor((ago - h * 1h) / 1m)
+quick feed, ml, [60, 90, 120]
+row gap 2
+  statcard count(feed today), "feeds today"
+  statcard sum(feed.ml today), "ml today of" goal, goal
+if count(feed) > 0
+  "Last feed" h "h" m "min ago" head
+section "Last 7 days"
+  goalbars last 7 days, sum(feed.ml on it), goal
+list feed today, "No feeds yet today."
+===
+@rich domain=dog_walks topic=dog walk minutes style=detailed
+walks with my dog, enter how long each walk was in minutes plus the route name. goal of 90 minutes a week, show the total this week, the average walk, and the longest walk
+needs: log a walk with route and duration | total walking time this week against 90 minutes | average walk length | longest walk
+---
+app "Dog Walks" paw yellow
+table walk route text, len dur = 30m
+setting goal num = 90 "Weekly minutes goal"
+let total = sum(walk.len week) / 1m
+topbar "Dog Walks", walk, "Log walk"
+statcard round(total), "minutes this week of" goal, goal
+row gap 2
+  statcard round(avg(walk.len) / 1m), "average walk, min"
+  statcard round(max(walk, it.len) / 1m), "longest walk, min"
+list walk by day, "No walks yet. Add one after the next stroll."
+===
+@rich domain=study_sessions topic=study session lengths style=custom_ui
+timer-free study log: i type how long i studied (like 45m or 2h) and the subject. daily total as hours, average session, and a heat map of the last 5 weeks
+needs: log a session with subject and duration | total hours today | average session length | heat map of study days
+---
+app "Study Log" book orange
+table session subject text, len dur = 45m
+let today_h = sum(session.len today) / 1h
+topbar "Study Log", session, "Log session"
+row gap 2
+  statcard round(today_h * 10) / 10, "hours today"
+  statcard round(avg(session.len) / 1m), "average session, min"
+section "Last 35 days"
+  heat last 35 days, sum(session.len on it) / 1h, 3
+each session top 8 as s empty "No sessions yet. Log the first one."
+  row card gap 2 tap edit s swipe remove s
+    s.subject bold grow
+    s.len faint
+===
+@rich domain=chai_stall topic=chai stall sales style=custom_ui
+tea stall counter. big buttons for chai, samosa and biscuit that add a sale at a set price, show today's income, a bar chart of the last week and what sold most today
+needs: one-tap sale buttons for each item | income today | bar chart of income for the last 7 days | count of each item today
+---
+app "Chai Stall" cup green
+table sale item pick Chai|Samosa|Biscuit = Chai, qty num 1..50 = 1, price money
+row gap 1
+  button "Chai 30" fill accent grow tap add sale item = Chai, price = 30
+  button "Samosa 40" fill soft grow tap add sale item = Samosa, price = 40
+  button "Biscuit 10" fill soft grow tap add sale item = Biscuit, price = 10
+statcard sum(sale today, it.qty * it.price), "income today"
+section "Sold today"
+  each options sale.item
+    row
+      it grow
+      sum(sale.qty today where item = it) bold
+section "Income by day", "last 7 days"
+  plot 0..7, 0..max(100, max(days last 7 days, sum(sale on it, it.qty * it.price))) axes
+    each days last 7 days as d
+      rect index + 0.15, 0, 0.7, sum(sale on d, it.qty * it.price) fill accent radius 2
+      tick index + 0.5, dayname(d)
+===
+@rich domain=tuition_fees topic=tuition fees balance style=detailed
+home tuition with 8 students. each has a monthly fee. when a parent pays i log a payment. show who has not paid this month, the balance owed and total collected this month
+needs: add a student with monthly fee | log a fee payment | who has not paid this month | total collected this month | balance owed per student
+---
+app "Tuition" school teal dark
+table student name text, fee money
+table paid student ref student, amount money
+let collected = sum(paid.amount month)
+topbar "Tuition", student, "Add student"
+row gap 2
+  statcard collected, "collected this month"
+  statcard sum(student, max(0, it.fee - sum(it.paid.amount month))), "still owed"
+each student sort name as s empty "No students yet. Add each one with the monthly fee."
+  let owed = max(0, s.fee - sum(s.paid.amount month))
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      if owed > 0
+        "owes" owed faint color bad
+      else
+        "paid up" faint color good
+    if owed > 0
+      button "Paid" tap add paid student = s, amount = owed
+===
+@rich domain=irrigation topic=field irrigation schedule style=multi_feature
+farm fields with how many days apart they need watering. a button to log irrigation. show the fields that are due now in red, days since last water, and how many hours of pump time used this week
+needs: add a field with watering interval | log irrigation with pump hours | fields due now highlighted | days since last irrigation | pump hours this week
+---
+app "Irrigation" drop blue
+table plot name text, every num 1..30 = 5
+table water plot ref plot, hours num 0.5..24 = 2
+topbar "Irrigation", plot, "Add field"
+statcard sum(water.hours week), "pump hours this week"
+each plot sort name as p empty "No fields yet. Add a field with its watering gap."
+  row card gap 2 fill if(due(p.water, p.every), soft, surface) tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      if(since(p.water) >= 0, join(plural(since(p.water), "day"), " since water"), "Never watered") faint
+    if due(p.water, p.every)
+      "Due" color bad bold
+    button "Watered" tap add water plot = p
+===
+@rich domain=run_pace topic=running pace style=detailed
+logging my runs: distance in km and time taken. calculate my pace per km for each run, the best pace i have done, total km this month and a line of distance over my last runs
+needs: log a run with distance and time | pace per km for each run | best pace | total km this month | line chart of recent distances
+---
+app "Runs" run red
+table run km num 0.5..100, took dur
+let pace(r run) = r.took / r.km
+topbar "Runs", run, "Log run"
+row gap 2
+  statcard round(sum(run.km month) * 10) / 10, "km this month"
+  statcard count(run month), "runs this month"
+if count(run) > 0
+  "Best pace" min(run, it.took / it.km) "per km" bold
+section "Distance", "last 10 runs"
+  trend run top 10, it.km
+each run top 10 as r empty "No runs yet. Add your first run."
+  row card gap 2 tap edit r swipe remove r
+    r.km "km in" r.took bold grow
+    pace(r) "/km" faint
+===
+@rich domain=bake_log topic=sourdough bake times style=custom_ui
+sourdough log: start time of the dough and when it was baked, so i can see how many hours each loaf took, my average, and rate each loaf out of 5
+needs: add a loaf with start and bake date-times | hours the loaf took | average hours | rating out of 5 | chips to filter by rating
+---
+app "Sourdough" bread orange
+table loaf name text, started when, baked when, stars num 1..5 = 3
+state min num = 1
+let hrs(l loaf) = (l.baked - l.started) / 1h
+topbar "Sourdough", loaf, "Add loaf"
+statcard round(sum(loaf, hrs(it)) / max(1, count(loaf)) * 10) / 10, "average hours per loaf"
+row gap 1
+  each [1, 3, 4, 5] as n
+    button n "stars+" fill if(min = n, accent, soft) grow tap set min = n
+each loaf where stars >= min sort baked desc as l empty "No loaves match. Add one or lower the stars."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.name bold
+      l.started faint
+    round(hrs(l)) "h" bold
+    l.stars "stars" faint
+===
+@rich domain=meter_readings topic=electricity meter style=detailed
+monthly electricity meter readings. i type the reading number, the app works out units used since the last reading, and the bill using my rate per unit. show the bill this month and units per reading
+needs: add a meter reading | units used since previous reading | bill at a rate per unit setting | line chart of units over time
+---
+app "Power Meter" bolt yellow
+table reading value num 0..
+setting rate money = 42 "Rate per unit"
+let units(r reading) = r.value - nth(reading where value < r.value sort value desc, 1).value
+topbar "Power Meter", reading, "Add reading"
+if count(reading) > 1
+  let latest = nth(reading sort value desc, 1)
+  statcard units(latest), "units since last reading"
+  statcard units(latest) * rate, "bill for those units"
+section "Readings"
+  trend reading sort value, it.value
+each reading sort value desc top 12 as r empty "No readings yet. Add the number on your meter."
+  row card gap 2 tap edit r swipe remove r
+    r.value bold grow
+    r.at faint
+===
+@rich domain=staff_advances topic=staff advance ledger style=multi_feature
+shop staff take salary advances. list each employee with monthly salary and let me log advances, then show what is left to pay this month after the advances and the total advanced
+needs: add an employee with monthly salary | log an advance to an employee | salary left after advances | total advanced this month
+---
+app "Staff Ledger" users purple
+table staff name text, salary money
+table advance staff ref staff, amount money
+topbar "Staff Ledger", staff, "Add staff"
+row gap 2
+  statcard sum(advance.amount month), "advanced this month"
+  statcard sum(staff.salary) - sum(advance.amount month), "left to pay"
+each staff sort name as s empty "No staff yet. Add each person with a monthly salary."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      "left" s.salary - sum(s.advance.amount month) faint
+    button "+500" tap add advance staff = s, amount = 500
+    button "+1000" tap add advance staff = s, amount = 1000
+===
+@rich domain=birthdays topic=birthday countdown style=detailed
+birthdays of family and friends. enter the name and birth date and list who is next with the number of days to go, turning age, and a count of birthdays in the next 30 days
+needs: add a person with birth date | days until next birthday | age they turn | count of birthdays in next 30 days
+---
+app "Birthdays" gift pink
+table person name text, born date
+let nextb(p person) = if(addmonths(p.born, 12 * (year(today) - year(p.born))) < today, addmonths(p.born, 12 * (year(today) - year(p.born) + 1)), addmonths(p.born, 12 * (year(today) - year(p.born))))
+let soon = count(person, nextb(it) - today <= 30)
+topbar "Birthdays", person, "Add birthday"
+statcard soon, "birthdays in the next 30 days"
+each person sort nextb(it) as p empty "No birthdays yet. Add the people you want to remember."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      "turns" year(nextb(p)) - year(p.born) faint
+    if nextb(p) = today
+      "Today!" color accent bold
+    else
+      plural(nextb(p) - today, "day") bold
+===
+@rich domain=flat_bills topic=flatmate bill split style=short
+split the flat bills between flatmates
+needs: add a bill with amount and due date | split equally by number of flatmates | total unpaid | tick bills as paid
+---
+app "Flat Bills" home grey
+table bill name text, amount money, due date, paid bool
+setting mates num 1..10 = 3 "Flatmates"
+let open = sum(bill.amount where paid = no)
+topbar "Flat Bills", bill, "Add bill"
+row gap 2
+  statcard open, "unpaid in total"
+  statcard open / mates, "each flatmate owes"
+each bill sort due as b empty "No bills yet. Add rent, power or internet."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.name bold
+      b.amount / mates "each, due" b.due faint color if(b.paid = no and b.due < today, bad, muted)
+    toggle b.paid
+===
+@rich domain=tool_lending topic=tool lending style=multi_feature
+neighbours borrow my tools like the drill and ladder. note who has what and since when, show how many days it has been out and flag anything out for over 2 weeks
+needs: lend a tool to a neighbour | days out for each tool | flag tools out more than 14 days | button when it comes back
+---
+app "Tool Shed" tool blue
+table lent tool text, who text, since date = today, back bool
+topbar "Tool Shed", lent, "Lend tool"
+statcard count(lent where back = no and today - since > 14), "out too long"
+each lent where back = no sort since as l empty "Everything is home. Lend a tool with the button above."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.tool bold
+      l.who faint
+    plural(today - l.since, "day") bold color if(today - l.since > 14, bad, ink)
+    button "Back" tap set l.back = yes
+===
+@rich domain=wedding_rsvp topic=wedding guest rsvp style=multi_feature
+wedding guest list with the family side, number of seats each and rsvp status of invited, yes or no. show total confirmed seats, and how many days are left to the wedding on 2027-03-12. show who has not answered.
+needs: add a guest with side and seats | rsvp status chips | total confirmed seats | days left to the wedding | who has not answered
+---
+app "Wedding" heart purple
+table guest name text, side pick Bride|Groom = Bride, seats num 1..10 = 1, rsvp pick Waiting|Yes|No = Waiting
+setting day date = 2027-03-12 "Wedding date"
+state f pick Waiting|Yes|No = Waiting
+topbar "Wedding", guest, "Add guest"
+row gap 2
+  statcard day - today, "days to go"
+  statcard sum(guest.seats where rsvp = Yes), "seats confirmed"
+choice f
+each guest where rsvp = f sort name as g empty "Nobody in this group yet."
+  row card gap 2 tap edit g swipe remove g
+    g.name bold grow
+    g.seats "seats" faint
+    g.side faint
+===
+@rich domain=driving_lessons topic=driving lessons style=detailed
+learning to drive. log each lesson with hours and what we practised. my test is on 2027-01-20, so show days to the test, total hours so far against 30 hours and the hours per week i still need
+needs: log a lesson with hours and topic | total hours against 30 | days until the test | hours per week still needed
+---
+app "Driving" car ink
+table lesson topic text, hours num 0.5..4 = 1
+setting test date = 2027-01-20 "Test date"
+let done = sum(lesson.hours)
+topbar "Driving", lesson, "Log lesson"
+goal done, 30, "hours practised", "h"
+row gap 2
+  statcard test - today, "days to the test"
+  statcard round(max(0, 30 - done) / max(1, (test - today) / 7) * 10) / 10, "hours per week needed"
+list lesson by day, "No lessons yet. Log the first one."
+===
+@rich domain=labour_site topic=site labour payroll style=detailed
+building site: list the workers with a daily wage and keep a record of days worked. show each worker's total wages this week (days times daily wage) and the total payroll this week
+needs: add a worker with daily wage | log a day worked | wages per worker this week | total payroll this week
+---
+app "Site Labour" tool orange
+table worker name text, wage money
+table day worker ref worker
+topbar "Site Labour", worker, "Add worker"
+statcard sum(worker, it.wage * count(it.day week)), "payroll this week"
+each worker sort name as w empty "No workers yet. Add each worker with a daily wage."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.name bold
+      count(w.day week) "days at" w.wage faint
+    w.wage * count(w.day week) bold
+    button "+ day" tap add day worker = w
+===
+@rich domain=egg_count topic=egg collection style=multi_feature
+number of eggs my hens lay each day. quick buttons to add a basket, bar chart for the week, average per day this week and the best day ever
+needs: one-tap buttons to add eggs | bar chart of eggs per day | average per day this week | best day total
+---
+app "Egg Count" egg yellow
+table egg n num 1..60
+let best = max(days last 90 days, sum(egg.n on it))
+quick egg, n, [6, 12, 24]
+row gap 2
+  statcard sum(egg.n today), "eggs today"
+  statcard round(sum(egg.n last 7 days) / 7), "average per day this week"
+  statcard best, "best day in 90 days"
+section "This week", "eggs per day"
+  daybars last 7 days, sum(egg.n on it)
+list egg top 8, "No eggs counted yet. Tap 6 to add a first basket."
+===
+@rich domain=bike_repairs topic=bike repair jobs style=detailed
+repair shop for bicycles. record customer, problem, promised date, charge and status that is waiting, fixing or ready. show the count in each stage, the cash waiting in ready bikes, and flag jobs past the promised date
+needs: add a job with customer, problem, promised date and charge | status chips for waiting, fixing and ready | count per status | cash waiting in ready bikes | late jobs flagged
+---
+app "Bike Shop" bike teal
+table job customer text, problem text, promised date, charge money, status pick Waiting|Fixing|Ready|Collected = Waiting
+state tab pick Waiting|Fixing|Ready = Waiting
+topbar "Bike Shop", job, "New job"
+statcard sum(job.charge where status = Ready), "cash waiting in ready bikes"
+row gap 1
+  each options job.status
+    button it count(job where status = it) fill if(tab = it, accent, soft) grow tap set tab = it
+each job where status = tab sort promised as j empty "No bikes at this stage."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.customer bold
+      j.problem faint
+      if j.promised < today
+        "Late" color bad bold
+    j.charge bold
+    if j.status = Waiting
+      button "Start" tap set j.status = Fixing
+    if j.status = Fixing
+      button "Ready" tap set j.status = Ready
+    if j.status = Ready
+      button "Collected" tap set j.status = Collected
+===
+@rich domain=visitor_log topic=office visitor log style=custom_ui
+front desk visitor book. enter the visitor, who they came to see, time in and time out. show how long each stayed, how many visitors today and the longest visit this week
+needs: log a visitor with host, time in and time out | length of each visit | visitors today | longest visit this week
+---
+app "Visitors" user slate
+table visit name text, host text, tin time, tout time
+let mins(v visit) = (v.tout - v.tin) / 1m
+topbar "Visitors", visit, "Sign in visitor"
+row gap 2
+  statcard count(visit today), "visitors today"
+  statcard max(visit week, mins(it)), "longest visit this week, min"
+each visit top 15 as v empty "No visitors yet. Log the first one."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.name bold
+      "to see" v.host faint
+    stack gap 0 align end
+      mins(v) "min" bold
+      v.tin "to" v.tout tiny color muted
+===
+@rich domain=call_log topic=client call minutes style=short
+log of calls with clients and how long they lasted
+needs: log a call with client and duration | total call time today | average call length | chart of minutes per day
+---
+app "Call Log" phone ocean
+table call client text, len dur = 10m
+topbar "Call Log", call, "Log call"
+row gap 2
+  statcard round(sum(call.len today) / 1m), "minutes on calls today"
+  statcard round(avg(call.len) / 1m), "average call, min"
+section "Minutes per day", "last 7 days"
+  plot 0..7, 0..max(30, max(days last 7 days, sum(call.len on it) / 1m)) axes
+    each days last 7 days as d
+      rect index + 0.15, 0, 0.7, sum(call.len on d) / 1m fill accent radius 2
+      tick index + 0.5, dayname(d)
+list call by day, "No calls logged yet."
+===
+@rich domain=lap_times topic=lap time race style=custom_ui
+swim club lap times. add each lap with swimmer and time as 1m20s style duration. show the fastest lap, the latest lap, and whether the latest beat the average
+needs: add a lap with swimmer and time | fastest lap | latest lap | whether the latest lap beat the average | line chart of lap times
+---
+app "Lap Times" timer mint
+table lap swimmer text, took dur
+let fastest = min(lap.took)
+let avgt = avg(lap.took)
+topbar "Lap Times", lap, "Add lap"
+if count(lap) > 0
+  row gap 2
+    statcard round(fastest / 1s), "fastest lap, sec"
+    statcard round(last(lap).took / 1s), "latest lap, sec"
+  if last(lap).took < avgt
+    "The latest lap beat the average." color good bold card
+  else
+    "The latest lap was slower than average." color muted card
+section "Lap times", "last 12"
+  trend lap top 12, it.took / 1s
+list lap top 10, "No laps yet. Add the first one."
+===
+@rich domain=postdated_cheques topic=post-dated cheques style=detailed
+i receive post-dated cheques from shops. record the shop, amount and the date on the cheque, tick when cleared, and show the total clearing this week, the total in the next 30 days and which cheques are already past their date
+needs: add a cheque with shop, amount and date | tick when cleared | total clearing this week | total in next 30 days | cheques past their date flagged
+---
+app "Cheques" money red
+table cheque shop text, amount money, on date, cleared bool
+let week_sum = sum(cheque.amount where cleared = no and on >= today and on - today <= 7)
+let month_sum = sum(cheque.amount where cleared = no and on >= today and on - today <= 30)
+topbar "Cheques", cheque, "Add cheque"
+row gap 2
+  statcard week_sum, "clearing this week"
+  statcard month_sum, "in the next 30 days"
+each cheque where cleared = no sort on as c empty "No pending cheques. Add one with the button above."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.shop bold
+      c.on faint color if(c.on < today, bad, muted)
+    c.amount bold
+    toggle c.cleared
+===
+@rich domain=kids_chores topic=kids chore rewards style=multi_feature
+chore chart for my two kids, each chore has a reward in rupees. kids tap done when finished, show what each child earned this week and a total for the month
+needs: add a chore with reward | tap done to log a completed chore for a child | earned per child this week | total earned this month
+---
+app "Chores" star pink dark
+table chore name text, reward money
+table done chore ref chore, who pick Ayaan|Zoya = Ayaan
+state k pick Ayaan|Zoya = Ayaan
+topbar "Chores", chore, "Add chore"
+row gap 2
+  each options done.who as w
+    statcard sum(done month, if(it.who = w, it.chore.reward, 0)), "earned by" w "this month"
+choice k
+each chore sort name as c empty "No chores yet. Add one with its reward."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.reward faint
+    button "Done" tap add done chore = c, who = k
+section "This week", "earned"
+  each options done.who as w
+    row
+      w grow
+      sum(done week, if(it.who = w, it.chore.reward, 0)) bold

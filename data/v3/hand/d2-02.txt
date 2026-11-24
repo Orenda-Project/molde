@@ -1,0 +1,420 @@
+@rich domain=d2_velocity_log topic=sprint_velocity_history style=multi_feature
+after each sprint I want to note what we planned and what we really finished in points. show a chart of finished points per sprint, the average velocity and what percent of the plan we complete, so I can stop overcommitting
+needs: add a sprint with planned and finished points | bar chart of finished points per sprint | average velocity | completion percent of plan
+---
+app "Velocity" chart plum
+table sprint name text, planned num 0..200, done num 0..200
+let rate = round(sum(sprint.done) * 100 / max(sum(sprint.planned), 1))
+topbar "Velocity", sprint, "Add sprint"
+statcard round(avg(sprint.done)), "points average velocity,"  rate "% of plan completed"
+section "Finished points", "per sprint"
+  bars sprint top 8, it.done, it.name
+each sprint sort at desc as s empty "No sprints yet. Add the one you just closed."
+  row card gap 2 tap edit s swipe remove s
+    s.name bold grow
+    s.done "of" s.planned "pts" faint
+===
+@rich domain=d2_rice_scoring topic=rice_prioritisation style=detailed
+I score feature ideas with RICE: reach per quarter, impact (Minimal, Low, Medium, High, Massive), confidence in percent and effort in person weeks. calculate the RICE score for each idea and rank them with the winner on top
+needs: add an idea with reach, impact, confidence and effort | RICE score per idea | ranked list best first | bar chart of top scores
+---
+app "RICE" target red
+table idea name text, reach num 0..1000000, impact pick Minimal|Low|Medium|High|Massive = Medium, confidence num 10..100 = 80 "Confidence %", effort num 1..52 = 4 "Effort (weeks)"
+let rice(r idea) = round(r.reach * if(r.impact = Massive, 3, if(r.impact = High, 2, if(r.impact = Medium, 1, if(r.impact = Low, 0.5, 0.25)))) * r.confidence / 100 / r.effort)
+topbar "RICE scores", idea, "Add idea"
+section "Top five", "RICE score"
+  bars idea sort rice(it) desc top 5, rice(it), it.name
+each idea sort rice(it) desc as i empty "No ideas scored yet. Add one with its reach and effort."
+  row card gap 2 tap edit i swipe remove i
+    text index + 1 big
+    stack grow gap 0
+      i.name bold
+      i.reach "people ·" i.impact "·" i.effort "wk" faint
+    text rice(i) bold
+===
+@rich domain=d2_moscow_scope topic=moscow_release_scope style=custom_ui
+release scope with MoSCoW: every requirement is Must, Should, Could or Wont and has an estimate in days. I only have 30 days of capacity so show if the Musts alone already fit, and total days per bucket
+needs: add a requirement with bucket and days | total days per bucket | musts against capacity | change capacity | switch buckets
+---
+app "Scope" flag ink
+table req title text, bucket pick Must|Should|Could|Wont = Must, days num 1..60 = 3
+setting capacity num = 30 "Capacity (days)"
+state tab pick Must|Should|Could|Wont = Must
+topbar "Release scope", req, "Add requirement"
+goal sum(req.days where bucket = Must), capacity, "days of Must items", "d"
+row gap 1
+  each options req.bucket
+    button it sum(req.days where bucket = it) "d" fill if(tab = it, accent, soft) grow tap set tab = it
+each req where bucket = tab sort title as r empty "Nothing in this bucket. Good, or add one."
+  row card gap 2 tap edit r swipe remove r
+    r.title bold grow
+    r.days "d" faint
+===
+@rich domain=d2_feature_votes topic=feature_request_votes style=multi_feature
+users email me feature requests so I want a board: add a request, tap plus one each time somebody asks for it again, and sort by the most wanted. show the top 3 as a chart
+needs: add a feature request | tap plus one for each vote | sorted by most votes | chart of top three requests
+---
+app "Requests" bell mint
+table want title text
+table vote want ref want
+topbar "Feature requests", want, "Add request"
+section "Most wanted", "votes"
+  bars want sort count(it.vote) desc top 3, count(it.vote), it.title
+each want sort count(it.vote) desc as w empty "No requests yet. Add the first thing users asked for."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.title bold
+      "last asked" since(w.vote) "days ago" faint
+    count(w.vote) big
+    button "+1" tap add vote want = w
+===
+@rich domain=d2_spike_timebox topic=spike_timebox_timer style=custom_ui
+spikes eat my week. keep a list of spikes with the question, the hours I budgeted, and the hours spent so far with a +30 min button. plus a countdown timer for the timebox that tells me when to stop and write up
+needs: add a spike with question and budget hours | add 30 minutes spent | timer for the timebox | shows when over budget | mark outcome
+---
+app "Spikes" hourglass yellow
+table spike question text, budget num 1..40 = 4 "Budget (hours)", spent num 0..80 = 0, outcome pick Open|Answered|Dropped = Open
+setting box dur = 2h "Timebox length"
+timer box, "Timebox", notify "Timebox over. Write down what you learned."
+topbar "Spikes", spike, "Add spike"
+each spike sort outcome as s empty "No spikes yet. Add the question you want answered."
+  stack card gap 1 tap edit s swipe remove s
+    s.question bold
+    row gap 2
+      s.spent "of" s.budget "h" color if(s.spent > s.budget, bad, ink) grow
+      button "+30 min" tap set s.spent = s.spent + 0.5
+    choice s.outcome
+===
+@rich domain=d2_pr_cycle_time topic=pull_request_cycle_time style=detailed
+want to see how long my PRs take from opened to merged. add a PR with the date opened, press merged when it lands and store the days it took, show the average days, and a chart of the last 8 PRs
+needs: add a PR with opened date | merged button saves days taken | average days to merge | chart of recent PRs | list of open ones
+---
+app "PR cycle" bolt orange dark
+table pr title text, opened date = today, cycle num? "Days to merge"
+topbar "PR cycle time", pr, "Add PR"
+statcard round(avg(pr.cycle) * 10) / 10, "days average to merge,"  count(pr where cycle = 0) "open"
+section "Last PRs", "days to merge"
+  trend pr where cycle > 0 top 8, it.cycle
+each pr where cycle = 0 sort opened as p empty "No open PRs. Everything is merged."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.title bold
+      "open for" today - p.opened "days" faint
+    button "Merged" tap set p.cycle = max(today - p.opened, 0)
+===
+@rich domain=d2_reviewer_load topic=reviewer_load_balance style=multi_feature
+team keeps dumping reviews on two people. log every review as reviewer plus PR, show this week's reviews per person, and flag anyone over the cap I set, default 5 a week
+needs: log a review with reviewer and PR | reviews per person this week | flag people above the cap | change the cap
+---
+app "Review load" users teal
+table review reviewer text, pr text
+setting cap num 1..30 = 5 "Reviews per week cap"
+topbar "Review load", review, "Log review"
+statcard count(review week), "reviews this week by" plural(count(review week by reviewer), "person")
+each review week by reviewer empty "No reviews logged this week."
+  row card gap 2
+    it.key bold grow
+    count(it) "reviews" color if(count(it) > cap, bad, ink)
+    if count(it) > cap
+      "over cap" bold color bad
+section "Last 14 days"
+  daybars last 14 days, count(review on it)
+===
+@rich domain=d2_pair_sessions topic=pair_programming_log style=short
+log of my pair programming sessions with who and for how long
+needs: log a session with partner and minutes | minutes paired this week | days paired in the last week | list of sessions
+---
+app "Pairing" users green
+table pair partner text, mins num 5..480 = 60, topic text?
+topbar "Pairing", pair, "Log session"
+statcard sum(pair.mins week), "minutes paired this week"
+weekdots count(pair on it) > 0
+list pair by day, "No sessions yet. Pull someone into your editor."
+===
+@rich domain=d2_tshirt_sizing topic=tshirt_story_sizing style=custom_ui
+stories sized as t-shirts, XS S M L XL, not hours. I add stories with a size, see how many in each size, and a rough point total where XS is 1, S 2, M 3, L 5, XL 8 so I can tell the PM
+needs: add a story with t-shirt size | count per size | rough points total | change size by tapping | list sorted by size
+---
+app "T-shirt sizes" tag pink
+table story title text, size pick XS|S|M|L|XL = M
+let pts = count(story where size = XS) + count(story where size = S) * 2 + count(story where size = M) * 3 + count(story where size = L) * 5 + count(story where size = XL) * 8
+topbar "Sizing", story, "Add story"
+statcard pts, "rough points across" plural(count(story), "story")
+row gap 1
+  each options story.size as z
+    stack card grow gap 0 align center
+      count(story where size = z) big
+      z faint
+each story sort title as s empty "No stories yet. Add the first one to size it."
+  stack card gap 1 swipe remove s
+    s.title bold
+    choice s.size
+===
+@rich domain=d2_estimate_accuracy topic=estimate_vs_actual_hours style=detailed
+I always say 2 hours and it takes 6. for each task I write my estimate in hours, later the actual hours. show my accuracy overall (actual divided by estimate) and a line chart of that ratio so I see if I improve
+needs: add a task with estimate in hours | enter the actual hours later | overall accuracy ratio | line chart of ratio per finished task
+---
+app "Estimates" calc blue
+table task title text, est num 0.5..200 = 2 "Estimate (hours)", actual num? "Actual (hours)"
+let ratio = sum(task.actual) / max(sum(task.est where actual > 0), 1)
+topbar "Estimates", task, "Add task"
+statcard round(ratio * 100) / 100, "x actual vs estimate across" count(task where actual > 0) "finished tasks"
+section "Ratio per finished task", "1 = perfect"
+  trend task where actual > 0, it.actual / it.est
+each task sort at desc as t empty "No tasks yet. Add one with your guess."
+  row card gap 2 tap edit t swipe remove t
+    t.title bold grow
+    "est" t.est "h ·" "took" t.actual "h" faint
+===
+@rich domain=d2_refactor_wishlist topic=refactor_wishlist_pain style=multi_feature
+list of things I want to refactor, with the file and how much it hurts from 1 to 5 using a slider. tick off the ones I finish and show the total pain left
+needs: add a refactor with file | pain slider for each item | tick when finished | total pain remaining
+---
+app "Refactor list" tool slate
+table wish what text, file text?, pain num 1..5 = 3, done bool
+topbar "Refactor wishlist", wish, "Add wish"
+statcard sum(wish.pain where done = no), "pain points left in" count(wish where done = no) "wishes"
+each wish sort pain desc as w empty "Nothing to refactor. Suspicious."
+  stack card gap 1 swipe remove w
+    row gap 2
+      toggle w.done
+      stack grow gap 0
+        w.what bold
+        w.file faint
+      w.pain big
+    slider w.pain 1..5
+===
+@rich domain=d2_smell_log topic=code_smell_log style=multi_feature
+log code smells I find while reading: type (long method, duplication, god class, magic numbers, dead code), where it is, and tick when cleaned. filter by type and show how many open per type
+needs: log a smell with type and location | filter by type | tick as cleaned | open count per type chart
+---
+app "Smells" eye purple
+table smell kind pick Long_method|Duplication|God_class|Magic_numbers|Dead_code = Long_method, where_it text, cleaned bool
+state f pick All|Long_method|Duplication|God_class|Magic_numbers|Dead_code = All
+topbar "Code smells", smell, "Log smell"
+section "Open per type"
+  bars options smell.kind, count(smell where kind = it and cleaned = no), it
+choice f
+each smell where cleaned = no and (f = All or kind = f) sort at desc as s empty "No smells here. Keep reading the code."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.cleaned
+    stack grow gap 0
+      s.where_it bold
+      s.kind faint
+===
+@rich domain=d2_rfc_tracker topic=rfc_comment_deadlines style=detailed
+we write RFCs and then nobody comments before the deadline. track each RFC with author, comment deadline and status Draft, Open, Approved, Withdrawn. remind me the day before the deadline, and show how many days are left
+needs: add an RFC with author and deadline | status of each RFC | days left to comment | reminder the day before | count open RFCs
+---
+app "RFCs" pen grey
+table rfc title text, author text, deadline date, status pick Draft|Open|Approved|Withdrawn = Open
+remind "An RFC closes for comments tomorrow" at rfc.deadline - 1d at 9:00
+topbar "RFCs", rfc, "Add RFC"
+statcard count(rfc where status = Open), "open for comments,"  count(rfc where status = Open and deadline < today) "past deadline"
+each rfc where status = Draft or status = Open sort deadline as r empty "No RFCs waiting for comments."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 2
+      r.title bold grow
+      text r.deadline - today "days left" color if(r.deadline < today, bad, ink)
+    r.author faint
+    choice r.status
+===
+@rich domain=d2_decision_matrix topic=weighted_decision_matrix style=custom_ui
+choosing between Postgres, Mongo and Dynamo. I list options, list criteria with weights 1 to 5, then give each option a score per criterion. total weighted score per option, highest on top
+needs: add an option | add a criterion with weight | score each option per criterion | weighted total per option
+---
+app "Decision" scale ocean
+table option name text
+table crit name text, weight num 1..5 = 3
+table rating option ref option, crit ref crit, score num 1..5 = 3
+topbar "Decision matrix", option, "Add option"
+section "Criteria", count(crit)
+  each crit as c empty "Add criteria like cost or speed first."
+    row gap 2 tap edit c swipe remove c
+      c.name grow
+      "weight" c.weight faint
+  form crit, "Add criterion"
+each option sort sum(it.rating, it.score * it.crit.weight) desc as o empty "Add the options you are comparing."
+  row card gap 2 swipe remove o
+    o.name bold grow
+    sum(o.rating, it.score * it.crit.weight) big
+form rating, "Add score"
+===
+@rich domain=d2_meeting_cost topic=meeting_cost_calculator style=multi_feature
+how much do our meetings cost? log each meeting with number of people and minutes, set average hourly cost per person, and show the cost of each meeting, this week's total cost and a chart of minutes per day
+needs: log a meeting with people and minutes | set average hourly cost | cost of each meeting | weekly total cost | minutes per day chart
+---
+app "Meeting cost" clock red
+table meeting what text, people num 1..60 = 5, mins num 5..480 = 30
+setting rate money = 25 "Hourly cost per person"
+topbar "Meeting cost", meeting, "Log meeting"
+statcard sum(meeting week, it.people * it.mins * rate / 60), "spent in meetings this week,"  sum(meeting.mins week) "min"
+section "Minutes in meetings", "last 7 days"
+  daybars last 7 days, sum(meeting.mins on it)
+each meeting sort at desc as m empty "No meetings logged. Lucky you."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.what bold
+      m.people "people ·" m.mins "min" faint
+    m.people * m.mins * rate / 60 bold
+===
+@rich domain=d2_decision_log_revisit topic=decisions_with_revisit_date style=multi_feature
+log of small decisions we make in standups, who made it and a date when we should revisit it. show the ones due for revisit and a reminder when that day comes
+needs: add a decision with owner and revisit date | highlight decisions due for revisit | reminder on the revisit day | count of decisions due
+---
+app "Decisions" note yellow
+table decision what text, owner text, revisit date?
+remind "Time to revisit a decision" at decision.revisit
+topbar "Decision log", decision, "Add decision"
+statcard count(decision where revisit <= today), "decisions to revisit of" count(decision)
+each decision sort at desc as d empty "No decisions logged. Write down the next one."
+  row card gap 2 tap edit d swipe remove d fill if(d.revisit <= today, soft, surface)
+    stack grow gap 0
+      d.what bold
+      d.owner "· revisit" d.revisit faint
+    if d.revisit <= today
+      "Due" bold color warn
+===
+@rich domain=d2_demo_day_claps topic=demo_day_claps style=custom_ui
+demo day with 6 teams. add the teams, and when a demo ends everyone taps clap as many times as they like. show a leaderboard with claps and a trophy for the leader
+needs: add a team | clap button | leaderboard sorted by claps | trophy on the leader | total claps
+---
+app "Demo day" trophy pink
+table team name text
+table clap team ref team
+topbar "Demo day", team, "Add team"
+statcard count(clap), "claps across" plural(count(team), "team")
+each team sort count(it.clap) desc as t empty "No teams yet. Add the first demo."
+  row card gap 2 swipe remove t
+    if index = 0 and count(t.clap) > 0
+      icon trophy
+    stack grow gap 0
+      t.name bold
+      count(t.clap) "claps" faint
+    button "Clap" fill accent tap add clap team = t
+===
+@rich domain=d2_team_kudos topic=team_kudos_wall style=short
+kudos wall for my team. who and what for, and a count per person this month
+needs: add kudos with person and reason | count per person this month | list by day
+---
+app "Kudos" heart pink
+table kudos to text, why text
+topbar "Kudos", kudos, "Give kudos"
+section "This month", count(kudos month)
+  share kudos month by to, count(it), it.key
+list kudos by day, "No kudos yet. Say thanks to someone."
+===
+@rich domain=d2_feedback_given topic=sbi_feedback_given style=detailed
+I want to give my juniors feedback regularly using situation, behaviour, impact. note who, if it was positive or constructive, and the three parts. group by person and show the ratio so I am not only criticising
+needs: add feedback with person, kind, situation, behaviour and impact | notes grouped by person | ratio of positive to constructive | tap to edit
+---
+app "Feedback" smile mint
+table fb person text, kind pick Positive|Constructive = Positive, situation text, behaviour text, impact text
+topbar "Feedback given", fb, "Add feedback"
+goal count(fb where kind = Positive), count(fb), "positive feedback"
+each fb by person as g empty "No feedback written yet. Start with something good."
+  text g.key head
+  each g as f
+    stack card gap 0 tap edit f swipe remove f
+      f.kind bold color if(f.kind = Positive, good, warn)
+      f.situation "→" f.behaviour "→" f.impact faint
+===
+@rich domain=d2_skill_matrix topic=team_skill_matrix_bus_factor style=custom_ui
+team skill matrix. add people, rate each person on a tech from 1 (learning) to 4 (expert), then show for each tech how many people know it and warn when only one person does, our bus factor
+needs: add a person | rate a person on a tech from 1 to 4 | people count per tech | bus factor warning | highest level per tech
+---
+app "Skills" brain purple
+table member name text
+table skill member ref member, tech text, level num 1..4 = 2
+topbar "Skill matrix", member, "Add person"
+each skill by tech empty "No ratings yet. Rate someone below."
+  row card gap 2
+    stack grow gap 0
+      it.key bold
+      "best level" max(it.level) faint
+    if count(it) = 1
+      "bus factor 1" bold color bad
+    else
+      text count(it) "people" faint
+section "Rate someone"
+  form skill, "Save rating"
+===
+@rich domain=d2_takehome_tracker topic=take_home_test_deadlines style=detailed
+we send a take-home test to candidates. track when I sent it, the due date, and status Sent, Submitted, Reviewed, Passed, Failed. show late ones in red and remind me on the due date
+needs: add a candidate with sent and due date | status per candidate | late ones in red | reminder on due date | count waiting
+---
+app "Take-home" pen orange
+table cand name text, sent date = today, due date, status pick Sent|Submitted|Reviewed|Passed|Failed = Sent
+remind "A take-home test is due today" at cand.due
+topbar "Take-home tests", cand, "Add candidate"
+statcard count(cand where status = Sent), "waiting for submission,"  count(cand where status = Sent and due < today) "late"
+each cand sort due as c empty "No take-home tests out right now."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 2
+      c.name bold grow
+      c.due faint color if(c.due < today and c.status = Sent, bad, muted)
+    choice c.status
+===
+@rich domain=d2_referral_bonus topic=employee_referral_tracker style=multi_feature
+tracking referrals from our staff: candidate, role, who referred, status and the bonus amount. show total bonus owed for the ones hired and how many each employee has referred
+needs: add a referral with referrer, role and bonus | status of each referral | total bonus owed for hired | referrals per employee
+---
+app "Referrals" gift teal
+table referral cand text, role text, by text, status pick Submitted|Interviewing|Hired|Declined = Submitted, bonus money = 500
+topbar "Referrals", referral, "Add referral"
+statcard sum(referral.bonus where status = Hired), "bonus owed for" count(referral where status = Hired) "hires"
+section "Referrals per employee"
+  share referral by by, count(it), it.key
+each referral sort at desc as r empty "No referrals yet. Ask the team who they know."
+  stack card gap 1 swipe remove r
+    row
+      r.cand bold grow
+      r.role faint
+    choice r.status
+===
+@rich domain=d2_interview_slots topic=interview_slot_calendar style=custom_ui
+calendar of interview days for the month. tap a day to mark that we have interviews, move between months, and show how many interview days and the next marked ones as a list
+needs: month calendar of interview days | tap a day to mark or unmark | move between months | count of interview days this month
+---
+app "Interviews" calendar ink dark
+table slot
+state m date = today
+topbar "Interview days", slot, "Add today"
+monthnav m
+statcard count(slot month of m), "interview days in" monthname(m)
+calendar slot, m
+list slot month of m by day, "No interview days marked. Tap a day above."
+===
+@rich domain=d2_first_week_plan topic=first_week_by_day style=detailed
+plan for a new teammate's first week, by weekday. add steps for Mon to Fri, tick them off, highlight today's column and show how many steps are done overall
+needs: add a step on a weekday | tick steps done | today's day highlighted | overall progress
+---
+app "First week" school green
+table step day pick Mon|Tue|Wed|Thu|Fri = Mon, what text, done bool
+topbar "First week", step, "Add step"
+goal count(step where done = yes), count(step), "steps done"
+each options step.day as d
+  stack card gap 1 fill if(dayname(today) = d, accent, soft)
+    row
+      d bold grow
+      count(step where day = d and done = yes) "/" count(step where day = d) faint
+    each step where day = d sort at as s empty "Nothing planned."
+      row gap 2 swipe remove s
+        toggle s.done
+        s.what grow
+===
+@rich domain=d2_laptop_setup topic=dev_machine_setup_times style=short
+setting up a new dev laptop: steps with minutes each took, tick them as done, show slowest steps
+needs: add a step with minutes | tick steps done | total minutes spent | slowest steps chart
+---
+app "Laptop setup" tool grey
+table step what text, mins num 0..600 = 10, done bool
+topbar "Laptop setup", step, "Add step"
+statcard sum(step.mins where done = yes), "minutes spent," count(step where done = no) "steps left"
+section "Slowest steps", "minutes"
+  bars step sort mins desc top 5, it.mins, it.what
+each step sort at as s empty "No steps yet. Add the first thing you install."
+  row gap 2 swipe remove s
+    toggle s.done
+    s.what grow
+    s.mins "min" faint

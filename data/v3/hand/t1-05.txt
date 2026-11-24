@@ -1,0 +1,196 @@
+@rich domain=cattle_vaccines topic=cattle vaccination due style=detailed
+dairy farm with 30 cows. each cow has a tag number and a vaccine she needs every so many days. a button logs the vaccination. show which cows are overdue, days since the last shot and the count of cows overdue
+needs: add a cow with tag and days between vaccinations | button to log a vaccination | days since the last shot | overdue cows highlighted and counted
+---
+app "Dairy Herd" paw grey dark
+table cow tag text, every num 30..365 = 180
+table shot cow ref cow
+topbar "Dairy Herd", cow, "Add cow"
+statcard count(cow, due(it.shot, it.every)), "cows overdue", count(cow)
+each cow sort tag as c empty "No cows yet. Add each cow by her tag."
+  row card gap 2 tap edit c swipe remove c fill if(due(c.shot, c.every), soft, surface)
+    stack grow gap 0
+      c.tag bold
+      if(since(c.shot) >= 0, join(plural(since(c.shot), "day"), " since shot"), "Never vaccinated") faint color if(due(c.shot, c.every), bad, muted)
+    button "Vaccinated" tap add shot cow = c
+===
+@rich domain=late_arrivals topic=class late arrivals style=custom_ui
+i teach morning class which starts at 8:30. type the pupil and the time they arrived. anyone after 8:30 is late. show how many were late this week, the latest arrival today, and the minutes each late pupil missed
+needs: log a pupil arrival time | late if after 8:30 | count late this week | minutes missed per late pupil
+---
+app "Roll Call" clock plum
+table arrival pupil text, came time
+let missed(a arrival) = (a.came - 8:30) / 1m
+statcard count(arrival week where came > 8:30), "late arrivals this week"
+each arrival today sort came desc as a empty "Nobody has arrived yet today."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.pupil bold
+      a.came faint
+    if a.came > 8:30
+      "Late" missed(a) "min" color bad bold
+    else
+      "On time" color good bold
+form arrival, "Mark arrival"
+===
+@rich domain=conference_talks topic=conference talk schedule style=multi_feature
+tech meetup program with two tabs. one lists talks by start time with speaker, room and length in minutes and shows the end time, the other shows the total talk hours and the number of talks per room
+needs: add a talk with speaker, room, start and minutes | talks sorted by start with end time | tab for stats | total talk hours | talks per room
+---
+app "Meetup" users plum dark
+table talk title text, who text, room pick Main|Lab|Hall = Main, start time, mins num 10..120 = 30
+topbar "Meetup", talk, "Add talk"
+screen talks "Talks" list
+  each talk sort start as t empty "No talks yet. Add the first one."
+    row card gap 2 tap edit t swipe remove t
+      stack grow gap 0
+        t.title bold
+        t.who t.room faint
+      t.start "-" t.start + t.mins * 1m bold
+screen stats "Stats" chart
+  statcard round(sum(talk.mins) / 60 * 10) / 10, "talk hours in total"
+  section "Talks per room"
+    each options talk.room
+      row
+        it grow
+        count(talk where room = it) bold
+===
+@rich domain=taxi_bookings topic=taxi pre-bookings style=detailed
+airport taxi pre-bookings: passenger, pickup date and time as one value, fare and a done tick. show how long until the next pickup, bookings today, and the fare total for tomorrow
+needs: add a booking with passenger, pickup date-time and fare | time until the next pickup | bookings today | fare total for tomorrow | tick done
+---
+app "Airport Taxi" car pink
+table ride who text, pickup when, fare money, done bool
+let nxt = nth(ride where done = no and pickup >= now sort pickup, 1)
+let tom = today + 1
+topbar "Airport Taxi", ride, "Add booking"
+row gap 2
+  statcard count(ride today), "pickups today"
+  statcard sum(ride.fare on tom), "fares tomorrow"
+if count(ride where done = no and pickup >= now) > 0
+  section "Next pickup", "in" floor((nxt.pickup - now) / 1h) "h"
+    nxt.who big
+    nxt.pickup faint
+each ride where done = no sort pickup as r empty "No bookings. Add the first pickup."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.who bold
+      r.pickup faint
+    r.fare bold
+    toggle r.done
+===
+@rich domain=policy_renewals topic=insurance policy renewals style=multi_feature
+all our insurance policies: provider, yearly premium, renewal date. show the total yearly premium, premium per month on average, and policies renewing within 60 days with the days left
+needs: add a policy with provider, premium and renewal date | total yearly premium | average per month | policies renewing in 60 days with days left
+---
+app "Policies" shield grey
+table policy kind text, firm text, premium money, renews date
+topbar "Policies", policy, "Add policy"
+row gap 2
+  statcard sum(policy.premium), "premium per year"
+  statcard round(sum(policy.premium) / 12), "per month"
+section "Renewing soon", "within 60 days:" count(policy where renews >= today and renews - today <= 60)
+  each policy where renews >= today and renews - today <= 60 sort renews as p empty "Nothing renews in the next 60 days."
+    row gap 2
+      p.kind bold grow
+      plural(p.renews - today, "day") faint
+list policy, "No policies yet. Add your first one."
+===
+@rich domain=laundry_pickups topic=laundry pickups style=custom_ui
+dry cleaning counter. tickets with customer, number of items, price per item and status in, ready or collected. big status chips, total due on ready tickets, and the oldest waiting ticket in days
+needs: add a ticket with customer, items and price per item | status chips for in, ready and collected | total due on ready tickets | oldest waiting ticket age in days
+---
+app "Laundry" cloud ocean dark
+table ticket who text, items num 1..50 = 1, price money, stage pick In|Ready|Collected = In
+state tab pick In|Ready|Collected = In
+let oldest = max(ticket where stage != Collected, today - it.at)
+topbar "Laundry", ticket, "New ticket"
+row gap 2
+  statcard sum(ticket where stage = Ready, it.items * it.price), "due on ready tickets"
+  statcard oldest, "days for oldest waiting"
+choice tab
+each ticket where stage = tab sort at as t empty "No tickets in this stage."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.who bold
+      t.items "items at" t.price faint
+    t.items * t.price bold
+    if t.stage = In
+      button "Ready" tap set t.stage = Ready
+    if t.stage = Ready
+      button "Collected" tap set t.stage = Collected
+===
+@rich domain=coin_collection topic=coin collection value style=multi_feature
+coins and stamps i collect. name, kind chips for coin stamp or note, how many i own and the estimated value of one. total collection value, items per kind and filter by kind
+needs: add an item with kind, count and value each | filter chips by kind | total collection value | number of pieces per kind
+---
+app "Collection" star mint
+table piece name text, kind pick Coin|Stamp|Note = Coin, qty num 1..999 = 1, each money
+state k pick Coin|Stamp|Note = Coin
+topbar "Collection", piece, "Add item"
+statcard sum(piece, it.qty * it.each), "total collection value"
+choice k
+statcard sum(piece.qty where kind = k), "pieces of this kind"
+each piece where kind = k sort name as p empty "Nothing of this kind yet."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.qty "x" p.each faint
+    p.qty * p.each bold
+===
+@rich domain=piano_practice topic=piano practice streak style=detailed
+piano practice. one button to log a practice with minutes. i want my current streak, the best streak ever, days since i last skipped, and a grid of the last 5 weeks so i can see the gaps
+needs: log a practice with minutes | current streak | best streak | days since last practice | grid of last 35 days
+---
+app "Piano" music ink
+table practice mins num 5..240 = 20
+let cur = streak(practice)
+quick practice, mins, [15, 30, 45]
+row gap 2
+  statcard cur, "day streak"
+  statcard best(practice), "best streak"
+  statcard if(count(practice) > 0, since(practice), 0), "days since practice"
+section "Last 5 weeks", "minutes:" sum(practice.mins last 35 days)
+  daygrid last 35 days, sum(practice.mins on it), 30
+list practice by day, "No practice yet. Tap 15 to start."
+===
+@rich domain=fixed_deposits topic=fixed deposit maturity style=detailed
+bank fixed deposits: principal, yearly profit percent, start date and months. show the maturity date, maturity amount (principal plus principal times percent over 100 times months over 12), days left, and total principal locked
+needs: add a deposit with principal, percent, start date and months | maturity date and amount | days left until maturity | total principal locked
+---
+app "Deposits" coin grey dark
+table fd bank text, principal money, pct num 1..30 = 12, start date, months num 1..120 = 12
+let ends(f fd) = addmonths(f.start, f.months)
+let payout(f fd) = f.principal + f.principal * f.pct / 100 * f.months / 12
+topbar "Deposits", fd, "Add deposit"
+row gap 2
+  statcard sum(fd, if(ends(it) >= today, it.principal, 0)), "principal locked"
+  statcard sum(fd, if(ends(it) >= today, payout(it) - it.principal, 0)), "profit to come"
+each fd sort start as f empty "No deposits yet. Add your first one."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.bank bold
+      "matures" ends(f) faint
+    stack gap 0 align end
+      payout(f) bold
+      if(ends(f) < today, "matured", join(plural(ends(f) - today, "day"), " left")) tiny color muted
+===
+@rich domain=flight_delays topic=flight delay log style=multi_feature
+i fly a lot for work and want to log each flight with the planned and actual departure times, to see the delay in minutes, the average delay, how many flights left more than 15 minutes late and a bar chart of delay per flight
+needs: log a flight with route, planned and actual departure | delay in minutes per flight | average delay | count of flights over 15 minutes late | bar chart of delay per flight
+---
+app "Flight Delays" plane blue dark
+table flight route text, planned time, actual time
+let delay(f flight) = (f.actual - f.planned) / 1m
+form flight, "Log flight"
+row gap 2
+  statcard round(sum(flight, delay(it)) / max(1, count(flight))), "average delay, min"
+  statcard count(flight, delay(it) > 15), "flights over 15 min late"
+section "Delay per flight", "last 10"
+  bars flight top 10, delay(it), it.route
+each flight top 8 as f empty "No flights logged yet."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.route bold
+      f.planned "planned" f.actual "actual" faint
+    delay(f) "min" bold color if(delay(f) > 15, bad, ink)

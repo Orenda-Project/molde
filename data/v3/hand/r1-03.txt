@@ -1,0 +1,574 @@
+@rich domain=r1_bookshop_two_tabs topic=bookshop_shelf_and_sales style=multi_feature
+small bookshop with a shelf tab and a sales tab. on the shelf i want to search by title or author, see copies left and tap sold when a copy goes. on the sales tab today's money, a week chart and my bestsellers this month
+needs: add a book with title, author, copies bought and price | search by title or author | tap sold to record a sale and see copies left | money from today's sales | bestsellers this month
+---
+app "Book Shop" book green
+table book title text, author text?, qty num 0.. "Copies bought", price money
+table sale book ref book
+state q text = ""
+screen shelf "Shelf" book
+  topbar "Book Shop", book, "Add book"
+  field q "Search title or author"
+  each book where has(title, q) or has(author, q) sort title as b empty "No book matches. Try another word."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.title bold
+        b.author b.price faint
+      b.qty - count(b.sale) bold color if(b.qty - count(b.sale) <= 2, warn, ink)
+      button "Sold" tap add sale book = b
+screen sales "Sales" chart
+  statcard sum(sale today, it.book.price), "sold today from" plural(count(sale today), "book")
+  section "Last 7 days"
+    daybars last 7 days, sum(sale on it, it.book.price)
+  section "Bestsellers", "this month"
+    share book sort count(it.sale month) desc top 5, count(it.sale month), it.title
+===
+@rich domain=r1_toy_gift_finder topic=toy_shop_budget_finder style=custom_ui
+toy corner. a customer says my budget is two thousand for a six year old. i want a slider for the budget and chips for age group and then see only toys that fit and are in stock, with a sold button that cuts the stock
+needs: add a toy with age group, quantity and price | slider for the customer's budget | chips to pick an age group | list only toys in stock within the budget | sold button reduces the quantity
+---
+app "Toy Corner" game blue
+table toy name text, age pick Baby|Toddler|Kids|Teen = Kids, qty num 0.., price money
+state budget num = 2000
+state ageq text = ""
+topbar "Toy Corner", toy, "Add toy"
+"Customer budget" budget faint
+slider budget 200..10000
+scroll
+  each options toy.age
+    button it fill if(ageq = it, accent, soft) tap set ageq = if(ageq = it, "", it)
+let fit = count(toy where price <= budget and qty > 0 and (ageq = "" or age = ageq))
+fit "toys fit this budget" head
+each toy where price <= budget and qty > 0 and (ageq = "" or age = ageq) sort price desc as t empty "Nothing fits. Try a bigger budget or another age."
+  row card gap 2 tap edit t
+    stack grow gap 0
+      t.name bold
+      t.age "·" t.qty "in stock" faint
+    t.price bold
+    button "Sold" tap set t.qty = t.qty - 1
+===
+@rich domain=r1_gift_hampers_due topic=gift_hamper_orders_reminder style=detailed
+we make gift hampers for eid, weddings, birthdays and offices. need to note customer, which hamper, price and delivery date, tick when delivered, and get a reminder the morning before a hamper is due so we are not rushing
+needs: add an order with customer, hamper type, price and delivery date | reminder the day before delivery | tick when delivered | count and worth of hampers still to deliver | which hamper type brings the most money this month
+---
+app "Gift Hampers" gift pink
+table order customer text, hamper pick Eid|Wedding|Birthday|Corporate|Baby = Eid, price money, day date, delivered bool
+topbar "Gift Hampers", order, "New hamper order"
+remind "A hamper is due tomorrow" at order.day - 1d at 9:00
+row gap 2
+  stat count(order where delivered = no), "to deliver"
+  stat sum(order.price where delivered = no), "worth waiting"
+each order where delivered = no sort day as o empty "No hampers waiting. Take the next order."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.delivered
+    stack grow gap 0
+      o.customer bold
+      o.hamper "· due" o.day faint color if(o.day < today, bad, muted)
+    o.price bold
+section "Money by hamper", "this month"
+  share order month by hamper, sum(it.price), it.key
+===
+@rich domain=r1_cosmetics_margins topic=cosmetics_cost_price_margin style=multi_feature
+cosmetics counter. i buy at one price and sell at another and honestly never calculate the margin. list the items with cost, price and stock, show the margin percent of each, which items give the best margin and what profit is sitting on my shelf
+needs: add an item with cost, selling price and quantity | margin percent for each item | chart of best margins | profit sitting in stock | stock count with plus and minus
+---
+app "Beauty Counter" heart purple
+table item name text, cost money, price money, qty num 0..
+let margin(i item) = round((i.price - i.cost) * 100 / max(i.price, 1))
+topbar "Beauty Counter", item, "Add item"
+statcard sum(item, it.qty * (it.price - it.cost)), "profit sitting on the shelf in" sum(item.qty) "pieces"
+section "Best margins", "percent"
+  bars item sort margin(it) desc top 6, margin(it), it.name
+each item sort name as i empty "No items yet. Add lipstick, cream or anything you sell."
+  row card gap 1 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      margin(i) "% margin" faint color if(margin(i) < 20, warn, muted)
+    button "-" tap set i.qty = i.qty - 1
+    i.qty bold
+    button "+" tap set i.qty = i.qty + 1
+===
+@rich domain=r1_perfume_decants topic=perfume_decant_by_ml style=detailed
+i sell perfume decants by the ml from big bottles. each bottle has its size in ml and what i paid. tap 3, 5 or 10 ml when i fill a vial, show how much is left in the bottle, a bar for it and whether i have earned back what the bottle cost
+needs: add a bottle with size and what was paid | tap 3, 5 or 10 ml to record a decant | ml left in each bottle with a bar | price per ml setting | earned versus bottle cost
+---
+app "Decant Bar" drop ocean
+table bottle name text, ml num 10..1000, cost money
+table decant bottle ref bottle, ml num 1..100, price money
+setting per_ml money = 200 "Price per ml"
+topbar "Decant Bar", bottle, "Add bottle"
+each bottle sort name as b empty "No bottles yet. Add a perfume with its size and what you paid."
+  let used = sum(b.decant.ml)
+  stack card gap 2 tap edit b swipe remove b
+    row gap 2
+      b.name bold grow
+      b.ml - used "ml left" faint
+    draw 100, 6
+      rect 0, 0, 100, 6 fill soft radius 3
+      rect 0, 0, 100 * clamp((b.ml - used) / b.ml, 0, 1), 6 fill accent radius 3
+    row gap 1
+      button "3 ml" tap add decant bottle = b, ml = 3, price = 3 * per_ml
+      button "5 ml" tap add decant bottle = b, ml = 5, price = 5 * per_ml
+      button "10 ml" tap add decant bottle = b, ml = 10, price = 10 * per_ml
+    "Earned" sum(b.decant.price) "of" b.cost "paid" faint color if(sum(b.decant.price) >= b.cost, good, muted)
+===
+@rich domain=r1_henna_bookings topic=henna_artist_calendar style=multi_feature dark
+henna artist. eid season is crazy so i want every booking with client, event, date, price and advance, a month view showing which days are booked and how heavily, the upcoming list in date order and the balance i will collect
+needs: add a booking with client, event, date, price and advance | month view of booked days | upcoming bookings in date order | balance still to collect | swipe to remove a booking
+---
+app "Henna Bookings" pen grey dark
+table booking client text, event pick Wedding|Eid|Party|Bridal = Eid, day date, price money, advance money = 0
+topbar "Henna Bookings", booking, "New booking"
+row gap 2
+  stat count(booking where day >= today), "upcoming bookings"
+  stat sum(booking.price where day >= today) - sum(booking.advance where day >= today), "balance to collect"
+section "This month", "darker means busier"
+  daygrid month, count(booking where day = it), 3
+section "Upcoming"
+  each booking where day >= today sort day as b empty "No upcoming bookings. Add the next one."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.client bold
+        b.day b.event faint
+      b.price - b.advance bold
+===
+@rich domain=r1_tailor_measurements topic=tailor_measurement_book style=custom_ui
+tailor here, i lose the paper slips with measurements. i want each client with chest, waist, hips, length and sleeve in inches plus a note, and a search box so i can find a client by name fast
+needs: add a client with chest, waist, hips, length, sleeve and a note | search clients by name | measurements shown on each client card | tap a client to edit | swipe to remove
+---
+app "Measurements" pen ocean
+table client name text, phone text?, chest num 20..60 unit "in", waist num 20..60 unit "in", hips num 20..70 unit "in", length num 20..60 unit "in", sleeve num 10..40 unit "in", note long?
+state q text = ""
+topbar "Measurements", client, "New client"
+field q "Find a client"
+each client where has(name, q) sort name as c empty "No client found. Add the measurements with New client."
+  stack card gap 1 tap edit c swipe remove c
+    row
+      c.name bold grow
+      "Saved" c.at faint
+    grid 4 gap 1
+      stack gap 0 align center
+        "Chest" tiny color muted
+        c.chest bold
+      stack gap 0 align center
+        "Waist" tiny color muted
+        c.waist bold
+      stack gap 0 align center
+        "Hips" tiny color muted
+        c.hips bold
+      stack gap 0 align center
+        "Length" tiny color muted
+        c.length bold
+    "Sleeve" c.sleeve "in" c.note faint
+===
+@rich domain=r1_dry_clean_slips topic=dry_cleaner_slip_lookup style=short
+customer gives me the slip number, i type it and see their clothes and hand them over
+needs: type a slip number to find the ticket | mark the ticket ready or handed over | add a new ticket with pieces and amount | list of clothes not yet collected
+---
+app "Dry Clean" shield slate
+table ticket slip num 1..9999, customer text, pieces num 1..50, amount money, ready bool, collected bool
+state find num = 0
+topbar "Dry Clean", ticket, "New ticket"
+field find "Slip number"
+if find > 0
+  each ticket where slip = find as t empty "No ticket with that number."
+    stack card gap 2
+      t.customer big
+      t.pieces "pieces ·" t.amount faint
+      if t.collected
+        "Already collected" color good
+      else
+        row gap 1
+          button "Mark ready" tap set t.ready = yes
+          button "Hand over" fill accent tap set t.collected = yes
+section "Not collected yet", count(ticket where collected = no)
+  each ticket where collected = no sort at as t empty "Everything has been collected."
+    row gap 2 tap edit t
+      t.slip bold
+      t.customer grow
+      toggle t.ready
+===
+@rich domain=r1_home_tutor_lessons topic=home_tutor_lesson_fees style=multi_feature
+i teach at homes, a different rate per lesson for every family. each time i go i want one tap for lesson taken, one tap when they pay, and at month end who still owes me and how much. must be able to look at last month too
+needs: add a family with rate per lesson | tap when a lesson is taken | tap when a family pays | amount still owed per family for the month | move between months
+---
+app "Home Tuition" school slate
+table family name text, rate money
+table lesson family ref family
+table paid family ref family, amount money
+state m date = today
+topbar "Home Tuition", family, "Add family"
+monthnav m
+statcard sum(family, count(it.lesson month of m) * it.rate - sum(it.paid.amount month of m)), "still to receive for" monthname(m)
+each family sort name as f empty "No families yet. Add each with the rate per lesson."
+  let owed = count(f.lesson month of m) * f.rate - sum(f.paid.amount month of m)
+  stack card gap 2 tap edit f
+    row gap 2
+      stack grow gap 0
+        f.name bold
+        count(f.lesson month of m) "lessons x" f.rate faint
+      owed big color if(owed > 0, bad, good)
+    row gap 1
+      button "Took a lesson" tap add lesson family = f
+      button "Got paid" fill accent tap add paid family = f, amount = max(owed, 0)
+===
+@rich domain=r1_daycare_fees topic=daycare_monthly_and_late_fees style=detailed
+i run a small daycare. every child has a monthly fee, and parents who pick up late pay per minute. i tick when the month's fee is received, tap plus 15 minutes when a parent is late and see what i should collect in total
+needs: add a child with monthly fee | tick when this month's fee is received | tap to add 15 late minutes | late charge per minute setting | total still to collect including late charges
+---
+app "Daycare Fees" baby orange
+table child name text, fee money
+table feepaid child ref child
+table late child ref child, mins num 5..180
+setting late_rate money = 10 "Late charge per minute"
+topbar "Daycare Fees", child, "Add child"
+statcard sum(child, it.fee * (1 - min(count(it.feepaid month), 1))) + sum(late.mins month) * late_rate, "still to collect this month from" count(child, count(it.feepaid month) = 0) "children"
+each child sort name as c empty "No children yet. Add each child with the monthly fee."
+  let extra = sum(c.late.mins month) * late_rate
+  stack card gap 2 tap edit c swipe remove c
+    row gap 2
+      toggle c.feepaid month
+      stack grow gap 0
+        c.name bold
+        "Fee" c.fee "· late charges" extra faint color if(extra > 0, warn, muted)
+      button "+15 min late" tap add late child = c, mins = 15
+===
+@rich domain=r1_gym_memberships topic=gym_membership_expiry style=detailed
+gym front desk. members take monthly, quarterly or yearly plans from a start date with a fee. i want to see how many days each has left, count active and expired, how many expire within a week and renew with one tap
+needs: add a member with plan, start date and fee | days left for each member | count of active and expired members | members expiring within seven days | renew button that restarts from today
+---
+app "Gym Desk" dumbbell teal
+table member name text, plan pick Monthly|Quarterly|Yearly = Monthly, start date, fee money
+let days(m member) = if(m.plan = Monthly, 30, if(m.plan = Quarterly, 90, 365))
+let left(m member) = m.start + days(m) - today
+topbar "Gym Desk", member, "New member"
+row gap 2
+  stat count(member, left(it) >= 0), "active"
+  stat count(member, left(it) < 0), "expired"
+  stat count(member, left(it) >= 0 and left(it) <= 7), "expire this week"
+each member sort left(it) as m empty "No members yet. Add the first one."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.name bold
+      m.plan "· fee" m.fee faint
+    if left(m) < 0
+      "Expired" bold color bad
+    else
+      left(m) "days left" bold color if(left(m) <= 7, warn, ink)
+    button "Renew" tap set m.start = today
+===
+@rich domain=r1_cyber_cafe_pcs topic=cyber_cafe_computer_use style=multi_feature
+cyber cafe with ten computers. every customer session i log the pc number, minutes and any printouts money. show which computers were used today, how many hours in total, and money earned with my hourly price
+needs: log a session with pc number, minutes and printout money | price per hour setting | grid of the ten computers showing hours used today | money earned today | bar chart of hours per day this week
+---
+app "Cyber Cafe" bolt blue
+table session pc num 1..10, mins num 5..600, prints money = 0
+setting rate money = 120 "Price per hour"
+topbar "Cyber Cafe", session, "Log session"
+statcard sum(session.mins today) * rate / 60 + sum(session.prints today), "earned today from" round(sum(session.mins today) / 6) / 10 "hours"
+section "Computers", "hours used today"
+  grid 5 gap 1
+    each 1..10 as p
+      stack radius 8 pad 1 gap 0 align center fill if(sum(session.mins today where pc = p) > 0, accent, soft)
+        "PC" p bold
+        round(sum(session.mins today where pc = p) / 6) / 10 "h" tiny
+section "Hours per day"
+  daybars last 7 days, sum(session.mins on it) / 60
+===
+@rich domain=r1_snooker_clock topic=snooker_table_clock_billing style=custom_ui
+snooker club with four tables. i want to press start for a table, see it running with the minutes, and when the players leave press stop to get the bill at my per minute price. at night a total of finished games
+needs: start button for each of four tables | running tables with time elapsed | stop button that ends the game | bill from minutes and price per minute | total of finished games today
+---
+app "Snooker Club" ball orange
+table game tbl num 1..4, start when, stop when?, ended bool
+setting rate money = 10 "Price per minute"
+row gap 1
+  each 1..4 as t
+    button "Start table" t tap add game tbl = t, start = now
+section "Running now"
+  each game where ended = no sort start as g empty "No table is running."
+    row card gap 2
+      stack grow gap 0
+        "Table" g.tbl bold
+        "Running" now - g.start faint
+      round((now - g.start) / 1m) * rate bold
+      button "Stop and bill" fill accent tap set g.stop = now then set g.ended = yes
+section "Finished today", "total" sum(game today where ended = yes, round((it.stop - it.start) / 1m) * rate)
+  each game today where ended = yes sort start desc as g empty "No finished games yet."
+    row gap 2
+      "Table" g.tbl grow
+      round((g.stop - g.start) / 1m) "min" faint
+      round((g.stop - g.start) / 1m) * rate bold
+===
+@rich domain=r1_tent_chair_rental topic=tent_chair_rental_availability style=multi_feature
+i rent out chairs and tents for weddings. i own 300 chairs and 8 tents. when a customer books i note how many go out and the fee, and mark returned when they are back. i need to know right now how many chairs and tents are free
+needs: add a rental with chairs, tents and fee | settings for chairs and tents owned | chairs and tents free right now | mark a rental returned | rent earned this month
+---
+app "Tent House" home green
+table rental customer text, chairs num 0..500 = 0, tents num 0..20 = 0, fee money, back bool
+setting chairs_total num = 300 "Chairs we own"
+setting tents_total num = 8 "Tents we own"
+topbar "Tent House", rental, "New rental"
+row gap 2
+  stat chairs_total - sum(rental.chairs where back = no), "chairs free"
+  stat tents_total - sum(rental.tents where back = no), "tents free"
+each rental where back = no sort at as r empty "Everything is back in the store."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.customer bold
+      r.chairs "chairs," r.tents "tents" faint
+    r.fee bold
+    button "Returned" tap set r.back = yes
+"Rent earned this month" sum(rental.fee month) head
+===
+@rich domain=r1_bike_hire_shop topic=bicycle_hire_in_out style=detailed
+bicycle hire shop on the canal road. each bike has a tag and a rate per day. i want to see which bikes are out and which are in, tap to hire for one or two days, tap returned, and how much each bike earned this month
+needs: add a bike with tag and daily rate | show if each bike is in or out | tap to hire a bike for 1 or 2 days | tap returned when it is back | what each bike earned this month
+---
+app "Bike Hire" bike ocean
+table bike tag text, rate money
+table hire bike ref bike, days num 1..30 = 1, back bool
+topbar "Bike Hire", bike, "Add bike"
+row gap 2
+  stat count(bike) - count(hire where back = no), "bikes in the shop"
+  stat sum(hire.days month), "bike days hired this month"
+each bike sort tag as b empty "No bikes yet. Add each bike with its daily rate."
+  let out = count(b.hire where back = no)
+  stack card gap 2 tap edit b
+    row gap 2
+      b.tag bold grow
+      if(out > 0, "Out", "In") bold color if(out > 0, warn, good)
+    if out = 0
+      row gap 1
+        button "Hire 1 day" tap add hire bike = b, days = 1
+        button "Hire 2 days" tap add hire bike = b, days = 2
+    else
+      button "Returned" fill accent tap set all hire.back = yes where bike = b
+    "Earned this month" sum(b.hire.days month) * b.rate faint
+===
+@rich domain=r1_fabric_by_metre topic=cloth_cut_by_metre style=custom_ui dark
+i sell cloth by the metre from rolls. each roll has the metres bought and a rate per metre. i set the length the customer wants with a slider, tap cut on the roll, and it takes those metres off and shows the price. today's money at the top
+needs: add a roll with name, metres bought and rate per metre | slider for the length to cut | cut button that records the sale from a roll | metres left on each roll | money taken today
+---
+app "Cloth by Metre" tag teal dark
+table fabric name text, bought num 1..1000 unit "m", rate money
+table cut fabric ref fabric, metres num 0.25..50
+state len num = 2.5
+topbar "Cloth by Metre", fabric, "Add roll"
+statcard sum(cut today, it.metres * it.fabric.rate), "taken today from" sum(cut.metres today) "metres"
+"Length to cut" len "m" faint
+slider len 0.5..10
+each fabric sort name as f empty "No rolls yet. Add a roll with its metres and rate."
+  let left = f.bought - sum(f.cut.metres)
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      left "m left ·" f.rate "per metre" faint color if(left < 5, warn, muted)
+    button "Cut" len "m" fill accent tap add cut fabric = f, metres = len
+    len * f.rate bold
+===
+@rich domain=r1_bangle_matrix topic=bangle_colour_size_stock style=custom_ui
+bangles shop. stock goes by colour and by size, 24, 26 and 28. i want a table with colours down the side and sizes across, each cell showing boxes left, and tapping a cell sells one box. adding new boxes should be simple too
+needs: add boxes with colour, size and number | table of colours by sizes showing boxes left | tap a cell to sell one box | undo the last sale | total boxes in stock
+---
+app "Bangle Stock" star pink
+table lot colour pick Red|Green|Gold|Blue|Black = Red, size pick S24|S26|S28 = S26, boxes num 1..500
+table sold colour pick Red|Green|Gold|Blue|Black = Red, size pick S24|S26|S28 = S26, boxes num 1..50 = 1
+topbar "Bangle Stock", lot, "Add boxes"
+statcard sum(lot.boxes) - sum(sold.boxes), "boxes in stock," sum(sold.boxes today) "sold today"
+"Tap a cell when a box is sold" faint
+grid 4 gap 1
+  box
+  each options lot.size as s
+    s bold align center
+  each options lot.colour as c
+    c bold
+    each options lot.size as s
+      let left = sum(lot.boxes where colour = c and size = s) - sum(sold.boxes where colour = c and size = s)
+      stack radius 8 pad 1 gap 0 align center fill if(left < 3, warn, soft) tap add sold colour = c, size = s, boxes = 1
+        left bold
+button "Undo last sale" tap remove last(sold today)
+===
+@rich domain=r1_scrap_dealer_godown topic=kabadi_scrap_buying_weights style=detailed
+kabadi shop, i buy paper, iron, plastic, copper and tin by weight. rates change so i keep a rate for each in settings. pick the material, set kilos, see what to pay and tap bought. i also sell to the big dealer so i need to record sales and see kilos still in my godown per material
+needs: rates per kg for each material in settings | pick material and set kilos | amount to pay shown from weight and rate | tap bought to save the purchase | kilos in the godown per material
+---
+app "Scrap Dealer" scale purple
+table buy material pick Paper|Iron|Plastic|Copper|Tin = Paper, kg num 0.5..2000, cost money
+table sell material pick Paper|Iron|Plastic|Copper|Tin = Paper, kg num 1..5000, amount money
+setting paper_rate money = 40 "Paper per kg"
+setting iron_rate money = 120 "Iron per kg"
+setting plastic_rate money = 70 "Plastic per kg"
+setting copper_rate money = 1400 "Copper per kg"
+setting tin_rate money = 90 "Tin per kg"
+state mat pick Paper|Iron|Plastic|Copper|Tin = Paper
+state w num = 5
+let rate = if(mat = Paper, paper_rate, if(mat = Iron, iron_rate, if(mat = Plastic, plastic_rate, if(mat = Copper, copper_rate, tin_rate))))
+topbar "Scrap Dealer", sell, "Record sale"
+choice mat
+"Weight" w "kg" faint
+slider w 1..200
+statcard w * rate, "to pay for" w "kg of" mat
+button "Bought" fill accent tap add buy material = mat, kg = w, cost = w * rate
+section "In the godown", "kg"
+  each options buy.material as k
+    row
+      k bold grow
+      sum(buy.kg where material = k) - sum(sell.kg where material = k) "kg" bold
+===
+@rich domain=r1_chicken_shop_birds topic=poultry_shop_birds_and_weight style=multi_feature
+chicken shop. birds come in the morning from the farm, some die, and i sell by weight. i want to log birds received, tap when i sell birds with the weight on a slider and my rate per kg, tap lost when one dies and see how many birds are left
+needs: log birds received | slider for the weight of a sale and number of birds | price from weight and rate per kg | tap to record a lost bird | birds left in the shop
+---
+app "Chicken Shop" food red
+table delivery birds num 1..2000
+table sale birds num 1..50, kg num 0.5..100, amount money
+table loss birds num 1..200
+setting rate money = 520 "Price per kg"
+state nb num = 1
+state kgw num = 1.5
+let left = sum(delivery.birds) - sum(sale.birds) - sum(loss.birds)
+topbar "Chicken Shop", delivery, "Birds received"
+row gap 2
+  stat left, "birds in the shop"
+  stat sum(sale.amount today), "sold today"
+row gap 2 align center
+  "Birds" nb bold grow
+  button "-" tap set nb = max(nb - 1, 1)
+  button "+" tap set nb = nb + 1
+"Weight" kgw "kg" faint
+slider kgw 0.5..10
+row gap 1
+  button "Sell for" kgw * rate fill accent tap add sale birds = nb, kg = kgw, amount = kgw * rate
+  button "Lost 1 bird" tap add loss birds = 1
+===
+@rich domain=r1_courier_cod_cash topic=courier_cod_cash_deposit style=detailed
+i deliver cash on delivery parcels for a courier company. every parcel has a tracking id and the amount to collect. tap delivered or returned, show the cash i am carrying that must be deposited and note each deposit i make
+needs: add a parcel with tracking id and amount to collect | filter parcels by out, delivered or returned | tap delivered or returned | cash in hand to deposit | record a deposit
+---
+app "COD Desk" package grey
+table parcel track text, cod money, status pick Out|Delivered|Returned = Out
+table deposit amount money
+state tab pick Out|Delivered|Returned = Out
+let cash = sum(parcel.cod where status = Delivered) - sum(deposit.amount)
+topbar "COD Desk", parcel, "Add parcel"
+row gap 2
+  stat cash, "cash with you to deposit"
+  stat count(parcel where status = Out), "parcels out"
+choice tab
+each parcel where status = tab sort at desc as p empty "No parcels here."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.track bold
+      "Collect" p.cod faint
+    if p.status = Out
+      button "Delivered" fill accent tap set p.status = Delivered
+      button "Returned" tap set p.status = Returned
+section "Deposits"
+  form deposit, "Deposit cash"
+  list deposit top 5, "No deposits yet."
+===
+@rich domain=r1_school_van_fees topic=school_van_fee_and_fuel style=multi_feature
+i run a school van with about twenty kids. each child has a monthly fee. i tick when it is received this month, write fuel and repair costs as they come, and want the month's profit and who has not paid
+needs: add a child with route and monthly fee | tick when this month's fee is received | write fuel and repair costs | fees collected this month minus costs as profit | list of children who have not paid
+---
+app "School Van" bus ocean
+table kid name text, route pick Morning|Afternoon|Both = Both, fee money
+table feepaid kid ref kid
+table cost note text, amount money
+let collected = sum(kid, it.fee * min(count(it.feepaid month), 1))
+topbar "School Van", kid, "Add child"
+row gap 2
+  stat collected, "fees collected"
+  stat collected - sum(cost.amount month), "profit this month"
+each kid sort name as k empty "No children yet. Add each with the monthly fee."
+  row card gap 2 tap edit k swipe remove k
+    toggle k.feepaid month
+    stack grow gap 0
+      k.name bold
+      k.route "· fee" k.fee faint
+    if count(k.feepaid month) = 0
+      "Not paid" bold color warn
+section "Fuel and repairs", "this month" sum(cost.amount month)
+  form cost, "Save cost"
+  list cost month, "No costs this month."
+===
+@rich domain=r1_water_tanker_trips topic=water_tanker_trips_net style=detailed dark
+water tanker owner. each trip i write the area, gallons, what the customer paid and the diesel i burnt. show trips today with my net, a bar chart of trips per day against my target of four trips and the areas i supply most
+needs: log a trip with area, gallons, price and diesel cost | trips today and net after diesel | bar chart of trips per day with a goal line | trips goal setting | areas supplied most this month
+---
+app "Tanker Trips" drop mint dark
+table trip area text, gallons num 500..10000 = 2000, price money, fuel money = 0
+setting goal num = 4 "Trips goal per day"
+topbar "Tanker Trips", trip, "Log trip"
+statcard count(trip today), "trips today, net" sum(trip.price today) - sum(trip.fuel today), goal
+section "Trips per day"
+  goalbars last 7 days, count(trip on it), goal
+section "Where I deliver", "gallons this month"
+  share trip month by area, sum(it.gallons), it.key
+list trip today, "No trips yet today."
+===
+@rich domain=r1_wholesale_order_book topic=wholesale_orders_by_shop style=multi_feature
+wholesale godown. shopkeepers phone in orders and i write them down: shop, what they want and the amount. i want pending orders grouped by shop so the van loads one shop at a time, a sent button and the total value still to dispatch
+needs: take an order with shop, items and amount | pending orders grouped by shop | sent button on each order | total value still to dispatch | add a new shop
+---
+app "Order Book" package plum
+table retailer name text, area text?
+table order retailer ref retailer, items text, amount money, sent bool
+topbar "Order Book", order, "Take order"
+statcard sum(order.amount where sent = no), "to dispatch to" count(retailer, count(it.order where sent = no) > 0) "shops"
+each order where sent = no by retailer.name as g empty "No pending orders. The godown is caught up."
+  row
+    g.key bold grow
+    sum(g.amount) faint
+  each g as o
+    row card gap 2 tap edit o swipe remove o
+      o.items grow
+      o.amount bold
+      button "Sent" tap set o.sent = yes
+section "Shops"
+  form retailer, "Save shop"
+===
+@rich domain=r1_distributor_visits topic=distributor_shop_visit_round style=custom_ui
+i am a distributor salesman with a list of shops that must be visited every week. i want to see which shops are overdue for a visit, tap visited with the order i took, and see the orders i brought each day against a target
+needs: add a shop with area | setting for visit every how many days | list shows which shops need a visit | tap visited and save the order amount | bar chart of orders per day with a target line
+---
+app "Route Visits" map ink
+table shop name text, area text?
+table visit shop ref shop, order money = 0
+setting every_days num 1..60 = 7 "Visit each shop every (days)"
+setting goal money = 50000 "Daily order target"
+state amt money = 0
+topbar "Route Visits", shop, "Add shop"
+count(shop, due(it.visit, every_days)) "shops need a visit" head
+field amt "Order taken at this visit"
+each shop sort name as s empty "No shops yet. Add the shops on your route."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.area "· last visit" since(s.visit) "days ago" faint
+    if due(s.visit, every_days)
+      button "Visited" fill accent tap add visit shop = s, order = amt then set amt = 0
+    else
+      "Done" faint
+section "Orders per day"
+  goalbars last 7 days, sum(visit.order on it), goal
+===
+@rich domain=r1_masala_shop_tiles topic=spice_shop_weight_prices style=short
+masala shop. tiles for each spice, i set the grams and tap to sell
+needs: add a spice with price per 100 g | slider for the weight in grams | tiles showing the price for that weight | tap a tile to record the sale | today's money
+---
+app "Masala Shop" leaf plum
+table spice name text, rate money
+table sale spice ref spice, grams num 10..5000, amount money
+state w num = 250
+topbar "Masala Shop", spice, "Add spice"
+"Weight" w "g" faint
+slider w 50..1000
+grid 2 gap 1
+  each spice sort name as sp empty "No spices yet. Add each with its price per 100 g."
+    stack card gap 0 tap add sale spice = sp, grams = w, amount = w * sp.rate / 100 swipe remove sp
+      sp.name bold
+      sp.rate "per 100 g" faint
+      w * sp.rate / 100 big
+statcard sum(sale.amount today), "sold today in" plural(count(sale today), "sale")
