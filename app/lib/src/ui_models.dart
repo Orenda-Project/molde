@@ -5,7 +5,7 @@ import 'models.dart';
 
 String mb(num bytes) => '${(bytes / 1048576).round()} MB';
 
-const String kPrivacy = 'Privacy. Molde works offline. Your apps and everything you enter stay on this phone and are never sent anywhere. '
+const String kPrivacy = 'Molde works offline. Your apps and everything you enter stay on this phone and are never sent anywhere. '
     'The only things this app downloads are the list of available models and the model file you choose, from Hugging Face. '
     'Nothing about you, your requests or your data is sent with those downloads. '
     'The screen that shows your app is locked to the page inside this app and cannot open other addresses.';

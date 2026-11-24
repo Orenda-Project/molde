@@ -83,7 +83,11 @@ class ModelDownloader {
       var lastBytes = have;
       while (true) {
         if (_cancel) return _cancelled(m, part);
-        if (_pause) { _emit(DlStatus(DlState.paused, received: have, total: m.bytes, model: m)); throw DlError('paused'); }
+        if (_pause) {
+          final got = await part.exists() ? await part.length() : 0;
+          _emit(DlStatus(DlState.paused, received: got, total: m.bytes, model: m));
+          throw DlError('paused');
+        }
         have = await part.exists() ? await part.length() : 0;
         if (have >= m.bytes) break;
         try {
