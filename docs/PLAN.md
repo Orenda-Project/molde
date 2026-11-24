@@ -2,6 +2,16 @@
 
 Written 2026-11-23. Replaces the v1 plan (README of 12 Nov and `docs/plan/01` to `04`), which stays in the repo as history.
 
+## 0. Where this is going (Kamal, 2026-11-24)
+
+The tiny model is the product. No template library, no picking from a fixed set of screens: quality problems are fixed with data, language design, decoding or model size, never by replacing generation with templates.
+
+The long-term use is **lessons whose UI each learner shapes by chat**. A bigger model (server side or offline beforehand) writes the deep lesson content: the lesson plan, explanations, examples, questions. The tiny on-device model builds the UI that presents that lesson, the way the learner asks for it ("show it as flashcards", "one step at a time", "bigger text, dark", "quiz me at the end"), and changes it when asked. Consequences for the design:
+
+- The tiny model lays out content it is GIVEN. Programs refer to lesson content by name (sections, steps, questions, terms, images) instead of copying the text, so programs stay short and the content stays exact.
+- The language needs lesson pieces: readable long text, sections, cards, step-through with progress, reveal, flashcards, multiple-choice and short-answer questions with feedback, a score, and learner notes, all generic (level 1 plus std).
+- Training data and evaluation get a lesson track: (lesson content + learner request) -> UI program, and UI edits by chat.
+
 ## 1. What changes, in one paragraph
 
 In v1 a 2B model wrote HTML and JavaScript. That is about 1,000 tokens per app from a 1.3 GB model, which means minutes of waiting on a cheap phone. In v2 the model writes **MoldeScript**, a small language we design for exactly this job, and a program we write (the runtime) turns it into the app. An app becomes about 100 tokens instead of 1,000, and because the language is small and strict, a model of about 100 to 300 million parameters can learn it. Fewer tokens times a much smaller model is where the speed comes from.
