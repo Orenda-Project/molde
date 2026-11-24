@@ -2,7 +2,7 @@ app "Quiz" star plum
 table item question text, a text, b text, c text, right pick A|B|C
 table answer item ref item, chose pick A|B|C
 let score = count(answer, it.chose = it.item.right)
-topbar "Quiz", item, "Add question"
+topbar item, "Add question"
 goal count(answer), count(item), "right so far:" score
 each item as x
   if count(x.answer) = 0

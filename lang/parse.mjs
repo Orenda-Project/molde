@@ -268,7 +268,7 @@ const BUILD = {
   },
   'let-stmt': n => ({ kind: 'let', name: id(child(n, 'ident')), params: children(n, 'param').length ? children(n, 'param').map(paramOf) : null, e: expr(child(n, 'expr')) }),
   'def-stmt': (n, src) => ({ kind: 'def', name: id(child(n, 'ident')), params: children(n, 'param').map(p => ({ ...paramOf(p), dflt: child(p, 'arg') ? src.slice(child(p, 'arg').s, child(p, 'arg').e) : null })) }),
-  'call-stmt': (n, src) => ({ kind: 'call', name: id(child(n, 'ident')), args: children(n, 'arg').map(a => src.slice(a.s, a.e)) }),
+  'call-stmt': (n, src) => ({ kind: 'call', name: id(child(n, 'ident')), args: [...children(n, 'arg'), ...children(n, 'later-arg')].sort((a, b) => a.s - b.s).map(a => src.slice(a.s, a.e)) }),
   'slot-stmt': () => ({ kind: 'slot' }),
   'screen-stmt': n => {
     const ids = children(n, 'ident');

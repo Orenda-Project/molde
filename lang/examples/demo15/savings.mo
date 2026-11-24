@@ -2,7 +2,7 @@ app "Savings" coin mint
 table deposit amount money, note text?
 setting goal money = 100000 "Savings goal"
 let total = sum(deposit.amount)
-topbar "Savings", deposit, "Other amount"
+topbar deposit, "Other amount"
 statcard total, "saved of" goal, goal
 quick deposit, amount, [1000, 5000]
 section "Last 7 days", "this month:" sum(deposit.amount month)
