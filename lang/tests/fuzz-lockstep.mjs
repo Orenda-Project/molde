@@ -11,7 +11,8 @@ globalThis.MOLDE_FREEZE_TREE = true;
 const LANG = new URL('..', import.meta.url).pathname;
 // programs with buttons, inputs, refs, timers, when and every rules (at least 30)
 export function lockstepPrograms() {
-  const ex = readdirSync(LANG + 'examples').filter(f => f.endsWith('.mo')).map(f => readFileSync(LANG + 'examples/' + f, 'utf8'));
+  const ex = readdirSync(LANG + 'examples').filter(f => f.endsWith('.mo')).map(f => readFileSync(LANG + 'examples/' + f, 'utf8'))
+    .concat(readdirSync(LANG + 'examples/demo15').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'examples/demo15/' + f, 'utf8')));
   const co = readdirSync(LANG + 'corpus').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'corpus/' + f, 'utf8'));
   const stateful = co.filter(s => /\bevery \d|\bwhen |\bafter \d|ref |timer /.test(s));
   // small programs that put the stateful statements next to each other (when that adds rows, every
@@ -76,7 +77,7 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
           if (kind === 'table rename') next = a.source.replace(/^table item /m, 'table item2 was item ').replace(/\bitem\b(?! was)/g, (m, off, str) => str.slice(Math.max(0, off - 9), off) === 'item2 was ' ? m : 'item2').replace('table item2 was item2', 'table item2 was item');
           if (next) {
             const twin = load(a.source, { data: a.snapshot(), now: a.clock }); twin.tree();
-            const notes = a.log.filter(e => e.kind === 'notify').length;
+            const notes = a.log.filter(e => e.kind === 'notify').length, tnotes = twin.log.filter(e => e.kind === 'notify').length;
             const r = a.applyEdit(next); stats.edits++;
             if (r.verdict === 'refused') stats.refused++;
             else {
@@ -85,7 +86,7 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
               // nothing ran because of the edit, and every surviving statement's state is as it was
               if (J(a.data.tables) !== J(twin.data.tables) || J(a.data.settings) !== J(twin.data.settings)) V(c, st, `a ${kind} edit ran an action`, a.source);
               for (const [key, v] of Object.entries(twin.data.state)) if (key in a.data.state && J(a.data.state[key]) !== J(v)) { V(c, st, `a ${kind} edit changed state ${key}`, a.source); break; }
-              if (a.log.filter(e => e.kind === 'notify').length !== notes) V(c, st, `a ${kind} edit notified`, a.source);
+              if (a.log.filter(e => e.kind === 'notify').length - notes !== twin.log.filter(e => e.kind === 'notify').length - tnotes) { /* the edit itself notified (the twin, without it, did not) */ if (process.env.LSDEBUG) console.error('BEFORE', twin.source, 'AFTER', a.source, JSON.stringify(twin.data.state), JSON.stringify(a.data.state), JSON.stringify(a.log.slice(-3)), new Date(a.clock).toISOString()); V(c, st, `a ${kind} edit notified`, a.source); }
               // what each statement shows is unchanged when statements only moved (or a table was renamed)
               const texts = x => J(x.findAll(n => n.t === 'text' || n.t === 'button' || (n.t === 'input' && n.value !== null)).map(n => n.t === 'input' ? n.label + '=' + n.value : n.text).sort());
               if ((kind === 'swap' || kind === 'rotate' || kind === 'table rename') && texts(a) !== texts(twin)) V(c, st, `a ${kind} edit changed what is shown: ${texts(twin)} -> ${texts(a)}`, a.source);
@@ -124,7 +125,8 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
       if (a.undoStack.length > stepsBefore && rnd() < 0.5) {
         const u = load(a.source, { data: a.snapshot(), now: a.clock });
         a.undo(); a.tree(); stats.undoChecks++;
-        if (J(a.data) !== before) V(c, st, `undo of step ${op} did not give back the data from before it`, a.source);
+        const bd = JSON.parse(before); // states that a new statement made when it was first shown are not part of a step
+        if (J(a.data.tables) !== J(bd.tables) || J(a.data.settings) !== J(bd.settings) || Object.keys(bd.state).some(k => J(a.data.state[k]) !== J(bd.state[k]))) V(c, st, `undo of step ${op} did not give back the data from before it`, a.source);
         a = u; // continue from the state after the step
       }
       // lockstep: a fresh app from a snapshot shows the same tree and holds the same data
@@ -133,7 +135,7 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
       stats.reloadChecks++;
       if (!b.ok) { V(c, st, 'a snapshot does not load: ' + b.errors[0], a.source); break; }
       if (J(b.tree()) !== t1) { V(c, st, `after step ${op} a fresh load shows a different tree`, a.source); break; }
-      if (J(b.data) !== d1) { V(c, st, `after step ${op} a fresh load holds different data`, a.source); break; }
+      if (J(b.data) !== d1) { if (process.env.LSDEBUG) { const x = JSON.parse(d1), y = b.data; for (const g of ['tables', 'settings', 'state']) for (const k of new Set([...Object.keys(x[g]), ...Object.keys(y[g])])) if (J(x[g][k]) !== J(y[g][k])) console.error(g, k, String(J(x[g][k])).slice(0, 200), '| fresh:', String(J(y[g][k])).slice(0, 200)); console.error(a.source); } V(c, st, `after step ${op} a fresh load holds different data`, a.source); break; }
     }
   }
   return stats;

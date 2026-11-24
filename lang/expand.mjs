@@ -4,6 +4,7 @@
 // After expansion only level-1 statements remain; the checker then checks them.
 // Browser-safe: the std library text comes from sources.gen.mjs (written by gen-gbnf.mjs).
 import { parse, MoError, asTextLine } from './parse.mjs';
+import { parseText } from './engine.mjs';
 import { lex, join as joinToks } from './lex.mjs';
 import { STD_SOURCES } from './sources.gen.mjs';
 export const VALUE_KINDS = new Set(['num', 'money', 'text', 'bool', 'date', 'time', 'dur', 'color', 'icon']);
@@ -108,7 +109,9 @@ function expandCall(call, defs, errors, stack) {
     if ((p.kind === 'table' || p.kind === 'name') && toks.length === 1 && failedNames.has(toks[0].v)) return null; // its declaring line failed; reported there
     if ((p.kind === 'table' || p.kind === 'name') && !(toks.length === 1 && toks[0].t === 'word')) return err('E_KIND', `"${call.name}" expects a ${p.kind === 'table' ? 'table' : 'name'} for ${p.name}, got "${a}".`, 'pass a single name.');
     if (usedDefault) toks = toks.flatMap(t => (t.t === 'word' && subst.has(t.v)) ? subst.get(t.v) : [t]); // a default may use earlier parameters
-    if (VALUE_KINDS.has(p.kind) && toks.length > 1) toks = [{ t: 'p', v: '(' }, ...toks, { t: 'p', v: ')' }];
+    // a text made of several parts ("of" goal "today") goes in as parts: it fits where the def shows text
+    const parts = p.kind === 'text' && toks.length > 1 && !parseText(joinToks(toks), ['expr']).tree;
+    if (VALUE_KINDS.has(p.kind) && toks.length > 1 && !parts) toks = [{ t: 'p', v: '(' }, ...toks, { t: 'p', v: ')' }];
     subst.set(p.name, toks);
   }
   const n = ++counter;

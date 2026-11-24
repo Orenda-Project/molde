@@ -18,9 +18,12 @@ leaf-stmt ::= table-stmt | setting-stmt | state-stmt | let-stmt | remind-stmt | 
   | image-stmt | space-stmt | divider-stmt | field-stmt | toggle-stmt | choice-stmt | slider-stmt | button-stmt
   | shape-stmt | pt-stmt | tick-stmt | slot-stmt
 
-app-stmt ::= "app" sp string (sp ident)? (sp theme)?
+# the app line: name, icon, colour (a theme or an accent colour), and dark or light to override the phone
+app-stmt ::= "app" sp string (sp ident)? (sp theme)? (sp mode)?
 ask-stmt ::= "ask" sp string (sp string)+
 theme ::= "ocean" | "mint" | "slate" | "ink" | "plum"
+  | "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey"
+mode ::= "dark" | "light"
 
 # ---------- data ----------
 table-stmt ::= "table" sp ident (sp "was" sp ident)? (sp string)? (sp field ("," sp field)*)?
@@ -41,7 +44,8 @@ def-stmt ::= "def" sp ident (sp param ("," sp param)*)?
 param ::= ident sp (pkind | ident) (sp "=" sp arg)?
 pkind ::= "num" | "money" | "text" | "bool" | "date" | "time" | "dur" | "color" | "icon" | "table" | "name" | "src" | "win" | "act"
 call-stmt ::= ident (sp arg ("," sp arg)*)?
-arg ::= actions | source | window | expr
+# a text value may be several parts side by side: statcard ml, "ml of" goal "today", goal
+arg ::= actions | source | window | expr | string (sp tpart)+
 slot-stmt ::= "slot"
 screen-stmt ::= "screen" sp ident sp string (sp ident)?
 
@@ -55,7 +59,8 @@ every-stmt ::= "every" sp dur (sp "if" sp expr)? sp actions
 when-stmt ::= "when" sp expr sp actions
 
 # ---------- structure ----------
-each-stmt ::= "each" sp source (sp "as" sp ident)? (sp "empty" sp string)?
+# empty: the text shown when there is nothing (a quoted text, or a text value such as a component's parameter)
+each-stmt ::= "each" sp source (sp "as" sp ident)? (sp "empty" sp (string | path))?
 source ::= "days" sp window | "options" sp path | list | range | query
 range ::= sum-expr ".." sum-expr
 list ::= "[" lit ("," sp lit)* "]"
