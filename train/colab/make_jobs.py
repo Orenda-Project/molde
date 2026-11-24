@@ -22,6 +22,7 @@ ap.add_argument("--train-chunks", type=int, default=1, help="N sequential train 
 ap.add_argument("--data-dir", default="data/out", help="dataset folder under train/ (train.jsonl, val.jsonl, test_refs.jsonl, dataset_card.json)")
 ap.add_argument("--final-parts", type=int, default=1, help="parts of final.tar (900 MB each): 1 for <=0.4B models in bf16, 2 for 0.8B")
 ap.add_argument("--eval-bs", type=int, default=8, help="1 for hybrid-attention models (Qwen3.5): batched left-padded generation breaks linear-attention layers")
+ap.add_argument("--eval-test2", action="store_true", help="also evaluate data_dir/test2_refs.jsonl (heldout2) into eval_test2/")
 ap.add_argument("--save-f16", action="store_true")
 ap.add_argument("--epoch-range", default="", help="A:B  train epochs A..B in one-epoch chunks (pause_at_epoch), save bf16 weights to Drive after each; when B < total epochs the session ends with a full checkpoint save (--ckpt-parts) instead of final/eval/export")
 ap.add_argument("--total-epochs", type=int, default=0)
@@ -124,7 +125,7 @@ if "eval" in stages:
     ck = shlex.quote(a.chat_kwargs)
     def ev(refs, outn):
         return f"python3 eval_gen.py --model {RUN}/final --data {a.data_dir} {refs}--out {RUN}/{outn} --lang {ROOT}/lang --bs {a.eval_bs} --chat_kwargs {ck}"
-    ecmd = f"cd {ROOT}/train && {ev('', 'eval')} > {RUN}.eval.log 2>&1; {ev('--refs templ_refs.jsonl ', 'eval_templ')} >> {RUN}.eval.log 2>&1; echo EVAL_FINISHED >> {RUN}.eval.log"
+    ecmd = f"cd {ROOT}/train && {ev('', 'eval')} > {RUN}.eval.log 2>&1; {ev('--refs templ_refs.jsonl ', 'eval_templ')} >> {RUN}.eval.log 2>&1; " + (f"{ev('--refs test2_refs.jsonl ', 'eval_test2')} >> {RUN}.eval.log 2>&1; " if a.eval_test2 else "") + f"echo EVAL_FINISHED >> {RUN}.eval.log"
     (d / "38_eval.py").write_text(HEART + "cmd = " + repr(ecmd) + "\n" + f'''
 subprocess.Popen(cmd, shell=True)
 log = heart("{RUN}.eval.log", "EVAL_FINISHED", 1500, "eval_gen.py")
@@ -144,6 +145,7 @@ pk = ["true"]
 if "eval" in stages:
     pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/eval {RUN}/eval")
     pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/eval_templ {RUN}/eval_templ")
+    if a.eval_test2: pk.append(f"python3 {ROOT}/train/colab/pack.py pack {RUN}/eval_test2 {RUN}/eval_test2")
 if "export" in stages and a.gguf_parts > 1 and a.save_f16:
     pk.append(f"python3 {ROOT}/train/colab/pack.py split {RUN}/gguf/{N}-f16.gguf && rm {RUN}/gguf/{N}-f16.gguf")
 if a.ckpt_parts:
@@ -151,7 +153,7 @@ if a.ckpt_parts:
 (d / "40_pack.py").write_text(f'import subprocess\nfor c in {pk!r}:\n    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-300:], r.stderr[-300:])\n    assert r.returncode == 0, c\nprint(subprocess.run("ls -la {RUN} {RUN}/gguf", shell=True, capture_output=True, text=True).stdout)\n')
 save = {}
 if "eval" in stages:
-    save |= {f"{RUN}/eval.tar.part00": DR, f"{RUN}/eval.tar.SHA256SUMS": DR, f"{RUN}/eval/metrics.json": DR, f"{RUN}/eval_templ.tar.part00": DR, f"{RUN}/eval_templ.tar.SHA256SUMS": DR}
+    save |= {f"{RUN}/eval.tar.part00": DR, f"{RUN}/eval.tar.SHA256SUMS": DR, f"{RUN}/eval/metrics.json": DR, f"{RUN}/eval_templ.tar.part00": DR, f"{RUN}/eval_templ.tar.SHA256SUMS": DR} | ({f"{RUN}/eval_test2.tar.part00": DR, f"{RUN}/eval_test2.tar.SHA256SUMS": DR} if a.eval_test2 else {})
 if "export" in stages:
     save[f"{RUN}/gguf/SHA256SUMS"] = DR + "/gguf"
     for q in (["f16"] if a.save_f16 else []) + a.quants.split():

@@ -14,7 +14,7 @@ Output (out_dir): log.jsonl, ckpt/ (model + optimizer + state, for resume), fina
 DONE (written when the schedule is complete), PAUSED (when max_minutes hit; run again to resume).
 Precision: auto = bf16 on Ampere+, else fp32 for <=400M params, else fp16 autocast with GradScaler.
 """
-import argparse, json, math, os, pathlib, random, sys, time
+import argparse, json, math, os, pathlib, random, shutil, sys, time
 
 import torch
 import torch.utils.checkpoint
@@ -116,6 +116,9 @@ def main():
         return cfg["lr"] * (cfg["min_lr_ratio"] + (1 - cfg["min_lr_ratio"]) * 0.5 * (1 + math.cos(math.pi * min(1, p))))
     step = 0
     if (ck / "state.json").exists():
+        for nm in ("best.json", "orig_vocab.txt"):
+            if (ck / "extra" / nm).exists() and not (out / nm).exists(): shutil.copy(ck / "extra" / nm, out / nm)
+        if (ck / "extra" / "best").exists() and not (out / "best").exists(): shutil.copytree(ck / "extra" / "best", out / "best")
         st = json.load(open(ck / "state.json")); step = st["step"]
         opt.load_state_dict(torch.load(ck / "opt.pt", map_location=dev))
         log(event="resumed", step=step)
@@ -176,7 +179,10 @@ def main():
         tmp = out / "ckpt_tmp"; tmp.mkdir(exist_ok=True)
         model.save_pretrained(tmp / "model", safe_serialization=True); tok.save_pretrained(tmp / "model")
         torch.save(opt.state_dict(), tmp / "opt.pt"); json.dump({"step": step}, open(tmp / "state.json", "w"))
-        import shutil
+        ex = tmp / "extra"; ex.mkdir(exist_ok=True)
+        for nm in ("best.json", "orig_vocab.txt"):
+            if (out / nm).exists(): shutil.copy(out / nm, ex / nm)
+        if (out / "best").exists(): shutil.copytree(out / "best", ex / "best", dirs_exist_ok=True)
         if ck.exists(): shutil.rmtree(ck)
         tmp.rename(ck); log(event="ckpt", step=step)
 
@@ -211,8 +217,9 @@ def main():
                 sc = checker_pass(cfg["es_val_n"]); log(event="val_checker", step=step, epoch=step // spe, checker_pass=round(sc, 3))
                 if sc > best["score"]:
                     best.update(score=sc, epoch_bad=0)
-                    import shutil
-                    shutil.rmtree(out / "best", ignore_errors=True); model.save_pretrained(out / "best", safe_serialization=True)
+                    shutil.rmtree(out / "best", ignore_errors=True); (out / "best").mkdir(parents=True)
+                    from safetensors.torch import save_file
+                    save_file({k: v.detach().to(torch.bfloat16).cpu().contiguous() for k, v in model.state_dict().items()}, str(out / "best" / "model.safetensors"), metadata={"format": "pt"})
                     (out / "best.json").write_text(json.dumps({"step": step, "checker_pass": sc}))
                 else:
                     best["epoch_bad"] += 1
@@ -235,13 +242,12 @@ def main():
     model.to(dt).save_pretrained(out / "final", safe_serialization=True); tok.save_pretrained(out / "final")
     json.dump({k: v for k, v in cfg.items()}, open(out / "final" / "train_config.json", "w"), indent=1)
     if cfg["add_molde_tokens"] and (out / "final" / "tokenizer.json").exists():
-        orig_vocab = int((out / "orig_vocab.txt").read_text())
+        orig_vocab = int((out / "orig_vocab.txt").read_text()) if (out / "orig_vocab.txt").exists() else len(AutoTokenizer.from_pretrained(cfg["tokenizer"] or cfg["model"]))
         # llama.cpp's SentencePiece path reads added tokens from added_tokens.json (tokenizer.json alone would export [PAD] placeholders)
         json.dump({t: i for t, i in tok.get_vocab().items() if i >= orig_vocab}, open(out / "final" / "added_tokens.json", "w"))
     if True:   # llama.cpp's converter needs the SentencePiece file for Gemma (tokenizer.json alone fails an assert)
         try:
             from huggingface_hub import hf_hub_download
-            import shutil
             shutil.copy(hf_hub_download(cfg["tokenizer"] or cfg["model"], "tokenizer.model"), out / "final" / "tokenizer.model")
         except Exception as e:
             print("no tokenizer.model for this base (fine for BPE models):", type(e).__name__)
