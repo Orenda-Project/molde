@@ -1,0 +1,486 @@
+@rich domain=deadline_board topic=deadline tracker style=detailed
+my freelance clients keep moving things around so I need a place to list every deadline with its due date and hours of work, tick them off when sent, show how many are overdue or due this week, and sort the open ones by date.
+needs: add a deadline with name, due date and hours | tick a deadline as done | count of overdue deadlines | count due within 7 days | open deadlines sorted by due date with days left or days late
+---
+app "Deadlines" flag ocean
+table task name text, due date, hours num 1..200 = 2, done bool
+let late = count(task where done = no and due < today)
+let soon = count(task where done = no and due >= today and due - today <= 7)
+topbar "Deadlines", task, "Add deadline"
+row gap 2
+  statcard late, "overdue"
+  statcard soon, "due in 7 days"
+section "Open work", sum(task.hours where done = no) "h left"
+  each task where done = no sort due as t empty "Nothing due. Add a deadline with the button above."
+    row gap 2 tap edit t swipe remove t
+      stack grow gap 0
+        t.name bold
+        if(t.due < today, join("Late by ", plural(today - t.due, "day")), join("Due in ", plural(t.due - today, "day"))) faint color if(t.due < today, bad, muted)
+      toggle t.done
+===
+@rich domain=work_hours topic=work hours log style=multi_feature
+log my shifts with the date, start and stop time and the unpaid break. i want the hours worked this week against a 40 hour target and a bar chart of hours per day for the last week.
+needs: log a shift with date, start, stop and break | hours worked this week against a target | bar chart of hours per day for the last 7 days | list of recent shifts with hours each
+---
+app "Work Hours" clock mint
+table shift day date, start time, stop time, brk dur = 30m
+setting target num = 40 "Weekly hours target"
+let wk = sum(shift week, (it.stop - it.start - it.brk) / 1h)
+topbar "Work Hours", shift, "Log shift"
+statcard round(wk), "hours worked this week", target
+section "Last 7 days", "hours per day"
+  plot 0..7, 0..10 axes gridlines
+    each days last 7 days as d
+      rect index + 0.15, 0, 0.7, sum(shift on d, (it.stop - it.start - it.brk) / 1h) fill accent radius 2
+      tick index + 0.5, dayname(d)
+each shift sort day desc top 10 as s empty "No shifts yet. Log your first one."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.day bold
+      s.start "to" s.stop faint
+    fixed((s.stop - s.start - s.brk) / 1h, 1) "h" bold
+===
+@rich domain=rent_roll topic=rent due dates style=detailed
+i own a few flats. need each tenant with their flat, monthly rent and due day, a button to mark rent paid, how much collected this month versus expected, and a late flag when the due day has gone by and rent is still owed
+needs: add a tenant with flat, rent and due day | button to record a payment | collected this month versus expected rent | late flag when rent is owed after the due day
+---
+app "Rent Roll" home slate
+table tenant name text, flat text, rent money, due_day num 1..28 = 1
+table payment tenant ref tenant, amount money
+let expected = sum(tenant.rent)
+let got = sum(payment.amount month)
+topbar "Rent Roll", tenant, "Add tenant"
+statcard got, "collected this month of" expected, expected
+each tenant sort flat as t empty "No tenants yet. Add a flat and its monthly rent."
+  let owed = max(0, t.rent - sum(t.payment.amount month))
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      "Flat" t.flat "due on day" t.due_day faint
+      if owed > 0 and monthday(today) > t.due_day
+        "Late" color bad bold
+    if owed > 0
+      button "Paid" tap add payment tenant = t, amount = owed
+    else
+      "Paid" color good bold
+===
+@rich domain=warranty_box topic=warranty countdown style=short
+warranty countdown for my gadgets, shows days left
+needs: add an item with purchase date and warranty months | days left until warranty ends | switch between active and expired | weekly chart of purchases
+---
+app "Warranty" shield ink dark
+table item name text, bought date, months num 1..120 = 12, price money?
+state view pick Active|Expired = Active
+let ends(i item) = addmonths(i.bought, i.months)
+topbar "Warranty", item, "Add item"
+choice view
+each item where (view = Active and addmonths(bought, months) >= today) or (view = Expired and addmonths(bought, months) < today) sort bought as i empty "Nothing here. Add a gadget with its purchase date."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      "Bought" i.bought "for" i.months "months" faint
+    if(ends(i) < today, "Expired", join(plural(ends(i) - today, "day"), " left")) bold
+section "Spent on gadgets", "last 7 days"
+  daybars last 7 days, sum(item.price on it)
+===
+@rich domain=class_schedule topic=class schedule durations style=multi_feature
+college timetable for me: each class has a day, start time and length in minutes. let me pick a weekday chip and see that day's classes in order with the end time, and total class hours for the day.
+needs: add a class with day, start time and length | choose a weekday to filter | classes sorted by start time with end time | total class hours for the chosen day
+---
+app "Timetable" school plum
+table lesson subject text, day pick Mon|Tue|Wed|Thu|Fri = Mon, start time, mins num 15..240 = 60
+state d pick Mon|Tue|Wed|Thu|Fri = Mon
+let hrs = sum(lesson, if(it.day = d, it.mins, 0)) / 60
+topbar "Timetable", lesson, "Add class"
+choice d
+statcard fixed(hrs, 1), "class hours on this day"
+each lesson where day = d sort start as l empty "No classes on this day. Add one with the button above."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.subject bold
+      l.start "to" l.start + l.mins * 1m faint
+    l.mins "min" faint
+===
+@rich domain=loan_instalments topic=loan instalments style=detailed
+we took a loan from a cousin and pay it back in instalments. keep each payment with date and amount, show total paid, how much is still left from the loan amount, and a bar of the percent repaid.
+needs: record an instalment with amount | total paid so far | amount still left | progress bar of percent repaid | list of payments by date
+---
+app "Loan" coin red
+table instalment amount money, note text?
+setting loan money = 240000 "Loan amount"
+setting monthly money = 20000 "Monthly instalment"
+let paid = sum(instalment.amount)
+let left = max(0, loan - paid)
+topbar "Loan", instalment, "Add payment"
+goal paid, loan, "repaid so far"
+row gap 2
+  statcard left, "still to pay"
+  statcard ceil(left / monthly), "instalments to go"
+list instalment by day, "No payments yet. Add the first instalment."
+===
+@rich domain=shift_pay topic=shift pay style=multi_feature
+for my restaurant staff: record each shift with name, hours and hourly rate, show the pay for the shift (hours times rate), total payroll this week and a chart of the pay by day
+needs: add a shift with name, hours and rate | pay per shift as hours times rate | total payroll this week | bar chart of pay per day
+---
+app "Shift Pay" money orange
+table shift who text, hours num 0.5..16 = 8, rate money = 12
+let payroll = sum(shift week, it.hours * it.rate)
+topbar "Shift Pay", shift, "Add shift"
+statcard payroll, "payroll this week"
+section "Pay per day", "last 7 days"
+  plot 0..7, 0..max(10, max(days last 7 days, sum(shift on it, it.hours * it.rate))) axes
+    each days last 7 days as d
+      rect index + 0.15, 0, 0.7, sum(shift on d, it.hours * it.rate) fill accent radius 2
+      tick index + 0.5, dayname(d)
+each shift top 12 as s empty "No shifts yet. Add the first one."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.who bold
+      s.hours "h at" s.rate faint
+    s.hours * s.rate bold
+===
+@rich domain=subscription_renewals topic=subscription renewals style=detailed
+all my streaming and software subscriptions with monthly price and the date they renew. tell me the monthly total, what renews in the next 10 days, and show the total per year
+needs: add a subscription with price and renewal date | monthly total | subscriptions renewing within 10 days | yearly cost | tap to renew by a month
+---
+app "Subscriptions" bell yellow
+table sub name text, price money, renews date
+let monthly = sum(sub.price)
+topbar "Subscriptions", sub, "Add subscription"
+row gap 2
+  statcard monthly, "per month"
+  statcard monthly * 12, "per year"
+section "Renewing soon", count(sub where renews >= today and renews - today <= 10) "in 10 days"
+  each sub where renews - today <= 10 sort renews as s empty "Nothing renews in the next 10 days."
+    row gap 2
+      stack grow gap 0
+        s.name bold
+        s.renews faint
+      s.price bold
+      button "Renewed" tap set s.renews = addmonths(s.renews, 1)
+list sub, "No subscriptions yet. Add the ones you pay for."
+===
+@rich domain=baby_vaccines topic=vaccination schedule style=multi_feature
+vaccination tracker for my baby, each shot has a name, the date it is due and a tick for given. show the next due shot with the days left, and how many are given out of the total
+needs: add a vaccine with due date | tick when given | next due shot with days left | given out of total progress | overdue shots highlighted
+---
+app "Baby Shots" baby green
+table shot name text, due date, given bool
+let total = count(shot)
+let did = count(shot where given = yes)
+let nxt = nth(shot where given = no sort due, 1)
+topbar "Baby Shots", shot, "Add vaccine"
+statcard did, "of" plural(total, "shot") "given", total
+if count(shot where given = no) > 0
+  section "Next shot"
+    nxt.name big
+    if(nxt.due < today, join("Overdue by ", plural(today - nxt.due, "day")), join("In ", plural(nxt.due - today, "day"))) color if(nxt.due < today, bad, muted)
+each shot sort due as s empty "No vaccines yet. Add the first one from the schedule your clinic gave you."
+  row card gap 2 tap edit s swipe remove s fill if(s.given = no and s.due < today, soft, surface)
+    stack grow gap 0
+      s.name bold
+      s.due faint
+    toggle s.given
+===
+@rich domain=assignment_board topic=assignment board style=custom_ui
+kanban style board for my uni assignments. three columns to do, doing and done as chips i can tap, course, due date, and a number showing how many are due within three days
+needs: add an assignment with course, title and due date | switch between to do, doing and done | move an assignment to the next stage | count of assignments due in 3 days
+---
+app "Assignments" pencil teal
+table work course text, title text, due date, stage pick Todo|Doing|Done = Todo
+state tab pick Todo|Doing|Done = Todo
+topbar "Assignments", work, "Add assignment"
+count(work where stage != Done and due >= today and due - today <= 3) "due within 3 days" head
+row gap 1
+  each options work.stage
+    button it count(work where stage = it) fill if(tab = it, accent, soft) grow tap set tab = it
+each work where stage = tab sort due as w empty "Nothing in this column yet."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.title bold
+      w.course "due in" plural(w.due - today, "day") faint
+    if w.stage = Todo
+      button "Start" tap set w.stage = Doing
+    if w.stage = Doing
+      button "Done" tap set w.stage = Done
+===
+@rich domain=fuel_log topic=fuel consumption log style=detailed
+fill-up log for my car. each time i enter the odometer, litres and price paid. show kilometres per litre for the last fill, total spent this month and a line chart of cost per fill
+needs: add a fill-up with odometer, litres and cost | km per litre for the latest fill | total fuel spend this month | line chart of cost per fill
+---
+app "Fuel Log" car blue
+table fill odometer num 0.., litres num 1..200, cost money
+let lastfill = nth(fill sort odometer desc, 1)
+let prevfill = nth(fill sort odometer desc, 2)
+let kpl = if(count(fill) > 1, (lastfill.odometer - prevfill.odometer) / lastfill.litres, 0)
+topbar "Fuel Log", fill, "Add fill-up"
+row gap 2
+  statcard fixed(kpl, 1), "km per litre, last fill"
+  statcard sum(fill.cost month), "spent this month"
+section "Cost per fill"
+  trend fill top 10, it.cost
+each fill sort odometer desc top 8 as f empty "No fill-ups yet. Add one after your next stop at the pump."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.odometer "km" bold
+      f.litres "litres" faint
+    f.cost bold
+===
+@rich domain=library_returns topic=library returns style=multi_feature
+my kids borrow books from the school library, 14 days each. list the books with the borrow date, show the return date and flag the ones overdue, with a count of books to return this week
+needs: add a borrowed book with borrow date | return date is 14 days after | overdue books highlighted | count to return this week | tap to mark returned
+---
+app "Library" book purple
+table loan title text, kid text, borrowed date = today, back bool
+let open = count(loan where back = no)
+let overdue = count(loan where back = no and borrowed + 14 < today)
+topbar "Library", loan, "Add book"
+row gap 2
+  statcard open, "books out"
+  statcard overdue, "overdue"
+each loan where back = no sort borrowed as l empty "All books are back. Add one when a child borrows."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.title bold
+      l.kid "- return by" l.borrowed + 14 faint
+    if l.borrowed + 14 < today
+      "Late" color bad bold
+    else
+      (l.borrowed + 14 - today) "days left" faint
+    button "Back" tap set l.back = yes
+===
+@rich domain=parking_tickets topic=parking tickets style=short
+parking fines, shows what i still owe
+needs: add a ticket with fine and due date | total unpaid fines | tickets past their due date | mark a ticket paid
+---
+app "Parking Fines" tag pink
+table ticket place text, fine money, due date, paid bool
+let owed = sum(ticket.fine where paid = no)
+let late = count(ticket where paid = no and due < today)
+topbar "Parking Fines", ticket, "Add ticket"
+row gap 2
+  statcard owed, "still unpaid"
+  statcard late, "past due date"
+each ticket where paid = no sort due as t empty "No unpaid tickets. Nice."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.place bold
+      t.due faint color if(t.due < today, bad, muted)
+    t.fine bold
+    toggle t.paid
+===
+@rich domain=pantry_expiry topic=expiry list style=multi_feature
+stuff in my fridge and pantry with expiry dates. show what expires within 3 days at the top, count of expired items, and let me tick off things i used up
+needs: add a food item with expiry date | items expiring within 3 days | count of expired items | tick an item as used
+---
+app "Expiry" food grey
+table food name text, expires date, used bool
+let gone = count(food where used = no and expires < today)
+let soon = count(food where used = no and expires >= today and expires - today <= 3)
+topbar "Expiry", food, "Add item"
+row gap 2
+  statcard soon, "expire in 3 days"
+  statcard gone, "already expired"
+each food where used = no sort expires as f empty "The pantry is empty. Add items with their expiry dates."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      if(f.expires < today, "Expired", join("Expires in ", plural(f.expires - today, "day"))) faint color if(f.expires - today <= 3, bad, muted)
+    toggle f.used
+===
+@rich domain=appointment_gaps topic=appointment gaps style=detailed
+dentist and doctor visits: log each visit with the date, and show how many days since the last visit and the average number of days between visits, plus a reminder state that says due if over 180 days
+needs: log a visit | days since last visit | average days between visits | due flag when over 180 days | list of visits by day
+---
+app "Check-ups" calendar ocean
+table visit doctor text, reason text?
+let ago = since(visit)
+topbar "Check-ups", visit, "Log visit"
+row gap 2
+  statcard ago, "days since last visit"
+  statcard round(gap(visit)), "days between visits on average"
+if due(visit, 180)
+  "Time to book a check-up." color bad bold card
+list visit by day, "No visits logged yet. Add the date of your last one."
+===
+@rich domain=sugar_streak topic=no sugar streak style=multi_feature
+trying to quit sugar. tap once per day i stayed clean, show my current streak, my best streak ever and the days since my last slip, with a grid of the last 5 weeks
+needs: one tap to log a clean day | current streak | best streak | days since last slip | grid of the last 35 days
+---
+app "Sugar Free" flame mint
+table clean
+table slip why text?
+let cur = streak(clean)
+topbar "Sugar Free", slip, "Log a slip"
+row gap 2
+  statcard cur, "days clean in a row"
+  statcard best(clean), "best streak"
+button "I stayed clean today" fill accent tap toggle clean
+section "Days since last slip"
+  since(slip) big
+  daygrid last 35 days, count(clean on it)
+===
+@rich domain=house_fund topic=house savings dates style=detailed
+saving for a house deposit by a date. enter deposits, set the target amount and the date i want it by, and tell me how much i must save per day to get there and how many days are left
+needs: add a deposit | target amount and target date settings | days left until target date | amount needed per day | progress against the target
+---
+app "House Fund" coin slate
+table deposit amount money
+setting target money = 5000000 "Deposit target"
+setting by date = 2027-12-31 "Target date"
+let saved = sum(deposit.amount)
+let days = max(1, by - today)
+topbar "House Fund", deposit, "Add deposit"
+statcard saved, "saved of" target, target
+row gap 2
+  statcard days, "days left"
+  statcard round(max(0, target - saved) / days), "to save per day"
+list deposit top 10, "No deposits yet. Add your first one."
+===
+@rich domain=car_service topic=car service due style=multi_feature
+car service book: each job has the date and odometer when done and how many months until the next one. show which are due, how many days overdue, and the cost for the year
+needs: add a service with date, odometer, interval and cost | due date of next service | overdue days highlighted | total cost this year
+---
+app "Car Service" tool ink
+table service job text, done_on date, km num 0.., every num 1..24 = 6, cost money
+let nextdue(s service) = addmonths(s.done_on, s.every)
+topbar "Car Service", service, "Add service"
+statcard sum(service.cost year), "spent on the car this year"
+each service sort done_on desc as s empty "No services yet. Add the last time you had the car looked at."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.job bold
+      "Next due" nextdue(s) faint
+    if nextdue(s) < today
+      "Overdue" today - nextdue(s) "days" color bad bold
+    else
+      (nextdue(s) - today) "days left" faint
+===
+@rich domain=plant_watering topic=plant watering style=custom_ui
+my houseplants: name, how many days between waterings, and a button to water. the plant should look red when thirsty and green when fine, and show days since water
+needs: add a plant with watering interval | water button logs the watering | days since last watering | colour shows when thirsty
+---
+app "Plants" plant plum
+table plant name text, every num 1..30 = 7
+table watering plant ref plant
+topbar "Plants", plant, "Add plant"
+grid 2 gap 1
+  each plant sort name as p empty "No plants yet. Add the first one with its watering interval."
+    let ago = since(p.watering)
+    stack card gap 1 fill if(due(p.watering, p.every), soft, surface)
+      p.name bold
+      if(ago >= 0, join(plural(ago, "day"), " since water"), "Never watered") faint
+      if due(p.watering, p.every)
+        "Thirsty" color bad bold
+      else
+        "Fine" color good bold
+      button "Water" tap add watering plant = p
+===
+@rich domain=document_renewals topic=document renewals style=detailed
+passport, id card, driving licence and visa: store each with its expiry date and show which expire within 90 days, with days left, and sort by the soonest
+needs: add a document with expiry date | days left until expiry | documents expiring in 90 days flagged | sorted by soonest expiry
+---
+app "Documents" key red dark
+table doc name text, number text?, expires date
+let urgent = count(doc where expires - today <= 90)
+topbar "Documents", doc, "Add document"
+statcard urgent, "expire within 90 days"
+each doc sort expires as d empty "No documents yet. Add your passport or ID to start."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.expires faint
+    if d.expires < today
+      "Expired" color bad bold
+    else
+      plural(d.expires - today, "day") bold color if(d.expires - today <= 90, warn, ink)
+===
+@rich domain=pet_vet topic=pet vet visits style=multi_feature
+two cats and a dog. keep vet visits with the pet, reason, cost and date. show cost per pet this year and the days since each pet last saw the vet
+needs: add a pet | log a vet visit for a pet with cost | cost per pet this year | days since last vet visit per pet
+---
+app "Pet Care" paw orange
+table pet name text, kind pick Cat|Dog|Other = Cat
+table vet pet ref pet, reason text, cost money
+topbar "Pet Care", pet, "Add pet"
+statcard sum(vet.cost year), "vet bills this year"
+each pet sort name as p empty "No pets yet. Add the first one."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.kind "- last vet" if(since(p.vet) >= 0, join(plural(since(p.vet), "day"), " ago"), "never") faint
+    sum(p.vet.cost year) bold
+list vet by day, "No vet visits yet."
+===
+@rich domain=gym_membership topic=gym membership days style=short
+how many days are left on each gym member's paid plan
+needs: add a member with paid-until date | days left on the plan | expired members flagged | count of members expiring this week
+---
+app "Gym Members" dumbbell yellow
+table member name text, until date
+let weekend = count(member where until >= today and until - today <= 7)
+topbar "Gym Members", member, "Add member"
+statcard weekend, "plans end this week"
+each member sort until as m empty "No members yet. Add a member and the date their plan ends."
+  row card gap 2 tap edit m swipe remove m
+    m.name bold grow
+    if m.until < today
+      "Expired" color bad bold
+    else
+      plural(m.until - today, "day") faint
+    button "+30 days" tap set m.until = max(m.until, today) + 30
+===
+@rich domain=invoice_aging topic=invoice aging style=detailed
+i send invoices as a freelancer. record client, amount, invoice date and net days. show the total unpaid, how much is overdue, and for each unpaid invoice the days overdue. tick when paid.
+needs: add an invoice with client, amount, date and net days | total unpaid | total overdue | days overdue per invoice | tick as paid
+---
+app "Invoices" wallet green
+table invoice client text, amount money, sent date = today, net num 1..90 = 30, paid bool
+let unpaid = sum(invoice.amount where paid = no)
+let overdue = sum(invoice.amount where paid = no and sent + net < today)
+topbar "Invoices", invoice, "Add invoice"
+row gap 2
+  statcard unpaid, "unpaid"
+  statcard overdue, "overdue"
+each invoice where paid = no sort sent as i empty "No unpaid invoices."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.client bold
+      i.amount faint
+    if i.sent + i.net < today
+      plural(today - (i.sent + i.net), "day") "late" color bad bold
+    else
+      "due in" plural(i.sent + i.net - today, "day") faint
+    toggle i.paid
+===
+@rich domain=trip_countdown topic=trip countdown budget style=multi_feature
+planning trips. every trip has a destination, departure date, number of nights and budget. show days until departure and the budget per night, and a total budget of all trips
+needs: add a trip with departure, nights and budget | days until departure | budget per night | total budget of all trips
+---
+app "Trips" plane teal
+table trip place text, departs date, nights num 1..60 = 5, budget money
+topbar "Trips", trip, "Add trip"
+statcard sum(trip.budget), "budgeted for all trips"
+each trip where departs >= today sort departs as t empty "No trips planned. Add one to start the countdown."
+  stack card gap 1 tap edit t swipe remove t
+    row
+      t.place head grow
+      plural(t.departs - today, "day") big
+    t.nights "nights," t.budget / t.nights "per night" faint
+===
+@rich domain=exam_countdown topic=exam countdown style=custom_ui
+my finals: each subject has an exam date and how many hours i have studied. give me days left, the hours per remaining day i should do if i want 30 hours in total, and a bar chart of study hours by subject
+needs: add a subject with exam date | log hours studied | days left per exam | hours needed per day to reach 30 | bar chart of study hours by subject
+---
+app "Finals" school blue
+table exam subject text, on date, hours num 0..500 = 0
+let need(e exam) = max(0, 30 - e.hours)
+topbar "Finals", exam, "Add exam"
+section "Study hours", "per subject"
+  bars exam sort on, it.hours, it.subject
+each exam where on >= today sort on as e empty "No exams yet. Add a subject and its exam date."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.subject bold
+      plural(e.on - today, "day") "left -" fixed(need(e) / max(1, e.on - today), 1) "h per day needed" faint
+    button "+1h" tap set e.hours = e.hours + 1

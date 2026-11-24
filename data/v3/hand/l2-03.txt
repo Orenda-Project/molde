@@ -1,0 +1,897 @@
+@rich domain=l2_photo_walks topic=photography walks kind=long
+-
+needs: log a photo walk with shots kept and place | shots per month | shots by theme | walks per week chart | monthly challenge progress | list of walks
+---
+app "Photo walks" eye ink
+table walkp place text, theme pick Street|Nature|People|Buildings|Light = Street, shots num 1..500 = 20 unit "shots", keepers num 0..100 = 3
+setting challenge num = 100 "Keepers this year"
+let kept = sum(walkp.keepers year)
+topbar "Photo walks", walkp, "Log a walk"
+statcard kept, "keepers this year of" challenge, challenge
+row gap 2
+  statcard count(walkp month), "walks this month"
+  statcard sum(walkp.shots month), "shots this month"
+  statcard round(sum(walkp.keepers) * 100 / max(sum(walkp.shots), 1)), "% keeper rate"
+section "Walks per week", "last 8 weeks"
+  bars 1..8, count(walkp week of (today - 7 * (8 - it))), join("W", it)
+section "Themes", "keepers by theme"
+  share walkp by theme, sum(it.keepers), it.key
+section "Places"
+  share walkp sort keepers desc top 5, it.keepers, it.place
+section "Best walk", "most keepers"
+  each walkp sort keepers desc top 1 as w empty "No walks yet."
+    row gap 2
+      w.place bold grow
+      w.keepers "keepers" faint
+section "Walk days", "last 10 weeks"
+  heat last 70 days, count(walkp on it), 1
+section "Since the last walk"
+  since(walkp) big
+  "days ago" faint
+section "All walks"
+  list walkp by day, "No walks yet. Take the camera for twenty minutes around your street."
+row gap 2
+  statcard count(walkp week), "entries this week"
+  statcard count(walkp prev week), "entries last week"
+section "Totals", "all time"
+  count(walkp) "entries so far" big
+  "This year" count(walkp year) faint
+  "Last one" since(walkp) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(walkp where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(walkp on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(walkp.shots) * 10) / 10 "shots" big
+  "Highest" max(walkp.shots) "shots" faint
+  "Lowest" min(walkp.shots) "shots" faint
+===
+@rich domain=l2_chess_games topic=chess game results kind=long
+-
+needs: log a game with opponent, colour and result | win rate | results split | games per week chart | filter by result | list of games
+---
+app "Chess" board slate dark
+table game opponent text, side pick White|Black = White, result pick Win|Draw|Loss = Win, moves num 5..200 = 35
+setting rating num = 1200 "My rating"
+state show pick All|Win|Draw|Loss = All
+let wins = count(game where result = Win)
+let played = count(game)
+topbar "Chess", game, "Log a game"
+row gap 2
+  statcard rating, "my rating"
+  statcard round(wins * 100 / max(played, 1)), "% win rate", 100
+  statcard played, "games played"
+section "Results", "all games"
+  share game by result, count(it), it.key
+section "As white or black", "wins"
+  each options game.side as s
+    row gap 1
+      s grow
+      count(game where side = s and result = Win) "wins of" count(game where side = s) bold
+section "Games per week", "last 8 weeks"
+  bars 1..8, count(game week of (today - 7 * (8 - it))), join("W", it)
+section "Short games", "under 20 moves"
+  count(game where moves < 20) big
+  "Average length" round(avg(game.moves)) "moves" faint
+row gap 1
+  button "All" fill if(show = All, accent, soft) tap set show = All
+  each options game.result as r
+    button r fill if(show = r, accent, soft) tap set show = r
+each game where show = All or result = show as g empty "No games here. Log the next one after you play."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      "vs" g.opponent bold
+      g.side g.moves "moves" faint
+    g.result bold color if(g.result = Win, good, if(g.result = Loss, bad, ink))
+row gap 2
+  statcard count(game week), "entries this week"
+  statcard count(game prev week), "entries last week"
+section "Totals", "all time"
+  count(game) "entries so far" big
+  "This year" count(game year) faint
+  "Last one" since(game) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(game where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(game on it), 2
+===
+@rich domain=l2_board_game_scores topic=family board game scores kind=long
+-
+needs: add a game night with winner and points | wins per player | points per player chart | games by title | scoreboard of the year | list of nights
+---
+app "Game nights" dice red
+table night title text, winner pick Abbu|Ammi|Ali|Sara|Guest = Ali, points num 0..1000 = 50, players num 2..8 = 4
+setting yearly_goal num = 24 "Game nights per year"
+topbar "Game nights", night, "Add night"
+statcard count(night year), "game nights this year, goal" yearly_goal, yearly_goal
+section "Scoreboard", "wins this year"
+  each options night.winner as w
+    stack gap 0
+      row
+        w grow
+        count(night year where winner = w) "wins" bold
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * count(night year where winner = w) / max(count(night year), 1), 4 fill accent radius 2
+section "Winning points", "average per player"
+  share night year by winner, round(avg(it.points)), it.key
+section "Favourite games"
+  share night by title, count(it), it.key
+section "Nights per month", "last 6 months"
+  bars 1..6, count(night month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+row gap 2
+  statcard max(night.points), "highest winning score"
+  statcard round(avg(night.players) * 10) / 10, "players on average"
+section "Last night"
+  each night top 1 as n empty "No game nights yet."
+    row gap 2
+      n.title bold grow
+      n.winner "won with" n.points faint
+section "Family streak"
+  count(days last 30 days, count(night on it) > 0) "game nights in 30 days" big
+section "All nights"
+  list night by day, "No game nights yet. Add your next Monopoly or Ludo night."
+row gap 2
+  statcard count(night week), "entries this week"
+  statcard count(night prev week), "entries last week"
+section "Totals", "all time"
+  count(night) "entries so far" big
+  "This year" count(night year) faint
+  "Last one" since(night) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(night where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(night on it), 2
+===
+@rich domain=l2_run_log topic=running distance log kind=long
+-
+needs: log a run with km and minutes | km this week against goal | pace per run trend | km per day chart | longest run | list of runs
+---
+app "Runs" run green
+table run km num 0.5..100 unit "km", mins num 3..600 unit "min", route text?
+setting weekly_km num = 20 "Weekly distance (km)"
+let wk = sum(run.km week)
+topbar "Runs", run, "Log a run"
+statcard round(wk * 10) / 10, "km this week, goal" weekly_km, weekly_km
+row gap 2
+  statcard round(sum(run.km month) * 10) / 10, "km this month"
+  statcard count(run month), "runs this month"
+  statcard round(max(run.km) * 10) / 10, "km longest run"
+section "Km per day", "last 14 days"
+  daybars last 14 days, sum(run.km on it)
+section "Pace", "minutes per km, recent runs"
+  trend run last 60 days, it.mins / it.km
+section "Km per month", "last 6 months"
+  bars 1..6, round(sum(run.km month of addmonths(today, it - 6))), monthname(addmonths(today, it - 6))
+section "Run days", "last 10 weeks"
+  heat last 70 days, count(run on it), 1
+section "Average pace"
+  fixed(sum(run.mins) / max(sum(run.km), 1), 1) "min per km" big
+  "Total distance" round(sum(run.km)) "km" faint
+section "Favourite routes"
+  share run by route, count(it), it.key
+section "Streak"
+  streak(run) "days in a row" big
+section "Runs"
+  list run by day, "No runs yet. Tap Log a run after your first jog."
+row gap 2
+  statcard count(run week), "entries this week"
+  statcard count(run prev week), "entries last week"
+section "Totals", "all time"
+  count(run) "entries so far" big
+  "This year" count(run year) faint
+  "Last one" since(run) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(run where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(run on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(run.km) * 10) / 10 "km" big
+  "Highest" max(run.km) "km" faint
+  "Lowest" min(run.km) "km" faint
+===
+@rich domain=l2_cycling_rides topic=cycling rides and bike kind=long
+-
+needs: log a ride with km and ride type | km this month against goal | rides by type | km per week chart | total km since service | list of rides
+---
+app "Rides" bike teal
+table ride km num 1..300 unit "km", kind pick Commute|Leisure|Hill|Race = Commute, mins num? 5..600
+table service note text, at_km num 0..99999 unit "km"
+setting monthly_km num = 150 "Km per month"
+let total = sum(ride.km)
+let since_service = total - last(service.at_km)
+topbar "Rides", ride, "Log a ride"
+statcard round(sum(ride.km month)), "km this month, goal" monthly_km, monthly_km
+row gap 2
+  statcard round(total), "km ridden in all"
+  statcard count(ride month), "rides this month"
+section "Km per week", "last 8 weeks"
+  bars 1..8, round(sum(ride.km week of (today - 7 * (8 - it)))), join("W", it)
+section "Ride types", "all rides"
+  share ride by kind, sum(it.km), it.key
+section "Km per day", "last 14 days"
+  daybars last 14 days, sum(ride.km on it)
+section "Bike service", "since the last:" since_service "km"
+  goal since_service, 500, "km toward the next service", "km"
+  button "Serviced today" tap add service note = "Service", at_km = total
+section "Longest ride"
+  round(max(ride.km)) "km" big
+  "Average ride" round(avg(ride.km)) "km" faint
+section "Ride days", "last 5 weeks"
+  daygrid last 35 days, count(ride on it), 1
+section "Rides"
+  list ride by day, "No rides yet. Even a short commute counts."
+row gap 2
+  statcard count(ride week), "entries this week"
+  statcard count(ride prev week), "entries last week"
+section "Totals", "all time"
+  count(ride) "entries so far" big
+  "This year" count(ride year) faint
+  "Last one" since(ride) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(ride where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(ride on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(ride.km) * 10) / 10 "km" big
+  "Highest" max(ride.km) "km" faint
+  "Lowest" min(ride.km) "km" faint
+===
+@rich domain=l2_body_measures topic=body measurements kind=long
+-
+needs: log weight, waist and chest | weight trend line | waist trend line | change since first entry | target weight progress | list of entries
+---
+app "Body" scale slate
+table body kg num 20..250 unit "kg", waist num? 40..200 unit "cm", chest num? 40..200 unit "cm"
+setting target_kg num = 70 "Target weight (kg)"
+let now_kg = last(body.kg)
+let change = last(body.kg) - first(body.kg)
+topbar "Body", body, "Add entry"
+row gap 2
+  statcard now_kg, "kg now"
+  statcard round(change * 10) / 10, "kg change since the first entry"
+section "Weight", "all entries"
+  trend body, it.kg
+section "Toward the target", "now" now_kg "kg of" target_kg "kg"
+  goal now_kg, max(now_kg, target_kg), "kg now", "kg"
+  "Still to go" round(abs(now_kg - target_kg) * 10) / 10 "kg" faint
+section "Waist", "cm"
+  trend body, it.waist
+  "Latest" last(body.waist) "cm" faint
+section "Chest", "cm"
+  trend body, it.chest
+  "Latest" last(body.chest) "cm" faint
+section "Weekly average", "last 8 weeks"
+  bars 1..8, round(avg(body.kg week of (today - 7 * (8 - it))) * 10) / 10, join("W", it)
+section "Lowest and highest"
+  "Lowest" min(body.kg) "kg" bold
+  "Highest" max(body.kg) "kg" faint
+section "Weigh-in streak"
+  since(body) big
+  "days since the last entry" faint
+section "Entries"
+  list body by day, "No entries yet. Weigh in at the same time each week."
+row gap 2
+  statcard count(body week), "entries this week"
+  statcard count(body prev week), "entries last week"
+section "Totals", "all time"
+  count(body) "entries so far" big
+  "This year" count(body year) faint
+  "Last one" since(body) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(body where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(body on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(body.kg) * 10) / 10 "kg" big
+  "Highest" max(body.kg) "kg" faint
+  "Lowest" min(body.kg) "kg" faint
+===
+@rich domain=l2_mood_weather topic=mood and energy diary kind=long
+-
+needs: log mood and energy from 1 to 5 | mood trend | average mood this week | heat map of the month | mood by what I did | list by day
+---
+app "Mood" smile purple
+table check mood num 1..5 = 3, energy num 1..5 = 3, thing pick Work|Family|Exercise|Rest|Friends|Study = Rest, note text?
+setting alert_below num = 2 "Low mood alert below"
+let avg_mood = round(avg(check.mood week) * 10) / 10
+topbar "Mood", check, "Check in"
+row gap 2
+  statcard avg_mood, "average mood this week, out of 5", 5
+  statcard round(avg(check.energy week) * 10) / 10, "average energy", 5
+  statcard count(check week), "check-ins this week"
+if last(check.mood) <= alert_below
+  "Your last mood was low. Talk to someone you trust today." color warn bold
+section "Mood", "last 30 days"
+  trend check last 30 days, it.mood
+section "Energy", "last 30 days"
+  trend check last 30 days, it.energy
+section "Mood by day", "last 10 weeks"
+  heat last 70 days, sum(check.mood on it), 5
+section "What lifts you", "average mood by activity"
+  each options check.thing as t
+    stack gap 0
+      row
+        t grow
+        round(avg(check.mood where thing = t) * 10) / 10 bold
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * avg(check.mood where thing = t) / 5, 4 fill accent radius 2
+section "Check-in streak"
+  streak(check) "days" big
+section "Check-ins"
+  list check by day, "No check-ins yet. Take ten seconds and rate how you feel."
+row gap 2
+  statcard count(check week), "entries this week"
+  statcard count(check prev week), "entries last week"
+section "Totals", "all time"
+  count(check) "entries so far" big
+  "This year" count(check year) faint
+  "Last one" since(check) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(check where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(check on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(check.mood) * 10) / 10 big
+  "Highest" max(check.mood) faint
+  "Lowest" min(check.mood) faint
+===
+@rich domain=l2_pregnancy_weeks topic=pregnancy week tracker kind=long
+-
+needs: due date setting | weeks and days pregnant | progress to due date | log weight and kicks | kicks per day chart | list of notes
+---
+app "Pregnancy" heart pink
+table weight kg num 30..200 unit "kg"
+table kick count num 1..100 = 10, mins num 1..180 = 30 unit "min"
+table note text text, mood pick Great|Okay|Tired|Sick = Okay
+setting due date = 2027-03-15 "Due date"
+let weeks = floor((today - (due - 280)) / 7)
+let days_left = due - today
+topbar "Pregnancy", note, "Add note"
+row card gap 3 align center
+  stack grow gap 0
+    "Week" weeks big
+    "and" (today - (due - 280)) % 7 "days" faint
+  stack gap 0 align center
+    days_left huge
+    "days to go" faint
+section "Progress", "done:" round(clamp((today - (due - 280)) / 280, 0, 1) * 100) "%"
+  goal clamp(today - (due - 280), 0, 280), 280, "days since the start", "days"
+section "Weight", "last entries"
+  trend weight, it.kg
+  "Gained" round((last(weight.kg) - first(weight.kg)) * 10) / 10 "kg" faint
+  form weight, "Save weight"
+section "Kick counts", "last 14 days"
+  daybars last 14 days, sum(kick.count on it)
+  button "Counted 10 kicks" tap add kick count = 10, mins = 30
+section "Mood", "this month"
+  share note month by mood, count(it), it.key
+section "Notes for the doctor"
+  list note by day, "No notes yet. Write questions here as you think of them."
+row gap 2
+  statcard count(weight week), "entries this week"
+  statcard count(weight prev week), "entries last week"
+section "Totals", "all time"
+  count(weight) "entries so far" big
+  "This year" count(weight year) faint
+  "Last one" since(weight) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(weight where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(weight on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(weight.kg) * 10) / 10 "kg" big
+  "Highest" max(weight.kg) "kg" faint
+  "Lowest" min(weight.kg) "kg" faint
+===
+@rich domain=l2_family_birthdays topic=family birthdays and ages kind=long
+-
+needs: add a person with birthday and relation | next birthdays with days left | birthdays per month chart | by relation split | age of each person | list sorted by name
+---
+app "Birthdays" gift pink
+table person name text, birthday date, relation pick Family|Friend|Colleague|Neighbour = Family
+setting warn_days num = 14 "Warn me this many days before"
+let nextbd(b date) = if(addmonths(b, 12 * (year(today) - year(b))) >= today, addmonths(b, 12 * (year(today) - year(b))), addmonths(b, 12 * (year(today) - year(b) + 1)))
+let soon = count(person where nextbd(birthday) - today <= warn_days)
+topbar "Birthdays", person, "Add person"
+row gap 2
+  statcard count(person), "people on the list"
+  statcard soon, "birthdays in the next" warn_days "days"
+section "Coming up", "nearest first"
+  each person sort nextbd(it.birthday) top 5 as p empty "No birthdays yet. Add the people you never want to forget."
+    row card gap 2 tap edit p swipe remove p
+      stack grow gap 0
+        p.name bold
+        p.relation "turns" year(nextbd(p.birthday)) - year(p.birthday) faint
+      stack gap 0 align center
+        nextbd(p.birthday) - today bold
+        "days" tiny color muted
+section "Birthdays per month"
+  bars 1..12, count(person where month(birthday) = it), monthname(addmonths(today, it - month(today)))
+section "Who they are"
+  share person by relation, count(it), it.key
+section "Oldest and youngest"
+  each person sort birthday top 1 as p empty "Add people to see this."
+    row gap 2
+      "Oldest" faint grow
+      p.name bold
+  each person sort birthday desc top 1 as p empty "Add people to see this."
+    row gap 2
+      "Youngest" faint grow
+      p.name bold
+section "This month", monthname(today)
+  each person where month(birthday) = month(today) sort monthday(birthday) as p empty "Nobody has a birthday this month."
+    row gap 2
+      p.name grow
+      "on the" monthday(p.birthday) faint
+section "Everyone"
+  list person, "No people yet."
+row gap 2
+  statcard count(person week), "entries this week"
+  statcard count(person prev week), "entries last week"
+section "Totals", "all time"
+  count(person) "entries so far" big
+  "This year" count(person year) faint
+  "Last one" since(person) "days ago" faint
+===
+@rich domain=l2_gift_ideas topic=gift ideas and budget kind=long
+-
+needs: add a gift idea for a person with price | tick when bought | total spent against a budget | spend by person | gifts by occasion | list sorted by person
+---
+app "Gifts" gift purple
+table idea gift text, for_who text, occasion pick Birthday|Eid|Wedding|Anniversary|Other = Birthday, price money = 0
+table bought idea ref idea
+setting budget money = 20000 "Gift budget for the year"
+let spent = sum(idea, it.price * count(it.bought all))
+let waiting = count(idea, count(it.bought all) = 0)
+topbar "Gifts", idea, "Add idea"
+row gap 2
+  statcard waiting, "gifts still to buy"
+  statcard round(spent), "spent so far, budget" budget, budget
+each idea sort for_who as g empty "No ideas yet. Write down what they mentioned wanting."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.gift bold
+      "for" g.for_who "for" g.occasion faint
+    g.price faint
+    toggle g.bought all
+section "Still to buy", "most expensive first"
+  each idea sort price desc as g empty "No ideas yet."
+    if count(g.bought all) = 0
+      row gap 2
+        g.gift grow
+        g.price bold
+section "By occasion"
+  share idea by occasion, count(it), it.key
+section "Price by person", "all ideas"
+  share idea by for_who, sum(it.price), it.key
+section "Bought per month", "last 6 months"
+  bars 1..6, count(bought month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Budget left"
+  goal spent, budget, "spent on gifts", ""
+  "Left to spend" max(budget - spent, 0) faint
+row gap 2
+  statcard count(bought week), "entries this week"
+  statcard count(bought prev week), "entries last week"
+section "Totals", "all time"
+  count(bought) "entries so far" big
+  "This year" count(bought year) faint
+  "Last one" since(bought) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(bought where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(bought on it), 2
+===
+@rich domain=l2_wedding_budget topic=wedding planning budget kind=long
+-
+needs: add an expense with category, estimate and paid amount | total paid against the budget | spending by category | what is still owed | guests count | list of expenses
+---
+app "Wedding" star red
+table cost item text, category pick Venue|Food|Clothes|Photos|Decor|Gifts|Other = Venue, estimate money, paid money = 0
+table guest name text, side pick Bride|Groom = Bride, count num 1..20 = 1
+setting budget money = 1500000 "Total budget"
+let planned = sum(cost.estimate)
+let paid = sum(cost.paid)
+let owed = planned - paid
+topbar "Wedding", cost, "Add expense"
+row gap 2
+  statcard paid, "paid so far of budget" budget, budget
+  statcard owed, "still owed on estimates"
+if planned > budget
+  "Estimates are above the budget by" planned - budget color warn bold
+section "By category", "estimates"
+  share cost by category, sum(it.estimate), it.key
+section "Paid or owed", "per category"
+  each options cost.category as c
+    stack gap 0
+      row
+        c grow
+        sum(cost.paid where category = c) "of" sum(cost.estimate where category = c) faint
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(cost.paid where category = c) / max(sum(cost.estimate where category = c), 1), 0, 1), 4 fill accent radius 2
+section "Biggest costs"
+  each cost sort estimate desc top 3 as c empty "No costs yet."
+    row gap 2
+      c.item grow
+      c.estimate bold
+section "Guests", "total:" sum(guest.count)
+  row gap 2
+    stat sum(guest.count where side = Bride), "bride side"
+    stat sum(guest.count where side = Groom), "groom side"
+  form guest, "Add guests"
+section "Payments per month", "last 6 months"
+  bars 1..6, sum(cost.paid month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "All expenses"
+  list cost, "No expenses yet. Start with the venue."
+row gap 2
+  statcard count(cost week), "entries this week"
+  statcard count(cost prev week), "entries last week"
+section "Totals", "all time"
+  count(cost) "entries so far" big
+  "This year" count(cost year) faint
+  "Last one" since(cost) "days ago" faint
+===
+@rich domain=l2_trip_packing topic=trip packing checklist kind=long
+-
+needs: add items to pack with a bag | tick each item packed | packed count and progress | items per bag | heavy items | list by bag
+---
+app "Packing" bag teal
+table pack name text, bag pick Suitcase|Backpack|Carry_on|Kids_bag = Suitcase, grams num 0..30000 = 200 unit "g", must bool
+table packed pack ref pack
+state filter pick All|Suitcase|Backpack|Carry_on|Kids_bag = All
+let n = count(pack)
+let got = count(pack, count(it.packed all) > 0)
+topbar "Packing", pack, "Add item"
+statcard got, "of" n "items packed", n
+if got = n and n > 0
+  "Everything is packed. Have a safe trip." head
+row gap 1
+  button "All" fill if(filter = All, accent, soft) tap set filter = All
+  each options pack.bag as b
+    button b count(pack where bag = b) fill if(filter = b, accent, soft) tap set filter = b
+each pack where filter = All or bag = filter sort name as p empty "Nothing to pack yet. Add passports, chargers, medicines."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.bag p.grams "g" faint
+    if p.must
+      "Must" color warn small
+    toggle p.packed all
+section "Weight per bag", "grams"
+  share pack by bag, sum(it.grams), it.key
+section "Still to pack", "must-have items first"
+  each pack sort name as p empty "No items yet."
+    if count(p.packed all) = 0
+      row gap 2
+        p.name grow
+        p.bag faint
+section "Heaviest items"
+  each pack sort grams desc top 3 as p empty "No items yet."
+    row gap 2
+      p.name grow
+      p.grams "g" bold
+section "Total weight"
+  round(sum(pack.grams) / 100) / 10 "kg in all" big
+  "Carry-on limit is usually 7 kg." faint
+row gap 2
+  statcard count(packed week), "entries this week"
+  statcard count(packed prev week), "entries last week"
+section "Totals", "all time"
+  count(packed) "entries so far" big
+  "This year" count(packed year) faint
+  "Last one" since(packed) "days ago" faint
+===
+@rich domain=l2_fuel_fillups topic=car fuel and mileage kind=long
+-
+needs: log a fill-up with litres, price and odometer | km per litre | fuel spend per month | cost per km | price trend | list of fill-ups
+---
+app "Fuel" car orange
+table fill litres num 1..120 unit "L", price money, odo num 0..999999 unit "km"
+setting tank num = 45 "Tank size (litres)"
+let km_used = last(fill.odo) - first(fill.odo)
+let kpl = km_used / max(sum(fill.litres) - first(fill.litres), 1)
+topbar "Fuel", fill, "Add fill-up"
+row gap 2
+  statcard round(kpl * 10) / 10, "km per litre overall"
+  statcard round(sum(fill.price month)), "spent on fuel this month"
+section "Fuel spend per month", "last 6 months"
+  bars 1..6, sum(fill.price month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Litres per fill-up", "recent"
+  trend fill last 180 days, it.litres
+section "Price paid", "per fill-up"
+  trend fill last 180 days, it.price
+section "Cost per km"
+  fixed(sum(fill.price) / max(km_used, 1), 1) "per km" big
+  "Total fuel cost" sum(fill.price) faint
+section "Fill-ups per month"
+  daybars last 30 days, count(fill on it)
+section "Range left", "from the last fill-up"
+  round(kpl * tank) "km on a full tank" big
+section "Records"
+  list fill by day, "No fill-ups yet. Add the litres, the price and the odometer each time."
+row gap 2
+  statcard count(fill week), "entries this week"
+  statcard count(fill prev week), "entries last week"
+section "Totals", "all time"
+  count(fill) "entries so far" big
+  "This year" count(fill year) faint
+  "Last one" since(fill) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(fill where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(fill on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(fill.litres) * 10) / 10 "L" big
+  "Highest" max(fill.litres) "L" faint
+  "Lowest" min(fill.litres) "L" faint
+===
+@rich domain=l2_car_service topic=car maintenance schedule kind=long
+-
+needs: log a service job with km and cost | jobs due by distance | km since each job | spend per month | spend by job type | list of jobs
+---
+app "Car care" tool slate dark
+table job kind pick Oil|Tyres|Brakes|Battery|Filter|Other = Oil, at_km num 0..999999 unit "km", cost money, note text?
+setting odo num = 85000 "Odometer now (km)" 
+setting oil_every num = 5000 "Oil change every (km)"
+let oil_due = last(job.at_km where kind = Oil) + oil_every
+topbar "Car care", job, "Log job"
+row gap 2
+  statcard odo, "km on the clock"
+  statcard max(oil_due - odo, 0), "km until the next oil change"
+section "Oil change", "progress to the next one"
+  goal clamp(odo - last(job.at_km where kind = Oil), 0, oil_every), oil_every, "km since the last oil change", "km"
+section "Last done", "by job"
+  each options job.kind as k
+    row gap 1
+      k grow
+      if(count(job where kind = k) > 0, join(odo - last(job.at_km where kind = k), " km ago"), "never") faint
+section "Spend by job", "all time"
+  share job by kind, sum(it.cost), it.key
+section "Spend per month", "last 6 months"
+  bars 1..6, sum(job.cost month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Total spent"
+  sum(job.cost year) big
+  "this year, over" count(job year) "jobs" faint
+section "Service history"
+  list job by day, "No jobs logged yet. Add your last oil change to start."
+row gap 2
+  statcard count(job week), "entries this week"
+  statcard count(job prev week), "entries last week"
+section "Totals", "all time"
+  count(job) "entries so far" big
+  "This year" count(job year) faint
+  "Last one" since(job) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(job where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(job on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(job.at_km) * 10) / 10 "km" big
+  "Highest" max(job.at_km) "km" faint
+  "Lowest" min(job.at_km) "km" faint
+===
+@rich domain=l2_rent_utilities topic=shared rent and bills split kind=long
+-
+needs: add a bill with who paid | split between flatmates | who owes what | bills per month chart | spending by bill type | list of bills
+---
+app "Flat bills" home blue
+table bill kind pick Rent|Electricity|Gas|Internet|Water|Food = Rent, amount money, payer pick Bilal|Hamza|Usman = Bilal
+setting people num = 3 "Flatmates"
+let total = sum(bill.amount month)
+let share_each = total / people
+topbar "Flat bills", bill, "Add bill"
+row gap 2
+  statcard total, "bills this month"
+  statcard round(share_each), "each person's share"
+section "Who owes what", "after splitting equally"
+  each options bill.payer as p
+    row card gap 2
+      p grow
+      stack gap 0 align end
+        sum(bill.amount month where payer = p) "paid" faint
+        if(sum(bill.amount month where payer = p) >= share_each, "gets back", "owes") color if(sum(bill.amount month where payer = p) >= share_each, good, bad) small
+      round(abs(sum(bill.amount month where payer = p) - share_each)) bold
+section "By type", "this month"
+  share bill month by kind, sum(it.amount), it.key
+section "Per month", "last 6 months"
+  bars 1..6, sum(bill.amount month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Biggest bill"
+  max(bill.amount month) big
+  "Bills this month" count(bill month) faint
+section "Bills"
+  list bill by day, "No bills yet this month. Add the rent first."
+row gap 2
+  statcard count(bill week), "entries this week"
+  statcard count(bill prev week), "entries last week"
+section "Totals", "all time"
+  count(bill) "entries so far" big
+  "This year" count(bill year) faint
+  "Last one" since(bill) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(bill where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(bill on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(bill.amount)) big
+  "Highest" max(bill.amount) faint
+  "Lowest" min(bill.amount) faint
+===
+@rich domain=l2_loan_emi topic=loan installment calculator kind=long
+-
+needs: set amount, rate and months | monthly installment | total interest | save quotes from banks | compare saved quotes | tabs for calculator and saved
+---
+app "Loan" calc slate
+table quote bank text, amount money, rate num 0..60, months num 1..360
+setting amount money = 500000 "Loan amount"
+setting rate num = 12 "Yearly interest (percent)"
+setting months num = 24 "Months to repay"
+let r = rate / 1200
+let emi = if(r > 0, amount * r * pow(1 + r, months) / (pow(1 + r, months) - 1), amount / months)
+let interest = emi * months - amount
+screen calc "Calculator" calc
+  field amount
+  field rate
+  field months
+  slider rate 0..40
+  slider months 6..120
+  "Monthly installment" faint
+  round(emi) big
+  row gap 2
+    statcard round(interest), "total interest"
+    statcard round(emi * months), "total to pay"
+  section "How much is interest", "share:" round(interest * 100 / max(emi * months, 1)) "%"
+    goal interest, max(emi * months, 1), "of everything you pay", ""
+screen saved "Saved quotes" list
+  topbar "Saved quotes", quote, "Save quote"
+  each quote sort rate as q empty "No quotes saved. Add what each bank offers."
+    row card gap 2 tap edit q swipe remove q
+      stack grow gap 0
+        q.bank bold
+        q.amount "at" q.rate "% for" q.months "months" faint
+  section "Cheapest rate"
+    min(quote.rate) "%" big
+  section "Interest compared"
+    bars quote, it.amount * it.rate / 100 * it.months / 12, it.bank
+===
+@rich domain=l2_committee_savings topic=committee savings circle kind=long
+-
+needs: add members and monthly contributions | record who paid this month | pot size | whose turn to collect | payments per month chart | list of payments
+---
+app "Committee" users green
+table member name text, turn num 1..30
+table pay member ref member, amount money
+setting dues money = 5000 "Monthly share per member"
+let n = count(member)
+let paid_now = count(member, count(it.pay month) > 0)
+let pot = n * dues
+topbar "Committee", member, "Add member"
+row gap 2
+  statcard paid_now, "of" n "paid this month", n
+  statcard pot, "pot this month"
+section "Members", "tap the tick when paid"
+  each member sort turn as m empty "No members yet. Add each person and their turn number."
+    row card gap 2 tap edit m swipe remove m
+      stack grow gap 0
+        m.name bold
+        "Turn" m.turn faint
+      toggle m.pay month
+section "Whose turn", monthname(today)
+  each member sort turn top 1 as m empty "Add members first."
+    row gap 2
+      m.name head grow
+      pot bold
+section "Still to pay", "this month"
+  each member sort name as m empty "No members yet."
+    if count(m.pay month) = 0
+      row gap 2
+        m.name grow
+        dues faint
+section "Collected per month", "last 6 months"
+  bars 1..6, sum(pay.amount month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Rounds left"
+  max(n - month(today), 0) big
+  "months until everyone has had a turn, if you started in January" faint
+row gap 2
+  statcard count(pay week), "entries this week"
+  statcard count(pay prev week), "entries last week"
+section "Totals", "all time"
+  count(pay) "entries so far" big
+  "This year" count(pay year) faint
+  "Last one" since(pay) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(pay where dayname(at) = it), it
+===
+@rich domain=l2_eid_shopping topic=eid shopping list kind=long
+-
+needs: add items with person, shop and price | tick bought | total against budget | spend by person | what is left to buy | list by person
+---
+app "Eid shopping" bag green
+table buy item text, for_who text, shop text?, price money, kind pick Clothes|Shoes|Food|Gifts|Decor = Clothes
+table got buy ref buy
+setting budget money = 40000 "Eid budget"
+let spent = sum(buy, it.price * count(it.got all))
+let planned = sum(buy.price)
+topbar "Eid shopping", buy, "Add item"
+row gap 2
+  statcard round(spent), "spent so far, budget" budget, budget
+  statcard count(buy, count(it.got all) = 0), "items left to buy"
+if planned > budget
+  "The list is above your budget by" planned - budget color warn bold
+section "Shopping list"
+  each buy sort for_who as b empty "Nothing on the list yet. Start with the children's clothes."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.item bold
+        b.for_who b.shop faint
+      b.price faint
+      toggle b.got all
+section "By kind", "planned"
+  share buy by kind, sum(it.price), it.key
+section "By person", "planned"
+  share buy by for_who, sum(it.price), it.key
+section "Shops to visit"
+  share buy where shop != "" by shop, count(it), it.key
+section "Days to go"
+  "Plan to finish a week early so the last days are calm." faint
+row gap 2
+  statcard count(got week), "entries this week"
+  statcard count(got prev week), "entries last week"
+section "Totals", "all time"
+  count(got) "entries so far" big
+  "This year" count(got year) faint
+  "Last one" since(got) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(got where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(got on it), 2
+===
+@rich domain=l2_typing_speed topic=typing speed practice kind=long
+-
+needs: log a typing test with words per minute and accuracy | best and average speed | speed trend line | tests per day chart | goal progress | list of tests
+---
+app "Typing" pen blue
+table test wpm num 5..250 unit "wpm", accuracy num 50..100 = 95 unit "%", minutes num 1..30 = 1
+setting goal_wpm num = 60 "Goal speed (wpm)"
+let best = max(test.wpm)
+let avg_wpm = round(avg(test.wpm last 7 days))
+topbar "Typing", test, "Log test"
+row gap 2
+  statcard best, "best wpm, goal" goal_wpm, goal_wpm
+  statcard avg_wpm, "average wpm, last 7 days"
+  statcard round(avg(test.accuracy last 7 days)), "% accuracy"
+section "Speed over time", "last 30 days"
+  trend test last 30 days, it.wpm
+section "Accuracy over time", "last 30 days"
+  trend test last 30 days, it.accuracy
+section "Tests per day", "last 14 days"
+  daybars last 14 days, count(test on it)
+section "Practice days", "last 10 weeks"
+  heat last 70 days, count(test on it), 3
+section "Words typed", "all time"
+  sum(test, it.wpm * it.minutes) big
+  "words in" count(test) "tests" faint
+section "Gap to the goal"
+  max(goal_wpm - avg_wpm, 0) big
+  "wpm to gain, about one wpm a week is normal" faint
+section "Streak"
+  streak(test) "days in a row" big
+section "Tests"
+  list test by day, "No tests yet. Take a one-minute test and log it."
+row gap 2
+  statcard count(test week), "entries this week"
+  statcard count(test prev week), "entries last week"
+section "Totals", "all time"
+  count(test) "entries so far" big
+  "This year" count(test year) faint
+  "Last one" since(test) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(test where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(test on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(test.wpm) * 10) / 10 "wpm" big
+  "Highest" max(test.wpm) "wpm" faint
+  "Lowest" min(test.wpm) "wpm" faint
+===

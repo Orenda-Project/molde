@@ -1,0 +1,646 @@
+@rich domain=c1_restaurant_tip_split topic=tip_and_bill_split style=multi_feature
+we ate out as five friends and always argue at the end. need to type the bill, pick a tip of 10, 15 or 20 percent, set how many people, and see what each one pays. keep the last few splits so we can look back
+needs: type the bill amount | pick a tip of ten, fifteen or twenty percent | change the number of people | shows what each person pays | saves splits to a short history
+---
+app "Tip Split" cup mint
+state bill money = 0
+state people num = 2
+state tip pick Ten|Fifteen|Twenty = Fifteen
+table split bill money, people num, each money
+let pct = if(tip = Ten, 10, if(tip = Fifteen, 15, 20))
+let total = bill * (1 + pct / 100)
+section "The bill"
+  field bill "Bill amount"
+  choice tip
+  row gap 2 align center
+    "People" people bold grow
+    button "-" tap set people = max(people - 1, 1)
+    button "+" tap set people = min(people + 1, 30)
+if bill > 0
+  statcard round(total / people), "each person pays"
+  "Tip is" round(bill * pct / 100) "at" pct "%" faint
+  button "Save this split" fill accent tap add split bill = bill, people = people, each = round(total / people)
+else
+  "Type the bill above to see what each person pays." faint
+section "Earlier splits"
+  each split top 5 as s empty "No splits saved yet."
+    row
+      s.bill "for" s.people "people" grow
+      s.each bold
+===
+@rich domain=c1_each_pays_quick topic=quick_bill_split style=short
+how much will each of us pay
+needs: type the total bill | change the number of people with plus and minus | adds a service charge | shows the amount each person pays
+---
+app "Each Pays" users slate
+state bill money = 0
+state people num = 4
+setting service num = 5 "Service charge %"
+let total = bill * (1 + service / 100)
+field bill "Bill total"
+row gap 2 align center
+  button "-" tap set people = max(people - 1, 1)
+  "People" people bold grow align center
+  button "+" tap set people = people + 1
+if bill > 0
+  round(total / people) big
+  "each, with" service "% service included" faint
+else
+  "Type the total bill to split it." faint
+===
+@rich domain=c1_discount_sales_tax topic=discount_then_tax style=detailed
+i am at the mall and the tag says one price, then there is a percent off and then sales tax on top. i want to type the tag price, slide the discount and the tax, and see what i really pay at the till and how much i save
+needs: type the tag price | slider for the discount percent | slider for the sales tax percent | final price at the till | amount saved and tax added
+---
+app "Shop Price" tag orange
+state price money = 0
+state off num = 10
+state tax num = 8
+let after = price * (1 - off / 100)
+let final = after * (1 + tax / 100)
+field price "Price on the tag"
+"Discount" off "%" faint
+slider off 0..90
+"Sales tax" tax "%" faint
+slider tax 0..25
+if price > 0
+  statcard round(final * 100) / 100, "you pay at the till"
+  row gap 2
+    stat round((price - after) * 100) / 100, "you save"
+    stat round((final - after) * 100) / 100, "tax added"
+else
+  "Enter the tag price to see what you will pay." faint
+===
+@rich domain=c1_gst_add_remove topic=gst_add_or_remove style=custom_ui
+shopkeeper here. sometimes my supplier price already has GST inside, sometimes not. let me pick 0, 5, 12 or 18 percent, say if the amount is with or without GST, and show price without GST, the GST part and price with GST
+needs: type an amount | pick the GST rate 0, 5, 12 or 18 | choose whether the amount has GST or not | shows price without GST, GST part and price with GST
+---
+app "GST Helper" calc blue
+state amount money = 0
+state rate pick Zero|Five|Twelve|Eighteen = Eighteen
+state mode pick Without_GST|With_GST = Without_GST
+let r = if(rate = Zero, 0, if(rate = Five, 5, if(rate = Twelve, 12, 18)))
+let net = if(mode = Without_GST, amount, amount / (1 + r / 100))
+let gst = net * r / 100
+field amount "Amount"
+"GST rate" faint
+choice rate
+"The amount is" faint
+choice mode
+if amount > 0
+  section "Result", "GST at" r "%"
+    row
+      "Price without GST" grow
+      round(net * 100) / 100 bold
+    row
+      "GST part" grow
+      round(gst * 100) / 100 bold
+    divider
+    row
+      "Price with GST" grow
+      round((net + gst) * 100) / 100 big
+else
+  "Enter an amount, pick the rate and see the split." faint
+===
+@rich domain=c1_cafe_vat_takings topic=cafe_vat_on_takings style=multi_feature
+i run a small cafe and the till shows takings with 5% VAT already inside. i want to type the day's takings, see the VAT part, save the day, and see how much VAT i owe this month
+needs: type the day's takings including VAT | shows the VAT part and sales without VAT | save the day with one button | total VAT owed this month | list of saved days
+---
+app "Cafe VAT" coffee teal
+table sale takings money, vat money
+state till money = 0
+setting vat_rate num 0..100 = 5 "VAT rate %"
+let vatpart = till - till / (1 + vat_rate / 100)
+section "Today's takings"
+  field till "Takings including VAT"
+  if till > 0
+    "VAT inside" round(vatpart * 100) / 100 big
+    "Sales without VAT" round((till - vatpart) * 100) / 100 faint
+    button "Save today" fill accent tap add sale takings = till, vat = vatpart then set till = 0
+  else
+    "Type what the till shows to see the VAT part." faint
+statcard round(sum(sale.vat month) * 100) / 100, "VAT to pay this month"
+section "Saved days", plural(count(sale month), "day")
+  list sale top 7, "No days saved yet."
+===
+@rich domain=c1_markup_price_round topic=shop_markup_selling_price style=detailed
+for my shop: i type what an item cost me, drag a markup percent, and it tells me the price to put on the shelf rounded to the nearest 5, the profit on each piece and my margin
+needs: type the cost of an item | slider for markup percent | selling price rounded to the nearest unit | profit per piece | margin percent
+---
+app "Markup" tag plum
+state cost money = 0
+state markup num = 30
+setting round_to num 1.. = 5 "Round price to nearest"
+let price = round(cost * (1 + markup / 100) / round_to) * round_to
+field cost "What it cost you"
+"Markup" markup "%" faint
+slider markup 0..200
+if cost > 0
+  statcard price, "put this on the shelf"
+  row gap 2
+    stat price - cost, "profit per piece"
+    stat round((price - cost) * 100 / price), "percent margin"
+else
+  "Type the cost to get a shelf price." faint
+===
+@rich domain=c1_margin_checker topic=profit_margin_check style=multi_feature
+am i losing money on this item? type buying price and selling price and show profit, margin and markup, and warn me red if i am selling below cost
+needs: type cost price and selling price | shows profit or loss per piece | margin percent | markup percent | warning when selling below cost
+---
+app "Margin Check" chart red
+state cost money = 0
+state sell money = 0
+let profit = sell - cost
+let margin = if(sell > 0, profit * 100 / sell, 0)
+let markup = if(cost > 0, profit * 100 / cost, 0)
+row gap 2
+  field cost "Cost price"
+  field sell "Selling price"
+if cost > 0 and sell > 0
+  statcard profit, if(profit < 0, "loss on each piece", "profit on each piece")
+  row gap 2
+    stat round(margin * 10) / 10, "percent margin"
+    stat round(markup * 10) / 10, "percent markup"
+  if profit < 0
+    "You are selling below cost." color bad bold
+else
+  "Enter both prices and I will tell you your margin." faint
+===
+@rich domain=c1_invoice_line_items topic=invoice_with_line_items style=detailed
+need to write quick invoices for clients: add each line with a description, quantity and unit price, set a tax percent and a discount percent, and see subtotal, tax and total due at the top. let me tap a line to fix it or swipe it away
+needs: add a line with item, quantity and price | tax percent setting | discount percent setting | subtotal, tax and total due | tap a line to edit or swipe to remove
+---
+app "Invoice" note ink dark
+table line item text, qty num 1.. = 1, price money
+setting tax num 0..100 = 0 "Tax %"
+setting discount num 0..100 = 0 "Discount %"
+let sub = sum(line, it.qty * it.price)
+let disc = sub * discount / 100
+let taxed = (sub - disc) * tax / 100
+topbar "Invoice", line, "Add item"
+statcard round((sub - disc + taxed) * 100) / 100, "total due"
+row gap 2
+  stat sub, "subtotal"
+  stat round(taxed * 100) / 100, "tax"
+section "Items", plural(count(line), "line")
+  each line sort at as l empty "No items yet. Tap Add item to start the invoice."
+    row tap edit l swipe remove l
+      l.item grow
+      l.qty "x" l.price faint
+      l.qty * l.price bold
+===
+@rich domain=c1_cart_free_delivery topic=cart_with_delivery_fee style=multi_feature
+online grocery cart: add items with quantity and price, delivery is 200 unless the cart goes over a free delivery limit, and tell me how much more to add to get it free
+needs: add items with quantity and price | delivery fee setting | free delivery limit setting | how much more to add for free delivery | total to pay with delivery
+---
+app "Cart" cart green
+table item name text, qty num 1..99 = 1, price money
+setting free_over money = 2000 "Free delivery over"
+setting fee money = 200 "Delivery fee"
+let subtotal = sum(item, it.qty * it.price)
+let delivery = if(subtotal = 0, 0, if(subtotal >= free_over, 0, fee))
+topbar "My Cart", item, "Add to cart"
+statcard subtotal + delivery, "to pay, free delivery at" free_over, free_over
+if subtotal > 0
+  if delivery = 0
+    "Delivery is free." color good bold
+  else
+    "Add" free_over - subtotal "more and delivery is free." faint
+  "Items" subtotal "+ delivery" delivery faint
+section "In your cart", plural(count(item), "item")
+  each item as i empty "Your cart is empty. Tap Add to cart."
+    row tap edit i swipe remove i
+      i.name grow
+      i.qty "x" i.price faint
+      i.qty * i.price bold
+===
+@rich domain=c1_currency_typed_rate topic=currency_with_typed_rate style=custom_ui
+travelling next month. i type the exchange rate i got from the bank myself, the amount, and whether i am buying or selling foreign cash. show how much i get and let me save conversions in a little list
+needs: type the amount | type the exchange rate | choose buying or selling foreign cash | shows the amount received | save conversions to a history
+---
+app "Currency" coin yellow
+state amount money = 0
+state rate num = 0
+state dir pick Buying|Selling = Buying
+table swap amount money, rate num, result money
+let result = if(dir = Buying, amount / rate, amount * rate)
+field amount "Amount to change"
+field rate "Bank rate (local money per 1 foreign)"
+choice dir
+if amount > 0 and rate > 0
+  statcard round(result * 100) / 100, if(dir = Buying, "foreign cash you get", "local money you get")
+  button "Save" tap add swap amount = amount, rate = rate, result = result
+else
+  "Type the amount and the bank rate." faint
+section "Saved", count(swap)
+  each swap top 6 as w empty "Nothing saved yet."
+    row
+      w.amount "at" w.rate grow faint
+      round(w.result * 100) / 100 bold
+===
+@rich domain=c1_salary_take_home topic=salary_after_tax_deductions style=detailed
+what lands in my account each month? i give gross salary, income tax percent, provident fund percent and any fixed deduction, and want take home per month and for the whole year
+needs: set gross monthly salary | income tax percent | provident fund percent | other fixed deduction | take-home per month and per year | bar showing how the salary splits
+---
+app "Take Home" wallet pink
+setting gross money = 100000 "Monthly gross salary"
+setting tax num 0..60 = 10 "Income tax %"
+setting pf num 0..30 = 5 "Provident fund %"
+setting other money = 0 "Other deductions"
+let taxamt = gross * tax / 100
+let pfamt = gross * pf / 100
+let net = gross - taxamt - pfamt - other
+statcard round(net), "take-home per month", gross
+"In a year" round(net * 12) bold
+section "Where it goes", gross
+  draw 100, 6
+    rect 0, 0, 100, 6 fill soft radius 3
+    rect 0, 0, 100 * max(net, 0) / gross, 6 fill accent radius 3
+  row
+    "Tax" grow
+    round(taxamt) bold
+  row
+    "Provident fund" grow
+    round(pfamt) bold
+  row
+    "Other" grow
+    other bold
+===
+@rich domain=c1_overtime_week topic=weekly_overtime_pay style=multi_feature
+factory shift worker, i get normal pay up to 40 hours a week and then time and a half, or double on bad weeks. let me enter hours and see the normal pay, the overtime pay and the total
+needs: enter hours worked in the week | set hourly rate and regular hours | choose time and a half or double | shows regular pay and overtime pay | total pay for the week
+---
+app "Overtime" clock grey
+state hours num = 45
+state mult pick Time_and_half|Double = Time_and_half
+setting rate money = 400 "Hourly rate"
+setting regular num 1..100 = 40 "Regular hours per week"
+let m = if(mult = Double, 2, 1.5)
+let ot = max(hours - regular, 0)
+let base = min(hours, regular) * rate
+let otpay = ot * rate * m
+field hours "Hours worked this week"
+choice mult
+statcard round(base + otpay), "total pay this week"
+row gap 2
+  stat round(base), "regular pay"
+  stat round(otpay), if(ot > 0, plural(ot, "overtime hour"), "no overtime")
+===
+@rich domain=c1_freelance_quote topic=freelancer_project_quote style=custom_ui
+quote for a design client: hours i think it will take, my hourly rate, how many revisions they want (first two are free, after that an hour each), plus rush or weekend surcharge, and a 30% deposit amount
+needs: slider for estimated hours | hourly rate field | revisions with two free | choose normal, rush or weekend | quote total and 30 percent deposit
+---
+app "Quote" pen ocean
+state hours num = 20
+state rate money = 25
+state revs num = 2
+state speed pick Normal|Rush|Weekend = Normal
+let bump = if(speed = Rush, 1.25, if(speed = Weekend, 1.5, 1))
+let work = (hours + max(revs - 2, 0)) * rate * bump
+field rate "Hourly rate"
+"Hours" hours faint
+slider hours 1..200
+"Revisions" revs "(two included)" faint
+slider revs 0..10
+choice speed
+statcard round(work), "project quote"
+row gap 2
+  stat round(work * 0.3), "deposit (30%)"
+  stat round(work * 0.7), "on delivery"
+===
+@rich domain=c1_hourly_rate_goal topic=rate_needed_for_income style=detailed
+how much should i charge per hour? i want a take-home of a certain amount a month, i have business costs, tax to pay, and only some hours a week are billable. work out the hourly rate i need
+needs: type wanted monthly take-home | monthly business costs | tax percent | billable hours per week | the hourly rate needed
+---
+app "Rate Goal" target mint dark
+state want money = 3000
+state costs money = 500
+state tax num = 15
+state hours num = 25
+let gross = (want + costs) / (1 - tax / 100)
+let monthly_hours = hours * 4.33
+field want "Wanted take-home per month"
+field costs "Business costs per month"
+"Tax" tax "%" faint
+slider tax 0..45
+"Billable hours per week" hours faint
+slider hours 5..60
+if monthly_hours > 0
+  statcard round(gross / monthly_hours * 100) / 100, "per hour is the rate you need"
+  "You must earn" round(gross) "a month before tax and costs." faint
+===
+@rich domain=c1_flat_rent_shares topic=rent_split_by_room_shares style=custom_ui
+three of us in one flat but rooms are different sizes. master room counts 3 shares, middle 2, small 1 by default, i can change them. type the rent and show what each pays
+needs: type the monthly rent | name each room | share weights per room | amount each room pays | total check
+---
+app "Rent Shares" home slate
+state rent money = 0
+state n1 text = "Master room"
+state n2 text = "Middle room"
+state n3 text = "Small room"
+state a num = 3
+state b num = 2
+state c num = 1
+let parts = a + b + c
+field rent "Monthly rent"
+section "Rooms", plural(parts, "share")
+  row gap 2
+    field n1
+    "x" a bold
+    slider a 1..6
+  row gap 2
+    field n2
+    "x" b bold
+    slider b 1..6
+  row gap 2
+    field n3
+    "x" c bold
+    slider c 1..6
+if rent > 0
+  section "Each pays", rent
+    row
+      n1 grow
+      round(rent * a / parts) bold
+    row
+      n2 grow
+      round(rent * b / parts) bold
+    row
+      n3 grow
+      round(rent * c / parts) bold
+else
+  "Type the rent to see each share." faint
+===
+@rich domain=c1_electric_by_days topic=utility_split_by_days_stayed style=multi_feature
+electricity bill for the shared house, but not all of us stayed the full month. enter the bill and days each person stayed and split it fairly by days
+needs: type the electricity bill | enter days stayed for three people | amount per person by days | cost per day | bars comparing the three shares
+---
+app "Bill by Days" bolt purple
+state bill money = 0
+state d1 num = 30
+state d2 num = 20
+state d3 num = 10
+let days = d1 + d2 + d3
+let perday = if(days > 0, bill / days, 0)
+field bill "Electricity bill"
+row gap 2
+  field d1 "Person 1 days"
+  field d2 "Person 2 days"
+  field d3 "Person 3 days"
+if bill > 0 and days > 0
+  statcard round(perday * 100) / 100, "per person-day"
+  section "Each person pays"
+    row
+      "Person 1" grow
+      round(perday * d1) bold
+    row
+      "Person 2" grow
+      round(perday * d2) bold
+    row
+      "Person 3" grow
+      round(perday * d3) bold
+    draw 100, 6
+      rect 0, 0, 100 * d1 / days, 6 fill accent
+      rect 100 * d1 / days, 0, 100 * d2 / days, 6 fill warn
+      rect 100 * (d1 + d2) / days, 0, 100 * d3 / days, 6 fill muted
+else
+  "Type the bill and the days to see the split." faint
+===
+@rich domain=c1_family_loan_interest topic=simple_interest_loan style=detailed
+my cousin wants to borrow money from me and we agreed simple interest per year. i type the amount, the yearly rate and the time in months or years and want to see the interest, the total to pay back and a monthly payment. save loans i gave so i remember
+needs: type the loan amount | yearly interest rate | time in months or years | shows interest and total to pay back | monthly payment | save loans to a list
+---
+app "Simple Loan" money orange
+state who text = ""
+state p money = 0
+state rate num = 10
+state t num = 12
+state unit pick Months|Years = Months
+table loan who text, principal money, back money
+let years = if(unit = Months, t / 12, t)
+let interest = p * rate / 100 * years
+let back = p + interest
+field who "Borrower"
+field p "Amount lent"
+"Rate" rate "% per year" faint
+slider rate 0..40
+field t "How long"
+choice unit
+if p > 0
+  statcard round(back), "to pay back", round(back)
+  row gap 2
+    stat round(interest), "interest"
+    stat round(back / (years * 12)), "per month"
+  button "Save loan" tap add loan who = who, principal = p, back = back
+section "Loans I gave", sum(loan.back)
+  each loan as l empty "No loans saved."
+    row swipe remove l
+      l.who grow
+      l.principal faint
+      l.back bold
+===
+@rich domain=c1_emi_pow topic=emi_reducing_balance style=detailed
+house loan EMI: type the loan amount, the yearly interest rate and years. i want the monthly EMI on reducing balance, total interest over the whole loan, and a chart of how the balance goes down year by year
+needs: type loan amount, rate and years | monthly EMI on reducing balance | total interest paid | chart of balance each year
+---
+app "EMI" calc blue
+state loan money = 1000000
+state rate num = 12
+state years num = 5
+let r = rate / 1200
+let n = years * 12
+let emi = if(r = 0, loan / n, loan * r * pow(1 + r, n) / (pow(1 + r, n) - 1))
+let bal(k num) = if(r = 0, loan - emi * k, loan * pow(1 + r, k) - emi * (pow(1 + r, k) - 1) / r)
+field loan "Loan amount"
+"Interest rate" rate "% per year" faint
+slider rate 1..30
+"Years" years faint
+slider years 1..30
+statcard round(emi), "EMI per month"
+row gap 2
+  stat round(emi * n - loan), "total interest"
+  stat round(emi * n), "total paid"
+section "Balance at the end of each year"
+  trend 1..years, max(round(bal(it * 12)), 0)
+===
+@rich domain=c1_savings_compound topic=savings_growth_pow style=multi_feature
+if i save a fixed amount every month at some yearly profit rate, how much will i have after N years? show the final amount, how much of it is my own money and a bar for each year
+needs: monthly deposit and starting amount | yearly profit rate | number of years | final amount | own money versus profit earned | bar chart per year
+---
+app "Grow" plant green
+state start money = 0
+state monthly money = 5000
+state rate num = 8
+state years num = 10
+let r = rate / 1200
+let fv(k num) = start * pow(1 + r, k) + if(r = 0, monthly * k, monthly * (pow(1 + r, k) - 1) / r)
+row gap 2
+  field start "Starting amount"
+  field monthly "Deposit per month"
+"Yearly rate" rate "%" faint
+slider rate 0..25
+"Years" years faint
+slider years 1..40
+statcard round(fv(years * 12)), "after" years "years"
+row gap 2
+  stat start + monthly * years * 12, "your own money"
+  stat round(fv(years * 12) - start - monthly * years * 12), "profit earned"
+section "Year by year"
+  bars 1..years, round(fv(it * 12)), join("Y", it)
+===
+@rich domain=c1_installment_plan topic=shop_installment_plan style=custom_ui
+customer wants to buy a fridge on installments. shop price, down payment, number of months and the extra percent we add for installments. show the monthly installment and how much extra they pay in total
+needs: type shop price | down payment | months slider | extra percent for installments | monthly installment | total extra paid
+---
+app "Installments" bag teal
+state price money = 0
+state down money = 0
+state months num = 12
+state extra num = 10
+let left = max(price - down, 0)
+let total = left * (1 + extra / 100)
+field price "Cash price"
+field down "Down payment"
+"Months" months faint
+slider months 3..36
+"Extra for installments" extra "%" faint
+slider extra 0..40
+if left > 0
+  statcard round(total / months), "per month for" months "months"
+  row gap 2
+    stat round(total - left), "extra paid"
+    stat round(down + total), "total cost"
+else
+  "Type the price to plan the installments." faint
+===
+@rich domain=c1_sales_commission_slabs topic=sales_commission_slabs style=detailed
+my agents get 2% on the first 100000 of sales, 3% on the next 400000 and 5% on anything above 500000. type monthly sales and show the commission for each slab and the total
+needs: type monthly sales | commission for the first slab | commission for the middle slab | commission above the top slab | total commission
+---
+app "Commission" users yellow
+state sales money = 0
+let s1 = min(sales, 100000) * 0.02
+let s2 = max(min(sales, 500000) - 100000, 0) * 0.03
+let s3 = max(sales - 500000, 0) * 0.05
+field sales "Sales this month"
+if sales > 0
+  statcard round(s1 + s2 + s3), "commission earned"
+  section "By slab", "overall" round((s1 + s2 + s3) * 1000 / sales) / 10 "%"
+    row
+      "First 100k at 2%" grow
+      round(s1) bold
+    row
+      "Next 400k at 3%" grow
+      round(s2) bold
+    row
+      "Above 500k at 5%" grow
+      round(s3) bold
+else
+  "Type this month's sales to see the commission." faint
+===
+@rich domain=c1_break_even topic=break_even_units style=multi_feature
+thinking of selling handmade candles. monthly rent and tools cost, selling price per candle, cost to make one. how many do i need to sell to break even, and how many for a profit i want?
+needs: monthly fixed costs | price and making cost per unit | units to break even | revenue at break even | units for a target profit
+---
+app "Break Even" chart red
+state fixed money = 20000
+state price money = 800
+state vc money = 350
+state goalp money = 10000
+let earns = price - vc
+let be = if(earns > 0, fixed / earns, 0)
+row gap 2
+  field fixed "Fixed costs per month"
+  field goalp "Profit wanted"
+row gap 2
+  field price "Price per piece"
+  field vc "Cost to make one"
+if earns > 0
+  statcard 0 - floor(0 - be), "pieces to break even"
+  row gap 2
+    stat round(be * price), "sales at break even"
+    stat 0 - floor(0 - (fixed + goalp) / earns), "pieces for your profit"
+  "Each piece earns you" earns "after its cost." faint
+else
+  "Your price must be higher than the cost to make one." color bad bold
+===
+@rich domain=c1_gold_tola_value topic=gold_price_per_tola_gram style=custom_ui
+gold shop: i type today's price for one tola of 24 karat, then the weight and whether in tola or grams, and pick 24, 22, 21 or 18 karat. show price per gram and the value of my piece
+needs: type the 24 karat price per tola | weight in grams or tola | pick the karat | price per gram | value of the piece
+---
+app "Gold Value" coin yellow
+state rate money = 0
+state weight num = 10
+state wunit pick Grams|Tola = Grams
+state karat pick K24|K22|K21|K18 = K22
+let k = if(karat = K24, 24, if(karat = K22, 22, if(karat = K21, 21, 18)))
+let grams = if(wunit = Grams, weight, weight * 11.664)
+let pergram = rate / 11.664 * k / 24
+field rate "24K price per tola"
+choice karat
+field weight "Weight"
+choice wunit
+if rate > 0
+  statcard round(pergram * grams), "value of your gold"
+  row gap 2
+    stat round(pergram), "per gram at" k "karat"
+    stat round(grams * 100) / 100, "grams in total"
+else
+  "Type today's tola price to start." faint
+===
+@rich domain=c1_silver_making_charges topic=silver_jewellery_price style=detailed
+selling silver jewellery. i enter the silver rate per tola, weight in grams, making charges per gram and wastage percent, and the app gives the final price for the customer
+needs: silver rate per tola | weight in grams | making charge per gram | wastage percent | final price for the customer
+---
+app "Silver Price" star grey
+state rate money = 0
+state grams num = 20
+state making money = 50
+state waste num = 5
+let metal = rate / 11.664 * grams * (1 + waste / 100)
+let labour = making * grams
+field rate "Silver price per tola"
+row gap 2
+  field grams "Weight (grams)"
+  field making "Making per gram"
+"Wastage" waste "%" faint
+slider waste 0..20
+if rate > 0
+  statcard round(metal + labour), "final price"
+  row gap 2
+    stat round(metal), "silver"
+    stat round(labour), "making charges"
+else
+  "Enter the silver rate to price a piece." faint
+===
+@rich domain=c1_discount_ladder topic=stacked_discounts style=custom_ui
+sale season, stores stack discounts like 20% off then extra 10% off then 5% coupon. let me type the price and set each step, show the price after every step and the real total discount
+needs: type the original price | three discount steps | price after each step | final price | real total discount percent
+---
+app "Discount Ladder" tag pink
+state price money = 0
+state d1 num = 20
+state d2 num = 10
+state d3 num = 5
+let p1 = price * (1 - d1 / 100)
+let p2 = p1 * (1 - d2 / 100)
+let p3 = p2 * (1 - d3 / 100)
+field price "Original price"
+"First discount" d1 "%" faint
+slider d1 0..80
+"Extra discount" d2 "%" faint
+slider d2 0..50
+"Coupon" d3 "%" faint
+slider d3 0..30
+if price > 0
+  section "Step by step", "total off" round((1 - p3 / price) * 1000) / 10 "%"
+    row
+      "After first" grow
+      round(p1 * 100) / 100
+    row
+      "After extra" grow
+      round(p2 * 100) / 100
+    row
+      "After coupon" grow
+      round(p3 * 100) / 100 big
+else
+  "Type the price to climb the ladder." faint

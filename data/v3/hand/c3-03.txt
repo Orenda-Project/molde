@@ -1,0 +1,455 @@
+@rich domain=c3_litre_gallon topic=litres_to_gallons style=short
+litres to gallons for the fuel prices in my uk trip, us and uk gallons are different
+needs: litres input | us or uk gallon chips | gallons result | litres per gallon note
+---
+app "Litre Gallon" cup teal
+state l num = 45
+state kind pick US|UK = UK
+let per = if(kind = US, 3.78541, 4.54609)
+field l "Litres"
+choice kind
+statcard round(l / per * 100) / 100, if(kind = US, "US gallons", "UK gallons"), 0
+"One" kind "gallon is" per "litres." faint
+===
+@rich domain=c3_speed_units topic=speed_units_kmh_mph_ms style=multi_feature
+my bike computer shows km/h, the american cycling forum talks mph, and physics homework needs metres per second. type one speed in km/h and show the other two, and also how long one km takes at that speed
+needs: speed input in km per hour | miles per hour | metres per second | time to cover one km
+---
+app "Speed Units" bolt blue dark
+state kmh num = 25
+let ms = kmh / 3.6
+field kmh "Speed (km/h)"
+section "The same speed"
+  row gap 2
+    statcard round(kmh * 0.621371 * 10) / 10, "mph"
+    statcard round(ms * 100) / 100, "m/s"
+  if kmh > 0
+    "One km takes" 3600 / kmh * 1s head
+  else
+    "Enter a speed above zero." faint
+===
+@rich domain=c3_plot_area topic=marla_kanal_plot_price style=detailed
+property dealer here. client gives plot size in marla or kanal or square feet. show it in all three, and with the price per marla give the total price. one marla is 272.25 sq ft and one kanal is 20 marla
+needs: plot size input | unit chips marla kanal or square feet | size in all three units | price per marla | total price
+---
+app "Plot Size" home green
+setting rate money = 1800000 "Price per marla"
+state size num = 10
+state unit pick Marla|Kanal|Sq_ft = Marla
+let marla = if(unit = Marla, size, if(unit = Kanal, size * 20, size / 272.25))
+field size "Plot size"
+choice unit
+section "In every unit"
+  "Marla" round(marla * 100) / 100 bold
+  "Kanal" round(marla / 20 * 1000) / 1000 bold
+  "Square feet" round(marla * 272.25) bold
+  "Square metres" round(marla * 272.25 * 0.0929) bold
+field rate
+statcard marla * rate, "total price", 0
+===
+@rich domain=c3_cups_grams topic=cooking_cups_to_grams style=multi_feature
+grandma's recipe is in cups and tablespoons but my scale is in grams. choose flour, sugar, rice or butter, enter cups and tbsp, and show grams and ml
+needs: ingredient chips | cups and tablespoons inputs | weight in grams | volume in ml
+---
+app "Cups to Grams" food mint
+state item pick Flour|Sugar|Rice|Butter = Flour
+state cups num = 1.5
+state tbsp num = 2
+let gcup = if(item = Flour, 125, if(item = Sugar, 200, if(item = Rice, 185, 227)))
+let tc = cups + tbsp / 16
+choice item
+row gap 2
+  field cups
+  field tbsp
+statcard round(tc * gcup), "grams of" item, 0
+"Volume" round(tc * 240) "ml" head
+"One cup of" item "is about" gcup "g" faint
+===
+@rich domain=c3_storage_fits topic=phone_storage_what_fits style=detailed
+my phone has 128 gb and 41 gb free. tell me how many photos, songs or minutes of video that is. use 4 mb a photo, 5 mb a song and 100 mb per minute of video
+needs: free storage input in gb | photos that fit | songs that fit | minutes of video | percent of phone free
+---
+app "Storage" box slate dark
+state total num = 128
+state free num = 41
+let mb = free * 1024
+field total "Phone storage (GB)"
+field free "Free space (GB)"
+statcard round(free / max(total, 1) * 100), "% of the phone is free", 100
+section "What fits"
+  round(mb / 4) "photos" bold
+  round(mb / 5) "songs" bold
+  floor(mb / 100 / 60) "h" round(mb / 100 % 60) "min of video" bold
+===
+@rich domain=c3_fever_check topic=body_temperature_fever_check style=short
+temperature converter c f with a fever warning for the kids
+needs: temperature input | celsius or fahrenheit chips | converted value | fever level text
+---
+app "Fever Check" heart red
+state t num = 38.2
+state scale pick Celsius|Fahrenheit = Celsius
+let c = if(scale = Celsius, t, (t - 32) * 5 / 9)
+field t "Temperature"
+choice scale
+statcard round(c * 10) / 10, "degrees C =" round((c * 9 / 5 + 32) * 10) / 10 "F", 40
+if c < 35
+  "Low. Warm up and recheck." color warn
+if c >= 35 and c < 37.5
+  "Normal range." color good
+if c >= 37.5 and c < 39
+  "Fever. Rest, fluids, recheck in a few hours." color warn
+if c >= 39
+  "High fever. Call a doctor." color bad
+===
+@rich domain=c3_baby_feed topic=baby_feed_amounts style=multi_feature
+newborn at home, weighs 3.6 kg. the nurse said about 150 ml per kilo per day. how many ml in total and how many feeds, ml per feed, and how many hours apart if i feed 8 times
+needs: baby weight input | ml per day total | number of feeds slider | ml per feed | hours between feeds
+---
+app "Baby Feeds" baby yellow
+setting kg num = 3.6 "Baby weight (kg)"
+state feeds num = 8
+let total = kg * 150
+field kg
+"Feeds a day" feeds faint
+slider feeds 4..12
+statcard round(total), "ml of milk a day", 0
+"Each feed" round(total / feeds) "ml" big
+"One feed every" round(24 / feeds * 10) / 10 "hours" head
+"This is a guide. Follow your doctor or nurse." faint
+===
+@rich domain=c3_blood_donor topic=blood_donation_next_date style=detailed
+i donate blood. log each donation date, show when i can donate again (56 days later), how many days to wait or if i can go now, and how many times i donated this year
+needs: log a donation with date | next eligible date after 56 days | days to wait or ready now | donations this year | list of donations
+---
+app "Blood Donor" drop red
+table donation place text?
+let lastd = last(donation.at)
+let nextd = lastd + 56
+topbar "Blood Donor", donation, "Log donation"
+if count(donation) = 0
+  "Log your first donation to see when you can give again." faint
+else
+  statcard max(nextd - today, 0), "days until you can donate again on" nextd, 56
+  if nextd <= today
+    "You can donate now." color good
+statcard count(donation year), "donations this year", 4
+list donation top 6, "No donations yet."
+===
+@rich domain=c3_leave_balance topic=annual_leave_balance style=multi_feature
+company gives 21 days leave a year, earned a bit each day. add each leave i took with how many days, then show how much i have earned so far this year, taken, and what is left right now
+needs: yearly leave days setting | log leave taken with days | earned so far this year | leave balance | taken total
+---
+app "Leave" plane purple
+table leave days num 0.5..30 = 1
+setting yearly num = 21 "Leave days per year"
+let jan1 = addmonths(today - monthday(today) + 1, 1 - month(today))
+let earned = yearly * (today - jan1 + 1) / 365
+let taken = sum(leave.days year)
+topbar "Leave", leave, "Add leave"
+statcard round((earned - taken) * 10) / 10, "days available now", yearly
+section "This year"
+  "Earned so far" round(earned * 10) / 10 "days" bold
+  "Taken" taken "days" bold
+list leave top 8, "No leave taken this year."
+===
+@rich domain=c3_notice_period topic=notice_period_last_day style=short
+resign date plus notice period gives my last working day
+needs: resignation date input | notice period chips 30 60 or 90 days | last working day with weekday | days remaining
+---
+app "Notice Period" bag grey
+setting resign date = today "Resignation date"
+state notice pick D30|D60|D90 = D30
+let n = if(notice = D30, 30, if(notice = D60, 60, 90))
+let lastday = resign + n
+field resign
+choice notice
+statcard max(lastday - today, 0), "days of notice left. Last day" lastday, n
+dayname(lastday) "is a" faint
+===
+@rich domain=c3_warranty_expiry topic=warranty_expiry_tracker style=detailed
+keep track of warranties for my fridge, phone, laptop. add what it is, purchase date and months of warranty, show expiry date and days left, soonest expiry first, and mark expired ones in red
+needs: add item with purchase date and warranty months | expiry date | days left | soonest first | expired in red
+---
+app "Warranties" shield blue
+table item name text, bought date = today "Purchase date", months num 1..120 = 12
+let expiry(i item) = addmonths(i.bought, i.months)
+topbar "Warranties", item, "Add item"
+statcard count(item where addmonths(bought, months) >= today), "items still under warranty", count(item)
+each item sort expiry(it) as i empty "No items yet. Add your fridge, phone or laptop with Add item."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      "expires" expiry(i) faint
+    if expiry(i) >= today
+      expiry(i) - today "days left" bold
+    else
+      "expired" bold color bad
+===
+@rich domain=c3_library_fine topic=library_book_due_fines style=multi_feature
+i borrow books from three libraries. add book title and the day i borrowed it, loan is 14 days, show the due date, days left and fine at 5 rupees a day when late, and the total fine now
+needs: add a book with borrow date | due date after 14 days | days left or late | fine per late day | total fine now
+---
+app "Library Due" book plum
+table loan title text, taken date = today "Borrowed on", back bool
+setting fee money = 5 "Fine per late day"
+let late(b loan) = max(today - (b.taken + 14), 0)
+topbar "Library Due", loan, "Add book"
+statcard sum(loan where back = no, late(it) * fee), "total fine right now", 0
+each loan where back = no sort taken as b empty "No books out. Add one when you borrow it."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      "due" b.taken + 14 faint
+    if late(b) > 0
+      late(b) "days late" color bad bold
+    else
+      b.taken + 14 - today "days left" bold
+    button "Returned" tap set b.back = yes
+===
+@rich domain=c3_subscription_bills topic=subscription_costs_renewals style=detailed
+netflix, spotify, gym, cloud storage. add each subscription with price, monthly or yearly billing and next renewal date. show what they cost per month in total, per year, and which renews first
+needs: add subscription with price billing and renewal date | monthly total | yearly total | which renews first | days until renewal
+---
+app "Subscriptions" tag orange
+table sub name text, price money, billing pick Monthly|Yearly = Monthly, renews date = today
+let permonth(s sub) = if(s.billing = Monthly, s.price, s.price / 12)
+topbar "Subscriptions", sub, "Add subscription"
+statcard sum(sub, permonth(it)), "a month in total, a year:" sum(sub, permonth(it)) * 12, 0
+each sub where renews >= today sort renews top 1 as s
+  stack card gap 0
+    "Renews first" faint
+    s.name bold large
+    s.renews - today "days to go" head
+each sub sort renews as s empty "No subscriptions yet. Add the first one with Add subscription."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.billing "renews" s.renews faint
+    s.price bold
+===
+@rich domain=c3_age_gap topic=age_difference_two_people style=short
+how many years months and days older is my brother than me
+needs: two birth dates | difference in years months and days | difference in total days
+---
+app "Age Gap" users purple
+setting older date = 1994-03-12 "Older person born"
+setting younger date = 1998-09-30 "Younger person born"
+let mths = (year(younger) - year(older)) * 12 + month(younger) - month(older) - if(monthday(younger) < monthday(older), 1, 0)
+field older
+field younger
+if younger < older
+  "The second date must be later than the first." faint
+else
+  statcard floor(mths / 12), "years," mths % 12 "months and" younger - addmonths(older, mths) "days", 0
+  "In total" younger - older "days apart" head
+===
+@rich domain=c3_service_gratuity topic=service_length_gratuity style=multi_feature
+my last day is coming up and hr asked how long i have worked. enter joining date and last day, show years months days of service and a rough gratuity of one month salary for each full year
+needs: joining date and last day inputs | service length in years months and days | full years | gratuity amount from salary
+---
+app "Service Length" school ocean
+setting join date = 2019-06-15 "Joining date"
+setting lastd date = today "Last working day"
+setting salary money = 90000 "Monthly salary"
+let mths = (year(lastd) - year(join)) * 12 + month(lastd) - month(join) - if(monthday(lastd) < monthday(join), 1, 0)
+let yrs = floor(mths / 12)
+field join
+field lastd
+field salary
+if lastd <= join
+  "The last day must be after the joining date." faint
+else
+  statcard yrs, "full years," mths % 12 "months and" lastd - addmonths(join, mths) "days of service", 0
+  section "Gratuity estimate"
+    yrs * salary big
+    "One month of salary for each full year. Your policy may differ." faint
+===
+@rich domain=c3_parking_fee topic=parking_fee_by_time style=detailed
+airport parking charges 200 for the first hour and 100 for each extra hour or part of an hour. enter the time in and the time out, show how long i stayed and the fee. cars sometimes stay past midnight
+needs: time in and time out inputs | length of stay | fee with first hour and extra hours | works past midnight
+---
+app "Parking Fee" car slate
+setting first money = 200 "First hour fee"
+setting extra money = 100 "Each extra hour"
+state tin time = 18:20
+state tout time = 22:05
+let stay = tout - tin
+let hrs = 0 - floor(0 - stay / 1h)
+let fee = if(hrs <= 0, 0, first + (hrs - 1) * extra)
+field tin "Time in"
+field tout "Time out"
+field first
+field extra
+statcard fee, "to pay for a stay of" stay, 0
+"Charged for" plural(hrs, "hour") faint
+===
+@rich domain=c3_appliance_kwh topic=appliance_electricity_cost style=detailed
+list my appliances with watts and hours used per day, show kwh per month for each and the cost at my unit rate, and the total bill estimate. ac is the big one i guess, show a bar comparing them
+needs: add appliance with watts and hours per day | kwh per month for each | monthly cost at unit rate | total estimate | bar comparison
+---
+app "Power Cost" bolt yellow
+table device name text, watts num 1..10000 = 100, hours num 0..24 = 4 "Hours per day"
+setting rate money = 55 "Price per unit (kWh)"
+let kwh(d device) = d.watts * d.hours * 30 / 1000
+topbar "Power Cost", device, "Add appliance"
+statcard sum(device, kwh(it)) * rate, "estimated bill for" round(sum(device, kwh(it))) "units a month", 0
+section "Which uses most", "kWh per month"
+  share device sort kwh(it) desc, kwh(it), it.name
+each device sort kwh(it) desc as d empty "No appliances yet. Add the AC, fridge and fans."
+  row card tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.watts "W for" d.hours "h a day" faint
+    kwh(d) * rate bold
+===
+@rich domain=c3_train_leave_by topic=train_leave_by_time style=short
+train at 17:45, it takes 50 minutes to get to the station and i want 15 minutes spare. when do i leave and how long from now
+needs: train time input | travel minutes and spare minutes | leave by time | minutes from now
+---
+app "Leave By" bus orange
+setting train time = 17:45 "Train departs"
+setting travel num = 50 "Minutes to the station"
+setting spare num = 15 "Spare minutes"
+let leave = train - (travel + spare) * 1m
+let wait = ((hour(leave) * 60 + minute(leave)) - (hour(now) * 60 + minute(now))) % 1440
+field train
+field travel
+field spare
+"Leave home at" faint
+leave big
+"That is in" floor(wait / 60) "h" wait % 60 "min" head
+===
+@rich domain=c3_year_progress topic=year_progress_days_left style=multi_feature
+how much of this year is gone? show the percent of the year, days left, weeks left, and which day of the year it is today. a progress bar would be fun
+needs: percent of year gone | days left | weeks left | day number of the year | progress bar
+---
+app "Year Progress" hourglass teal
+let jan1 = addmonths(today - monthday(today) + 1, 1 - month(today))
+let nextjan = addmonths(jan1, 12)
+let total = nextjan - jan1
+let dayno = today - jan1 + 1
+let pct = round(dayno / total * 100)
+statcard pct, "% of" year(today) "is done", 100
+draw 100, 6
+  rect 0, 0, 100, 6 fill soft radius 3
+  rect 0, 0, pct, 6 fill accent radius 3
+section "Time left"
+  total - dayno "days left" big
+  floor((total - dayno) / 7) "full weeks left" head
+  "Today is day" dayno "of" total faint
+===
+@rich domain=c3_pages_per_day topic=syllabus_pages_per_day style=detailed
+exam in march, textbook is 640 pages, i did 180 so far. i take one day off per week. how many pages do i need to read per day, and what date do i finish if i keep my pace
+needs: total pages done pages and exam date | rest days per week chips | pages per day needed | study days left | progress bar
+---
+app "Pages a Day" pencil plum
+setting total num = 640 "Total pages"
+setting done num = 180 "Pages done"
+setting exam date = 2027-03-10 "Exam date"
+state rest pick None|One_day|Two_days = One_day
+let off = if(rest = None, 0, if(rest = One_day, 1, 2))
+let study_days = floor(max(exam - today, 0) * (7 - off) / 7)
+let left = max(total - done, 0)
+field total
+field done
+field exam
+choice rest
+statcard if(study_days > 0, 0 - floor(0 - left / study_days), left), "pages a day for" plural(study_days, "study day"), 0
+draw 100, 4
+  rect 0, 0, 100, 4 fill soft radius 2
+  rect 0, 0, 100 * clamp(done / max(total, 1), 0, 1), 4 fill accent radius 2
+"Pages left:" left faint
+===
+@rich domain=c3_long_run_ladder topic=long_run_build_up_plan style=detailed
+half marathon on a date i set. my long run now is 10 km and i add 8 percent a week. show weeks left, and each week's long run distance from now, capped at 21 km, with the sunday date
+needs: race date and current long run inputs | weeks until race | long run distance for each week | cap at 21 km | week start dates
+---
+app "Long Run Plan" run green
+setting race date = 2027-02-14 "Race day"
+setting now_km num = 10 "Long run now (km)"
+let weeks = max(floor((race - today) / 7), 0)
+field race
+field now_km
+statcard weeks, "weeks until race day", 20
+if weeks = 0
+  "Race day is here or passed. Set a new date." faint
+else
+  section "Long run each week", "capped at 21 km"
+    each 0..weeks - 1 as w
+      row card gap 2
+        "Week" w + 1 bold
+        text today + w * 7 faint grow
+        round(min(now_km * pow(1.08, w), 21) * 10) / 10 "km" bold
+===
+@rich domain=c3_pace_converter topic=pace_per_km_per_mile style=short
+my pace is 5:30 per km, what is that per mile and in km/h, and what would a 5k take
+needs: pace minutes and seconds inputs | pace per mile | speed in km per hour | 5k time
+---
+app "Pace Convert" run pink
+state m num = 5
+state s num = 30
+let secs = m * 60 + s
+row gap 2
+  field m "Minutes per km"
+  field s "Seconds"
+if secs = 0
+  "Enter a pace to convert." faint
+else
+  "Per mile" faint
+  secs * 1.609344 * 1s big
+  "Speed" round(3600 / secs * 10) / 10 "km/h" big
+  "5 km in" secs * 5 * 1s head
+===
+@rich domain=c3_dose_times topic=dose_times_every_n_hours style=multi_feature
+antibiotic every 8 hours starting at 7:00. show me the times for all the doses in the day, and how long until the next dose. i can change the first dose time and the gap
+needs: first dose time and gap hours inputs | list of dose times | time until next dose
+---
+app "Dose Times" pill mint
+setting first time = 7:00 "First dose at"
+setting gap num 1..24 = 8 "Hours between doses"
+let n = floor(24 / gap)
+let nowm = hour(now) * 60 + minute(now)
+let firstm = hour(first) * 60 + minute(first)
+let wait = min(0..n - 1, (firstm + it * gap * 60 - nowm) % 1440)
+field first
+field gap
+section "Today's doses", "doses:" n
+  each 0..n - 1 as k
+    row
+      join("Dose ", k + 1) grow
+      first + k * gap * 1h bold
+"Next dose in" wait * 1m head
+"Follow the exact instructions from your pharmacist." faint
+===
+@rich domain=c3_hourly_wage topic=salary_to_hourly_rate style=short
+monthly salary to hourly and daily rate
+needs: monthly salary input | hours per week and days per week | hourly rate | daily rate
+---
+app "Hourly Wage" money teal
+setting salary money = 120000 "Monthly salary"
+state hrs num = 45
+state daysw num = 6
+let monthly_hours = hrs * 52 / 12
+field salary
+field hrs "Hours per week"
+field daysw "Days per week"
+statcard salary / max(monthly_hours, 1), "per hour", 0
+"Per day" salary / max(daysw * 52 / 12, 1) head
+"About" round(monthly_hours) "working hours a month" faint
+===
+@rich domain=c3_daily_steps topic=daily_steps_log_goal style=multi_feature
+log my steps each day against a goal of 8000, chart of the last 7 days with the goal line, my average, how many days i hit the goal, and a message when i am close today
+needs: log steps with a count | goal setting | bar chart with goal line | average steps | days the goal was hit
+---
+app "Step Count" walk blue
+table steps count num 1..100000
+setting target num = 8000 "Daily step goal"
+let today_n = sum(steps.count today)
+topbar "Step Count", steps, "Log steps"
+statcard today_n, "steps today of" target, target
+if today_n < target and today_n >= target * 0.8
+  "So close. A short walk gets you there." color warn
+section "Last 7 days", "goal hit on" count(days last 7 days, sum(steps.count on it) >= target) "days"
+  goalbars last 7 days, sum(steps.count on it), target
+"Average per day" round(sum(steps.count last 7 days) / 7) head
+list steps top 5, "No steps logged yet."

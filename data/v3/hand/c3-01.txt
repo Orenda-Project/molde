@@ -1,0 +1,571 @@
+@rich domain=c3_bmi_range topic=bmi_and_healthy_weight style=detailed
+my doctor keeps saying watch my bmi. I put in weight in kg and height in cm and want the bmi number with its category, plus the healthy weight range for my height and how far above or below it I am
+needs: enter weight and height | bmi number with a category label | ring toward bmi 25 | healthy weight range for my height | how many kg above or below the range
+---
+app "BMI Check" scale ocean
+setting kg num = 70 "Weight (kg)"
+setting cm num = 170 "Height (cm)"
+let m = cm / 100
+let bmi = if(m > 0, kg / (m * m), 0)
+let lo = 18.5 * m * m
+let hi = 24.9 * m * m
+let band = if(bmi = 0, "Enter your weight and height", if(bmi < 18.5, "Underweight", if(bmi < 25, "Healthy weight", if(bmi < 30, "Overweight", "Obese"))))
+section "Your numbers"
+  field kg
+  field cm
+statcard round(bmi * 10) / 10, band, 25
+section "Healthy range for your height"
+  if bmi = 0
+    "Fill in both numbers above to see your range." faint
+  else
+    round(lo * 10) / 10 "to" round(hi * 10) / 10 "kg" big
+    if kg > hi
+      "You are" round((kg - hi) * 10) / 10 "kg above the top of the range." faint
+    if kg < lo
+      "You are" round((lo - kg) * 10) / 10 "kg below the bottom of the range." faint
+    if kg >= lo and kg <= hi
+      "You are inside the healthy range." faint color good
+===
+@rich domain=c3_calorie_macros topic=daily_calories_and_macros style=multi_feature
+calorie calculator please: male or female, weight, height, age, how active I am (desk job to very active) and whether I want to lose, keep or gain. tell me calories a day and grams of protein, carbs and fat
+needs: pick male or female | weight height and age inputs | activity level chips | goal to lose keep or gain | daily calorie target | protein carbs and fat in grams
+---
+app "Calories" apple mint
+state sex pick Male|Female = Male
+state kg num = 70
+state cm num = 170
+state age num = 30
+state act pick Desk_job|Light|Moderate|Very_active = Light
+state aim pick Lose|Keep|Gain = Keep
+let bmr = 10 * kg + 6.25 * cm - 5 * age + if(sex = Male, 5, -161)
+let factor = if(act = Desk_job, 1.2, if(act = Light, 1.375, if(act = Moderate, 1.55, 1.725)))
+let burn = round(bmr * factor)
+let target = burn + if(aim = Lose, -500, if(aim = Gain, 300, 0))
+let protein = round(kg * 1.8)
+let fat = round(target * 0.25 / 9)
+let carbs = max(round((target - protein * 4 - fat * 9) / 4), 0)
+section "About you"
+  choice sex
+  field kg "Weight (kg)"
+  field cm "Height (cm)"
+  field age "Age"
+section "Activity and goal"
+  choice act
+  choice aim
+statcard target, "kcal a day to" aim, burn
+section "Daily macros", "grams"
+  row gap 2
+    statcard protein, "g protein"
+    statcard carbs, "g carbs"
+    statcard fat, "g fat"
+  "Burn at rest:" round(bmr) "kcal. Burn with your activity:" burn "kcal." faint
+===
+@rich domain=c3_water_need topic=daily_water_need style=short
+how much water should i drink each day for my weight, more if i exercise
+needs: weight input | exercise minutes slider | hot weather switch | litres per day | number of glasses
+---
+app "Water Need" cup teal
+state kg num = 65
+state ex num = 30
+state hot bool
+let ml = kg * 33 + ex * 12 + if(hot, 500, 0)
+let glasses = round(ml / 250)
+section "Your day"
+  field kg "Weight (kg)"
+  "Exercise" ex "minutes" faint
+  slider ex 0..180
+  toggle hot
+  "Hot weather today" faint
+statcard round(ml / 100) / 10, "litres of water today", 4
+"About" glasses "glasses of 250 ml" big
+"Your base need is" round(kg * 33) "ml. Exercise adds" ex * 12 "ml." faint
+===
+@rich domain=c3_run_pace topic=running_pace_and_predictions style=multi_feature
+after my 10k i want to know my pace per km, my speed in km/h and what that means for a 5k, a half marathon and a full marathon. i type distance and my finish time in minutes and seconds
+needs: distance and finish time inputs | pace per km | speed in km per hour | predicted 5k 10k half and marathon times
+---
+app "Run Pace" run orange
+state dist num = 10
+state mins num = 52
+state secs num = 30
+let total = (mins * 60 + secs) * 1s
+let pace = total / dist
+let kmh = if(total > 0s, dist / (total / 1h), 0)
+let predict(d num) = total * pow(d / dist, 1.06)
+section "Your run"
+  field dist "Distance (km)"
+  row gap 2
+    field mins "Minutes"
+    field secs "Seconds"
+if total > 0s
+  pace big
+  "per km" faint
+  "Speed" fixed(kmh, 1) "km/h" big
+  section "Predicted finish times", "Riegel formula"
+    each [5, 10, 21.1, 42.2] as d
+      row
+        join(d, " km") bold grow
+        text predict(d)
+else
+  "Enter a distance and a time to see your pace." faint
+===
+@rich domain=c3_heart_zones topic=heart_rate_zones style=detailed
+i run 3 times a week and need heart rate zones. use my age and my resting pulse, give me the five zones with the beats per minute range for each and say what each one is for
+needs: age and resting heart rate inputs | estimated max heart rate | five zones with beats per minute ranges | what each zone is for
+---
+app "Heart Zones" heart red dark
+state age num = 32
+state rest num = 60
+let maxhr = 220 - age
+let hrr = maxhr - rest
+let at(p num) = round(rest + hrr * p / 100)
+statcard maxhr, "beats a minute at your maximum", 0
+section "Your numbers"
+  field age "Age"
+  field rest "Resting heart rate"
+section "Training zones", "Karvonen method"
+  each [1, 2, 3, 4, 5] as z
+    row card gap 2 fill hue(120 - z * 22) opacity 0.9
+      "Zone" z bold
+      at(40 + z * 10) "-" at(50 + z * 10) "bpm" grow
+      if(z = 1, "Warm-up", if(z = 2, "Easy fat burn", if(z = 3, "Steady cardio", if(z = 4, "Hard intervals", "All-out sprint")))) small
+===
+@rich domain=c3_one_rep_max topic=one_rep_max_and_loads style=multi_feature
+gym calculator: i did 80 kg for 6 reps on bench. what is my one rep max, and what weights should i use at 90, 80, 70 percent. let me save each estimate so i can see the progress
+needs: weight lifted and reps inputs | estimated one rep max | table of working weights at percentages | save each estimate | progress line of saved maxes
+---
+app "1RM" dumbbell plum
+table pr lift text, orm num
+state lift text = "Bench"
+state kg num = 80
+state reps num = 6
+let orm = if(reps = 1, kg, kg * (1 + reps / 30))
+section "Your set"
+  field lift "Lift"
+  field kg "Weight lifted (kg)"
+  "Reps" reps faint
+  slider reps 1..20
+statcard round(orm * 10) / 10, "kg estimated one rep max", 0
+button "Save this estimate" fill accent tap add pr lift = lift, orm = round(orm * 10) / 10
+section "Working weights"
+  each [95, 90, 85, 80, 75, 70, 60] as p
+    row
+      p "%" bold grow
+      round(orm * p / 100 / 2.5) * 2.5 "kg"
+section "Saved estimates", "saved:" count(pr)
+  if count(pr) > 1
+    trend pr, it.orm
+  list pr top 8, "Nothing saved yet. Press Save this estimate."
+===
+@rich domain=c3_exact_age topic=exact_age_from_birthdate style=short
+how old am i exactly, years months days, and how many days until my next birthday
+needs: birth date input | age in years months and days | total days lived | days until next birthday | weekday of birth
+---
+app "My Age" user pink
+setting born date = today "Date of birth"
+let yrs = year(today) - year(born) - if(month(today) * 100 + monthday(today) < month(born) * 100 + monthday(born), 1, 0)
+let mon_since = addmonths(born, yrs * 12)
+let mths = year(today) * 12 + month(today) - year(mon_since) * 12 - month(mon_since) - if(monthday(today) < monthday(mon_since), 1, 0)
+let dys = today - addmonths(mon_since, mths)
+let nextb = addmonths(born, (yrs + 1) * 12)
+field born
+if born >= today
+  "Pick a birth date in the past to see your age." faint
+else
+  statcard yrs, "years," mths "months and" dys "days old", 0
+  section "More about you"
+    "Days lived" today - born big
+    "Born on a" dayname(born) faint
+    "Next birthday" nextb "in" plural(nextb - today, "day") head
+===
+@rich domain=c3_event_countdowns topic=days_until_events style=multi_feature
+i have a wedding, an exam and a trip coming. let me add each event with a name and a date and show how many days are left for each, soonest first, with the next one at the top
+needs: add an event with name and date | days left for each event | soonest first | next event highlighted | past events marked | count of upcoming
+---
+app "Countdowns" calendar blue
+table event name text, on date = today "Date"
+let upcoming = count(event where on >= today)
+topbar "Countdowns", event, "Add event"
+each event where on >= today sort on top 1 as nx
+  stack card gap 0 fill accent
+    text "Next up" tiny
+    nx.name large bold
+    nx.on - today "days to go" head
+statcard upcoming, "events still to come", count(event)
+section "All events"
+  each event sort on as e empty "No events yet. Tap Add event for the first date you are counting down to."
+    row card gap 2 tap edit e swipe remove e
+      stack grow gap 0
+        e.name bold
+        e.on faint
+      if e.on >= today
+        e.on - today "days" bold
+      else
+        "passed" faint color muted
+===
+@rich domain=c3_due_date topic=pregnancy_week_due_date style=detailed
+mum-to-be here. enter the first day of my last period and show the due date, which week and day I am on, which trimester, how many days to go and a progress ring through the 40 weeks
+needs: last period date input | due date | current week and day | trimester | days to go | progress ring over 40 weeks
+---
+app "Due Date" baby pink
+setting lmp date = today "First day of last period"
+let gone = today - lmp
+let due = lmp + 280
+let wk = floor(gone / 7)
+let tri = if(wk < 13, "first", if(wk < 28, "second", "third"))
+field lmp
+if gone < 0
+  "That date is in the future. Pick the first day of your last period." faint
+else
+  statcard wk, "weeks and" gone % 7 "days pregnant", 40
+  section "Key dates"
+    "Due date" due head
+    "Days to go" max(due - today, 0) big
+    "You are in the" tri "trimester" faint
+    "12-week scan around" lmp + 84 faint
+    "20-week scan around" lmp + 140 faint
+===
+@rich domain=c3_baby_age topic=baby_age_in_weeks_months style=multi_feature
+need something that tells me how old my baby is in weeks, and in months and days, plus when the next monthly birthday is and the date she turns six months for starting solids
+needs: baby birth date | age in weeks | age in months and days | next monthly birthday | six month date with days left
+---
+app "Baby Age" baby yellow
+setting dob date = today "Baby's birth date"
+let mths = (year(today) - year(dob)) * 12 + month(today) - month(dob) - if(monthday(today) < monthday(dob), 1, 0)
+let six = addmonths(dob, 6)
+field dob
+if dob > today
+  "Pick the birth date to see her age." faint
+else
+  statcard floor((today - dob) / 7), "weeks old (" today - dob "days)", 0
+  section "In months"
+    mths "months and" today - addmonths(dob, mths) "days" big
+    "Next monthly birthday" addmonths(dob, mths + 1) head
+    "in" plural(addmonths(dob, mths + 1) - today, "day") faint
+  section "Starting solids"
+    "Six months old on" six head
+    if six > today
+      "Still" plural(six - today, "day") "to go." faint
+    else
+      "She is past six months." faint
+===
+@rich domain=c3_work_hours topic=work_hours_timesheet style=detailed
+i work shifts with different start and end times and an unpaid break. let me add each shift with start, end and break minutes, show hours for each one, the total this week against 40 hours and a chart of hours per day
+needs: add a shift with start end and break | hours worked per shift | weekly total against 40 hours | chart of hours per day | list of shifts
+---
+app "Work Hours" clock slate
+table shift start time = 9:00, stop time = 17:00, brk num 0..180 = 30 "Break (min)"
+let hrs(s shift) = ((s.stop - s.start) - s.brk * 1m) / 1h
+topbar "Work Hours", shift, "Add shift"
+statcard round(sum(shift week, hrs(it)) * 10) / 10, "hours this week of 40", 40
+section "Hours per day", "this week"
+  daybars week, sum(shift on it, hrs(it))
+each shift sort at desc top 10 as s empty "No shifts yet. Add your first shift with Add shift."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.at bold
+      s.start "to" s.stop "with" s.brk "min break" faint
+    round(hrs(s) * 100) / 100 "h" bold
+===
+@rich domain=c3_overtime_pay topic=overtime_pay_calculator style=multi_feature
+overtime calculator for my factory job. hourly rate, hours i worked this week, normal hours before overtime, and whether overtime pays one and a half or double. show the normal pay, overtime pay and total
+needs: hourly rate hours worked and normal hours inputs | overtime multiplier choice | overtime hours | normal pay and overtime pay | total pay
+---
+app "Overtime" money green
+setting rate money = 500 "Hourly rate"
+setting normal num = 48 "Normal hours per week"
+state worked num = 54
+state mult pick Time_and_half|Double = Time_and_half
+let ot = max(worked - normal, 0)
+let reg = min(worked, normal)
+let m = if(mult = Double, 2, 1.5)
+let regpay = reg * rate
+let otpay = ot * rate * m
+section "This week"
+  field worked "Hours worked"
+  field rate
+  field normal
+  choice mult
+if worked = 0
+  "Enter the hours you worked to see your pay." faint
+else
+  statcard regpay + otpay, "total pay this week", 0
+  section "Breakdown"
+    "Normal:" reg "h =" regpay bold
+    "Overtime:" ot "h at x" m "=" otpay bold
+    "Overtime is" round(otpay / (regpay + otpay) * 100) "% of your pay" faint
+===
+@rich domain=c3_bedtime topic=bedtime_from_wake_time style=short
+what time should i go to bed if i wake up at 6:30, count sleep cycles
+needs: wake up time input | bedtimes for 6 5 4 and 3 sleep cycles | hours of sleep for each | time to fall asleep allowance
+---
+app "Bedtime" bed ink dark
+setting wake time = 6:30 "Wake-up time"
+setting fall num 0..60 = 15 "Minutes to fall asleep"
+field wake
+field fall
+section "Go to bed at", "each cycle is 90 minutes"
+  each [6, 5, 4, 3] as c
+    row card gap 2
+      wake - c * 90m - fall * 1m big
+      stack grow gap 0
+        c "cycles" bold
+        c * 1.5 "hours of sleep" faint
+      if c >= 5
+        "good" color good
+      else
+        "short" color warn
+===
+@rich domain=c3_shift_left topic=time_left_in_shift style=detailed
+night nurse here. my shift runs 19:00 to 07:00. show how much of it is done as a percent, how many hours and minutes are left and when it ends. i set start and end myself because it changes
+needs: shift start and end time inputs | percent of shift done | time left | end time shown | handles shifts past midnight
+---
+app "Shift Clock" timer purple
+setting from time = 19:00 "Shift starts"
+setting upto time = 7:00 "Shift ends"
+let len = (upto - from) / 1m
+let since = ((hour(now) * 60 + minute(now)) - (hour(from) * 60 + minute(from))) % 1440
+let done = clamp(since, 0, len)
+let left = len - done
+field from
+field upto
+if len = 0
+  "Start and end are the same time. Set the shift again." faint
+else
+  statcard round(done / len * 100), "% of the shift is done", 100
+  section "Remaining"
+    left * 1m big
+    "Until" upto faint
+    if since >= len
+      "You are outside this shift right now." faint color warn
+===
+@rich domain=c3_km_miles topic=km_and_miles_converter style=short
+km to miles and back, with a chip to flip direction
+needs: number input | direction chips km to miles or miles to km | converted result | common race distances in the other unit
+---
+app "Km and Miles" map blue
+state v num = 10
+state dir pick Km_to_miles|Miles_to_km = Km_to_miles
+let out = if(dir = Km_to_miles, v * 0.621371, v * 1.609344)
+let unit_out = if(dir = Km_to_miles, "miles", "km")
+field v "Value"
+choice dir
+statcard round(out * 100) / 100, unit_out, 0
+section "Race distances"
+  each [5, 10, 21.1, 42.2] as d
+    row
+      join(d, if(dir = Km_to_miles, " km", " miles")) grow
+      fixed(if(dir = Km_to_miles, d * 0.621371, d * 1.609344), 1) unit_out bold
+===
+@rich domain=c3_weight_converter topic=kg_lb_stone_converter style=multi_feature
+weight converter for my gym log: type kilos and show pounds and stones plus pounds, or type pounds and show kilos. i also want ounces
+needs: kilograms input shows pounds | stones and pounds breakdown | pounds input shows kilograms | ounces
+---
+app "Weight Convert" scale grey
+state kg num = 80
+state lb num = 176
+let pounds = kg * 2.20462
+section "Kilograms to pounds"
+  field kg "Kilograms"
+  statcard round(pounds * 10) / 10, "pounds", 0
+  floor(pounds / 14) "st" round(pounds % 14) "lb" head
+  "Ounces:" round(pounds * 16) faint
+section "Pounds to kilograms"
+  field lb "Pounds"
+  fixed(lb / 2.20462, 1) "kg" big
+  "That is" floor(lb / 14) "stone" round(lb % 14) "pounds" faint
+===
+@rich domain=c3_oven_temp topic=oven_temperature_converter style=multi_feature
+my recipe is in fahrenheit and my oven is celsius. convert both ways, show the gas mark and tell me if it is a slow, moderate or hot oven
+needs: temperature input with direction | converted value | gas mark | oven heat description
+---
+app "Oven Temp" fire orange
+state t num = 350
+state mode pick F_to_C|C_to_F = F_to_C
+let c = if(mode = F_to_C, (t - 32) * 5 / 9, t)
+let f = c * 9 / 5 + 32
+let gas = if(c < 135, 0, clamp(round((c - 121) / 14), 1, 9))
+let oven = if(c < 150, "Slow", if(c < 190, "Moderate", if(c < 230, "Hot", "Very hot")))
+field t "Temperature"
+choice mode
+statcard round(if(mode = F_to_C, c, f)), if(mode = F_to_C, "degrees Celsius", "degrees Fahrenheit"), 0
+section "Oven guide"
+  if gas = 0
+    "Gas mark: below the lowest setting" bold
+  else
+    "Gas mark" gas bold
+  oven "oven" head color if(c >= 230, bad, ink)
+  "Both scales:" round(c) "C =" round(f) "F" faint
+===
+@rich domain=c3_fuel_cost topic=fuel_economy_trip_cost style=detailed
+car has 7.5 litres per 100 km on the label. convert that to miles per gallon, then given the petrol price per litre and the km of a trip, show the fuel needed and what the trip costs. also split the cost between friends
+needs: litres per 100 km input | miles per gallon | trip distance and fuel price | litres needed and trip cost | cost split between people
+---
+app "Fuel Cost" car red
+setting l100 num = 7.5 "Litres per 100 km"
+setting price money = 280 "Petrol price per litre"
+state km num = 120
+state people num = 2
+let litres = km * l100 / 100
+let cost = litres * price
+let mpg = if(l100 > 0, 235.215 / l100, 0)
+section "Your car"
+  field l100
+  statcard round(mpg * 10) / 10, "miles per gallon (US)", 0
+section "The trip"
+  field km "Trip distance (km)"
+  field price
+  "People sharing" people faint
+  slider people 1..8
+  "Fuel needed" fixed(litres, 1) "litres" big
+  "Trip cost" cost head
+  "Each pays" cost / people bold
+===
+@rich domain=c3_height_converter topic=height_cm_feet_inches style=short
+cm to feet and inches and the other way, for filling forms
+needs: centimetres input shows feet and inches | feet and inches inputs show centimetres | total inches
+---
+app "Height" tool teal
+state cm num = 172
+state ft num = 5
+state inch num = 8
+let totin = cm / 2.54
+section "cm to feet"
+  field cm "Centimetres"
+  floor(totin / 12) "ft" round(totin % 12) "in" big
+  "Total" round(totin * 10) / 10 "inches" faint
+section "Feet and inches to cm"
+  row gap 2
+    field ft "Feet"
+    field inch "Inches"
+  round((ft * 12 + inch) * 2.54 * 10) / 10 "cm" big
+===
+@rich domain=c3_tola_grams topic=tola_masha_ratti_to_gram style=multi_feature
+jewellery shop: customer tells weight in tola, masha and ratti, i need grams, and with today's rate per tola the price. also grams back into tola. 1 tola is 11.664 grams, 12 masha in a tola, 8 ratti in a masha
+needs: tola masha and ratti inputs | weight in grams | price at the rate per tola | grams input back to tola
+---
+app "Tola Gram" coin yellow
+setting rate money = 250000 "Gold rate per tola"
+state tola num = 1
+state masha num = 0
+state ratti num = 0
+state grams num = 20
+let tt = tola + masha / 12 + ratti / 96
+section "Tola, masha, ratti"
+  row gap 1
+    field tola "Tola"
+    field masha "Masha"
+    field ratti "Ratti"
+  statcard round(tt * 11664) / 1000, "grams", 0
+  "Price at today's rate" tt * rate head
+  field rate
+section "Grams to tola"
+  field grams "Grams"
+  fixed(grams / 11.664, 3) "tola" big
+  floor(grams / 11.664) "tola" floor(grams / 11.664 % 1 * 12) "masha" faint
+===
+@rich domain=c3_book_finish topic=book_reading_time_finish style=multi_feature
+how long will this book take me? pages, words per page, my reading speed and how many minutes a day i can read. tell me total hours, pages a day and the date i finish
+needs: pages words per page and reading speed inputs | minutes available per day | total reading time | pages per day | finish date
+---
+app "Book Time" book ocean
+state pages num = 320
+state wpp num = 280
+state wpm num = 230
+state daily num = 30
+let total = pages * wpp / wpm * 1m
+let days = 0 - floor(0 - pages * wpp / wpm / daily)
+section "The book"
+  field pages
+  field wpp "Words per page"
+  field wpm "Reading speed (words/min)"
+section "Your time"
+  "Reading" daily "minutes a day" faint
+  slider daily 5..180
+"Total reading time" faint
+total big
+section "Plan"
+  "Finish on" today + days head
+  "In" plural(days, "day") big
+  "About" round(pages / max(days, 1)) "pages a day" faint
+===
+@rich domain=c3_exam_hours topic=study_hours_before_exam style=detailed
+exam on 12 december. add each topic with the hours it needs and the hours i already studied, show hours left in total, days left, and how many hours a day i must do, plus a bar of how far along each topic is
+needs: add a topic with hours needed and hours done | days until the exam | hours still left | hours per day required | progress per topic
+---
+app "Exam Hours" school purple
+table topic name text, need num 1..200 = 10 "Hours needed", done num 0..200 = 0 "Hours done"
+setting exam date = 2026-12-12 "Exam date"
+let left = max(sum(topic.need) - sum(topic.done), 0)
+let days = max(exam - today, 0)
+topbar "Exam Hours", topic, "Add topic"
+field exam
+statcard left, "hours of study left in" plural(days, "day"), sum(topic.need)
+"You need" round(left / max(days, 1) * 10) / 10 "hours a day." head
+each topic as t empty "No topics yet. Add each subject with the hours it needs."
+  stack card gap 1 tap edit t swipe remove t
+    row
+      t.name bold grow
+      t.done "of" t.need "h" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(t.done / t.need, 0, 1), 4 fill accent radius 2
+===
+@rich domain=c3_vaccine_dates topic=vaccine_schedule_dates style=detailed
+give birth date of my daughter and show the dates of her vaccine visits: birth, 6 weeks, 10 weeks, 14 weeks, 9 months and 15 months, with days left or done. highlight the next one
+needs: birth date input | date for each vaccine visit | days left or done | next visit highlighted
+---
+app "Vaccine Dates" shield mint
+setting dob date = today "Child's birth date"
+let past = count([0, 42, 70, 98, 274, 456], dob + it < today)
+field dob
+"Follow your own clinic's card if it differs from this schedule." faint
+each [0, 42, 70, 98, 274, 456] as d
+  row card gap 2 fill if(index = past, accent, surface)
+    stack grow gap 0
+      if(d = 0, "At birth", if(d < 100, join(d / 7, " weeks"), join(round(d / 30.4), " months"))) bold
+      dob + d faint
+    if dob + d >= today
+      "in" plural(dob + d - today, "day") bold
+    else
+      "done" color good
+===
+@rich domain=c3_rent_dues topic=rent_due_dates_paid style=multi_feature
+tenant here. rent is due on the 5th every month. show the next due date and days left, the next six due dates, what i pay in a year, and a button to mark this month's rent as paid with the history underneath
+needs: rent amount and due day settings | next due date with days left | next six due dates | yearly total | mark paid button with history
+---
+app "Rent Dues" home orange
+table paid amount money
+setting rent money = 35000 "Monthly rent"
+setting dueday num 1..28 = 5 "Due day of month"
+let base = today - monthday(today) + dueday
+let nxt = if(base < today, addmonths(base, 1), base)
+statcard nxt - today, "days until rent is due on" nxt, 31
+button "Mark this month paid" fill accent tap add paid amount = rent
+section "Next six due dates", "a year:" rent * 12
+  each 0..5 as i
+    row
+      addmonths(nxt, i) grow
+      rent bold
+section "Paid so far", "total:" sum(paid.amount)
+  list paid top 6, "No payments marked yet."
+===
+@rich domain=c3_cycle_tracker topic=cycle_length_next_date style=detailed
+log the first day of each period, work out my average cycle length from the dates, predict the next one and show how many days away it is and how many days since the last. if i only logged one use 28
+needs: log the start date of each period | average cycle length | predicted next date | days until next | days since last start
+---
+app "Cycle" moon pink
+table period start date = today
+let avg = if(count(period) < 2, 28, round(gap(period)))
+let last_start = last(period.start)
+let nxt = last_start + avg
+topbar "Cycle", period, "Log period start"
+if count(period) = 0
+  "Log the first day of your last period to get a prediction." faint
+else
+  statcard nxt - today, "days until the next period on" nxt, avg
+  section "Your cycle"
+    "Average length" avg "days" big
+    "Days since last start" today - last_start faint
+    "Logged" plural(count(period), "cycle start") faint
+list period top 6, "Nothing logged yet."

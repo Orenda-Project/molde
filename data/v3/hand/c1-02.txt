@@ -1,0 +1,618 @@
+@rich domain=c1_pack_price_compare topic=price_per_unit_comparison style=custom_ui
+standing in the aisle with two packs of rice, one 500g and one 750g, different prices. type size and price of each and tell me which is cheaper per 100g or per kg and by how much
+needs: size and price of pack A | size and price of pack B | compare per 100 or per 1000 | says which pack is cheaper | percent saved
+---
+app "Better Pack" package ocean
+state sa num = 500
+state pa money = 0
+state sb num = 750
+state pb money = 0
+state per pick Per_100|Per_1000 = Per_100
+let k = if(per = Per_100, 100, 1000)
+let ua = if(sa > 0, pa / sa * k, 0)
+let ub = if(sb > 0, pb / sb * k, 0)
+"Pack A" head
+row gap 2
+  field sa "Size"
+  field pa "Price"
+"Pack B" head
+row gap 2
+  field sb "Size"
+  field pb "Price"
+choice per
+if pa > 0 and pb > 0
+  statcard round(abs(ua - ub) * 100 / max(ua, ub)), if(ua = ub, "percent difference: same price", if(ua < ub, "percent cheaper: Pack A wins", "percent cheaper: Pack B wins"))
+  row gap 2
+    stat round(ua * 100) / 100, "pack A per unit group"
+    stat round(ub * 100) / 100, "pack B per unit group"
+else
+  "Enter both prices to see the winner." faint
+===
+@rich domain=c1_worker_wage_bill topic=daily_wage_bill_workers style=multi_feature
+i have a few workers on my construction site paid daily. add each one with the days they worked and daily wage, plus a bonus if any, and tell me the total wage bill and who earned most
+needs: add a worker with days worked and daily wage | optional bonus | total wage bill | bar chart of pay per worker | tap to edit or swipe to remove
+---
+app "Wage Bill" users mint
+table worker name text, days num 0..31 = 26, wage money, bonus money = 0
+let pay(w worker) = w.days * w.wage + w.bonus
+topbar "Wage Bill", worker, "Add worker"
+statcard sum(worker, pay(it)), "wage bill for" plural(count(worker), "worker")
+section "Pay per worker"
+  bars worker, pay(it), it.name
+section "Workers"
+  each worker as w empty "No workers yet. Tap Add worker."
+    row tap edit w swipe remove w
+      stack grow gap 0
+        w.name bold
+        w.days "days at" w.wage faint
+      pay(w) bold
+===
+@rich domain=c1_income_tax_slabs topic=annual_tax_slabs style=detailed
+type my salary and tell me the income tax for the year. slabs: nothing up to 600000, 5% from there to 1200000, then 30000 plus 15% up to 2200000, and above that 180000 plus 25%. i can give monthly or yearly income. show monthly tax too
+needs: type income | monthly or yearly | tax from the slabs | effective tax rate | tax per month and income after tax
+---
+app "Tax Slabs" shield slate dark
+state income money = 0
+state basis pick Yearly|Monthly = Yearly
+let yearly = if(basis = Monthly, income * 12, income)
+let tax = if(yearly <= 600000, 0, if(yearly <= 1200000, (yearly - 600000) * 0.05, if(yearly <= 2200000, 30000 + (yearly - 1200000) * 0.15, 180000 + (yearly - 2200000) * 0.25)))
+field income "Income"
+choice basis
+if yearly > 0
+  statcard round(tax), "income tax per year"
+  row gap 2
+    stat round(tax / 12), "per month"
+    stat round(tax * 1000 / yearly) / 10, "percent of income"
+  section "Income after tax", "per year"
+    round(yearly - tax) big
+    if yearly <= 600000
+      "You are in the zero tax slab." faint
+else
+  "Type your income to see the tax." faint
+===
+@rich domain=c1_partner_profit_share topic=profit_share_between_partners style=multi_feature
+three of us put money into a shop in different amounts. add each partner with what they put in, type the profit for the month, keep 10% in reserve, and split the rest by capital
+needs: add partners with the money they invested | type the monthly profit | reserve percent setting | each partner's share of profit | tap a partner to edit
+---
+app "Partners" users ink dark
+table partner name text, put money
+setting reserve num 0..50 = 10 "Keep in reserve %"
+state profit money = 0
+let capital = sum(partner.put)
+let pool = profit * (1 - reserve / 100)
+topbar "Partners", partner, "Add partner"
+field profit "Profit this month"
+if profit > 0 and capital > 0
+  statcard round(pool), "to share, reserve" round(profit - pool)
+else
+  "Add partners and type the profit to see the shares." faint
+section "Shares", "capital" capital
+  each partner as p empty "No partners yet."
+    row tap edit p
+      stack grow gap 0
+        p.name bold
+        round(p.put * 100 / capital) "% of capital" faint
+      round(pool * p.put / capital) bold
+===
+@rich domain=c1_cash_change_notes topic=change_due_note_breakdown style=custom_ui
+cashier at a busy counter. type the bill and the cash the customer gave, show change to return and break it into 1000, 500, 100, 50, 10, 5 and 1 notes so i can count it out fast
+needs: type the bill and the cash given | shows change to return | note breakdown 1000 500 100 50 10 5 1 | warning if cash is not enough
+---
+app "Change" money plum
+state due money = 0
+state paid money = 0
+let change = paid - due
+def notes d num, up num
+  if floor(change % up / d) > 0
+    row
+      "Notes of" d grow
+      "x" floor(change % up / d) bold
+row gap 2
+  field due "Bill"
+  field paid "Cash given"
+if due > 0 and paid > 0
+  if change < 0
+    "Customer still owes" 0 - change color bad big
+  else
+    statcard change, "change to give back"
+    section "Count it out"
+      notes 1000, 1000000
+      notes 500, 1000
+      notes 100, 500
+      notes 50, 100
+      notes 10, 50
+      notes 5, 10
+      notes 1, 5
+else
+  "Type the bill and the cash to see the change." faint
+===
+@rich domain=c1_shop_sales_tally topic=daily_sales_against_target style=multi_feature
+small shop, i want to punch in each sale as it happens, see today's total against my daily target, and a chart of the last 7 days so i know which days are weak
+needs: add a sale with item and amount | today's total against a daily target | chart of last 7 days with target line | list of today's sales | target can be changed
+---
+app "Sales Tally" bag red
+table sale item text?, amount money
+setting target money = 20000 "Daily target"
+topbar "Sales", sale, "Add sale"
+statcard sum(sale.amount today), "sold today, target" target, target
+section "Last 7 days", "best day" max(days last 7 days, sum(sale.amount on it))
+  goalbars last 7 days, sum(sale.amount on it), target
+section "Today", plural(count(sale today), "sale")
+  list sale today, "No sales yet today. Tap Add sale after the first customer."
+===
+@rich domain=c1_buy_get_free_price topic=buy_n_get_free_price style=custom_ui
+shop says buy 2 get 1 free, other shelves buy 3 get 1. type price per item, how many i must buy and how many come free, and how many i actually want. show what i pay and the real price per item
+needs: type price per item | buy and free quantities | how many items wanted | total to pay | real price per item and percent saved
+---
+app "Buy Get Free" gift orange
+state price money = 0
+state buy num = 2
+state free num = 1
+state want num = 6
+let size = buy + free
+let paid = floor(want / size) * buy + min(want % size, buy)
+let total = paid * price
+field price "Price per item"
+"Buy" buy faint
+slider buy 1..10
+"Get free" free faint
+slider free 0..5
+field want "Items wanted"
+if price > 0 and want > 0
+  statcard total, "to pay for" plural(want, "item")
+  row gap 2
+    stat round(total / want * 100) / 100, "real price per item"
+    stat round((1 - paid / want) * 100), "percent saved"
+else
+  "Type the price and how many you want." faint
+===
+@rich domain=c1_bulk_price_tiers topic=quantity_discount_tiers style=detailed
+wholesale price list: 1 to 9 pieces full price, 10 to 49 is 5% off, 50 to 99 is 10% off and 100 or more 15% off. type the unit price and the quantity so the customer sees the tier, price per piece, total and how much was saved
+needs: type unit price and quantity | tier ladder with the current tier highlighted | discounted price per piece | total to pay | amount saved
+---
+app "Bulk Tiers" box yellow
+state price money = 0
+state qty num = 25
+let off = if(qty >= 100, 15, if(qty >= 50, 10, if(qty >= 10, 5, 0)))
+let each = price * (1 - off / 100)
+row gap 2
+  field price "Price per piece"
+  field qty "Quantity"
+section "Tiers"
+  row pad 1 radius 2 fill if(off = 0, accent, soft)
+    "1 to 9 pieces" grow
+    "full price"
+  row pad 1 radius 2 fill if(off = 5, accent, soft)
+    "10 to 49" grow
+    "5% off"
+  row pad 1 radius 2 fill if(off = 10, accent, soft)
+    "50 to 99" grow
+    "10% off"
+  row pad 1 radius 2 fill if(off = 15, accent, soft)
+    "100 or more" grow
+    "15% off"
+if price > 0 and qty > 0
+  statcard round(each * qty * 100) / 100, "total for" plural(qty, "piece")
+  row gap 2
+    stat round(each * 100) / 100, "per piece"
+    stat round((price - each) * qty * 100) / 100, "saved"
+===
+@rich domain=c1_coupon_vs_percent topic=coupon_or_percent_off style=multi_feature
+checkout page offers either 15% off or a flat 500 coupon that needs a minimum spend of 3000. which one should i pick? type the order total, the percent, the coupon and the minimum and tell me
+needs: type the order total | percent off and flat coupon | minimum spend for the coupon | shows what you pay with each | tells which offer is better
+---
+app "Coupon or Percent" tag green
+state total money = 0
+state pct num = 15
+state flat money = 500
+state minimum money = 3000
+let a = total * (1 - pct / 100)
+let b = if(total >= minimum, total - flat, total)
+field total "Order total"
+row gap 2
+  field pct "Percent off"
+  field flat "Flat coupon"
+field minimum "Coupon needs a spend of"
+if total > 0
+  statcard round(min(a, b)), if(a <= b, "pay with the percent off", "pay with the coupon")
+  row gap 2
+    stat round(a), "with percent"
+    stat round(b), if(total >= minimum, "with coupon", "coupon not valid")
+else
+  "Type the order total to compare." faint
+===
+@rich domain=c1_loan_schedule_year topic=first_year_loan_schedule style=detailed
+i want to see where my first 12 payments go. loan amount, yearly rate and months, and a table with interest part, principal part and balance for each month, plus the fixed monthly payment
+needs: type loan amount, rate and months | fixed monthly payment | table for the first 12 months | interest and principal for each month | balance after each month
+---
+app "Loan Schedule" list teal
+state loan money = 500000
+state rate num = 14
+state months num = 36
+let r = rate / 1200
+let emi = if(r = 0, loan / months, loan * r * pow(1 + r, months) / (pow(1 + r, months) - 1))
+let bal(k num) = if(r = 0, loan - emi * k, loan * pow(1 + r, k) - emi * (pow(1 + r, k) - 1) / r)
+row gap 2
+  field loan "Loan"
+  field rate "Rate % a year"
+field months "Months"
+statcard round(emi), "payment every month"
+section "First 12 months", "interest | principal | balance"
+  each 1..min(months, 12) as k
+    row
+      k faint
+      round(bal(k - 1) * r) grow
+      round(emi - bal(k - 1) * r)
+      max(round(bal(k)), 0) bold
+===
+@rich domain=c1_card_interest_month topic=credit_card_interest style=multi_feature
+credit card bill is 80000 and i can only pay a little. type balance and yearly rate, choose minimum payment, double minimum or full, and show the interest charged next month, what's left and what a whole year of interest costs if i keep paying the minimum
+needs: type the card balance | yearly interest rate | choose minimum, double minimum or full payment | interest charged next month | balance after payment | yearly interest if paying minimum only
+---
+app "Card Interest" wallet blue
+state owed money = 80000
+state apr num = 36
+state plan pick Minimum|Double_minimum|Full = Minimum
+setting minpct num 1..20 = 5 "Minimum payment %"
+let minpay = owed * minpct / 100
+let paying = if(plan = Full, owed, if(plan = Double_minimum, minpay * 2, minpay))
+let left = owed - paying
+let interest = left * apr / 1200
+field owed "Card balance"
+"Yearly rate" apr "%" faint
+slider apr 0..60
+choice plan
+statcard round(paying), "you pay now, left" round(left)
+row gap 2
+  stat round(interest), "interest next month"
+  stat round(owed * apr / 100 * (1 - minpct / 100)), "a year at minimum"
+===
+@rich domain=c1_late_payment_fee topic=late_invoice_fee style=custom_ui
+client paid my invoice late. type invoice amount and the due date, choose a fee per day or per week as a percent, and cap it at 20% of the invoice. show days late, the late fee and the new total
+needs: type invoice amount | pick due date | fee percent per day or per week | days late | late fee capped at 20 percent | new total
+---
+app "Late Fee" alarm purple dark
+state amount money = 0
+state due date = today
+state rate num = 1
+state per pick Per_day|Per_week = Per_day
+let late = max(today - due, 0)
+let periods = if(per = Per_day, late, floor(late / 7))
+let fee = min(amount * rate / 100 * periods, amount * 0.2)
+field amount "Invoice amount"
+field due "Due date"
+field rate "Fee percent"
+choice per
+if amount > 0
+  if late = 0
+    "Not late yet. No fee." color good bold
+  else
+    statcard round(fee), "late fee after" late "days, new total" round(amount + fee)
+    if fee >= amount * 0.2
+      "The fee reached the 20% cap." faint
+else
+  "Type the invoice amount to check for a late fee." faint
+===
+@rich domain=c1_salary_hourly_rate topic=monthly_to_hourly_pay style=multi_feature
+my salary is monthly but a client asked my hourly rate. type monthly pay, hours per day and days per week, and show the daily, hourly and per minute rate
+needs: type monthly salary | hours per day and days per week | daily rate | hourly rate | rate per minute
+---
+app "Hourly Pay" clock pink
+state monthly money = 0
+state hpd num = 8
+state dpw num = 5
+let hours = hpd * dpw * 4.33
+field monthly "Monthly salary"
+"Hours per day" hpd faint
+slider hpd 1..14
+"Days per week" dpw faint
+slider dpw 1..7
+if monthly > 0 and hours > 0
+  statcard round(monthly / hours * 100) / 100, "per hour"
+  row gap 2
+    stat round(monthly / (dpw * 4.33)), "per day"
+    stat round(monthly / hours / 60 * 100) / 100, "per minute"
+else
+  "Type the monthly salary to get the hourly rate." faint
+===
+@rich domain=c1_daily_wager_month topic=daily_wager_month_pay style=detailed
+for my helper who is paid per day. this month has some days, sundays are off if i say so, he took a few leaves and i gave an advance. show days worked, total pay and what is left to pay him
+needs: daily rate | toggle for sundays off | leave days taken | advance already paid | days worked and pay left to give
+---
+app "Daily Wager" user grey
+state rate money = 0
+state offsun bool = yes
+state leaves num = 0
+state advance money = 0
+let working = monthdays(today) - if(offsun, 4, 0) - leaves
+let pay = max(working, 0) * rate
+row gap 2
+  field rate "Daily rate"
+  field advance "Advance paid"
+row gap 2 align center
+  "Sundays off" grow
+  toggle offsun
+"Leaves taken" leaves faint
+slider leaves 0..15
+if rate > 0
+  statcard round(pay - advance), "left to pay, month total" round(pay)
+  "Days worked" max(working, 0) "of" monthdays(today) faint
+else
+  "Type the daily rate to work out this month." faint
+===
+@rich domain=c1_end_of_service topic=gratuity_years_of_service style=detailed
+how much end of service money will i get? last monthly salary and years worked. first 5 years count 21 days of salary per year and every year after counts 30 days. nothing before one year
+needs: type last monthly salary | years of service | gratuity from 21 and 30 day rule | amount for the first five years and later years | nothing under one year message
+---
+app "End of Service" bag ocean dark
+state salary money = 0
+state years num = 6
+let first = min(years, 5)
+let later = max(years - 5, 0)
+let daily = salary / 30
+let amount = if(years < 1, 0, daily * (21 * first + 30 * later))
+field salary "Last monthly salary"
+"Years of service" years faint
+slider years 0..30
+if salary > 0
+  if years < 1
+    "No gratuity before one full year." faint
+  else
+    statcard round(amount), "end of service amount"
+    row gap 2
+      stat round(daily * 21 * first), "first 5 years"
+      stat round(daily * 30 * later), "later years"
+else
+  "Type the last salary to see the amount." faint
+===
+@rich domain=c1_inflation_price_future topic=price_after_inflation style=multi_feature
+what will a 50000 television cost in five years if prices rise 12% every year? type price, yearly price rise and years. show future price, extra paid, how long until prices double and a line chart year by year
+needs: type price today | yearly inflation percent | number of years | future price | years until prices double | line chart of price each year
+---
+app "Future Price" chart mint
+state price money = 50000
+state rise num = 12
+state years num = 5
+let future(k num) = price * pow(1 + rise / 100, k)
+field price "Price today"
+"Price rise" rise "% a year" faint
+slider rise 0..40
+"Years" years faint
+slider years 1..30
+statcard round(future(years)), "price after" plural(years, "year")
+row gap 2
+  stat round(future(years) - price), "extra you will pay"
+  stat if(rise > 0, round(72 / rise * 10) / 10, 0), "years to double"
+section "Year by year"
+  trend 1..years, future(it)
+===
+@rich domain=c1_rent_increase_plan topic=yearly_rent_increase style=short
+landlord adds a percent to the rent every year, what will i pay in 5 years
+needs: type current rent | yearly increase percent | rent for each of the next five years | total rent over five years
+---
+app "Rent Rise" home slate
+state rent money = 0
+state raise num = 10
+let at_year(k num) = rent * pow(1 + raise / 100, k - 1)
+field rent "Rent now"
+"Yearly increase" raise "%" faint
+slider raise 0..30
+if rent > 0
+  statcard round(sum(1..5, at_year(it))), "total rent over 5 years"
+  section "Year by year"
+    bars 1..5, round(at_year(it)), join("Y", it)
+else
+  "Type your rent to see the next five years." faint
+===
+@rich domain=c1_electric_unit_slabs topic=electricity_bill_unit_slabs style=detailed
+how is my electricity bill made? units 1 to 100 cost 10 each, 101 to 300 cost 15 each, above 300 cost 22 each, plus a fixed charge of 150 and 12% tax. i type units used and want the amount of each slab, tax and the total
+needs: type units used | cost of each slab | fixed charge | tax | total bill
+---
+app "Power Bill" bolt ink
+state units num = 0
+setting fixed money = 150 "Fixed charge"
+setting taxp num = 12 "Tax %"
+let s1 = min(units, 100) * 10
+let s2 = max(min(units, 300) - 100, 0) * 15
+let s3 = max(units - 300, 0) * 22
+let energy = s1 + s2 + s3
+let taxes = (energy + fixed) * taxp / 100
+field units "Units used this month"
+if units > 0
+  statcard round(energy + fixed + taxes), "total bill"
+  section "How it adds up"
+    row
+      "First 100 units" grow
+      s1 bold
+    row
+      "Next 200 units" grow
+      s2 bold
+    row
+      "Above 300 units" grow
+      s3 bold
+    row
+      "Fixed charge" grow
+      fixed bold
+    row
+      "Tax" grow
+      round(taxes) bold
+else
+  "Type the units on your meter to see the bill." faint
+===
+@rich domain=c1_trip_fuel_cost topic=road_trip_fuel_cost style=custom_ui
+going to the north with 4 friends in my car. distance one way, car mileage in km per litre, petrol price, and whether it is a return trip. show fuel needed, the cost and what each person pays
+needs: type distance one way | return trip toggle | car mileage and petrol price | litres needed and total fuel cost | cost per person
+---
+app "Trip Fuel" car plum
+state km num = 0
+state back bool = yes
+state kmpl num = 12
+state price money = 280
+state people num = 4
+let dist = if(back, km * 2, km)
+let litres = if(kmpl > 0, dist / kmpl, 0)
+field km "Distance one way (km)"
+row gap 2 align center
+  "Return trip" grow
+  toggle back
+row gap 2
+  field kmpl "Km per litre"
+  field price "Petrol per litre"
+"People" people faint
+slider people 1..8
+if km > 0
+  statcard round(litres * price), "fuel cost for" dist "km"
+  row gap 2
+    stat round(litres * 10) / 10, "litres needed"
+    stat round(litres * price / people), "each person pays"
+else
+  "Type the distance to cost the trip." faint
+===
+@rich domain=c1_taxi_fare_estimate topic=taxi_fare_estimate style=custom_ui
+i drive a taxi and customers always ask the fare. base fare, rate per km, waiting rate per minute and 25% extra at night. let me set the distance and waiting minutes and show the fare to say
+needs: base fare and per km rate settings | distance slider | waiting minutes | night extra toggle | fare to quote
+---
+app "Taxi Fare" car red
+setting base money = 100 "Base fare"
+setting perkm money = 45 "Per km"
+setting permin money = 5 "Per waiting minute"
+state km num = 5
+state wait num = 0
+state night bool = no
+let fare = (base + km * perkm + wait * permin) * if(night, 1.25, 1)
+"Distance" km "km" faint
+slider km 1..60
+"Waiting" wait "minutes" faint
+slider wait 0..60
+row gap 2 align center
+  "Night ride (+25%)" grow
+  toggle night
+statcard round(fare / 5) * 5, "quote to the customer"
+"Exact fare" round(fare * 100) / 100 faint
+===
+@rich domain=c1_courier_weight_rate topic=courier_charge_by_weight style=multi_feature
+parcel service price: same city starts at 150, other city 250, remote areas 400 for the first kg, then 60, 90 or 150 for every extra kg. cash on delivery adds 2%. let me enter weight and zone and see the charge
+needs: weight in kg | pick same city, other city or remote | charge by zone with extra kg | cash on delivery toggle | final charge
+---
+app "Courier Rate" package orange
+state kg num = 2
+state zone pick Same_city|Other_city|Remote = Same_city
+state cod bool = no
+let first = if(zone = Same_city, 150, if(zone = Other_city, 250, 400))
+let extra = if(zone = Same_city, 60, if(zone = Other_city, 90, 150))
+let ceilkg = 0 - floor(0 - kg)
+let base = first + max(ceilkg - 1, 0) * extra
+"Weight" kg "kg" faint
+slider kg 1..30
+choice zone
+row gap 2 align center
+  "Cash on delivery (+2%)" grow
+  toggle cod
+statcard round(base * if(cod, 1.02, 1)), "delivery charge"
+"First kg" first "+" max(ceilkg - 1, 0) "extra kg at" extra faint
+===
+@rich domain=c1_import_landed_cost topic=imported_item_landed_cost style=detailed
+buying a gadget from abroad. price in dollars, the dollar rate i typed, shipping cost, then customs duty percent and GST percent on top. show the final cost at my door in rupees and how much of it is tax
+needs: price in foreign currency | typed exchange rate | shipping cost | duty percent and GST percent | landed cost and tax part
+---
+app "Landed Cost" plane yellow
+state price money = 0
+state rate num = 280
+state ship money = 0
+state duty num = 20
+state gst num = 17
+let goods = price * rate + ship
+let dutyamt = goods * duty / 100
+let gstamt = (goods + dutyamt) * gst / 100
+row gap 2
+  field price "Price (foreign)"
+  field rate "Your rate"
+field ship "Shipping (local money)"
+"Customs duty" duty "%" faint
+slider duty 0..60
+"GST" gst "%" faint
+slider gst 0..25
+if price > 0
+  statcard round(goods + dutyamt + gstamt), "landed cost at your door"
+  row gap 2
+    stat round(dutyamt), "duty"
+    stat round(gstamt), "GST"
+else
+  "Type the price and rate to see the cost." faint
+===
+@rich domain=c1_three_currency_board topic=three_typed_currency_rates style=multi_feature
+shop in a border town that accepts three currencies. i type the three rates of the day once and then every sale i just type the local price and the board shows what to ask in each currency
+needs: three rates saved as settings | type the price in local money | amount in dollar, euro and pound | rates stay saved for tomorrow
+---
+app "Rate Board" coin green
+setting usd num 0.. = 280 "Local money per 1 USD"
+setting eur num 0.. = 305 "Local money per 1 EUR"
+setting gbp num 0.. = 355 "Local money per 1 GBP"
+state price money = 0
+field price "Price in local money"
+if price > 0
+  section "Ask the customer for"
+    row
+      "US dollars" grow
+      round(price / usd * 100) / 100 bold
+    row
+      "Euros" grow
+      round(price / eur * 100) / 100 bold
+    row
+      "Pounds" grow
+      round(price / gbp * 100) / 100 bold
+else
+  "Type a price to see it in dollars, euros and pounds." faint
+section "Today's rates", "tap to change"
+  row tap edit usd
+    "1 USD" grow
+    usd bold
+  row tap edit eur
+    "1 EUR" grow
+    eur bold
+  row tap edit gbp
+    "1 GBP" grow
+    gbp bold
+===
+@rich domain=c1_trip_budget_daily topic=trip_daily_allowance style=multi_feature
+5 day trip to the mountains. i set the total budget, start date and number of days, then log everything i spend. show what i can still spend per remaining day, a chart against my daily allowance and the list of expenses
+needs: set trip budget, start date and days | log an expense | left to spend per remaining day | chart of last 7 days against daily allowance | list of expenses
+---
+app "Trip Money" map teal
+table spend what text, amount money
+setting budget money = 50000 "Trip budget"
+setting start date = today "First day"
+setting days num 1..60 = 5 "Number of days"
+let spent = sum(spend.amount)
+let dayno = clamp(today - start + 1, 1, days)
+let daysleft = days - dayno + 1
+topbar "Trip Money", spend, "Add expense"
+statcard round((budget - spent) / daysleft), "can be spent each remaining day"
+"Allowance" round(budget / days) "a day. Spent so far" spent faint
+section "Last 7 days"
+  goalbars last 7 days, sum(spend.amount on it), budget / days
+section "Expenses", plural(count(spend), "item")
+  list spend by day, "Nothing spent yet. Tap Add expense."
+===
+@rich domain=c1_catering_per_head topic=wedding_catering_cost style=detailed
+planning a wedding dinner. number of guests, price per head for the menu i choose (basic, standard or premium), a fixed cost for tents and waiters, and 10% service tax. show the full cost and per head with everything
+needs: number of guests | pick basic, standard or premium menu | fixed cost for tents and waiters | service tax | total cost and cost per head
+---
+app "Dinner Cost" food blue
+state guests num = 200
+state menu pick Basic|Standard|Premium = Standard
+state fixed money = 150000
+let perhead = if(menu = Basic, 1200, if(menu = Standard, 1800, 2600))
+let food = guests * perhead
+let tax = (food + fixed) * 0.1
+field guests "Guests"
+choice menu
+field fixed "Tents, waiters and decoration"
+if guests > 0
+  statcard round(food + fixed + tax), "total dinner cost"
+  row gap 2
+    stat round((food + fixed + tax) / guests), "per guest in total"
+    stat food, "food at" perhead "each"
+  "Tax 10%:" round(tax) faint
+else
+  "Type the number of guests to cost the dinner." faint

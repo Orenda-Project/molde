@@ -1,0 +1,468 @@
+@rich domain=d1_bugs_by_build topic=bugs grouped by build style=detailed
+testing a mobile release: i add builds (like 2.4.1 with ship date) and then bugs that belong to a build, with steps to reproduce, severity and a fixed tick. show each build with how many bugs are still open
+needs: add a build with name and ship date | add a bug linked to a build with steps and severity | open and total bugs per build | tick a bug fixed | list of bugs newest first
+---
+app "Build bugs" tool purple
+table build name text, ship date?
+table bug title text, build ref build, steps long, sev pick Blocker|Major|Minor = Major, fixed bool
+topbar "Build bugs", bug, "Report bug"
+each build sort at desc as b empty "No builds yet. Add one below, then link bugs to it."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.name bold
+      b.ship faint
+    count(b.bug where fixed = no) "open" bold color if(count(b.bug where fixed = no) > 0, bad, good)
+    count(b.bug) "total" faint
+form build, "Add build"
+each bug sort at desc as x empty "No bugs yet."
+  row card gap 2 tap edit x swipe remove x
+    toggle x.fixed
+    stack grow gap 0
+      x.title bold
+      x.build.name "·" x.sev faint
+===
+@rich domain=d1_beta_feedback topic=beta tester feedback style=multi_feature
+feedback from beta testers on our app: name, build number, type (bug, idea or praise) and a mood from 1 to 5. chips to look at one type, average mood and a line chart of mood
+needs: add feedback with tester, build, type and mood | chips to filter by type | average mood card | mood trend line | feedback list newest first
+---
+app "Beta feedback" smile pink
+table feedback tester text, build text, kind pick Bug|Idea|Praise = Bug, mood num 1..5 = 3, note text?
+state f pick All|Bug|Idea|Praise = All
+topbar "Beta feedback", feedback, "Add feedback"
+row gap 2
+  statcard round(avg(feedback.mood) * 10) / 10, "average mood out of 5", 5
+  statcard count(feedback week), "messages this week"
+section "Mood over time", "oldest to newest"
+  trend feedback top 20, it.mood
+choice f
+each feedback where f = All or kind = f sort at desc as x empty "No feedback of this type yet."
+  row card gap 2 tap edit x swipe remove x
+    stack grow gap 0
+      x.tester "on" x.build bold
+      x.note faint
+    x.kind "·" x.mood "/ 5" faint
+===
+@rich domain=d1_uat_signoff topic=uat client sign-off by module style=custom_ui
+client uat sign-off. modules of the project with who at the client checks it, and a tick when they signed it off. a pending tab and a signed tab, and a progress bar of how much is signed
+needs: add a module with client contact | tick when the client signs off | pending tab | signed tab | progress of signed modules
+---
+app "UAT sign-off" check grey
+table module name text, contact text, signed bool, comment text?
+let total = count(module)
+screen pend "Pending" clock
+  topbar "Waiting on client", module, "Add module"
+  goal count(module where signed = yes), max(total, 1), "modules signed off"
+  each module where signed = no sort name as m empty "Everything is signed off."
+    row card gap 2 tap edit m swipe remove m
+      toggle m.signed
+      stack grow gap 0
+        m.name bold
+        m.contact faint
+screen done "Signed" check
+  statcard count(module where signed = yes), "modules signed", total
+  each module where signed = yes as m empty "Nothing signed yet. Ask the client to go through the first module."
+    row card gap 2 tap edit m
+      toggle m.signed
+      stack grow gap 0
+        m.name bold
+        m.comment faint
+===
+@rich domain=d1_hotfix_times topic=hotfix log time to fix style=multi_feature
+hotfix log for production. what broke, how many minutes it took to fix and who approved it. a line chart of fix times so i can see if we are getting faster and the average
+needs: log a hotfix with issue, minutes to fix and approver | line chart of fix times | average minutes to fix | hotfixes this month | list newest first
+---
+app "Hotfixes" bolt orange
+table hotfix issue text, mins num 5..2000 unit "min", approver text?
+topbar "Hotfixes", hotfix, "Log hotfix"
+row gap 2
+  statcard round(avg(hotfix.mins)), "min to fix on average"
+  statcard count(hotfix month), "hotfixes this month"
+section "Time to fix", "last 10 hotfixes"
+  trend hotfix top 10, it.mins
+each hotfix sort at desc as h empty "No hotfixes logged. Hopefully it stays that way."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.issue bold
+      h.approver "approved this" faint
+    h.mins "min" big color if(h.mins > 120, warn, ink)
+===
+@rich domain=d1_freelance_standup topic=solo freelancer daily work log style=detailed
+i freelance alone but still do my own standup. project, what i did, hours. I want hours per day vs a 6 hour target, dots for the days i logged work this week and total hours this week
+needs: add an update with project, what I did and hours | hours per day chart with a 6 hour target | dots for days with work this week | total hours this week | list of updates by day
+---
+app "Solo standup" pen yellow
+table did project text, what long, hours num 0..16 unit "h"
+setting target num = 6 "Daily hours target"
+topbar "Solo standup", did, "Log work"
+row gap 2
+  statcard sum(did.hours week), "hours this week", target * 5
+  statcard streak(did), "day streak"
+section "Days I worked"
+  weekdots count(did on it) > 0
+section "Hours per day", "target" target "h"
+  goalbars last 7 days, sum(did.hours on it), target
+list did by day, "Nothing logged yet. Write what you did today."
+===
+@rich domain=d1_learning_hours topic=programming learning log style=multi_feature
+im learning to code, so a log of what i studied: topic like python or sql, hours, and how it felt (stuck, ok, clicked). weekly goal of 10 hours with a progress bar and how my hours split by topic
+needs: log a study session with topic, hours and feeling | weekly hours goal with progress | hours split by topic | sessions this week | list of sessions by day
+---
+app "Learn to code" book green
+table study topic text, hours num 0.25..12 unit "h", feel pick Stuck|Ok|Clicked = Ok
+setting weekly num = 10 "Weekly goal (hours)"
+topbar "Learn to code", study, "Log session"
+goal sum(study.hours week), weekly, "hours this week", "h"
+row gap 2
+  statcard count(study week), "sessions this week"
+  statcard count(study week where feel = Clicked), "times it clicked"
+section "Hours by topic", "all time"
+  share study by topic, sum(it.hours), it.key
+list study by day, "No sessions yet. Even 20 minutes counts."
+===
+@rich domain=d1_code_practice topic=coding problems solved style=short
+leetcode style practice: problem name, easy medium or hard, how many tries and solved or not. streak of days i practised and a chart of problems per day
+needs: add a problem with name, level, tries and solved | streak of practice days | problems per day chart | problems solved by level | list of problems
+---
+app "Practice" brain teal
+table problem name text, level pick Easy|Medium|Hard = Easy, tries num 1..30 = 1, solved bool
+topbar "Practice", problem, "Add problem"
+row gap 2
+  statcard streak(problem), "day streak", best(problem)
+  statcard count(problem where solved = yes), "solved of" count(problem) "tried"
+section "Problems per day", "last 14 days"
+  daybars last 14 days, count(problem on it)
+section "Solved by level"
+  share problem where solved = yes by level, count(it), it.key
+list problem, "No problems yet. Add the first one you solved or got stuck on."
+===
+@rich domain=d1_retro_board topic=retro board went well improve try style=custom_ui
+retro board for the team: cards under went well, to improve and to try. a +1 button to vote, chips to show one column, most voted first
+needs: add a card with kind and text | +1 vote button | chips to filter by column | most voted card first | count of cards per column
+---
+app "Retro board" users blue dark
+table entry text_line text, kind pick Went_well|Improve|Try = Went_well, votes num 0.. = 0
+state col pick All|Went_well|Improve|Try = All
+topbar "Retro board", entry, "Add card"
+row gap 1
+  each options entry.kind as k
+    stack grow card gap 0 align center
+      count(entry where kind = k) big
+      k tiny
+choice col
+each entry where col = All or kind = col sort votes desc as e empty "No cards in this column. Add what you want to say."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.text_line bold
+      e.kind faint
+    button "+1" fill soft tap set e.votes = e.votes + 1
+    e.votes big
+===
+@rich domain=d1_incident_free_days topic=days without an incident style=multi_feature
+like those factory signs, days since our last incident. incident table with what happened and severity, a heat grid of the last 6 weeks where incident days show up and the longest quiet stretch
+needs: add an incident with text and severity | days since last incident | six week heat grid of incident days | incidents this year | list of incidents by day
+---
+app "Quiet days" bell purple dark
+table incident what text, sev pick Minor|Major|Outage = Minor
+topbar "Quiet days", incident, "Log incident"
+row gap 2
+  statcard since(incident), "days since the last incident"
+  statcard count(incident year), "incidents this year"
+section "Last 6 weeks", "darker means worse day"
+  daygrid last 42 days, count(incident on it), 3
+list incident by day, "No incidents on record. The sign says it all."
+===
+@rich domain=d1_pager_pages topic=pager pages by reason style=detailed
+every time the pager goes off i want to note the reason (disk, latency, deploy, alert noise, other) and how many minutes until i acked it. count pages at night, pages per day and which reasons are worst
+needs: log a page with reason and minutes to ack | pages per day chart | night pages this week | average minutes to ack | reasons compared
+---
+app "Pager" alarm grey
+table pagehit reason pick Disk|Latency|Deploy|Alert_noise|Other = Alert_noise, ack num 1..120 unit "min" = 5
+topbar "Pager", pagehit, "Log page"
+row gap 2
+  statcard count(pagehit week where hour(at) >= 22 or hour(at) < 7), "night pages this week"
+  statcard round(avg(pagehit.ack week)), "min to ack on average"
+section "Pages per day", "last 7 days"
+  daybars last 7 days, count(pagehit on it)
+section "Reasons", "this month"
+  share pagehit month by reason, count(it), it.key
+list pagehit by day, "No pages. Sleep well."
+===
+@rich domain=d1_pm_followups topic=post-mortem action follow-ups style=multi_feature
+each post-mortem has follow-up actions with an owner, tick when done. show each post-mortem with how many actions are still open, and a list of all the actions at the bottom
+needs: add a post-mortem | add a follow-up action linked to it with owner | tick an action done | open actions per post-mortem | list of all actions
+---
+app "Follow-ups" list ocean
+table pm title text
+table fix pm ref pm, what text, owner text?, done bool
+topbar "Follow-ups", fix, "Add action"
+each pm sort at desc as p empty "No post-mortems yet. Add one below, then add its actions."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.title bold grow
+      count(p.fix where done = no) "open of" count(p.fix) faint color if(count(p.fix where done = no) > 0, warn, good)
+    each p.fix as f
+      row gap 2
+        toggle f.done
+        f.what grow
+        f.owner faint
+form pm, "Add post-mortem"
+===
+@rich domain=d1_saas_subscriptions topic=dev team saas subscriptions style=detailed
+all the tools our dev team pays for (github, sentry, figma...) with price, monthly or yearly billing and renewal date. work out the real monthly cost and remind me 3 days before each renewal
+needs: add a subscription with price, billing period and renewal date | monthly cost total with yearly ones divided | reminder 3 days before renewal | renewals in the next 30 days | list sorted by renewal date
+---
+app "Dev tools" tag mint
+table sub tool text, cost money, bills pick Monthly|Yearly = Monthly, renews date
+let monthly = sum(sub.cost where bills = Monthly) + sum(sub.cost where bills = Yearly) / 12
+remind "A tool subscription renews in 3 days" at sub.renews - 3d at 9:00
+topbar "Dev tools", sub, "Add tool"
+row gap 2
+  statcard round(monthly), "a month in tools"
+  statcard count(sub where renews >= today and renews <= today + 30), "renew in 30 days", count(sub)
+each sub sort renews as s empty "No tools yet. Add each subscription with its renewal date."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.tool bold
+      s.bills "·" s.renews faint
+    s.cost bold
+===
+@rich domain=d1_license_seats topic=software license seats style=custom_ui
+license seats for our dev tools: tool, seats bought, seats used and expiry. each tool gets a bar of how full it is, and tools with free seats we could cancel should be easy to spot
+needs: add a license with tool, seats, used and expiry | bar of seats used on each tool | free seats count | expired licenses in red | total unused seats
+---
+app "Licenses" users slate
+table licence tool text, seats num 1..1000, used num 0..1000 = 0, expires date
+topbar "Licenses", licence, "Add license"
+row gap 2
+  statcard sum(licence.seats) - sum(licence.used), "unused seats"
+  statcard count(licence where expires < today), "expired licenses"
+each licence sort expires as l empty "No licenses yet. Add the tools you buy seats for."
+  stack card gap 1 tap edit l swipe remove l
+    row gap 2
+      l.tool bold grow
+      (l.seats - l.used) "free ·" l.expires faint color if(l.expires < today, bad, muted)
+    goal l.used, l.seats, "seats in use"
+===
+@rich domain=d1_env_inventory topic=env variables per service style=multi_feature
+env vars per service. services like api, worker, web, and for each one the variable key and a tick if it is a secret. show the counts per service and total secrets
+needs: add a service | add an env var with service, key and secret tick | variables per service | total secrets | list of variables
+---
+app "Env vars" box orange
+table service name text
+table envvar service ref service, key text, secret bool
+topbar "Env vars", envvar, "Add variable"
+row gap 2
+  statcard count(envvar), "variables in total"
+  statcard count(envvar where secret = yes), "secrets"
+section "Per service"
+  share envvar by service.name, count(it), it.key
+each service sort name as s empty "No services yet. Add api, web or worker below."
+  row card gap 2 tap edit s swipe remove s
+    s.name bold grow
+    count(s.envvar) "vars," count(s.envvar where secret = yes) "secret" faint
+form service, "Add service"
+list envvar, "No variables yet."
+===
+@rich domain=d1_cron_runs topic=cron runs with failures chart style=detailed
+cron jobs with a name and schedule, and each time one runs i tap ok or failed on it. show failures per day for the last week, and failed runs this week next to each job
+needs: add a cron job with name and schedule | buttons to log a run as ok or failed | failures per day chart | failed runs this week per job | total runs today
+---
+app "Cron runs" timer yellow
+table cron name text, schedule text
+table run cron ref cron, result pick OK|Failed = OK
+topbar "Cron runs", cron, "Add cron job"
+row gap 2
+  statcard count(run today), "runs today"
+  statcard count(run week where result = Failed), "failures this week"
+section "Failures per day", "last 7 days"
+  daybars last 7 days, count(run on it where result = Failed)
+each cron sort name as c empty "No cron jobs yet. Add one and log its runs here."
+  row card gap 1 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.schedule "· failed" count(c.run week where result = Failed) "times this week" faint
+    button "OK" tap add run cron = c, result = OK
+    button "Failed" fill bad tap add run cron = c, result = Failed
+===
+@rich domain=d1_backup_checks topic=backup restore test reminders style=multi_feature
+backups for the systems we run: name and kind (database, files, config). we should test a restore every 30 days, so a button to log a restore test and red when it is overdue
+needs: add a backup system with name and kind | button to log a restore test today | overdue restore tests in red | days since last test | count of overdue backups
+---
+app "Backups" shield green dark
+table backup system text, kind pick Database|Files|Config = Database
+table restore backup ref backup
+topbar "Backups", backup, "Add backup"
+statcard count(backup, due(it.restore, 30)), "backups need a restore test", count(backup)
+each backup sort system as b empty "No backups listed. Add each system you back up."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.system bold color if(due(b.restore, 30), bad, ink)
+      b.kind "· last restore test" since(b.restore) "days ago" faint
+    button "Tested" tap add restore backup = b
+===
+@rich domain=d1_patch_status topic=server patching status style=custom_ui
+patching: hosts with the date they were last patched. anything over my limit of 30 days goes red, a bar chart shows days since patch per host, and a button sets a host patched today
+needs: add a host with name and last patched date | days since patch per host in a chart | hosts over the day limit in red | button to mark patched today | adjustable day limit
+---
+app "Patching" tool ink
+table host name text, patched date
+setting limit num = 30 "Max days without patching"
+topbar "Patching", host, "Add host"
+statcard count(host, today - it.patched > limit), "hosts overdue for patches", count(host)
+section "Days since patch", "limit" limit "days"
+  bars host sort patched top 8, today - it.patched, it.name
+each host sort patched as h empty "No hosts yet. Add each server you patch."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.name bold color if(today - h.patched > limit, bad, ink)
+      (today - h.patched) "days since patch" faint
+    button "Patched" tap set h.patched = today
+===
+@rich domain=d1_flag_cleanup topic=stale feature flag cleanup style=multi_feature
+flags that live forever are a mess. list flags with the date created and whether still on, tick when removed from code. flags older than 90 days and not removed are stale and should show red
+needs: add a flag with name, created date and on state | tick when removed from code | stale flags older than 90 days in red | count of stale flags | age in days on each flag
+---
+app "Flag cleanup" flag plum
+table fflag name text, created date, on bool, removed bool
+let stale = count(fflag where removed = no and created < today - 90)
+topbar "Flag cleanup", fflag, "Add flag"
+statcard stale, "stale flags to clean up", count(fflag where removed = no)
+each fflag where removed = no sort created as f empty "No live flags. Nothing to clean."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.removed
+    stack grow gap 0
+      f.name bold color if(f.created < today - 90, bad, ink)
+      (today - f.created) "days old" faint
+    if f.on
+      "ON" bold color good
+    else
+      "off" faint
+section "Removed from code", count(fflag where removed = yes)
+  list fflag where removed = yes, "Nothing removed yet."
+===
+@rich domain=d1_changelog_tabs topic=public changelog with stats style=detailed
+public changelog for the app. two tabs: changelog where entries are grouped by day, and stats showing entries per month as bars and how many of each kind. kinds are new, improved, fixed
+needs: add a changelog entry with version, kind and text | changelog tab grouped by day | entries per kind | bars of entries per day | tap an entry to edit
+---
+app "Changelog" list red
+table entry2 version text, kind pick New|Improved|Fixed = New, line text
+screen log "Changelog" list
+  topbar "Changelog", entry2, "Add entry"
+  list entry2 by day, "No entries yet. Write what changed in your last release."
+screen stats "Stats" chart
+  row gap 1
+    each options entry2.kind as k
+      stack grow card gap 0 align center
+        count(entry2 where kind = k) big
+        k faint
+  section "Entries per day", "last 14 days"
+    daybars last 14 days, count(entry2 on it)
+===
+@rich domain=d1_release_calendar topic=release train calendar style=custom_ui
+release calendar: tap the days we shipped and see the month as a grid. month arrows to go back, how many releases this month, days since the last one
+needs: month calendar where tapping a day marks a release | month arrows | releases this month | days since last release | list of release days
+---
+app "Release train" calendar orange
+table ship note text?
+state m date = today
+topbar "Release train", ship, "Add release"
+monthnav m
+row gap 2
+  statcard count(ship month of m), "releases in" monthname(m)
+  statcard since(ship), "days since last release"
+calendar ship, m
+section "Release days", monthname(m)
+  list ship month of m by day, "No releases this month. Tap a day on the grid to mark one."
+===
+@rich domain=d1_bug_bash_scores topic=bug bash scoreboard style=short
+bug bash day, everyone logs bugs they found with points, and a scoreboard
+needs: log a bug with finder name and points | scoreboard by person | total points | bugs found today | list of finds
+---
+app "Bug bash" trophy yellow
+table find title text, who text, points num 1..10 = 2
+topbar "Bug bash", find, "Log a find"
+row gap 2
+  statcard sum(find.points), "points in total"
+  statcard count(find today), "bugs found today"
+section "Scoreboard", "points per person"
+  share find by who, sum(it.points), it.key
+list find, "No finds yet. First bug wins the coffee."
+===
+@rich domain=d1_coverage_modules topic=test coverage by module style=multi_feature
+test coverage per module of our backend as a percent. the target is 80 by default but i want to move it with a slider. bars for each module, modules under target in red, and average coverage
+needs: add a module with coverage percent | slider for the target percent | bars of coverage per module | modules under target in red | average coverage
+---
+app "Coverage" chart green
+table module name text, cover num 0..100 unit "%"
+setting aim num = 80 "Target coverage (%)"
+topbar "Coverage", module, "Add module"
+slider aim 50..100
+row gap 2
+  statcard round(avg(module.cover)), "% average coverage", 100
+  statcard count(module where cover < aim), "modules under" aim "%"
+section "Coverage per module"
+  bars module sort cover top 8, it.cover, it.name
+each module sort cover as m empty "No modules yet. Add one with its current coverage."
+  row card gap 2 tap edit m swipe remove m
+    m.name bold grow
+    m.cover "%" bold color if(m.cover < aim, bad, good)
+===
+@rich domain=d1_load_tests topic=load test results trend style=detailed
+results of our load tests: name of the run, requests per second, p95 latency in ms and error percent. line chart of p95 over runs, highlight runs over our 300 ms limit, best rps so far
+needs: log a load test with rps, p95 latency and error percent | line chart of p95 latency | runs over the latency limit in red | best rps card | adjustable latency limit
+---
+app "Load tests" bolt blue
+table loadrun name text, rps num 1..200000, p95 num 1..60000 unit "ms", errors num 0..100 = 0 unit "%"
+setting slo num = 300 "p95 limit (ms)"
+topbar "Load tests", loadrun, "Log run"
+row gap 2
+  statcard max(loadrun.rps), "best requests per second"
+  statcard count(loadrun where p95 > slo), "runs over" slo "ms"
+section "p95 latency", "oldest to newest"
+  trend loadrun top 12, it.p95
+each loadrun sort at desc as r empty "No load tests yet. Log the first run after you test."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.name bold
+      r.rps "rps ·" r.errors "% errors" faint
+    r.p95 "ms" big color if(r.p95 > slo, bad, good)
+===
+@rich domain=d1_dep_upgrades topic=dependency upgrade tracker style=multi_feature
+dependency upgrades to do: package, version now, version to move to, risk (patch, minor, major) and tick when done. chips by risk, progress bar of upgrades done
+needs: add a dependency with versions and risk | tick when upgraded | chips to filter by risk | progress of upgrades done | list of pending upgrades
+---
+app "Upgrades" package pink
+table dep name text, from_v text, to_v text, risk pick Patch|Minor|Major = Minor, done bool
+state f pick All|Patch|Minor|Major = All
+topbar "Upgrades", dep, "Add dependency"
+goal count(dep where done = yes), max(count(dep), 1), "upgrades done"
+choice f
+each dep where done = no and (f = All or risk = f) sort name as d empty "Nothing pending here. All caught up."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.done
+    stack grow gap 0
+      d.name bold
+      d.from_v "to" d.to_v faint
+    d.risk bold color if(d.risk = Major, bad, if(d.risk = Minor, warn, muted))
+===
+@rich domain=d1_freeze_windows topic=deploy freeze windows style=custom_ui
+we have deploy freezes (black friday, end of quarter). list them with reason, start and end date and show a big banner at the top that says deploys frozen when today is inside one
+needs: add a freeze window with reason, start and end | banner when frozen today | upcoming freezes list | days until next freeze | tap to edit
+---
+app "Freeze" lock grey
+table freeze reason text, starts date, ends date
+let frozen = count(freeze where starts <= today and ends >= today)
+topbar "Freeze windows", freeze, "Add freeze"
+if frozen > 0
+  stack card pad 2 fill bad gap 0
+    "Deploys are frozen" head
+    "A freeze window is active today." small
+else
+  stack card pad 2 fill good gap 0
+    "Clear to deploy" head
+    "No freeze today." small
+section "Upcoming and active"
+  each freeze where ends >= today sort starts as f empty "No freezes planned. Add one before the next busy week."
+    row gap 2 tap edit f swipe remove f
+      f.reason bold grow
+      f.starts "to" f.ends faint

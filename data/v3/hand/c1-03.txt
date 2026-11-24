@@ -1,0 +1,582 @@
+@rich domain=c1_group_gift_fund topic=office_gift_contributions style=multi_feature
+collecting money in the office for a colleague's wedding gift. add each person who gave and how much, tell me how much is collected against the gift price, and what an equal share would be for the whole group
+needs: add a contributor with amount | set the gift price | collected against price | equal share for the group size | swipe to remove a contributor
+---
+app "Gift Fund" gift plum
+table chip who text, amount money
+setting price money = 12000 "Gift price"
+setting people num 1.. = 8 "People in the group"
+let raised = sum(chip.amount)
+topbar "Gift Fund", chip, "Add contribution"
+statcard raised, "collected of" price, price
+if raised >= price
+  "The gift is covered. Time to shop." color good bold
+else
+  "Still needed" price - raised ". An equal share is" round(price / people) faint
+section "Who gave", plural(count(chip), "person")
+  each chip as c empty "Nobody has given yet."
+    row swipe remove c tap edit c
+      c.who grow
+      c.amount bold
+===
+@rich domain=c1_flat_grocery_owed topic=shared_grocery_who_owes style=multi_feature
+three flatmates buy groceries in turns. i log each purchase with the price and who paid, and want to see who spent how much and who is owed money or owes money after an equal split
+needs: add a purchase with price and who paid | total spent by each person | equal share | who is owed and who owes | list of purchases
+---
+app "Flat Groceries" cart green
+table buy what text, price money, who pick Ali|Sara|Omar = Ali
+let total = sum(buy.price)
+let each3 = total / 3
+topbar "Groceries", buy, "Add purchase"
+statcard total, "spent together, each share" round(each3)
+section "Balance", "equal split of three"
+  each options buy.who as p
+    let paid = sum(buy.price where who = p)
+    row
+      p bold grow
+      paid faint
+      if(paid >= each3, "gets back", "owes") abs(round(paid - each3)) color if(paid >= each3, good, bad)
+section "Purchases"
+  list buy by day, "No purchases yet."
+===
+@rich domain=c1_settle_two_people topic=settle_up_shared_costs style=short
+i paid for the hotel, my friend paid for the car, split 60/40. who owes who
+needs: type what i paid and what my friend paid | choose my share of the total | shows who owes whom and how much | total of both
+---
+app "Settle Up" users red
+state mine money = 0
+state theirs money = 0
+state myshare num = 50
+let total = mine + theirs
+let diff = mine - total * myshare / 100
+field mine "I paid"
+field theirs "My friend paid"
+"My share of the cost" myshare "%" faint
+slider myshare 0..100
+if total > 0
+  statcard round(abs(diff)), if(diff >= 0, "my friend owes me", "I owe my friend")
+  "Together we spent" total faint
+else
+  "Type what each of you paid." faint
+===
+@rich domain=c1_tip_pool_hours topic=restaurant_tip_pool style=detailed
+at our restaurant all tips go into one jar and get shared by hours worked. add staff with their hours this week, type the tip jar total and see how much each person gets, with bars to compare
+needs: add staff with hours worked | type the tip jar total | amount for each person by hours | bars comparing shares | tap to edit hours
+---
+app "Tip Pool" coin orange
+table staff name text, hours num 0.. = 0
+state jar money = 0
+let hrs = sum(staff.hours)
+topbar "Tip Pool", staff, "Add staff"
+field jar "Tip jar this week"
+if jar > 0 and hrs > 0
+  statcard round(jar / hrs * 100) / 100, "per hour worked, from" hrs "hours"
+  section "Each person gets"
+    share staff, round(jar * it.hours / hrs), it.name
+else
+  "Add staff and type the jar total to share the tips." faint
+section "Staff"
+  each staff as s empty "No staff yet."
+    row tap edit s swipe remove s
+      s.name grow
+      s.hours "hours" faint
+===
+@rich domain=c1_hostel_mess_bill topic=hostel_mess_share style=custom_ui
+we run a mess in the hostel. total monthly mess bill is typed in, each member has days they ate in, and guest meals count as extra days at one third. show the cost per day and what each member pays
+needs: type the monthly mess bill | add members with days present | guest meals counted as extra days | cost per day | what each member pays
+---
+app "Mess Bill" food teal
+table member name text, days num 0..31 = 30
+state bill money = 0
+state guests num = 0
+let units = sum(member.days) + guests / 3
+let perday = if(units > 0, bill / units, 0)
+topbar "Mess", member, "Add member"
+field bill "Mess bill this month"
+"Guest meals" guests faint
+slider guests 0..60
+if bill > 0 and units > 0
+  statcard round(perday * 100) / 100, "per day"
+  each member as m
+    row
+      m.name grow
+      m.days "days" faint
+      round(perday * m.days) bold
+  "Guests pay" round(perday * guests / 3) faint
+else
+  "Add members and type the bill to see the shares." faint
+===
+@rich domain=c1_sibling_school_fee topic=school_fee_sibling_discount style=detailed
+school gives 10% off the second child's fee and 20% off the third and later ones. i type the monthly fee, how many kids i have, and a transport fee per child if i take the van. show total per month and per year
+needs: type monthly fee per child | number of children | sibling discount for second and later children | transport fee toggle | total per month and per year
+---
+app "School Fee" school blue
+state fee money = 0
+state kids num = 2
+state van bool = no
+state vanfee money = 3000
+let fees = fee * (1 + if(kids >= 2, 0.9, 0) + max(kids - 2, 0) * 0.8)
+let transport = if(van, vanfee * kids, 0)
+field fee "Monthly fee for one child"
+"Children" kids faint
+slider kids 1..6
+row gap 2 align center
+  "School van" grow
+  toggle van
+if van
+  field vanfee "Van fee per child"
+if fee > 0
+  statcard round(fees + transport), "per month"
+  row gap 2
+    stat round((fees + transport) * 12), "per year"
+    stat round(fee * kids - fees), "saved by sibling discount"
+else
+  "Type the fee to see what you pay." faint
+===
+@rich domain=c1_agent_commission_split topic=property_agent_commission style=multi_feature
+property dealer: buyer pays 1% and seller pays 2% of the sale price, and i split the total with my partner dealer by a percent i choose. type the price and see my cut
+needs: type sale price | commission from buyer and seller | split percent with partner dealer | my commission | partner commission
+---
+app "Dealer Cut" home purple
+state price money = 0
+state mine num = 50
+let buyer = price * 0.01
+let seller = price * 0.02
+let all = buyer + seller
+field price "Sale price"
+"My share of the commission" mine "%" faint
+slider mine 0..100
+if price > 0
+  statcard round(all * mine / 100), "my commission of" round(all)
+  row gap 2
+    stat round(buyer), "from buyer"
+    stat round(seller), "from seller"
+  "Partner dealer gets" round(all * (100 - mine) / 100) faint
+else
+  "Type the sale price to see the commission." faint
+===
+@rich domain=c1_plot_price_marla topic=plot_price_by_size style=custom_ui
+buying a plot in a new society. they quote per marla. choose marla or kanal, how many, price per marla, and tell me total price, square feet and rate per square foot. 1 kanal is 20 marla and 1 marla is 272.25 sq ft
+needs: choose marla or kanal | number of plots | price per marla | total price | square feet and price per square foot
+---
+app "Plot Price" map pink
+state size pick Marla|Kanal = Marla
+state count num = 5
+state rate money = 0
+let marlas = count * if(size = Kanal, 20, 1)
+let feet = marlas * 272.25
+let total = marlas * rate
+choice size
+field count "Size"
+field rate "Price per marla"
+if rate > 0 and count > 0
+  statcard round(total), "total price for" marlas "marla"
+  row gap 2
+    stat round(feet), "square feet"
+    stat round(total / feet), "per square foot"
+else
+  "Type the price per marla to see the total." faint
+===
+@rich domain=c1_cloth_suits_length topic=cloth_for_suits style=multi_feature
+cloth shop. customers ask how many yards for 3 suits when one suit needs 3.5 yards. price is per metre in some rolls and per yard in others. show total length, in metres and the bill
+needs: suits wanted and yards per suit | price per metre or per yard | total length in yards and metres | bill amount
+---
+app "Cloth Bill" bag grey
+state suits num = 1
+state yards num = 3.5
+state price money = 0
+state per pick Per_metre|Per_yard = Per_yard
+let tot = suits * yards
+let metres = tot * 0.9144
+field suits "Suits"
+field yards "Yards per suit"
+field price "Price"
+choice per
+if price > 0
+  statcard round(if(per = Per_yard, tot, metres) * price), "to pay"
+  "Cut" tot "yards, that is" round(metres * 100) / 100 "metres" faint
+else
+  "Type the cloth price for the bill." faint
+===
+@rich domain=c1_fixed_deposit_maturity topic=fixed_deposit_compounding style=detailed
+bank offered me a fixed deposit. money i put, yearly profit rate, years, and whether it compounds yearly, quarterly or monthly. what do i get at the end, how much is the profit and what would be the monthly payout instead
+needs: type the deposit amount | yearly rate and years | compounding yearly, quarterly or monthly | maturity amount | profit earned | monthly payout option
+---
+app "Fixed Deposit" money ocean dark
+state p money = 0
+state rate num = 12
+state years num = 3
+state comp pick Yearly|Quarterly|Monthly = Quarterly
+let n = if(comp = Yearly, 1, if(comp = Quarterly, 4, 12))
+let final = p * pow(1 + rate / 100 / n, n * years)
+field p "Amount deposited"
+"Yearly rate" rate "%" faint
+slider rate 1..25
+"Years" years faint
+slider years 1..15
+choice comp
+if p > 0
+  statcard round(final), "at the end of" plural(years, "year")
+  row gap 2
+    stat round(final - p), "profit"
+    stat round(p * rate / 1200), "monthly payout instead"
+else
+  "Type the deposit to see the maturity amount." faint
+===
+@rich domain=c1_flip_resale_profit topic=resale_flips_profit style=multi_feature
+i buy old bikes and phones, fix them and sell. log each flip with what i paid, the repair and fee costs, and the price i sold for. show profit per flip, total profit and my return on money spent
+needs: log a flip with bought price, costs and sold price | profit on each flip | total profit | return percent on money spent | tap to edit a flip
+---
+app "Flips" tag mint
+table flip item text, bought money, costs money = 0 "Repairs and fees", sold money
+let spent = sum(flip, it.bought + it.costs)
+let profit = sum(flip, it.sold - it.bought - it.costs)
+topbar "Flips", flip, "Log a flip"
+statcard profit, "total profit from" plural(count(flip), "flip")
+if spent > 0
+  "Return on money spent" round(profit * 100 / spent) "%" bold
+section "Flips"
+  each flip as f empty "No flips yet. Tap Log a flip after your first sale."
+    row tap edit f swipe remove f
+      stack grow gap 0
+        f.item bold
+        "bought" f.bought "+ costs" f.costs faint
+      f.sold - f.bought - f.costs bold color if(f.sold - f.bought - f.costs >= 0, good, bad)
+===
+@rich domain=c1_share_average_cost topic=average_buying_price_shares style=detailed
+i buy a stock in small lots at different prices. add each purchase with number of shares and price. show my average buying price, total invested, and if i type today's price, my profit or loss in money and percent
+needs: add a purchase with shares and price | average buying price | total invested | type today's price | profit or loss in money and percent
+---
+app "Share Average" chart ink
+table buy shares num 1.., price money
+state px money = 0
+let qty = sum(buy.shares)
+let invested = sum(buy, it.shares * it.price)
+let avg = if(qty > 0, invested / qty, 0)
+topbar "Share Average", buy, "Add purchase"
+statcard round(avg * 100) / 100, "average price for" plural(qty, "share")
+"Total invested" round(invested) bold
+field px "Price today"
+if px > 0 and qty > 0
+  section "If you sold now"
+    round((px - avg) * qty) big color if(px >= avg, good, bad)
+    round((px / avg - 1) * 1000) / 10 "%" faint
+section "Purchases"
+  list buy, "No purchases yet."
+===
+@rich domain=c1_dividend_income topic=dividend_yield_income style=multi_feature
+holding some shares for the dividend. type shares owned, price per share and yearly dividend per share. show yield percent, income per year and per month, and how many shares i would need for a monthly income i want
+needs: shares owned and price per share | yearly dividend per share | yield percent | income per year and per month | shares needed for a wanted monthly income
+---
+app "Dividends" coin yellow
+state shares num = 100
+state price money = 0
+state div money = 0
+state want money = 0
+field shares "Shares owned"
+row gap 2
+  field price "Price per share"
+  field div "Dividend per year"
+field want "Monthly income i want"
+if price > 0 and div > 0
+  statcard round(div * 1000 / price) / 10, "percent yield"
+  row gap 2
+    stat round(shares * div), "per year"
+    stat round(shares * div / 12), "per month"
+  if want > 0
+    "You would need" round(want * 12 / div) "shares, costing" round(want * 12 / div * price) faint
+else
+  "Type the share price and dividend." faint
+===
+@rich domain=c1_days_to_payday topic=money_left_until_payday style=short
+how much can i spend per day until salary comes
+needs: type money left | pick the payday date | days remaining until payday | amount per day
+---
+app "Until Payday" calendar green
+state left money = 0
+state payday date = today + 10
+let days = payday - today
+field left "Money left"
+field payday "Payday"
+if days <= 0
+  "Payday is today or passed. Pick the next payday." faint
+if days > 0 and left > 0
+  statcard round(left / days), "per day for" plural(days, "day")
+if days > 0 and left <= 0
+  "Type the money you have left." faint
+===
+@rich domain=c1_salary_slip_build topic=salary_slip_components style=detailed
+building a salary slip: basic pay, house rent allowance as a percent of basic, medical as a percent of basic, a fixed conveyance, then tax percent on gross and a loan installment taken out. show gross and net and a bar of where it goes
+needs: basic salary | house rent and medical percentages | fixed conveyance | tax percent and loan installment | gross and net pay
+---
+app "Salary Slip" note orange
+setting basic money = 80000 "Basic pay"
+setting hra num 0..100 = 45 "House rent % of basic"
+setting med num 0..50 = 10 "Medical % of basic"
+setting conv money = 5000 "Conveyance"
+setting taxp num 0..40 = 8 "Tax % of gross"
+setting loan money = 0 "Loan installment"
+let gross = basic * (1 + hra / 100 + med / 100) + conv
+let taxamt = gross * taxp / 100
+let net = gross - taxamt - loan
+statcard round(net), "net pay, gross" round(gross), gross
+section "Slip"
+  row
+    "Basic" grow
+    basic
+  row
+    "House rent" grow
+    round(basic * hra / 100)
+  row
+    "Medical" grow
+    round(basic * med / 100)
+  row
+    "Conveyance" grow
+    conv
+  divider
+  row
+    "Tax" grow
+    round(taxamt) color bad
+  row
+    "Loan installment" grow
+    loan color bad
+===
+@rich domain=c1_withholding_payout topic=freelance_payout_after_fees style=custom_ui
+my client in another country pays 1000 dollars. the platform keeps 10%, then my bank takes 8% withholding tax, and a fixed 5 dollar wire fee. what lands in my account in local money at the rate i type
+needs: type invoice amount | platform fee percent | withholding tax percent | fixed wire fee | amount in local money at a typed rate
+---
+app "Payout" bag teal
+state amount money = 0
+state plat num = 10
+state wh num = 8
+state wire money = 5
+state rate num = 280
+let afterplat = amount * (1 - plat / 100)
+let net = max(afterplat * (1 - wh / 100) - wire, 0)
+field amount "Invoice (foreign money)"
+"Platform fee" plat "%" faint
+slider plat 0..30
+"Withholding tax" wh "%" faint
+slider wh 0..30
+row gap 2
+  field wire "Wire fee"
+  field rate "Local rate"
+if amount > 0
+  statcard round(net * rate), "arrives in local money"
+  "You keep" round(net * 100) / 100 "of" amount faint
+else
+  "Type the invoice amount to see the payout." faint
+===
+@rich domain=c1_milestone_payments topic=project_milestone_amounts style=multi_feature
+big website project. client pays in three milestones: a percent upfront, a percent at midpoint and the rest on delivery. type project price and slide the first two, and the last one fills itself. show each amount
+needs: type project price | upfront percent slider | midpoint percent slider | delivery percent fills the rest | amount for each milestone
+---
+app "Milestones" flag blue
+state price money = 0
+state m1 num = 30
+state m2 num = 40
+let m3 = max(100 - m1 - m2, 0)
+field price "Project price"
+"Upfront" m1 "%" faint
+slider m1 0..100
+"Midpoint" m2 "%" faint
+slider m2 0..100
+if m1 + m2 > 100
+  "The first two add up to more than 100%." color warn bold
+if price > 0
+  section "Payments", "delivery is" m3 "%"
+    row
+      "On start" grow
+      round(price * m1 / 100) bold
+    row
+      "At midpoint" grow
+      round(price * m2 / 100) bold
+    row
+      "On delivery" grow
+      round(price * m3 / 100) bold
+else
+  "Type the project price to see the payments." faint
+===
+@rich domain=c1_fixed_vs_hourly topic=fixed_fee_or_hourly style=custom_ui
+client offers a fixed fee for a job. i think it will take some hours and my normal rate is typed in. show what i would earn hourly, what the fixed fee works out to per hour, and tell me which is better
+needs: fixed fee offered | estimated hours | my hourly rate | effective hourly rate of the fixed fee | which option pays better
+---
+app "Fixed or Hourly" scale purple
+state fee money = 0
+state hours num = 10
+state rate money = 20
+let eff = if(hours > 0, fee / hours, 0)
+row gap 2
+  field fee "Fixed fee"
+  field rate "My hourly rate"
+"Estimated hours" hours faint
+slider hours 1..200
+if fee > 0
+  statcard round(eff * 100) / 100, "per hour on the fixed fee"
+  row gap 2
+    stat round(rate * hours), "hourly total"
+    stat round(fee - rate * hours), if(fee >= rate * hours, "extra with fixed fee", "short with fixed fee")
+  if fee >= rate * hours
+    "Take the fixed fee, if the hours hold." color good bold
+  else
+    "Bill hourly, the fixed fee is too low." color bad bold
+else
+  "Type the fee offered." faint
+===
+@rich domain=c1_percent_tools_tabs topic=percent_change_three_tools style=custom_ui
+percentage helper with three tabs: percent change between an old and a new number, what is X percent of a number, and a reverse tab that finds the original price when i know the price after a percent discount
+needs: percent change between old and new | percent of a number | original price from the discounted price | separate tabs for each tool
+---
+app "Percent Tools" calc grey
+state a num = 0
+state b num = 0
+state p num = 10
+state q num = 0
+state d num = 20
+screen chg "Change" chart
+  field a "Old value"
+  field b "New value"
+  if a != 0
+    round((b - a) / a * 1000) / 10 big
+    if(b >= a, "percent up", "percent down") faint
+screen part "Percent of" calc
+  "Percent" p "%" faint
+  slider p 0..100
+  field q "Of this number"
+  round(q * p / 100 * 100) / 100 big
+screen back "Reverse" tag
+  field b "Price after discount"
+  "Discount was" d "%" faint
+  slider d 1..90
+  round(b / (1 - d / 100) * 100) / 100 big
+  "was the original price" faint
+===
+@rich domain=c1_target_discount_ask topic=discount_needed_for_target style=short
+shop wants 24000, i can pay 20000. what percent discount should i ask for
+needs: type the shop price | type the price i want to pay | discount percent to ask for | how much i save
+---
+app "Ask Discount" tag ocean
+state shop money = 0
+state want money = 0
+field shop "Shop price"
+field want "I want to pay"
+if want > shop and shop > 0
+  "That is more than the shop price already." faint
+if shop > 0 and want > 0 and want <= shop
+  statcard round((1 - want / shop) * 1000) / 10, "percent discount to ask for"
+  "You save" shop - want faint
+if shop <= 0 or want <= 0
+  "Type both prices." faint
+===
+@rich domain=c1_price_by_weight_convert topic=per_kg_to_grams_price style=multi_feature
+sabzi mandi helper: if price is per kg, what do 350 grams cost; and when eggs are priced per dozen, what is one egg and what do 18 eggs cost
+needs: price per kg and grams wanted | cost of the grams | price per dozen | cost of one egg | cost of any number of eggs
+---
+app "Weigh Price" apple slate
+state kgprice money = 0
+state grams num = 350
+state dozen money = 0
+state eggs num = 18
+section "By weight", "price per kg"
+  field kgprice "Price per kg"
+  field grams "Grams wanted"
+  if kgprice > 0
+    round(kgprice * grams / 10) / 100 big
+    "for" grams "grams" faint
+section "By the dozen"
+  field dozen "Price per dozen"
+  field eggs "Eggs wanted"
+  if dozen > 0
+    round(dozen / 12 * eggs * 100) / 100 big
+    "one egg costs" round(dozen / 12 * 100) / 100 faint
+===
+@rich domain=c1_veg_scale_bill topic=vegetable_weighing_bill style=multi_feature
+vegetable cart: i set the price per kg, put the weight in grams on the scale and add it to the customer's bill, then next vegetable. show each line, the running total and a clear button
+needs: price per kg | weight in grams | add to the bill | bill lines with amounts | running total and clear bill
+---
+app "Veg Bill" apple ink
+table line grams num 1.., amount money
+state kgprice money = 0
+state grams num = 0
+section "Weigh it"
+  row gap 2
+    field kgprice "Price per kg"
+    field grams "Grams"
+  if kgprice > 0 and grams > 0
+    "This costs" round(kgprice * grams) / 1000 big
+    button "Add to bill" fill accent tap add line grams = grams, amount = kgprice * grams / 1000 then set grams = 0
+statcard sum(line.amount), "bill so far for" plural(count(line), "item")
+each line sort at as l empty "The bill is empty."
+  row swipe remove l
+    l.grams "g" grow
+    l.amount bold
+if count(line) > 0
+  button "Clear bill" fill soft tap remove all line
+===
+@rich domain=c1_gas_cylinder_days topic=gas_cylinder_cost_per_day style=detailed
+i log every time i buy a gas cylinder with the price. show how many days each cylinder lasts on average and what cooking gas costs me per day and per month
+needs: log a cylinder purchase with price | average days between cylinders | cost per day | cost per month | list of purchases
+---
+app "Gas Days" fire red dark
+table refill price money
+topbar "Gas", refill, "Cylinder bought"
+let days = gap(refill)
+if days > 0
+  statcard round(days), "days per cylinder on average"
+  row gap 2
+    stat round(avg(refill.price) / days), "per day"
+    stat round(avg(refill.price) / days * 30), "per month"
+else
+  "Log two cylinders and I will work out how long one lasts." faint
+section "Cylinders", plural(count(refill), "purchase")
+  list refill by day, "No cylinders logged yet."
+===
+@rich domain=c1_solar_payback topic=solar_system_payback style=multi_feature
+thinking of putting solar panels on the roof. system cost, my electricity bill now and the bill i expect after, and the yearly rise in tariff. how many years to get my money back and how much will i save in ten years
+needs: type system cost | bill now and bill after solar | yearly tariff rise | payback years | savings over ten years
+---
+app "Solar Payback" sun yellow
+state cost money = 0
+state before money = 0
+state after money = 0
+state rise num = 5
+let saving = max(before - after, 0) * 12
+let ten = sum(1..10, saving * pow(1 + rise / 100, it - 1))
+row gap 2
+  field before "Bill now (month)"
+  field after "Bill after solar"
+field cost "System cost"
+"Tariff rise" rise "% a year" faint
+slider rise 0..15
+if cost > 0 and saving > 0
+  statcard round(cost / saving * 10) / 10, "years to get your money back"
+  stat round(ten - cost), "saved after ten years, minus the cost"
+else
+  "Type the cost and both bills to see the payback." faint
+===
+@rich domain=c1_led_bulb_saving topic=led_bulbs_savings style=custom_ui
+replacing old 100 watt bulbs with 12 watt LED. number of bulbs, hours per day, price per unit of electricity and cost of one LED bulb. show monthly saving and how fast the bulbs pay for themselves
+needs: number of bulbs | old and new watts | hours per day | price per unit | monthly saving and payback months
+---
+app "LED Saving" bolt green
+state n num = 10
+state oldw num = 100
+state neww num = 12
+state hrs num = 6
+state unit money = 40
+state bulb money = 350
+let kwh = n * (oldw - neww) * hrs * 30 / 1000
+field n "Number of bulbs"
+row gap 2
+  field oldw "Old watts"
+  field neww "LED watts"
+row gap 2
+  field unit "Price per unit"
+  field bulb "Price of one LED"
+"Hours per day" hrs faint
+slider hrs 1..24
+if kwh > 0
+  statcard round(kwh * unit), "saved every month"
+  stat round(n * bulb / (kwh * unit) * 10) / 10, "months to pay for the bulbs"
+else
+  "Fill in the bulbs to see the saving." faint

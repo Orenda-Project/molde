@@ -1,0 +1,918 @@
+@rich domain=l1_chai_stall topic=tea_stall_sales kind=long
+-
+needs: add a sale with item, pieces and price | shows takings today against a target | bar chart of 7 days with goal line | best sellers this week | monthly costs and what is left after rent
+---
+app "Chai Stall" coffee orange
+table sale item pick Chai|Paratha|Samosa|Biscuit|Juice = Chai, qty num 1..200 = 1 unit "pcs", price money
+table cost what text, amount money, kind pick Milk|Gas|Sugar|Wages|Other = Milk
+setting target money = 6000 "Daily sales target"
+setting rent money = 15000 "Monthly shop rent"
+let takings = sum(sale today, it.qty * it.price)
+let monthsales = sum(sale month, it.qty * it.price)
+let spent = sum(cost.amount month)
+topbar "Chai Stall", sale, "Add sale"
+statcard takings, "sold today of" target, target
+row gap 2
+  stat count(sale today), "orders today"
+  stat sum(sale.qty today), "items served"
+  stat round(takings / max(count(sale today), 1)), "per order"
+section "Last 7 days", "goal met on" count(days last 7 days, sum(sale on it, it.qty * it.price) >= target) "of 7 days"
+  goalbars last 7 days, sum(sale on it, it.qty * it.price), target
+section "Best sellers this week", "pieces sold"
+  share sale week by item, sum(it.qty), it.key
+section "Month so far", "rent" rent
+  row gap 2
+    stat monthsales, "sales"
+    stat spent, "costs"
+    stat monthsales - spent - rent, "left after rent"
+  each cost month by kind as g empty "No costs yet this month. Add milk, gas or wages below."
+    row gap 1
+      g.key bold grow
+      sum(g.amount) faint
+form cost, "Add cost"
+section "Today's orders", plural(count(sale today), "order")
+  list sale today, "No sales yet today. Tap Add sale after the first cup."
+section "Orders per day", "last 14 days"
+  daybars last 14 days, count(sale on it)
+section "Latest sales", "tap one to fix a mistake"
+  each sale top 4 as s empty "Nothing sold yet."
+    row gap 2
+      s.item bold grow
+      s.qty "x" s.price faint
+      s.qty * s.price bold
+section "Costs by kind", "this month"
+  share cost month by kind, sum(it.amount), it.key
+if spent > monthsales / 2
+  "Costs are over half of this month's sales." color warn bold
+===
+@rich domain=l1_wheat_harvest topic=wheat_harvest_bags kind=long
+-
+needs: log bags cut per field | progress toward the season target | bags per field comparison | daily cutting chart | record sales to buyers with rate
+---
+app "Wheat Harvest" leaf green
+table cut field pick North_field|River_field|Back_plot|Canal_side = North_field, bags num 1..500, kgbag num 20..100 = 50 unit "kg"
+table sale buyer text, bags num 1..500, rate money
+setting target num = 600 "Season target (bags)"
+let total = sum(cut.bags)
+let sold = sum(sale.bags)
+topbar "Wheat Harvest", cut, "Log cutting"
+goal total, target, "bags cut this season", "bags"
+row gap 2
+  stat sold, "bags sold"
+  stat total - sold, "bags in the store"
+  stat round(sum(cut, it.bags * it.kgbag) / 1000), "tonnes cut"
+section "Bags per field", "all season"
+  bars cut by field, sum(it.bags), it.key
+section "Cutting, last 14 days", "best day" max(days last 14 days, sum(cut.bags on it)) "bags"
+  daybars last 14 days, sum(cut.bags on it)
+section "Sales", "earned" sum(sale, it.bags * it.rate)
+  each sale sort at desc top 5 as s empty "Nothing sold yet. Add the first buyer below."
+    row card gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.buyer bold
+        s.bags "bags at" s.rate faint
+      s.bags * s.rate bold
+form sale, "Add sale"
+section "Recent cutting"
+  list cut top 8, "No cutting logged yet. Log the first field after harvest."
+section "Fields still to cut", "no bags logged this week"
+  each options cut.field as f
+    if count(cut week where field = f) = 0
+      row gap 2
+        f bold grow
+        "Nothing cut" faint
+section "Average bag weight", "by field"
+  bars cut by field, round(avg(it.kgbag)), it.key
+section "Cut and sold", "bags"
+  row gap 2
+    stat total, "cut"
+    stat sold, "sold"
+    stat total - sold, "left"
+if total >= target
+  "Season target reached." color good bold
+===
+@rich domain=l1_dairy_milk topic=dairy_milk_collection kind=long
+-
+needs: log litres per cow per shift | choose morning or evening view | litres today against a goal | weekly bar chart | income at the price per litre
+---
+app "Dairy Log" milk blue
+table milk cow pick Gauri|Laali|Moti|Kali|Chandni = Gauri, litres num 1..40 = 8 unit "L", shift pick Morning|Evening = Morning
+setting price money = 140 "Price per litre"
+setting goal num = 60 "Daily herd goal (L)"
+state sh pick Morning|Evening = Morning
+let today_l = sum(milk.litres today)
+topbar "Dairy Log", milk, "Add milking"
+statcard today_l, "litres today of" goal, goal
+row gap 2
+  stat today_l * price, "earned today"
+  stat sum(milk.litres week) * price, "earned this week"
+section "Shift view"
+  choice sh
+  each options milk.cow as c
+    row gap 2
+      c bold grow
+      sum(milk.litres today where cow = c and shift = sh) "L" faint
+      draw 100, 4 width 90
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(milk.litres today where cow = c and shift = sh) / 12, 0, 1), 4 fill accent radius 2
+section "Last 7 days", "average" round(sum(milk.litres last 7 days) / 7) "L a day"
+  goalbars last 7 days, sum(milk.litres on it), goal
+section "Best cows this month", "litres"
+  share milk month by cow, sum(it.litres), it.key
+list milk today by day, "No milking logged today. Add the morning shift first."
+section "Evening against morning", "this week"
+  row gap 2
+    stat sum(milk.litres week where shift = Morning), "L morning"
+    stat sum(milk.litres week where shift = Evening), "L evening"
+section "Litres per day", "last 14 days"
+  trend days last 14 days, sum(milk.litres on it)
+section "Best day this month", "litres"
+  stat max(days month, sum(milk.litres on it)), "L in one day"
+section "Month income", "at the price per litre"
+  row gap 2
+    stat sum(milk.litres month) * price, "earned"
+    stat round(sum(milk.litres month) / max(count(days month, count(milk on it) > 0), 1)), "L a day"
+section "Milk per shift", "this week"
+  each options milk.shift as v
+    row gap 2
+      v bold grow
+      sum(milk.litres week where shift = v) "L" faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(milk.litres week where shift = v) / max(sum(milk.litres week), 1), 0, 1), 4 fill accent radius 2
+if today_l >= goal
+  "Daily goal reached." color good bold
+===
+@rich domain=l1_bug_tracker topic=developer_bug_board kind=long
+-
+needs: add a bug with severity and hours | filter by status chips | open critical count | hours against sprint budget | bugs by severity chart
+---
+app "Bug Board" tool purple dark
+table bug title text, severity pick Low|Medium|High|Critical = Medium, status pick Open|Fixing|Done = Open, hours num 1..40 = 2 unit "h"
+setting budget num = 60 "Sprint hours budget"
+state tab pick Open|Fixing|Done = Open
+let critical = count(bug where severity = Critical and status != Done)
+topbar "Bug Board", bug, "Report bug"
+statcard critical, "critical bugs still open", count(bug where severity = Critical)
+goal sum(bug.hours where status = Done), budget, "hours fixed this sprint", "h"
+row gap 1
+  each options bug.status as s
+    button s count(bug where status = s) fill if(tab = s, accent, soft) grow tap set tab = s
+each bug where status = tab sort hours desc as b empty "No bugs in this column. Nice and quiet."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.severity "-" b.hours "h" faint color if(b.severity = Critical, bad, muted)
+    if b.status = Open
+      button "Start" tap set b.status = Fixing
+    if b.status = Fixing
+      button "Done" tap set b.status = Done
+section "By severity", "all bugs"
+  share bug by severity, count(it), it.key
+section "Bugs reported per day", "last 14 days"
+  daybars last 14 days, count(bug on it)
+section "Hours by status", "all bugs"
+  share bug by status, sum(it.hours), it.key
+section "Hours still to fix", "open and fixing"
+  row gap 2
+    stat sum(bug.hours where status = Open), "h open"
+    stat sum(bug.hours where status = Fixing), "h in progress"
+    stat budget - sum(bug.hours where status = Done), "h of budget left"
+if sum(bug.hours where status != Done) > budget
+  "Open work is more than the sprint budget. Cut scope." color warn bold
+section "Done", count(bug where status = Done)
+  list bug where status = Done top 5, "Nothing fixed yet. Pick a bug and press Start."
+section "Hours per severity", "all bugs"
+  each options bug.severity as v
+    row gap 2
+      v bold grow
+      sum(bug.hours where severity = v) "h" faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(bug.hours where severity = v) / max(sum(bug.hours), 1), 0, 1), 4 fill accent radius 2
+section "Longest open bug"
+  each bug where status != Done sort hours desc top 1 as b empty "No open bugs."
+    row card gap 2
+      b.title bold grow
+      b.hours "h" bold
+===
+@rich domain=l1_freelance_invoices topic=freelance_invoice_tracker kind=long
+-
+needs: add an invoice with client amount and date | tap to mark paid | total still owed | overdue count | monthly income against goal
+---
+app "Invoices" money teal
+table invoice client text, amount money, issued date = today, paid bool
+setting goal money = 250000 "Monthly income goal"
+let owed = sum(invoice.amount where paid = no)
+let late = count(invoice where paid = no and issued < today - 30)
+topbar "Invoices", invoice, "New invoice"
+statcard owed, "still owed by" count(invoice where paid = no) "clients"
+if late > 0
+  "Chase" plural(late, "invoice") "older than 30 days" bold color bad
+goal sum(invoice.amount month where paid = yes), goal, "paid this month"
+section "Income per month", "last 6 months"
+  bars days last 6 months, sum(invoice.amount month of it where paid = yes), monthname(it)
+section "Top clients", "by amount billed"
+  share invoice by client, sum(it.amount), it.key
+section "Unpaid"
+  each invoice where paid = no sort issued as i empty "Everything is paid. Enjoy it."
+    row card gap 2 tap edit i swipe remove i
+      toggle i.paid
+      stack grow gap 0
+        i.client bold
+        "Issued" i.issued faint color if(i.issued < today - 30, bad, muted)
+      i.amount bold
+section "Paid", count(invoice where paid = yes)
+  list invoice where paid = yes top 6, "Nothing paid yet."
+section "Billed per week", "last 4 weeks"
+  daybars last 28 days, sum(invoice.amount on it)
+section "Average invoice", "all time"
+  row gap 2
+    stat round(avg(invoice.amount)), "average amount"
+    stat max(invoice.amount), "biggest invoice"
+    stat count(invoice month), "sent this month"
+section "Slowest payers", "unpaid, oldest first"
+  each invoice where paid = no sort issued top 3 as i empty "Nobody is late."
+    row gap 2
+      i.client bold grow
+      plural(today - i.issued, "day") faint
+      i.amount bold
+section "Cash in", "last 7 days"
+  daybars last 7 days, sum(invoice.amount on it where paid = yes)
+section "Paid share", "of everything billed"
+  goal sum(invoice.amount where paid = yes), max(sum(invoice.amount), 1), "already paid"
+if owed > goal
+  "More is owed than your monthly goal. Send reminders." color warn bold
+===
+@rich domain=l1_club_dues topic=sports_club_dues kind=long
+-
+needs: add club members | tick who paid this month | collected against the target | who is behind | monthly collection chart
+---
+app "Club Dues" users red
+table member name text, group pick Juniors|Seniors|Veterans = Seniors
+table payment member ref member, amount money = 2000
+setting target money = 60000 "Monthly dues target"
+let paid = count(member, count(it.payment month) > 0)
+topbar "Club Dues", member, "Add member"
+statcard sum(payment.amount month), "collected of" target, target
+row gap 2
+  stat paid, "members paid"
+  stat count(member) - paid, "still to pay"
+  stat round(paid * 100 / max(count(member), 1)), "percent paid"
+section "Members", "tick when paid"
+  each member sort name as m empty "No members yet. Add the first player with Add member."
+    row card gap 2 tap edit m swipe remove m
+      toggle m.payment month
+      stack grow gap 0
+        m.name bold
+        m.group faint
+      if count(m.payment month) = 0
+        "Due" faint color bad
+section "Collected per month", "last 6 months"
+  bars days last 6 months, sum(payment.amount month of it), monthname(it)
+section "By group", "this month"
+  share member by group, count(it), it.key
+section "Paid so far", "this month"
+  goal sum(payment.amount month), target, "of the monthly target"
+section "Last payments", "newest first"
+  each payment top 5 as p empty "No payments yet this month."
+    row gap 2
+      p.member.name bold grow
+      p.at faint
+      p.amount bold
+section "Members by group"
+  row gap 2
+    each options member.group as g
+      stat count(member where group = g), g
+section "Paid per group", "this month"
+  each options member.group as v
+    row gap 2
+      v bold grow
+      count(member where group = v and count(payment month) > 0)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(member where group = v and count(payment month) > 0) / max(count(member where group = v), 1), 0, 1), 4 fill accent radius 2
+if count(member) - paid > 5
+  "Many members are behind. Call them this week." color warn bold
+===
+@rich domain=l1_poultry_eggs topic=poultry_egg_laying kind=long
+-
+needs: log eggs collected and broken | laying rate for the flock | egg trend over 30 days | feed bags used | heat map of collecting days
+---
+app "Hen House" egg yellow
+table collect eggs num 0..2000, broken num 0..200 = 0
+table feed bags num 1..50 = 1, cost money
+setting flock num = 400 "Birds in the flock"
+let eggs_today = sum(collect.eggs today)
+topbar "Hen House", collect, "Log eggs"
+statcard round(eggs_today * 100 / flock), "percent laying rate, from" eggs_today "eggs", 100
+row gap 2
+  stat sum(collect.broken today), "broken today"
+  stat sum(collect.eggs week), "eggs this week"
+  stat round(sum(collect.eggs week) / 12), "dozen this week"
+section "Eggs per day", "last 30 days"
+  trend days last 30 days, sum(collect.eggs on it)
+section "Collecting days", "last 5 weeks"
+  heat last 35 days, count(collect on it), 2
+section "Feed", "bags this month" sum(feed.bags month)
+  row gap 2
+    stat sum(feed.cost month), "feed cost"
+    stat round(sum(feed.cost month) / max(sum(collect.eggs month), 1) * 100) / 100, "feed cost per egg"
+  each feed top 3 as f empty "No feed bought yet. Add a purchase below."
+    row gap 1
+      f.bags "bags" grow
+      f.cost bold
+form feed, "Add feed"
+list collect today, "No eggs logged today. Log the morning round."
+section "Broken eggs", "last 7 days"
+  daybars last 7 days, sum(collect.broken on it)
+section "Best day this month", "eggs"
+  stat max(days month, sum(collect.eggs on it)), "eggs in one day"
+section "Dozens to sell", "this week"
+  row gap 2
+    stat floor(sum(collect.eggs week) / 12), "full dozens"
+    stat sum(collect.eggs week) % 12, "loose eggs"
+if sum(collect.broken week) * 20 > sum(collect.eggs week)
+  "More than 5 percent broke this week. Check the trays." color warn bold
+section "Laying rate", "last 7 days"
+  each days last 7 days as d
+    row gap 2
+      dayname(d) grow
+      sum(collect.eggs on d) "eggs" faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(collect.eggs on d) / flock, 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_bakery_orders topic=bakery_custom_orders kind=long
+-
+needs: add an order with customer item due date and price | orders due today | tick when ready | revenue by item | reminder each morning
+---
+app "Bakery Orders" bread pink
+table order customer text, item pick Cake|Cupcakes|Bread|Cookies|Pastry = Cake, due date = today, price money, ready bool
+setting capacity num = 8 "Orders per day I can bake"
+let due_today = count(order where due = today and ready = no)
+let late = count(order where due < today and ready = no)
+remind "Orders are due today" at 7:30 if due_today > 0
+topbar "Bakery Orders", order, "New order"
+row gap 2
+  stat due_today, "due today"
+  stat late, "overdue" 
+  stat sum(order.price where ready = no), "waiting to bake"
+goal count(order where due = today), capacity, "orders booked for today"
+each order where ready = no sort due as o empty "No open orders. Add one when a customer calls."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.ready
+    stack grow gap 0
+      o.customer bold
+      o.item "-" o.due faint color if(o.due < today, bad, muted)
+    o.price bold
+section "Revenue by item", "all ready orders"
+  share order where ready = yes by item, sum(it.price), it.key
+section "Orders per day", "next 7 days"
+  bars days last 7 days, count(order where due = it), dayname(it)
+section "Ready", count(order where ready = yes)
+  list order where ready = yes top 5, "Nothing ready yet."
+section "Money waiting", "orders not ready yet"
+  row gap 2
+    stat sum(order.price where ready = no), "to earn"
+    stat sum(order.price where ready = yes), "already baked"
+section "Top customers", "by spend"
+  share order by customer, sum(it.price), it.key
+section "Booked per weekday", "this week"
+  bars days week, count(order where due = it), dayname(it)
+if late > 0
+  "Late:" plural(late, "order") "past the due date" color bad bold
+section "Orders per item", "not ready yet"
+  each options order.item as v
+    row gap 2
+      v bold grow
+      count(order where item = v and ready = no)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(order where item = v and ready = no) / max(count(order where ready = no), 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_tailor_jobs topic=tailor_shop_jobs kind=long
+-
+needs: add a stitching job with price and advance | balance still to collect | tick when finished | jobs by garment | due soon list
+---
+app "Tailor Shop" pen plum
+table job customer text, kind pick Shalwar_kameez|Waistcoat|Blouse|Suit|Alteration = Shalwar_kameez, due date, price money, advance money = 0, done bool
+setting rush num = 3 "Rush job if due within (days)"
+let balance = sum(job, it.price - it.advance)
+topbar "Tailor Shop", job, "New job"
+statcard balance, "still to collect on" count(job where done = no) "open jobs"
+row gap 2
+  stat count(job where done = no and due <= today + rush), "rush jobs"
+  stat sum(job.advance month), "advances this month"
+  stat count(job where done = yes), "finished"
+section "Open jobs", "by due date"
+  each job where done = no sort due as j empty "No open jobs. Add the next stitching order."
+    row card gap 2 tap edit j swipe remove j
+      toggle j.done
+      stack grow gap 0
+        j.customer bold
+        j.kind "- due" j.due faint color if(j.due <= today + rush, warn, muted)
+      stack gap 0 align end
+        j.price - j.advance bold
+        "to pay" tiny faint
+section "Jobs by garment", "all time"
+  share job by kind, count(it), it.key
+section "Income per week", "last 4 weeks"
+  bars days last 4 weeks, sum(job.price week of it where done = yes), monthday(it)
+section "Finished"
+  list job where done = yes top 5, "No finished jobs yet."
+section "Money owed", "balance per customer"
+  each job where done = no sort price desc top 4 as j
+    row gap 2
+      j.customer bold grow
+      j.price - j.advance bold
+section "Advance taken", "this month"
+  goal sum(job.advance month), max(sum(job.price month), 1), "of the month's job value"
+section "Jobs started", "last 14 days"
+  daybars last 14 days, count(job on it)
+if count(job where done = no and due < today) > 0
+  "Some jobs are past their due date." color bad bold
+section "Open jobs per garment", "not finished"
+  each options job.kind as v
+    row gap 2
+      v bold grow
+      count(job where kind = v and done = no)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(job where kind = v and done = no) / max(count(job where done = no), 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_driver_earnings topic=driver_trips_fuel kind=long
+-
+needs: log a trip with fare and km | earnings today against target | log fuel purchases | fuel cost per km | switch between trips and fuel tabs
+---
+app "Driver Book" car ink
+table trip fare money, km num 1..500 = 5 unit "km", kind pick Ride|Parcel|Airport = Ride
+table fuel litres num 1..60 = 10 unit "L", cost money
+setting target money = 5000 "Daily earnings target"
+setting mileage num = 14 "Car km per litre"
+let earned = sum(trip.fare today)
+screen trips "Trips" car
+  topbar "Trips", trip, "Add trip"
+  statcard earned, "earned today of" target, target
+  row gap 2
+    stat count(trip today), "trips"
+    stat sum(trip.km today), "km driven"
+    stat round(earned / max(sum(trip.km today), 1)), "per km"
+  section "Last 7 days", "goal met on" count(days last 7 days, sum(trip.fare on it) >= target) "days"
+    goalbars last 7 days, sum(trip.fare on it), target
+  list trip today by day, "No trips yet today. Tap Add trip after the first fare."
+screen fuelscr "Fuel" bolt
+  topbar "Fuel", fuel, "Add fuel"
+  statcard sum(fuel.cost month), "fuel spent this month"
+  stat round(sum(trip.km month) / mileage), "litres the trips needed" 
+  section "Where the money goes", "this month"
+    share trip month by kind, sum(it.fare), it.key
+  section "Fuel stops"
+    list fuel top 8, "No fuel bought yet. Add your next fill-up."
+screen summary "Summary" chart
+  section "This week", "earnings"
+    daybars week, sum(trip.fare on it)
+  row gap 2
+    stat sum(trip.fare week), "earned"
+    stat sum(fuel.cost week), "fuel"
+    stat sum(trip.fare week) - sum(fuel.cost week), "kept"
+  section "Trips by kind"
+    share trip week by kind, count(it), it.key
+screen log "Quick add" plus
+  form trip, "Save trip"
+  form fuel, "Save fuel"
+===
+@rich domain=l1_sprint_board topic=team_sprint_points kind=long
+-
+needs: add a task with points owner and stage | board columns by stage | points done per person | sprint progress | tap a task to move it
+---
+app "Sprint" target mint
+table task title text, points num 1..13 = 3, owner pick Ali|Sara|Bilal|Hina = Ali, stage pick Todo|Doing|Review|Done = Todo
+setting commit num = 40 "Points committed"
+let done_pts = sum(task.points where stage = Done)
+topbar "Sprint", task, "Add task"
+goal done_pts, commit, "points done this sprint", "pts"
+grid 2 gap 1
+  each options task.stage as s
+    stack card gap 1
+      row
+        s head grow
+        sum(task.points where stage = s) "pts" faint
+      each task where stage = s as t empty "Empty"
+        stack radius 8 pad 1 fill soft gap 0 tap edit t swipe remove t
+          t.title bold
+          t.owner "-" t.points "pts" faint
+section "Points done per person"
+  bars task where stage = Done by owner, sum(it.points), it.key
+section "Load per person", "all open work"
+  share task where stage != Done by owner, sum(it.points), it.key
+section "Tasks added", "last 14 days"
+  daybars last 14 days, count(task on it)
+section "Waiting for review", "stuck in the review column"
+  each task where stage = Review as t empty "Nothing waiting for review."
+    row gap 2
+      t.title bold grow
+      t.owner faint
+      button "Merge" tap set t.stage = Done
+section "Points left", "to hit the commitment"
+  row gap 2
+    stat commit - done_pts, "pts to go"
+    stat sum(task.points where stage = Doing), "pts in progress"
+    stat count(task), "tasks in all"
+if done_pts >= commit
+  "Commitment met. Pull one more task." color good bold
+section "Points per person", "committed"
+  each options task.owner as v
+    row gap 2
+      v bold grow
+      sum(task.points where owner = v) "pts" faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(task.points where owner = v) / max(commit / 4, 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_deploy_log topic=deploy_release_log kind=long
+-
+needs: log a deploy with service version and minutes | success rate | deploys per day | which service deploys most | flag slow deploys
+---
+app "Deploys" bolt slate dark
+table deploy service pick Web|API|Worker|Docs = Web, version text, result pick Success|Rolled_back|Failed = Success, mins num 1..120 = 6 unit "min"
+setting slow num = 15 "Slow deploy limit (min)"
+let rate = round(count(deploy where result = Success) * 100 / max(count(deploy), 1))
+topbar "Deploys", deploy, "Log deploy"
+row gap 2
+  stat rate, "percent succeeded"
+  stat count(deploy week), "deploys this week"
+  stat round(avg(deploy.mins)), "average minutes"
+if count(deploy where mins > slow) > 0
+  "Slow deploys:" count(deploy where mins > slow) "over" slow "minutes" color warn bold
+section "Deploys per day", "last 14 days"
+  daybars last 14 days, count(deploy on it)
+section "By service", "all time"
+  share deploy by service, count(it), it.key
+section "Duration", "last 14 days"
+  trend deploy last 14 days sort at, it.mins
+each deploy top 8 as d empty "No deploys logged yet. Log the next release."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.service d.version bold
+      d.at faint
+    d.mins "min" color if(d.mins > slow, warn, ink)
+    d.result color if(d.result = Success, good, bad)
+section "Failures", "last 30 days"
+  daybars last 30 days, count(deploy on it where result != Success)
+section "Slowest deploys", "top 3"
+  each deploy sort mins desc top 3 as d empty "No deploys yet."
+    row gap 2
+      d.service d.version bold grow
+      d.mins "min" color warn
+section "Rolled back", count(deploy where result = Rolled_back)
+  list deploy where result = Rolled_back top 4, "No rollbacks. Keep it that way."
+section "Results", "all deploys"
+  each options deploy.result as v
+    row gap 2
+      v bold grow
+      count(deploy where result = v)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(deploy where result = v) / max(count(deploy), 1), 0, 1), 4 fill accent radius 2
+section "Last deploy"
+  each deploy top 1 as d empty "No deploys yet."
+    row card gap 2
+      d.service d.version bold grow
+      d.result faint
+===
+@rich domain=l1_fish_pond topic=fish_pond_checks kind=long
+-
+needs: log water temperature and feed per pond | fish alive against stocked | temperature trend | feed used per week | which pond checked today
+---
+app "Fish Pond" fish blue
+table check pond pick A|B|C = A, temp num 15..40 = 26 unit "C", feed num 0..50 = 5 unit "kg", dead num 0..500 = 0
+setting stock num = 3000 "Fish stocked"
+let alive = stock - sum(check.dead)
+topbar "Fish Pond", check, "Log check"
+statcard alive, "fish alive of" stock, stock
+row gap 2
+  stat round(avg(check.temp last 7 days) * 10) / 10, "average temp this week"
+  stat sum(check.feed week), "kg fed this week"
+  stat sum(check.dead week), "lost this week"
+section "Checked today"
+  row gap 1
+    each options check.pond as p
+      stack card grow gap 0 align center
+        p bold
+        if(count(check today where pond = p) > 0, "Done", "Not yet") faint color if(count(check today where pond = p) > 0, good, warn)
+section "Water temperature", "last 14 days"
+  trend check last 14 days sort at, it.temp
+section "Feed per day", "last 7 days"
+  daybars last 7 days, sum(check.feed on it)
+section "Losses by pond"
+  share check by pond, sum(it.dead), it.key
+list check top 6, "No checks yet. Log the first pond visit."
+section "Dead fish", "last 14 days"
+  daybars last 14 days, sum(check.dead on it)
+section "Survival", "since stocking"
+  goal alive, stock, "fish alive", "fish"
+if avg(check.temp last 3 days) > 32
+  "Water is warm. Feed less and add aeration." color warn bold
+section "Feed per pond", "all time"
+  share check by pond, sum(it.feed), it.key
+section "Feed per pond", "this week"
+  each options check.pond as v
+    row gap 2
+      v bold grow
+      sum(check.feed week where pond = v) "kg" faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(check.feed week where pond = v) / max(sum(check.feed week), 1), 0, 1), 4 fill accent radius 2
+section "Latest entries", "tap one to edit it"
+  each check top 3 as x empty "Nothing here yet."
+    row card gap 2 tap edit x swipe remove x
+      stack grow gap 0
+        x.pond bold
+        x.temp "C -" x.feed "kg fed" faint
+      x.dead "lost" bold
+===
+@rich domain=l1_mosque_fund topic=mosque_donation_fund kind=long
+-
+needs: record a donation with fund and amount | progress toward the building target | donations by fund | daily donations chart | list grouped by day
+---
+app "Masjid Fund" mosque green
+table gift donor text?, amount money, fund pick Building|Zakat|Iftar|Salaries = Building
+setting target money = 2000000 "Building fund target"
+let building = sum(gift.amount where fund = Building)
+topbar "Masjid Fund", gift, "Add donation"
+statcard building, "raised for the building of" target, target
+row gap 2
+  stat sum(gift.amount today), "received today"
+  stat sum(gift.amount month), "this month"
+  stat count(gift month), "donations this month"
+section "By fund", "all time"
+  share gift by fund, sum(it.amount), it.key
+section "Donations per day", "last 14 days"
+  daybars last 14 days, sum(gift.amount on it)
+section "Biggest gifts", "top 3"
+  each gift sort amount desc top 3 as g empty "No donations yet. Add the first one."
+    row card gap 2 tap edit g swipe remove g
+      stack grow gap 0
+        g.donor bold
+        g.fund faint
+      g.amount bold
+list gift by day, "No donations recorded yet."
+section "Zakat and Iftar", "this month"
+  row gap 2
+    stat sum(gift.amount month where fund = Zakat), "Zakat"
+    stat sum(gift.amount month where fund = Iftar), "Iftar"
+    stat sum(gift.amount month where fund = Salaries), "Salaries"
+section "Still needed", "for the building"
+  goal building, target, "raised so far"
+  stat target - building, "still to raise"
+section "Average gift", "this month"
+  stat round(avg(gift.amount month)), "per donation"
+section "Share of all gifts", "by fund"
+  each options gift.fund as v
+    row gap 2
+      v bold grow
+      sum(gift.amount where fund = v)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(gift.amount where fund = v) / max(sum(gift.amount), 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_salon_book topic=salon_appointments_day kind=long
+-
+needs: book an appointment with client service and price | pick the day to view | today's schedule by time | earnings per service | stylist capacity
+---
+app "Salon Book" smile pink
+table booking client text, service pick Haircut|Facial|Mehndi|Colour|Bridal = Haircut, day date = today, slot time, price money
+setting chairs num = 6 "Clients a day I can take"
+state d date = today
+topbar "Salon Book", booking, "Book client"
+row gap 1 align center
+  button "<" tap set d = d - 1
+  text d bold grow align center
+  button ">" tap set d = d + 1
+goal count(booking where day = d), chairs, "clients booked this day"
+row gap 2
+  stat sum(booking.price where day = d), "expected today"
+  stat count(booking where day = d and service = Bridal), "bridal bookings"
+section "Schedule", "by time"
+  each booking where day = d sort slot as b empty "Nobody booked for this day. Add the first client."
+    row card gap 2 tap edit b swipe remove b
+      b.slot bold
+      stack grow gap 0
+        b.client bold
+        b.service faint
+      b.price bold
+section "Earnings by service", "this month"
+  share booking month by service, sum(it.price), it.key
+section "Busy days", "next 14 days"
+  bars days last 14 days, count(booking where day = it), monthday(it)
+section "Free chairs", "this day"
+  stat chairs - count(booking where day = d), "more clients can fit"
+section "Services this week", "count"
+  share booking week by service, count(it), it.key
+section "Weekly takings", "last 7 days"
+  daybars last 7 days, sum(booking.price where day = it)
+section "Next client"
+  each booking where day = d sort slot top 1 as b empty "No bookings. Time for tea."
+    row card gap 2
+      b.slot head
+      b.client bold grow
+      b.service faint
+section "Bookings per service", "this week"
+  each options booking.service as v
+    row gap 2
+      v bold grow
+      count(booking week where service = v)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(booking week where service = v) / max(count(booking week), 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_tuition_fees topic=tuition_academy_fees kind=long
+-
+needs: add students with class | tick when this month's fee is paid | fees collected against target | who has not paid | students per class
+---
+app "Academy Fees" school blue
+table student name text, class pick Grade_6|Grade_7|Grade_8|Matric = Grade_6
+table fee student ref student, amount money = 3500
+setting capacity num = 40 "Seats in the academy"
+let paid = count(student, count(it.fee month) > 0)
+topbar "Academy Fees", student, "Add student"
+statcard sum(fee.amount month), "collected this month from" paid "of" count(student), count(student) * 3500
+goal count(student), capacity, "seats filled", "students"
+section "Not paid yet", "this month"
+  if paid = count(student) and paid > 0
+    "Everyone has paid this month. Well done." color good bold
+  each student sort name as s empty "No students yet. Add the first name with Add student."
+    if count(s.fee month) = 0
+      row card gap 2 tap edit s swipe remove s
+        toggle s.fee month
+        stack grow gap 0
+          s.name bold
+          s.class faint
+        "Due" color bad
+section "Students per class"
+  share student by class, count(it), it.key
+section "Fees collected", "last 6 months"
+  bars days last 6 months, sum(fee.amount month of it), monthname(it)
+section "Paid this month", count(fee month)
+  list fee month, "No fees paid yet this month."
+section "Fee collection", "this month"
+  goal paid, max(count(student), 1), "students have paid"
+section "New students", "last 6 months"
+  bars days last 6 months, count(student month of it), monthname(it)
+section "Class sizes"
+  row gap 2
+    each options student.class as c
+      stat count(student where class = c), c
+if count(student) >= capacity
+  "The academy is full." color warn bold
+section "Paid per class", "this month"
+  each options student.class as v
+    row gap 2
+      v bold grow
+      count(student where class = v and count(fee month) > 0)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(student where class = v and count(fee month) > 0) / max(count(student where class = v), 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_pharmacy_stock topic=pharmacy_stock_expiry kind=long
+-
+needs: add medicine with quantity low level expiry and cost | plus and minus buttons | items running low | expiring soon warning | stock value
+---
+app "Pharmacy Stock" pill teal
+table item name text, qty num 0.. = 20, low num 0.. = 10, expiry date, cost money
+setting soon num = 60 "Warn this many days before expiry"
+let short = count(item, it.qty <= it.low)
+let expiring = count(item, it.expiry <= today + soon and it.qty > 0)
+topbar "Pharmacy Stock", item, "Add medicine"
+row gap 2
+  stat short, "running low" 
+  stat expiring, "expiring soon"
+  stat sum(item, it.qty * it.cost), "stock value"
+section "Lowest stock", "top 6"
+  bars item sort qty top 6, it.qty, it.name
+each item sort expiry as i empty "No medicines yet. Add each one with its expiry date."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold color if(i.qty <= i.low, warn, ink)
+      "Expires" i.expiry faint color if(i.expiry <= today + soon, bad, muted)
+    button "-" tap set i.qty = i.qty - 1
+    i.qty bold
+    button "+" tap set i.qty = i.qty + 1
+section "Stock value by item", "top 5"
+  share item sort qty * cost desc top 5, it.qty * it.cost, it.name
+section "Expiring soon", "oldest first"
+  each item where expiry <= today + soon and qty > 0 sort expiry top 4 as i empty "Nothing expires soon."
+    row gap 2
+      i.name bold grow
+      i.expiry faint color bad
+      i.qty "left" faint
+section "Reorder list", "at or below the low level"
+  each item where qty <= low sort qty top 5 as i empty "Nothing to reorder."
+    row gap 2
+      i.name bold grow
+      i.qty "of" i.low faint
+if short > 3
+  "Many items are low. Place an order today." color warn bold
+section "Stock cover", "lowest five by percent of low level"
+  each item sort qty / max(low, 1) top 5 as i
+    row gap 2
+      i.name bold grow
+      i.qty "of" i.low faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(i.qty / max(i.low * 2, 1), 0, 1), 4 fill if(i.qty <= i.low, warn, accent) radius 2
+===
+@rich domain=l1_phone_repair topic=mobile_repair_jobs kind=long
+-
+needs: add a repair job with phone issue and price | filter by status chips | advance a job to the next stage | revenue against daily target | repairs by issue
+---
+app "Phone Fix" phone slate
+table repair phone text, issue pick Screen|Battery|Charging_port|Software|Water = Screen, price money, status pick Waiting|Fixing|Ready|Collected = Waiting
+setting target money = 8000 "Daily revenue target"
+state tab pick Waiting|Fixing|Ready|Collected = Waiting
+topbar "Phone Fix", repair, "New repair"
+statcard sum(repair.price today where status = Collected), "collected today of" target, target
+row gap 1
+  each options repair.status as s
+    button s count(repair where status = s) fill if(tab = s, accent, soft) grow tap set tab = s
+each repair where status = tab sort at as r empty "No phones in this stage."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.phone bold
+      r.issue "-" r.price faint
+    if r.status = Waiting
+      button "Start" tap set r.status = Fixing
+    if r.status = Fixing
+      button "Ready" tap set r.status = Ready
+    if r.status = Ready
+      button "Handed over" tap set r.status = Collected
+section "Revenue", "last 7 days"
+  goalbars last 7 days, sum(repair.price on it where status = Collected), target
+section "Repairs by issue", "all time"
+  share repair by issue, count(it), it.key
+section "Waiting the longest", "oldest first"
+  each repair where status = Waiting sort at top 3 as r empty "Nothing waiting."
+    row gap 2
+      r.phone bold grow
+      r.issue faint
+section "Work in the shop", "now"
+  row gap 2
+    stat count(repair where status = Fixing), "being fixed"
+    stat count(repair where status = Ready), "ready to collect"
+    stat sum(repair.price where status = Ready), "waiting to be paid"
+section "Repairs per day", "last 14 days"
+  daybars last 14 days, count(repair on it)
+section "Phones per stage", "right now"
+  each options repair.status as v
+    row gap 2
+      v bold grow
+      count(repair where status = v)  faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(count(repair where status = v) / max(count(repair), 1), 0, 1), 4 fill accent radius 2
+===
+@rich domain=l1_kitchen_garden topic=kitchen_garden_harvest kind=long
+-
+needs: log a harvest with crop and grams | harvest days grid | kilos picked this month | crop comparison | beds in use
+---
+app "Garden Harvest" plant green
+table pick crop pick Tomato|Okra|Spinach|Chilli|Mint|Brinjal = Tomato, grams num 50..20000 = 500 unit "g"
+table sow crop text, beds num 1..10 = 1
+setting beds_total num = 6 "Beds in the garden"
+let used = sum(sow.beds)
+topbar "Garden Harvest", pick, "Log harvest"
+row gap 2
+  stat round(sum(pick.grams month) / 100) / 10, "kg this month"
+  stat count(days last 30 days, count(pick on it) > 0), "harvest days of 30"
+  stat round(sum(pick.grams today) / 100) / 10, "kg today"
+section "Harvest days", "last 5 weeks"
+  daygrid last 35 days, count(pick on it), 2
+section "By crop", "grams this month"
+  share pick month by crop, sum(it.grams), it.key
+section "Beds", "in use:" used "of" beds_total
+  goal used, beds_total, "beds planted", "beds"
+  each sow as s empty "Nothing sown yet. Add what is growing below."
+    row gap 2
+      s.crop bold grow
+      s.beds "beds" faint
+form sow, "Add planting"
+list pick today, "Nothing picked today. Log the first basket."
+section "Best picking day", "this month"
+  stat max(days month, sum(pick.grams on it)), "g in one day"
+section "Kilos per day", "last 14 days"
+  daybars last 14 days, round(sum(pick.grams on it) / 100) / 10
+section "Streak", "days with a harvest"
+  stat streak(pick), "days in a row"
+if count(pick today) = 0
+  "Nothing picked yet today. Check the tomatoes." faint
+section "Kilos per crop", "this month"
+  each options pick.crop as v
+    row gap 2
+      v bold grow
+      round(sum(pick.grams month where crop = v) / 100) / 10 "kg" faint
+      draw 100, 4 width 80
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(round(sum(pick.grams month where crop = v) / 100) / 10 / max(round(sum(pick.grams month) / 100) / 10, 1), 0, 1), 4 fill accent radius 2
+section "Planted beds"
+  goal used, beds_total, "beds in use", "beds"

@@ -1,0 +1,513 @@
+@rich domain=d1_bug_severity topic=bug list severity counts style=detailed
+Need a bug list for our app: each bug has a title, severity, status and the area of the code. Show how many open bugs there are for each severity at the top, and let me tap a bug to change its status.
+needs: add a bug with title, severity, status and area | open bug count for each severity | open versus total card | list of bugs newest first | tap a bug to change its status
+---
+app "Bug list" tool ocean
+table bug title text, severity pick Critical|High|Medium|Low = Medium, status pick Open|In_progress|Fixed|Wontfix = Open, area text?
+let live = count(bug where status = Open or status = In_progress)
+topbar "Bug list", bug, "Report bug"
+statcard live, "open bugs out of" count(bug) "reported", count(bug)
+section "Open by severity", "tap a bug to change its status"
+  row gap 1
+    each options bug.severity as s
+      stack grow card gap 0 align center
+        count(bug where severity = s and (status = Open or status = In_progress)) big color if(s = Critical, bad, ink)
+        s faint
+each bug sort at desc as b empty "No bugs yet. Report the first one when you find it."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.area faint
+    b.severity color if(b.severity = Critical, bad, if(b.severity = High, warn, muted))
+    b.status faint
+===
+@rich domain=d1_triage_board topic=ticket triage by status style=multi_feature
+triage board for me and two other devs. tickets with title, owner and story points, a status like new / triaged / doing / review / done, chips to filter by status, and a count under each column name
+needs: add a ticket with title, owner, points and status | count of tickets in each status | chips to filter by status | list of tickets with owner and points | total points still not done
+---
+app "Triage board" board mint
+table ticket title text, owner text?, points num 1..13 = 3, status pick New|Triaged|Doing|Review|Done = New
+state f pick All|New|Triaged|Doing|Review|Done = All
+topbar "Triage board", ticket, "New ticket"
+scroll
+  each options ticket.status as s
+    stack card gap 0 align center width 20
+      count(ticket where status = s) big
+      s faint
+choice f
+"Points still open:" sum(ticket.points where status != Done) head
+each ticket where f = All or status = f sort at desc as t empty "Nothing here. Add a ticket or pick another status chip."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.title bold
+      t.owner "·" t.points "pts" faint
+    t.status faint color if(t.status = Done, good, ink)
+===
+@rich domain=d1_regression_cases topic=regression test run style=custom_ui
+Our QA regression run before every release: a list of test cases by suite, tap pass or fail on each, a pass rate at the top and a button that resets the whole run when we start over.
+needs: add a test case with name and suite | pass and fail buttons on each case | pass rate card | progress of cases run | reset the whole run
+---
+app "Regression run" check slate
+table tcase name text, suite pick Login|Checkout|Search|Profile|Settings = Login, result pick Untested|Pass|Fail = Untested
+let ran = count(tcase where result != Untested)
+let ok = count(tcase where result = Pass)
+topbar "Regression run", tcase, "Add case"
+row gap 2
+  statcard round(ok * 100 / max(ran, 1)), "% pass rate", 100
+  statcard count(tcase where result = Fail), "failing cases"
+goal ran, count(tcase), "cases run so far"
+each tcase sort name as c empty "No test cases yet. Add the first one for the login flow."
+  row card gap 1 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.suite faint
+    button "Pass" fill if(c.result = Pass, good, soft) tap set c.result = Pass
+    button "Fail" fill if(c.result = Fail, bad, soft) tap set c.result = Fail
+button "Reset the run" tap set all tcase.result = Untested
+===
+@rich domain=d1_release_checklist topic=release go no-go checklist style=detailed
+release checklist for friday: steps like run migrations, smoke test, tell support. tick each one when done. at the top I want a big banner saying ready or not ready, with the number of steps left.
+needs: add a step with name and owner | tick each step when done | banner ready or not ready | number of steps left | list of steps with owners
+---
+app "Release" flag ink
+table step name text, owner text?, done bool
+let left = count(step where done = no)
+topbar "Release checklist", step, "Add step"
+if left = 0 and count(step) > 0
+  stack card pad 2 fill good gap 0
+    "Ready to ship" head
+    "All" count(step) "steps are done." small
+else
+  stack card pad 2 fill warn gap 0
+    "Not ready" head
+    plural(left, "step") "still open" small
+goal count(step) - left, max(count(step), 1), "steps done"
+each step sort done as s empty "No steps yet. Add what has to happen before you deploy."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    stack grow gap 0
+      s.name bold
+      s.owner faint
+===
+@rich domain=d1_deploy_rollbacks topic=deploy log rollback flag style=multi_feature
+deploy log for our services. service, version, staging or production, a tick if we had to roll it back and a note. show deploys per day for the last 2 weeks and how many were rolled back this week
+needs: add a deploy with service, version, environment and note | rollback tick on each deploy | deploys per day chart for 14 days | rollbacks this week | list of deploys marked in red when rolled back
+---
+app "Deploy log" bolt plum
+table deploy service text, version text, env pick Staging|Production = Production, rolled_back bool, note text?
+topbar "Deploy log", deploy, "Log deploy"
+row gap 2
+  statcard count(deploy week), "deploys this week"
+  statcard count(deploy week where rolled_back = yes), "rollbacks this week"
+section "Deploys per day", "last 14 days"
+  daybars last 14 days, count(deploy on it)
+each deploy sort at desc as d empty "No deploys logged. Add one right after you ship."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.service d.version bold color if(d.rolled_back, bad, ink)
+      d.env "·" d.note faint
+    toggle d.rolled_back
+===
+@rich domain=d1_standup_notes topic=daily standup notes per person style=detailed
+standup notes for the team. who is talking, what they did yesterday, what they will do today, and a flag if blocked. a search box for a name and a red number of people who are blocked today.
+needs: add a note with person, yesterday, plan and blocked flag | search notes by person name | number of people blocked today | notes today list | older notes by day
+---
+app "Standup" users red
+table note person text, yesterday long, plan long, blocked bool
+state who text = ""
+let stuck = count(note today where blocked = yes)
+topbar "Standup", note, "Add update"
+statcard stuck, "blocked today of" count(note today) "updates", count(note today)
+field who "Search a person"
+section "Today", plural(count(note today where has(person, who)), "update")
+  each note today where has(person, who) as n empty "No updates yet today. Add yours."
+    stack card gap 0 tap edit n swipe remove n
+      n.person bold color if(n.blocked, bad, ink)
+      "Did:" n.yesterday small
+      "Doing:" n.plan small
+list note yesterday, "Nothing from yesterday."
+===
+@rich domain=d1_retro_actions topic=retro action items owners style=multi_feature
+action items from our retros. what we agreed, who owns it, due date, tick when done. overdue ones go red and I want to see open actions per person.
+needs: add an action with text, owner and due date | tick when done | overdue actions in red | open actions per owner | counts of open and overdue
+---
+app "Retro actions" target orange
+table action what text, owner text, due date, done bool
+let late = count(action where done = no and due < today)
+topbar "Retro actions", action, "Add action"
+row gap 2
+  statcard count(action where done = no), "open actions"
+  statcard late, "overdue"
+section "Open per owner"
+  share action where done = no by owner, count(it), it.key
+each action where done = no sort due as a empty "Nothing open. Good retro."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.done
+    stack grow gap 0
+      a.what bold
+      a.owner "·" a.due faint color if(a.due < today, bad, muted)
+section "Done", count(action where done = yes)
+  list action where done = yes, "Nothing finished yet."
+===
+@rich domain=d1_incident_downtime topic=incident log minutes down style=detailed
+incident log for our api: title, severity, how many minutes it was down. weekly chart of downtime minutes and a monthly uptime percent based on a 30 day month
+needs: log an incident with title, severity and minutes down | minutes down per day this week chart | uptime percent this month | incident count this month | list of incidents newest first
+---
+app "Incidents" bell yellow
+table incident title text, sev pick SEV1|SEV2|SEV3 = SEV3, minutes num 1..2000 unit "min"
+let down = sum(incident.minutes month)
+topbar "Incidents", incident, "Log incident"
+row gap 2
+  statcard round((100 - down * 100 / 43200) * 100) / 100, "% uptime this month", 100
+  statcard count(incident month), "incidents this month"
+section "Minutes down", "last 7 days"
+  daybars last 7 days, sum(incident.minutes on it)
+each incident sort at desc as i empty "No incidents. Enjoy it while it lasts."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.title bold
+      i.at faint
+    i.minutes "min" color if(i.sev = SEV1, bad, ink)
+    i.sev faint
+===
+@rich domain=d1_oncall_shifts topic=on-call shift pages log style=short
+on call log, who had the shift and how many pages they got
+needs: log a shift with person, start date and days | pages received per shift | who is on call now | pages this month | list of past shifts
+---
+app "On call" phone green
+table shift person text, start date, days num 1..14 = 7, pages num 0..200 = 0 "Pages"
+let cur = last(shift)
+topbar "On call", shift, "Add shift"
+row gap 2
+  stack card grow gap 0
+    cur.person big
+    "on call now" faint
+  statcard sum(shift.pages month), "pages this month"
+bars shift top 6, it.pages, it.person
+each shift sort start desc as s empty "No shifts yet. Add the current rotation."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.person bold
+      s.start "for" plural(s.days, "day") faint
+    s.pages "pages" color if(s.pages > 20, warn, ink)
+===
+@rich domain=d1_handover_notes topic=on-call handover notes style=custom_ui
+i hand over the pager every monday so i need notes: from, to, what is going on, and how many open items are left. show the newest handover big at the top and keep older ones in a list
+needs: add a handover with from, to, notes and open items | newest handover shown big | open items left card | older handovers grouped by day | tap to edit a note
+---
+app "Handover" pen teal
+table handover from_who text, to_who text, notes long, open_items num 0..50 = 0
+let cur = last(handover)
+topbar "Handover", handover, "New handover"
+if count(handover) > 0
+  stack card gap 1 pad 2
+    "Latest handover" faint
+    cur.from_who "to" cur.to_who head
+    cur.notes
+    cur.open_items "open items left" bold color if(cur.open_items > 0, warn, good)
+else
+  "No handovers yet. Write the first note before you hand over the pager." faint
+section "Open items handed over", "this month"
+  sum(handover.open_items month) big
+list handover by day, "No older handovers."
+===
+@rich domain=d1_postmortem_causes topic=post-mortem root cause style=multi_feature
+post-mortems: title, root cause (config, code bug, capacity, dependency, human error or unknown), minutes of impact and tick when the follow-ups are done. chart of causes so we see what keeps biting us
+needs: add a post-mortem with title, root cause and impact minutes | tick when follow-ups are done | causes compared in a chart | follow-ups still open | list of post-mortems
+---
+app "Post-mortems" shield blue
+table pm title text, cause pick Config|Code_bug|Capacity|Dependency|Human_error|Unknown = Unknown, minutes num 0..5000 unit "min", followups_done bool
+topbar "Post-mortems", pm, "Add post-mortem"
+statcard count(pm where followups_done = no), "post-mortems with open follow-ups", count(pm)
+section "Root causes", "what keeps biting us"
+  share pm by cause, count(it), it.key
+section "Impact", "total minutes" sum(pm.minutes)
+  bars pm top 8, it.minutes, it.title
+each pm sort at desc as p empty "No post-mortems yet. Write one after the next incident."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.followups_done
+    stack grow gap 0
+      p.title bold
+      p.cause "·" p.minutes "min" faint
+===
+@rich domain=d1_api_key_expiry topic=api key expiry reminders style=detailed
+list of api keys with the service, name and expiry date. colour keys red when expired and orange when they expire within 30 days. remind me a week before each expiry.
+needs: add a key with name, service and expiry date | expired keys in red and soon ones in orange | days left on each key | reminder a week before expiry | count of expired and expiring keys
+---
+app "API keys" key purple
+table apikey name text, service text, expires date
+let gone = count(apikey where expires < today)
+let soon = count(apikey where expires >= today and expires <= today + 30)
+remind "An API key expires in a week" at apikey.expires - 7d at 9:00
+topbar "API keys", apikey, "Add key"
+row gap 2
+  statcard gone, "expired"
+  statcard soon, "expire in 30 days"
+each apikey sort expires as k empty "No keys tracked. Add each key with its expiry date."
+  row card gap 2 tap edit k swipe remove k fill if(k.expires < today, bad, if(k.expires <= today + 30, warn, surface))
+    stack grow gap 0
+      k.name bold
+      k.service faint
+    if k.expires < today
+      "Expired" bold
+    else
+      k.expires - today "days left" bold
+===
+@rich domain=d1_tls_certs topic=tls certificate expiry style=multi_feature
+tls certs for all our domains: domain, issuer, expiry and whether it auto renews. show the ones that do not auto renew first and warn me 14 days before they expire
+needs: add a cert with domain, issuer, expiry and auto renew | certs without auto renew listed first | reminder 14 days before expiry | days left per cert | count of certs expiring in 30 days
+---
+app "TLS certs" lock pink
+table cert domain text, issuer pick LetsEncrypt|DigiCert|Sectigo|Other = LetsEncrypt, expires date, auto_renew bool
+remind "A TLS certificate expires in two weeks" at cert.expires - 14d at 9:00
+topbar "TLS certs", cert, "Add cert"
+statcard count(cert where expires <= today + 30), "certs expire within 30 days", count(cert)
+section "Manual renewals", "no auto renew"
+  each cert where auto_renew = no sort expires as c empty "Every cert renews itself."
+    row tap edit c
+      c.domain bold grow
+      c.expires - today "days" color if(c.expires - today < 14, bad, ink)
+section "Auto renewing", count(cert where auto_renew = yes)
+  each cert where auto_renew = yes sort expires as c empty "None yet."
+    row tap edit c swipe remove c
+      c.domain grow
+      c.issuer faint
+===
+@rich domain=d1_domain_renewals topic=domain renewal costs style=custom_ui
+my domains with registrar, renewal date and yearly cost. total cost per year, next renewal date, and overdue ones in red
+needs: add a domain with registrar, renewal date and cost | total yearly cost | next renewal date | overdue domains in red | list sorted by renewal date
+---
+app "Domains" cloud grey dark
+table domain name text, registrar text?, renews date, cost money
+let nxt = nth(domain sort renews, 1)
+topbar "Domains", domain, "Add domain"
+row gap 2
+  statcard sum(domain.cost), "per year in renewals"
+  stack card grow gap 0
+    nxt.renews big
+    "next renewal" faint
+statcard count(domain where renews < today), "overdue renewals"
+each domain sort renews as d empty "No domains yet. Add the ones you pay for every year."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold color if(d.renews < today, bad, ink)
+      d.registrar faint
+    stack gap 0 align end
+      d.cost bold
+      d.renews faint
+===
+@rich domain=d1_secrets_rotation topic=secrets rotation tracker style=multi_feature
+tracker for secrets we have to rotate: db password, stripe key, jwt secret. rotation period in days, when it was last rotated, and a button to mark it rotated today. show how many are overdue
+needs: add a secret with name, store and rotation period | button to mark rotated today | days until next rotation | overdue secrets in red | count of overdue secrets
+---
+app "Secrets" key ocean
+table secret name text, store pick Vault|Env_file|Cloud_console|Password_manager = Vault, rotated date, every num 7..365 = 90 unit "days"
+let late = count(secret, it.rotated + it.every < today)
+topbar "Secrets", secret, "Add secret"
+statcard late, "secrets overdue for rotation", count(secret)
+each secret sort rotated as s empty "No secrets tracked. Add the first one with its rotation period."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.store "· every" s.every "days" faint
+      if s.rotated + s.every < today
+        "Overdue by" today - (s.rotated + s.every) "days" small color bad
+      else
+        "Next rotation in" s.rotated + s.every - today "days" small color muted
+    button "Rotated" tap set s.rotated = today
+===
+@rich domain=d1_cron_inventory topic=cron job inventory failures style=detailed
+inventory of all the cron jobs on our boxes. name, the schedule as text, last run time, and a status of ok, failed or skipped. buttons to mark a run ok or failed, and chips to show only failed ones
+needs: add a job with name, schedule and status | buttons to mark a run ok or failed with the time | chips to filter by status | failed jobs count | last run on each job
+---
+app "Cron jobs" timer mint
+table job name text, schedule text, last_run when?, status pick OK|Failed|Skipped = OK
+state f pick All|OK|Failed|Skipped = All
+topbar "Cron jobs", job, "Add job"
+row gap 2
+  statcard count(job where status = Failed), "jobs failing", count(job)
+  statcard count(job where last_run >= now - 1d), "ran in the last day"
+choice f
+each job where f = All or status = f sort name as j empty "No jobs match. Add a cron job or change the chip."
+  stack card gap 1 tap edit j swipe remove j
+    row gap 2
+      j.name bold grow
+      j.status bold color if(j.status = Failed, bad, if(j.status = Skipped, warn, good))
+    j.schedule "· last run" j.last_run faint
+    row gap 1
+      button "Ran OK" tap set j.status = OK then set j.last_run = now
+      button "Failed" tap set j.status = Failed then set j.last_run = now
+===
+@rich domain=d1_server_inventory topic=server inventory os renewal style=multi_feature
+server inventory at night is easier on the eyes, so dark please. name, os, region, monthly cost and renewal date. show cost per month total, a chart of servers by os and anything renewing in 30 days
+needs: add a server with name, os, region, cost and renewal date | total monthly cost | servers by os chart | servers renewing in 30 days | list sorted by renewal date
+---
+app "Servers" box slate dark
+table server name text, os pick Ubuntu|Debian|Alpine|Windows|RHEL = Ubuntu, region text?, cost money, renews date
+topbar "Servers", server, "Add server"
+row gap 2
+  statcard sum(server.cost), "per month in servers"
+  statcard count(server where renews >= today and renews <= today + 30), "renew within 30 days", count(server)
+section "Servers by OS", "servers:" count(server)
+  share server by os, count(it), it.key
+each server sort renews as s empty "No servers yet. Add the first box you run."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.os "·" s.region faint
+    stack gap 0 align end
+      s.cost bold
+      s.renews faint color if(s.renews <= today + 30, warn, muted)
+===
+@rich domain=d1_feature_flags topic=feature flags toggles style=custom_ui
+feature flags for the app, each with a name, environment and a note on why it exists. a switch to turn it on or off right in the list and a count of flags that are on. search by name please
+needs: add a flag with name, environment and note | toggle each flag on or off | count of flags that are on | search flags by name | note shown under each flag
+---
+app "Flags" flag ink
+table flag name text, env pick Dev|Staging|Prod = Dev, on bool, note text?
+state q text = ""
+topbar "Feature flags", flag, "New flag"
+statcard count(flag where on = yes), "flags on out of" count(flag), count(flag)
+field q "Search flags"
+each flag where has(name, q) sort name as f empty "No flags found. Add one before you hide a feature behind it."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      f.env "·" f.note faint
+    toggle f.on
+===
+@rich domain=d1_release_notes topic=release notes by version style=detailed
+release notes log by version number. every entry is a feature, fix, breaking change or docs note with a short text. group the entries by kind and show how many breaking changes we shipped this year
+needs: add a note with version, kind and text | entries grouped by kind | breaking changes this year | tap an entry to edit | newest entries first inside each group
+---
+app "Release notes" note plum
+table rnote version text, kind pick Feature|Fix|Breaking|Docs = Feature, text_line text
+topbar "Release notes", rnote, "Add note"
+statcard count(rnote year where kind = Breaking), "breaking changes this year", count(rnote year)
+each rnote by kind as g empty "No release notes yet. Write one line per change."
+  section g.key, "entries:" count(g)
+    each g as r
+      row tap edit r swipe remove r
+        r.version bold
+        r.text_line grow
+===
+@rich domain=d1_mobile_crashes topic=mobile crash reports style=multi_feature
+crash reports from our mobile app: which screen, device (android, iphone, tablet), how many users hit it, and a tick when fixed. rank the worst unfixed ones in a bar chart
+needs: add a crash with screen, device and user count | tick when fixed | bar chart of the worst unfixed crashes | users affected total | list of crashes by device
+---
+app "Crashes" phone red
+table crash screen text, device pick Android|iPhone|Tablet = Android, users num 1..1000000 = 1, fixed bool
+topbar "Crashes", crash, "Add crash"
+row gap 2
+  statcard sum(crash.users where fixed = no), "users hit by open crashes"
+  statcard count(crash where fixed = no), "open crashes", count(crash)
+section "Worst open crashes", "users affected"
+  bars crash where fixed = no sort users desc top 6, it.users, it.screen
+section "By device"
+  share crash where fixed = no by device, sum(it.users), it.key
+each crash sort users desc as c empty "No crashes reported. Add one from the store console."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.fixed
+    stack grow gap 0
+      c.screen bold
+      c.device "·" c.users "users" faint
+===
+@rich domain=d1_flaky_tests topic=flaky test tracker style=short
+flaky tests list with how many times each failed out of runs and the flake percent
+needs: add a flaky test with name, fails and runs | flake percent on each test | plus button to count a failed run | worst offender first | count of tests above 10 percent
+---
+app "Flaky tests" bolt orange dark
+table flaky name text, fails num 0.. = 1, runs num 1.. = 10
+let bad_ones = count(flaky, it.fails * 100 / it.runs > 10)
+topbar "Flaky tests", flaky, "Add test"
+statcard bad_ones, "tests flaking above 10%", count(flaky)
+each flaky sort it.fails / it.runs desc as t empty "No flaky tests. Add the ones that fail now and then."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.fails "fails in" t.runs "runs" faint
+    round(t.fails * 100 / t.runs) "%" big color if(t.fails * 100 / t.runs > 10, bad, ink)
+    button "+ fail" tap set t.fails = t.fails + 1 then set t.runs = t.runs + 1
+    button "+ pass" tap set t.runs = t.runs + 1
+===
+@rich domain=d1_security_findings topic=security findings by risk style=multi_feature
+pentest findings: title, risk level, status (open, fixed, accepted) and a fix-by date. two tabs, one for what is still open and one for fixed. risk counts on the open tab
+needs: add a finding with title, risk, status and fix-by date | open tab with risk counts | fixed tab | overdue findings in red | tap to edit status
+---
+app "Findings" shield yellow
+table finding title text, risk pick Critical|High|Medium|Low|Info = Medium, status pick Open|Fixed|Accepted = Open, fixby date?
+screen open "Open" shield
+  topbar "Open findings", finding, "Add finding"
+  row gap 1
+    each options finding.risk as r
+      stack grow card gap 0 align center
+        count(finding where risk = r and status = Open) big
+        r tiny
+  each finding where status = Open sort fixby as f empty "Nothing open. Add findings from your next test."
+    row card gap 2 tap edit f swipe remove f
+      stack grow gap 0
+        f.title bold
+        f.risk "· fix by" f.fixby faint color if(f.fixby < today, bad, muted)
+screen done "Closed" check
+  statcard count(finding where status = Fixed), "fixed findings", count(finding)
+  list finding where status != Open, "Nothing closed yet."
+===
+@rich domain=d1_tech_debt topic=tech debt backlog style=custom_ui
+our tech debt backlog: what the debt is, effort (hours, days or weeks) and a pain score from 1 to 5. rank by pain in a chart, tick when paid off, and show how many we paid this quarter
+needs: add a debt item with effort and pain score | tick when paid off | chart ranking unpaid debt by pain | paid off this quarter count | list of unpaid items sorted by pain
+---
+app "Tech debt" tool green
+table debt item text, effort pick Hours|Days|Weeks = Days, pain num 1..5 = 3, paid bool
+topbar "Tech debt", debt, "Add debt"
+row gap 2
+  statcard count(debt where paid = no), "items of debt", count(debt)
+  statcard count(debt last 3 months where paid = yes), "paid off in 3 months"
+section "Biggest pain", "score out of 5"
+  bars debt where paid = no sort pain desc top 6, it.pain, it.item
+each debt where paid = no sort pain desc as d empty "No debt listed. Either lucky or lying."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.paid
+    stack grow gap 0
+      d.item bold
+      d.effort faint
+    d.pain "/ 5" bold color if(d.pain >= 4, bad, ink)
+===
+@rich domain=d1_sprint_board topic=sprint tasks by column style=custom_ui
+sprint board on my phone with columns todo, doing and done as tabs i can tap. each task has a title and points, buttons to move it forward, and a burn number of points done this week
+needs: add a task with title and points | tap a column to switch between todo doing and done | buttons to move a task to another column | points done this week | count in each column
+---
+app "Sprint" board teal
+table task title text, points num 1..13 = 2, col pick Todo|Doing|Done = Todo
+state view pick Todo|Doing|Done = Todo
+topbar "Sprint", task, "Add task"
+row gap 2
+  statcard sum(task.points where col = Done), "points done", sum(task.points)
+  statcard count(task where col = Doing), "tasks in progress"
+choice view
+each task where col = view sort at as t empty "This column is empty. Move a task here with the buttons."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 2
+      t.title bold grow
+      t.points "pts" faint
+    row gap 1
+      each options task.col as c
+        button c fill if(t.col = c, accent, soft) tap set t.col = c
+===
+@rich domain=d1_pr_queue topic=pull request review queue style=multi_feature
+review queue for pull requests: title, author, size (S M L XL) and status waiting, changes, approved or merged. show how many days each one has been waiting and flag the ones older than 2 days
+needs: add a pr with title, author, size and status | days waiting on each pr | prs older than 2 days flagged | count waiting for review | buttons to approve or merge
+---
+app "PR queue" check blue
+table pr title text, author text, size pick S|M|L|XL = M, status pick Waiting|Changes|Approved|Merged = Waiting
+let waiting = count(pr where status = Waiting)
+topbar "PR queue", pr, "Add PR"
+statcard waiting, "PRs waiting for review", count(pr where status != Merged)
+each pr where status != Merged sort at as p empty "Queue is empty. Nothing to review right now."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.title bold grow
+      p.size faint
+    p.author "· waiting" today - p.at "days" faint color if(today - p.at > 2 and p.status = Waiting, bad, muted)
+    row gap 1
+      button "Approve" tap set p.status = Approved
+      button "Merge" tap set p.status = Merged

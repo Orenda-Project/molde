@@ -1,0 +1,473 @@
+@rich domain=d1_game_bugs topic=indie game bug list style=multi_feature
+indie game bug list. title, platform (pc, switch, mobile), how often it repros, type (crash, visual, minor) and a fixed tick. filter chips for platform and crashes on top in a red number
+needs: add a bug with title, platform, repro rate and type | fixed tick | chips to filter by platform | count of open crashes | list of bugs
+---
+app "Game bugs" game green
+table bug title text, platform pick PC|Switch|Mobile = PC, repro pick Always|Sometimes|Rare = Sometimes, kind pick Crash|Visual|Minor = Visual, fixed bool
+state p pick Any|PC|Switch|Mobile = Any
+topbar "Game bugs", bug, "Add bug"
+statcard count(bug where kind = Crash and fixed = no), "open crashes", count(bug where fixed = no)
+choice p
+each bug where p = Any or platform = p sort at desc as b empty "No bugs on this platform. Add one when playtesters find it."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.fixed
+    stack grow gap 0
+      b.title bold color if(b.kind = Crash and b.fixed = no, bad, ink)
+      b.platform "·" b.repro "·" b.kind faint
+===
+@rich domain=d1_bug_assign topic=bug assignment take it style=custom_ui
+tiny bug list for the team where each bug has an owner. type my name once at the top, then a Take it button on every unassigned bug sets me as the owner. tabs for all, mine and unassigned
+needs: add a bug with title and severity | my name field | take it button assigns the bug to me | chips for all, mine and unassigned | count of unassigned bugs
+---
+app "Bug owners" user slate
+table bug title text, sev pick High|Medium|Low = Medium, owner text = "nobody"
+state me text = ""
+state view pick All|Mine|Unassigned = All
+topbar "Bug owners", bug, "Add bug"
+field me "Your name"
+statcard count(bug where owner = "nobody"), "bugs without an owner", count(bug)
+choice view
+each bug where view = All or (view = Mine and owner = me) or (view = Unassigned and owner = "nobody") sort at desc as b empty "Nothing in this view. Try another chip."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.owner "·" b.sev faint
+    if b.owner = "nobody"
+      button "Take it" tap set b.owner = me
+===
+@rich domain=d1_customer_bugs topic=customer reported bugs aging style=detailed
+bugs our customers report through support: ticket number, what they said, a tick when we replied and a tick when fixed. the oldest open one should be easy to see so show a bar chart of age in days
+needs: add a customer bug with ticket, description, replied and fixed ticks | age in days of open bugs in a chart | count not yet replied | oldest open first in the list | tap to edit ticks
+---
+app "Customer bugs" phone blue
+table custbug ticket text, what text, replied bool, fixed bool
+topbar "Customer bugs", custbug, "Add report"
+row gap 2
+  statcard count(custbug where replied = no), "waiting for a reply", count(custbug)
+  statcard count(custbug where fixed = no), "still open"
+section "Age of open bugs", "days"
+  bars custbug where fixed = no sort at top 6, today - it.at, it.ticket
+each custbug where fixed = no sort at as c empty "No open customer bugs. Quiet inbox."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.ticket bold
+      c.what faint
+    (today - c.at) "days" bold color if(today - c.at > 7, bad, ink)
+===
+@rich domain=d1_suite_progress topic=regression suites with cases style=multi_feature
+regression suites like login, checkout and search, each with its own test cases. tap pass or fail on a case and every suite shows a progress bar of passed cases
+needs: add a suite | add a case linked to a suite | pass and fail buttons on each case | progress of passed cases per suite | failed cases count
+---
+app "Suites" check purple dark
+table suite name text
+table tcase suite ref suite, name text, result pick Untested|Pass|Fail = Untested
+topbar "Suites", tcase, "Add case"
+statcard count(tcase where result = Fail), "failed cases", count(tcase)
+each suite sort name as s empty "No suites yet. Add one below, then add its cases."
+  stack card gap 1 tap edit s swipe remove s
+    goal count(s.tcase where result = Pass), max(count(s.tcase), 1), s.name
+    each s.tcase as c
+      row gap 1
+        c.name grow color if(c.result = Fail, bad, ink)
+        button "Pass" fill if(c.result = Pass, good, soft) tap set c.result = Pass
+        button "Fail" fill if(c.result = Fail, bad, soft) tap set c.result = Fail
+form suite, "Add suite"
+===
+@rich domain=d1_release_per_release topic=checklist per release style=detailed
+i ship several things so one checklist per release: name the release (web 3.2, api 1.9) and tick its steps. each release should show if it is ready, with how many steps are left
+needs: add a release with a name | add a step linked to a release | tick steps done | ready or not ready label per release | steps left per release
+---
+app "Release steps" flag pink
+table release name text
+table rstep release ref release, name text, done bool
+topbar "Release steps", rstep, "Add step"
+each release sort at desc as r empty "No releases yet. Add one below, then give it steps."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 2
+      r.name head grow
+      if count(r.rstep where done = no) = 0 and count(r.rstep) > 0
+        "Ready" bold color good
+      else
+        count(r.rstep where done = no) "steps left" bold color warn
+    each r.rstep as s
+      row gap 2
+        toggle s.done
+        s.name grow
+form release, "Add release"
+===
+@rich domain=d1_store_submission topic=app store submission checklist style=custom_ui
+checklist before submitting to the app store: build, store page, legal and review items. chips for each group and a progress bar for the whole thing, plus a tick on each item
+needs: add an item with group | tick each item | chips for each group | overall progress bar | count of items left per group
+---
+app "Store checklist" check grey
+table item what text, area pick Build|Store_page|Legal|Review = Build, done bool
+state a pick All|Build|Store_page|Legal|Review = All
+topbar "Store checklist", item, "Add item"
+goal count(item where done = yes), max(count(item), 1), "items done"
+row gap 1
+  each options item.area as g
+    stack grow card gap 0 align center
+      count(item where area = g and done = no) big
+      g tiny
+choice a
+each item where a = All or area = a sort done as i empty "Nothing in this group. Add an item above."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.done
+    stack grow gap 0
+      i.what bold
+      i.area faint
+===
+@rich domain=d1_deploy_durations topic=deploy duration and success style=multi_feature
+how long our deploys take. service, minutes it took, and whether it worked. a line of minutes over the last deploys, success rate in percent and the slowest service
+needs: add a deploy with service, minutes and success | line chart of deploy minutes | success rate percent | slowest deploy | list of deploys by day
+---
+app "Deploy times" clock ocean
+table dep service text, mins num 1..240 unit "min", worked bool
+topbar "Deploy times", dep, "Log deploy"
+row gap 2
+  statcard round(count(dep where worked = yes) * 100 / max(count(dep), 1)), "% of deploys worked", 100
+  statcard max(dep.mins), "min for the slowest deploy"
+section "Minutes per deploy", "last 12 deploys"
+  trend dep top 12, it.mins
+list dep by day, "No deploys yet. Log one each time you ship."
+===
+@rich domain=d1_canary_rollout topic=canary rollout percent style=short
+canary rollout: version and what percent of users have it, with buttons to halt it or send to everyone
+needs: add a rollout with version and percent | slider to change the percent | halt and full buttons | bars of percent per version | count of live rollouts
+---
+app "Rollouts" bolt mint
+table rollout version text, pct num 0..100 = 5 unit "%"
+topbar "Rollouts", rollout, "Start rollout"
+statcard count(rollout where pct > 0 and pct < 100), "rollouts in progress", count(rollout)
+section "Share of users", "per version"
+  bars rollout top 6, it.pct, it.version
+each rollout sort at desc as r empty "No rollouts yet. Start one at 5 percent."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 2
+      r.version bold grow
+      r.pct "%" big
+    slider r.pct 0..100
+    row gap 1
+      button "Halt" fill bad tap set r.pct = 0
+      button "Everyone" tap set r.pct = 100
+===
+@rich domain=d1_standup_energy topic=standup with blockers tab style=detailed
+daily standup with two tabs: updates (person, what they did, energy from 1 to 5) and blockers (anyone who wrote something they are blocked on). energy average of the team this week as a number
+needs: add an update with person, what they did, energy and blocker | updates tab | blockers tab | average energy this week | energy by person this week
+---
+app "Standup+" users slate
+table standup person text, did text, energy num 1..5 = 3, blocker text?
+screen ups "Updates" users
+  topbar "Updates", standup, "Add update"
+  statcard round(avg(standup.energy week) * 10) / 10, "team energy this week, out of 5", 5
+  section "Energy by person", "this week"
+    share standup week by person, avg(it.energy), it.key
+  list standup today, "No updates today yet."
+screen blk "Blockers" flag
+  each standup week where len(blocker) > 0 sort at desc as s empty "No blockers this week. Nice."
+    stack card gap 0 tap edit s
+      s.person bold color bad
+      s.blocker
+===
+@rich domain=d1_retro_by_member topic=retro actions by team member style=multi_feature
+retro actions that belong to a team member. add the members first, then actions with owner, due date and done tick. filter by member with chips and show open actions per member
+needs: add a team member | add an action with owner and due date | tick when done | chips to pick a member and see their actions | open actions per member
+---
+app "Team actions" target teal
+table member name text
+table action what text, owner ref member, due date, done bool
+state who ref member
+topbar "Team actions", action, "Add action"
+scroll
+  each member sort name as m
+    stack card gap 0 align center
+      count(m.action where done = no) big
+      m.name faint
+choice who
+each action where done = no and owner = who sort due as a empty "Pick a member above to see their open actions."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.done
+    stack grow gap 0
+      a.what bold
+      a.owner.name "· due" a.due faint color if(a.due < today, bad, muted)
+form member, "Add member"
+===
+@rich domain=d1_incident_timeline topic=incident timeline steps style=detailed
+timeline for each incident: i write the incident title, then steps with a time (detected, mitigated, resolved...) and a short note. show each incident with its steps in time order
+needs: add an incident with title | add a timeline step with time and note linked to an incident | steps shown in time order under each incident | count of steps per incident | newest incident first
+---
+app "Timelines" clock blue
+table incident title text
+table event incident ref incident, what text, t time
+topbar "Timelines", event, "Add step"
+each incident sort at desc as i empty "No incidents yet. Add one below, then add its steps."
+  stack card gap 1 tap edit i swipe remove i
+    row gap 2
+      i.title head grow
+      count(i.event) "steps" faint
+    each i.event sort t as e
+      row gap 2
+        e.t bold
+        e.what grow
+form incident, "Add incident"
+===
+@rich domain=d1_downtime_weeks topic=weekly downtime and mttr style=multi_feature
+how bad was downtime over the last 4 weeks, one bar per week in minutes. also mean time to recover and how severities split. incident has title, minutes and severity
+needs: log an incident with title, minutes and severity | bar per week for the last 4 weeks | average minutes to recover | severity split | list of incidents newest first
+---
+app "Downtime" alarm red
+table incident title text, minutes num 1..3000 unit "min", sev pick Minor|Major|Outage = Minor
+topbar "Downtime", incident, "Log incident"
+row gap 2
+  statcard round(avg(incident.minutes)), "min to recover on average"
+  statcard sum(incident.minutes last 4 weeks), "min down in 4 weeks"
+section "Minutes down per week"
+  bars 1..4, sum(incident.minutes week of (today - 7 * (4 - it))), join("wk ", it)
+section "Severity split", "all time"
+  share incident by sev, count(it), it.key
+each incident sort at desc as i empty "No incidents logged."
+  row card gap 2 tap edit i swipe remove i
+    i.title bold grow
+    i.minutes "min" faint
+===
+@rich domain=d1_oncall_rota topic=on-call rota members style=custom_ui
+on call rota for four of us. add the people, tap a name when the pager passes to them, and show who has it now and how many shifts each person did this quarter
+needs: add a person to the rota | tap a name to hand the pager to them | who is on call now | shifts per person this quarter | history of handovers
+---
+app "Rota" phone orange dark
+table member name text
+table shift member ref member
+let cur = last(shift)
+topbar "Rota", member, "Add person"
+stack card gap 0
+  "On call now" faint
+  cur.member.name big
+row gap 1
+  each member sort name as m empty "Add the people on the rota first."
+    button m.name fill if(cur.member = m, accent, soft) tap add shift member = m
+section "Shifts this quarter"
+  share member sort count(it.shift last 3 months) desc, count(it.shift last 3 months), it.name
+section "Handover history"
+  each shift sort at desc top 6 as s empty "No handovers yet."
+    row gap 2
+      s.member.name bold grow
+      s.at faint
+===
+@rich domain=d1_handover_checklist topic=handover checklist reset style=short
+handover checklist items i tick before passing the pager, and a reset button for next week
+needs: add a checklist item | tick each item | progress of items ticked | reset all ticks button | free text note for the next person
+---
+app "Handover list" check teal
+table hitem what text, done bool
+state note long = ""
+topbar "Handover list", hitem, "Add item"
+goal count(hitem where done = yes), max(count(hitem), 1), "items ticked"
+each hitem sort at as h empty "No items yet. Add things like check dashboards or ack open alerts."
+  row card gap 2 tap edit h swipe remove h
+    toggle h.done
+    h.what grow
+field note "Note for the next person"
+button "Reset for next week" tap set all hitem.done = no
+===
+@rich domain=d1_client_certs topic=client site certificates style=detailed
+i look after websites for several clients. certificate list per client: domain, expiry date. group them by client, show days left, red under 14 days and remind me 10 days before
+needs: add a certificate with client, domain and expiry | certificates grouped by client | days left on each | red when under 14 days | reminder 10 days before expiry
+---
+app "Client certs" lock yellow dark
+table ccert client text, domain text, expires date
+remind "A client certificate expires in 10 days" at ccert.expires - 10d at 9:00
+topbar "Client certs", ccert, "Add certificate"
+statcard count(ccert where expires < today + 14), "certs expire within 14 days", count(ccert)
+each ccert by client as g empty "No certificates yet. Add the first site you look after."
+  section g.key, "certs:" count(g)
+    each g as c
+      row tap edit c swipe remove c
+        c.domain bold grow
+        (c.expires - today) "days" color if(c.expires - today < 14, bad, muted)
+===
+@rich domain=d1_domain_renew_filter topic=domain renewals filter style=multi_feature
+domain list with renewal dates. chips for all, overdue and next 60 days. a Renewed button adds one year to the date, and the cost of what is coming up shows at the top
+needs: add a domain with renewal date and price | chips for all, overdue and soon | renewed button adds a year | cost of renewals in the next 60 days | overdue count in red
+---
+app "Renewals" cloud green
+table dom name text, renews date, price money
+state f pick All|Overdue|Soon = All
+topbar "Renewals", dom, "Add domain"
+row gap 2
+  statcard sum(dom.price where renews >= today and renews <= today + 60), "to pay in 60 days"
+  statcard count(dom where renews < today), "overdue", count(dom)
+choice f
+each dom where f = All or (f = Overdue and renews < today) or (f = Soon and renews >= today and renews <= today + 60) sort renews as d empty "No domains in this view."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold color if(d.renews < today, bad, ink)
+      d.renews "·" d.price faint
+    button "Renewed" tap set d.renews = addmonths(d.renews, 12)
+===
+@rich domain=d1_api_key_rotate topic=api keys with environments style=custom_ui
+api keys by environment (dev, staging, prod) with expiry. expired ones red, a Rotate button sets expiry to 90 days from today, and prod keys shown first with a count
+needs: add a key with name, environment and expiry | rotate button sets 90 days from today | expired keys in red | prod keys listed first | count of prod keys expiring in 30 days
+---
+app "Key rotation" key teal
+table akey name text, env pick Dev|Staging|Prod = Prod, expires date
+topbar "Key rotation", akey, "Add key"
+statcard count(akey where env = Prod and expires <= today + 30), "prod keys expire within 30 days", count(akey where env = Prod)
+section "Prod keys"
+  each akey where env = Prod sort expires as k empty "No prod keys tracked."
+    row tap edit k swipe remove k
+      stack grow gap 0
+        k.name bold color if(k.expires < today, bad, ink)
+        k.expires faint
+      button "Rotate" tap set k.expires = today + 90
+section "Dev and staging"
+  each akey where env != Prod sort expires as k empty "No dev or staging keys."
+    row tap edit k swipe remove k
+      k.name grow color if(k.expires < today, bad, ink)
+      k.env faint
+===
+@rich domain=d1_secret_log topic=secret rotation log style=multi_feature
+log of secret rotations: a list of secrets and a button that logs a rotation each time. show days since last rotation, and turn it red if more than 90 days
+needs: add a secret with name | button to log a rotation | days since last rotation | red after 90 days | rotations this year
+---
+app "Rotation log" key blue
+table secret name text
+table rot secret ref secret
+topbar "Rotation log", secret, "Add secret"
+row gap 2
+  statcard count(secret, due(it.rot, 90)), "secrets due for rotation", count(secret)
+  statcard count(rot year), "rotations this year"
+each secret sort name as s empty "No secrets yet. Add the ones you rotate."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold color if(due(s.rot, 90), bad, ink)
+      "Last rotated" since(s.rot) "days ago" faint
+    button "Rotated" tap add rot secret = s
+===
+@rich domain=d1_cron_enabled topic=cron jobs on and off style=detailed
+cron job inventory with owner, how many minutes the job usually takes and a switch to mark it enabled. i want to know how many are disabled and the total minutes of cron work per day
+needs: add a cron job with owner and typical minutes | enabled switch | count of disabled jobs | total minutes of jobs per day | list with owner
+---
+app "Crons" timer purple
+table cj name text, owner text, mins num 1..600 unit "min", enabled bool
+topbar "Crons", cj, "Add job"
+row gap 2
+  statcard count(cj where enabled = no), "jobs disabled", count(cj)
+  statcard sum(cj.mins where enabled = yes), "min of cron work per run"
+each cj sort name as j empty "No cron jobs yet. Add the ones on your servers."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.name bold color if(j.enabled, ink, muted)
+      j.owner "·" j.mins "min" faint
+    toggle j.enabled
+===
+@rich domain=d1_agency_servers topic=agency servers by client style=multi_feature
+servers we host for clients: server name, client, provider (hetzner, aws, digitalocean) and monthly cost. what each client costs us per month in a chart and the total
+needs: add a server with name, client, provider and monthly cost | cost per client chart | total monthly cost | servers per provider | list of servers
+---
+app "Hosting" box pink
+table srv name text, client text, provider pick Hetzner|AWS|DigitalOcean|Other = Hetzner, cost money
+topbar "Hosting", srv, "Add server"
+row gap 2
+  statcard sum(srv.cost), "a month in hosting"
+  statcard count(srv), "servers"
+section "Cost per client"
+  share srv by client, sum(it.cost), it.key
+section "Per provider"
+  share srv by provider, count(it), it.key
+list srv, "No servers yet. Add each box with its client."
+===
+@rich domain=d1_server_eol topic=server os end of life style=custom_ui
+the os on each server and the date support ends. red when it ends in under 90 days or already ended. count of servers on unsupported os and a split by os
+needs: add a server with os and support end date | servers near or past end of life in red | count of unsupported servers | split by os | list sorted by end date
+---
+app "End of life" shield grey
+table box name text, os text, eol date
+topbar "End of life", box, "Add server"
+statcard count(box where eol < today), "servers on an unsupported OS", count(box)
+section "By OS"
+  share box by os, count(it), it.key
+each box sort eol as b empty "No servers listed. Add each one with its OS support end."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.name bold
+      b.os faint
+    b.eol bold color if(b.eol < today, bad, if(b.eol < today + 90, warn, muted))
+===
+@rich domain=d1_flag_rollout_pct topic=feature flag percent rollout style=multi_feature
+feature flags with a rollout percentage, not just on or off. buttons minus 10 and plus 10 on each flag, a bar chart of the percentages and a count of flags at 100 percent we could remove
+needs: add a flag with name and percentage | minus 10 and plus 10 buttons | bar chart of percentages | flags at 100 percent count | list of flags
+---
+app "Flag rollout" flag ocean
+table fl name text, pct num 0..100 = 0 unit "%"
+topbar "Flag rollout", fl, "Add flag"
+statcard count(fl where pct = 100), "flags fully on, ready to remove", count(fl)
+section "Rollout", "percent of users"
+  bars fl sort pct desc top 8, it.pct, it.name
+each fl sort name as f empty "No flags yet. Add one at 0 percent."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      f.pct "%" big
+    button "-10" tap set f.pct = f.pct - 10
+    button "+10" tap set f.pct = f.pct + 10
+===
+@rich domain=d1_flag_audit topic=feature flag change audit log style=detailed
+audit log for flag changes: which flag, switched on or off, and by whom. today's changes count at the top, a chart of changes per day and a list by day
+needs: log a flag change with flag name, on or off and person | changes today count | chart of changes per day | most changed flags | list by day
+---
+app "Flag audit" list mint dark
+table flagchange flag text, to pick On|Off = On, by text
+topbar "Flag audit", flagchange, "Log change"
+row gap 2
+  statcard count(flagchange today), "changes today"
+  statcard count(flagchange week where to = Off), "switched off this week"
+section "Changes per day", "last 14 days"
+  daybars last 14 days, count(flagchange on it)
+section "Most changed flags"
+  share flagchange month by flag, count(it), it.key
+list flagchange by day, "No flag changes logged."
+===
+@rich domain=d1_customer_release_notes topic=customer release notes search style=detailed
+write release notes for customers: version, a title and the body text. newest one shown at the top in big, and a search box that looks in the title and body
+needs: add release notes with version, title and body | latest release shown big | search by title or body | count of releases this year | list of older notes
+---
+app "What's new" gift slate
+table note version text, title text, body long
+state q text = ""
+let latest = last(note)
+topbar "What's new", note, "Write notes"
+if count(note) > 0
+  stack card gap 1 pad 2
+    latest.version "latest" faint
+    latest.title head
+    latest.body
+statcard count(note year), "releases this year"
+field q "Search the notes"
+each note where has(title, q) or has(body, q) sort at desc as n empty "No notes match."
+  stack card gap 0 tap edit n swipe remove n
+    n.version n.title bold
+    n.body faint
+===
+@rich domain=d1_semver_bump topic=semantic version bump helper style=custom_ui
+semver helper: show the current version of my library and buttons to bump patch, minor or major which add a new release row. also a list of past versions with the date
+needs: current version shown big | bump patch, minor and major buttons | release history with dates | count of releases this year | add a release by hand
+---
+app "Semver" tag ink
+table rel major num 0..99, minor num 0..99, patch num 0..99
+let v = last(rel)
+topbar "Semver", rel, "Add by hand"
+stack card gap 1 pad 2
+  "Current version" faint
+  if count(rel) > 0
+    join(v.major, ".", v.minor, ".", v.patch) huge bold
+  else
+    "No releases yet" head
+row gap 1
+  button "Patch" tap add rel major = v.major, minor = v.minor, patch = v.patch + 1
+  button "Minor" tap add rel major = v.major, minor = v.minor + 1, patch = 0
+  button "Major" tap add rel major = v.major + 1, minor = 0, patch = 0
+statcard count(rel year), "releases this year"
+each rel sort at desc as r empty "No history yet. Add 1.0.0 by hand to start."
+  row card gap 2 tap edit r swipe remove r
+    join(r.major, ".", r.minor, ".", r.patch) bold grow
+    r.at faint

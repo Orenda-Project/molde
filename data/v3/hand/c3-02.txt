@@ -1,0 +1,509 @@
+@rich domain=c3_protein_target topic=daily_protein_meal_split style=multi_feature
+lifting for 4 months and cant tell how much protein i should eat. pick my goal (build, keep or cut), put my weight, and show grams a day and what that is per meal if i eat 4 meals
+needs: weight input | goal chips build keep or cut | protein grams per day | grams per meal | number of meals slider
+---
+app "Protein" egg red
+setting kg num 30..200 = 75 "Body weight (kg)"
+state aim pick Build|Keep|Cut = Build
+state meals num = 4
+let per_kg = if(aim = Build, 2, if(aim = Keep, 1.6, 2.2))
+let total = round(kg * per_kg)
+field kg
+choice aim
+statcard total, "g of protein a day (" per_kg "g per kg)", 0
+section "Split across meals"
+  "Meals a day" meals faint
+  slider meals 2..7
+  round(total / meals) "g per meal" big
+  "A chicken breast is about 30 g, an egg about 6 g." faint
+===
+@rich domain=c3_walk_burn topic=calories_burned_walking_log style=detailed
+how many calories do i burn on a walk? pick my pace (slow, normal, brisk), enter minutes and my weight, show kcal for that walk, and let me save walks so i can see this week's total and a chart per day
+needs: pace chips | minutes and weight inputs | calories for the walk | save the walk | week total | bar chart of the last 7 days
+---
+app "Walk Burn" walk green
+table walk mins num 1..600, kcal num
+setting kg num = 70 "Your weight (kg)"
+state pace pick Slow|Normal|Brisk = Normal
+state mins num = 30
+let met = if(pace = Slow, 2.8, if(pace = Normal, 3.5, 4.8))
+let kcal = round(met * kg * mins / 60)
+section "This walk"
+  choice pace
+  field mins "Minutes"
+  field kg
+  statcard kcal, "kcal for a" mins "minute walk", 0
+  button "Save this walk" fill accent tap add walk mins = mins, kcal = kcal
+section "This week", "kcal:" sum(walk.kcal week)
+  daybars last 7 days, sum(walk.kcal on it)
+list walk top 6, "No walks saved yet."
+===
+@rich domain=c3_step_goal topic=steps_to_lose_weight style=detailed
+i want to lose 4 kg in 10 weeks by walking. work out the calorie deficit per day, and how many extra steps a day that means at my weight, then show how many steps that is each week
+needs: kilos to lose and weeks inputs | daily calorie deficit | extra steps per day | steps per week
+---
+app "Step Goal" walk teal
+setting kg num = 82 "Current weight (kg)"
+state lose num = 4
+state weeks num = 10
+let deficit = if(weeks > 0, lose * 7700 / (weeks * 7), 0)
+let per_step = kg * 0.00055
+let steps = if(per_step > 0, round(deficit / per_step), 0)
+section "Your plan"
+  field kg
+  field lose "Kilos to lose"
+  "Weeks" weeks faint
+  slider weeks 2..52
+if weeks = 0 or lose = 0
+  "Enter kilos to lose and a number of weeks." faint
+else
+  statcard steps, "extra steps a day", 10000
+  section "What it means"
+    "Daily deficit" round(deficit) "kcal" big
+    "Steps per week" steps * 7 head
+    "About" round(steps * 0.0008 * 10) / 10 "km extra each day" faint
+    if steps > 15000
+      "That is a lot. Try more weeks or add food changes too." faint color warn
+===
+@rich domain=c3_goal_weight_date topic=weight_goal_arrival_date style=short
+when will i reach my goal weight if i lose 0.5 kg a week
+needs: current weight goal weight and weekly loss inputs | weeks needed | date reached | message when goal is already reached
+---
+app "Goal Date" target purple
+state now_kg num = 88
+state goalkg num = 78
+state rate num = 0.5
+let diff = now_kg - goalkg
+let weeks = if(rate > 0, 0 - floor(0 - diff / rate), 0)
+field now_kg "Current weight (kg)"
+field goalkg "Goal weight (kg)"
+field rate "Loss per week (kg)"
+if diff <= 0
+  "You are already at or below your goal. Great work." color good
+else
+  statcard weeks, "weeks to go, about" round(diff * 10) / 10 "kg", 0
+  "You get there around" today + weeks * 7 head
+  "That is" plural(weeks * 7, "day") faint
+===
+@rich domain=c3_waist_hip topic=waist_hip_ratio_check style=short
+waist to hip ratio for men and women with the risk level
+needs: waist and hip inputs | male or female chips | ratio value | risk level with colour
+---
+app "Waist Hip" heart pink
+state sex pick Female|Male = Female
+state waist num = 80
+state hip num = 98
+let r = if(hip > 0, waist / hip, 0)
+let limit = if(sex = Male, 0.9, 0.85)
+choice sex
+field waist "Waist (cm)"
+field hip "Hip (cm)"
+statcard round(r * 100) / 100, if(r = 0, "Enter both measures", if(r < limit, "Low risk", if(r < limit + 0.1, "Moderate risk", "High risk"))), limit
+"Healthy is below" limit "for" sex faint
+===
+@rich domain=c3_bike_trip topic=cycling_speed_time_distance style=multi_feature
+cycling calculator, three in one. choose what i want to find: speed, time or distance, fill the other two and show the answer, plus the arrival time if i leave now
+needs: choose what to solve for | distance time and speed inputs | answer | arrival time from now
+---
+app "Bike Trip" bike mint
+state find pick Speed|Time|Distance = Time
+state km num = 42
+state kmh num = 21
+state mins num = 120
+let ans = if(find = Speed, if(mins > 0, km / (mins / 60), 0), if(find = Time, if(kmh > 0, km / kmh * 60, 0), kmh * mins / 60))
+choice find
+if find != Distance
+  field km "Distance (km)"
+if find != Speed
+  field kmh "Speed (km/h)"
+if find != Time
+  field mins "Time (minutes)"
+statcard round(ans * 10) / 10, if(find = Speed, "km/h average speed", if(find = Time, "minutes on the bike", "km ridden")), 0
+if find = Time
+  "Arrive at" now + ans * 1m head
+  "if you leave now" faint
+===
+@rich domain=c3_swim_pace topic=swim_pace_per_100m style=short
+pool laps to pace per 100 m
+needs: laps and pool length inputs | total time input | pace per 100 m | total distance
+---
+app "Swim Pace" drop ocean
+state laps num = 40
+state pool pick M25|M50 = M25
+state mins num = 30
+state secs num = 0
+let metres = laps * if(pool = M25, 25, 50)
+let secs_total = mins * 60 + secs
+let pace = if(metres > 0, secs_total / metres * 100, 0)
+field laps "Laps (one length each)"
+choice pool
+row gap 2
+  field mins "Minutes"
+  field secs "Seconds"
+"Distance" metres "m" head
+"Pace per 100 m" floor(pace / 60) ":" if(round(pace % 60) < 10, "0", "") round(pace % 60) big
+===
+@rich domain=c3_fasting_window topic=intermittent_fasting_window style=detailed
+im doing intermittent fasting. i choose 16, 18 or 20 hours fast and my first meal time, and want the time my eating window closes and a line telling me if i can eat right now or still fasting
+needs: first meal time input | fast length chips 16 18 or 20 | eating window end time | eating or fasting right now
+---
+app "Fast Window" clock ink dark
+setting first time = 12:00 "First meal at"
+state fast pick H16|H18|H20 = H16
+let hrs = if(fast = H16, 16, if(fast = H18, 18, 20))
+let eatlen = 24 - hrs
+let into = ((hour(now) * 60 + minute(now)) - (hour(first) * 60 + minute(first))) % 1440
+let eating = into < eatlen * 60
+field first
+choice fast
+statcard eatlen, "hours to eat, window closes at" first + eatlen * 1h, 24
+if eating
+  "You are inside the eating window." big color good
+  "Closes in" floor((eatlen * 60 - into) / 60) "h" (eatlen * 60 - into) % 60 "min" faint
+else
+  "You are fasting now." big color warn
+  "Eating opens in" floor((1440 - into) / 60) "h" (1440 - into) % 60 "min" faint
+===
+@rich domain=c3_caffeine_left topic=caffeine_in_body_and_cutoff style=multi_feature
+log each coffee or tea with its caffeine and show how much is still in my body now (half life about 5.5 hours), and tell me the latest time to drink coffee if bed is at 23:00 and i want under 50 mg left
+needs: log a drink with caffeine mg | caffeine still in body now | bedtime input | latest coffee time for bed | list of today's drinks
+---
+app "Caffeine" coffee orange
+table cup kind pick Coffee|Tea|Cola|Energy = Coffee, mg num 5..400 = 95
+setting bed time = 23:00 "Bedtime"
+let still = round(sum(cup last 2 days, it.mg * pow(0.5, (now - it.at) / 1h / 5.5)))
+let cutoff = bed - 5.5 * 1h * 2
+topbar "Caffeine", cup, "Log a drink"
+statcard still, "mg still in your body now", 200
+section "Bedtime check"
+  field bed
+  "Last full cup of coffee by" cutoff head
+  "That keeps about 25 percent of a 200 mg dose at bedtime." faint
+  quick cup, mg, [60, 95, 160]
+list cup today, "No drinks logged today. Tap Log a drink."
+===
+@rich domain=c3_zone_clock topic=meeting_time_in_other_city style=multi_feature
+i set meetings with clients abroad. choose their city (london, dubai, new york, sydney), type my meeting time in karachi and show their local time and whether it is a good hour for them
+needs: city chips | my meeting time input | their local time | good or bad hour warning
+---
+app "Zone Clock" map blue
+setting mine time = 15:00 "My meeting time (Karachi)"
+state city pick London|Dubai|New_York|Sydney = London
+let off = if(city = London, -5, if(city = Dubai, -1, if(city = New_York, -10, 6)))
+let theirs = mine + off * 1h
+let hr = hour(theirs)
+field mine
+choice city
+statcard hr, "o'clock for them. Their time is" theirs, 24
+if hr >= 9 and hr < 18
+  "Good hour for a meeting." big color good
+else
+  "Outside office hours for them." big color warn
+"Difference:" off "hours from Karachi (daylight saving may shift it by one hour)" faint
+===
+@rich domain=c3_meeting_cost topic=meeting_cost_calculator style=short
+cost of a meeting from people, minutes and average hourly pay
+needs: people minutes and hourly pay inputs | cost of the meeting | cost per minute | yearly cost if weekly
+---
+app "Meeting Cost" money slate
+setting pay money = 1500 "Average hourly pay"
+state people num = 6
+state mins num = 45
+let cost = people * pay * mins / 60
+field people "People in the room"
+field mins "Minutes"
+field pay
+statcard cost, "spent on this meeting", 0
+"Each minute costs" cost / max(mins, 1) faint
+"If it repeats weekly, a year costs" cost * 52 head
+===
+@rich domain=c3_quit_smoking topic=smoke_free_days_saved style=multi_feature
+i quit smoking on 1 october. show days smoke free, cigarettes i did not smoke, money saved from my pack price and a few health milestones i have passed
+needs: quit date and cigarettes per day settings | days smoke free | cigarettes avoided | money saved | milestones passed
+---
+app "Smoke Free" leaf green
+setting quit date = 2026-10-01 "Quit date"
+setting perday num = 15 "Cigarettes per day before"
+setting pack money = 600 "Price of a pack of 20"
+let days = max(today - quit, 0)
+statcard days, "days smoke free", 90
+section "What you saved"
+  "Cigarettes not smoked" days * perday big
+  "Money saved" days * perday / 20 * pack head
+field quit
+field perday
+field pack
+section "Milestones"
+  each [2, 14, 30, 90, 365] as m
+    row
+      join(m, " days") grow
+      if days >= m
+        "reached" color good
+      else
+        "in" m - days "days" faint
+===
+@rich domain=c3_project_clock topic=deadline_percent_elapsed style=detailed
+project started 3 november and is due 15 january. show how many days are left, what percent of the time has gone and a bar for it, plus how many days it lasts in total and how many weeks
+needs: start and due date inputs | days left | percent of time elapsed with bar | total length in days and weeks
+---
+app "Project Clock" hourglass yellow
+setting begin date = 2026-11-03 "Start date"
+setting due date = 2027-01-15 "Due date"
+let total = due - begin
+let gone = clamp(today - begin, 0, total)
+let pct = if(total > 0, round(gone / total * 100), 0)
+field begin
+field due
+if total <= 0
+  "The due date must be after the start date." faint
+else
+  statcard max(due - today, 0), "days left, " pct "% of the time used", 100
+  draw 100, 6
+    rect 0, 0, 100, 6 fill soft radius 3
+    rect 0, 0, pct, 6 fill if(pct > 90, bad, accent) radius 3
+  "Total length:" plural(total, "day") "(" floor(total / 7) "weeks" total % 7 "days)" faint
+  if today > due
+    "The deadline has passed." color bad
+===
+@rich domain=c3_date_calc topic=date_difference_and_add_days style=multi_feature
+date calculator: two dates, tell me how many days between them in weeks and days, and a second part where i give a date and a number of days to add and see the new date and weekday
+needs: two dates input | days between | weeks and days | start date plus days | weekday of the result
+---
+app "Date Calc" calendar slate
+state a date = today
+state b date = 2026-12-25
+state start date = today
+state plus num = 45
+let gap = b - a
+let res = start + plus
+section "Between two dates"
+  field a "From"
+  field b "To"
+  statcard abs(gap), "days apart", 0
+  floor(abs(gap) / 7) "weeks and" abs(gap) % 7 "days" head
+  if gap < 0
+    "The second date is earlier." faint
+section "Add days to a date"
+  field start "Start date"
+  field plus "Days to add"
+  res big
+  "A" dayname(res) faint
+===
+@rich domain=c3_invoice_dues topic=invoice_due_dates_overdue style=detailed
+i send invoices on net 15, net 30 or net 60 terms. let me add each with client, amount, issue date and terms, show the due date, mark the overdue ones red and total what is still waiting, with a button to mark paid
+needs: add invoice with client amount date and terms | due date from terms | overdue marked red | total outstanding | mark paid button
+---
+app "Invoice Dues" tag orange
+table invoice client text, amount money, issued date = today, terms pick Net_15|Net_30|Net_60 = Net_30, paid bool
+let days(i invoice) = if(i.terms = Net_15, 15, if(i.terms = Net_30, 30, 60))
+topbar "Invoice Dues", invoice, "New invoice"
+let waiting = sum(invoice where paid = no, it.amount)
+let late = sum(invoice where paid = no, if(it.issued + days(it) < today, it.amount, 0))
+statcard waiting, "still to collect, late:" late, 0
+each invoice where paid = no sort issued as i empty "Nothing outstanding. Add an invoice with New invoice."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.client bold
+      "due" i.issued + days(i) faint color if(i.issued + days(i) < today, bad, muted)
+    i.amount bold
+    button "Paid" tap set i.paid = yes
+===
+@rich domain=c3_loan_schedule topic=loan_instalment_dates style=detailed
+bike loan from the shop. first instalment is 5 january, 12 months, total 120000. show instalment amount, the date of each one, how many are left and the date of the last
+needs: total months and first date inputs | instalment amount | date of each instalment | instalments left | last instalment date
+---
+app "Instalments" bike blue
+setting total money = 120000 "Total to repay"
+setting n num 1..36 = 12 "Number of months"
+setting first date = 2027-01-05 "First instalment"
+let each_amt = total / n
+let left = count(1..n, addmonths(first, it - 1) >= today)
+statcard each_amt, "a month for" n "months", 0
+field total
+field n
+field first
+"Instalments left:" left "of" n head
+"Last one on" addmonths(first, n - 1) faint
+section "Dates"
+  each 1..n as k
+    row
+      join("No. ", k) grow
+      addmonths(first, k - 1)
+      if addmonths(first, k - 1) < today
+        "paid" color good
+      else
+        each_amt
+===
+@rich domain=c3_screen_time topic=screen_time_budget style=multi_feature
+trying to cut my phone use to 3 hours a day. i add each app session with minutes, and want to see today's total against the 3 hour budget, hours left, and the last 7 days as bars with a line
+needs: add a session with app and minutes | today total against budget | time left today | last 7 days chart with budget line
+---
+app "Screen Time" phone purple dark
+table use app pick Social|Video|Games|Messages|Other = Social, mins num 1..600 = 30
+setting budget num 30..600 = 180 "Daily budget (minutes)"
+let today_min = sum(use.mins today)
+topbar "Screen Time", use, "Add session"
+statcard today_min, "minutes used today of" budget, budget
+if today_min > budget
+  "Over budget by" today_min - budget "minutes." color bad
+else
+  "Left today:" floor((budget - today_min) / 60) "h" (budget - today_min) % 60 "min" head
+section "Last 7 days"
+  goalbars last 7 days, sum(use.mins on it), budget
+list use today, "Nothing logged today. Add a session when you put the phone down."
+===
+@rich domain=c3_freelance_hours topic=freelance_time_earnings style=detailed
+for my freelance work: log a task with project name, start time and end time, show hours for each, and earnings at my rate per hour. also show which project earned most this month
+needs: add a task with project start and end | hours per task | earnings at hourly rate | total this month | earnings per project
+---
+app "Freelance Time" pen green
+table task project text, start time = 10:00, stop time = 12:00
+setting rate money = 2000 "Hourly rate"
+let hrs(t task) = (t.stop - t.start) / 1h
+topbar "Freelance Time", task, "Log task"
+statcard sum(task month, hrs(it)), "hours this month, earned" sum(task month, hrs(it)) * rate, 0
+section "By project", "this month"
+  share task month by project, sum(it, hrs(it)) * rate, it.key
+section "Tasks"
+  each task top 8 as t empty "No tasks yet. Log the first one with Log task."
+    row card tap edit t swipe remove t
+      stack grow gap 0
+        t.project bold
+        t.start "to" t.stop faint
+      hrs(t) "h" bold
+===
+@rich domain=c3_fast_hours topic=sehri_iftar_fast_length style=short
+fasting hours between sehri and iftar
+needs: sehri end and iftar time inputs | length of the fast | time left until iftar | percent of fast done
+---
+app "Fast Length" moon mint
+setting sehri time = 5:10 "Sehri ends"
+setting iftar time = 17:40 "Iftar time"
+let len = (iftar - sehri) / 1m
+let sofar = clamp(((hour(now) * 60 + minute(now)) - (hour(sehri) * 60 + minute(sehri))) % 1440, 0, len)
+field sehri
+field iftar
+statcard round(len / 6) / 10, "hours of fasting", 24
+"Done so far" round(sofar / len * 100) "%" head
+"Time left to iftar" (len - sofar) * 1m big
+===
+@rich domain=c3_pill_runout topic=pill_pack_runs_out style=multi_feature
+how long will my pills last? number of pills in the pack, how many i take a day, and the date i started. show the last day, days left and the date to reorder 5 days before
+needs: pills in pack doses per day and start date | last day of the pack | days left | reorder date | friendly state when finished
+---
+app "Pill Pack" pill teal
+setting pack num = 60 "Pills in the pack"
+setting perday num = 2 "Pills per day"
+setting began date = today "Started on"
+let lasts = if(perday > 0, floor(pack / perday), 0)
+let lastday = began + lasts - 1
+field pack
+field perday
+field began
+if lasts = 0
+  "Enter pills per day to see when the pack ends." faint
+else
+  statcard max(lastday - today + 1, 0), "days of pills left", lasts
+  "Last pill on" lastday big
+  "Reorder by" lastday - 5 head
+  if today > lastday
+    "This pack is finished. Time for a new one." color warn
+===
+@rich domain=c3_run_calories topic=run_calories_weekly_log style=multi_feature
+log each run with km and minutes, work out the kcal from my weight, and show this week's runs as dots, total km, and the kcal burned. also a chart of km per day
+needs: add a run with distance and minutes | calories from weight | total km this week | week dots | chart of km per day
+---
+app "Run Log" run red
+table run km num 0.5..100 = 5, mins num 1..600 = 30
+setting kg num = 70 "Your weight (kg)"
+let kcal(r run) = round(r.km * kg * 1.036)
+topbar "Run Log", run, "Log run"
+weekdots count(run on it) > 0
+statcard sum(run.km week), "km run this week, burned" sum(run week, kcal(it)) "kcal", 30
+section "Km per day", "last 7 days"
+  daybars last 7 days, sum(run.km on it)
+each run top 6 as r empty "No runs yet. Tap Log run after your first one."
+  row card tap edit r swipe remove r
+    stack grow gap 0
+      r.km "km in" r.mins "min" bold
+      r.at faint
+    kcal(r) "kcal" faint
+===
+@rich domain=c3_weight_trend topic=weekly_weight_trend_projection style=multi_feature
+i weigh myself every sunday. save each weight, draw the trend line, tell me how much i lost since the first weigh-in, the average change per week, and the date i hit my target of 70 kg at that speed
+needs: save a weigh-in | trend line | total change since first | average change per week | projected date to target
+---
+app "Weigh-ins" scale grey
+table weigh kg num 20..300 = 80
+setting target num = 70 "Target weight (kg)"
+let first_kg = first(weigh.kg)
+let last_kg = last(weigh.kg)
+let weeks = max((today - first(weigh.at)) / 7, 1)
+let per_week = (first_kg - last_kg) / weeks
+topbar "Weigh-ins", weigh, "Save weight"
+if count(weigh) < 2
+  "Save at least two weigh-ins to see your trend." faint
+else
+  statcard round((first_kg - last_kg) * 10) / 10, "kg lost since the first weigh-in", first_kg - target
+  trend weigh, it.kg
+  section "Pace"
+    round(per_week * 100) / 100 "kg per week" big
+    if per_week > 0 and last_kg > target
+      "Target reached around" today + round((last_kg - target) / per_week * 7) head
+    if last_kg <= target
+      "You are at your target. Keep it steady." color good
+list weigh top 5, "No weigh-ins yet."
+===
+@rich domain=c3_birthdays_next topic=family_birthdays_countdown style=multi_feature
+i always forget birthdays in the family. add name and birth date, then show everyone in order of who is next, how many days until, and the age they turn
+needs: add a person with birth date | days until next birthday | age they turn | ordered by who is next | today highlighted
+---
+app "Birthdays" gift pink
+table person name text, born date
+let nextb(p person) = addmonths(p.born, 12 * (year(today) - year(p.born) + if(month(today) * 100 + monthday(today) > month(p.born) * 100 + monthday(p.born), 1, 0)))
+topbar "Birthdays", person, "Add person"
+each person sort nextb(it) - today as p empty "Nobody yet. Tap Add person and enter a name and birth date."
+  row card gap 2 tap edit p swipe remove p fill if(nextb(p) = today, accent, surface)
+    stack grow gap 0
+      p.name bold
+      nextb(p) faint
+    stack gap 0 align end
+      if nextb(p) = today
+        "Today!" bold
+      else
+        nextb(p) - today "days" bold
+      "turns" year(nextb(p)) - year(p.born) faint
+===
+@rich domain=c3_sleep_debt topic=sleep_debt_week style=detailed
+log what time i went to bed and woke up each day, work out the hours slept, and tell me how much sleep debt i built this week compared to the 8 hours i need. bar chart of hours slept would be nice
+needs: log bed time and wake time | hours slept per night | weekly sleep debt against the need | bar chart of the last 7 days | average per night
+---
+app "Sleep Debt" bed slate dark
+table night bed time = 23:00, woke time = 7:00
+setting need num 4..12 = 8 "Hours needed per night"
+let hrs(n night) = (n.woke - n.bed) / 1h
+let slept = sum(night last 7 days, hrs(it))
+let nights = count(night last 7 days)
+topbar "Sleep Debt", night, "Log night"
+if nights = 0
+  "Log last night's sleep to see your weekly balance." faint
+else
+  statcard round((need * nights - slept) * 10) / 10, "hours of sleep debt over" plural(nights, "night"), need * nights
+  "Average" round(slept / nights * 10) / 10 "hours a night" head
+section "Hours per night"
+  daybars last 7 days, sum(night on it, hrs(it))
+list night top 7, "No nights logged yet."
+===
+@rich domain=c3_seconds_clock topic=seconds_minutes_to_hours style=short
+turn seconds or minutes into hours minutes seconds, like for my race splits
+needs: number input | unit chips seconds or minutes | hours minutes and seconds | total in days
+---
+app "Time Convert" timer grey
+state n num = 5400
+state u pick Seconds|Minutes = Seconds
+let secs = if(u = Seconds, n, n * 60)
+field n "Amount"
+choice u
+statcard floor(secs / 3600), "hours," floor(secs % 3600 / 60) "minutes," secs % 60 "seconds", 0
+"As a clock" secs * 1s big
+"That is" round(secs / 864) / 100 "days" faint

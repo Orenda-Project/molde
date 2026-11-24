@@ -1,0 +1,545 @@
+@rich domain=n1_new_baby_hub topic=baby_sleep_bills_tasks from=v2-cr-44bb53b05d
+-
+needs: log my own sleep and see the average of the last 7 nights | bar chart of hours slept | bills with due dates and a paid tick | weekly reminder about bills due | task list with done count | three tabs for sleep, bills and tasks
+---
+app "New Baby" baby purple
+table night slept time, woke time
+table bill name text, amount money, due date, paid bool
+table task what text, done bool
+let avg7 = sum(night last 7 days, it.woke - it.slept) / max(count(night last 7 days), 1)
+remind "Bills due this week, have a look" at 9:00 on mon if count(bill where paid = no and due < today + 7) > 0
+screen sleep "Sleep" bed
+  topbar "Sleep", night, "Log my sleep"
+  "Average sleep, last 7 nights" faint
+  avg7 big
+  section "Hours slept", "last 7 days"
+    daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
+  list night by day, "No nights logged yet. Log the last one, even if it was short."
+screen bills "Bills" money
+  topbar "Bills", bill, "Add bill"
+  statcard sum(bill.amount where paid = no), "still to pay, due this week:" count(bill where paid = no and due < today + 7)
+  each bill where paid = no sort due as b empty "No unpaid bills. Enjoy it."
+    row card gap 2 tap edit b swipe remove b
+      toggle b.paid
+      stack grow gap 0
+        b.name bold
+        "Due" b.due faint color if(b.due < today, bad, muted)
+      b.amount bold
+screen tasks "Tasks" check
+  topbar "Tasks", task, "Add task"
+  statcard count(task where done = yes), "of" count(task) "tasks done", count(task)
+  each task sort done as t empty "No tasks. Add the next small thing."
+    row card gap 2 tap edit t swipe remove t
+      toggle t.done
+      t.what bold grow color if(t.done, muted, ink)
+===
+@rich domain=n1_recipe_scaler topic=recipes_with_ingredients from=v2-cr-d30bd24c73
+-
+needs: save recipes with serving size and cooking time | add ingredients with quantity and unit to each recipe | choose how many people you are cooking for | quantities scale to that number | slider for people
+---
+app "Recipes" food pink
+table recipe title text, serves num 1..20 = 4, mins num 5..300 = 30 unit "min"
+table ingr recipe ref recipe, item text, qty num 0.., unit text?
+state people num = 4
+topbar "Recipes", recipe, "New recipe"
+section "Cooking for" people "people"
+  slider people 1..20
+each recipe sort title as r empty "No recipes yet. Add one, then list its ingredients below."
+  stack card gap 1 tap edit r swipe remove r
+    row
+      r.title bold grow
+      r.mins "min" faint
+    each r.ingr as i empty "No ingredients yet."
+      row
+        i.item grow
+        round(i.qty * people / r.serves * 10) / 10 i.unit
+form ingr, "Add ingredient"
+===
+@rich domain=n1_between_jobs_reading topic=pages_between_jobs from=v2-cr-290d099785
+-
+needs: log pages read in 5, 10 or 20 page taps | say where you read: commute, break, lunch or evening | daily page goal setting | bar chart with goal line for the week | reading streak | where you read most
+---
+app "Between Jobs" book grey
+table read pages num 1..500 = 10, spot pick Commute|Break|Lunch|Evening = Commute
+setting goal num 1..200 = 15 "Pages a day"
+state place pick Commute|Break|Lunch|Evening = Commute
+statcard sum(read.pages today), "pages today of" goal, goal
+"Where are you reading?" faint
+choice place
+row gap 1
+  each [5, 10, 20] as k
+    button "+" k "pages" grow tap add read pages = k, spot = place
+section "Last 7 days", "streak" streak(read) "days"
+  goalbars last 7 days, sum(read.pages on it), goal
+section "Where you read", "this month"
+  share read month by spot, sum(it.pages), it.key
+===
+@rich domain=n1_site_diary topic=outdoor_work_costs_diary from=v2-cr-22f24b990d
+-
+needs: note what you did with the site and hours | record the cost of materials and fuel | hours and costs this week | costs split by site | bar chart of hours per day | diary grouped by day
+---
+app "Site Diary" tool ocean
+table log what text, site text?, hours num 0.5..14 = 8 unit "h", cost money = 0 "Costs (materials, fuel)"
+topbar "Site Diary", log, "Note today's work"
+statcard sum(log.hours week), "hours worked this week, costs" sum(log.cost week), 40
+section "Costs by site", "this month"
+  share log month by site, sum(it.cost), it.key
+section "Hours per day", "last 7 days"
+  daybars last 7 days, sum(log.hours on it)
+list log by day, "Nothing noted yet. Tap Note today's work and write what you did and what it cost."
+===
+@rich domain=n1_hour_blocks topic=morning_hour_blocks from=v2-cr-b7f555450b
+-
+needs: log a block with what, start time and minutes | strip showing the morning from 6:00 to 14:00 filled by your blocks | minutes unaccounted for | where the hours went | blocks listed in time order
+---
+app "Hour Blocks" clock mint
+table block what text, start time = 7:00, mins num 5..480 = 30
+let logged = sum(block.mins today)
+topbar "Hour Blocks", block, "Log a block"
+statcard logged, "minutes logged today, unaccounted for:" max(480 - logged, 0), 480
+draw 100, 14
+  rect 0, 0, 100, 14 fill soft radius 3
+  each block today as b
+    rect (hour(b.start) + minute(b.start) / 60 - 6) * 100 / 8, 1, b.mins * 100 / 480, 12 fill accent opacity 0.8 radius 2
+row
+  "6:00" tiny color muted grow
+  "10:00" tiny color muted grow
+  "14:00" tiny color muted
+section "Where the hours went", "today"
+  share block today by what, sum(it.mins), it.key
+each block today sort start as b empty "Nothing logged yet today. Add what you did this morning."
+  row card gap 2 tap edit b swipe remove b
+    b.start bold
+    b.what grow
+    b.mins "min" faint
+===
+@rich domain=n1_due_dates topic=late_today_and_week_tasks from=v2-cr-0f5c5ac54f
+-
+needs: tasks with a due date | reminder the day before and on the day | late tasks listed apart in red | tap Tomorrow to push a late task | what is due in the next 7 days
+---
+app "Due Dates" calendar slate
+table task title text, due date = today, done bool
+remind "A task is due tomorrow" at task.due - 1d at 9:00
+remind "A task is due today" at task.due
+topbar "Due Dates", task, "Add task"
+section "Late", "overdue:" count(task where done = no and due < today)
+  each task where done = no and due < today sort due as t empty "Nothing late. Well done."
+    row card gap 2 tap edit t swipe remove t
+      toggle t.done
+      stack grow gap 0
+        t.title bold color bad
+        "was due" t.due faint
+      button "Tomorrow" tap set t.due = today + 1
+section "Next 7 days"
+  each task where done = no and due >= today and due <= today + 7 sort due as t empty "Nothing due this week."
+    row card gap 2 tap edit t swipe remove t
+      toggle t.done
+      t.title bold grow
+      t.due faint color if(t.due = today, warn, muted)
+===
+@rich domain=n1_quote_maker topic=shop_quote_and_jobs from=v2-cr-954836181d
+-
+needs: price list of items | pick an item, quantity and discount to work out a total | save the quote as a job | job list with value of all jobs | three tabs for quote, prices and jobs
+---
+app "Quote Maker" calc ink
+table item name text, price money
+table job customer text, item ref item, qty num 1..9999 = 1
+state which ref item
+state qty num = 1
+state off num = 0
+screen quote "Quote" calc
+  "Pick an item" faint
+  choice which
+  "Quantity" qty faint
+  slider qty 1..100
+  "Discount" off "%" faint
+  slider off 0..50
+  "Total" round(which.price * qty * (100 - off)) / 100 big
+  button "Save as a job" fill accent tap add job customer = "Walk-in", item = which, qty = qty
+screen items "Prices" tag
+  topbar "Prices", item, "Add item"
+  list item, "No prices yet. Add each thing you sell."
+screen jobs "Jobs" list
+  statcard sum(job, it.qty * it.item.price), "worth of jobs in" count(job) "orders"
+  form job, "Add job"
+  list job by day, "No jobs yet."
+===
+@rich domain=n1_trip_ready topic=trip_packing_and_spending from=v2-cr-e7c07c9ab7
+-
+needs: packing checklist with ticks | days left until leaving | trip budget setting | spending log with a progress bar against the budget | warning when over budget
+---
+app "Trip Ready" plane plum
+table pack what text, packed bool
+table spend what text, amount money
+setting budget money = 50000 "Trip budget"
+setting leave date = 2026-12-24 "Leaving on"
+let spent = sum(spend.amount)
+topbar "Trip Ready", pack, "Add to pack"
+statcard max(leave - today, 0), "days until you leave", 30
+goal spent, budget, if(spent > budget, "over budget", "spent of budget")
+if spent > budget
+  "Over by" spent - budget bold color bad
+section "Packing", "ticked:" count(pack where packed = yes) "of" count(pack)
+  each pack sort packed as p empty "Nothing to pack yet. Add passport, charger, tickets."
+    row gap 2 tap edit p swipe remove p
+      toggle p.packed
+      p.what grow color if(p.packed, muted, ink)
+form spend, "Add spending"
+===
+@rich domain=n1_workshop_shelf topic=workshop_stock_shelves from=v2-cr-2d9b16d9bc
+-
+needs: items with a shelf type, quantity and low level | filter by shelf | plus and minus buttons on every item | items running low in warning colour | stock per shelf chart
+---
+app "Workshop" tool red
+table part name text, kind pick Tools|Fasteners|Paint|Spares = Tools, qty num 0.., low num 0.. = 2
+state shelf pick All|Tools|Fasteners|Paint|Spares = All
+let short = count(part, it.qty <= it.low)
+topbar "Workshop", part, "Add item"
+statcard count(part), "items on the shelves, running low:" short
+choice shelf
+each part where shelf = All or kind = shelf sort qty as p empty "Nothing on this shelf yet. Add what you keep in the workshop."
+  row card gap 1 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold color if(p.qty <= p.low, warn, ink)
+      p.kind faint
+    button "-" tap set p.qty = p.qty - 1
+    p.qty bold
+    button "+" tap set p.qty = p.qty + 1
+section "Stock by shelf"
+  share part by kind, sum(it.qty), it.key
+===
+@rich domain=n1_one_big_count topic=daily_count_ring from=v2-cr-2338f8571b
+-
+needs: name the thing you count | daily goal setting | tap the big ring to add one | ring fills toward the goal | undo the last tap | bar chart with goal line and best day
+---
+app "Daily Count" target orange
+table hit
+setting thing text = "Cups of tea" "What are you counting?"
+setting goal num 1..500 = 8 "Daily goal"
+let n = count(hit today)
+text thing head align center
+draw 100, 100 width 240 tap add hit
+  circle 44 stroke soft thick 8
+  arc 44, 0, 360 * clamp(n / goal, 0, 1) stroke if(n >= goal, good, accent) thick 8
+  label 50, 46, n huge
+  label 50, 66, "of" goal color muted
+"Tap the circle to count one" faint align center
+button "Undo last" tap remove last(hit today)
+section "Last 7 days", "goal met on" count(days last 7 days, count(hit on it) >= goal) "days"
+  goalbars last 7 days, count(hit on it), goal
+"Best day in 30 days:" max(days last 30 days, count(hit on it)) faint
+===
+@rich domain=n1_today_later topic=todo_today_soon_someday from=v2-cr-ba3aeb1091
+-
+needs: add a to do into Today, Soon or Someday | tabs with open counts | tick to finish | one tap to move something to today | clear all finished
+---
+app "Today Later" list yellow
+table todo title text, lane pick Today|Soon|Someday = Today, done bool
+state tab pick Today|Soon|Someday = Today
+topbar "Today Later", todo, "Add to do"
+row gap 1
+  each options todo.lane
+    button it count(todo where lane = it and done = no) fill if(tab = it, ink, surface) grow tap set tab = it
+each todo where lane = tab and done = no as t empty "Nothing here. Enjoy the quiet or add something."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    t.title bold grow
+    if t.lane != Today
+      button "Do today" tap set t.lane = Today
+section "Finished", "done:" count(todo where done = yes)
+  list todo where done = yes top 5, "Nothing finished yet."
+button "Clear finished" tap remove all todo where done = yes
+===
+@rich domain=n1_idea_notes topic=ideas_with_star_rating from=v2-cr-da82fe7147
+-
+needs: write an idea with a title, details and a star rating | search ideas by words | slider to show only ideas with enough stars | best ideas first | count of ideas
+---
+app "Idea Notes" star green
+table idea title text, body long?, stars num 1..5 = 3
+state q text = ""
+state least num = 1
+topbar "Idea Notes", idea, "New idea"
+statcard count(idea), "ideas saved, top rated:" count(idea where stars = 5)
+field q "Search ideas"
+"Show ideas with at least" least "stars" faint
+slider least 1..5
+each idea where stars >= least and (has(title, q) or has(body, q)) sort stars desc as i empty "No ideas match. Write one down before it gets away."
+  stack card gap 0 tap edit i swipe remove i
+    row
+      i.title bold grow
+      i.stars "of 5" faint
+    i.body faint
+===
+@rich domain=n1_thought_sorter topic=thoughts_sorted_by_topic from=v2-cr-35dcb311a9
+-
+needs: create topics | save a thought under a topic | tap a topic to see its thoughts | newest thought first | topics ranked by how many thoughts they hold
+---
+app "Thought Sorter" brain teal
+table topic name text
+table thought topic ref topic, body long
+state sel ref topic
+topbar "Thought Sorter", topic, "New topic"
+choice sel
+each thought where topic = sel sort at desc as t empty "Pick a topic above, or save a thought to one below."
+  stack card gap 0 tap edit t swipe remove t
+    t.body
+    t.at faint
+section "Topics", "thoughts per topic"
+  share topic sort count(it.thought) desc, count(it.thought), it.name
+form thought, "Save a thought"
+===
+@rich domain=n1_health_four topic=weight_food_walk_sleep from=v2-cr-ccc9f7500b
+-
+needs: weight in kg | food with calories | walking minutes against 30 a day | hours slept | chips to pick which one to log | weight trend over 30 days
+---
+app "Health Four" heart blue
+table weigh kg num 20..300
+table meal what text, kcal num 0..3000
+table walk mins num 1..300
+table rest hrs num 0..24
+state logging pick Weight|Food|Walk|Sleep = Weight
+grid 2 gap 1
+  statcard last(weigh.kg), "kg now"
+  statcard sum(meal.kcal today), "kcal today"
+  statcard sum(walk.mins today), "min walked", 30
+  statcard last(rest.hrs), "hours slept"
+choice logging
+if logging = Weight
+  form weigh, "Save weight"
+if logging = Food
+  form meal, "Save meal"
+if logging = Walk
+  form walk, "Save walk"
+if logging = Sleep
+  form rest, "Save sleep"
+section "Weight", "last 30 days"
+  trend weigh last 30 days sort at, it.kg
+section "Walking", "last 7 days"
+  goalbars last 7 days, sum(walk.mins on it), 30
+===
+@rich domain=n1_daily_nudges topic=reminders_by_time_of_day from=v2-cr-6d36e2644e
+-
+needs: add a reminder with a time of day | phone reminder at that time | grouped into morning, afternoon and evening | tick off each one today | count done today
+---
+app "Daily Nudges" bell purple
+table rem what text, clock time = 8:00
+table ack rem ref rem
+remind "Daily reminder, open your list" at rem.clock
+def daypart title text, lo num, hi num
+  section title, "reminders:" count(rem where hour(clock) >= lo and hour(clock) < hi)
+    each rem where hour(clock) >= lo and hour(clock) < hi sort clock as r empty "None in this part of the day."
+      row card gap 2 tap edit r swipe remove r
+        toggle r.ack
+        r.clock bold
+        r.what grow
+topbar "Daily Nudges", rem, "Add reminder"
+statcard count(rem, count(it.ack today) > 0), "of" count(rem) "done today", count(rem)
+daypart "Morning", 0, 12
+daypart "Afternoon", 12, 18
+daypart "Evening", 18, 24
+===
+@rich domain=n1_tap_counter_circle topic=big_tap_counter from=v2-cr-cba5356644
+-
+needs: tap a big circle to count up | step size setting | minus and reset buttons | best count remembered | circle colour changes as the count grows
+---
+app "Tap Counter" target pink dark
+setting step num 1..100 = 1 "Step size"
+state n num = 0
+state best num = 0
+when n > best set best = n
+draw 100, 100 tap set n = n + step
+  circle 46 fill hue(200 + n * 6) opacity 0.35
+  circle 46 stroke accent thick 3
+  label 50, 48, n huge
+  label 50, 68, "tap to count" tiny color muted
+row gap 1
+  button "-" grow tap set n = max(n - step, 0)
+  button "Reset" grow tap set n = 0
+"Best so far:" best bold align center
+button "Reset best" tap set best = 0
+===
+@rich domain=n1_before_the_date topic=countdown_dates_reminders from=v2-cr-87c130b5c7
+-
+needs: add a bill, birthday or appointment with a date | reminder the day before and on the day | days left shown on each | dates in the next 7 days | passed dates kept below
+---
+app "Before the Date" calendar grey
+table event what text, day date
+remind "Something is due tomorrow" at event.day - 1d at 9:00
+remind "Something is due today" at event.day
+topbar "Before the Date", event, "Add date"
+statcard count(event where day >= today and day <= today + 7), "dates in the next 7 days"
+each event where day >= today sort day as e empty "No dates coming up. Add a bill, a birthday or an appointment."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.what bold
+      e.day faint
+    if(e.day = today, "Today", plural(e.day - today, "day")) bold color if(e.day - today <= 3, warn, ink)
+section "Already passed"
+  list event where day < today top 5, "Nothing has passed yet."
+===
+@rich domain=n1_earn_and_spend topic=work_and_spending_record from=v2-cr-12c5ce5b4d
+-
+needs: record money earned with hours worked | record money spent | what you kept this month | earnings per hour | filter earned or spent | month split chart
+---
+app "Earn and Spend" wallet ocean
+table item what text, kind pick Earned|Spent = Earned, amount money, hours num? 0..24
+state f pick All|Earned|Spent = All
+let got = sum(item.amount month where kind = Earned)
+let gone = sum(item.amount month where kind = Spent)
+topbar "Earn and Spend", item, "Add entry"
+statcard got - gone, "kept this month, earned" got ", spent" gone, got
+"You earn about" round(sum(item.amount where kind = Earned) / max(sum(item.hours), 1)) "per hour worked" faint
+choice f
+list item where f = All or kind = f by day, "Nothing here yet. Add what you earned or spent."
+section "Split", "this month"
+  share item month by kind, sum(it.amount), it.key
+===
+@rich domain=n1_book_push topic=reading_streak_nudge from=v2-cr-20132887fd
+-
+needs: add books with their page count | add 10 or 20 pages with one tap | progress bar per book | evening reminder only if you have not read | reading streak and best streak | week dots
+---
+app "Book Push" book mint
+table book title text, total num 1..3000 unit "pages"
+table read book ref book, pages num 1..500 = 10
+remind "Read ten pages tonight, your streak is waiting" at 20:30 if count(read today) = 0
+topbar "Book Push", book, "Add book"
+if(count(read today) > 0, "Nice, you read today", "Not yet today. Ten pages is enough.") head
+streak(read) "day streak, best" best(read) faint
+weekdots count(read on it) > 0
+each book sort sum(it.read.pages) desc as b empty "No books yet. Add the one on your bedside table."
+  stack card gap 2 tap edit b swipe remove b
+    b.title bold
+    goal sum(b.read.pages), b.total, "pages read"
+    row gap 1
+      each [10, 20] as k
+        button "+" k "pages" grow tap add read book = b, pages = k
+===
+@rich domain=n1_gym_sets topic=gym_set_logger from=v2-cr-2cd17be40f
+-
+needs: pick the lift: squat, bench, deadlift, row or press | step the weight and the reps | log a set with one button | volume lifted today | sets per lift today
+---
+app "Gym Sets" dumbbell slate dark
+table lift move pick Squat|Bench|Deadlift|Row|Press = Squat, kg num 0..500 = 40, reps num 1..50 = 8
+state mv pick Squat|Bench|Deadlift|Row|Press = Squat
+state w num = 40
+state r num = 8
+choice mv
+row gap 2 align center
+  "Weight" faint grow
+  button "-" tap set w = max(w - 2.5, 0)
+  w big
+  button "+" tap set w = w + 2.5
+row gap 2 align center
+  "Reps" faint grow
+  button "-" tap set r = max(r - 1, 1)
+  r big
+  button "+" tap set r = r + 1
+button "Log set" fill accent tap add lift move = mv, kg = w, reps = r
+section "Today", "volume:" sum(lift today, it.kg * it.reps) "kg"
+  share lift today by move, count(it), it.key
+  list lift today, "No sets yet. Pick a lift, set the weight and reps, then tap Log set."
+===
+@rich domain=n1_fit_week topic=weekly_workout_plan from=v2-cr-6e45463e82
+-
+needs: plan a workout for each day with type and minutes | week grid showing today highlighted | tap a workout to mark it done | progress of workouts done this week | minutes by type | reset the week
+---
+app "Fit Week" bolt ink
+table plan day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, kind pick Cardio|Strength|Yoga|Rest = Cardio, mins num 5..180 = 30, done bool
+topbar "Fit Week", plan, "Plan a workout"
+goal count(plan where done = yes), count(plan where kind != Rest), "workouts done this week"
+grid 7 gap 1
+  each options plan.day as dd
+    stack gap 1 align center
+      text dd tiny bold color if(dd = dayname(today), accent, muted)
+      each plan where day = dd as p
+        stack radius 8 pad 1 gap 0 fill if(p.done, accent, soft) tap set p.done = not p.done
+          p.kind tiny
+          p.mins tiny
+section "Minutes by type", "done so far"
+  share plan where done = yes by kind, sum(it.mins), it.key
+button "Reset the week" tap set all plan.done = no
+===
+@rich domain=n1_family_board topic=family_list_and_chores from=v2-cr-57f9782fe5
+-
+needs: add family members | shared shopping list anyone can add to and tick | who added each item | chores for each child with ticks | count of chores done per child | three tabs
+---
+app "Family Board" users plum
+table member name text
+table item what text, who ref member, got bool
+table chore what text, kid ref member, done bool
+screen shop "Shopping" cart
+  topbar "Shopping", item, "Add item"
+  each item where got = no as i empty "Nothing needed. Add what the house is out of."
+    row card gap 2 tap edit i swipe remove i
+      toggle i.got
+      i.what bold grow
+      i.who.name faint
+screen kids "Chores" star
+  topbar "Chores", chore, "Add chore"
+  each member as m empty "Add the family on the Family tab first."
+    stack card gap 1
+      row
+        m.name head grow
+        count(m.chore where done = yes) "of" count(m.chore) "done" faint
+      each m.chore as c
+        row gap 2
+          toggle c.done
+          c.what grow
+screen fam "Family" users
+  topbar "Family", member, "Add person"
+  list member, "No one yet. Add each person in the house."
+===
+@rich domain=n1_note_tiles topic=colour_note_tiles from=v2-cr-32c6137c29
+-
+needs: write a note with title and text | pick a colour for the note | pin notes so they come first | search notes | notes shown as tiles
+---
+app "Notes" note red
+table note title text, body long?, tone pick Sun|Sky|Leaf|Rose = Sun, pinned bool
+state q text = ""
+topbar "Notes", note, "New note"
+field q "Search notes"
+grid 2 gap 1
+  each note where has(title, q) or has(body, q) sort pinned desc as n empty "No notes yet. Tap New note and write the first one."
+    stack card gap 0 tap edit n swipe remove n
+      box height 6 radius 3 fill if(n.tone = Sun, yellow, if(n.tone = Sky, blue, if(n.tone = Leaf, green, pink)))
+      n.title bold
+      n.body faint
+      if n.pinned
+        "Pinned" tiny color accent
+===
+@rich domain=n1_work_nudges topic=desk_health_nudges from=v2-cr-6c1df332a5
+-
+needs: reminder to drink water every 2 hours on workdays | reminder to stand up every 90 minutes | reminder to rest your eyes | tap to log water, stand, eyes or pills | counts today and a chart for the week
+---
+app "Work Nudges" heart orange
+table nudge kind pick Water|Stand|Eyes|Pills = Water
+remind "Drink a glass of water" every 2h from 9:00 to 17:00 if weekday(today) <= 5
+remind "Stand up and walk for two minutes" every 90m from 9:30 to 17:30 if weekday(today) <= 5
+remind "Look 20 feet away for 20 seconds" every 1h from 9:00 to 18:00 if weekday(today) <= 5
+"Tap when you did it" faint
+grid 2 gap 1
+  each options nudge.kind as k
+    stack card gap 0 tap add nudge kind = k
+      k bold
+      count(nudge today where kind = k) "today" faint
+weekdots count(nudge on it where kind = Water) >= 4
+section "This week", "done:" count(nudge week)
+  daybars last 7 days, count(nudge on it)
+===
+@rich domain=n1_lift_records topic=lift_personal_bests from=v2-cr-72b693bdc6
+-
+needs: log a lift with weight and reps | personal best for every lift | pick a lift to see its progress line | last weight for that lift | history list
+---
+app "Lift Records" trophy yellow
+table lift move pick Squat|Bench|Deadlift|Press = Squat, kg num 1..500, reps num 1..30 = 1
+state which pick Squat|Bench|Deadlift|Press = Squat
+topbar "Lift Records", lift, "Log a lift"
+section "Personal bests"
+  each options lift.move as m
+    row gap 2
+      text m bold grow
+      max(lift.kg where move = m) "kg" bold
+choice which
+"Best" max(lift.kg where move = which) "kg, last" last(lift.kg where move = which) "kg" head
+trend lift where move = which sort at, it.kg
+list lift where move = which by day, "No lifts logged for this one yet."

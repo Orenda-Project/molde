@@ -1,0 +1,200 @@
+@rich domain=d1_client_bug_hours topic=freelance bug fixes billable hours style=detailed
+freelance: bugs i fix for client sites with the client name, severity and the hours it took. my hourly rate is a setting, show total hours and the amount to invoice for bugs that are fixed, and open bugs per client
+needs: add a bug with client, title, severity and hours | hourly rate setting | amount to invoice for fixed bugs | open bugs per client | tick fixed
+---
+app "Client bugs" tool slate
+table bug client text, title text, sev pick High|Medium|Low = Medium, hours num 0.25..40 unit "h", fixed bool
+setting rate money = 30 "Rate per hour"
+topbar "Client bugs", bug, "Add bug"
+row gap 2
+  statcard sum(bug.hours where fixed = yes) * rate, "to invoice for fixed bugs"
+  statcard sum(bug.hours where fixed = yes), "billable hours"
+section "Open bugs per client"
+  share bug where fixed = no by client, count(it), it.key
+each bug sort at desc as b empty "No bugs yet. Add what a client reports."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.fixed
+    stack grow gap 0
+      b.client bold
+      b.title faint
+    b.hours "h" bold
+===
+@rich domain=d1_weekly_triage topic=weekly triage meeting decisions style=multi_feature
+bug triage meeting every monday. each bug gets a decision: fix now, next sprint, backlog or close. chips to show one decision, counts per decision at the top and the reporter name
+needs: add a bug with title, reporter and decision | counts per decision | chips to filter by decision | change decision with buttons | list of bugs
+---
+app "Triage meeting" users ink
+table bug title text, reporter text, decision pick Fix_now|Next_sprint|Backlog|Close = Backlog
+state f pick All|Fix_now|Next_sprint|Backlog|Close = All
+topbar "Triage meeting", bug, "Add bug"
+scroll
+  each options bug.decision as d
+    stack card gap 0 align center width 20
+      count(bug where decision = d) big
+      d faint
+choice f
+each bug where f = All or decision = f sort at desc as b empty "No bugs under this decision."
+  stack card gap 1 tap edit b swipe remove b
+    row gap 2
+      b.title bold grow
+      b.reporter faint
+    row gap 1
+      each options bug.decision as d
+        button d fill if(b.decision = d, accent, soft) tap set b.decision = d
+===
+@rich domain=d1_device_matrix topic=device regression matrix style=custom_ui
+before a release i test on real phones. rows are device and os version, and a tick when the full regression passed on it. chips for each brand and a pass count out of all devices
+needs: add a device with brand, os version and notes | tick when regression passed | chips for each brand | passed out of all devices | notes under each device
+---
+app "Device matrix" phone plum
+table devrun brand pick Pixel|Samsung|Xiaomi|iPhone|iPad = Pixel, osv text, passed bool, note text?
+state b pick All|Pixel|Samsung|Xiaomi|iPhone|iPad = All
+topbar "Device matrix", devrun, "Add device"
+goal count(devrun where passed = yes), max(count(devrun), 1), "devices passed"
+choice b
+each devrun where b = All or brand = b sort brand as d empty "No devices for this brand. Add the phone you test on."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.passed
+    stack grow gap 0
+      d.brand d.osv bold
+      d.note faint
+===
+@rich domain=d1_release_day_timeline topic=release day timed steps style=detailed
+release day runbook with times: each step has a time like 14:00, an owner and a tick when done. remind me at the time of each step. banner says ready when all ticked, and steps are shown in time order
+needs: add a step with time, name and owner | reminder at each step time | tick when done | ready banner | steps in time order
+---
+app "Release day" clock red
+table rstep name text, owner text?, at_time time, done bool
+remind "Release step is due" at rstep.at_time
+topbar "Release day", rstep, "Add step"
+if count(rstep) > 0 and count(rstep where done = no) = 0
+  stack card pad 2 fill good gap 0
+    "Ready" head
+    "Every step is done." small
+else
+  stack card pad 2 fill soft gap 0
+    count(rstep where done = no) "steps to go" head
+each rstep sort at_time as s empty "No steps yet. Add the first one with its time."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    s.at_time bold
+    stack grow gap 0
+      s.name bold
+      s.owner faint
+===
+@rich domain=d1_deploy_takes topic=deploy duration and rollback style=multi_feature
+log deploys with the service, how long it took (as a duration) and a rollback tick. show the rollbacks this month, average length in minutes and the slowest deploy this month
+needs: log a deploy with service, duration and rollback tick | rollbacks this month | average minutes | slowest deploy | list by day
+---
+app "Deploy takes" timer orange
+table dep service text, took dur, rolled_back bool
+topbar "Deploy takes", dep, "Log deploy"
+row gap 2
+  statcard count(dep month where rolled_back = yes), "rollbacks this month", count(dep month)
+  statcard round(avg(dep.took month) / 1m), "min average deploy"
+section "Slowest this month"
+  each dep month sort took desc top 3 as d empty "No deploys this month."
+    row gap 2
+      d.service bold grow
+      d.took faint
+list dep by day, "No deploys yet."
+===
+@rich domain=d1_standup_dots topic=standup streak per person style=custom_ui
+each person posts a standup line daily and i want a row of dots for the last 7 days next to their name. add people, tap post for today, and show a count of who posted today
+needs: add a person | post button for today | dots for the last 7 days per person | count of people who posted today | tap name to edit
+---
+app "Standup dots" users yellow
+table person name text
+table post person ref person
+topbar "Standup dots", person, "Add person"
+statcard count(person, count(it.post today) > 0), "posted today of" count(person), count(person)
+each person sort name as p empty "No people yet. Add the team."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.name bold grow
+      count(p.post last 7 days) "of 7 days" faint
+      button "Posted" fill if(count(p.post today) > 0, good, soft) tap toggle p.post
+    weekdots count(p.post on it) > 0
+===
+@rich domain=d1_error_budget topic=error budget minutes style=detailed
+error budget for the api: slo as a percent setting (99.9 by default), minutes of downtime allowed per 30 days worked out from it, minutes used this month from my outage log and how much is left, with a progress bar
+needs: log an outage with title and minutes | slo percent setting | allowed minutes per month worked out | progress of budget used | minutes left this month
+---
+app "Error budget" shield green
+table outage title text, minutes num 1..5000 unit "min"
+setting slo num = 99.9 "SLO (%)"
+let allowed = 43200 * (100 - slo) / 100
+let used = sum(outage.minutes month)
+topbar "Error budget", outage, "Log outage"
+goal used, allowed, "min of error budget used", "min"
+row gap 2
+  statcard round(allowed - used), "min left this month"
+  statcard count(outage month), "outages this month"
+if used > allowed
+  "Budget is gone. Freeze risky deploys until next month." color bad bold
+each outage sort at desc as o empty "No outages this month. Budget is untouched."
+  row card gap 2 tap edit o swipe remove o
+    o.title bold grow
+    o.minutes "min" faint
+===
+@rich domain=d1_lessons_learned topic=post-mortem lessons search style=multi_feature
+lessons from our post-mortems in one list: the lesson text, the root cause pick and a tag word. chips by root cause and a search box that looks in lesson and tag
+needs: add a lesson with text, root cause and tag | chips by root cause | search lessons and tags | count per root cause | list newest first
+---
+app "Lessons" brain teal
+table lesson body text, cause pick Config|Code|Capacity|Process|People = Code, tag text?
+state f pick All|Config|Code|Capacity|Process|People = All
+state q text = ""
+topbar "Lessons", lesson, "Add lesson"
+scroll
+  each options lesson.cause as c
+    stack card gap 0 align center width 18
+      count(lesson where cause = c) big
+      c faint
+choice f
+field q "Search lessons"
+each lesson where (f = All or cause = f) and (has(body, q) or has(tag, q)) sort at desc as l empty "No lessons match. Write one after the next post-mortem."
+  stack card gap 0 tap edit l swipe remove l
+    l.body bold
+    l.cause "·" l.tag faint
+===
+@rich domain=d1_datacenter_tiles topic=servers by datacenter tiles style=custom_ui
+server tiles by datacenter: name, location (frankfurt, virginia, singapore) and renewal date. each server is a small tile that turns amber when it renews within 30 days and red when overdue, with a count of servers per location
+needs: add a server with name, location and renewal date | tile per server coloured by renewal | count of servers per location | overdue servers count | tap a tile to edit
+---
+app "Server tiles" grid blue
+table node name text, loc pick Frankfurt|Virginia|Singapore = Frankfurt, renews date
+topbar "Server tiles", node, "Add server"
+row gap 2
+  statcard count(node where renews < today), "overdue renewals", count(node)
+  stack grow gap 0
+    each options node.loc as l
+      row gap 2
+        l grow
+        count(node where loc = l) bold
+grid 3 gap 1
+  each node sort renews as n empty "No servers yet. Add the first one."
+    stack radius 10 pad 1 gap 0 fill if(n.renews < today, bad, if(n.renews < today + 30, warn, soft)) tap edit n swipe remove n
+      n.name bold
+      n.renews faint
+===
+@rich domain=d1_token_timeline topic=access token expiry timeline style=multi_feature
+access tokens given to team members and tools: token name, holder and expiry. a bar chart of how many expire in each of the next 8 weeks, expired ones in red and a count per holder
+needs: add a token with name, holder and expiry | bars of expiries for the next 8 weeks | expired tokens in red | tokens per holder | list sorted by expiry
+---
+app "Token expiry" key purple
+table tok name text, holder text, expires date
+topbar "Token expiry", tok, "Add token"
+row gap 2
+  statcard count(tok where expires < today), "expired tokens"
+  statcard count(tok where expires >= today and expires < today + 56), "expire in 8 weeks", count(tok)
+section "Expiring per week", "next 8 weeks"
+  bars 1..8, count(tok where expires >= today + 7 * (it - 1) and expires < today + 7 * it), join("w", it)
+section "Per holder"
+  share tok by holder, count(it), it.key
+each tok sort expires as t empty "No tokens yet. Add each token with its expiry."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold color if(t.expires < today, bad, ink)
+      t.holder faint
+    t.expires faint

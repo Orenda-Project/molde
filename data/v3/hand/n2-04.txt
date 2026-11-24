@@ -1,0 +1,517 @@
+@rich domain=n2_stock_take topic=stock_count_variance from=v2-cr-b49dceb510
+-
+needs: add items with the quantity on the books | count each item with plus, minus or a match button | shows how many items are counted and how many differ | difference per item in red when it does not match
+---
+app "Stock Take" box grey
+table item name text, expected num 0.. = 0 "On the books", counted num? 0.. "Counted"
+let counted_n = count(item where counted >= 0)
+let off = count(item, it.counted != it.expected)
+topbar "Stock Take", item, "Add item"
+statcard counted_n, "of" count(item) "items counted," off "differ", count(item)
+each item sort name as i empty "No items yet. Add what should be on the shelf, then count it."
+  stack card gap 1 tap edit i swipe remove i
+    row gap 2
+      i.name bold grow
+      "Books" i.expected faint
+    row gap 2
+      button "-" tap set i.counted = max(if(i.counted >= 0, i.counted, i.expected) - 1, 0)
+      "Counted" i.counted bold color if(i.counted = i.expected, good, if(i.counted >= 0, bad, muted)) grow
+      button "+" tap set i.counted = if(i.counted >= 0, i.counted, i.expected) + 1
+      button "Match" tap set i.counted = i.expected
+===
+@rich domain=n2_bite_spend_mood topic=food_spend_and_mood from=v2-cr-cb4c8fec66
+-
+needs: log what I ate with cost, mood and on-the-go tick | food spent today | share of spending by mood | on-the-go meals this week and average cost | bars of daily food spend
+---
+app "Bite Spend Mood" food teal
+table bite what text, cost money, mood pick Great|Okay|Low = Okay, onthego bool "Eaten on the go"
+topbar "Bite Spend Mood", bite, "Log a bite"
+statcard sum(bite.cost today), "spent on food today," count(bite today) "bites"
+row gap 2
+  stat count(bite week where onthego = yes), "on-the-go meals this week"
+  stat round(avg(bite.cost week)), "average per bite"
+section "Money by mood", "this month"
+  share bite month by mood, sum(it.cost), it.key
+section "Food spend per day"
+  daybars last 7 days, sum(bite.cost on it)
+list bite by day, "Nothing logged yet. Tap Log a bite after you eat."
+===
+@rich domain=n2_pocket_calculator topic=four_function_calculator from=v2-cr-36029b2676
+-
+needs: number keypad | add, subtract, multiply and divide | equals shows the result | clear and backspace | shows the previous number and the operation
+---
+app "Pocket Calculator" calc slate
+state buf num = 0
+state acc num = 0
+state op pick None|Add|Sub|Mul|Div = None
+let result = if(op = Add, acc + buf, if(op = Sub, acc - buf, if(op = Mul, acc * buf, if(op = Div, acc / buf, buf))))
+stack card gap 0 align end
+  acc if(op = Add, "+", if(op = Sub, "-", if(op = Mul, "x", if(op = Div, "/", "")))) faint
+  buf huge
+grid 4 gap 1
+  button "7" tap set buf = buf * 10 + 7
+  button "8" tap set buf = buf * 10 + 8
+  button "9" tap set buf = buf * 10 + 9
+  button "/" fill soft tap set acc = result then set buf = 0 then set op = Div
+  button "4" tap set buf = buf * 10 + 4
+  button "5" tap set buf = buf * 10 + 5
+  button "6" tap set buf = buf * 10 + 6
+  button "x" fill soft tap set acc = result then set buf = 0 then set op = Mul
+  button "1" tap set buf = buf * 10 + 1
+  button "2" tap set buf = buf * 10 + 2
+  button "3" tap set buf = buf * 10 + 3
+  button "-" fill soft tap set acc = result then set buf = 0 then set op = Sub
+  button "C" fill bad tap set buf = 0 then set acc = 0 then set op = None
+  button "0" tap set buf = buf * 10
+  button "<" tap set buf = floor(buf / 10)
+  button "+" fill soft tap set acc = result then set buf = 0 then set op = Add
+button "=" fill accent tap set buf = result then set acc = 0 then set op = None
+===
+@rich domain=n2_fasting_diary topic=fasting_feelings_diary from=v2-cr-c7a9851420
+-
+needs: write a fast with hours, energy, hunger and a note | fasts and average hours this month | bars of how hungry I felt | energy line over 30 days | list by day
+---
+app "Fasting Diary" pen plum
+table fast hours num 1..72, energy num 1..5 = 3 "Energy", hunger num 1..5 = 3 "Hunger", note long?
+topbar "Fasting Diary", fast, "Write a fast"
+statcard count(fast month), "fasts this month · average" fixed(avg(fast.hours month), 1) "h"
+section "How hungry", "number of fasts at each level"
+  bars 1..5, count(fast where hunger = it), it
+section "Energy", "last 30 days"
+  trend fast last 30 days sort at, it.energy
+list fast by day, "No fasts written yet. Add the first one and how it felt."
+===
+@rich domain=n2_rest_and_reps topic=rest_timer_with_set_targets from=v2-cr-72a80f7ce0
+-
+needs: pick a rest length from 60 to 180 seconds | countdown timer with a notice when rest is over | log a set with weight, reps and target reps | shows how many sets hit the target today | list of today's sets with hit or miss
+---
+app "Rest and Reps" timer orange
+table rset move text, kg num 0..500, reps num 1..50, goal num 1..50 = 8 "Target reps"
+state rest num = 90
+row gap 1
+  each [60, 90, 120, 180]
+    button it "s" fill if(rest = it, accent, soft) grow tap set rest = it
+timer 1s * rest, join(rest, " second rest"), notify "Rest is over. Next set."
+topbar "Rest and Reps", rset, "Log set"
+statcard count(rset today where reps >= goal), "of" count(rset today) "sets hit the target today", count(rset today)
+each rset today sort at desc as s empty "No sets yet today. Log one after you lift."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.move bold
+      s.kg "kg ·" s.reps "of" s.goal "reps" faint
+    if(s.reps >= s.goal, "Hit", "Missed") bold color if(s.reps >= s.goal, good, warn)
+===
+@rich domain=n2_remember_box topic=things_to_remember_nudges from=v2-cr-3ff39bc673
+-
+needs: add things to remember and mark the important ones | tick them off | one-tap nudge in one hour or three hours | morning reminder when important things are open | counts of open and important
+---
+app "Remember Box" brain green
+table thing what text, important bool, done bool
+remind "You have important things to remember" at 9:00 if count(thing where important = yes and done = no) > 0
+topbar "Remember Box", thing, "Remember this"
+statcard count(thing where done = no), "things to remember," count(thing where important = yes and done = no) "important"
+each thing where done = no sort at desc as t empty "Nothing to remember. Add what keeps slipping your mind."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 2
+      toggle t.done
+      t.what bold grow
+      if t.important
+        "Important" small color bad
+    row gap 1
+      button "Nudge in 1h" small tap remind "Look at your Remember Box" in 1h
+      button "Nudge in 3h" small tap remind "Look at your Remember Box" in 3h
+section "Done", "so far:" count(thing where done = yes)
+  list thing where done = yes, "Nothing ticked off yet."
+===
+@rich domain=n2_home_rooms topic=household_stuff_by_room from=v2-cr-4eeb18d434
+-
+needs: add stuff with room and quantity | room tiles with counts | tap a room to filter | search by name | total items and number of kinds
+---
+app "Home Rooms" home yellow
+table stuff name text, room pick Kitchen|Bedroom|Living|Bath|Store = Kitchen, qty num 1.. = 1
+state r text = All
+state q text = ""
+topbar "Home Rooms", stuff, "Add stuff"
+statcard sum(stuff.qty), "things in" plural(count(stuff), "kind")
+scroll gap 1
+  button "All" fill if(r = All, ink, soft) tap set r = All
+  each options stuff.room as rm
+    stack card pad 1 gap 0 align center fill if(r = rm, accent, surface) tap set r = rm
+      rm small
+      count(stuff where room = rm) big
+field q "Find something"
+each stuff where (r = All or room = r) and has(name, q) sort name as s empty "Nothing here. Add what you have in this room."
+  row card gap 2 tap edit s swipe remove s
+    s.name bold grow
+    s.room faint
+    s.qty bold
+===
+@rich domain=n2_sticky_notes topic=coloured_sticky_notes from=v2-cr-1c80e82066
+-
+needs: write a sticky note and pick its colour | sticky notes laid out as coloured squares | tap to edit and swipe to remove | count by colour
+---
+app "Sticky Notes" note orange
+table sticky text long, shade pick Yellow|Blue|Green|Pink = Yellow
+topbar "Sticky Notes", sticky, "New sticky"
+row gap 1
+  each options sticky.shade
+    stack grow card gap 0 align center
+      it small
+      count(sticky where shade = it) big
+grid 2 gap 2
+  each sticky sort at desc as n empty "No stickies yet. Stick the first one."
+    stack radius 12 pad 2 gap 1 fill if(n.shade = Yellow, yellow, if(n.shade = Blue, blue, if(n.shade = Green, green, pink))) tap edit n swipe remove n
+      n.text
+      n.at tiny
+===
+@rich domain=n2_rock_paper_scissors topic=rock_paper_scissors_game from=v2-cr-f9ea18e94e
+-
+needs: three buttons for rock, paper and scissors | the computer picks at random | says who won each round | tally of wins, draws and losses | start a new game
+---
+app "Rock Paper Scissors" game blue
+table play me num 1..3, cpu num 1..3
+let nm(x num) = if(x = 1, "Rock", if(x = 2, "Paper", "Scissors"))
+let wins = count(play, (it.me - it.cpu + 3) % 3 = 1)
+let loses = count(play, (it.me - it.cpu + 3) % 3 = 2)
+let draws = count(play) - wins - loses
+row gap 2
+  statcard wins, "wins"
+  statcard draws, "draws"
+  statcard loses, "losses"
+if count(play) > 0
+  "You" nm(last(play.me)) "vs computer" nm(last(play.cpu)) head
+  if((last(play.me) - last(play.cpu) + 3) % 3 = 1, "You win this round", if((last(play.me) - last(play.cpu) + 3) % 3 = 2, "Computer wins this round", "A draw")) big
+else
+  "Pick one to play the first round." head
+grid 3 gap 1
+  each [1, 2, 3] as k
+    button nm(k) fill accent tap add play me = k, cpu = random(3)
+button "New game" tap remove all play
+===
+@rich domain=n2_home_fixit topic=home_repair_jobs_and_parts from=v2-cr-07e91adbd7
+-
+needs: add repair jobs with room and cost | move a job to waiting or done | add parts to buy with a tick | counts of open jobs and parts to buy | total spent on finished jobs
+---
+app "Home Fix-It" tool red
+table job what text, room text?, status pick To_do|Waiting|Done = To_do, cost money?
+table part job ref job, item text, bought bool
+screen jobs "Jobs" tool
+  topbar "Repair jobs", job, "Add job"
+  row gap 2
+    statcard count(job where status != Done), "jobs open"
+    statcard sum(job.cost where status = Done), "spent on finished jobs"
+  each job where status != Done sort at as j empty "No open jobs. Add the drip, the door and the light."
+    stack card gap 1 tap edit j swipe remove j
+      row gap 2
+        j.what bold grow
+        j.status faint
+      j.room faint
+      row gap 1
+        button "Waiting for parts" small tap set j.status = Waiting
+        button "Done" small fill accent tap set j.status = Done
+screen parts "Parts" box
+  topbar "Parts to buy", part, "Add part"
+  statcard count(part where bought = no), "parts still to buy"
+  each part sort bought as p empty "No parts listed."
+    row card gap 2 tap edit p swipe remove p
+      toggle p.bought
+      stack grow gap 0
+        p.item bold
+        p.job.what faint
+===
+@rich domain=n2_budget_switch topic=daily_or_monthly_budget from=v2-cr-08ffdc22ef
+-
+needs: monthly budget setting | switch between daily and monthly view | shows spent against the daily share or the whole month | bars with the daily line or a chart of the month | add spending
+---
+app "Budget Switch" wallet ink
+table spend what text, amount money
+setting monthly money = 60000 "Monthly budget"
+state view pick Daily|Monthly = Daily
+let daily = monthly / monthdays(today)
+topbar "Budget Switch", spend, "Add spending"
+choice view
+if view = Daily
+  statcard sum(spend.amount today), "spent today of" round(daily), round(daily)
+  section "Last 7 days", "against your daily share"
+    goalbars last 7 days, sum(spend.amount on it), daily
+  list spend today, "Nothing spent today."
+else
+  statcard sum(spend.amount month), "spent this month of" monthly, monthly
+  section "This month", "per day"
+    daybars month, sum(spend.amount on it)
+  list spend month by day, "Nothing spent this month."
+===
+@rich domain=n2_week_planner topic=week_planner_by_day from=v2-cr-651f6c4310
+-
+needs: add things to do on a day with an optional time | seven day cards with what is planned | tick things done | count of things left each day | clear all done things
+---
+app "Week Planner" calendar ocean
+table plan day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, what text, time time?, done bool
+topbar "Week Planner", plan, "Plan something"
+statcard count(plan where done = yes), "of" count(plan) "planned things done", count(plan)
+each options plan.day as dd
+  stack card gap 1 fill if(dd = dayname(today), soft, surface)
+    row
+      dd bold grow
+      count(plan where day = dd and done = no) "left" faint
+    each plan where day = dd sort time as p empty "Free day."
+      row gap 2 tap edit p swipe remove p
+        toggle p.done
+        p.time faint
+        p.what grow
+button "Clear done things" tap remove all plan where done = yes
+===
+@rich domain=n2_hostel_money topic=hostel_allowance_per_day from=v2-cr-cb770ead89
+-
+needs: add spending with kind | monthly allowance cap with progress | how much can be spent per day for the rest of the month | share by kind | three biggest spends
+---
+app "Hostel Money" bag mint
+table spend what text, amount money, kind pick Mess|Print|Travel|Snacks|Other = Mess
+setting cap money = 15000 "Monthly allowance"
+let spent = sum(spend.amount month)
+let days_left = monthdays(today) - monthday(today) + 1
+topbar "Hostel Money", spend, "Add spending"
+statcard spent, "spent of" cap "this month", cap
+"You can spend about" round(max(cap - spent, 0) / days_left) "a day for" plural(days_left, "more day") head
+section "Where it goes", "this month"
+  share spend month by kind, sum(it.amount), it.key
+section "Biggest spends"
+  each spend month sort amount desc top 3 as s empty "Nothing spent yet this month."
+    row gap 2
+      s.what grow
+      s.amount bold
+===
+@rich domain=n2_money_lent topic=loans_and_repayments from=v2-cr-2d375b5673
+-
+needs: record money lent with the person and amount | record repayments with one tap | remaining balance per person | totals still owed and paid back | list of payments received
+---
+app "Money Lent" money pink
+table loan who text, amount money, note text?
+table repay loan ref loan, amount money
+let lent = sum(loan.amount)
+let back = sum(repay.amount)
+topbar "Money Lent", loan, "Lend money"
+row gap 2
+  statcard lent - back, "still owed to me"
+  statcard back, "paid back so far"
+each loan sort at as l empty "No loans yet. Add who borrowed and how much."
+  stack card gap 1 tap edit l swipe remove l
+    row gap 2
+      l.who bold grow
+      l.amount - sum(l.repay.amount) bold color if(l.amount - sum(l.repay.amount) > 0, warn, good)
+    goal sum(l.repay.amount), l.amount, "paid back"
+    row gap 1
+      button "+500" small tap add repay loan = l, amount = 500
+      button "+1000" small tap add repay loan = l, amount = 1000
+      button "Paid in full" small fill accent tap add repay loan = l, amount = l.amount - sum(l.repay.amount)
+section "Payments received"
+  list repay top 5, "No payments yet."
+===
+@rich domain=n2_spend_calendar topic=spending_heat_calendar from=v2-cr-e7188312de
+-
+needs: add spending with a name and amount | month navigation | total for the month | calendar grid darker on big spending days | the five biggest spends | list by day
+---
+app "Spend Calendar" calendar purple
+table spend what text, amount money
+state m date = today
+topbar "Spend Calendar", spend, "Add spending"
+monthnav m
+statcard sum(spend.amount month of m), "spent in" monthname(m)
+daygrid month of m, sum(spend.amount on it), max(sum(spend.amount month of m) / monthdays(m) * 2, 1)
+section "Biggest five"
+  each spend month of m sort amount desc top 5 as s empty "Nothing spent this month."
+    row gap 2
+      s.what grow
+      s.amount bold
+list spend month of m by day, "Nothing spent this month."
+===
+@rich domain=n2_task_board topic=todo_doing_done_board from=v2-cr-08ea5f346a
+-
+needs: add a task | three stages Todo, Doing and Done with counts | tap a stage to see its tasks | one button moves a task to the next stage | reopen a finished task
+---
+app "Task Board" list green
+table task title text, stage pick Todo|Doing|Done = Todo
+state s text = Todo
+topbar "Task Board", task, "Add task"
+row gap 1
+  each options task.stage
+    stack grow card gap 0 align center fill if(s = it, accent, surface) tap set s = it
+      count(task where stage = it) big
+      it small
+each task where stage = s sort at desc as t empty "No tasks in this stage."
+  row card gap 2 tap edit t swipe remove t
+    t.title bold grow
+    if t.stage = Todo
+      button "Start" tap set t.stage = Doing
+    if t.stage = Doing
+      button "Finish" fill accent tap set t.stage = Done
+    if t.stage = Done
+      button "Reopen" tap set t.stage = Todo
+===
+@rich domain=n2_step_goal topic=daily_steps_goal from=v2-cr-29814bdeba
+-
+needs: one-tap buttons to add steps | add another amount | daily step goal setting | distance walked in km | goal bars over 7 days | count of days the goal was met
+---
+app "Step Goal" walk teal
+table walk steps num 1..100000
+setting goal num = 8000 "Daily step goal"
+let total = sum(walk.steps today)
+topbar "Step Goal", walk, "Other amount"
+statcard total, "steps of" goal "today", goal
+"About" round(total * 0.0008 * 10) / 10 "km walked today" faint
+quick walk, steps, [500, 1000, 2000]
+section "Last 7 days", "goal met on" count(days last 7 days, sum(walk.steps on it) >= goal) "days"
+  goalbars last 7 days, sum(walk.steps on it), goal
+===
+@rich domain=n2_day_timeline topic=quick_day_timeline from=v2-cr-03bb0dd587
+-
+needs: tap what just happened | optional note on each moment | timeline of today with times | moments per day over a week
+---
+app "Day Timeline" clock blue
+table moment what pick Woke|Ate|Worked|Walked|Rested|Slept = Ate, note text?
+topbar "Day Timeline", moment, "Add with a note"
+scroll gap 1
+  each options moment.what as w
+    button w tap add moment what = w
+section "Today", plural(count(moment today), "moment")
+  each moment today sort at as m empty "Nothing logged yet today. Tap what just happened."
+    row gap 2 tap edit m swipe remove m
+      m.at faint
+      m.what bold
+      m.note faint grow
+section "Last 7 days", "moments per day"
+  daybars last 7 days, count(moment on it)
+===
+@rich domain=n2_notebooks topic=notebooks_with_pages from=v2-cr-94236d0713
+-
+needs: make notebooks | add pages with a title and text | latest pages shown under each notebook | page count per notebook | search all pages
+---
+app "Notebooks" book slate
+table notebook name text
+table page notebook ref notebook, title text, body long
+state q text = ""
+topbar "Notebooks", notebook, "New notebook"
+field q "Search all pages"
+if len(q) > 0
+  each page where has(title, q) or has(body, q) sort at desc as f empty "No page matches."
+    row card gap 2 tap edit f
+      f.title bold grow
+      f.notebook.name faint
+each notebook sort name as nb empty "No notebooks yet. Make one for each subject or project."
+  stack card gap 1 tap edit nb swipe remove nb
+    row gap 2
+      nb.name head grow
+      plural(count(nb.page), "page") faint
+    each nb.page sort at desc top 3 as p
+      row gap 2 tap edit p
+        p.title grow
+        p.at faint
+form page, "Add page"
+===
+@rich domain=n2_trip_sortout topic=trip_tasks_by_kind from=v2-cr-d9abc20824
+-
+needs: add trip tasks by kind: documents, booking, packing, money | tick them done | progress bar per kind | days to go and things left | list of open tasks
+---
+app "Trip Sort-Out" map yellow
+table todo what text, kind pick Documents|Booking|Packing|Money|Other = Packing, done bool
+setting leave date = today "Leaving on"
+topbar "Trip Sort-Out", todo, "Add task"
+statcard leave - today, "days to go ·" count(todo where done = no) "things left"
+grid 2 gap 1
+  each options todo.kind as k
+    stack card gap 1
+      row gap 1
+        k bold grow
+        count(todo where kind = k and done = yes) "of" count(todo where kind = k) faint
+      goal count(todo where kind = k and done = yes), max(count(todo where kind = k), 1), "done"
+each todo where done = no sort kind as t empty "Everything is sorted. Safe travels."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    t.what bold grow
+    t.kind faint
+===
+@rich domain=n2_idea_ranker topic=rate_and_rank_ideas from=v2-cr-d1900f1997
+-
+needs: add an idea with why and a score from 1 to 5 | slider to show only ideas above a score | best ideas first | mark an idea as tried | bars of how many ideas at each score
+---
+app "Idea Ranker" star orange
+table idea title text, why long?, score num 1..5 = 3 "Score (1 to 5)", tried bool
+state min num = 1
+topbar "Idea Ranker", idea, "Add idea"
+statcard round(avg(idea.score) * 10) / 10, "average score across" plural(count(idea), "idea")
+section "Scores", "how many at each"
+  bars 1..5, count(idea where score = it), it
+"Show ideas scoring at least" min faint
+slider min 1..5
+each idea where score >= min and tried = no sort score desc as i empty "No ideas at this score. Lower the slider or add one."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.title bold
+      i.why faint
+    i.score big
+    toggle i.tried
+===
+@rich domain=n2_farm_log topic=farm_work_and_costs from=v2-cr-b935302966
+-
+needs: log what was done with the plot, kind of cost and amount | spent this month | share of cost by plot | share of cost by kind | list by day
+---
+app "Farm Log" plant green dark
+table farmday what text, spent money = 0, place pick North|South|River|Orchard|Barn = North, kind pick Seed|Labour|Fuel|Feed|Repair|Other = Labour, note text?
+topbar "Farm Log", farmday, "Log work"
+statcard sum(farmday.spent month), "spent this month ·" count(farmday today) "jobs today"
+section "By plot", "this month"
+  share farmday month by place, sum(it.spent), it.key
+section "By kind", "this month"
+  share farmday month by kind, sum(it.spent), it.key
+list farmday by day, "Nothing logged yet. Write down today's work before you forget."
+===
+@rich domain=n2_time_blocks topic=useful_and_wasted_time from=v2-cr-8118e1d28e
+-
+needs: log a block of time with minutes and whether it was useful, needed or wasted | wasted minutes against the day's total | share by kind today | wasted minutes over 14 days | biggest time eaters this week
+---
+app "Where Time Goes" hourglass red
+table block what text, mins num 5..720 = 30, kind pick Useful|Needed|Wasted = Useful
+topbar "Where Time Goes", block, "Log time"
+statcard sum(block.mins today where kind = Wasted), "minutes wasted of" sum(block.mins today) "logged today", sum(block.mins today)
+section "Today"
+  share block today by kind, sum(it.mins), it.key
+section "Wasted minutes", "last 14 days"
+  daybars last 14 days, sum(block.mins on it where kind = Wasted)
+section "Time eaters", "this week"
+  share block week where kind = Wasted by what, sum(it.mins), it.key
+===
+@rich domain=n2_fifty_two_weeks topic=fifty_two_week_savings from=v2-cr-5509698c43
+-
+needs: 52 boxes to tap as each week is saved | weekly step amount setting | shows total saved against the full target | the amount for each week shown on its box
+---
+app "52 Week Savings" coin purple
+table paid wk num 1..52
+setting step money = 100 "Weekly step"
+let total = sum(paid, it.wk * step)
+statcard total, "saved of" 1378 * step, 1378 * step
+"Week 1 saves one step, week 52 saves 52 steps. Tap a week when you save it." faint
+grid 7 gap 1
+  each 1..52 as c
+    stack radius 8 pad 1 gap 0 align center fill if(count(paid where wk = c) > 0, accent, soft) tap toggle paid all where wk = c
+      text c bold
+      c * step tiny
+field step
+===
+@rich domain=n2_counters topic=multiple_tap_counters from=v2-cr-8c724edf57
+-
+needs: make named counters with a step size | big plus and minus buttons | big number for each counter | reset a counter | total of all counters
+---
+app "Counters" plus grey dark
+table counter name text, step num 1..100 = 1
+table bump counter ref counter, delta num -100..100
+topbar "Counters", counter, "New counter"
+statcard sum(bump.delta), "in all" plural(count(counter), "counter")
+each counter sort name as c empty "No counters yet. Make one for anything you want to count."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 2
+      c.name bold grow
+      sum(c.bump.delta) huge
+    row gap 1
+      button "-" grow tap add bump counter = c, delta = 0 - c.step
+      button "+" fill accent grow tap add bump counter = c, delta = c.step
+      button "Reset" tap remove all bump where counter = c

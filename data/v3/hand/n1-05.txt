@@ -1,0 +1,222 @@
+@rich domain=n1_trip_countdown topic=trip_countdown_checklist from=v2-cr-113c0aa7ad
+-
+needs: set the day the trip starts | days to go | to do list with due dates and reminders | one tap starter items like tickets, hotel and visa | done out of total
+---
+app "Trip Countdown" plane slate
+table task what text, due date, done bool
+setting leave date = 2026-12-20 "Trip starts"
+remind "A trip task is due tomorrow" at task.due - 1d at 9:00
+topbar "Trip Countdown", task, "Add to list"
+statcard max(leave - today, 0), "days to go, still to do:" count(task where done = no), 60
+goal count(task where done = yes), count(task), "booked or done"
+"Quick add" faint
+scroll gap 1
+  each ["Tickets", "Hotel", "Visa", "Insurance", "Currency"] as sug
+    button sug tap add task what = sug, due = leave - 14
+each task where done = no sort due as t empty "Nothing left to do. Add a task or tap a starter above."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    stack grow gap 0
+      t.what bold
+      "Due" t.due faint color if(t.due < today, bad, muted)
+section "Done", "ticked off:" count(task where done = yes)
+  list task where done = yes top 5, "Nothing done yet."
+===
+@rich domain=n1_set_timer_slider topic=big_timer_with_slider from=v2-cr-f333d314b8
+-
+needs: slider to set the minutes | preset buttons for 1, 5, 15, 30 and 60 minutes | countdown with start pause and reset | notification when it ends | timers finished today
+---
+app "Set Timer" timer ink dark
+table ran mins num 1..600
+state mins num = 10
+row gap 1
+  each [1, 5, 15, 30, 60] as m
+    button m grow fill if(mins = m, accent, soft) tap set mins = m
+slider mins 1..120
+timer 1m * mins, "Timer for" mins "minutes", add ran mins = mins then notify "Time is up"
+section "Finished today", "minutes:" sum(ran.mins today)
+  list ran today, "No timers finished yet. Set the minutes and press Start."
+===
+@rich domain=n1_holiday_picker topic=compare_holiday_costs from=v2-cr-287bd0112e
+-
+needs: add destinations with flight price, hotel per night and nights | total cost of each | cheapest first | budget setting with over budget in red | vote for favourites | chart comparing totals
+---
+app "Holiday Picker" plane plum
+table dest name text, flight money, night money "Hotel per night", nights num 1..30 = 5, votes num 0..99 = 0
+setting budget money = 150000 "Holiday budget"
+let cost(d dest) = d.flight + d.night * d.nights
+topbar "Holiday Picker", dest, "Add destination"
+each dest sort cost(it) as d empty "No destinations yet. Add two or three and compare them."
+  stack card gap 1 tap edit d swipe remove d
+    row
+      d.name bold grow
+      cost(d) bold color if(cost(d) > budget, bad, ink)
+    d.nights "nights, flight" d.flight "+ hotel" d.night "a night" faint
+    row gap 2 align center
+      button "Vote" tap set d.votes = d.votes + 1
+      d.votes "votes" faint
+section "Compare totals", "budget" budget
+  bars dest sort cost(it), cost(it), it.name
+===
+@rich domain=n1_hostel_timetable topic=hostel_study_timetable from=v2-cr-69adf4c2dc
+-
+needs: add classes, study, meals and sleep blocks on weekdays | today's blocks in time order with coloured markers | reminder when a block starts | planned study hours | week overview of blocks per day
+---
+app "Hostel Timetable" school red
+table block wd pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon "Day", kind pick Class|Study|Meal|Sleep = Class, what text, start time = 9:00, mins num 15..300 = 60
+remind "A block on your timetable is starting" at block.start
+topbar "Hostel Timetable", block, "Add block"
+"Today" head
+each block where wd = dayname(today) sort start as b empty "Nothing planned today. Add a class or a study block."
+  row card gap 2 tap edit b swipe remove b
+    box width 8 radius 4 fill if(b.kind = Class, accent, if(b.kind = Study, good, soft))
+    b.start bold
+    stack grow gap 0
+      b.what bold
+      b.kind "," b.mins "min" faint
+section "Study hours planned", "per week:" round(sum(block.mins where kind = Study) / 6) / 10
+  share block where kind = Study by wd, sum(it.mins), it.key
+grid 7 gap 1
+  each options block.wd as dd
+    stack gap 0 align center
+      text dd tiny color muted
+      count(block where wd = dd) bold
+===
+@rich domain=n1_quick_maths topic=percent_convert_basic_maths from=v2-cr-b9ea2786ea
+-
+needs: percentage of an amount with add and take off | unit conversions kilometres to miles, kilograms to pounds and Celsius to Fahrenheit | add, subtract, multiply, divide and remainder of two numbers | three tabs
+---
+app "Quick Maths" calc orange dark
+state amt num = 0
+state pct num = 10
+state km num = 0
+state kg num = 0
+state deg num = 0
+state x num = 0
+state y num = 0
+screen percent "Percent" calc
+  field amt "Amount"
+  "Percent" pct "%" faint
+  slider pct 0..100
+  "That is" round(amt * pct) / 100 big
+  "Adding it gives" round(amt * (100 + pct)) / 100 faint
+  "Taking it off gives" round(amt * (100 - pct)) / 100 faint
+screen convert "Convert" scale
+  field km "Kilometres"
+  km "km is" round(km * 62.1371) / 100 "miles" head
+  field kg "Kilograms"
+  kg "kg is" round(kg * 220.462) / 100 "pounds" head
+  field deg "Celsius"
+  deg "C is" round(deg * 18 + 320) / 10 "F" head
+screen basic "Basics" plus
+  field x "First number"
+  field y "Second number"
+  "Sum" x + y big
+  "Difference" x - y faint
+  "Product" x * y faint
+  "Quotient" round(x / max(y, 0.000001) * 1000) / 1000 faint
+  "Remainder" x % max(y, 1) faint
+===
+@rich domain=n1_gym_routine_days topic=gym_routine_by_weekday from=v2-cr-88c5c703bf
+-
+needs: build a routine of exercises per weekday with sets and reps | today's workout with ticks | progress of today's exercises done | total sets planned today | exercises per day overview
+---
+app "Gym Routine" dumbbell yellow
+table move day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, name text, sets num 1..10 = 3, reps num 1..50 = 10
+table did move ref move
+let todays = count(move where day = dayname(today))
+topbar "Gym Routine", move, "Add exercise"
+goal count(move, it.day = dayname(today) and count(it.did today) > 0), todays, "exercises done today"
+"Sets planned today:" sum(move where day = dayname(today), it.sets) faint
+each move where day = dayname(today) as m empty "Rest day. Add exercises for today to build the routine."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.did
+    stack grow gap 0
+      m.name bold
+      m.sets "x" m.reps faint
+section "Your week", "exercises per day"
+  grid 7 gap 1
+    each options move.day as dd
+      stack gap 0 align center
+        text dd tiny color if(dd = dayname(today), accent, muted)
+        count(move where day = dd) bold
+===
+@rich domain=n1_day_diary_quick topic=quick_what_i_did_diary from=v2-cr-fd41b8f067
+-
+needs: one tap buttons for common things like worked, cooked or walked | write anything else | list grouped by day | things done today and streak | 5 week grid of active days
+---
+app "What I Did" pen green
+table did what text
+topbar "What I Did", did, "Write something"
+statcard count(did today), "things done today, streak" streak(did)
+"Tap what you did" faint
+quick did, what, ["Worked", "Cooked", "Walked", "Cleaned", "Read"]
+section "Last 5 weeks"
+  daygrid last 35 days, count(did on it), 4
+list did by day, "Nothing yet. Tap what you did today."
+===
+@rich domain=n1_stuff_to_remember topic=monthly_and_weekly_nudges from=v2-cr-9a1e0f8032
+-
+needs: list the stuff to remember with a kind | monthly reminder on the 1st and 15th | weekly planning reminder you can switch off | bin day reminder | tick each as checked this month
+---
+app "Stuff to Remember" bell teal
+table stuff what text, kind pick Home|Money|Car|Health = Home
+table check stuff ref stuff
+setting weekly bool = yes "Sunday planning reminder"
+remind "Monthly check: rent, subscriptions, filters" monthly on 1, 15 at 10:00
+remind "Plan the week" at 18:00 on sun if weekly
+remind "Take out the bins" at 19:00 on tue
+topbar "Stuff to Remember", stuff, "Add stuff"
+statcard count(stuff, count(it.check month) > 0), "of" count(stuff) "checked this month", count(stuff)
+each stuff sort kind as s empty "Add the things you always forget, like the car service."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.check month
+    stack grow gap 0
+      s.what bold
+      s.kind faint
+===
+@rich domain=n1_house_bills_month topic=monthly_house_bills_checklist from=v2-cr-9ec9027a97
+-
+needs: list the house bills with amount and due day | monthly income setting | tick each bill paid for this month | what is left after bills | amount paid so far this month | reminder on the due day
+---
+app "House Bills" home blue
+table bill name text, amount money, dueday num 1..31 = 1 "Due on day"
+table paid bill ref bill
+setting income money = 100000 "Monthly income"
+let total = sum(bill.amount)
+remind "A house bill is due today" at 9:00 if count(bill, it.dueday = monthday(today) and count(it.paid month) = 0) > 0
+topbar "House Bills", bill, "Add bill"
+statcard income - total, "left after bills, bills total" total, income
+goal sum(bill, it.amount * count(it.paid month)), total, "paid this month"
+each bill sort dueday as b empty "No bills yet. Add rent, electricity, school fees."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid month
+    stack grow gap 0
+      b.name bold
+      "Due on the" b.dueday faint color if(monthday(today) > b.dueday and count(b.paid month) = 0, bad, muted)
+    b.amount bold
+===
+@rich domain=n1_shift_life topic=shift_money_sleep_energy from=v2-cr-173bffc377
+-
+needs: money in and out with the balance | sleep with start and wake time and a chart of hours | one tap energy rating from 1 to 5 | energy line over 14 days | a tab for each of the three
+---
+app "Shift Life" moon purple dark
+table cash what text, amount money, kind pick In|Out = Out
+table rest slept time, woke time
+table feel energy num 1..5
+screen money "Money" wallet
+  topbar "Money", cash, "Add"
+  statcard sum(cash.amount where kind = In) - sum(cash.amount where kind = Out), "balance, out this week" sum(cash.amount week where kind = Out)
+  daybars last 7 days, sum(cash.amount on it where kind = Out)
+screen sleep "Sleep" bed
+  topbar "Sleep", rest, "Log sleep"
+  section "Hours slept", "last 7 days"
+    daybars last 7 days, sum(rest on it, (it.woke - it.slept) / 1h)
+  list rest by day, "No sleep logged. Add the last one after your shift."
+screen health "Energy" heart
+  "How is your energy now?" head
+  row gap 1
+    each 1..5 as e
+      button e grow tap add feel energy = e
+  section "Energy", "last 14 days"
+    trend feel last 14 days sort at, it.energy

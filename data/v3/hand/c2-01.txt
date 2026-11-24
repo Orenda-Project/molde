@@ -1,0 +1,717 @@
+@rich domain=c2_zakat_cash_gold topic=zakat_nisab_check style=detailed
+need to work out my zakat this year: cash in hand, bank savings and gold in grams, minus debts, and tell me if I even reach nisab. let me pick silver or gold nisab and put today's rates. also keep a note of zakat I already paid
+needs: enter cash, bank, gold grams and debts | choose silver or gold nisab | enter gold and silver rate | shows zakat due at 2.5% or says below nisab | mark zakat as paid and keep a list of payments
+---
+app "Zakat check" coin ocean
+table paid amount money, note text?
+state cash money = 0
+state bank money = 0
+state gold num = 0
+state owed money = 0
+state gold_rate money = 0
+state silver_rate money = 0
+state basis pick Silver|Gold = Silver
+let wealth = cash + bank + gold * gold_rate - owed
+let nisab = if(basis = Silver, 612.36 * silver_rate, 87.48 * gold_rate)
+let due = if(nisab > 0 and wealth >= nisab, wealth * 0.025, 0)
+row bar
+  "Zakat check" head grow
+section "What you hold"
+  field cash "Cash in hand"
+  field bank "Bank and savings"
+  field gold "Gold (grams)"
+  field owed "Debts due now"
+section "Today's rates", "per gram"
+  field gold_rate "Gold"
+  field silver_rate "Silver"
+  row gap 1
+    "Nisab by" faint
+    choice basis
+if nisab = 0
+  "Type today's gold or silver rate to see the nisab." faint
+else
+  statcard round(due), if(wealth >= nisab, "zakat due at 2.5%", "below nisab, no zakat due")
+  goal max(wealth, 0), nisab, "net wealth against nisab"
+  button "Mark as paid" tap add paid amount = round(due), note = "Zakat"
+section "Paid so far", sum(paid.amount)
+  list paid top 6, "Nothing recorded yet."
+===
+@rich domain=c2_fidya_missed_fasts topic=fidya_per_missed_fast style=multi_feature
+my father is too old to fast so we give fidya for each missed day. calculator where I set how many fasts, the rate for one person's meal, shows total fidya, and a record of what we already gave so I see what is left
+needs: set number of missed fasts | set fidya rate per fast | total fidya amount | record each payment given | amount still left to give
+---
+app "Fidya" food red
+table given amount money, to text?
+setting rate money = 300 "Fidya per fast"
+state fasts num = 30
+let total = fasts * rate
+let left = max(total - sum(given.amount), 0)
+row bar
+  "Fidya for missed fasts" head grow
+section "Missed fasts"
+  "Fasts missed" fasts faint
+  slider fasts 0..60
+  field rate "Meal rate for one person"
+statcard total, "total fidya for" plural(fasts, "fast")
+if fasts = 0
+  "Slide to the number of fasts missed to see the amount." faint
+else
+  goal sum(given.amount), total, "given so far"
+  statcard left, "still left to give"
+  button "I gave one day's fidya" tap add given amount = rate, to = "One day"
+section "Payments given", plural(count(given), "payment")
+  list given top 8, "No payment recorded. Tap the button after you give."
+===
+@rich domain=c2_kaffara_sixty topic=kaffara_sixty_poor style=detailed
+I broke a fast on purpose and must feed 60 poor people as kaffara. keep count of how many people I fed each day with quick buttons, what a meal costs me, and how much money and how many people are still left
+needs: quick buttons to log people fed | progress toward 60 people | meal cost setting | money still to spend | bar chart of people fed per day | list of feeding entries
+---
+app "Kaffara" bread blue
+table fed people num 1..60, note text?
+setting meal money = 250 "Cost of one meal"
+let done = sum(fed.people)
+let left = max(60 - done, 0)
+row bar
+  "Kaffara: feed 60" head grow
+statcard done, "of 60 people fed", 60
+quick fed, people, [1, 2, 5, 10]
+section "Still to do", plural(left, "person")
+  "Money still needed" left * meal head
+  "Spent so far" done * meal faint
+  if left = 0
+    "Kaffara complete. May Allah accept it." big color good
+section "People fed per day", "last 7 days"
+  daybars last 7 days, sum(fed.people on it)
+list fed top 10, "Nothing logged yet. Tap 5 when you feed five people."
+===
+@rich domain=c2_hajj_package_budget topic=hajj_savings_plan style=custom_ui
+hajj budget: package price, flight add-ons, qurbani, shopping and pocket money per person, times how many of us are going. then tell me how much to put away each month if I have N months left, and track my deposits
+needs: enter package, qurbani, shopping and pocket money per person | number of people slider | months left slider | monthly saving needed | deposits table with amount | progress bar toward total
+---
+app "Hajj budget" mosque mint
+table deposit amount money
+state package money = 0
+state qurbani money = 0
+state shopping money = 0
+state pocket money = 0
+state people num = 2
+state months num = 12
+let total = (package + qurbani + shopping + pocket) * people
+let saved = sum(deposit.amount)
+let monthly = max(total - saved, 0) / max(months, 1)
+row bar
+  "Hajj budget" head grow
+section "Cost per person"
+  field package "Package"
+  field qurbani "Qurbani (dam)"
+  field shopping "Shopping and gifts"
+  field pocket "Pocket money"
+section "Travelling"
+  "People" people faint
+  slider people 1..8
+  "Months left to save" months faint
+  slider months 1..60
+if total = 0
+  "Fill in the package price to see the full budget." faint
+else
+  statcard total, "total for" plural(people, "person"), total
+  goal saved, total, "saved so far"
+  statcard round(monthly), "to put away every month"
+button "Add 10000 to savings" tap add deposit amount = 10000
+list deposit top 5, "No deposits yet."
+===
+@rich domain=c2_umrah_sar_family topic=umrah_trip_in_riyals style=multi_feature
+planning umrah for the family in Ramadan. hotel nights and rate in riyals, rooms, food per person per day, transport, and the riyal rate to rupees so I see the total in both. show hotel, food, transport as shares
+needs: hotel nights, nightly rate and rooms | food per person per day | transport cost | riyal to rupee rate | total in riyals and rupees | share bars for hotel food transport
+---
+app "Umrah budget" mosque orange dark
+state nights num = 10
+state rate num = 350
+state rooms num = 2
+state people num = 4
+state food num = 60
+state transport num = 800
+state sar num = 75
+let hotel = nights * rate * rooms
+let meals = nights * people * food
+let total = hotel + meals + transport
+section "Stay"
+  field nights "Nights"
+  field rate "Hotel rate per night (SAR)"
+  field rooms "Rooms"
+  field people "People"
+section "Food and travel (SAR)"
+  field food "Food per person per day"
+  field transport "Taxis and Haramain train"
+  field sar "Rupees for 1 riyal"
+statcard total, "riyals in all"
+"In rupees" round(total * sar) head
+section "Where it goes", "SAR"
+  each [1, 2, 3] as k
+    stack gap 0
+      row
+        if(k = 1, "Hotel", if(k = 2, "Food", "Transport")) grow
+        if(k = 1, hotel, if(k = 2, meals, transport)) bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * if(k = 1, hotel, if(k = 2, meals, transport)) / max(total, 1), 3 fill accent radius 1
+"Per person" round(total / max(people, 1)) "riyals" faint
+===
+@rich domain=c2_inherit_wife_children topic=estate_split_wife_children style=detailed
+estate share calculator after father passed: total estate, debts and funeral cost, tick if there is a wife, number of sons and daughters. use the simple rule and show every share in plain fractions and rupees
+needs: estate and debts and funeral inputs | wife on or off | number of sons and daughters | wife share one eighth | each son and each daughter share | the rule used is written in the app
+---
+app "Inheritance" users purple
+state estate money = 0
+state debts money = 0
+state funeral money = 0
+state wife bool = yes
+state sons num = 1
+state daughters num = 1
+let net = max(estate - debts - funeral, 0)
+let wife_part = if(wife, net / 8, 0)
+let rest = net - wife_part
+let units = sons * 2 + daughters
+let per = rest / max(units, 1)
+row bar
+  "Estate shares" head grow
+section "The estate"
+  field estate "Total estate"
+  field debts "Debts"
+  field funeral "Funeral costs"
+section "The family"
+  row gap 2
+    toggle wife
+    "Wife alive" grow
+  "Sons" sons faint
+  slider sons 0..8
+  "Daughters" daughters faint
+  slider daughters 0..8
+if net = 0 or units = 0
+  "Enter the estate and at least one child to see the shares." faint
+else
+  statcard net, "left to share after debts"
+  if wife
+    row gap 2
+      "Wife (1/8)" grow
+      wife_part bold
+  each [1, 2] as k empty ""
+    if (k = 1 and sons > 0) or (k = 2 and daughters > 0)
+      row gap 2
+        if(k = 1, plural(sons, "son"), plural(daughters, "daughter")) "each" grow
+        round(if(k = 1, per * 2, per)) bold
+section "Rule used"
+  "Debts and funeral first. With children the wife gets 1/8. The rest is split so a son gets twice a daughter. A guide only; ask a scholar for your family." faint
+===
+@rich domain=c2_inherit_husband_estate topic=widow_estate_husband_share style=short
+my sister died leaving a husband and children. how much does each get from her estate
+needs: estate amount | husband gets one quarter with children | rest split among sons and daughters | shows each son and daughter amount
+---
+app "Her estate" users slate
+state estate money = 0
+state sons num = 1
+state daughters num = 1
+let husband = estate / 4
+let units = sons * 2 + daughters
+let per = (estate - husband) / max(units, 1)
+field estate "Estate left by her"
+"Sons" sons faint
+slider sons 0..6
+"Daughters" daughters faint
+slider daughters 0..6
+if estate = 0
+  "Enter the estate to see who gets what." faint
+else
+  statcard husband, "husband, one quarter (1/4)"
+  "Each son" round(per * 2) head
+  "Each daughter" round(per) head
+  "Simple rule: with children the husband takes 1/4, the rest goes 2 to 1 between sons and daughters." faint
+===
+@rich domain=c2_fuel_mileage_log topic=tank_to_tank_mileage style=multi_feature
+log every petrol fill-up with km driven since last fill, litres and price per litre, then tell me my real mileage km per litre, cost per km, and a line of mileage over time for my Cultus
+needs: add fill-up with km, litres and price | average km per litre | cost per km | line chart of mileage over fill-ups | list of fill-ups
+---
+app "Mileage" car yellow
+table fill km num 1..2000, litres num 1..100, price money
+topbar "Mileage", fill, "Add fill-up"
+let kmpl = sum(fill.km) / max(sum(fill.litres), 1)
+let spent = sum(fill, it.litres * it.price)
+row gap 2
+  statcard round(kmpl * 10) / 10, "km per litre"
+  statcard round(spent / max(sum(fill.km), 1) * 10) / 10, "cost per km"
+section "Mileage per fill-up", "km per litre"
+  if count(fill) > 1
+    trend fill sort at, it.km / it.litres
+  else
+    "Add two fill-ups to see the line." faint
+"Total fuel spend" spent faint
+list fill top 10, "No fill-ups yet. Tap Add fill-up at the pump."
+===
+@rich domain=c2_commute_fuel_month topic=monthly_commute_fuel style=short
+how much petrol does my office commute cost a month on bike versus car
+needs: distance and working days | choose bike, car or rickshaw | petrol price | monthly and yearly fuel cost
+---
+app "Commute fuel" bike pink
+state km num = 12
+state days num = 22
+state price money = 270
+state ride pick Bike|Car|Rickshaw = Bike
+let kmpl = if(ride = Bike, 45, if(ride = Car, 12, 25))
+let monthly = km * 2 * days / kmpl * price
+section "Your commute"
+  "One way" km "km" faint
+  slider km 1..80
+  "Working days a month" days faint
+  slider days 1..30
+  field price "Petrol per litre"
+  choice ride
+statcard round(monthly), "per month by" ride "at" kmpl "km per litre"
+row gap 2
+  stat round(monthly / max(days, 1)), "per day"
+  stat round(monthly * 12), "per year"
+===
+@rich domain=c2_trip_cost_split topic=friends_trip_split style=detailed
+we went to Hunza as friends and different people paid for fuel, hotel and food. let me add each expense with who paid, set how many people were there, and show what each person paid, the fair share and who owes whom
+needs: add expense with what and who paid | number of people setting | total trip cost | fair share per person | per payer balance owes or gets back
+---
+app "Trip split" map ink
+table spend what text, amount money, who text
+setting people num = 5 "People on the trip"
+let total = sum(spend.amount)
+let share = total / max(people, 1)
+topbar "Trip split", spend, "Add expense"
+row gap 2
+  statcard total, "spent in all"
+  statcard round(share), "fair share each"
+section "Who paid what", "balance against fair share"
+  each spend by who as g empty "No expenses yet. Add fuel, hotel and food as you pay."
+    row gap 2
+      g.key bold grow
+      sum(g.amount) faint
+      if sum(g.amount) >= share
+        "gets back" round(sum(g.amount) - share) color good bold
+      else
+        "owes" round(share - sum(g.amount)) color bad bold
+list spend top 8, "Nothing here yet."
+===
+@rich domain=c2_paint_room_litres topic=room_paint_quantity style=multi_feature
+I'm repainting the bedroom. room length width and height in feet, number of doors and windows, how many coats, litres needed and how many 4 litre tins to buy, and the cost
+needs: room length, width and height | doors and windows to subtract | number of coats | litres needed | 4 litre tins to buy | cost estimate
+---
+app "Paint calc" pencil green
+state len num = 14
+state wid num = 12
+state ht num = 10
+state doors num = 1
+state windows num = 2
+state coats num = 2
+setting cover num = 100 "Sq ft one litre covers"
+setting tin_price money = 3200 "Price of a 4 litre tin"
+let wall = max(2 * (len + wid) * ht - doors * 21 - windows * 12, 0)
+let litres = wall * coats / max(cover, 1)
+let tins = floor(litres / 4) + if(litres / 4 > floor(litres / 4), 1, 0)
+section "Room size (feet)"
+  field len "Length"
+  field wid "Width"
+  field ht "Height"
+section "Openings and coats"
+  row gap 1
+    field doors "Doors"
+    field windows "Windows"
+  "Coats" coats faint
+  slider coats 1..3
+if wall = 0
+  "Enter the room size to see how much paint you need." faint
+else
+  statcard wall, "sq ft of wall to paint"
+  statcard round(litres * 10) / 10, "litres for" plural(coats, "coat")
+  "Buy" plural(tins, "tin") "of 4 litres" head
+  "About" tins * tin_price "in paint" faint
+===
+@rich domain=c2_tile_floor_boxes topic=floor_tiles_with_wastage style=multi_feature
+tiles for the lounge floor: length and width in feet, pick tile size, add wastage percent and tell me the number of tiles and boxes of 8, plus the price
+needs: floor length and width | tile size choice | wastage slider | tiles needed | boxes of 8 | total tile cost
+---
+app "Floor tiles" grid grey
+state len num = 16
+state wid num = 12
+state size pick Small|Medium|Large = Medium
+state waste num = 10
+setting price money = 180 "Price per tile"
+let area = len * wid
+let per = if(size = Small, 1, if(size = Medium, 1.78, 4))
+let raw = area / per * (1 + waste / 100)
+let tiles = floor(raw) + if(raw > floor(raw), 1, 0)
+let boxes = floor(tiles / 8) + if(tiles / 8 > floor(tiles / 8), 1, 0)
+section "Floor (feet)"
+  field len "Length"
+  field wid "Width"
+section "Tile"
+  choice size
+  "Small 12 x 12 in, Medium 16 x 16 in, Large 24 x 24 in" tiny faint
+  "Wastage" waste "%" faint
+  slider waste 0..25
+if area = 0
+  "Enter the floor size to count tiles." faint
+else
+  statcard tiles, "tiles for" area "sq ft"
+  row gap 2
+    stat boxes, "boxes of 8"
+    stat boxes * 8 * price, "total cost"
+===
+@rich domain=c2_boundary_wall_bricks topic=small_wall_bricks_cement style=detailed
+how many bricks and cement bags for a boundary wall around my plot, length and height in feet, half brick or full brick thickness, and what it costs at today's rates per 1000 bricks and per bag
+needs: wall length and height | thickness choice | bricks with 5 percent extra | cement bags | cost of bricks and cement
+---
+app "Wall estimate" tool plum
+state len num = 120
+state ht num = 8
+state thick pick Half|Full = Half
+setting brick_rate money = 14000 "Price per 1000 bricks"
+setting bag money = 1300 "Price per cement bag"
+let area = len * ht
+let bricks = round(area * if(thick = Half, 4.5, 9) * 1.05)
+let bags = floor(bricks / 80) + if(bricks / 80 > floor(bricks / 80), 1, 0)
+section "The wall"
+  field len "Length (feet)"
+  field ht "Height (feet)"
+  row gap 1
+    "Thickness" faint
+    choice thick
+if area = 0
+  "Enter length and height to get the bricks." faint
+else
+  statcard bricks, "bricks incl. 5% breakage"
+  statcard bags, "bags of cement (about 1 per 80 bricks)"
+  section "Cost", "estimate"
+    row gap 2
+      "Bricks" grow
+      bricks / 1000 * brick_rate bold
+    row gap 2
+      "Cement" grow
+      bags * bag bold
+    divider
+    row gap 2
+      "Total" bold grow
+      bricks / 1000 * brick_rate + bags * bag head
+===
+@rich domain=c2_recipe_scaler_saved topic=recipe_servings_scaler style=custom_ui
+my recipes are for 4 people but I cook for guests. I type the servings in the recipe and servings I want, add the ingredients with amount and unit, and it shows the new amounts for each
+needs: servings in recipe and servings wanted | add ingredient with amount and unit | scaled amount shown for each ingredient | multiplier shown
+---
+app "Recipe scaler" food teal dark
+table item what text, qty num 0..10000, unit pick g|ml|cups|spoons|pieces = g
+state base num = 4
+state want num = 10
+let k = want / max(base, 1)
+topbar "Recipe scaler", item, "Add ingredient"
+row gap 2
+  stat base, "servings in recipe"
+  stat want, "servings wanted"
+"Multiply everything by" round(k * 100) / 100 head
+"Recipe makes" base faint
+slider base 1..20
+"You need" want faint
+slider want 1..60
+each item sort at as i empty "No ingredients yet. Add them as written in your recipe."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.what bold
+      "was" i.qty i.unit faint
+    stack gap 0 align end
+      round(i.qty * k * 10) / 10 big
+      i.unit faint
+===
+@rich domain=c2_roast_chicken_time topic=roast_time_by_weight style=short
+what time do I put the chicken in the oven if dinner is at 7:30, depends on weight
+needs: weight in kg | method choice oven or air fryer or pot | cooking time in hours and minutes | time to start for dinner
+---
+app "Roast timer" food mint
+state kg num = 1.5
+state how pick Oven|Airfryer|Pot = Oven
+state serve time = 19:30
+let mins = round(kg * if(how = Oven, 45, if(how = Airfryer, 35, 30)) + if(how = Oven, 20, 10))
+let begin = (hour(serve) * 60 + minute(serve) - mins) % 1440
+"Weight" kg "kg" faint
+slider kg 0.5..4
+choice how
+field serve "Dinner time"
+statcard mins, "minutes in the oven, which is" floor(mins / 60) "h" mins % 60 "min"
+"Put it in at" floor(begin / 60) ":" if(begin % 60 < 10, "0", "") begin % 60 head
+"Oven 45 min per kg plus 20, air fryer 35 per kg plus 10, pot 30 per kg plus 10. Check it is cooked through." tiny faint
+===
+@rich domain=c2_electricity_slab_bill topic=slab_electricity_estimate style=detailed
+estimate my electricity bill from units used. the rate changes with slab: up to 100 units one rate, 101 to 200 higher, 201 to 300 higher again and above that the highest. add 17 percent tax and fixed charge, and let me save each month's units to see a chart
+needs: units consumed input | slab rate chosen by nested ifs | tax percent and fixed charge | total bill | save monthly units | bar chart of saved months
+---
+app "Light bill" bolt orange
+table month units num 0..3000, label text
+state units num = 220
+state tax num = 17
+setting fixed money = 150 "Fixed charge"
+let rate = if(units <= 100, 7, if(units <= 200, 11, if(units <= 300, 17, 24)))
+let energy = units * rate
+let bill = energy * (1 + tax / 100) + fixed
+section "Meter reading"
+  "Units used" units faint
+  slider units 0..800
+  "Tax" tax "%" faint
+  slider tax 0..25
+if units = 0
+  "Slide the units to see the bill." faint
+else
+  statcard round(bill), "estimated bill"
+  row gap 2
+    stat rate, "per unit slab"
+    stat round(energy), "energy charge"
+  button "Save this month" tap add month units = units, label = monthname(today)
+section "Saved months", "units"
+  if count(month) > 0
+    bars month top 6, it.units, it.label
+  else
+    "Nothing saved yet. Tap Save this month." faint
+===
+@rich domain=c2_solar_payback_years topic=rooftop_solar_payback style=multi_feature
+thinking of a solar system for the house. system size in kW, cost per kW, sun units per kW a day, what I pay per unit, then payback in years, a line of my cumulative savings over 10 years, and how much panels lose each year
+needs: system size and cost per kW | units per kW per day | tariff per unit | payback years | line chart of 10 year savings | yearly panel degradation
+---
+app "Solar payback" sun purple
+state kw num = 5
+state cost money = 150000
+state sun num = 4
+state tariff money = 40
+state loss num = 0.5
+let yearly = kw * sun * 365 * tariff
+let paid_back = cost * kw / max(yearly, 1)
+let left10 = pow(1 - loss / 100, 10)
+section "Your system"
+  "Size" kw "kW" faint
+  slider kw 1..20
+  field cost "Cost per kW"
+  "Sun hours (units per kW a day)" sun faint
+  slider sun 2..6
+  field tariff "What you pay per unit"
+  "Panel loss per year" loss "%" faint
+  slider loss 0..2
+if yearly = 0
+  "Fill in the prices to see how fast it pays back." faint
+else
+  statcard round(paid_back * 10) / 10, "years to pay back"
+  row gap 2
+    stat round(yearly), "saved in year one"
+    stat round(left10 * 100), "% output after 10 years"
+  section "Total saved over 10 years", "minus cost"
+    trend 1..10, yearly * it - cost * kw
+===
+@rich domain=c2_water_tank_fill_time topic=overhead_tank_fill style=custom_ui
+roof tank filling time: round or box tank with size in feet, how full it is now, pump flow in litres a minute, and how long till full, plus the electricity of running the pump
+needs: round or box tank choice | tank size | current level slider | pump flow | time to fill | pump electricity cost
+---
+app "Tank fill" cup slate
+state shape pick Round|Box = Round
+state wide num = 4
+state high num = 5
+state long num = 4
+state level num = 20
+state flow num = 40
+state kw num = 0.75
+setting rate money = 35 "Price per unit"
+let cubic = if(shape = Round, pi * pow(wide / 2, 2) * high, wide * long * high)
+let litres = cubic * 28.32
+let need = litres * (100 - level) / 100
+let mins = need / max(flow, 1)
+row gap 1
+  choice shape
+section "Tank"
+  if shape = Round
+    field wide "Diameter (ft)"
+  else
+    field wide "Width (ft)"
+    field long "Length (ft)"
+  field high "Height (ft)"
+  "Full now" level "%" faint
+  slider level 0..100
+  field flow "Pump flow (litres a minute)"
+statcard round(litres), "litres when full"
+if level >= 100
+  "The tank is already full." big color good
+else
+  "Time to fill" floor(mins / 60) "h" round(mins % 60) "min" big
+  "Water to add" round(need) "litres" faint
+  "Pump power cost" round(mins / 60 * kw * rate) faint
+===
+@rich domain=c2_grocery_per_head topic=monthly_grocery_per_person style=multi_feature
+track the monthly ration and grocery buying for our house with item, category and amount, family size, and show cost per head, share of each category and how it compares with my budget per head
+needs: add a grocery item with category and amount | family size setting | cost per head this month | share chart by category | budget per head comparison
+---
+app "Grocery" cart yellow
+table buy item text, amount money, cat pick Staples|Dairy|Meat|Veg|Fruit|Other = Staples
+setting heads num = 6 "People eating"
+setting plan money = 6000 "Budget per head"
+let spent = sum(buy.amount month)
+let each_head = spent / max(heads, 1)
+topbar "Grocery", buy, "Add item"
+goal round(each_head), plan, "per head this month"
+statcard spent, "spent by the whole house this month"
+section "Where it goes", "this month"
+  share buy month by cat, sum(it.amount), it.key
+section "Days left"
+  "You can still spend" max(plan * heads - spent, 0) "this month, about" round(max(plan * heads - spent, 0) / max(monthdays(today) - monthday(today) + 1, 1)) "a day" faint
+list buy month by day, "Nothing bought this month. Add the first item."
+===
+@rich domain=c2_wheat_seed_fertiliser topic=wheat_inputs_per_acre style=detailed
+I sow wheat on a few acres. enter acres, drill or broadcast, and it should give seed in kg, DAP bags and urea bags per acre and total, with the cost at my prices
+needs: acres input | drill or broadcast choice | seed kg total | DAP and urea bags | cost of seed and fertiliser
+---
+app "Wheat inputs" plant pink
+state acres num = 5
+state how pick Drill|Broadcast = Drill
+setting seed_price money = 120 "Seed per kg"
+setting dap money = 14000 "DAP per bag"
+setting urea money = 4500 "Urea per bag"
+let seed = acres * if(how = Drill, 45, 50)
+let dap_bags = acres * 1
+let urea_bags = acres * 2
+let cost = seed * seed_price + dap_bags * dap + urea_bags * urea
+section "Field"
+  field acres "Acres"
+  row gap 1
+    "Sowing by" faint
+    choice how
+if acres = 0
+  "Enter the acres to see the inputs." faint
+else
+  statcard seed, "kg of seed", seed
+  row gap 2
+    stat dap_bags, "bags DAP"
+    stat urea_bags, "bags urea"
+  section "Cost", "at your prices"
+    row
+      "Seed" grow
+      seed * seed_price bold
+    row
+      "DAP" grow
+      dap_bags * dap bold
+    row
+      "Urea" grow
+      urea_bags * urea bold
+    divider
+    "Total" cost head
+  "Per acre: 45 kg seed drilled or 50 kg broadcast, 1 bag DAP, 2 bags urea. Soil test first if you can." tiny faint
+===
+@rich domain=c2_crop_profit_fields topic=crop_profit_by_field style=multi_feature
+list my crops with acres, maunds per acre, selling price per maund and cost per acre, and give profit for each crop and the whole season. a bar for which crop pays best
+needs: add crop with acres, maunds per acre, price and cost | profit per crop | total season profit | share chart of profit by crop | list to edit or remove crops
+---
+app "Crop profit" leaf ink
+table crop name text, acres num 0.. = 1, yield num 0.. "Maunds per acre", price money "Price per maund", cost money "Cost per acre"
+let profit = sum(crop, it.acres * (it.yield * it.price - it.cost))
+topbar "Crop profit", crop, "Add crop"
+statcard profit, "season profit from" sum(crop.acres) "acres"
+"Per acre" round(profit / max(sum(crop.acres), 1)) faint
+section "Profit by crop"
+  share crop sort name, it.acres * (it.yield * it.price - it.cost), it.name
+each crop sort name as c empty "No crops yet. Add wheat, cotton or whatever you grow."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.acres "acres," c.yield "maunds each" faint
+    c.acres * (c.yield * c.price - c.cost) bold color if(c.yield * c.price >= c.cost, good, bad)
+===
+@rich domain=c2_cow_feed_day topic=dairy_feed_per_day style=short
+daily feed for my cows, how much green fodder and wanda, by weight and milk
+needs: cow count and body weight | milk per cow | green fodder and concentrate kg | daily feed cost
+---
+app "Cow feed" milk green
+state cows num = 3
+state weight num = 400
+state milk num = 8
+setting fodder_price money = 8 "Green fodder per kg"
+setting feed_price money = 90 "Wanda per kg"
+let green = cows * weight * 0.1
+let wanda = cows * (1 + milk / 2.5)
+section "Herd"
+  field cows "Cows"
+  field weight "Weight of one cow (kg)"
+  "Milk per cow" milk "litres a day" faint
+  slider milk 0..30
+statcard round(green), "kg green fodder a day"
+statcard round(wanda * 10) / 10, "kg concentrate (wanda) a day"
+"Feed cost per day" round(green * fodder_price + wanda * feed_price) head
+"Per litre of milk" round((green * fodder_price + wanda * feed_price) / max(cows * milk, 1)) faint
+===
+@rich domain=c2_plot_marla_kanal topic=plot_unit_converter style=multi_feature
+convert plot size between marla, kanal and square feet, and with the price per marla tell me the full price of the plot
+needs: size input in marla, kanal or square feet | all three units shown | price per marla | total price of the plot
+---
+app "Plot sizes" home grey dark
+state size num = 5
+state unit pick Marla|Kanal|Sqft = Marla
+state rate money = 0
+let sqft = size * if(unit = Marla, 272.25, if(unit = Kanal, 5445, 1))
+let marla = sqft / 272.25
+section "Your plot"
+  field size "Size"
+  choice unit
+if sqft = 0
+  "Enter the size of the plot." faint
+else
+  row gap 2
+    statcard round(marla * 100) / 100, "marla"
+    statcard round(marla / 20 * 1000) / 1000, "kanal"
+  statcard round(sqft), "square feet"
+section "Price", "per marla"
+  field rate "Rate per marla"
+  if rate > 0
+    "Plot price" round(marla * rate) big
+  else
+    "Add the rate to see the price." faint
+"1 marla = 272.25 sq ft, 1 kanal = 20 marla" tiny faint
+===
+@rich domain=c2_suit_fabric_metres topic=shalwar_kameez_cloth style=detailed
+how many metres of cloth for a gents shalwar kameez, I give kameez length, sleeve, shalwar length, and say if I need a waistcoat or extra for a big size. price per metre too
+needs: kameez length, sleeve and shalwar length | waistcoat toggle | big size toggle | metres needed | cloth price per metre
+---
+app "Suit cloth" bag plum
+state shirt num = 40
+state sleeve num = 24
+state shalwar num = 40
+state vest bool = no
+state big bool = no
+setting per_m money = 900 "Cloth price per metre"
+let inches = 2 * shirt + sleeve + 2 * shalwar + 12 + if(vest, 30, 0) + if(big, 10, 0)
+let metres = round(inches / 39.37 * 105) / 100
+section "Measurements (inches)"
+  field shirt "Kameez length"
+  field sleeve "Sleeve"
+  field shalwar "Shalwar length"
+section "Extras"
+  row gap 2
+    toggle vest
+    "Waistcoat" grow
+  row gap 2
+    toggle big
+    "Big size (XL and up)" grow
+statcard metres, "metres of cloth, 5% spare added"
+"Cloth will cost" round(metres * per_m) head
+"Made for 44 inch wide cloth. Ask your tailor for the final length." tiny faint
+===
+@rich domain=c2_gas_cylinder_days topic=lpg_cylinder_lasting style=multi_feature
+note each gas cylinder I buy with price and weight, and tell me how many days a cylinder lasts on average, how many days since the last one, what it costs per month and a warning when it should be nearly empty
+needs: log cylinder purchase with price and kg | average days a cylinder lasts | days since last refill | monthly gas cost | warning when due
+---
+app "Gas cylinder" fire teal
+table cyl price money, kg num 1..50 = 11.8
+let lasts = gap(cyl)
+let monthly = if(lasts > 0, avg(cyl.price) * 30 / lasts, 0)
+topbar "Gas cylinder", cyl, "New cylinder"
+if count(cyl) < 2
+  "Add at least two cylinders to learn how long one lasts." faint
+else
+  statcard round(lasts), "days one cylinder lasts"
+  statcard round(monthly), "gas cost per month"
+if count(cyl) > 0
+  "Last cylinder was" since(cyl) "days ago" head color if(lasts > 0 and since(cyl) >= lasts - 3, warn, ink)
+  if lasts > 0 and since(cyl) >= lasts - 3
+    "Time to book the next one." color warn bold
+list cyl top 6, "No cylinders yet. Add one when it arrives."

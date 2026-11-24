@@ -1,0 +1,498 @@
+@rich domain=n1_quick_tasks topic=type_and_tag_tasks from=v2-cr-22514ca875
+-
+needs: type a task and pick a tag in one go | tags home, work, errand or other | tick tasks off | open tasks listed newest first | done count and tasks per tag
+---
+app "Quick Tasks" check red
+table task title text, tag pick Home|Work|Errand|Other = Home, done bool
+state newt text = ""
+state newtag pick Home|Work|Errand|Other = Home
+field newt "What needs doing?"
+choice newtag
+if len(newt) > 0
+  button "Add task" fill accent tap add task title = newt, tag = newtag then set newt = ""
+statcard count(task where done = no), "open tasks, done:" count(task where done = yes)
+each task where done = no sort at desc as t empty "Nothing open. Type a task above and pick a tag."
+  row card gap 2 swipe remove t tap edit t
+    toggle t.done
+    t.title bold grow
+    t.tag faint
+section "Open per tag"
+  share task where done = no by tag, count(it), it.key
+===
+@rich domain=n1_mood_diary topic=five_tap_mood_diary from=v2-cr-66b0c0dd71
+-
+needs: tap 1 to 5 for how the day was | write an optional line | mood line over 30 days | 5 week grid shaded by mood | average mood this week
+---
+app "Mood Diary" smile orange
+table entry mood num 1..5 = 3, line text?
+topbar "Mood Diary", entry, "Write a line"
+"How was today?" head
+row gap 1
+  each 1..5 as m
+    button m grow tap add entry mood = m
+"Average this week" round(avg(entry.mood week) * 10) / 10 "of 5" faint
+section "Mood", "last 30 days"
+  trend entry last 30 days sort at, it.mood
+section "Last 5 weeks"
+  daygrid last 35 days, sum(entry.mood on it) / max(count(entry on it), 1), 5
+list entry where len(line) > 0 top 7, "No lines yet. A tap is enough on a busy day."
+===
+@rich domain=n1_just_count topic=plain_counting_buttons from=v2-cr-a697d1e2a2
+-
+needs: big total | buttons for plus 1, plus 5, plus 10 and minus 1 | counted today and this week | undo the last tap | recent taps listed
+---
+app "Just Count" plus yellow
+table tick n num
+let total = sum(tick.n)
+text total huge align center
+"counted since the start" faint align center
+grid 4 gap 1
+  each [1, 5, 10] as k
+    button "+" k fill accent tap add tick n = k
+  button "-1" tap add tick n = -1
+grid 2 gap 1
+  statcard sum(tick.n today), "today"
+  statcard sum(tick.n week), "this week"
+button "Undo the last tap" tap remove last(tick)
+list tick top 6, "Nothing counted yet. Tap +1 to start."
+===
+@rich domain=n1_cash_runway topic=money_runway_forecast from=v2-cr-2791528a65
+-
+needs: record money in and out with a category | balance now | days of money left at the current pace | where money goes by category | spending per day against the daily pace
+---
+app "Cash Runway" wallet green
+table money what text, amount money, kind pick In|Out = Out, cat pick Food|Bills|Fun|Other = Food
+let bal = sum(money.amount where kind = In) - sum(money.amount where kind = Out)
+let perday = sum(money.amount last 14 days where kind = Out) / 14
+topbar "Cash Runway", money, "Add money in or out"
+statcard bal, "balance now"
+"At this pace you have" if(perday > 0, floor(bal / perday), 0) "days of money left" head color if(bal < perday * 7, bad, ink)
+section "Where it goes", "last 30 days"
+  share money last 30 days where kind = Out by cat, sum(it.amount), it.key
+section "Out per day", "pace" round(perday) "a day"
+  goalbars last 14 days, sum(money.amount on it where kind = Out), perday
+===
+@rich domain=n1_before_i_leave topic=leave_house_checklist from=v2-cr-0bcc7804e9
+-
+needs: checklist of things you forget | reminder on weekday mornings | still to check count | all set message when ticked | reset for tomorrow
+---
+app "Before I Leave" key teal
+table item what text, done bool
+remind "Keys, wallet, phone: check before you leave" at 7:45 if weekday(today) <= 5
+topbar "Before I Leave", item, "Add item"
+if count(item, it.done = no) = 0 and count(item) > 0
+  "All set. Have a good day." head color good
+else
+  count(item, it.done = no) "still to check" head
+each item sort done as i empty "Add what you keep forgetting: keys, charger, lunch."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.done
+    i.what bold grow color if(i.done, muted, ink)
+button "Reset for tomorrow" tap set all item.done = no
+===
+@rich domain=n1_family_recipe_list topic=family_recipes_to_shopping from=v2-cr-49159ca08b
+-
+needs: save family recipes with who cooks them | ingredients under each recipe | tap plus list to put an ingredient on the shopping list | tick things bought | count still to buy
+---
+app "Family Recipes" food blue
+table recipe name text, cook text?, mins num 5..300 = 30
+table ingr recipe ref recipe, item text
+table need what text, got bool
+topbar "Family Recipes", recipe, "Save a recipe"
+each recipe sort name as r empty "No recipes yet. Save the first family favourite."
+  stack card gap 1 tap edit r swipe remove r
+    row
+      r.name bold grow
+      r.cook faint
+    each r.ingr as i
+      row gap 1
+        i.item grow
+        button "+ list" tap add need what = i.item
+section "Shopping list", "to buy:" count(need where got = no)
+  each need sort got as n empty "Tap + list next to an ingredient to put it here."
+    row gap 2 swipe remove n
+      toggle n.got
+      n.what grow color if(n.got, muted, ink)
+form ingr, "Add an ingredient"
+===
+@rich domain=n1_notes_archive topic=active_and_archived_notes from=v2-cr-85b639d2e8
+-
+needs: write notes with a title and text | tabs for active and archived with counts | archive and restore with one tap | newest first | tap to edit or swipe to remove
+---
+app "Notes Archive" note purple
+table note title text, body long?, archived bool
+state tab pick Active|Archived = Active
+topbar "Notes", note, "New note"
+row gap 1
+  button "Active" count(note where archived = no) fill if(tab = Active, ink, surface) grow tap set tab = Active
+  button "Archived" count(note where archived = yes) fill if(tab = Archived, ink, surface) grow tap set tab = Archived
+each note where (tab = Active and archived = no) or (tab = Archived and archived = yes) sort at desc as n empty "No notes here. Tap New note to write one."
+  stack card gap 0 tap edit n swipe remove n
+    row
+      n.title bold grow
+      button if(n.archived, "Restore", "Archive") tap set n.archived = not n.archived
+    n.body faint
+===
+@rich domain=n1_week_planner topic=study_meals_workouts_week from=v2-cr-9a0b9918c9
+-
+needs: plan study, meals and workouts on weekdays | every day as a card with today highlighted | colour by kind | tick things done | progress of planned things done
+---
+app "Week Planner" calendar pink
+table slot day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, kind pick Study|Meal|Workout = Study, what text, done bool
+topbar "Week Planner", slot, "Plan something"
+goal count(slot where done = yes), count(slot), "planned things done"
+each options slot.day as dd
+  stack card gap 1
+    row
+      text dd head grow color if(dd = dayname(today), accent, ink)
+      count(slot where day = dd) faint
+    each slot where day = dd as s empty "Free day"
+      row gap 2 tap edit s swipe remove s
+        toggle s.done
+        s.kind bold color if(s.kind = Study, accent, if(s.kind = Meal, good, warn))
+        s.what grow
+===
+@rich domain=n1_school_and_bills topic=school_parents_bills_events from=v2-cr-fda215947a
+-
+needs: add school run, parents evening and bill dates | reminder the evening before | chips to filter by kind | coloured marker per kind | what is on today and this week
+---
+app "School and Bills" school grey
+table event what text, kind pick School|Parents|Bills = School, day date
+state f pick All|School|Parents|Bills = All
+remind "Something is on tomorrow" at event.day - 1d at 18:00
+topbar "School and Bills", event, "Add event"
+statcard count(event where day = today), "on today, this week:" count(event where day >= today and day <= today + 7)
+choice f
+each event where day >= today and (f = All or kind = f) sort day as e empty "Nothing coming up. Add the school run, evenings and bills."
+  row card gap 2 tap edit e swipe remove e
+    box width 8 radius 4 fill if(e.kind = School, accent, if(e.kind = Bills, warn, good))
+    stack grow gap 0
+      e.what bold
+      e.kind "," e.day faint
+    if(e.day = today, "Today", plural(e.day - today, "day")) bold
+===
+@rich domain=n1_lent_out topic=things_lent_to_people from=v2-cr-0718073dda
+-
+needs: note what you lent and to whom | days it has been out | red when out for more than 14 days | one tap Got it back | Saturday reminder while things are out
+---
+app "Lent Out" gift ocean
+table lent what text, to text, since date = today, back bool
+remind "Something you lent is still out" at 18:00 on sat if count(lent where back = no) > 0
+topbar "Lent Out", lent, "Lend something"
+statcard count(lent where back = no), "things still out, over 14 days:" count(lent where back = no and since < today - 14)
+each lent where back = no sort since as l empty "Nothing lent out. Add something when you hand it over."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.what bold
+      "With" l.to "for" today - l.since "days" faint color if(l.since < today - 14, bad, muted)
+    button "Got it back" tap set l.back = yes
+section "Back home", "returned:" count(lent where back = yes)
+  list lent where back = yes top 5, "Nothing returned yet."
+===
+@rich domain=n1_house_hub topic=house_money_list_and_jobs from=v2-cr-f511c0a7be
+-
+needs: house money in and out with what is left | shared list anyone can add to | jobs for the children with ticks | chart of spending per day | share of jobs done per child | three tabs
+---
+app "House Hub" home mint
+table cash what text, amount money, kind pick In|Out = Out
+table item what text, got bool
+table job kid text, what text, done bool
+screen money "Money" wallet
+  topbar "House Money", cash, "Add"
+  statcard sum(cash.amount where kind = In) - sum(cash.amount where kind = Out), "left, spent this month" sum(cash.amount month where kind = Out)
+  daybars last 7 days, sum(cash.amount on it where kind = Out)
+  list cash top 6, "No money recorded yet."
+screen shop "List" cart
+  topbar "Shared list", item, "Add item"
+  each item sort got as i empty "Nothing on the list. Anyone can add to it."
+    row card gap 2 tap edit i swipe remove i
+      toggle i.got
+      i.what bold grow color if(i.got, muted, ink)
+screen kids "Kids" star
+  topbar "Jobs", job, "Add job"
+  section "Jobs done", "per child"
+    share job where done = yes by kid, count(it), it.key
+  each job sort done as j empty "No jobs yet. Give the children something to do."
+    row card gap 2 tap edit j swipe remove j
+      toggle j.done
+      j.kid bold
+      j.what grow
+===
+@rich domain=n1_counter_tiles topic=named_counters_with_steps from=v2-cr-2b49f96731
+-
+needs: create named counters | each with its own step size | plus and minus on a tile | big number on each tile | reset all counters
+---
+app "Counters" plus slate dark
+table counter name text, value num = 0, step num 1..100 = 1
+topbar "Counters", counter, "New counter"
+grid 2 gap 1
+  each counter sort name as c empty "No counters yet. Add one and tap + to count."
+    stack card gap 1 align center tap edit c swipe remove c
+      c.name bold
+      c.value huge
+      row gap 1
+        button "-" tap set c.value = c.value - c.step
+        button "+" fill accent tap set c.value = c.value + c.step
+      "step" c.step faint
+button "Reset all to zero" tap set all counter.value = 0
+===
+@rich domain=n1_many_timers topic=named_timer_presets from=v2-cr-9a06824430
+-
+needs: save timers with a name and minutes | tap a chip to choose one | countdown with start pause and reset | notification when it ends | timers finished today
+---
+app "Many Timers" timer ink dark
+table preset name text, mins num 1..240
+table ran preset ref preset
+state sel ref preset
+topbar "Many Timers", preset, "Add timer"
+choice sel
+if sel.mins > 0
+  timer 1m * sel.mins, sel.name, add ran preset = sel then notify "Your timer is done"
+else
+  "Pick a timer above, or add one like Study 45 or Dough 90." faint
+section "Finished today", "timers:" count(ran today)
+  share ran today by preset, count(it), it.key
+===
+@rich domain=n1_my_things topic=what_i_own_and_lent from=v2-cr-61efa4ab58
+-
+needs: list what you own with a place | mark a thing as lent with the name of who has it | search by name | chips for all or lent | counts owned and lent
+---
+app "My Things" box plum
+table thing name text, place pick Home|Work|Car|Storage = Home, lent bool, to text?
+state q text = ""
+state view pick All|Lent = All
+topbar "My Things", thing, "Add thing"
+statcard count(thing), "things owned, lent out:" count(thing where lent = yes)
+field q "Search my things"
+choice view
+each thing where (view = All or lent = yes) and has(name, q) sort name as t empty "No things match. Add what you own."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      if t.lent
+        "Lent to" t.to faint color warn
+      else
+        t.place faint
+    toggle t.lent
+===
+@rich domain=n1_move_and_study topic=exercise_and_study_screen from=v2-cr-af211a77de
+-
+needs: log exercise and study minutes with one tap | totals for both today | bar chart of each for the week | days when you did both | one screen
+---
+app "Move and Study" run red
+table log kind pick Exercise|Study = Exercise, mins num 5..300 = 30
+statcard sum(log.mins today), "minutes of exercise and study today"
+weekdots count(log on it where kind = Exercise) > 0 and count(log on it where kind = Study) > 0
+section "Exercise", "today:" sum(log.mins today where kind = Exercise)
+  row gap 1
+    each [15, 30, 60] as k
+      button "+" k "min" grow tap add log kind = Exercise, mins = k
+  daybars last 7 days, sum(log.mins on it where kind = Exercise)
+section "Study", "today:" sum(log.mins today where kind = Study)
+  row gap 1
+    each [15, 30, 60] as k
+      button "+" k "min" grow tap add log kind = Study, mins = k
+  daybars last 7 days, sum(log.mins on it where kind = Study)
+===
+@rich domain=n1_fast_prayer_grid topic=week_grid_fast_and_prayers from=v2-cr-5c15b76ab7
+-
+needs: tap a box to mark the fast for any of the last 7 days | five boxes under each day for the prayers | fasts kept this week | prayers prayed this week | grid tells which box is which
+---
+app "Fast and Prayer" beads orange dark
+table fast
+table prayer name pick Fajr|Dhuhr|Asr|Maghrib|Isha = Fajr
+grid 2 gap 1
+  statcard count(fast week), "fasts this week"
+  statcard count(prayer week), "of 35 prayers", 35
+grid 7 gap 1
+  each days last 7 days as d
+    stack gap 1 align center
+      text dayname(d) tiny color muted
+      box height 22 radius 6 fill if(count(fast on d) > 0, accent, soft) tap toggle fast on d
+      each options prayer.name as p
+        box height 14 radius 4 fill if(count(prayer on d where name = p) > 0, good, soft) tap toggle prayer on d where name = p
+"Top box is the fast, then Fajr, Dhuhr, Asr, Maghrib, Isha" faint align center
+===
+@rich domain=n1_count_and_save topic=counter_with_saved_counts from=v2-cr-b3bdfd9dba
+-
+needs: big count with minus 1, plus 1 and plus 10 | save the count and start again | list of saved counts | total of all saved counts
+---
+app "Count and Save" plus yellow
+table saved amt num
+state n num = 0
+text n huge align center
+row gap 1
+  button "-1" grow tap set n = max(n - 1, 0)
+  button "+1" fill accent grow tap set n = n + 1
+  button "+10" grow tap set n = n + 10
+button "Save this count" tap add saved amt = n then set n = 0
+section "Saved counts", "total:" sum(saved.amt)
+  list saved top 8, "Nothing saved yet. Count something and tap Save."
+===
+@rich domain=n1_shop_pnl topic=shop_accounts_by_month from=v2-cr-2e540e5dff
+-
+needs: record sales, stock, rent, wages and utilities | month by month with arrows | profit for the month | where the costs went | costs as a share of sales
+---
+app "Shop Accounts" book green
+table acct kind pick Sales|Stock|Rent|Wages|Utilities|Other = Sales, amount money, note text?
+state m date = today
+let inc = sum(acct.amount month of m where kind = Sales)
+let outg = sum(acct.amount month of m) - inc
+topbar "Shop Accounts", acct, "Add entry"
+monthnav m
+statcard inc - outg, "profit, sales" inc ", costs" outg
+"Costs are" round(outg * 100 / max(inc, 1)) "% of sales" faint
+section "Where the costs went", monthname(m)
+  share acct month of m where kind != Sales by kind, sum(it.amount), it.key
+list acct month of m by day, "No entries this month. Add a sale or a cost."
+===
+@rich domain=n1_idea_pipeline topic=ideas_from_spark_to_shipped from=v2-cr-6234f4d701
+-
+needs: write down an idea | stage spark, trying or shipped | chips with counts | one tap to move an idea on | shipped out of all ideas
+---
+app "Idea Pipeline" star teal
+table idea title text, stage pick Spark|Trying|Shipped = Spark
+state tab pick All|Spark|Trying|Shipped = All
+topbar "Idea Pipeline", idea, "Add idea"
+goal count(idea where stage = Shipped), count(idea), "ideas shipped"
+row gap 1
+  each options idea.stage
+    button it count(idea where stage = it) fill if(tab = it, ink, surface) grow tap set tab = it
+  button "All" fill if(tab = All, ink, surface) grow tap set tab = All
+each idea where tab = All or stage = tab sort at desc as i empty "No ideas here. Write one down while it is fresh."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.title bold
+      i.stage faint
+    if i.stage = Spark
+      button "Try it" tap set i.stage = Trying
+    if i.stage = Trying
+      button "Shipped" fill accent tap set i.stage = Shipped
+===
+@rich domain=n1_cupboard_shed topic=home_stock_used_up from=v2-cr-7a50ed436c
+-
+needs: list what is in the cupboard, shed, garage and pantry | quantity with plus and minus | Used up button | list of what is out and needs buying | filter by place
+---
+app "Cupboard and Shed" home blue
+table stuff name text, place pick Cupboard|Shed|Garage|Pantry = Cupboard, qty num 0.. = 1
+state shelf pick All|Cupboard|Shed|Garage|Pantry = All
+topbar "Cupboard and Shed", stuff, "Add stuff"
+statcard count(stuff where qty > 0), "things in stock, to buy:" count(stuff where qty = 0)
+choice shelf
+each stuff where qty > 0 and (shelf = All or place = shelf) sort name as s empty "Nothing here. Add what you keep at home."
+  row card gap 1 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.place faint
+    button "-" tap set s.qty = s.qty - 1
+    s.qty bold
+    button "+" tap set s.qty = s.qty + 1
+    button "Used up" tap set s.qty = 0
+section "Out, to buy", "items:" count(stuff where qty = 0)
+  each stuff where qty = 0 as s empty "Nothing is missing."
+    row gap 2
+      s.name grow
+      button "Bought" tap set s.qty = 1
+===
+@rich domain=n1_trip_itinerary topic=day_by_day_trip_plan from=v2-cr-cdcf7e7669
+-
+needs: add stops with a day number, a time and an estimated cost | every day shown as its own card | cost of each day | total estimated cost | tap a stop to edit
+---
+app "Trip Itinerary" map purple
+table stop daynum num 1..30 = 1 "Day", what text, at_time time?, cost money?
+topbar "Trip Itinerary", stop, "Add a stop"
+statcard sum(stop.cost), "estimated cost, stops:" count(stop)
+each 1..max(stop.daynum) as n
+  stack card gap 1
+    row
+      "Day" n head grow
+      sum(stop.cost where daynum = n) faint
+    each stop where daynum = n sort at_time as s empty "Nothing planned yet."
+      row gap 2 tap edit s swipe remove s
+        s.at_time bold
+        s.what grow
+===
+@rich domain=n1_count_heat topic=daily_count_heatmap from=v2-cr-e09fb66b2b
+-
+needs: name what you count and set a daily target | tap plus one | today against the target | 10 week heat map | which weekdays you count most
+---
+app "Count Heat" fire pink
+table tick
+setting thing text = "Pushups" "What are you counting?"
+setting goal num 1..100 = 5 "Daily target"
+text thing head
+statcard count(tick today), "today of" goal, goal
+button "+1" fill accent tap add tick
+section "Last 10 weeks"
+  heat last 70 days, count(tick on it), goal
+section "Weekdays you count most", "1 is Monday"
+  bars 1..7, count(tick where weekday(at) = it)
+===
+@rich domain=n1_savings_growth topic=monthly_savings_growth from=v2-cr-1d8f3fffee
+-
+needs: one tap to put away 500, 1000 or 5000 | total saved | this month against a monthly target | growth against last month | bars for the last 6 months
+---
+app "Savings Growth" coin grey
+table save amount money
+setting target money = 10000 "Monthly target"
+let this_m = sum(save.amount month)
+let prev_m = sum(save.amount prev month)
+statcard sum(save.amount), "saved in total"
+quick save, amount, [500, 1000, 5000]
+goal this_m, target, "put aside this month"
+if(prev_m > 0, round((this_m - prev_m) * 100 / prev_m), 0) "% compared with last month" faint
+section "Last 6 months"
+  bars 1..6, sum(save.amount month of addmonths(today, it - 6)), join(month(addmonths(today, it - 6)))
+===
+@rich domain=n1_house_money_views topic=house_money_day_week_month from=v2-cr-fe93980840
+-
+needs: record spending with a category | monthly budget setting | chips to switch between day, week and month | day view of today | week bars and month grid
+---
+app "House Money" home ocean
+table spend what text, amount money, cat pick Food|Bills|Kids|Home|Other = Food
+setting budget money = 80000 "Monthly budget"
+state view pick Day|Week|Month = Day
+topbar "House Money", spend, "Add spending"
+choice view
+if view = Day
+  statcard sum(spend.amount today), "spent today of about" round(budget / 30), round(budget / 30)
+  list spend today, "Nothing spent today."
+if view = Week
+  statcard sum(spend.amount week), "spent this week of about" round(budget / 4), round(budget / 4)
+  daybars last 7 days, sum(spend.amount on it)
+if view = Month
+  goal sum(spend.amount month), budget, "spent this month"
+  daygrid month, sum(spend.amount on it), budget / 15
+  share spend month by cat, sum(it.amount), it.key
+===
+@rich domain=n1_supplier_orders topic=suppliers_stock_and_reorder from=v2-cr-1297a943b2
+-
+needs: items linked to a supplier with a low level | plus and minus on stock | suppliers with item counts and phone | a tab listing what to reorder per supplier | low items in warning colour
+---
+app "Supplier Orders" package mint
+table supplier name text, phone text?
+table item name text, supplier ref supplier, qty num 0.., low num 0.. = 5
+screen stock "Stock" box
+  topbar "Stock", item, "Add item"
+  each item sort qty as i empty "No items yet. Add what you stock and who supplies it."
+    row card gap 1 tap edit i swipe remove i
+      stack grow gap 0
+        i.name bold color if(i.qty <= i.low, warn, ink)
+        i.supplier.name faint
+      button "-" tap set i.qty = i.qty - 1
+      i.qty bold
+      button "+" tap set i.qty = i.qty + 1
+screen sup "Suppliers" users
+  topbar "Suppliers", supplier, "Add supplier"
+  each supplier sort name as s empty "No suppliers yet."
+    stack card gap 0 tap edit s swipe remove s
+      s.name bold
+      count(s.item) "items," s.phone faint
+screen order "To order" cart
+  each supplier as s empty "Add suppliers first."
+    stack card gap 1
+      s.name bold
+      each s.item where qty <= low as i empty "Nothing to reorder."
+        row gap 2
+          i.name grow
+          "only" i.qty "left" faint color warn

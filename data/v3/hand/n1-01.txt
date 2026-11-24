@@ -1,0 +1,500 @@
+@rich domain=n1_run_nets_weights topic=home_training_log from=v2-cr-e68f66c8b3
+-
+needs: log a session as run, nets or weights with minutes and effort | minutes this week against a 180 minute target | time split by activity | bar chart of the last 7 days | list of past sessions by day
+---
+app "Home Training" run ocean
+table session kind pick Run|Nets|Weights = Run, mins num 5..240 = 30 unit "min", effort num 1..10 = 5 "Effort 1 to 10", dist num? 0.. unit "km"
+topbar "Home Training", session, "Log session"
+statcard sum(session.mins week), "minutes trained this week", 180
+weekdots count(session on it) > 0
+section "Time by activity", "this week"
+  share session week by kind, sum(it.mins), it.key
+section "Last 7 days", "km run:" sum(session.dist last 7 days)
+  daybars last 7 days, sum(session.mins on it)
+"Average effort this week" round(avg(session.effort week) * 10) / 10 "of 10" faint
+list session by day, "No sessions yet. Tap Log session after a run, a net or weights."
+===
+@rich domain=n1_remember_things topic=remember_memo_nudges from=v2-cr-13e1fa050a
+-
+needs: add a memo with a day and a reminder time | phone reminder at that time | tick a memo off when done | overdue memos shown in red | count of things still to remember
+---
+app "Remember" bell mint
+table memo what text, on_day date = today "Day", alert time = 9:00 "Remind me at", done bool
+let open = count(memo where done = no)
+remind "You have something to remember today" at memo.alert
+topbar "Remember", memo, "New memo"
+statcard open, "things to remember, late:" count(memo where done = no and on_day < today), count(memo)
+each memo where done = no sort on_day as m empty "Nothing to remember. Tap New memo and I will nudge you."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.done
+    stack grow gap 0
+      m.what bold
+      m.on_day "at" m.alert faint color if(m.on_day < today, bad, muted)
+section "Done", count(memo where done = yes)
+  list memo where done = yes, "Nothing ticked off yet."
+===
+@rich domain=n1_calculator_keypad topic=pocket_calculator_keypad from=v2-cr-e6f519b8fb
+-
+needs: number keypad with digits 0 to 9 | add subtract multiply and divide | equals gives the answer | clear key | tape of recent answers
+---
+app "Calc" calc slate dark
+state acc num = 0
+state cur num = 0
+state op pick Add|Sub|Mul|Div|Nop = Nop
+table tape answer num
+let res = if(op = Add, acc + cur, if(op = Sub, acc - cur, if(op = Mul, acc * cur, if(op = Div, acc / cur, cur))))
+stack card gap 0 align end
+  if op != Nop
+    acc if(op = Add, "+", if(op = Sub, "-", if(op = Mul, "x", "/"))) faint
+  text cur huge
+grid 4 gap 1
+  each [7, 8, 9] as n
+    button n tap set cur = cur * 10 + n
+  button "/" fill soft tap set acc = res then set cur = 0 then set op = Div
+  each [4, 5, 6] as n
+    button n tap set cur = cur * 10 + n
+  button "x" fill soft tap set acc = res then set cur = 0 then set op = Mul
+  each [1, 2, 3] as n
+    button n tap set cur = cur * 10 + n
+  button "-" fill soft tap set acc = res then set cur = 0 then set op = Sub
+  button "C" fill bad tap set cur = 0 then set acc = 0 then set op = Nop
+  button "0" tap set cur = cur * 10
+  button "=" fill accent tap add tape answer = res then set cur = res then set acc = 0 then set op = Nop
+  button "+" fill soft tap set acc = res then set cur = 0 then set op = Add
+section "Tape", "last answers"
+  list tape top 5, "Answers show here after you press ="
+===
+@rich domain=n1_activity_timer topic=daily_activity_timer from=v2-cr-f174b35efc
+-
+needs: pick the activity: study, cook, walk, chores or rest | countdown timer with start pause reset | quick length buttons 10 20 45 minutes | finished timers are saved | minutes per activity today
+---
+app "Day Timer" timer ink
+table spent what pick Study|Cook|Walk|Chores|Rest = Study, mins num 1..600
+setting length dur = 20m "Timer length"
+state doing pick Study|Cook|Walk|Chores|Rest = Study
+choice doing
+row gap 1
+  each [10, 20, 45] as m
+    button m "min" fill if(length = 1m * m, accent, soft) grow tap set length = 1m * m
+timer length, "Timing" doing, add spent what = doing, mins = length / 1m then notify doing "time is up"
+section "Today", "minutes:" sum(spent.mins today)
+  share spent today by what, sum(it.mins), it.key
+list spent today, "No timers finished yet today. Pick an activity and press Start."
+===
+@rich domain=n1_home_cooking topic=home_cooking_dishes from=v2-cr-1dd7257f3d
+-
+needs: save a dish with meal type and cooking time | filter dishes by breakfast lunch dinner or snack | tap Cooked to count how often you made it | most cooked dishes ranked | mark favourites
+---
+app "Home Cooking" food plum
+table dish name text, kind pick Breakfast|Lunch|Dinner|Snack = Dinner, mins num 5..240 = 30 unit "min", steps long?, fav bool
+table cooked dish ref dish
+state meal pick All|Breakfast|Lunch|Dinner|Snack = All
+topbar "Home Cooking", dish, "Add dish"
+choice meal
+each dish where meal = All or kind = meal sort name as d empty "No dishes yet. Add the meals you cook at home."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.fav
+    stack grow gap 0
+      d.name bold
+      d.kind "," d.mins "min," count(d.cooked) "times cooked" faint
+    button "Cooked" tap add cooked dish = d
+section "Most cooked", "this month"
+  share dish sort count(it.cooked month) desc top 5, count(it.cooked month), it.name
+===
+@rich domain=n1_remember_pins topic=memory_jar_quick_remind from=v2-cr-527958ace9
+-
+needs: type what to remember in one box | one tap to remind in 1 hour, 4 hours or tomorrow | mark a thing urgent | urgent things listed first | count of things in the jar
+---
+app "Memory Jar" brain red
+table thing what text, urgent bool
+state say text = ""
+statcard count(thing), "things in your jar, urgent:" count(thing where urgent = yes)
+field say "What do you need to remember?"
+if len(say) > 0
+  row gap 1
+    button "In 1 hour" fill accent grow tap add thing what = say then remind "Check your jar: something to remember" in 1h then set say = ""
+    button "In 4 hours" grow tap add thing what = say then remind "Check your jar: something to remember" in 4h then set say = ""
+    button "Tomorrow" grow tap add thing what = say then remind "Check your jar: something to remember" in 1d then set say = ""
+each thing sort urgent desc as t empty "The jar is empty. Type something above and pick when to be reminded."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.urgent
+    t.what bold grow color if(t.urgent, bad, ink)
+    t.at faint
+===
+@rich domain=n1_fasting_hours topic=fasting_hours_clock from=v2-cr-406e5cc5a7
+-
+needs: start and end a fast with one button | hours fasted so far against a goal | fasts completed this week | bar chart of the last 7 days | history of starts and ends
+---
+app "Fasting" hourglass orange
+table fast mode pick Start|End = Start
+setting target num 8..24 = 16 "Fasting goal (hours)"
+let fasting = last(fast.mode) = Start
+let hrs = if(fasting, round((now - last(fast.at)) / 1h * 10) / 10, 0)
+goal hrs, target, if(fasting, "hours fasted so far", "not fasting right now"), "h"
+if fasting
+  button "Break my fast" fill bad tap add fast mode = End
+else
+  button "Start fasting" fill accent tap add fast mode = Start
+statcard count(fast week where mode = End), "fasts finished this week", 5
+section "Fasts finished", "last 7 days"
+  daybars last 7 days, count(fast on it where mode = End)
+list fast by day, "No fasts yet. Tap Start fasting when you stop eating."
+===
+@rich domain=n1_daily_tally topic=daily_counters_trend from=v2-cr-2e12a41a40
+-
+needs: create your own counters | plus one and undo for each counter | counted today and this week per counter | bar chart of the last 7 days per counter | 5 week grid of all counting
+---
+app "Daily Tally" check yellow
+table thing name text
+table tally thing ref thing
+topbar "Daily Tally", thing, "New counter"
+statcard count(tally today), "counted today across" plural(count(thing), "counter")
+each thing as t empty "No counters yet. Add one, like coffees, steps or phone calls."
+  stack card gap 2 swipe remove t
+    row gap 2
+      stack grow gap 0
+        t.name bold
+        count(t.tally today) "today," count(t.tally last 7 days) "this week" faint
+      button "-" tap remove last(t.tally today)
+      button "+1" fill accent tap add tally thing = t
+    daybars last 7 days, count(t.tally on it)
+section "All counters", "last 5 weeks"
+  daygrid last 35 days, count(tally on it), 5
+===
+@rich domain=n1_three_lists topic=shopping_packing_wish_lists from=v2-cr-49d6e6e81c
+-
+needs: one place for shopping, packing and wish lists | tap a list to switch with open counts | tick items off | optional price on each item | total price of wishes still to buy
+---
+app "Three Lists" list green
+table entry what text, kind pick Shopping|Packing|Wishes = Shopping, got bool, price money?
+state which pick Shopping|Packing|Wishes = Shopping
+topbar "Three Lists", entry, "Add item"
+row gap 1
+  each options entry.kind
+    button it count(entry where kind = it and got = no) fill if(which = it, ink, surface) grow tap set which = it
+goal count(entry where kind = which and got = yes), count(entry where kind = which), "done in" which
+each entry where kind = which sort got as e empty "Nothing on this list yet. Add the first item."
+  row card gap 2 tap edit e swipe remove e
+    toggle e.got
+    stack grow gap 0
+      e.what bold color if(e.got, muted, ink)
+      e.price faint
+section "Wishes still to buy", "items:" count(entry where kind = Wishes and got = no)
+  sum(entry.price where kind = Wishes and got = no) head
+===
+@rich domain=n1_sum_tape topic=adding_machine_tape from=v2-cr-4087ca43c9
+-
+needs: add numbers to a tape as plus or minus | running total in big type | average of the numbers | split the total between a number of people | clear the tape
+---
+app "Sum Tape" pen teal
+table line label text?, amount num, sign pick Plus|Minus = Plus
+state parts num = 1
+let total = sum(line.amount where sign = Plus) - sum(line.amount where sign = Minus)
+topbar "Sum Tape", line, "Add a number"
+total huge
+count(line) "numbers, average" round(avg(line.amount) * 100) / 100 faint
+section "Split the total", "between" parts
+  slider parts 1..20
+  "Each share" round(total / parts * 100) / 100 big
+section "Tape", "newest first"
+  each line sort at desc as l empty "The tape is empty. Tap Add a number."
+    row gap 2 tap edit l swipe remove l
+      l.label grow
+      if(l.sign = Plus, "+", "-") l.amount bold color if(l.sign = Plus, good, bad)
+button "Clear the tape" fill bad tap remove all line
+===
+@rich domain=n1_chore_stars topic=kids_chores_star_chart from=v2-cr-ee6252675b
+-
+needs: add each child | add chores worth 1 to 5 stars | tap a chore to give a child its stars | star progress toward a treat | set how many stars buy a treat
+---
+app "Chore Stars" star blue
+table kid name text
+table chore name text, stars num 1..5 = 1
+table done chore ref chore, kid ref kid
+setting treat num = 15 "Stars for a treat"
+topbar "Chore Stars", kid, "Add child"
+each kid as k empty "No children yet. Add each child with Add child."
+  stack card gap 2 swipe remove k
+    row
+      k.name head grow
+      sum(k.done, it.chore.stars) "stars" bold
+    goal sum(k.done, it.chore.stars), treat, "stars toward a treat"
+    scroll gap 1
+      each chore as c
+        button c.name "+" c.stars tap add done chore = c, kid = k
+form chore, "Add chore"
+===
+@rich domain=n1_budget_in_out topic=money_in_and_out from=v2-cr-e65574393b
+-
+needs: add money in or money out with a note | what is left this month | spending per day against a daily allowance | list grouped by day | month navigation
+---
+app "Budget" wallet purple
+table flow what text, amount money, type pick In|Out = Out
+state m date = today
+let inc = sum(flow.amount month of m where type = In)
+let out = sum(flow.amount month of m where type = Out)
+topbar "Budget", flow, "Add money in or out"
+monthnav m
+statcard inc - out, "left this month, in" inc ", out" out, inc
+section "Spending per day", "allowance" round(inc / 30) "a day"
+  goalbars last 7 days, sum(flow.amount on it where type = Out), inc / 30
+list flow month of m by day, "Nothing recorded this month. Add your pay or a first expense."
+===
+@rich domain=n1_time_expense_jobs topic=client_hours_and_costs from=v2-cr-16b631bed8
+-
+needs: add clients | log hours worked for a client | log costs for a client | hourly rate setting | amount to bill per client | hours this month
+---
+app "Time and Costs" hourglass pink
+table client name text
+table job client ref client, hours num 0.25..24 = 1 unit "h", note text?
+table cost client ref client, what text, amount money
+setting rate money = 1500 "Hourly rate"
+topbar "Time and Costs", client, "Add client"
+statcard sum(job.hours month), "hours this month, costs" sum(cost.amount month)
+each client as c empty "No clients yet. Add one, then log hours and costs against it."
+  stack card gap 1 tap edit c swipe remove c
+    row
+      c.name bold grow
+      sum(c.job.hours) "h" bold
+    "To bill:" sum(c.job.hours) * rate + sum(c.cost.amount) "(hours" sum(c.job.hours) * rate "+ costs" sum(c.cost.amount) ")" faint
+    row gap 1
+      button "+1 h" tap add job client = c, hours = 1
+      button "+4 h" tap add job client = c, hours = 4
+form cost, "Add cost"
+===
+@rich domain=n1_category_limits topic=monthly_limit_per_category from=v2-cr-acf7b0be81
+-
+needs: set a monthly limit for each kind of purchase | record what you buy under a category | progress bar per category | red when over the limit | spending per day chart
+---
+app "Spend Limits" tag grey
+table cat name text, limit money
+table buy cat ref cat, what text?, amount money
+topbar "Spend Limits", cat, "Add limit"
+statcard sum(buy.amount month), "spent this month of" sum(cat.limit), sum(cat.limit)
+each cat sort name as c empty "No limits yet. Add a category like Food or Fuel with its monthly limit."
+  stack card gap 1 tap edit c swipe remove c
+    c.name bold
+    goal sum(c.buy.amount month), c.limit, "used this month"
+    if sum(c.buy.amount month) > c.limit
+      "Over by" sum(c.buy.amount month) - c.limit color bad bold
+section "Spending per day"
+  daybars last 14 days, sum(buy.amount on it)
+form buy, "Record a purchase"
+===
+@rich domain=n1_ramadan_days topic=ramadan_30_day_grid from=v2-cr-5d6f1184a0
+-
+needs: set the first day of Ramadan | 30 day grid you tap to mark each fast | which day of Ramadan it is today | log Quran pages with one tap | pages read so far
+---
+app "Ramadan" moon ocean dark
+table fast
+table quran pages num 1..100
+setting first date = 2027-02-08 "First day of Ramadan"
+let dayno = today - first + 1
+statcard count(fast), "fasts kept of 30, today is day" clamp(dayno, 0, 30), 30
+grid 6 gap 1
+  each 1..30 as n
+    let d = first + n - 1
+    box height 40 radius 8 fill if(count(fast on d) > 0, accent, soft) tap toggle fast on d
+      text n small align center color if(count(fast on d) > 0, bg, ink)
+section "Quran", "pages so far:" sum(quran.pages)
+  row gap 1
+    each [2, 5, 10] as p
+      button "+" p "pages" grow tap add quran pages = p
+  daybars last 7 days, sum(quran.pages on it)
+===
+@rich domain=n1_stretch_breaks topic=stretch_break_total from=v2-cr-4b03c84d87
+-
+needs: tap to log a stretch break with its minutes | running total of breaks and minutes | reminders on weekdays only while goal not met | daily goal setting | bar chart with goal line
+---
+app "Stretch Breaks" heart mint
+table stretch mins num 1..30 = 3
+setting daily num = 4 "Breaks per day"
+let n = count(stretch today)
+remind "Stretch break: stand up and loosen your shoulders" at 11:00, 15:00 on mon tue wed thu fri if n < daily
+statcard n, "of" daily "breaks today", daily
+"How long did you stretch?" faint
+quick stretch, mins, [3, 5, 10]
+count(stretch) "breaks and" sum(stretch.mins) "minutes in total" bold
+section "Last 7 days", "goal met on" count(days last 7 days, count(stretch on it) >= daily) "days"
+  goalbars last 7 days, count(stretch on it), daily
+===
+@rich domain=n1_shop_books topic=shop_day_book_profit from=v2-cr-bca8e6c3c1
+-
+needs: write each sale, purchase and expense | day book grouped by day | profit this month | where the money went chart | sales per day for two weeks
+---
+app "Shop Books" book slate
+table entry what text, amount money, kind pick Sale|Purchase|Expense = Sale, party text?
+let sales = sum(entry.amount month where kind = Sale)
+let costs = sum(entry.amount month where kind = Purchase) + sum(entry.amount month where kind = Expense)
+screen day "Day book" book
+  topbar "Day book", entry, "New entry"
+  list entry by day, "No entries yet. Write each sale, purchase and expense here."
+screen pl "Profit" chart
+  statcard sales - costs, "profit this month, sales" sales ", costs" costs
+  section "Where the money went", "this month"
+    share entry month by kind, sum(it.amount), it.key
+  section "Sales per day", "last 14 days"
+    daybars last 14 days, sum(entry.amount on it where kind = Sale)
+===
+@rich domain=n1_who_owes_me topic=owed_to_me_ledger from=v2-cr-2ec6bd462c
+-
+needs: add people and record what they owe with a due date | record payments | balance per person | one tap pay in full | total still owed and weekly reminder
+---
+app "Who Owes Me" users ink
+table person name text, phone text?
+table owe person ref person, amount money, due date?
+table paid person ref person, amount money
+let out = sum(owe.amount) - sum(paid.amount)
+remind "Check who still owes you money" at 10:00 on sat
+topbar "Who Owes Me", person, "Add person"
+statcard out, "still owed by" count(person, sum(it.owe.amount) > sum(it.paid.amount)) "people"
+each person sort sum(it.owe.amount) - sum(it.paid.amount) desc as p empty "No one owes you yet. Add a person first."
+  let bal = sum(p.owe.amount) - sum(p.paid.amount)
+  stack card gap 1 tap edit p
+    row
+      p.name bold grow
+      if(bal > 0, "owes", "settled") bal color if(bal > 0, warn, good)
+    if bal > 0
+      button "Paid in full" tap add paid person = p, amount = bal
+form owe, "Record a loan"
+===
+@rich domain=n1_prayer_reps topic=prayers_and_rep_tally from=v2-cr-1e0c5f678d
+-
+needs: tick the five daily prayers | prayers prayed today and day streak | week dots showing days with all five | rep counter for pushups, squats and situps | reps today per exercise
+---
+app "Prayers and Reps" beads plum
+table prayer name pick Fajr|Dhuhr|Asr|Maghrib|Isha = Fajr
+table rep move pick Pushups|Squats|Situps = Pushups, n num 1..500
+state mv pick Pushups|Squats|Situps = Pushups
+"Prayers today" head
+row gap 1
+  each options prayer.name as p
+    stack grow gap 0 align center
+      p tiny color muted
+      toggle prayer today where name = p
+goal count(prayer today), 5, "prayers prayed today"
+weekdots count(prayer on it) >= 5
+"Reps" head
+choice mv
+row gap 1
+  each [10, 20, 50] as k
+    button "+" k grow tap add rep move = mv, n = k
+section "Reps today", "in all:" sum(rep.n today)
+  share rep today by move, sum(it.n), it.key
+===
+@rich domain=n1_wish_fund topic=saving_for_a_wish from=v2-cr-afb72f1a1f
+-
+needs: list things you want with prices | add savings to a wish with one tap | progress bar per wish | total saved against everything wanted | average saved per month
+---
+app "Wish Fund" gift red
+table wish what text, price money
+table put wish ref wish, amount money
+topbar "Wish Fund", wish, "Add a wish"
+statcard sum(put.amount), "saved toward" count(wish) "wishes worth" sum(wish.price), sum(wish.price)
+each wish sort price as w empty "No wishes yet. Add something you want and its price."
+  stack card gap 2 tap edit w swipe remove w
+    row
+      w.what bold grow
+      w.price faint
+    goal sum(w.put.amount), w.price, "saved so far"
+    row gap 1
+      each [500, 1000, 5000] as a
+        button "+" a grow tap add put wish = w, amount = a
+section "Your pace", "about" round(sum(put.amount last 3 months) / 3) "a month"
+  daybars last 14 days, sum(put.amount on it)
+===
+@rich domain=n1_fast_makeup topic=fasts_to_make_up from=v2-cr-b2af5a9ee0
+-
+needs: log a missed fast with the reason | one tap to log a made up fast today | fasts still owed | calendar of made up days | reasons chart
+---
+app "Fasts to Make Up" moon orange
+table missed why pick Illness|Travel|Cycle|Other = Illness
+table madeup
+let owed = max(count(missed) - count(madeup), 0)
+statcard count(madeup), "made up out of" count(missed) "missed", count(missed)
+owed "fasts still to make up" head color if(owed > 0, warn, good)
+button "I made up a fast today" fill accent tap toggle madeup
+calendar madeup
+section "Why they were missed"
+  share missed by why, count(it), it.key
+form missed, "Log a missed fast"
+list missed by day, "No missed fasts logged."
+===
+@rich domain=n1_daily_log_tags topic=daily_log_with_tags from=v2-cr-66cdb0cab6
+-
+needs: log a line about the day with a tag | filter by tag chips | logged today and day streak | 5 week grid of busy days | list grouped by day
+---
+app "Daily Log" pen yellow
+table moment note text, tag pick Work|Home|Health|Fun|Other = Home
+state f pick All|Work|Home|Health|Fun|Other = All
+topbar "Daily Log", moment, "Log something"
+"Logged today" count(moment today) head
+streak(moment) "day streak" faint
+choice f
+list moment where f = All or tag = f by day, "Nothing logged yet. Tap Log something and write one line."
+section "Last 5 weeks", "busiest tag" if(count(moment where tag = Work) >= count(moment where tag = Home), "Work", "Home")
+  daygrid last 35 days, count(moment on it), 3
+===
+@rich domain=n1_coin_jar topic=jobs_for_coins_jar from=v2-cr-09cb66b137
+-
+needs: add jobs worth coins | tap a job to earn its coins | jar that fills with coins | prizes list with cost | buy a prize only when enough coins
+---
+app "Coin Jar" coin green
+table job name text, coins num 1..20 = 1
+table prize name text, cost num 1..500
+table earned job ref job
+table bought prize ref prize
+let coins = sum(earned, it.job.coins) - sum(bought, it.prize.cost)
+topbar "Coin Jar", job, "Add job"
+draw 100, 110
+  let h = 86 * clamp(coins / 50, 0, 1)
+  rect 20, 12, 60, 92 stroke ink thick 2 radius 10
+  rect 22, 102 - h, 56, h fill warn radius 6
+  label 50, 54, coins huge
+grid 2 gap 1
+  each job as j empty "No jobs yet. Add little jobs like making the bed."
+    button j.name "+" j.coins tap add earned job = j
+section "Prizes", "coins in the jar:" coins
+  each prize sort cost as p empty "No prizes yet. Add something to save up for."
+    row gap 2
+      p.name bold grow
+      p.cost "coins" faint
+      if coins >= p.cost
+        button "Get it" fill accent tap add bought prize = p
+      else
+        "needs" p.cost - coins "more" faint
+form prize, "Add prize"
+===
+@rich domain=n1_quick_timers topic=preset_timers_history from=v2-cr-5ed9f37679
+-
+needs: pick 5, 10, 25 or 45 minutes | countdown with start pause and reset | notification when time is up | finished timers saved | minutes timed this week
+---
+app "Quick Timers" timer teal
+table ran mins num 1..600
+state len dur = 5m
+scroll gap 1
+  each [5, 10, 25, 45] as m
+    button m "min" fill if(len = 1m * m, accent, soft) tap set len = 1m * m
+timer len, "Countdown", add ran mins = len / 1m then notify "Timer finished"
+section "Timed this week", "minutes:" sum(ran.mins week)
+  daybars last 7 days, sum(ran.mins on it)
+list ran today, "Nothing timed yet today."
+===
+@rich domain=n1_puppy_care topic=puppy_care_buttons from=v2-cr-1e9696dea1
+-
+needs: one tap to log fed, water, walk, potty, play or meds | how many of each today | hours since the last feeding | next vet visit countdown | feeding reminders morning and evening | walks chart
+---
+app "Puppy Care" paw blue
+table care kind pick Fed|Water|Walk|Potty|Play|Meds = Fed
+setting vet date = today "Next vet visit"
+remind "Puppy dinner time" at 7:30, 18:00
+"Vet visit in" max(vet - today, 0) "days" head
+"Last fed" round((now - last(care.at where kind = Fed)) / 1h) "hours ago" faint
+grid 3 gap 1
+  each options care.kind as k
+    stack card gap 0 tap add care kind = k
+      k bold
+      count(care today where kind = k) "today" faint
+section "Walks", "last 7 days"
+  daybars last 7 days, count(care on it where kind = Walk)
+list care today, "Nothing logged yet today. Tap a button when the puppy eats, drinks or walks."

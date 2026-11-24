@@ -1,0 +1,197 @@
+@rich domain=c3_lifting_total topic=powerlifting_total_strength style=multi_feature
+powerlifting total: squat, bench and deadlift in kg plus my bodyweight. show the total, total divided by bodyweight and say if i am beginner, intermediate or advanced. let me save the day's total to see the progress
+needs: squat bench deadlift and bodyweight inputs | total | ratio to bodyweight | level label | save total and see progress
+---
+app "Lifting Total" dumbbell ink dark
+table meet total num
+state sq num = 140
+state bn num = 100
+state dl num = 170
+state bw num = 80
+let total = sq + bn + dl
+let ratio = if(bw > 0, total / bw, 0)
+field sq "Squat (kg)"
+field bn "Bench (kg)"
+field dl "Deadlift (kg)"
+field bw "Bodyweight (kg)"
+statcard total, "kg total, x" round(ratio * 100) / 100 "bodyweight. Level:" if(ratio < 3, "beginner", if(ratio < 5, "intermediate", "advanced")), 0
+button "Save today's total" fill accent tap add meet total = total
+if count(meet) > 1
+  section "Progress"
+    trend meet, it.total
+===
+@rich domain=c3_activity_kcal topic=calories_by_activity_type style=short
+calories burned by activity
+needs: activity chips | minutes and weight inputs | calories burned | calories per hour
+---
+app "Activity Burn" flame orange
+state act pick Running|Cycling|Swimming|Walking|Yoga = Running
+state mins num = 40
+state kg num = 70
+let met = if(act = Running, 9.8, if(act = Cycling, 7.5, if(act = Swimming, 8, if(act = Walking, 3.5, 2.5))))
+choice act
+field mins "Minutes"
+field kg "Your weight (kg)"
+statcard round(met * kg * mins / 60), "kcal burned", 0
+"That is about" round(met * kg) "kcal per hour." faint
+===
+@rich domain=c3_car_service topic=car_service_due_date style=detailed
+log every time the car is serviced, next service is due 6 months after the last one. show the due date, how many days are left, a red warning if overdue, and the days since the last service
+needs: log a service with date | due date six months after the last | days left | overdue warning | days since last service
+---
+app "Car Service" tool blue
+table service shop text?
+let lastd = last(service.at)
+let nxt = addmonths(lastd, 6)
+topbar "Car Service", service, "Log service"
+if count(service) = 0
+  "Log your last service to see when the next one is due." faint
+else
+  statcard max(nxt - today, 0), "days until the next service on" nxt, 183
+  "Days since last service" since(service) head
+  if nxt < today
+    "Service is overdue by" plural(today - nxt, "day") "." color bad
+list service top 5, "No services logged yet."
+===
+@rich domain=c3_sleep_efficiency topic=sleep_efficiency_percent style=detailed
+sleep efficiency: i got into bed at 23:15, fell asleep at 23:50, woke at 6:40 and got out of bed at 7:00. work out time in bed, time asleep and the efficiency percent, and say if it is good (85 or more)
+needs: four time inputs | time in bed | time asleep | efficiency percent | good or low label
+---
+app "Sleep Score" moon purple dark
+state inbed time = 23:15
+state asleep time = 23:50
+state woke time = 6:40
+state outbed time = 7:00
+let tib = outbed - inbed
+let tas = woke - asleep
+let eff = if(tib > 0s, round(tas / tib * 100), 0)
+field inbed "Got into bed"
+field asleep "Fell asleep"
+field woke "Woke up"
+field outbed "Got out of bed"
+statcard eff, "% sleep efficiency", 100
+"In bed" tib "and asleep" tas head
+if eff >= 85
+  "That is good sleep efficiency." color good
+else
+  "Below 85 percent. Try a fixed wake-up time." color warn
+===
+@rich domain=c3_week_hours_plan topic=hours_left_this_week style=multi_feature
+i need to hit 40 hours by friday. tell me how many hours i have done so far this week and how many hours a day i must work on the days that are left, counting today
+needs: hours done input | weekly target | work days left this week | hours per day needed
+---
+app "Week Hours" clock green
+setting target num = 40 "Weekly target (hours)"
+state done num = 18.5
+let left_days = max(6 - weekday(today), 0)
+let need = max(target - done, 0)
+field target
+field done "Hours done so far"
+statcard done, "hours done of" target, target
+if need = 0
+  "Target reached. Enjoy the rest of the week." big color good
+else
+  if left_days = 0
+    "No work days left this week." faint
+  else
+    "Work" round(need / left_days * 10) / 10 "hours a day for" plural(left_days, "day") big
+    "Still" need "hours to go" faint
+===
+@rich domain=c3_flight_duration topic=flight_duration_time_zones style=detailed
+flight leaves lahore at 22:30 and lands in london at 03:10 local time. london is 5 hours behind lahore. how long is the flight in the air, and what time is it in lahore when i land
+needs: departure and arrival local times | time zone difference | flight duration | arrival time at home
+---
+app "Flight Time" plane ocean
+state dep time = 22:30
+state arr time = 3:10
+state diff num = -5
+let air = (arr - dep) - diff * 1h
+field dep "Departs (local)"
+field arr "Lands (local)"
+field diff "Arrival zone minus departure zone (hours)"
+"Time in the air" faint
+air big
+"When you land it is" arr - diff * 1h "back home" head
+===
+@rich domain=c3_school_cutoff topic=age_on_school_cutoff_date style=short
+is my daughter old enough to start school, age on 1 april
+needs: birth date and cutoff date inputs | age on cutoff in years and months | eligible or not
+---
+app "School Age" school pink
+setting born date = 2021-07-15 "Child's birth date"
+setting cutoff date = 2027-04-01 "School age cutoff date"
+let mths = (year(cutoff) - year(born)) * 12 + month(cutoff) - month(born) - if(monthday(cutoff) < monthday(born), 1, 0)
+field born
+field cutoff
+statcard floor(mths / 12), "years" mths % 12 "months old on the cutoff date", 5
+if mths >= 60
+  "Old enough to start." color good
+else
+  "Not old enough yet. She turns five on" addmonths(born, 60) color warn
+===
+@rich domain=c3_steps_to_km topic=steps_to_km_by_height style=short
+10000 steps is how many km for my height
+needs: steps input | height input | stride length | distance in km and miles
+---
+app "Steps to Km" walk teal
+state n num = 10000
+state cm num = 170
+let stride = cm * 0.415
+field n "Steps"
+field cm "Height (cm)"
+statcard round(n * stride / 100000 * 10) / 10, "km walked", 0
+"About" round(n * stride / 160934 * 10) / 10 "miles, stride" round(stride) "cm" faint
+===
+@rich domain=c3_moment_countdown topic=countdown_to_exact_moment style=multi_feature
+countdown to my flight on a date at a time. show days, hours and minutes left, and how much of the 30 days since i booked has passed as a percent with a bar
+needs: event date and time inputs | days hours and minutes left | percent of time since booking elapsed | bar | friendly message when it is past
+---
+app "Countdown" hourglass blue dark
+setting evd date = 2026-12-31 "Event date"
+setting evt time = 20:00 "Event time"
+setting booked date = 2026-11-24 "Date you started counting"
+let moment = evd + hour(evt) * 1h + minute(evt) * 1m
+let left = moment - now
+let pct = clamp(round((today - booked) / max(evd - booked, 1) * 100), 0, 100)
+field evd
+field evt
+field booked
+if left <= 0s
+  "It has already happened." big color good
+else
+  floor(left / 1d) "days" hour(left) "hours" minute(left) "minutes" big
+  "since you started counting:" pct "%" faint
+  draw 100, 6
+    rect 0, 0, 100, 6 fill soft radius 3
+    rect 0, 0, pct, 6 fill accent radius 3
+===
+@rich domain=c3_triathlon_total topic=triathlon_finish_time style=detailed
+triathlon plan: swim 28 min, bike 74 min, run 49 min, transitions 3 and 2 min. show the total finish time, what percent of the race each part takes and the clock time i finish if the start gun is at 7:30
+needs: minutes for swim bike run and two transitions | total finish time | percent of each part | finish clock time from start time
+---
+app "Triathlon" bike teal
+setting start time = 7:30 "Start time"
+state swim num = 28
+state bike num = 74
+state run num = 49
+state t1 num = 3
+state t2 num = 2
+let tot = swim + bike + run + t1 + t2
+field start
+row gap 1
+  field swim "Swim min"
+  field bike "Bike min"
+  field run "Run min"
+row gap 1
+  field t1 "T1 min"
+  field t2 "T2 min"
+statcard tot, "minutes in total. Finish at" start + tot * 1m, 0
+section "Share of the race"
+  each 0..2 as k
+    stack gap 0
+      row
+        if(k = 0, "Swim", if(k = 1, "Bike", "Run")) grow
+        round(if(k = 0, swim, if(k = 1, bike, run)) / max(tot, 1) * 100) "%" bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * if(k = 0, swim, if(k = 1, bike, run)) / max(tot, 1), 3 fill accent radius 1

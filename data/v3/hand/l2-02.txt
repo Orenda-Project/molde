@@ -1,0 +1,900 @@
+@rich domain=l2_doctor_visits topic=doctor visits and costs kind=long
+-
+needs: add a visit with doctor, kind, date and cost | upcoming visits sorted by date | health spending against a yearly budget | cost by kind | spending per month | past visits list
+---
+app "Doctor visits" heart teal
+table visit doctor text, kind pick GP|Dentist|Eye|Child|Lab|Specialist = GP, day date, cost money?, note text?
+setting yearly_budget money = 30000 "Health budget per year"
+let spent = sum(visit.cost year)
+let upcoming = count(visit where day >= today)
+remind "Doctor visit tomorrow" at visit.day - 1d at 18:00
+topbar "Doctor visits", visit, "Add visit"
+row gap 2
+  statcard upcoming, "visits coming up"
+  statcard count(visit year where day < today), "visits this year"
+statcard spent, "spent on health this year, budget" yearly_budget, yearly_budget
+section "Coming up", "nearest first"
+  each visit where day >= today sort day as v empty "No visits planned. Book your check-up and add it here."
+    row card gap 2 tap edit v swipe remove v
+      stack grow gap 0
+        v.doctor bold
+        v.kind v.day faint
+      "in" v.day - today "days" faint
+section "Cost by kind", "this year"
+  share visit year by kind, sum(it.cost), it.key
+section "Spending per month", "last 6 months"
+  bars 1..6, sum(visit.cost month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Visits per kind", "all time"
+  each options visit.kind as k
+    row gap 1
+      k grow
+      count(visit where kind = k) bold
+section "Biggest bill", "this year"
+  max(visit.cost year) big
+  "Average per visit" round(avg(visit.cost year)) faint
+section "Notes to remember"
+  each visit where note != "" top 4 as v empty "No notes yet. Write what the doctor said when you add a visit."
+    row gap 2
+      v.note grow
+      v.day faint
+section "Past visits"
+  each visit where day < today sort day desc as v empty "No past visits recorded."
+    row gap 2 tap edit v
+      v.doctor v.day grow
+      v.cost bold
+row gap 2
+  statcard count(visit week), "entries this week"
+  statcard count(visit prev week), "entries last week"
+===
+@rich domain=l2_kids_teeth topic=kids tooth brushing chart kind=long
+-
+needs: tick morning and night brushing per child | full days count | week dots | month grid | stars per child | reminders morning and night
+---
+app "Brush teeth" tooth mint
+table kid name text
+table brush kid ref kid, slot pick Morning|Night = Morning
+let kids = count(kid)
+let full = count(days last 7 days, count(brush on it) >= kids * 2 and kids > 0)
+remind "Brush your teeth!" at 7:30, 20:00
+topbar "Brush teeth", kid, "Add child"
+statcard count(brush today), "of" kids * 2 "brushes done today", kids * 2
+each kid as k empty "No children yet. Add each child to start the chart."
+  stack card gap 2 tap edit k swipe remove k
+    k.name bold
+    row gap 2
+      row gap 1 grow
+        "Morning" faint
+        toggle k.brush where slot = Morning
+      row gap 1 grow
+        "Night" faint
+        toggle k.brush where slot = Night
+    weekdots count(k.brush on it) >= 2
+section "Full days", "in the last 7:" full
+  daybars last 7 days, count(brush on it)
+section "Month grid", "darker means more brushing"
+  daygrid last 28 days, count(brush on it), max(kids * 2, 1)
+section "Star chart", "full days this month"
+  each kid sort name as k
+    row gap 1
+      k.name grow
+      count(days month, count(k.brush on it) >= 2) "stars" bold
+section "Habit streak"
+  streak(brush) "days with brushing" big
+  "Best run" best(brush) "days" faint
+section "Morning or night", "this month"
+  share brush month by slot, count(it), it.key
+section "Tips"
+  "Two minutes, two times a day. Sing a song to keep time." faint
+row gap 2
+  statcard count(brush week), "entries this week"
+  statcard count(brush prev week), "entries last week"
+section "Totals", "all time"
+  count(brush) "entries so far" big
+  "This year" count(brush year) faint
+  "Last one" since(brush) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(brush where dayname(at) = it), it
+===
+@rich domain=l2_meditation_sits topic=meditation sits and timer kind=long
+-
+needs: countdown timer that logs a sit | minutes this week against goal | streak | heat map of sit days | styles split | quick log buttons
+---
+app "Meditation" leaf teal
+table sit mins num 1..120 unit "min", style pick Breath|Body_scan|Walking|Silence = Breath
+setting weekly_goal num = 70 "Minutes per week"
+setting sit_length dur = 10m "Sit length"
+let wk = sum(sit.mins week)
+remind "Time to sit for a few minutes" at 6:45, 21:00
+timer sit_length, "Sit", add sit mins = sit_length / 1m then notify "Sit finished. Take a slow breath."
+statcard wk, "min this week, goal" weekly_goal, weekly_goal
+row gap 2
+  statcard streak(sit), "day streak"
+  statcard count(sit month), "sits this month"
+  statcard best(sit), "best streak"
+section "Minutes per day", "last 7 days"
+  daybars last 7 days, sum(sit.mins on it)
+section "Sit days", "last 10 weeks"
+  heat last 70 days, count(sit on it), 2
+section "Styles", "this month"
+  share sit month by style, sum(it.mins), it.key
+section "Sit length", "last 60 days"
+  trend sit last 60 days, it.mins
+section "Quick log", "for a sit you did without the timer"
+  row gap 1
+    button "5 min" tap add sit mins = 5
+    button "10 min" tap add sit mins = 10
+    button "20 min" tap add sit mins = 20
+section "Totals"
+  sum(sit.mins) "minutes in all" big
+  "Longest sit" max(sit.mins) "min" faint
+  "Average sit" round(avg(sit.mins)) "min" faint
+section "Sits"
+  list sit by day, "No sits yet. Press Start and breathe."
+row gap 2
+  statcard count(sit week), "entries this week"
+  statcard count(sit prev week), "entries last week"
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(sit where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(sit on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(sit.mins) * 10) / 10 "min" big
+  "Highest" max(sit.mins) "min" faint
+  "Lowest" min(sit.mins) "min" faint
+===
+@rich domain=l2_kind_acts topic=kindness acts challenge kind=long
+-
+needs: log an act of kindness with who and kind | acts this month against a goal | acts by type | acts per day | streak | list by day
+---
+app "Kindness" smile pink
+table act what text = "Kind act", who pick Family|Friend|Neighbour|Stranger|Colleague = Friend, kind pick Time|Gift|Words|Help = Help
+setting monthly_goal num = 30 "Acts per month"
+let n = count(act month)
+topbar "Kindness", act, "Log an act"
+statcard n, "kind acts this month, goal" monthly_goal, monthly_goal
+quick act, who, [Family, Friend, Neighbour]
+row gap 2
+  statcard streak(act), "days in a row"
+  statcard count(act week), "acts this week"
+  statcard count(act all), "acts in all"
+section "By type", "this month"
+  share act month by kind, count(it), it.key
+section "Who got your kindness", "all time"
+  share act by who, count(it), it.key
+section "Per day", "last 14 days"
+  daybars last 14 days, count(act on it)
+section "Calendar", "last 5 weeks"
+  daygrid last 35 days, count(act on it), 3
+section "Ideas for today"
+  each ["Call someone you have not spoken to", "Pay for the next person", "Say thank you to a teacher", "Share your lunch"]
+    row card gap 2
+      icon smile
+      it grow
+section "Gifts and help", "this month"
+  count(act month where kind = Gift or kind = Help) big
+  "of" n "acts were gifts or help" faint
+section "Your acts"
+  list act by day, "No acts yet. Start small: hold a door, send a kind message."
+row gap 2
+  statcard count(act week), "entries this week"
+  statcard count(act prev week), "entries last week"
+section "Totals", "all time"
+  count(act) "entries so far" big
+  "This year" count(act year) faint
+  "Last one" since(act) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(act where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(act on it), 2
+===
+@rich domain=l2_yoga_poses topic=yoga practice and progress kind=long
+-
+needs: log a yoga session with focus and minutes | minutes this week against goal | week dots | focus split | session length trend | tabs for practice, progress and history
+---
+app "Yoga" leaf purple
+table session mins num 5..120 unit "min", focus pick Flexibility|Strength|Balance|Calm = Calm, note text?
+setting weekly_goal num = 90 "Minutes per week"
+let wk = sum(session.mins week)
+remind "Roll out your mat" at 6:30 on mon wed fri
+screen practice "Practice" leaf
+  statcard wk, "min this week, goal" weekly_goal, weekly_goal
+  weekdots count(session on it) > 0
+  quick session, mins, [10, 20, 30]
+  form session, "Save session"
+  section "Today"
+    list session today, "No practice yet today. Even ten minutes help."
+  section "Pose ideas"
+    each ["Child's pose", "Downward dog", "Warrior two", "Tree pose"]
+      row gap 2
+        icon leaf
+        it grow
+screen progress "Progress" chart
+  section "Minutes per day", "last 14 days"
+    daybars last 14 days, sum(session.mins on it)
+  section "Focus", "all time"
+    share session by focus, sum(it.mins), it.key
+  section "Session length", "last 60 days"
+    trend session last 60 days, it.mins
+  row gap 2
+    statcard streak(session), "day streak"
+    statcard sum(session.mins month), "min this month"
+  section "Practice days", "last 5 weeks"
+    daygrid last 35 days, count(session on it), 2
+screen history "History" list
+  list session by day, "No sessions yet. Your practice shows up here."
+===
+@rich domain=l2_homework_planner topic=homework due dates kind=long
+-
+needs: add homework with subject, due date and effort | tick when done | what is due today and overdue | work per subject | homework left count | list sorted by due date
+---
+app "Homework" pencil blue
+table task title text, subject pick Maths|English|Science|Urdu|Islamiat|Other = Maths, due date, mins num 5..240 = 30 unit "min"
+table finished task ref task
+state filter pick All|Maths|English|Science|Urdu|Islamiat|Other = All
+let open = count(task, count(it.finished all) = 0)
+remind "Check your homework list" at 17:00 on mon tue wed thu sun
+topbar "Homework", task, "Add homework"
+row gap 2
+  statcard open, "homework still to do"
+  statcard count(task where due = today), "due today"
+row gap 1
+  button "All" fill if(filter = All, accent, soft) tap set filter = All
+  each options task.subject as s
+    button s fill if(filter = s, accent, soft) tap set filter = s
+each task where filter = All or subject = filter sort due as t empty "No homework here. Enjoy the free time or add the next task."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.title bold
+      t.subject t.mins "min" faint
+      if count(t.finished all) > 0
+        "Done" color good small
+      else
+        if t.due < today
+          "Late by" today - t.due "days" color bad small
+        else
+          "Due" t.due faint
+    toggle t.finished all
+section "Minutes of work", "tasks due, next 7 days"
+  daybars last 7 days, sum(task.mins where due = today)
+section "Work by subject"
+  share task by subject, sum(it.mins), it.key
+section "Finished per day", "last 14 days"
+  daybars last 14 days, count(finished on it)
+section "Streak"
+  streak(finished) "days with homework finished" big
+  "Best run" best(finished) "days" faint
+row gap 2
+  statcard count(finished week), "entries this week"
+  statcard count(finished prev week), "entries last week"
+section "Totals", "all time"
+  count(finished) "entries so far" big
+  "This year" count(finished year) faint
+  "Last one" since(finished) "days ago" faint
+===
+@rich domain=l2_grades_tracker topic=school marks and grades kind=long
+-
+needs: add a mark with subject, score and out-of total | average percent | subject averages | marks trend line | pass mark setting | list of marks by subject
+---
+app "Marks" school purple
+table mark subject pick Maths|English|Science|Urdu|Islamiat|Computer = Maths, test text, score num 0..200, total num 1..200 = 100
+setting pass_percent num = 40 "Pass mark (percent)"
+let pct = round(sum(mark.score) * 100 / max(sum(mark.total), 1))
+let failed = count(mark, it.score * 100 < pass_percent * it.total)
+topbar "Marks", mark, "Add mark"
+row gap 2
+  statcard pct, "% average over all tests", 100
+  statcard count(mark), "tests recorded"
+  statcard failed, "below the pass mark"
+section "By subject", "average percent"
+  each options mark.subject as s
+    stack gap 0
+      row
+        s grow
+        round(sum(mark.score where subject = s) * 100 / max(sum(mark.total where subject = s), 1)) "%" bold
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(mark.score where subject = s) / max(sum(mark.total where subject = s), 1), 0, 1), 4 fill accent radius 2
+section "Score over time", "percent per test"
+  trend mark last 180 days, it.score * 100 / it.total
+section "Tests per month", "last 6 months"
+  bars 1..6, count(mark month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Best and weakest"
+  "Best score" max(mark, it.score * 100 / it.total) "%" bold
+  "Lowest score" min(mark, it.score * 100 / it.total) "%" faint
+section "Latest tests"
+  each mark top 8 as m empty "No marks yet. Add the first test result."
+    row card gap 2 tap edit m swipe remove m
+      stack grow gap 0
+        m.test bold
+        m.subject faint
+      m.score "/" m.total bold
+row gap 2
+  statcard count(mark week), "entries this week"
+  statcard count(mark prev week), "entries last week"
+section "Totals", "all time"
+  count(mark) "entries so far" big
+  "This year" count(mark year) faint
+  "Last one" since(mark) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(mark where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(mark on it), 2
+===
+@rich domain=l2_exam_countdown topic=exam countdown and revision kind=long
+-
+needs: add exams with a date | days left to each exam | revision hours per day | revision hours per subject | weekly hours against goal | list of exams by date
+---
+app "Exams" alarm red
+table exam subject text, day date, hall text?
+table revise subject text, hours num 0.5..10 unit "h" = 1
+setting weekly_hours num = 14 "Revision hours per week"
+let wk = sum(revise.hours week)
+remind "Revision time" at 16:00
+topbar "Exams", exam, "Add exam"
+each exam where day >= today sort day top 1 as e empty "No exams ahead. Add your next paper."
+  row card gap 3 align center
+    stack grow gap 0
+      "Next exam" faint
+      e.subject head
+      e.day faint
+    stack gap 0 align center
+      e.day - today huge
+      "days left" faint
+section "Revision this week", "so far" wk "of" weekly_hours "h"
+  goal wk, weekly_hours, "hours of revision", "h"
+section "Revision per day", "last 7 days"
+  daybars last 7 days, sum(revise.hours on it)
+section "Hours per subject", "this month"
+  share revise month by subject, sum(it.hours), it.key
+section "Log revision"
+  row gap 1
+    button "1 hour" tap add revise subject = "General", hours = 1
+    button "2 hours" tap add revise subject = "General", hours = 2
+  list revise today, "No revision logged today."
+section "All exams", "by date"
+  each exam sort day as x empty "No exams yet."
+    row card gap 2 tap edit x swipe remove x
+      stack grow gap 0
+        x.subject bold
+        x.day x.hall faint
+      if x.day >= today
+        x.day - today "days" bold
+      else
+        "Done" faint
+row gap 2
+  statcard count(revise week), "entries this week"
+  statcard count(revise prev week), "entries last week"
+section "Totals", "all time"
+  count(revise) "entries so far" big
+  "This year" count(revise year) faint
+  "Last one" since(revise) "days ago" faint
+===
+@rich domain=l2_study_blocks topic=study hours by subject kind=long
+-
+needs: log study minutes by subject | hours this week against goal | hours per subject share | study per day chart | study days heat map | list by day
+---
+app "Study hours" book slate
+table study subject pick Maths|Physics|Chemistry|English|Urdu = Maths, mins num 5..480 unit "min", topic text?
+setting weekly_hours num = 15 "Study hours per week"
+let hours = sum(study.mins week) / 60
+topbar "Study hours", study, "Log study"
+statcard round(hours * 10) / 10, "hours this week, goal" weekly_hours, weekly_hours
+quick study, mins, [30, 45, 60]
+section "Minutes per day", "last 7 days"
+  goalbars last 7 days, sum(study.mins on it), weekly_hours * 60 / 7
+section "By subject", "this month"
+  share study month by subject, sum(it.mins), it.key
+section "Study days", "last 10 weeks"
+  heat last 70 days, count(study on it), 3
+row gap 2
+  statcard streak(study), "day streak"
+  statcard round(sum(study.mins month) / 60), "hours this month"
+section "Weak spots", "least studied this month"
+  each options study.subject as s
+    row gap 1
+      s grow
+      round(sum(study.mins month where subject = s) / 60 * 10) / 10 "h" bold
+section "Topics lately"
+  each study where topic != "" top 5 as t empty "Add a topic when you log study so you can see what you covered."
+    row gap 2
+      t.topic grow
+      t.mins "min" faint
+section "Study log"
+  list study by day, "No study logged. Tap 30 after your first block."
+row gap 2
+  statcard count(study week), "entries this week"
+  statcard count(study prev week), "entries last week"
+section "Totals", "all time"
+  count(study) "entries so far" big
+  "This year" count(study year) faint
+  "Last one" since(study) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(study where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(study on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(study.mins) * 10) / 10 "min" big
+  "Highest" max(study.mins) "min" faint
+  "Lowest" min(study.mins) "min" faint
+===
+@rich domain=l2_language_class topic=language learning log kind=long
+-
+needs: log a practice with minutes and skill | new words learned total | minutes per day chart | skills split | daily goal streak | list by day
+---
+app "Language" book orange
+table practice mins num 5..240 unit "min", skill pick Listening|Speaking|Reading|Writing|Words = Words, newwords num? 0..100
+setting daily_mins num = 20 "Daily minutes"
+let today_mins = sum(practice.mins today)
+topbar "Language", practice, "Log practice"
+statcard today_mins, "min today, goal" daily_mins, daily_mins
+row gap 2
+  statcard sum(practice.newwords), "new words learned"
+  statcard streak(practice), "day streak"
+section "Minutes per day", "last 14 days"
+  goalbars last 14 days, sum(practice.mins on it), daily_mins
+section "Skills", "last 30 days"
+  share practice last 30 days by skill, sum(it.mins), it.key
+section "Words per week", "last 8 weeks"
+  bars 1..8, sum(practice.newwords week of (today - 7 * (8 - it))), join("W", it)
+section "Calendar", "last 5 weeks"
+  daygrid last 35 days, sum(practice.mins on it), daily_mins
+section "Goal days", "last 30 days"
+  count(days last 30 days, sum(practice.mins on it) >= daily_mins) big
+  "days you met your daily goal" faint
+section "Sessions"
+  list practice by day, "No practice yet. Ten minutes a day beats two hours on Sunday."
+row gap 2
+  statcard count(practice week), "entries this week"
+  statcard count(practice prev week), "entries last week"
+section "Totals", "all time"
+  count(practice) "entries so far" big
+  "This year" count(practice year) faint
+  "Last one" since(practice) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(practice where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(practice on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(practice.mins) * 10) / 10 "min" big
+  "Highest" max(practice.mins) "min" faint
+  "Lowest" min(practice.mins) "min" faint
+===
+@rich domain=l2_school_fees topic=school fees and payments kind=long
+-
+needs: record a fee payment with child and term | paid versus yearly total | paid per child | payments per month chart | next due reminder | list of payments
+---
+app "School fees" school blue
+table payment child pick Ayan|Hira = Ayan, term pick Term_1|Term_2|Term_3 = Term_1, amount money, paid_on date = today, receipt text?
+setting yearly_fee money = 240000 "Total fees for the year"
+setting due_day num = 5 "Fees due on day of month"
+let paid = sum(payment.amount year)
+let left = max(yearly_fee - paid, 0)
+remind "School fee is due" monthly on 5 at 9:00
+topbar "School fees", payment, "Add payment"
+statcard paid, "paid this year of" yearly_fee, yearly_fee
+row gap 2
+  statcard left, "still to pay"
+  statcard count(payment year), "payments made"
+section "Per child", "this year"
+  each options payment.child as c
+    stack gap 0
+      row
+        c grow
+        sum(payment.amount year where child = c) bold
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * sum(payment.amount year where child = c) / max(paid, 1), 4 fill accent radius 2
+section "Per term"
+  share payment year by term, sum(it.amount), it.key
+section "Paid per month", "last 6 months"
+  bars 1..6, sum(payment.amount month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Biggest payment"
+  max(payment.amount) big
+  "Average payment" round(avg(payment.amount)) faint
+section "Months left", "at the current pace"
+  if(paid > 0, round(left / (paid / max(month(today), 1))), 0) big
+  "months of payments to finish the year" faint
+section "Receipts"
+  each payment where receipt != "" top 4 as p empty "No receipt numbers saved yet. Add one when you pay."
+    row gap 2
+      p.receipt grow
+      p.amount faint
+section "All payments"
+  list payment by day, "No payments yet. Add the first fee you pay."
+row gap 2
+  statcard count(payment week), "entries this week"
+  statcard count(payment prev week), "entries last week"
+section "Totals", "all time"
+  count(payment) "entries so far" big
+  "This year" count(payment year) faint
+  "Last one" since(payment) "days ago" faint
+===
+@rich domain=l2_electricity_units topic=electricity meter and bills kind=long
+-
+needs: log a meter reading with units | units used this month against a limit | units per day chart | bill estimate | monthly bills | list of readings
+---
+app "Electricity" bolt orange
+table reading units num 0..99999 unit "units", note text?
+table bill month_name text, amount money
+setting rate money = 42 "Price per unit"
+setting limit num = 300 "Units I want to stay under"
+let used = last(reading.units) - first(reading.units month)
+let est = used * rate
+topbar "Electricity", reading, "Add reading"
+statcard max(used, 0), "units used this month, limit" limit, limit
+row gap 2
+  statcard round(est), "estimated bill so far"
+  statcard max(round(used / max(monthday(today), 1) * 10) / 10, 0), "units per day"
+if used > limit
+  "You are over your limit. Switch off the standby devices." color warn bold
+section "Meter readings", "last 30 days"
+  trend reading last 30 days, it.units
+section "Projection", "if you keep this pace"
+  round(max(used, 0) / max(monthday(today), 1) * monthdays(today)) big
+  "units by the end of the month" faint
+section "Paid bills", "last 6"
+  bars bill top 6, it.amount, it.month_name
+section "Add a bill"
+  form bill, "Save bill"
+section "Cost per unit", "from paid bills"
+  round(sum(bill.amount) / max(count(bill), 1)) big
+  "average bill" faint
+section "Readings"
+  list reading by day, "No readings yet. Read the meter on the first of each month."
+row gap 2
+  statcard count(reading week), "entries this week"
+  statcard count(reading prev week), "entries last week"
+section "Totals", "all time"
+  count(reading) "entries so far" big
+  "This year" count(reading year) faint
+  "Last one" since(reading) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(reading where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(reading on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(reading.units) * 10) / 10 "units" big
+  "Highest" max(reading.units) "units" faint
+  "Lowest" min(reading.units) "units" faint
+===
+@rich domain=l2_home_repairs topic=home repair jobs and costs kind=long
+-
+needs: add a repair job with room, cost and status | tabs by status | open jobs count | spend by room | cost per month chart | mark a job done
+---
+app "Home repairs" tool slate
+table job title text, room pick Kitchen|Bathroom|Bedroom|Roof|Garden|Other = Kitchen, status pick Todo|Doing|Done = Todo, cost money?, due date?
+setting budget money = 50000 "Repair budget for the year"
+state tab pick Todo|Doing|Done = Todo
+let spent = sum(job.cost year where status = Done)
+topbar "Home repairs", job, "Add job"
+row gap 2
+  statcard count(job where status != Done), "open jobs"
+  statcard spent, "spent this year, budget" budget, budget
+row gap 1
+  each options job.status as s
+    button s count(job where status = s) fill if(tab = s, ink, surface) grow tap set tab = s
+each job where status = tab sort due as j empty "No jobs here. Add the leaking tap, the cracked tile, the loose door."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.title bold
+      j.room j.due faint
+    j.cost faint
+    if j.status = Todo
+      button "Start" tap set j.status = Doing
+    if j.status = Doing
+      button "Done" fill accent tap set j.status = Done
+section "Spend by room", "all done jobs"
+  share job where status = Done by room, sum(it.cost), it.key
+section "Spend per month", "last 6 months"
+  bars 1..6, sum(job.cost month of addmonths(today, it - 6) where status = Done), monthname(addmonths(today, it - 6))
+section "Overdue jobs"
+  each job where status != Done and due < today sort due as j empty "Nothing overdue."
+    row gap 2
+      j.title grow
+      "Late" today - j.due "days" color bad
+section "Biggest job"
+  max(job.cost) big
+  "Jobs finished this year" count(job year where status = Done) faint
+row gap 2
+  statcard count(job week), "entries this week"
+  statcard count(job prev week), "entries last week"
+section "Totals", "all time"
+  count(job) "entries so far" big
+  "This year" count(job year) faint
+  "Last one" since(job) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(job where dayname(at) = it), it
+===
+@rich domain=l2_pantry_stock topic=kitchen pantry stock kind=long
+-
+needs: add pantry items with quantity and low level | plus and minus buttons | low stock shopping list | stock by shelf | value of stock | list sorted by name
+---
+app "Pantry" box green
+table item name text, qty num 0.. = 1, low num 0.. = 1, shelf pick Dry|Cold|Freezer|Spices|Cleaning = Dry, price money = 0
+let lowcount = count(item where qty <= low)
+let stockvalue = sum(item, it.qty * it.price)
+topbar "Pantry", item, "Add item"
+row gap 2
+  statcard count(item), "items on the shelves"
+  statcard lowcount, "running low or out"
+  statcard round(stockvalue), "value of stock"
+section "Shopping list", "items at or below the low level"
+  each item where qty <= low sort name as i empty "Nothing is low. The shopping list is empty."
+    row card gap 2 tap edit i
+      stack grow gap 0
+        i.name bold
+        "Have" i.qty "Need at least" i.low faint
+      button "Bought" tap set i.qty = i.low + 2
+section "All items"
+  each item sort name as i empty "No items yet. Add rice, flour, oil, lentils to start."
+    row card gap 2 tap edit i swipe remove i
+      stack grow gap 0
+        i.name bold
+        i.shelf faint
+      button "-" tap set i.qty = i.qty - 1
+      i.qty bold fill if(i.qty <= i.low, warn, soft)
+      button "+" tap set i.qty = i.qty + 1
+section "By shelf"
+  share item by shelf, sum(it.qty), it.key
+section "Most valuable", "stock value"
+  share item sort it.qty * it.price desc top 5, it.qty * it.price, it.name
+section "Used up", "items that hit zero"
+  each item where qty = 0 as i empty "Nothing has run out."
+    row gap 2
+      i.name grow
+      "restock" faint
+row gap 2
+  statcard count(item week), "entries this week"
+  statcard count(item prev week), "entries last week"
+section "Totals", "all time"
+  count(item) "entries so far" big
+  "This year" count(item year) faint
+  "Last one" since(item) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(item where dayname(at) = it), it
+===
+@rich domain=l2_garden_harvest topic=vegetable garden harvest kind=long
+-
+needs: log a harvest with crop and kilograms | kilograms this season | harvest by crop | harvest per week chart | month calendar of harvest days | list of harvests
+---
+app "Garden" tree green dark
+table harvest crop pick Tomato|Chilli|Okra|Spinach|Mint|Other = Tomato, kg num 0.1..100 unit "kg", note text?
+table sow crop text, day date = today, rows num 1..20 = 1
+setting season_goal num = 50 "Season goal (kg)"
+state d date = today
+let season = sum(harvest.kg year)
+topbar "Garden", harvest, "Log harvest"
+statcard round(season * 10) / 10, "kg harvested this year, goal" season_goal, season_goal
+row gap 2
+  statcard count(harvest month), "harvest days this month"
+  statcard round(max(harvest.kg) * 10) / 10, "kg in the best harvest"
+section "By crop", "this year"
+  share harvest year by crop, sum(it.kg), it.key
+section "Kilograms per day", "last 14 days"
+  daybars last 14 days, sum(harvest.kg on it)
+section "Harvest calendar"
+  monthnav d
+  calendar harvest, d
+section "Sowing log", "what went into the ground"
+  each sow top 5 as s empty "Nothing sown yet. Add each sowing so you know when to expect a harvest."
+    row card gap 2 tap edit s swipe remove s
+      s.crop bold grow
+      s.rows "rows" s.day faint
+  form sow, "Add sowing"
+section "Days since last harvest"
+  since(harvest) big
+  "Streak" streak(harvest) "days" faint
+section "Harvests"
+  list harvest by day, "No harvest yet. Tap Log harvest when you pick the first tomato."
+row gap 2
+  statcard count(harvest week), "entries this week"
+  statcard count(harvest prev week), "entries last week"
+section "Totals", "all time"
+  count(harvest) "entries so far" big
+  "This year" count(harvest year) faint
+  "Last one" since(harvest) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(harvest where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(harvest on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(harvest.kg) * 10) / 10 "kg" big
+  "Highest" max(harvest.kg) "kg" faint
+  "Lowest" min(harvest.kg) "kg" faint
+===
+@rich domain=l2_aquarium_care topic=fish tank care routine kind=long
+-
+needs: log water tests with pH and temperature | tick feeding and water change | pH and temperature trends | days since water change | reminder to feed | list of tests
+---
+app "Aquarium" fish teal
+table test ph num 4..10, temp num 15..35 unit "C", ammonia num 0..5 = 0 unit "ppm"
+table feed grams num 0..20 = 1 unit "g"
+table change litres num 1..200 = 20 unit "L"
+setting ph_low num = 6.8 "Lowest good pH"
+setting ph_high num = 7.8 "Highest good pH"
+remind "Feed the fish" at 8:30, 18:30
+topbar "Aquarium", test, "Log test"
+row gap 2
+  statcard last(test.ph), "pH now"
+  statcard last(test.temp), "degrees C now"
+  statcard since(change), "days since water change"
+if last(test.ph) < ph_low or last(test.ph) > ph_high
+  "pH is outside the good range. Check the water." color warn bold
+section "Feeding today", "meals:" count(feed today)
+  row gap 1
+    button "Feed 1 g" tap add feed grams = 1
+    button "Feed 2 g" tap add feed grams = 2
+  "Fed" sum(feed.grams today) "g today" faint
+section "pH trend", "last 30 days"
+  trend test last 30 days, it.ph
+section "Temperature trend", "last 30 days"
+  trend test last 30 days, it.temp
+section "Water changes", "last 8 weeks"
+  bars 1..8, sum(change.litres week of (today - 7 * (8 - it))), join("W", it)
+  button "Changed 20 L" tap add change litres = 20
+section "Ammonia", "keep it at zero"
+  max(test.ammonia month) "ppm highest this month" big
+section "Water tests"
+  list test by day, "No tests yet. Test the water once a week."
+row gap 2
+  statcard count(test week), "entries this week"
+  statcard count(test prev week), "entries last week"
+section "Totals", "all time"
+  count(test) "entries so far" big
+  "This year" count(test year) faint
+  "Last one" since(test) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(test where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(test on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(test.ph) * 10) / 10 big
+  "Highest" max(test.ph) faint
+  "Lowest" min(test.ph) faint
+===
+@rich domain=l2_knitting_projects topic=knitting and crochet rows kind=long
+-
+needs: add projects with target rows | add rows with plus buttons | progress bar per project | rows per day chart | projects by status | list of finished projects
+---
+app "Knitting" star pink
+table project name text, yarn text?, target num 10..5000 = 200 unit "rows", status pick Active|Paused|Finished = Active
+table rowlog project ref project, rows num 1..200 = 10
+let active = count(project where status = Active)
+topbar "Knitting", project, "New project"
+row gap 2
+  statcard active, "projects in progress"
+  statcard sum(rowlog.rows today), "rows knitted today"
+  statcard sum(rowlog.rows week), "rows this week"
+each project where status != Finished sort name as p empty "No projects yet. Cast on your first scarf and add it."
+  stack card gap 2 tap edit p swipe remove p
+    row gap 2
+      stack grow gap 0
+        p.name bold
+        p.yarn faint
+      sum(p.rowlog.rows) "of" p.target faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(p.rowlog.rows) / p.target, 0, 1), 4 fill accent radius 2
+    row gap 1
+      button "+10 rows" tap add rowlog project = p, rows = 10
+      button "+25 rows" tap add rowlog project = p, rows = 25
+      button "Finish" tap set p.status = Finished
+section "Rows per day", "last 14 days"
+  daybars last 14 days, sum(rowlog.rows on it)
+section "Craft days", "last 5 weeks"
+  daygrid last 35 days, count(rowlog on it), 2
+section "Finished", "projects:" count(project where status = Finished)
+  each project where status = Finished as p empty "Nothing finished yet. Your first one is close."
+    row gap 2
+      p.name grow
+      sum(p.rowlog.rows) "rows" faint
+section "Streak"
+  streak(rowlog) "days of knitting" big
+row gap 2
+  statcard count(rowlog week), "entries this week"
+  statcard count(rowlog prev week), "entries last week"
+section "Totals", "all time"
+  count(rowlog) "entries so far" big
+  "This year" count(rowlog year) faint
+  "Last one" since(rowlog) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(rowlog where dayname(at) = it), it
+===
+@rich domain=l2_guitar_practice topic=guitar practice log kind=long
+-
+needs: log a practice with minutes and focus | minutes this week against goal | focus split | practice per day chart | practice streak | songs I am learning
+---
+app "Guitar" music plum
+table practice mins num 5..240 unit "min", focus pick Chords|Scales|Songs|Rhythm|Ear = Songs, note text?
+table song title text, level pick Learning|Almost|Mastered = Learning
+setting weekly_goal num = 120 "Minutes per week"
+let wk = sum(practice.mins week)
+remind "Pick up the guitar for 20 minutes" at 19:30
+topbar "Guitar", practice, "Log practice"
+statcard wk, "min this week, goal" weekly_goal, weekly_goal
+quick practice, mins, [10, 20, 30]
+row gap 2
+  statcard streak(practice), "day streak"
+  statcard best(practice), "best streak"
+  statcard count(practice month), "sessions this month"
+section "Minutes per day", "last 7 days"
+  goalbars last 7 days, sum(practice.mins on it), weekly_goal / 7
+section "What you practise", "last 30 days"
+  share practice last 30 days by focus, sum(it.mins), it.key
+section "Practice days", "last 10 weeks"
+  heat last 70 days, count(practice on it), 2
+section "Songs", "in the book:" count(song)
+  each song sort title as s empty "No songs yet. Add the first one you want to play."
+    row card gap 2 tap edit s swipe remove s
+      s.title bold grow
+      s.level faint
+      if s.level = Learning
+        button "Almost" tap set s.level = Almost
+      if s.level = Almost
+        button "Got it" tap set s.level = Mastered
+  form song, "Add song"
+section "Hours so far"
+  round(sum(practice.mins) / 60) "hours of practice in all" big
+  "Longest session" max(practice.mins) "min" faint
+section "Sessions"
+  list practice by day, "No practice yet. Tap 10 and play one slow chord change."
+row gap 2
+  statcard count(practice week), "entries this week"
+  statcard count(practice prev week), "entries last week"
+section "Totals", "all time"
+  count(practice) "entries so far" big
+  "This year" count(practice year) faint
+  "Last one" since(practice) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(practice where dayname(at) = it), it
+===
+@rich domain=l2_painting_log topic=painting and sketching log kind=long
+-
+needs: log a piece with title, medium and hours | hours this month | medium split | pieces per month chart | rate my satisfaction | gallery list
+---
+app "Sketchbook" pen orange
+table piece title text, medium pick Pencil|Watercolour|Acrylic|Digital|Ink = Pencil, hours num 0.25..40 = 1 unit "h", stars num 1..5 = 3
+setting monthly_pieces num = 8 "Pieces per month"
+let n = count(piece month)
+topbar "Sketchbook", piece, "Add piece"
+statcard n, "pieces this month, goal" monthly_pieces, monthly_pieces
+row gap 2
+  statcard round(sum(piece.hours month) * 10) / 10, "hours painted this month"
+  statcard round(avg(piece.stars) * 10) / 10, "average stars"
+section "Pieces per month", "last 6 months"
+  bars 1..6, count(piece month of addmonths(today, it - 6)), monthname(addmonths(today, it - 6))
+section "Mediums", "all pieces"
+  share piece by medium, count(it), it.key
+section "Hours per medium"
+  share piece by medium, sum(it.hours), it.key
+section "Satisfaction", "stars over time"
+  trend piece last 180 days, it.stars
+section "Best pieces", "highest stars"
+  each piece sort stars desc top 4 as p empty "No pieces yet."
+    row card gap 2 tap edit p
+      stack grow gap 0
+        p.title bold
+        p.medium faint
+      p.stars "stars" bold
+section "Studio days", "last 5 weeks"
+  daygrid last 35 days, sum(piece.hours on it), 2
+section "Streak"
+  streak(piece) "days with a piece" big
+section "Gallery"
+  list piece by day, "No pieces yet. Draw something small and add it."
+row gap 2
+  statcard count(piece week), "entries this week"
+  statcard count(piece prev week), "entries last week"
+section "Totals", "all time"
+  count(piece) "entries so far" big
+  "This year" count(piece year) faint
+  "Last one" since(piece) "days ago" faint
+section "Which weekdays", "all time"
+  bars ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], count(piece where dayname(at) = it), it
+section "Busy days", "last 5 weeks"
+  daygrid last 35 days, count(piece on it), 2
+section "The numbers", "all time"
+  "Average" round(avg(piece.hours) * 10) / 10 "h" big
+  "Highest" max(piece.hours) "h" faint
+  "Lowest" min(piece.hours) "h" faint
+===

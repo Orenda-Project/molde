@@ -1,0 +1,221 @@
+@rich domain=c2_zakat_shares_portfolio topic=zakat_on_stock_holdings style=multi_feature
+I hold some PSX shares and zakat is due on their market value. let me add each holding with number of shares and today's price, add cash, check nisab against silver rate, and show zakat and which holding is biggest
+needs: add holding with shares and price | cash setting | silver rate for nisab | zakat due at 2.5% on total | share chart of holdings
+---
+app "Share zakat" chart ink
+table holding name text, shares num 1.., price money
+setting cash money = 0 "Cash and bank"
+setting silver money = 0 "Silver price per gram"
+let stocks = sum(holding, it.shares * it.price)
+let wealth = stocks + cash
+let nisab = silver * 612.36
+topbar "Share zakat", holding, "Add holding"
+statcard stocks, "value of shares"
+if nisab = 0
+  "Set the silver price in the settings to check the nisab." faint tap edit silver
+else
+  if wealth >= nisab
+    statcard round(wealth * 0.025), "zakat due at 2.5% on" round(wealth)
+  else
+    "Below the nisab of" round(nisab) ", no zakat due." color good bold
+section "Biggest holdings"
+  share holding sort shares * price desc top 5, it.shares * it.price, it.name
+list holding top 6, "No shares yet. Add each company with the shares you own."
+===
+@rich domain=c2_wedding_rsvp_heads topic=rsvp_plates_for_caterer style=custom_ui
+guests reply with how many adults and kids are coming from each family. add each family, count the plates with kids at half price, price per plate, and total
+needs: add family with adults and kids | plate count with kids at half | price per plate | total catering bill | list to edit or remove
+---
+app "Wedding RSVP" users green
+table family name text, adults num 0..20 = 2, kids num 0..20 = 0
+setting plate money = 1800 "Price per plate"
+let plates = sum(family.adults) + sum(family.kids) / 2
+topbar "Wedding RSVP", family, "Add family"
+row gap 2
+  statcard sum(family.adults), "adults"
+  statcard sum(family.kids), "kids"
+statcard round(plates * 10) / 10, "plates to order"
+"Catering bill" round(plates * plate) head
+each family sort name as f empty "No replies yet. Add each family that confirms."
+  row card gap 2 tap edit f swipe remove f
+    f.name bold grow
+    f.adults "adults," f.kids "kids" faint
+===
+@rich domain=c2_covered_area_cost topic=house_construction_cost style=detailed
+we are building on a 10 marla plot. floors, how much of the plot we cover, and cost per sq ft for grey structure or finished. tell me the covered area on each floor, total covered sq ft and the build cost
+needs: plot marla | floors and cover percent | grey or finished choice | total covered area | build cost
+---
+app "Build cost" home grey
+state marla num = 10
+state floors num = 2
+state cover num = 70
+state stage pick Grey|Finished = Grey
+setting grey money = 3200 "Grey structure per sq ft"
+setting fin money = 5800 "Finished per sq ft"
+let plot = marla * 272.25
+let per_floor = plot * cover / 100
+let total = per_floor * floors
+section "Plot"
+  field marla "Plot size (marla)"
+  "Floors" floors faint
+  slider floors 1..3
+  "Covered" cover "% of the plot" faint
+  slider cover 30..90
+  choice stage
+statcard round(total), "sq ft covered in all"
+row gap 2
+  stat round(per_floor), "sq ft per floor"
+  stat round(plot - per_floor), "sq ft left open"
+"Build cost" round(total * if(stage = Grey, grey, fin)) head
+===
+@rich domain=c2_ac_inverter_saving topic=inverter_ac_electricity style=multi_feature
+conventional AC against inverter AC: pick 1, 1.5 or 2 ton, hours a day, months of use and unit price. show units and bill for both and what the inverter saves over the summer
+needs: AC tonnage choice | hours a day and months | unit price | bill for both types | saving over the season
+---
+app "AC saving" bolt plum dark
+state ton pick T1|T15|T2 = T15
+state hours num = 8
+state months num = 5
+state rate money = 40
+let t = if(ton = T1, 1, if(ton = T15, 1.5, 2))
+let old_units = t * 1.2 * hours * 30
+let new_units = t * 0.7 * hours * 30
+section "Your AC"
+  row gap 1
+    choice ton
+  "T1 is 1 ton, T15 is 1.5 ton, T2 is 2 ton" tiny faint
+  "Hours a day" hours faint
+  slider hours 1..24
+  "Months of use" months faint
+  slider months 1..9
+  field rate "Price per unit"
+row gap 2
+  statcard round(old_units * rate), "conventional, a month"
+  statcard round(new_units * rate), "inverter, a month"
+"The inverter saves" round((old_units - new_units) * rate * months) "over" plural(months, "month") head color good
+"Uses about" round(old_units - new_units) "fewer units each month" faint
+===
+@rich domain=c2_solar_battery_hours topic=battery_backup_hours style=short
+how many hours will my battery run the fans and lights if they use 300 watts
+needs: battery Ah and volts | load in watts | hours of backup | batteries for a target
+---
+app "Battery backup" bolt teal
+state ah num = 200
+state volts pick V12|V24 = V12
+state watts num = 300
+state want num = 6
+let v = if(volts = V12, 12, 24)
+let hours = ah * v * 0.5 / max(watts, 1)
+field ah "Battery size (Ah)"
+choice volts
+"Load" watts "watts" faint
+slider watts 50..2000
+statcard round(hours * 10) / 10, "hours of backup, using half the battery"
+"I want" want "hours of backup" faint
+slider want 1..24
+"Batteries needed" floor(want / max(hours, 0.1)) + if(want / max(hours, 0.1) > floor(want / max(hours, 0.1)), 1, 0) head
+===
+@rich domain=c2_rice_cups_water topic=rice_water_and_time style=custom_ui
+how much water for rice: cups of rice, basmati or sella or brown, how many cups of water and how many minutes, and how many people it feeds
+needs: cups of rice | rice type choice | water cups | cooking minutes | people it feeds
+---
+app "Rice cooker" food ocean
+state cups num = 2
+state kind pick Basmati|Sella|Brown = Basmati
+let water = cups * if(kind = Basmati, 1.5, if(kind = Sella, 1.75, 2))
+let mins = if(kind = Basmati, 12, if(kind = Sella, 18, 35))
+choice kind
+"Rice" cups "cups" faint
+slider cups 0.5..8
+statcard round(water * 100) / 100, "cups of water"
+row gap 2
+  stat mins, "minutes on low heat"
+  stat floor(cups * 2.5), "people it feeds"
+"Soak" kind "for 20 to 30 minutes first, then let it rest 5 minutes with the lid on." faint
+===
+@rich domain=c2_fish_pond_feed topic=fish_pond_daily_feed style=detailed
+fish farm pond: number of fish, average weight in grams, feed as a percent of body weight, bag price, and tell me kg of feed a day, how long a bag lasts and monthly feed cost
+needs: fish count and average weight | feed percent of body weight | kg of feed a day | days a 25 kg bag lasts | monthly feed cost
+---
+app "Fish feed" fish red
+state fish num = 5000
+state grams num = 250
+state pct num = 3
+setting bag money = 8200 "Price of a 25 kg bag"
+let biomass = fish * grams / 1000
+let feed = biomass * pct / 100
+section "Pond"
+  field fish "Number of fish"
+  "Average weight" grams "g" faint
+  slider grams 20..1000
+  "Feed" pct "% of body weight" faint
+  slider pct 1..6
+statcard round(biomass), "kg of fish in the pond"
+row gap 2
+  stat round(feed * 10) / 10, "kg of feed a day"
+  stat round(25 / max(feed, 0.1) * 10) / 10, "days one bag lasts"
+"Feed cost a month" round(feed * 30 * bag / 25) head
+"Feed twice a day, and cut back when the water is cold or dull." tiny faint
+===
+@rich domain=c2_cane_sett_seed topic=sugarcane_setts_per_acre style=short
+sugarcane seed cane for 3 acres, row distance 4 feet
+needs: acres | row distance and sett gap | setts per acre | maunds of seed cane
+---
+app "Cane seed" plant blue
+state acres num = 3
+state row num = 4
+state gap num = 1.5
+let setts = 43560 / max(row * gap, 0.1)
+field acres "Acres"
+"Row distance" row "ft" faint
+slider row 2..6
+"Gap between setts" gap "ft" faint
+slider gap 1..3
+statcard round(setts), "setts per acre"
+"Seed cane:" round(setts * acres / 300) "maunds" head
+"Counting about 300 setts to a maund of cane." tiny faint
+===
+@rich domain=c2_meter_reading_days topic=meter_reading_projection style=multi_feature
+every few days I note the electric meter reading. from the first and latest readings tell me units used, per day, projected units and bill for the month, and a chart of readings
+needs: add meter reading | units used since first reading | units per day | projected month bill | line chart of readings
+---
+app "Meter readings" bolt mint
+table reading meter num 0..1000000 "Meter reading"
+setting rate money = 38 "Price per unit"
+let used = max(reading.meter) - min(reading.meter)
+let span = max((last(reading.at) - first(reading.at)) / 1d, 1)
+topbar "Meter readings", reading, "Add reading"
+if count(reading) < 2
+  "Add two readings on different days to see the usage." faint
+else
+  statcard used, "units used since the first reading"
+  section "Projection", "30 days"
+    "Per day" round(used / span * 10) / 10 "units" head
+    "Month" round(used / span * 30 * rate) "at" rate "a unit" faint
+  section "Readings"
+    trend reading sort at, it.meter
+list reading top 5, "No readings yet."
+===
+@rich domain=c2_ushr_on_harvest topic=ushr_on_crop_value style=detailed
+ushr on my harvest: maunds sold at the rate per maund, minus nothing, ten percent if the land was watered by rain and five percent if by tubewell or canal. tell me ushr in money and in maunds and let me save what I gave
+needs: maunds and rate | rain or tubewell choice | ushr in maunds and money | save ushr given | list of ushr given
+---
+app "Ushr" leaf orange
+table gave maunds num 0.., note text?
+state maunds num = 120
+state rate money = 4000
+state water pick Rain|Tubewell = Tubewell
+let pct = if(water = Rain, 10, 5)
+let due = maunds * pct / 100
+section "Harvest"
+  field maunds "Total maunds"
+  field rate "Rate per maund"
+  row gap 1
+    "Watered by" faint
+    choice water
+statcard round(due * 10) / 10, "maunds due, which is" pct "%"
+"In money" round(due * rate) head
+goal sum(gave.maunds), due, "given so far", "maunds"
+button "Give 1 maund" tap add gave maunds = 1
+button "Give 5 maunds" tap add gave maunds = 5
+list gave top 5, "Nothing given yet."

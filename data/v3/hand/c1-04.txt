@@ -1,0 +1,583 @@
+@rich domain=c1_milkman_monthly_bill topic=milk_delivery_monthly_bill style=multi_feature
+milkman comes every morning and we always argue about the month end bill. let me log litres each day, set the price per litre, and show the bill this month with a grid of the days he came
+needs: log a delivery with litres | price per litre setting | bill this month | grid of days with litres | list of deliveries
+---
+app "Milk Bill" milk blue
+table milk litres num 0.. = 1
+setting rate money = 140 "Price per litre"
+topbar "Milk", milk, "Add delivery"
+statcard sum(milk.litres month) * rate, "bill this month for" sum(milk.litres month) "litres"
+section "Days this month", "average" round(sum(milk.litres month) / monthday(today) * 10) / 10 "litres a day"
+  daygrid month, sum(milk.litres on it), 2
+section "Deliveries"
+  list milk top 10, "No deliveries yet. Tap Add delivery each morning."
+===
+@rich domain=c1_subscriptions_yearly topic=subscriptions_cost_per_year style=detailed
+i signed up for too many things. let me list each subscription with its price and whether it is billed monthly or yearly, then show what i spend per month and per year in total and which one costs the most
+needs: add a subscription with price and billing cycle | cost per month in total | cost per year in total | bars comparing subscriptions per month | tap to edit or swipe to remove
+---
+app "Subscriptions" bell purple
+table sub name text, price money, cycle pick Monthly|Yearly = Monthly
+let permonth(s sub) = if(s.cycle = Yearly, s.price / 12, s.price)
+topbar "Subscriptions", sub, "Add subscription"
+statcard round(sum(sub, permonth(it))), "per month, which is" round(sum(sub, permonth(it)) * 12) "a year"
+section "Compared per month"
+  share sub, round(permonth(it)), it.name
+section "All subscriptions"
+  each sub as s empty "No subscriptions yet. Add the first one."
+    row tap edit s swipe remove s
+      s.name grow
+      s.price "/" if(s.cycle = Yearly, "year", "month") faint
+===
+@rich domain=c1_habit_cost_invested topic=habit_cost_if_invested style=custom_ui
+i buy a cold drink every day and i want to see the real cost. name of the habit, how many per day, price each, and show cost per week, month and year, and what the same money would grow to in ten years at 8%
+needs: name of the habit | how many per day and price each | cost per week, month and year | what it grows to in ten years if invested
+---
+app "Habit Cost" coin pink
+state habit text = "Cold drink"
+state perday num = 1
+state price money = 0
+let month = perday * price * 30
+let r = 0.08 / 12
+let grown = month * (pow(1 + r, 120) - 1) / r
+field habit "The habit"
+row gap 2
+  field perday "Per day"
+  field price "Price each"
+if price > 0
+  statcard round(month * 12), "a year on" habit
+  row gap 2
+    stat round(perday * price * 7), "per week"
+    stat round(month), "per month"
+  section "If you invested it instead", "8% for ten years"
+    round(grown) big
+else
+  "Type the price to see what the habit costs." faint
+===
+@rich domain=c1_coffee_home_vs_cafe topic=coffee_home_or_cafe style=short
+how much do i save making coffee at home instead of the cafe
+needs: cafe price per cup | home cost per cup | cups per week | saving per year | weeks to pay back a machine
+---
+app "Coffee Saving" coffee grey
+state cafe money = 0
+state home money = 40
+state cups num = 5
+state machine money = 30000
+let week = (cafe - home) * cups
+field cafe "Cafe price per cup"
+row gap 2
+  field home "Home cost per cup"
+  field machine "Coffee machine cost"
+"Cups per week" cups faint
+slider cups 1..30
+if cafe > home
+  statcard round(week * 52), "saved per year"
+  "A machine pays for itself in" round(machine / week) "weeks." faint
+else
+  "Type the cafe price to see what you save." faint
+===
+@rich domain=c1_car_cost_per_km topic=car_running_cost_per_km style=detailed
+what does my car really cost per kilometre? yearly petrol, servicing and repairs, insurance and token tax, and a rough yearly value loss, divided by the km i drive in a year. show cost per km and per month
+needs: yearly petrol and servicing | insurance and tax | yearly value loss | kilometres per year | cost per km and per month
+---
+app "Car Cost" car ocean dark
+state fuel money = 0
+state service money = 0
+state insure money = 0
+state loss money = 0
+state km num = 12000
+let total = fuel + service + insure + loss
+row gap 2
+  field fuel "Petrol per year"
+  field service "Servicing and repairs"
+row gap 2
+  field insure "Insurance and tax"
+  field loss "Value loss per year"
+field km "Kilometres per year"
+if total > 0 and km > 0
+  statcard round(total / km * 100) / 100, "per kilometre"
+  row gap 2
+    stat round(total / 12), "per month"
+    stat round(total), "per year"
+  draw 100, 6
+    rect 0, 0, 100 * fuel / total, 6 fill accent
+    rect 100 * fuel / total, 0, 100 * service / total, 6 fill warn
+    rect 100 * (fuel + service) / total, 0, 100 * insure / total, 6 fill muted
+else
+  "Fill in the yearly costs to see the price per km." faint
+===
+@rich domain=c1_ridehail_net_day topic=ride_hailing_driver_earnings style=multi_feature
+i drive for a ride app. i add each trip fare, the company keeps a percent, fuel costs me a fixed amount per day. show what i actually take home today and for the last 7 days against my daily target
+needs: add each trip fare | company commission percent | fuel cost per day | take-home today | last 7 days against a daily target
+---
+app "Driver Day" car mint
+table trip fare money
+setting cut num 0..50 = 20 "Company commission %"
+setting fuelday money = 1500 "Fuel per day"
+setting target money = 5000 "Daily target"
+let net(d date) = sum(trip.fare on d) * (1 - cut / 100) - if(sum(trip.fare on d) > 0, fuelday, 0)
+topbar "Trips", trip, "Add trip"
+statcard round(net(today)), "take-home today from" plural(count(trip today), "trip"), target
+section "Last 7 days"
+  goalbars last 7 days, max(net(it), 0), target
+section "Today's trips"
+  list trip today, "No trips yet today."
+===
+@rich domain=c1_stall_daily_account topic=food_stall_daily_profit style=custom_ui
+i run a samosa stall. every evening i type sales, cost of ingredients, gas and my helper's pay, and save the day. show the profit for today, the profit of the last days as a line and this month's total
+needs: type sales, ingredients, gas and helper pay | profit for the day | save the day | line chart of recent days | profit this month
+---
+app "Stall Account" food orange
+table day profit money
+state sales money = 0
+state stuff money = 0
+state gas money = 0
+state helper money = 0
+let today_profit = sales - stuff - gas - helper
+row gap 2
+  field sales "Sales"
+  field stuff "Ingredients"
+row gap 2
+  field gas "Gas"
+  field helper "Helper"
+if sales > 0
+  statcard today_profit, if(today_profit >= 0, "profit today", "loss today")
+  button "Save the day" fill accent tap add day profit = today_profit then set sales = 0 then set stuff = 0 then set gas = 0 then set helper = 0
+statcard sum(day.profit month), "profit this month from" plural(count(day month), "day")
+section "Recent days"
+  trend day top 10, it.profit
+===
+@rich domain=c1_udhaar_khata_days topic=shop_credit_pending_days style=multi_feature
+in my grocery shop customers take things on credit. i add each name, amount and the date, and want to see the total pending, how many days each has been waiting and a red mark for anything older than 30 days
+needs: add a credit entry with customer, amount and date | total pending | days each one has been waiting | red mark when older than 30 days | tap to edit or swipe to remove
+---
+app "Udhaar" book yellow
+table credit customer text, amount money, since date = today "Given on"
+topbar "Udhaar", credit, "Add credit"
+statcard sum(credit.amount), "pending from" plural(count(credit), "entry")
+if count(credit where since < today - 30) > 0
+  "Late (over 30 days):" sum(credit.amount where since < today - 30) color bad bold
+section "Who owes"
+  each credit sort since as c empty "Nobody owes you. Tap Add credit when someone takes on credit."
+    row tap edit c swipe remove c
+      stack grow gap 0
+        c.customer bold
+        "Waiting" today - c.since "days" faint color if(today - c.since > 30, bad, muted)
+      c.amount bold
+===
+@rich domain=c1_tutor_monthly_income topic=home_tutor_class_income style=multi_feature
+i teach tuitions at home. each student has a rate per class. i add students, tap plus one after every class, and see my total income this month, how many classes i took and who pays the most
+needs: add a student with rate per class | plus one button after each class | classes taken per student | total income this month | tap student to edit
+---
+app "Tuition Income" pencil red
+table student name text, rate money, classes num 0.. = 0
+topbar "Tuitions", student, "Add student"
+statcard sum(student, it.rate * it.classes), "earned, from" sum(student.classes) "classes"
+each student sort rate desc as s empty "No students yet. Tap Add student."
+  row card tap edit s
+    stack grow gap 0
+      s.name bold
+      s.classes "classes at" s.rate faint
+    s.rate * s.classes bold
+    button "+1" fill accent tap set s.classes = s.classes + 1
+===
+@rich domain=c1_prorated_first_rent topic=move_in_prorated_rent style=detailed
+moving into a flat in the middle of the month. landlord wants rent only for the days i stay in the first month and a deposit of 2 months. type the move in date and monthly rent and show first month rent, deposit and what i pay on day one
+needs: pick move in date | monthly rent | days stayed in the first month | deposit of two months | total to pay on day one
+---
+app "Move In Rent" home slate
+state moved date = today
+state rent money = 0
+let dim = monthdays(moved)
+let stay = dim - monthday(moved) + 1
+let first = rent * stay / dim
+field moved "Move in date"
+field rent "Monthly rent"
+if rent > 0
+  statcard round(first + rent * 2), "to pay on day one"
+  row gap 2
+    stat round(first), "rent for" plural(stay, "day")
+    stat rent * 2, "deposit"
+else
+  "Type the monthly rent to see the first payment." faint
+===
+@rich domain=c1_deposit_refund_cuts topic=security_deposit_deductions style=multi_feature
+tenant leaving. security deposit was 60000 and the landlord lists cuts for repainting, broken door, cleaning. let me add each cut with an amount and see how much the refund is, and warn me if the cuts are more than the deposit
+needs: set the deposit amount | add each deduction with amount | refund amount | warning when cuts exceed deposit | list of deductions
+---
+app "Deposit Refund" key ink
+table cut what text, amount money
+setting deposit money = 60000 "Security deposit"
+let refund = deposit - sum(cut.amount)
+topbar "Deductions", cut, "Add deduction"
+statcard max(refund, 0), "refund out of" deposit, deposit
+if refund < 0
+  "Cuts are" 0 - refund "more than the deposit." color bad bold
+section "What was cut", sum(cut.amount)
+  each cut as c empty "No deductions. You get the full deposit back."
+    row tap edit c swipe remove c
+      c.what grow
+      c.amount bold
+===
+@rich domain=c1_cake_cost_slice topic=bakery_cost_per_slice style=detailed
+baking cakes to sell. i list the ingredients and what each cost for one cake, say how many slices it cuts into and my markup percent, and want the cost per slice, the price per slice and the profit per cake
+needs: list ingredients with cost | slices per cake | markup percent | cost and selling price per slice | profit per cake
+---
+app "Cake Costs" bread plum
+table ing what text, cost money
+setting slices num 1.. = 12 "Slices per cake"
+setting markup num 0..500 = 100 "Markup %"
+let total = sum(ing.cost)
+let price = round(total / slices * (1 + markup / 100))
+topbar "Cake Costs", ing, "Add ingredient"
+statcard total, "to bake one cake"
+if total > 0
+  row gap 2
+    stat round(total / slices), "cost per slice"
+    stat price, "sell each slice at"
+  "Profit per cake" price * slices - total bold
+section "Ingredients", plural(count(ing), "item")
+  list ing, "No ingredients yet. Add flour, eggs, butter."
+===
+@rich domain=c1_crop_profit_acre topic=crop_profit_per_acre style=detailed
+wheat farmer here. yield in maunds per acre, price per maund, then seed, fertiliser, water and labour costs per acre, and how many acres i have. show profit per acre and for all my land
+needs: yield per acre and price per maund | costs for seed, fertiliser, water and labour | number of acres | profit per acre | profit for all the land
+---
+app "Crop Profit" plant green
+state yield num = 40
+state price money = 0
+state seed money = 0
+state fert money = 0
+state water money = 0
+state labour money = 0
+state acres num = 5
+let income = yield * price
+let costs = seed + fert + water + labour
+section "Income per acre"
+  row gap 2
+    field yield "Maunds"
+    field price "Price per maund"
+section "Costs per acre", costs
+  row gap 2
+    field seed "Seed"
+    field fert "Fertiliser"
+  row gap 2
+    field water "Water"
+    field labour "Labour"
+field acres "Acres"
+if price > 0
+  statcard round(income - costs), if(income >= costs, "profit per acre", "loss per acre")
+  stat round((income - costs) * acres), "for all" plural(acres, "acre")
+else
+  "Type the price per maund to see the profit." faint
+===
+@rich domain=c1_tailor_order_bill topic=tailor_order_bill style=custom_ui
+tailor shop bill. shirts are 1200, trousers 1500 and full suits 3500 by default and i can change them. slide how many of each, add 30% if the customer wants it urgent, and take half as advance
+needs: counts of shirts, trousers and suits | price list settings | urgent toggle adds thirty percent | total bill | advance of half
+---
+app "Tailor Bill" pen pink
+setting shirt money = 1200 "Shirt price"
+setting trouser money = 1500 "Trouser price"
+setting suit money = 3500 "Suit price"
+state ns num = 0
+state nt num = 0
+state nu num = 0
+state urgent bool = no
+let bill = (ns * shirt + nt * trouser + nu * suit) * if(urgent, 1.3, 1)
+"Shirts" ns faint
+slider ns 0..10
+"Trousers" nt faint
+slider nt 0..10
+"Suits" nu faint
+slider nu 0..10
+row gap 2 align center
+  "Urgent order (+30%)" grow
+  toggle urgent
+if bill > 0
+  statcard round(bill), "total bill"
+  row gap 2
+    stat round(bill / 2), "advance"
+    stat round(bill / 2), "on delivery"
+else
+  "Slide the items to build the bill." faint
+===
+@rich domain=c1_print_shop_pages topic=print_shop_job_price style=multi_feature
+photocopy and print shop. customer says pages and copies, black or colour, one side or both, binding fee if any. pages over 500 get 10% off. show the price for the job
+needs: pages and copies | black or colour toggle | both sides toggle | binding fee | price with discount over 500 pages
+---
+app "Print Price" note grey
+setting bw money = 4 "Black page rate"
+setting colour money = 25 "Colour page rate"
+state pages num = 20
+state copies num = 1
+state clr bool = no
+state both bool = no
+state bind money = 0
+let pcs = pages * copies
+let rate = if(clr, colour, bw) * if(both, 0.9, 1)
+let cost = pcs * rate * if(pcs > 500, 0.9, 1) + bind
+row gap 2
+  field pages "Pages"
+  field copies "Copies"
+row gap 2 align center
+  "Colour" grow
+  toggle clr
+row gap 2 align center
+  "Both sides (-10%)" grow
+  toggle both
+field bind "Binding fee"
+statcard round(cost), "for" plural(pcs, "page")
+if pcs > 500
+  "Includes 10% off for over 500 pages." faint
+===
+@rich domain=c1_data_pack_per_gb topic=mobile_data_pack_compare style=multi_feature
+three data packs on offer from the network, all different. i type the price and the GB of each and it shows the price per GB and highlights the cheapest one
+needs: price and GB of three packs | price per GB of each pack | highlights the cheapest pack | shows how much cheaper than the dearest
+---
+app "Data Packs" phone mint
+state p1 money = 0
+state g1 num = 5
+state p2 money = 0
+state g2 num = 20
+state p3 money = 0
+state g3 num = 50
+let u1 = if(g1 > 0, p1 / g1, 0)
+let u2 = if(g2 > 0, p2 / g2, 0)
+let u3 = if(g3 > 0, p3 / g3, 0)
+let best = min(u1, min(u2, u3))
+row gap 2
+  field p1 "Pack 1 price"
+  field g1 "GB"
+row gap 2
+  field p2 "Pack 2 price"
+  field g2 "GB"
+row gap 2
+  field p3 "Pack 3 price"
+  field g3 "GB"
+if p1 > 0 and p2 > 0 and p3 > 0
+  section "Price per GB"
+    row pad 1 radius 2 fill if(u1 = best, accent, soft)
+      "Pack 1" grow
+      round(u1 * 100) / 100 bold
+    row pad 1 radius 2 fill if(u2 = best, accent, soft)
+      "Pack 2" grow
+      round(u2 * 100) / 100 bold
+    row pad 1 radius 2 fill if(u3 = best, accent, soft)
+      "Pack 3" grow
+      round(u3 * 100) / 100 bold
+  "Best pack is" round((1 - best / max(u1, max(u2, u3))) * 100) "% cheaper than the dearest." faint
+else
+  "Type all three prices." faint
+===
+@rich domain=c1_food_app_compare topic=delivery_apps_total_compare style=detailed
+same biryani on two delivery apps. type the item price, then for each app the delivery fee, service charge percent and any discount percent. show the total on each app and which one is cheaper
+needs: item price | delivery fee for each app | service percent for each app | discount percent for each app | total on each app and the cheaper one
+---
+app "App Compare" food slate dark
+state item money = 0
+state fa money = 150
+state sa num = 5
+state da num = 0
+state fb money = 0
+state sb num = 12
+state db num = 20
+let ta = item * (1 - da / 100) * (1 + sa / 100) + fa
+let tb = item * (1 - db / 100) * (1 + sb / 100) + fb
+field item "Price of the item"
+section "App A"
+  row gap 2
+    field fa "Delivery fee"
+    field sa "Service %"
+    field da "Discount %"
+section "App B"
+  row gap 2
+    field fb "Delivery fee"
+    field sb "Service %"
+    field db "Discount %"
+if item > 0
+  statcard round(min(ta, tb)), if(ta <= tb, "App A is cheaper", "App B is cheaper")
+  "A costs" round(ta) "and B costs" round(tb) faint
+===
+@rich domain=c1_karat_exchange_grams topic=gold_karat_equivalent_grams style=custom_ui
+customer brings 12 grams of 21 karat to swap for 24 karat. choose the karat they have and the karat they want, type the weight, and show how many grams of pure gold that is and the equal weight in the new karat
+needs: type the weight in grams | karat they have | karat they want | grams of pure gold | equal weight in the other karat
+---
+app "Karat Swap" scale plum dark
+state grams num = 10
+state from pick K24|K22|K21|K18 = K21
+state to pick K24|K22|K21|K18 = K24
+let kf = if(from = K24, 24, if(from = K22, 22, if(from = K21, 21, 18)))
+let kt = if(to = K24, 24, if(to = K22, 22, if(to = K21, 21, 18)))
+field grams "Weight (grams)"
+"They have" faint
+choice from
+"They want" faint
+choice to
+if grams > 0
+  statcard round(grams * kf / kt * 100) / 100, "grams of" kt "karat"
+  "That is" round(grams * kf / 24 * 100) / 100 "grams of pure gold." faint
+else
+  "Type the weight to convert." faint
+===
+@rich domain=c1_gold_buy_ledger topic=gold_purchases_average_profit style=multi_feature
+i buy gold in small amounts over the year for my daughter's wedding. log each purchase with grams and the tola rate that day, and show total grams, total spent, average rate and my profit at today's rate
+needs: log a purchase with grams and tola rate | total grams and total spent | average rate per tola | today's rate setting | profit at today's rate
+---
+app "Gold Ledger" coin orange
+table buy grams num 0.., rate money
+setting today_rate money = 0 "Today's rate per tola"
+let grams = sum(buy.grams)
+let spent = sum(buy, it.grams * it.rate / 11.664)
+let value = grams * today_rate / 11.664
+topbar "Gold", buy, "Log purchase"
+statcard round(spent), "spent on" round(grams * 100) / 100 "grams"
+if grams > 0
+  row gap 2
+    stat round(spent / grams * 11.664), "average rate per tola"
+    stat round(value - spent), if(today_rate > 0, "profit at today's rate", "set today's rate")
+section "Purchases"
+  list buy by day, "Nothing bought yet."
+===
+@rich domain=c1_eid_shopping_budget topic=eid_shopping_list_budget style=multi_feature
+eid is near. let me list what i must buy for each person with the price, set my total budget, and see how much is left and which person takes the biggest part
+needs: add a gift or outfit with person and price | total budget setting | amount left | bars of spending per person | tap to edit or swipe to remove
+---
+app "Eid Shopping" gift yellow
+table buy person text, what text, price money
+setting budget money = 50000 "Eid budget"
+let spent = sum(buy.price)
+topbar "Eid Shopping", buy, "Add item"
+statcard budget - spent, if(spent > budget, "over the budget", "left to spend"), budget
+section "Per person"
+  share buy by person, sum(it.price), it.key
+section "Shopping list", plural(count(buy), "item")
+  each buy as b empty "Nothing on the list yet."
+    row tap edit b swipe remove b
+      stack grow gap 0
+        b.what bold
+        b.person faint
+      b.price bold
+===
+@rich domain=c1_sadaqah_percent_plan topic=monthly_charity_plan style=detailed
+i want to give a fixed percent of my income every month. type income, slide the percent, and split it between three causes by weights i choose: school fees, food packs and the mosque fund. show the amount for each
+needs: type monthly income | percent to give | weights for three causes | amount per cause | total given per year
+---
+app "Charity Plan" heart green
+state income money = 0
+state pct num = 5
+state w1 num = 3
+state w2 num = 2
+state w3 num = 1
+let give = income * pct / 100
+let parts = w1 + w2 + w3
+field income "Monthly income"
+"Give" pct "%" faint
+slider pct 1..30
+"School fees weight" w1 faint
+slider w1 0..6
+"Food packs weight" w2 faint
+slider w2 0..6
+"Mosque fund weight" w3 faint
+slider w3 0..6
+if income > 0 and parts > 0
+  statcard round(give), "per month, per year" round(give * 12)
+  section "Split"
+    row
+      "School fees" grow
+      round(give * w1 / parts) bold
+    row
+      "Food packs" grow
+      round(give * w2 / parts) bold
+    row
+      "Mosque fund" grow
+      round(give * w3 / parts) bold
+else
+  "Type your income to plan the giving." faint
+===
+@rich domain=c1_fuel_fill_log topic=petrol_fill_ups_mileage style=multi_feature
+bike petrol log. every fill i add litres, price per litre and km since the last fill. i want to see the cost of each fill, this month's fuel spend, my average price per litre and my mileage in km per litre
+needs: add a fill with litres, price and km | cost of each fill | fuel spend this month | average price per litre | mileage in km per litre
+---
+app "Fuel Log" fire teal
+table fill litres num 0.., price money, km num 0..
+topbar "Fuel Log", fill, "Add fill"
+statcard sum(fill, it.litres * it.price), "spent in all, this month" sum(fill month, it.litres * it.price)
+if sum(fill.litres) > 0
+  row gap 2
+    stat round(sum(fill, it.litres * it.price) / sum(fill.litres) * 10) / 10, "average price per litre"
+    stat round(sum(fill.km) / sum(fill.litres) * 10) / 10, "km per litre"
+section "Fills"
+  each fill as f empty "No fills yet. Tap Add fill after your next stop."
+    row tap edit f swipe remove f
+      stack grow gap 0
+        f.litres "litres at" f.price faint
+        f.km "km" faint
+      f.litres * f.price bold
+===
+@rich domain=c1_mobile_load_tax topic=recharge_tax_balance style=short
+load card tax is taking my balance. 15 percent tax, how much do i get when i load 500, and how much should i load to get 500
+needs: tax percent | amount loaded to balance received | balance wanted to amount to load | both directions with a choice
+---
+app "Load Tax" phone purple
+state amount money = 500
+state tax num = 15
+state way pick Load_to_balance|Balance_to_load = Load_to_balance
+field amount "Amount"
+"Tax" tax "%" faint
+slider tax 0..30
+choice way
+statcard round(if(way = Load_to_balance, amount * (1 - tax / 100), amount / (1 - tax / 100))), if(way = Load_to_balance, "balance you receive", "you need to load")
+===
+@rich domain=c1_cash_drawer_count topic=cash_drawer_note_count style=custom_ui
+closing the shop, i count how many notes of each kind are in the drawer: 1000, 500, 100, 50, 20 and 10. type the counts, see the cash total, and compare with what the sales book says to get the shortage or extra
+needs: counts of each note | total cash in the drawer | sales figure from the book | shortage or extra | amount of each denomination
+---
+app "Drawer Count" money pink
+state n1 num = 0
+state n2 num = 0
+state n3 num = 0
+state n4 num = 0
+state n5 num = 0
+state n6 num = 0
+state book money = 0
+let total = n1 * 1000 + n2 * 500 + n3 * 100 + n4 * 50 + n5 * 20 + n6 * 10
+grid 3 gap 1
+  field n1 "1000 notes"
+  field n2 "500 notes"
+  field n3 "100 notes"
+  field n4 "50 notes"
+  field n5 "20 notes"
+  field n6 "10 notes"
+statcard total, "in the drawer"
+field book "Sales book says"
+if book > 0
+  if total >= book
+    "Extra" total - book color good big
+  else
+    "Short" book - total color bad big
+===
+@rich domain=c1_shop_daily_target_rent topic=daily_sales_needed_for_costs style=detailed
+how much must my shop sell every day just to pay the bills? monthly rent, salaries, electricity, and my average profit margin on sales. days open in a month. show the sales needed per day and per month
+needs: rent, salaries and electricity | average margin percent | days open per month | sales needed per month | sales needed per day
+---
+app "Daily Target" target ocean
+state rent money = 0
+state pay money = 0
+state power money = 0
+state margin num = 20
+state open num = 26
+let fixed = rent + pay + power
+let need = if(margin > 0, fixed / (margin / 100), 0)
+row gap 2
+  field rent "Rent"
+  field pay "Salaries"
+  field power "Electricity"
+"Average margin" margin "%" faint
+slider margin 5..60
+"Days open" open faint
+slider open 10..31
+if fixed > 0
+  statcard round(need / open), "to sell every day"
+  stat round(need), "to sell every month to cover" round(fixed)
+else
+  "Type your monthly costs to see the daily target." faint

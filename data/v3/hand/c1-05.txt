@@ -1,0 +1,251 @@
+@rich domain=c1_two_bank_loans topic=compare_two_bank_loan_offers style=detailed
+two banks offered me a car loan. same amount and years but different yearly rates and different processing fees in percent. show the monthly installment of each, the total i will pay including the fee, and tell me which bank is cheaper
+needs: loan amount and years | rate of each bank | processing fee percent of each bank | monthly installment of each | total cost and cheaper bank
+---
+app "Bank Compare" money slate
+state loan money = 0
+state years num = 5
+state ra num = 15
+state fa num = 1
+state rb num = 13.5
+state fb num = 2.5
+let n = years * 12
+let emi(r num) = if(r = 0, loan / n, loan * r / 1200 * pow(1 + r / 1200, n) / (pow(1 + r / 1200, n) - 1))
+let ta = emi(ra) * n + loan * fa / 100
+let tb = emi(rb) * n + loan * fb / 100
+row gap 2
+  field loan "Loan"
+  field years "Years"
+section "Bank A"
+  row gap 2
+    field ra "Rate %"
+    field fa "Fee %"
+section "Bank B"
+  row gap 2
+    field rb "Rate %"
+    field fb "Fee %"
+if loan > 0
+  statcard round(abs(ta - tb)), if(ta <= tb, "cheaper at Bank A", "cheaper at Bank B")
+  row gap 2
+    stat round(emi(ra)), "Bank A per month"
+    stat round(emi(rb)), "Bank B per month"
+else
+  "Type the loan amount to compare the banks." faint
+===
+@rich domain=c1_target_monthly_deposit topic=monthly_saving_for_target style=custom_ui
+i want 2 million in 8 years for a down payment. at about 9% yearly, how much should i put away every month? slide the years and the rate, and show the money i put in against what the interest adds
+needs: type the target amount | slider for years | slider for yearly rate | monthly deposit needed | own money against interest earned
+---
+app "Target Saving" target plum dark
+state goal_amt money = 2000000
+state years num = 8
+state rate num = 9
+let r = rate / 1200
+let n = years * 12
+let monthly = if(r = 0, goal_amt / n, goal_amt * r / (pow(1 + r, n) - 1))
+field goal_amt "Amount needed"
+"Years" years faint
+slider years 1..30
+"Yearly rate" rate "%" faint
+slider rate 0..20
+statcard round(monthly), "to save every month"
+row gap 2
+  stat round(monthly * n), "your own money"
+  stat round(goal_amt - monthly * n), "interest adds"
+===
+@rich domain=c1_college_fund_future topic=child_college_fund_needed style=multi_feature
+university costs 1.5 million today for my son who starts in 12 years. fees rise 8% a year and i can earn 10% on savings. show the cost then and how much to save each month from now
+needs: cost of the course today | years until the course starts | yearly fee rise | return on savings | future cost and monthly saving needed
+---
+app "College Fund" school red
+state cost money = 1500000
+state years num = 12
+state rise num = 8
+state ret num = 10
+let future = cost * pow(1 + rise / 100, years)
+let r = ret / 1200
+let n = years * 12
+let monthly = if(r = 0, future / n, future * r / (pow(1 + r, n) - 1))
+field cost "Cost today"
+"Years to go" years faint
+slider years 1..25
+"Fees rise" rise "% a year" faint
+slider rise 0..20
+"Savings earn" ret "% a year" faint
+slider ret 0..20
+statcard round(monthly), "to save each month"
+"The course will cost about" round(future) "when he starts." faint
+===
+@rich domain=c1_emergency_fund_goal topic=emergency_fund_months style=multi_feature
+building an emergency fund. i list my monthly must-pay costs like rent, food, bills, then choose how many months of cover i want and how much i have saved so far. show the target and how far i am
+needs: list monthly must-pay costs | months of cover slider | amount saved so far | target amount | progress toward the target
+---
+app "Safety Net" shield teal
+table cost what text, amount money
+setting saved money = 0 "Saved so far"
+state months num = 6
+let monthly = sum(cost.amount)
+topbar "Safety Net", cost, "Add monthly cost"
+"Months of cover" months faint
+slider months 3..12
+statcard saved, "saved of" monthly * months, monthly * months
+if monthly > 0
+  if saved >= monthly * months
+    "Your net is full." color good bold
+  else
+    "Still to save" monthly * months - saved faint
+section "Monthly costs", monthly
+  each cost as c empty "Add rent, food, bills and school fees."
+    row tap edit c swipe remove c
+      c.what grow
+      c.amount bold
+===
+@rich domain=c1_piecework_pay_week topic=piecework_pay_by_item style=multi_feature
+i sew in a small workshop and get paid per piece: 80 for a shirt, 120 for trousers, 60 for a bag. i log how many pieces of what i finish and want this week's pay and pieces per day
+needs: log pieces finished by item | rate per item | pay this week | pieces per day chart | tap to edit or swipe to remove
+---
+app "Piece Pay" pen blue
+table work item pick Shirt|Trousers|Bag = Shirt, pieces num 1.. = 1
+let rate(w work) = if(w.item = Shirt, 80, if(w.item = Trousers, 120, 60))
+topbar "Piece Pay", work, "Log pieces"
+statcard sum(work week, it.pieces * rate(it)), "earned this week from" sum(work.pieces week) "pieces"
+section "Pieces per day"
+  daybars last 7 days, sum(work.pieces on it)
+section "Log"
+  each work top 10 as w empty "Nothing logged yet. Tap Log pieces after you finish a batch."
+    row tap edit w swipe remove w
+      w.item grow
+      w.pieces "x" rate(w) faint
+      w.pieces * rate(w) bold
+===
+@rich domain=c1_event_ticket_profit topic=event_ticket_revenue_profit style=detailed
+organising a charity concert. general tickets, vip tickets and student tickets each have a price and a number sold so far. type the hall cost and sound cost and show revenue, profit and how many more average tickets we must sell to break even
+needs: tickets sold for each of three types | price of each type | hall and sound costs | revenue and profit | more tickets needed to break even
+---
+app "Concert Money" star ocean
+state ng num = 0
+state pg money = 500
+state nv num = 0
+state pv money = 2000
+state ns num = 0
+state ps money = 250
+state costs money = 0
+let sold = ng + nv + ns
+let revenue = ng * pg + nv * pv + ns * ps
+let avgp = if(sold > 0, revenue / sold, pg)
+section "Tickets sold"
+  row gap 2
+    field ng "General"
+    field pg "Price"
+  row gap 2
+    field nv "VIP"
+    field pv "Price"
+  row gap 2
+    field ns "Students"
+    field ps "Price"
+field costs "Hall and sound costs"
+statcard revenue, "revenue from" plural(sold, "ticket")
+if costs > 0
+  if revenue >= costs
+    "Profit" revenue - costs color good big
+  else
+    "Short by" costs - revenue color bad big
+    "About" 0 - floor(0 - (costs - revenue) / avgp) "more tickets to break even." faint
+===
+@rich domain=c1_coin_jar_counter topic=coin_jar_counting_history style=custom_ui
+my kids empty the piggy bank every few months. i count coins of 1, 2, 5 and 10, type the counts, see the total, and save each count with the date so we can see how fast it fills up
+needs: counts of each coin | total money in the jar | save the count with its date | list of past counts | total of all saved counts
+---
+app "Coin Jar" coin mint dark
+table tally total money
+state c1 num = 0
+state c2 num = 0
+state c5 num = 0
+state c10 num = 0
+let sum_now = c1 + c2 * 2 + c5 * 5 + c10 * 10
+grid 2 gap 1
+  field c1 "1 coins"
+  field c2 "2 coins"
+  field c5 "5 coins"
+  field c10 "10 coins"
+statcard sum_now, "in the jar right now"
+if sum_now > 0
+  button "Save this count" fill accent tap add tally total = sum_now then set c1 = 0 then set c2 = 0 then set c5 = 0 then set c10 = 0
+section "Past counts", "all together" sum(tally.total)
+  each tally top 6 as k empty "No counts saved yet."
+    row swipe remove k
+      k.at grow faint
+      k.total bold
+===
+@rich domain=c1_cashback_cap_price topic=cashback_with_cap style=short
+card gives 10% cashback but max 500 per purchase. what is my real price
+needs: type the purchase price | cashback percent | cap on cashback | price after cashback
+---
+app "Cashback" gift pink
+state price money = 0
+state pct num = 10
+state cap money = 500
+let back = min(price * pct / 100, cap)
+field price "Purchase price"
+row gap 2
+  field pct "Cashback %"
+  field cap "Cashback cap"
+if price > 0
+  statcard round(price - back), "real price after cashback"
+  "You get back" round(back) if(price * pct / 100 > cap, "(the cap applies)", "") faint
+else
+  "Type the price to see your cashback." faint
+===
+@rich domain=c1_job_offer_real_hourly topic=job_offers_real_pay_compare style=multi_feature
+i have two job offers. one pays more but the office is far. for each i type monthly salary, daily commute cost and hours per day including travel time. show the real pay per hour after travel costs and which one wins
+needs: monthly salary for each job | daily commute cost | hours per day including travel | real pay per hour for each | which job wins
+---
+app "Job Compare" users grey
+state sa money = 0
+state ca money = 0
+state ha num = 9
+state sb money = 0
+state cb money = 0
+state hb num = 11
+let ra = if(ha > 0, (sa - ca * 26) / (ha * 26), 0)
+let rb = if(hb > 0, (sb - cb * 26) / (hb * 26), 0)
+section "Job A"
+  row gap 2
+    field sa "Salary"
+    field ca "Commute a day"
+    field ha "Hours a day"
+section "Job B"
+  row gap 2
+    field sb "Salary"
+    field cb "Commute a day"
+    field hb "Hours a day"
+if sa > 0 and sb > 0
+  statcard round(max(ra, rb) * 100) / 100, if(ra >= rb, "per hour: Job A wins", "per hour: Job B wins")
+  "Job A pays" round(ra * 100) / 100 "an hour, Job B pays" round(rb * 100) / 100 faint
+else
+  "Type both salaries to compare." faint
+===
+@rich domain=c1_usd_invoice_local topic=dollar_invoice_to_local style=custom_ui
+sent a 750 dollar invoice. my bank gives me the rate i type, charges 1.5% conversion fee and a flat local fee. show what i get in local money and keep a short list of past payouts
+needs: invoice amount in dollars | typed bank rate | conversion fee percent and flat fee | amount received in local money | list of saved payouts
+---
+app "Dollar Payout" money ink
+table payout usd money, got money
+state dollars money = 0
+state rate num = 280
+state fee num = 1.5
+state flat money = 200
+let gotlocal = max(dollars * rate * (1 - fee / 100) - flat, 0)
+field dollars "Invoice in dollars"
+row gap 2
+  field rate "Bank rate"
+  field fee "Fee %"
+field flat "Flat local fee"
+if dollars > 0
+  statcard round(gotlocal), "arrives in your account"
+  button "Save payout" tap add payout usd = dollars, got = gotlocal
+section "Past payouts", sum(payout.got)
+  each payout top 6 as p empty "No payouts saved yet."
+    row swipe remove p
+      p.usd grow faint
+      round(p.got) bold

@@ -1,0 +1,566 @@
+@rich domain=n1_life_three_tabs topic=money_tasks_health_checks from=v2-cr-1e07f9eeca
+-
+needs: log money in and out | task list with done ticks | health checks such as blood pressure and sugar | a tab for each of the three | balance shown at the top of the money tab
+---
+app "Life Check" shield green
+table cash what text, amount money, kind pick In|Out = Out
+table todo what text, done bool
+table health measure pick Pressure|Sugar|Weight|Pulse = Pressure, value num 0..500
+screen money "Money" wallet
+  topbar "Money", cash, "Add money"
+  statcard sum(cash.amount where kind = In) - sum(cash.amount where kind = Out), "balance, out this month" sum(cash.amount month where kind = Out)
+  list cash by day, "No money recorded yet."
+screen tasks "Tasks" check
+  topbar "Tasks", todo, "Add task"
+  each todo sort done as t empty "No tasks. Add one when it pops into your head."
+    row card gap 2 tap edit t swipe remove t
+      toggle t.done
+      t.what bold grow
+screen checks "Health" heart
+  topbar "Health", health, "Add check"
+  each options health.measure as m
+    row card gap 2
+      text m bold grow
+      last(health.value where measure = m) bold
+      "checks" count(health where measure = m) faint
+===
+@rich domain=n1_home_tools_where topic=where_is_my_tool from=v2-cr-5aa09b607d
+-
+needs: save each tool with the room and the exact spot | search by name to find where it is | room chips with counts | count of tools in the house | tools per room chart
+---
+app "Home Tools" tool teal
+table tool name text, room pick Garage|Kitchen|Bedroom|Shed|Cupboard = Garage, spot text?
+state q text = ""
+state r pick All|Garage|Kitchen|Bedroom|Shed|Cupboard = All
+topbar "Home Tools", tool, "Add tool"
+field q "Where is my... (type a tool)"
+choice r
+each tool where (r = All or room = r) and has(name, q) sort name as t empty "No tools match. Add the ones you keep around the house."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.room "," t.spot faint
+section "Tools per room", "in all:" count(tool)
+  share tool by room, count(it), it.key
+===
+@rich domain=n1_study_marks topic=study_hours_and_marks from=v2-cr-076ea8f668
+-
+needs: add subjects | log study time with one tap per subject | hours studied this week | record test marks | average mark per subject ranked
+---
+app "Study Marks" school blue
+table subject name text
+table study subject ref subject, mins num 5..600 = 60
+table mark subject ref subject, score num 0..100, test text?
+topbar "Study Marks", subject, "Add subject"
+statcard round(sum(study.mins week) / 6) / 10, "hours studied this week", 10
+each subject sort name as s empty "No subjects yet. Add the ones you are studying."
+  stack card gap 1 tap edit s swipe remove s
+    s.name bold
+    round(sum(s.study.mins) / 6) / 10 "h studied, average mark" round(avg(s.mark.score)) faint
+    row gap 1
+      button "+30 min" grow tap add study subject = s, mins = 30
+      button "+1 h" grow tap add study subject = s, mins = 60
+section "Average mark", "best first"
+  share subject sort avg(it.mark.score) desc, round(avg(it.mark.score)), it.name
+form mark, "Add a mark"
+===
+@rich domain=n1_savings_pots topic=savings_in_pots from=v2-cr-80fff7cf6c
+-
+needs: make pots with a goal | add 500, 1000 or 5000 with one tap | take money out | progress bar per pot | total saved in all pots
+---
+app "Savings Pots" coin purple
+table pot name text, goal money
+table put pot ref pot, amount money, dir pick In|Out = In
+let bal(p pot) = sum(p.put.amount where dir = In) - sum(p.put.amount where dir = Out)
+topbar "Savings Pots", pot, "New pot"
+statcard sum(put.amount where dir = In) - sum(put.amount where dir = Out), "saved in all pots"
+each pot as p empty "No pots yet. Make one for a holiday, an emergency or a gift."
+  stack card gap 2 tap edit p swipe remove p
+    p.name bold
+    goal bal(p), p.goal, "saved"
+    row gap 1
+      each [500, 1000, 5000] as a
+        button "+" a grow tap add put pot = p, amount = a, dir = In
+      button "Take 500" grow tap add put pot = p, amount = 500, dir = Out
+===
+@rich domain=n1_weekly_credit topic=weekly_credit_book from=v2-cr-37d7b900d0
+-
+needs: add the people you deal with | record money gave or got | move between weeks with arrows | week total and balance per person | overall amount owed to you
+---
+app "Weekly Khata" wallet pink
+table party name text
+table deal party ref party, amount money, kind pick Gave|Got = Gave
+state d date = today
+let bal(p party) = sum(p.deal.amount where kind = Gave) - sum(p.deal.amount where kind = Got)
+topbar "Weekly Khata", party, "Add person"
+row align center gap 1
+  button "<" tap set d = d - 7
+  "Week of" d bold grow align center
+  button ">" tap set d = d + 7
+statcard sum(party, bal(it)), "owed to you overall, gave this week" sum(deal.amount week of d where kind = Gave)
+each party sort name as p empty "No one yet. Add the people you give credit to."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      "This week:" sum(p.deal.amount week of d where kind = Gave) - sum(p.deal.amount week of d where kind = Got) faint
+    bal(p) bold color if(bal(p) > 0, warn, good)
+form deal, "Record a deal"
+===
+@rich domain=n1_parttime_pay topic=part_time_hours_and_pay from=v2-cr-e37da98e9d
+-
+needs: log a shift with start and finish | hours worked this week | pay per hour setting | job costs | take home pay after costs | bar chart of hours per day
+---
+app "Part-time Pay" clock grey
+table shift place text?, start time = 9:00, finish time = 17:00
+table spend what text, amount money
+setting rate money = 800 "Pay per hour"
+let hrs = sum(shift week, (it.finish - it.start) / 1h)
+topbar "Part-time Pay", shift, "Log a shift"
+statcard hrs, "hours this week, earning" round(hrs * rate)
+"Take home" round(hrs * rate - sum(spend.amount week)) head
+section "Hours per day", "last 7 days"
+  daybars last 7 days, sum(shift on it, (it.finish - it.start) / 1h)
+section "Job costs", "this week:" sum(spend.amount week)
+  list spend top 5, "No job costs yet."
+form spend, "Add a job cost"
+list shift by day, "No shifts yet. Tap Log a shift after work."
+===
+@rich domain=n1_homework_exams topic=homework_and_exam_dates from=v2-cr-0a0e88aec7
+-
+needs: add homework, exams and projects with a subject and due date | days to the next exam | overdue items in red | tick items off | count of open items
+---
+app "Homework" school ocean
+table work subject pick Maths|Science|English|History|Urdu = Maths, what text, kind pick Homework|Exam|Project = Homework, due date, done bool
+let nxt = nth(work where kind = Exam and done = no and due >= today sort due, 1).due
+topbar "Homework", work, "Add item"
+statcard nxt - today, "days to the next exam, open items:" count(work where done = no)
+each work where done = no sort due as w empty "Nothing due. Add homework or an exam date."
+  row card gap 2 tap edit w swipe remove w
+    toggle w.done
+    stack grow gap 0
+      w.subject w.what bold
+      w.kind "," w.due faint color if(w.due < today, bad, muted)
+    if w.kind = Exam
+      "Exam" bold color bad
+section "Done", "ticked off:" count(work where done = yes)
+  list work where done = yes top 5, "Nothing finished yet."
+===
+@rich domain=n1_task_board topic=three_column_task_board from=v2-cr-db6ca4d19a
+-
+needs: add tasks | board with Todo, Doing and Done columns | tap a card to move it along | swipe a card away | done out of total progress
+---
+app "Task Board" board mint
+table task title text, stage pick Todo|Doing|Done = Todo
+topbar "Task Board", task, "Add task"
+goal count(task where stage = Done), count(task), "tasks done"
+"Tap a card to move it along" faint
+grid 3 gap 1
+  each options task.stage as s
+    stack gap 1
+      row
+        text s bold grow
+        count(task where stage = s) faint
+      each task where stage = s as t
+        stack card gap 0 pad 1 tap set t.stage = if(t.stage = Todo, Doing, if(t.stage = Doing, Done, Todo)) swipe remove t
+          t.title small
+button "Clear the Done column" tap remove all task where stage = Done
+===
+@rich domain=n1_spend_or_save topic=weekly_spend_vs_save from=v2-cr-3d1b14cde3
+-
+needs: record money spent or saved | week by week with arrows | spent and saved totals for the week | bar showing the share saved | spending per day chart
+---
+app "Spend or Save" coin slate
+table flow dir pick Spend|Save = Spend, amount money, note text?
+state d date = today
+let sp = sum(flow.amount week of d where dir = Spend)
+let sv = sum(flow.amount week of d where dir = Save)
+topbar "Spend or Save", flow, "Add"
+row align center gap 1
+  button "<" tap set d = d - 7
+  "Week of" d bold grow align center
+  button ">" tap set d = d + 7
+row gap 3
+  stack grow gap 0
+    sp big
+    "spent" faint
+  stack grow gap 0
+    sv big color good
+    "saved" faint
+draw 100, 8
+  rect 0, 0, 100, 8 fill soft radius 4
+  rect 0, 0, 100 * sv / max(sp + sv, 1), 8 fill good radius 4
+"Saved" round(sv * 100 / max(sp + sv, 1)) "% of the money that moved" faint
+section "Spending each day"
+  daybars week of d, sum(flow.amount on it where dir = Spend)
+list flow week of d by day, "Nothing recorded this week."
+===
+@rich domain=n1_fridge_and_bag topic=fridge_and_packing_lists from=v2-cr-c3dc76a6be
+-
+needs: fridge list and packing list side by side | add an item with a quantity | plus and minus on quantity | tick items off | open count above each list
+---
+app "Fridge and Bag" cart ink
+table thing what text, spot pick Fridge|Packing = Fridge, qty num 1..99 = 1, got bool
+topbar "Fridge and Bag", thing, "Add item"
+grid 2 gap 2
+  each options thing.spot as sp
+    stack gap 1
+      row
+        text sp head grow
+        count(thing where spot = sp and got = no) faint
+      each thing where spot = sp sort got as t empty "Empty"
+        stack card gap 0 tap edit t swipe remove t
+          row gap 1
+            toggle t.got
+            t.what bold grow color if(t.got, muted, ink)
+          row gap 1 align center
+            button "-" tap set t.qty = t.qty - 1
+            t.qty bold
+            button "+" tap set t.qty = t.qty + 1
+===
+@rich domain=n1_work_journal topic=work_done_and_paid_journal from=v2-cr-6c4d339567
+-
+needs: write what you did at work | write what you paid for with the amount | filter all, did or paid | things done and money paid out this week | 4 week grid of busy days
+---
+app "Work Journal" pen plum
+table entry what text, kind pick Did|Paid = Did, amount money?
+state f pick All|Did|Paid = All
+topbar "Work Journal", entry, "Add"
+statcard count(entry week where kind = Did), "things done this week, paid out" sum(entry.amount week where kind = Paid)
+choice f
+each entry where f = All or kind = f by day as g empty "Nothing yet. Write what you did, or what you paid for."
+  g.key bold faint
+  each g as e
+    row card gap 2 tap edit e swipe remove e
+      icon if(e.kind = Did, "check", "money")
+      e.what bold grow
+      e.amount faint
+section "Busy days", "last 4 weeks"
+  daygrid last 28 days, count(entry on it where kind = Did), 3
+===
+@rich domain=n1_reading_plan_habit topic=reading_plan_by_weekday from=v2-cr-4afc3d8fe0
+-
+needs: plan a reading slot per weekday with a cue and minutes | today's slot shown first with a tick | week overview of planned days | slots done this week | tips that help
+---
+app "Reading Plan" book red
+table plan day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, cue pick Morning|Commute|Lunch|Bedtime = Bedtime, mins num 5..90 = 15
+table did plan ref plan
+topbar "Reading Plan", plan, "Add a reading slot"
+"Today" head
+each plan where day = dayname(today) as p empty "No reading planned today. Add a slot, ten minutes is enough."
+  row card gap 2
+    toggle p.did
+    stack grow gap 0
+      p.cue bold
+      p.mins "minutes" faint
+section "Your week", "slots done:" count(plan, count(it.did week) > 0) "of" count(plan)
+  grid 7 gap 1
+    each options plan.day as dd
+      box height 28 radius 6 fill if(count(plan where day = dd) > 0, accent, soft)
+        text dd tiny align center color if(count(plan where day = dd) > 0, bg, muted)
+section "Tips that help"
+  each ["Keep the book where you sit", "Read five pages, not a chapter", "Pair reading with a cup of tea"] as tip
+    text tip faint
+===
+@rich domain=n1_spending_quick topic=quick_spending_taps from=v2-cr-5ed5b3eede
+-
+needs: tap 100, 500 or 1000 to record spending | pick the kind: food, travel, bills, fun or other | daily limit setting | spent today against the limit | week by kind and per day chart
+---
+app "Spending" wallet orange
+table spend amount money, kind pick Food|Travel|Bills|Fun|Other = Food
+setting daily money = 2000 "Daily limit"
+state k pick Food|Travel|Bills|Fun|Other = Food
+topbar "Spending", spend, "Other amount"
+statcard sum(spend.amount today), "spent today of" daily, daily
+choice k
+row gap 1
+  each [100, 500, 1000] as a
+    button a grow tap add spend amount = a, kind = k
+section "This week", "by kind"
+  share spend week by kind, sum(it.amount), it.key
+section "Each day"
+  goalbars last 7 days, sum(spend.amount on it), daily
+list spend today, "Nothing spent today. Tap an amount when you pay for something."
+===
+@rich domain=n1_till_and_stock topic=till_sales_with_stock from=v2-cr-917b334787
+-
+needs: products with price and stock | Sell 1 button that records a sale and lowers stock | takings today | low stock in warning colour | sold out state | best sellers
+---
+app "Till and Stock" bag yellow
+table product name text, price money, stock num 0..
+table sale product ref product, qty num 1..999 = 1
+let takings = sum(sale today, it.qty * it.product.price)
+topbar "Till and Stock", product, "Add product"
+statcard takings, "taken today from" plural(count(sale today), "sale")
+each product sort stock as p empty "No products yet. Add what you sell with its price and stock."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.price "each," p.stock "left" faint color if(p.stock <= 3, warn, muted)
+    if p.stock > 0
+      button "Sell 1" fill accent tap add sale product = p then set p.stock = p.stock - 1
+    else
+      "Sold out" bold color bad
+section "Best sellers", "units"
+  share product sort sum(it.sale.qty) desc top 5, sum(it.sale.qty), it.name
+section "Takings", "last 7 days"
+  daybars last 7 days, sum(sale on it, it.qty * it.product.price)
+===
+@rich domain=n1_ramadan_trio topic=fasts_quran_and_giving from=v2-cr-184e1d757f
+-
+needs: calendar to mark fasts | day of Ramadan and fasts kept | Quran pages with one tap against 604 | record what you give | tabs for fasts, Quran and giving
+---
+app "Ramadan Trio" moon green dark
+table fast
+table quran pages num 1..100
+table gift what text, amount money
+setting first date = 2027-02-08 "First day of Ramadan"
+screen fasts "Fasts" moon
+  statcard count(fast), "fasts kept, day" clamp(today - first + 1, 0, 30), 30
+  calendar fast, first
+screen read "Quran" book
+  goal sum(quran.pages), 604, "pages read of 604"
+  row gap 1
+    each [2, 5, 10] as p
+      button "+" p "pages" grow tap add quran pages = p
+  section "Last 7 days"
+    daybars last 7 days, sum(quran.pages on it)
+screen give "Giving" gift
+  topbar "Giving", gift, "Give"
+  statcard sum(gift.amount), "given this Ramadan in" plural(count(gift), "gift")
+  list gift by day, "Nothing given yet."
+===
+@rich domain=n1_night_dump topic=night_head_dump from=v2-cr-55496a6f14
+-
+needs: one tap to record how your head feels tonight | optional line to write it down | nights in a row | mood split this month | recent lines
+---
+app "Night Dump" moon teal dark
+table dump mood pick Calm|Busy|Worried|Happy = Calm, line text?
+"How is your head tonight?" head
+row gap 1
+  each options dump.mood as m
+    button m grow tap add dump mood = m
+streak(dump) "nights in a row" faint
+section "Write it down", "optional"
+  form dump, "Save with a line"
+section "This month", "by mood"
+  share dump month by mood, count(it), it.key
+each dump where len(line) > 0 sort at desc top 10 as d empty "No lines yet. A tap on a mood is enough."
+  stack card gap 0
+    d.line
+    d.mood d.at faint
+===
+@rich domain=n1_books_this_year topic=books_finished_this_year from=v2-cr-8a5e9f9253
+-
+needs: add books | tap Finished to stamp today | yearly goal of books | books finished this year against the goal | bar chart of books by month
+---
+app "Books This Year" book blue
+table book title text, done bool, finished date?
+setting goal num 1..200 = 12 "Books this year"
+let n = count(book where done = yes and year(finished) = year(today))
+topbar "Books This Year", book, "Add book"
+statcard n, "books finished of" goal "this year", goal
+section "By month", "finished"
+  bars 1..12, count(book where done = yes and year(finished) = year(today) and month(finished) = it)
+each book sort done as b empty "No books yet. Add the one you want to finish next."
+  row card gap 2 tap edit b swipe remove b
+    b.title bold grow color if(b.done, muted, ink)
+    if b.done
+      b.finished faint
+    else
+      button "Finished" tap set b.done = yes then set b.finished = today
+===
+@rich domain=n1_tailor_cash topic=tailor_sales_and_fabric from=v2-cr-41af0b023d
+-
+needs: record each sale as stitching, alteration or ready made | record fabric and thread purchases | profit today | sales per day for the week | what the purchases were spent on
+---
+app "Tailor Cash" tag purple
+table sold what pick Stitching|Alteration|Readymade = Stitching, amount money
+table bought what pick Fabric|Thread|Buttons|Other = Fabric, amount money
+let earned = sum(sold.amount today)
+let spent = sum(bought.amount today)
+topbar "Tailor Cash", sold, "Add sale"
+statcard earned - spent, "profit today, sold" earned ", bought" spent
+section "Sales", "last 7 days"
+  daybars last 7 days, sum(sold.amount on it)
+section "Bought this month", "in all:" sum(bought.amount month)
+  share bought month by what, sum(it.amount), it.key
+form bought, "Add a purchase"
+list sold today, "No sales yet today."
+===
+@rich domain=n1_priority_matrix topic=urgent_important_matrix from=v2-cr-4e9a761c9b
+-
+needs: add a job and mark it urgent and important | four boxes: do first, plan, quick, drop | tick a job done | count in each box | tap a job to edit
+---
+app "Priority Matrix" flag pink
+table job what text, urgent bool, big bool "Important", done bool
+def cell title text, u bool, b bool
+  stack card gap 1
+    row
+      text title bold grow
+      count(job where done = no and urgent = u and big = b) faint
+    each job where done = no and urgent = u and big = b as j empty "Nothing here"
+      row gap 1 tap edit j
+        toggle j.done
+        j.what small grow
+topbar "Priority Matrix", job, "Add job"
+grid 2 gap 1
+  cell "Do first", yes, yes
+  cell "Plan it", no, yes
+  cell "Quick one", yes, no
+  cell "Drop it", no, no
+===
+@rich domain=n1_stock_customers topic=stock_and_customer_orders from=v2-cr-657eba0121
+-
+needs: product stock with plus and minus | customers with phone | record an order for a customer and product | orders and money spent per customer | tabs for stock, customers and orders
+---
+app "Stock and Customers" box grey
+table product name text, qty num 0.., price money
+table customer name text, phone text?
+table order customer ref customer, product ref product, qty num 1..999 = 1
+screen stock "Stock" box
+  topbar "Stock", product, "Add product"
+  each product sort qty as p empty "No products yet. Add what you keep in stock."
+    row card gap 1 tap edit p swipe remove p
+      stack grow gap 0
+        p.name bold
+        p.price faint
+      button "-" tap set p.qty = p.qty - 1
+      p.qty bold
+      button "+" tap set p.qty = p.qty + 1
+screen cust "Customers" users
+  topbar "Customers", customer, "Add customer"
+  each customer sort count(it.order) desc as c empty "No customers yet."
+    stack card gap 0 tap edit c swipe remove c
+      c.name bold
+      count(c.order) "orders," sum(c.order, it.qty * it.product.price) "spent" faint
+screen sell "Orders" list
+  form order, "Record an order"
+  list order by day, "No orders yet."
+===
+@rich domain=n1_gentle_nudges topic=medicine_bills_birthdays from=v2-cr-32df7f739b
+-
+needs: medicine times with a taken tick | phone reminder at the medicine time | bills with due dates and a reminder three days before | birthdays with a reminder on the day | three tabs
+---
+app "Gentle Nudges" bell ocean
+table med name text, clock time = 8:00
+table taken med ref med
+table bill name text, due date, amount money?, paid bool
+table birthday name text, day date "Next birthday"
+remind "Time for your medicine" at med.clock
+remind "A bill is due in 3 days" at bill.due - 3d at 9:00
+remind "A birthday today" at birthday.day
+screen meds "Medicine" pill
+  topbar "Medicine", med, "Add medicine"
+  statcard count(med, count(it.taken today) > 0), "of" count(med) "taken today", count(med)
+  each med sort clock as m empty "No medicines yet. Add each one with its time."
+    row card gap 2 tap edit m swipe remove m
+      toggle m.taken
+      m.clock bold
+      m.name grow
+screen bills "Bills" money
+  topbar "Bills", bill, "Add bill"
+  each bill where paid = no sort due as b empty "No unpaid bills."
+    row card gap 2 tap edit b swipe remove b
+      toggle b.paid
+      stack grow gap 0
+        b.name bold
+        b.due faint color if(b.due < today, bad, muted)
+      b.amount bold
+screen bdays "Birthdays" gift
+  topbar "Birthdays", birthday, "Add birthday"
+  each birthday sort day as x empty "No birthdays yet."
+    row card gap 2 tap edit x swipe remove x
+      x.name bold grow
+      x.day faint
+===
+@rich domain=n1_planned_spending topic=big_spends_to_save_for from=v2-cr-4cce0ee5bf
+-
+needs: plan a big spend with an amount and a date | how much to put aside each month for it | total to put aside per month | total due in the next 90 days | chart of planned amounts
+---
+app "Planned Spending" home mint
+table plan what text, amount money, due date
+let need(p plan) = round(p.amount / max((p.due - today) / 30, 1))
+topbar "Planned Spending", plan, "Plan a big spend"
+statcard sum(plan, need(it)), "to put aside each month for" plural(count(plan), "planned spend")
+"Due in the next 90 days:" sum(plan.amount where due <= today + 90) bold
+each plan sort due as p empty "No big spends planned. Add Eid, school fees or a repair."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.what bold grow
+      p.amount bold
+    "Due" p.due "," max(p.due - today, 0) "days left, put aside" need(p) "a month" faint color if(p.due - today < 30, warn, muted)
+section "Planned amounts", "by due date"
+  bars plan sort due, it.amount, it.what
+===
+@rich domain=n1_dog_diary topic=dog_food_and_vet_record from=v2-cr-529ccff110
+-
+needs: feeding taps of 100, 150 or 200 grams | grams fed today against a daily amount | dinner reminders morning and evening | vet visits with a next visit date and reminder | weekly food chart
+---
+app "Dog Diary" paw slate
+table vet what text, day date = today, next date?, cost money?
+table fed grams num 10..1000 = 150
+setting daily num = 300 "Food per day (g)"
+remind "Dog dinner time" at 7:30, 18:30
+remind "Vet visit in 3 days" at vet.next - 3d at 9:00
+topbar "Dog Diary", vet, "Vet visit"
+statcard sum(fed.grams today), "g fed today of" daily, daily
+row gap 1
+  each [100, 150, 200] as g
+    button "+" g "g" grow tap add fed grams = g
+section "Food this week"
+  goalbars last 7 days, sum(fed.grams on it), daily
+section "Vet record", "spent:" sum(vet.cost)
+  each vet sort day desc as v empty "No vet visits yet. Add the vaccines and check-ups."
+    row card gap 2 tap edit v swipe remove v
+      v.what bold grow
+      v.day "next:" v.next faint
+===
+@rich domain=n1_bill_split topic=split_bill_with_tip from=v2-cr-f91f683d88
+-
+needs: type the bill | tip and tax sliders | number of people slider | what each person pays | save a split to the history
+---
+app "Split the Bill" calc ink
+table split total money, heads num 1..20
+state bill money = 0
+state tip num = 10
+state tax num = 0
+state people num = 2
+let total = round(bill * (100 + tax + tip) / 100)
+field bill "Bill amount"
+"Tip" tip "%" faint
+slider tip 0..30
+"Tax" tax "%" faint
+slider tax 0..20
+"People" people faint
+slider people 1..20
+section "Each person pays"
+  round(total / people) huge
+  "Total with tip and tax" total faint
+  button "Save this split" fill accent tap add split total = total, heads = people
+section "Earlier splits"
+  list split top 5, "No splits saved yet."
+===
+@rich domain=n1_day_close topic=daily_sales_and_costs_close from=v2-cr-7ddbeb54ff
+-
+needs: record sales and expenses | pick the day with arrows | profit for that day | bars comparing sales and expenses | compare with the 7 day average
+---
+app "Day Close" chart yellow
+table sale what text, amount money
+table cost what text, amount money
+state d date = today
+let s = sum(sale.amount on d)
+let c = sum(cost.amount on d)
+topbar "Day Close", sale, "Add sale"
+row align center gap 1
+  button "<" tap set d = d - 1
+  text d bold grow align center
+  button ">" tap set d = d + 1
+text s - c huge
+if(s >= c, "In profit on this day", "A loss on this day") faint color if(s >= c, good, bad)
+draw 100, 16
+  rect 0, 1, 100 * s / max(max(s, c), 1), 6 fill accent radius 3
+  rect 0, 9, 100 * c / max(max(s, c), 1), 6 fill warn radius 3
+"Sales" s ", expenses" c faint
+"Seven day average sales:" round(sum(sale.amount last 7 days) / 7) faint
+form cost, "Add an expense"
+list sale on d, "No sales on this day."

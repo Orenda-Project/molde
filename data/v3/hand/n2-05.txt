@@ -1,0 +1,267 @@
+@rich domain=n2_read_daily topic=daily_reading_minutes from=v2-cr-a429131036
+-
+needs: log minutes read | daily minutes goal setting | a 15 minute reading timer that logs itself | streak and best streak | bars with the goal line | evening reminder if the goal is not met
+---
+app "Read Daily" book blue
+table session mins num 1..300 = 15, title text?
+setting goal num 5..300 = 20 "Minutes a day"
+let m = sum(session.mins today)
+remind "Time to read a little" at 21:00 if m < goal
+topbar "Read Daily", session, "Log reading"
+statcard m, "minutes read of" goal "today", goal
+timer 15m, "Reading timer", add session mins = 15 then notify "Nice. 15 minutes logged."
+row gap 2
+  stat streak(session), "day streak"
+  stat best(session), "best streak"
+section "Last 7 days", "goal met on" count(days last 7 days, sum(session.mins on it) >= goal) "days"
+  goalbars last 7 days, sum(session.mins on it), goal
+===
+@rich domain=n2_interval_timer topic=work_rest_interval_timer from=v2-cr-15f0800979
+-
+needs: work and rest seconds settings | ring that counts down each phase | start, pause and reset | switches between work and rest by itself | counts rounds finished today
+---
+app "Interval Timer" timer pink
+setting work num 5..600 = 30 "Work seconds"
+setting rest num 5..300 = 10 "Rest seconds"
+table round_done
+state running bool = no
+state phase pick Work|Rest = Work
+state left num = 30
+every 1s if running set left = left - 1
+when running and left <= 0 and phase = Work set phase = Rest then set left = rest
+when running and left <= 0 and phase = Rest set phase = Work then set left = work then add round_done
+draw width 240
+  circle 44 stroke soft thick 7
+  arc 44, 0, 360 * left / if(phase = Work, work, rest) stroke if(phase = Work, accent, good) thick 7
+  label 50, 44, left huge
+  label 50, 66, phase small
+row gap 2
+  button if(running, "Pause", "Start") fill accent grow tap set running = not running
+  button "Reset" grow tap set running = no then set phase = Work then set left = work
+statcard count(round_done today), "rounds finished today"
+section "Last 7 days"
+  daybars last 7 days, count(round_done on it)
+===
+@rich domain=n2_book_goal topic=yearly_book_goal from=v2-cr-3f59afb306
+-
+needs: log a finished book with rating and kind | books-this-year goal setting | tells me if I am on pace | bars of books finished per month | share by kind
+---
+app "Book Goal" book green
+table finished title text, rating num 1..5 = 4, kind pick Fiction|Non_fiction|Other = Fiction
+setting goal num 1..200 = 12 "Books this year"
+let n = count(finished year)
+let pace = round(goal * month(today) / 12)
+topbar "Book Goal", finished, "Finished a book"
+statcard n, "of" goal "books this year", goal
+if n >= pace
+  "On pace. Keep reading." head color good
+else
+  "A little behind:" pace - n "to catch up" head color warn
+section "Books per month", "this year"
+  bars 1..12, count(finished year where month(at) = it), it
+section "What you read", "this year"
+  share finished year by kind, count(it), it.key
+list finished year, "No books finished this year yet. The first one counts the most."
+===
+@rich domain=n2_session_helper topic=session_lists_nudges_calculator from=v2-cr-f7a74d1bfb
+-
+needs: lists of things to do for each session with a tick | nudges for people with a daily time and a reminder | clear ticked items | calculator that splits a session fee between people
+---
+app "Session Helper" users slate
+table item what text, session text = "Next session", done bool
+table nudge who text, note text?, time time = 9:00
+state a money = 0
+state n num = 4
+remind "Time to nudge someone on your list" at nudge.time
+screen lists "Lists" list
+  topbar "Session lists", item, "Add item"
+  each item where done = no sort session as i empty "Nothing planned. Add what each session needs."
+    row card gap 2 tap edit i swipe remove i
+      toggle i.done
+      i.what bold grow
+      i.session faint
+  button "Clear ticked items" tap remove all item where done = yes
+screen nudges "Nudges" bell
+  topbar "Nudges", nudge, "Add nudge"
+  each nudge sort time as g empty "No nudges yet. Add who to remind and when."
+    row card gap 2 tap edit g swipe remove g
+      stack grow gap 0
+        g.who bold
+        g.note faint
+      g.time bold
+screen calc "Calculator" calc
+  field a "Session fee"
+  "People" n faint
+  slider n 1..40
+  "Each pays" round(a / n) big
+  "Collected from everyone" a faint
+===
+@rich domain=n2_split_the_bill topic=restaurant_bill_split_with_tip from=v2-cr-5bc171db1c
+-
+needs: add each person with what they ordered | tip percent slider | total with tip | what each person pays for their own items | what each pays if split evenly
+---
+app "Split the Bill" calc orange
+table diner name text, amount money "Their items"
+setting tip num 0..40 = 10 "Tip %"
+let sub = sum(diner.amount)
+let tipamt = sub * tip / 100
+topbar "Split the Bill", diner, "Add person"
+statcard sub + tipamt, "total with a tip of" round(tipamt)
+section "Tip", "now" tip "%"
+  slider tip 0..30
+each diner sort name as d empty "Add each person and what they ordered."
+  row card gap 2 tap edit d swipe remove d
+    d.name bold grow
+    d.amount faint
+    round(d.amount * (1 + tip / 100)) bold
+section "Or split evenly", "each pays" round((sub + tipamt) / max(count(diner), 1))
+  "Shared by" plural(count(diner), "person") faint
+===
+@rich domain=n2_shop_inventory topic=shop_stock_value_and_margin from=v2-cr-21be74ef72
+-
+needs: add products with cost, price, quantity and reorder level | shows stock value at cost and profit if everything sells | list of products to reorder | sold-one and restock buttons | margin per product
+---
+app "Shop Inventory" package ink
+table product name text, cost money "Cost price", price money "Selling price", qty num 0.. = 0, reorder num 0.. = 5 "Reorder at"
+let value = sum(product, it.qty * it.cost)
+let retail = sum(product, it.qty * it.price)
+topbar "Shop Inventory", product, "Add product"
+row gap 2
+  statcard value, "stock at cost"
+  statcard retail - value, "profit if all sold"
+section "Reorder now", "below level:" count(product where qty <= reorder)
+  each product where qty <= reorder sort qty as r empty "Nothing to reorder. Stock looks healthy."
+    row gap 2 tap edit r
+      r.name bold grow
+      r.qty "left" color bad
+      button "+10" tap set r.qty = r.qty + 10
+section "All products", plural(count(product), "item")
+  each product sort name as p empty "No products yet. Add what you sell."
+    row card gap 2 tap edit p swipe remove p
+      stack grow gap 0
+        p.name bold
+        p.qty "in stock · margin" round((p.price - p.cost) * 100 / max(p.price, 1)) "%" faint
+      button "Sold 1" small tap set p.qty = p.qty - 1
+===
+@rich domain=n2_dated_todo topic=deadlines_sorted_by_date from=v2-cr-794be901c0
+-
+needs: add a deadline or a to-do with an optional date | groups for overdue, today, this week and later | tick done | counts of open and overdue
+---
+app "Dated To-do" list red
+table item title text, due date?, kind pick Deadline|Todo = Todo, done bool
+topbar "Dated To-do", item, "Add"
+statcard count(item where done = no), "open ·" count(item where done = no and due < today) "overdue"
+section "Overdue", "past the date"
+  each item where done = no and due < today sort due as i empty "Nothing overdue."
+    row gap 2 tap edit i swipe remove i
+      toggle i.done
+      i.title bold grow
+      i.due color bad
+section "Today"
+  each item where done = no and due = today as t empty "Nothing due today."
+    row gap 2 tap edit t swipe remove t
+      toggle t.done
+      t.title bold grow
+      t.kind faint
+section "This week"
+  each item where done = no and due > today and due <= today + 7 sort due as w empty "Nothing else this week."
+    row gap 2 tap edit w swipe remove w
+      toggle w.done
+      w.title bold grow
+      w.due faint
+section "Later or no date"
+  each item where done = no and not (due <= today + 7) sort due as l empty "Nothing waiting."
+    row gap 2 tap edit l swipe remove l
+      toggle l.done
+      l.title bold grow
+      l.due faint
+===
+@rich domain=n2_trip_trio topic=trip_days_packing_budget from=v2-cr-2256860e8e
+-
+needs: leaving and returning dates with a countdown | packing list with ticks and progress | trip budget with costs by kind | shows how much can be spent per day | share of costs by kind
+---
+app "Trip Trio" plane teal
+table pack what text, packed bool
+table cost what text, amount money, kind pick Stay|Travel|Food|Fun|Other = Food
+setting leave date = today "Leaving on"
+setting back date = today "Coming back"
+setting budget money = 80000 "Trip budget"
+let trip_days = max(back - leave, 1)
+screen days "Days" calendar
+  statcard leave - today, "days until we leave"
+  "Trip length" plural(trip_days, "day") head
+  section "Dates", "tap to change"
+    field leave
+    field back
+screen packing "Packing" bag
+  topbar "Packing", pack, "Add item"
+  statcard count(pack where packed = yes), "of" count(pack) "items packed", count(pack)
+  each pack sort packed as p empty "Nothing to pack yet. Add the first item."
+    row card gap 2 tap edit p swipe remove p
+      toggle p.packed
+      p.what bold grow
+screen money "Money" money
+  topbar "Trip money", cost, "Add cost"
+  statcard sum(cost.amount), "spent of" budget, budget
+  "You can spend about" round(budget / trip_days) "a day" faint
+  share cost by kind, sum(it.amount), it.key
+===
+@rich domain=n2_home_upkeep topic=bills_chores_repairs_supplies from=v2-cr-599c1c7de6
+-
+needs: add things to deal with by area: bills, chores, repairs, supplies | optional due date and amount | area tiles with open counts to filter | tick done | total of unpaid bills
+---
+app "Home Upkeep" home plum
+table chore title text, area pick Bills|Chores|Repairs|Supplies = Chores, due date?, amount money?, done bool
+state a text = All
+let late = count(chore where done = no and due < today)
+topbar "Home Upkeep", chore, "Add to the list"
+statcard count(chore where done = no), "things to deal with ·" late "overdue"
+scroll gap 1
+  stack card pad 1 gap 0 align center fill if(a = All, accent, surface) tap set a = All
+    count(chore where done = no) big
+    "All" small
+  each options chore.area as ar
+    stack card pad 1 gap 0 align center fill if(a = ar, accent, surface) tap set a = ar
+      count(chore where area = ar and done = no) big
+      ar small
+section "Bills to pay", "total:" sum(chore.amount where area = Bills and done = no)
+  each chore where area = Bills and done = no sort due as b empty "No unpaid bills."
+    row gap 2 tap edit b
+      toggle b.done
+      b.title grow
+      b.amount bold
+each chore where done = no and (a = All or area = a) sort due as c empty "Nothing to deal with here. Enjoy it."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.done
+    stack grow gap 0
+      c.title bold
+      c.area "·" c.due faint color if(c.due < today, bad, muted)
+===
+@rich domain=n2_chore_chart topic=chores_and_pocket_money from=v2-cr-66436d7567
+-
+needs: add each child | one tap to record a job done for a child | pocket money rate per job setting | shows what each child earned this week | share of jobs by child | recent jobs list so nobody argues
+---
+app "Chore Chart" star pink
+table kid name text
+table chore kid ref kid, job pick Dishes|Laundry|Tidy|Trash|Pet|Homework = Dishes
+setting rate money = 50 "Pocket money per job"
+let jobs_w = count(chore week)
+topbar "Chore Chart", kid, "Add child"
+statcard jobs_w * rate, "pocket money earned this week," jobs_w "jobs"
+each kid sort name as k empty "Add the children to start the chart."
+  stack card gap 1 tap edit k swipe remove k
+    row gap 2
+      k.name head grow
+      count(k.chore week) * rate bold
+    scroll gap 1
+      each options chore.job as j
+        button j small tap add chore kid = k, job = j
+    count(k.chore week) "jobs this week ·" count(k.chore today) "today" faint
+section "Who did what", "this week"
+  share chore week by kid.name, count(it), it.key
+section "Recent jobs"
+  each chore top 6 as c empty "No jobs recorded yet."
+    row gap 2
+      c.kid.name bold
+      c.job grow
+      c.at faint

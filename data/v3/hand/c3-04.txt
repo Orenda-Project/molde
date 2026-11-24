@@ -1,0 +1,448 @@
+@rich domain=c3_ideal_weight topic=ideal_weight_by_height style=multi_feature
+what should a person my height weigh? male or female, height in feet and inches, and give the ideal weight plus a comfortable range ten percent each side in both kg and lb
+needs: male or female chips | height in feet and inches | ideal weight | range ten percent either side | kg and lb shown
+---
+app "Ideal Weight" scale slate
+state sex pick Male|Female = Male
+state ft num = 5
+state inch num = 9
+let over = max(ft * 12 + inch - 60, 0)
+let ideal = if(sex = Male, 50, 45.5) + 2.3 * over
+choice sex
+row gap 2
+  field ft "Feet"
+  field inch "Inches"
+statcard round(ideal * 10) / 10, "kg ideal (" round(ideal * 2.20462) "lb)", 0
+section "Comfortable range"
+  round(ideal * 0.9) "to" round(ideal * 1.1) "kg" big
+  round(ideal * 0.9 * 2.20462) "to" round(ideal * 1.1 * 2.20462) "lb" faint
+===
+@rich domain=c3_deficit_plan topic=calorie_deficit_timeline style=detailed
+i burn about 2400 kcal a day, weigh 92 and want 80. let me choose a deficit of 300, 500 or 750 a day, then show the weeks it will take, the date i get there, and the weight loss per week
+needs: daily burn current and goal weight inputs | deficit chips 300 500 or 750 | weight lost per week | weeks needed | finish date
+---
+app "Deficit Plan" fire orange
+setting burn num = 2400 "Calories burned per day"
+setting now_kg num = 92 "Current weight (kg)"
+setting goalkg num = 80 "Goal weight (kg)"
+state cut pick C300|C500|C750 = C500
+let d = if(cut = C300, 300, if(cut = C500, 500, 750))
+let perweek = d * 7 / 7700
+let weeks = if(now_kg > goalkg, 0 - floor(0 - (now_kg - goalkg) / perweek), 0)
+field burn
+field now_kg
+field goalkg
+choice cut
+if now_kg <= goalkg
+  "Your current weight is already at or below your goal." faint
+else
+  statcard weeks, "weeks at" burn - d "kcal a day. You lose" round(perweek * 100) / 100 "kg a week", 0
+  "Goal reached around" today + weeks * 7 head
+===
+@rich domain=c3_food_diary topic=daily_calorie_food_log style=multi_feature
+log what i eat with calories and a meal type (breakfast, lunch, dinner, snack), show today's calories against my 2000 limit and how many are left, and a chart of the last 7 days
+needs: add food with calories and meal type | today's calories against the limit | calories left | chart of the last 7 days with goal line | list of today's food
+---
+app "Food Diary" apple mint
+table food what text, kcal num 0..3000, meal pick Breakfast|Lunch|Dinner|Snack = Lunch
+setting limit num = 2000 "Daily calories"
+let eaten = sum(food.kcal today)
+topbar "Food Diary", food, "Add food"
+statcard eaten, "kcal eaten, left:" max(limit - eaten, 0), limit
+if eaten > limit
+  "Over by" eaten - limit "kcal today." color bad
+section "Last 7 days"
+  goalbars last 7 days, sum(food.kcal on it), limit
+list food today, "Nothing eaten yet today. Add your breakfast with Add food."
+===
+@rich domain=c3_macro_split topic=macro_percent_split_grams style=short
+daily calories and my carb protein fat percentages, show grams
+needs: calories input | percent sliders for protein and fat | carbs as the rest | grams of each | warning if percent too high
+---
+app "Macro Split" chart plum
+state cal num = 2200
+state pp num = 30
+state fp num = 25
+let cp = 100 - pp - fp
+field cal "Daily calories"
+"Protein" pp "%" faint
+slider pp 10..50
+"Fat" fp "%" faint
+slider fp 15..45
+if cp < 0
+  "Protein and fat add up to more than 100 percent." color bad
+else
+  section "Your day in grams", "carbs get the rest:" cp "%"
+    "Protein" round(cal * pp / 100 / 4) "g" bold
+    "Carbs" round(cal * cp / 100 / 4) "g" bold
+    "Fat" round(cal * fp / 100 / 9) "g" bold
+===
+@rich domain=c3_sweat_rate topic=sweat_rate_per_hour style=detailed
+weigh before and after a long run to find my sweat rate. weight before, weight after, how much i drank in ml and how long i ran. show ml of sweat per hour and how much to drink per 15 minutes next time
+needs: weight before and after inputs | drink and time inputs | sweat rate per hour | drink per 15 minutes
+---
+app "Sweat Rate" drop blue
+state before num = 71.2
+state after num = 70.1
+state drank num = 500
+state mins num = 90
+let lost = (before - after) * 1000 + drank
+let rate = if(mins > 0, lost / (mins / 60), 0)
+field before "Weight before (kg)"
+field after "Weight after (kg)"
+field drank "Drank during (ml)"
+field mins "Run time (minutes)"
+statcard round(rate), "ml of sweat per hour", 0
+"Aim to drink about" round(rate * 0.7 / 4) "ml every 15 minutes." head
+if after < before - before * 0.02
+  "You lost over 2 percent of body weight. Drink more next time." color warn
+===
+@rich domain=c3_race_splits topic=race_splits_even_pace style=multi_feature
+target 5k in 25 minutes. show the split for every kilometre at even pace with the clock time at each km, and the pace per km. let me change the distance up to 21 km and the target time
+needs: distance and target time inputs | pace per km | split time at every kilometre | works for distances up to 21 km
+---
+app "Race Splits" flag red
+state km num = 5
+state mins num = 25
+state secs num = 0
+let total = (mins * 60 + secs) * 1s
+let pace = total / max(km, 1)
+row gap 2
+  field km "Distance (km)"
+  field mins "Target minutes"
+  field secs "Seconds"
+"Even pace" faint
+pace big
+"per km" faint
+section "Splits"
+  each 1..min(floor(km), 21) as k
+    row
+      join("km ", k) grow
+      pace * k bold
+===
+@rich domain=c3_interval_total topic=interval_workout_total_time style=short
+hiit 8 rounds of 40 sec work 20 sec rest, how long is the whole thing
+needs: rounds work seconds and rest seconds inputs | total workout time | finish time if starting now
+---
+app "Interval Time" timer red dark
+state rounds num = 8
+state work num = 40
+state rest num = 20
+let total = (rounds * work + max(rounds - 1, 0) * rest) * 1s
+field rounds
+field work "Work (seconds)"
+field rest "Rest (seconds)"
+statcard rounds, "rounds, total time" total, 0
+"If you start now you finish at" now + total head
+===
+@rich domain=c3_training_load topic=weekly_training_load_change style=detailed
+coach told me not to raise my training load more than 10 percent a week. log each session with minutes and how hard it felt from 1 to 10, load is minutes times effort. show this week's load vs last week and the percent change, and warn if too big
+needs: log session with minutes and effort | load per session | this week against last week | percent change | warning above 10 percent
+---
+app "Training Load" bolt purple
+table session what text, mins num 5..300 = 45, rpe num 1..10 = 6 "Effort 1 to 10"
+let this_week = sum(session week, it.mins * it.rpe)
+let last_week = sum(session prev week, it.mins * it.rpe)
+let change = if(last_week > 0, round((this_week - last_week) / last_week * 100), 0)
+topbar "Training Load", session, "Log session"
+statcard this_week, "load this week, last week was" last_week, max(last_week * 1.1, 1)
+if last_week > 0
+  "Change:" change "%" head color if(change > 10, bad, good)
+  if change > 10
+    "That is more than a 10 percent rise. Ease off a little." color warn
+each session week sort at desc as s empty "No sessions this week. Log your first with Log session."
+  row card tap edit s swipe remove s
+    stack grow gap 0
+      s.what bold
+      s.mins "min at effort" s.rpe faint
+    s.mins * s.rpe bold
+===
+@rich domain=c3_payday_budget topic=days_to_payday_daily_budget style=multi_feature
+salary comes on the 28th. i have 14500 left in my account, how many days until payday, and what can i spend per day, with a message if i am under 500 a day
+needs: payday day and money left inputs | days until next payday | spend per day | warning when low
+---
+app "Payday" wallet green
+setting payday num 1..28 = 28 "Salary day of month"
+state left money = 14500
+let base = today - monthday(today) + payday
+let nxt = if(base <= today, addmonths(base, 1), base)
+let n = nxt - today
+field payday
+field left "Money left now"
+statcard n, "days until payday on" nxt, 31
+"You can spend" left / max(n, 1) "a day" big
+if left / max(n, 1) < 500
+  "That is tight. Cut small spending until payday." color warn
+===
+@rich domain=c3_exam_list topic=exam_countdown_list style=detailed
+i have six exams. add the subject and date, show the days left for each one soonest first with a bar of how close it is compared to 30 days, and highlight any exam inside a week
+needs: add exam with subject and date | days left for each | soonest first | bar for each exam | highlight inside a week
+---
+app "Exam Days" school ink
+table exam subject text, on date = today "Exam date"
+topbar "Exam Days", exam, "Add exam"
+statcard count(exam where on >= today), "exams still to come", count(exam)
+each exam where on >= today sort on as e empty "No upcoming exams. Add one with Add exam."
+  stack card gap 1 tap edit e swipe remove e fill if(e.on - today <= 7, accent, surface)
+    row
+      e.subject bold grow
+      e.on - today "days" bold
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(1 - (e.on - today) / 30, 0, 1), 3 fill if(e.on - today <= 7, bad, accent) radius 1
+===
+@rich domain=c3_trip_budget topic=trip_nights_daily_budget style=multi_feature
+going to murree from 20 december to 24 december with 60000 total budget. how many nights, budget per day and per person with 4 people, and which weekday i leave
+needs: departure and return dates | total budget and people inputs | nights | budget per day and per person | weekday of departure
+---
+app "Trip Budget" map yellow
+setting out date = 2026-12-20 "Leave on"
+setting back date = 2026-12-24 "Return on"
+setting budget money = 60000 "Total budget"
+state people num = 4
+let nights = back - out
+field out
+field back
+field budget
+field people "People"
+if nights <= 0
+  "The return date must be after the departure date." faint
+else
+  statcard nights, "nights away, leaving on a" dayname(out), 0
+  "Per day" budget / (nights + 1) head
+  "Per person per day" budget / (nights + 1) / max(people, 1) big
+===
+@rich domain=c3_roster_rotation topic=three_on_one_off_roster style=detailed
+my plant runs 3 days on, 1 day off. i enter the date of my first day on, and want to know if today is a work day, when my next day off is and see the next 14 days coloured
+needs: first work day input | work day or off today | next day off | next 14 days coloured
+---
+app "Roster" calendar slate dark
+setting first date = today "First day on shift"
+let pos(d date) = (d - first) % 4
+let off_today = pos(today) = 3
+field first
+if off_today
+  "Today is your day off." big color good
+else
+  "Today is shift day" pos(today) + 1 "of 3." big
+"Next day off:" today + if(off_today, 0, 3 - pos(today)) head
+grid 7 gap 1
+  each 0..13 as i
+    stack gap 0 align center
+      text dayname(today + i) tiny color muted
+      box height 28 radius 6 fill if(pos(today + i) = 3, soft, accent)
+        text monthday(today + i) small align center
+===
+@rich domain=c3_pay_period topic=fortnightly_pay_period style=short
+paid every second friday, which period are we in
+needs: anchor payday input | current pay period start and end | days until payday | next three paydays
+---
+app "Pay Period" money teal
+setting anchor date = 2026-11-13 "A payday"
+let sincep = (today - anchor) % 14
+let nextpay = today + (14 - sincep) % 14
+field anchor
+statcard (nextpay - today), "days until payday on" nextpay, 14
+"This period started" nextpay - 14 "and ends" nextpay - 1 head
+section "Next paydays"
+  each 0..2 as k
+    text nextpay + k * 14
+===
+@rich domain=c3_maternity_leave topic=maternity_leave_end_date style=multi_feature
+my maternity leave starts on 1 february for 12 weeks. when does it end, when do i go back to work, how many weeks have i used so far and how long is left
+needs: leave start date and weeks inputs | end date | return date | weeks used and weeks left
+---
+app "Leave Dates" baby pink
+setting begin date = 2027-02-01 "Leave starts"
+setting weeks num 1..52 = 12 "Weeks of leave"
+let finish = begin + weeks * 7 - 1
+let used = clamp(floor((today - begin) / 7), 0, weeks)
+field begin
+field weeks
+statcard used, "weeks used of" weeks, weeks
+section "Dates"
+  "Last day of leave" finish head
+  "Back at work on" finish + 1 big
+  if today < begin
+    "Starts in" plural(begin - today, "day") faint
+  if today > finish
+    "Leave is over." faint
+===
+@rich domain=c3_probation_end topic=probation_end_date style=short
+joined on 10 november with 3 months probation
+needs: joining date and probation months | probation end date | days left | friendly message when finished
+---
+app "Probation" bag grey dark
+setting joined date = 2026-11-10 "Joining date"
+setting months num 1..12 = 3 "Probation months"
+let finish = addmonths(joined, months)
+field joined
+field months
+if today >= finish
+  "Probation is over. Congratulations." big color good
+else
+  statcard finish - today, "days of probation left until" finish, finish - joined
+===
+@rich domain=c3_egg_timer topic=egg_timer_presets style=short
+egg timer with soft, medium and hard presets
+needs: egg style chips | countdown with start and reset | minutes shown for each style
+---
+app "Egg Timer" egg yellow
+state style pick Soft|Medium|Hard = Medium
+let mins = if(style = Soft, 6, if(style = Medium, 8, 11))
+choice style
+timer mins * 1m, join(style, " egg"), notify "Eggs are ready"
+"Soft 6 min, medium 8 min, hard 11 min from boiling water." faint
+===
+@rich domain=c3_reading_speed topic=reading_speed_tests style=multi_feature
+test my reading speed: i read a page of 300 words, enter the time in seconds, get words per minute. save each test so i can see if i get faster over time
+needs: words and seconds inputs | words per minute | save the test | trend of saved tests | best speed
+---
+app "Reading Speed" book blue
+table test wpm num
+state words num = 300
+state secs num = 75
+let wpm = if(secs > 0, round(words / secs * 60), 0)
+field words "Words in the text"
+field secs "Seconds it took"
+statcard wpm, "words per minute", 250
+button "Save test" fill accent tap add test wpm = wpm
+section "Progress", "best:" max(test.wpm)
+  if count(test) > 1
+    trend test, it.wpm
+  list test top 5, "No tests saved yet. Time yourself and press Save test."
+===
+@rich domain=c3_pet_age topic=dog_age_in_human_years style=short
+how old is my dog in human years
+needs: dog age input | small or large dog chips | human age equivalent
+---
+app "Dog Years" paw orange
+state age num = 5
+state size pick Small|Large = Small
+let human = if(age <= 2, age * 12, 24 + (age - 2) * if(size = Small, 4, 6))
+field age "Dog age (years)"
+choice size
+statcard round(human), "in human years", 80
+===
+@rich domain=c3_fuel_log topic=fuel_fill_up_efficiency style=detailed
+every time i fill the tank, i write litres, price per litre and km driven since last fill. show km per litre for each fill, the average, cost per km and what i spent on fuel this month
+needs: add a fill with litres price and km | km per litre per fill | average km per litre | cost per km | fuel spend this month
+---
+app "Fuel Log" car red
+table fill litres num 1..120, price money, km num 1..2000
+let eff(f fill) = f.km / f.litres
+topbar "Fuel Log", fill, "Add fill-up"
+statcard round(sum(fill, it.km) / max(sum(fill.litres), 1) * 10) / 10, "km per litre on average", 15
+section "This month", "spent:" sum(fill month, it.litres * it.price)
+  "Cost per km" sum(fill, it.litres * it.price) / max(sum(fill.km), 1) big
+each fill top 8 as f empty "No fill-ups yet. Add one next time you refuel."
+  row card tap edit f swipe remove f
+    stack grow gap 0
+      f.litres "L at" f.price faint
+      f.at faint
+    round(eff(f) * 10) / 10 "km/L" bold
+===
+@rich domain=c3_tyre_pressure topic=tyre_pressure_psi_bar style=short
+tyre pressure converter psi bar kpa
+needs: value input | unit chips psi bar or kpa | the other two units | recommended range note
+---
+app "Tyre Pressure" car ink
+state v num = 32
+state u pick Psi|Bar|Kpa = Psi
+let psi = if(u = Psi, v, if(u = Bar, v * 14.5038, v * 0.145038))
+field v "Pressure"
+choice u
+row gap 2
+  statcard round(psi * 10) / 10, "psi"
+  statcard round(psi * 0.0689476 * 100) / 100, "bar"
+"Equals" round(psi * 6.89476) "kPa" head
+"Most cars run 30 to 35 psi. Check the sticker on the door." faint
+===
+@rich domain=c3_recipe_scale topic=recipe_scaler_servings style=detailed
+my biryani recipe is for 4 people but 10 are coming. list the ingredients with amounts and unit, set the servings i have and the servings i want, and show each ingredient scaled
+needs: add an ingredient with amount and unit | original servings and wanted servings | scale factor | scaled amount for each ingredient
+---
+app "Recipe Scale" food orange
+table ing name text, qty num 0.01..100000 = 1, unit pick g|ml|cups|tbsp|pcs = g
+setting have num = 4 "Recipe serves"
+setting want num = 10 "I need to serve"
+let f = if(have > 0, want / have, 0)
+topbar "Recipe Scale", ing, "Add ingredient"
+statcard round(f * 100) / 100, "x the recipe", 0
+each ing sort name as i empty "No ingredients yet. Add rice, chicken, spices with Add ingredient."
+  row card tap edit i swipe remove i
+    i.name bold grow
+    i.qty "x" round(f * 100) / 100 faint
+    round(i.qty * f * 10) / 10 i.unit bold
+===
+@rich domain=c3_day_milestones topic=life_milestone_days style=multi_feature
+fun one: from my birth date, when do i turn 10000 days old, 20000 days old and 1 billion seconds old. say if it already happened and how many days ago or to go
+needs: birth date input | date for 10000 and 20000 days | date for one billion seconds | days ago or days to go
+---
+app "Milestones" star purple
+setting born date = 1995-06-01 "Date of birth"
+field born
+statcard today - born, "days old today", 20000
+section "Milestone dates"
+  each [10000, 20000, 11574] as m
+    row card gap 2
+      stack grow gap 0
+        if(m = 11574, "One billion seconds", join(m, " days")) bold
+        born + m faint
+      if born + m > today
+        "in" plural(born + m - today, "day") bold
+      else
+        plural(today - born - m, "day") "ago" faint
+===
+@rich domain=c3_hours_decimal topic=hours_minutes_to_decimal style=short
+payroll wants 7:45 as 7.75, convert hours and minutes both ways
+needs: hours and minutes inputs | decimal hours | decimal input back to hours and minutes
+---
+app "Decimal Hours" clock teal
+state h num = 7
+state m num = 45
+state dec num = 6.4
+section "Clock to decimal"
+  row gap 2
+    field h "Hours"
+    field m "Minutes"
+  statcard round((h + m / 60) * 100) / 100, "decimal hours", 0
+section "Decimal to clock"
+  field dec "Decimal hours"
+  floor(dec) "h" round(dec % 1 * 60) "min" big
+===
+@rich domain=c3_adult_height topic=predicted_adult_height_child style=detailed
+my son is 9 and my daughter is 6. enter father height and mother height in cm, choose boy or girl, and show the predicted adult height with a range of 8 cm either side, and in feet and inches
+needs: father and mother height inputs | boy or girl chips | predicted adult height | range 8 cm each side | feet and inches
+---
+app "Adult Height" baby green
+state dad num = 178
+state mum num = 162
+state kid pick Boy|Girl = Boy
+let pred = if(kid = Boy, (dad + mum + 13) / 2, (dad + mum - 13) / 2)
+field dad "Father (cm)"
+field mum "Mother (cm)"
+choice kid
+statcard round(pred), "cm predicted adult height", 0
+"Likely range" round(pred - 8) "to" round(pred + 8) "cm" head
+"In feet:" floor(pred / 30.48) "ft" round(pred / 2.54 % 12) "in" faint
+"A guide only. Real height depends on many things." faint
+===
+@rich domain=c3_bp_log topic=blood_pressure_readings style=multi_feature
+my father has to check his blood pressure twice a day. save top and bottom number each time, show the latest reading with a label (normal, raised, high), the average of the last 7 days, and a line chart of the top number
+needs: save a reading with top and bottom number | latest reading with a label | average of last 7 days | line chart | list of readings
+---
+app "BP Log" heart red
+table bp sys num 70..250 = 120 "Top number", dia num 40..150 = 80 "Bottom number"
+let ls = last(bp.sys)
+let ld = last(bp.dia)
+topbar "BP Log", bp, "Save reading"
+if count(bp) = 0
+  "Save the first reading to see the label and average." faint
+else
+  statcard ls, "top over" ld "bottom: " if(ls >= 140 or ld >= 90, "high", if(ls >= 120 or ld >= 80, "raised", "normal")), 140
+  "Average, last 7 days" round(avg(bp.sys last 7 days)) "/" round(avg(bp.dia last 7 days)) head
+  if count(bp) > 1
+    section "Top number over time"
+      trend bp, it.sys
+list bp top 6, "No readings yet."
