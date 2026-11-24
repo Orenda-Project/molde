@@ -385,7 +385,11 @@ class Renderer {
       }
       case 'more': el.textContent = `Show ${fin(n.count) ? group(Math.min(n.count, 200)) + ' ' : ''}more`; if (fin(n.count)) el.setAttribute('aria-label', `Show ${Math.min(n.count, 200)} more of ${n.count}`); break;   // the rest of a long list (UITREE round 11)
       case 'icon': el.innerHTML = iconSvg(n.name, null); break;
-      case 'image': if (typeof n.src === 'string' && /^data:image\//.test(n.src)) el.src = n.src; else el.removeAttribute('src'); break;
+      case 'image': { // a stored picture (data: URL), or a lesson picture ref the host resolves (opts.resolveImage)
+        const u = typeof n.src === 'string' && !/^data:/.test(n.src) && this.opts.resolveImage ? this.opts.resolveImage(n.src) : n.src;
+        if (typeof u === 'string' && /^data:image\//.test(u)) el.src = u; else el.removeAttribute('src');
+        el.alt = n.a11y || ''; break;
+      }
       case 'space': el.style.height = sc(fin(n.size) ? n.size : 2); break;
       case 'error': el.textContent = (n.line ? `Line ${n.line}: ` : '') + (n.text || 'error'); break;
       case 'toggle': el.setAttribute('aria-checked', String(!!n.on)); el.setAttribute('aria-label', cap(String(n.label || 'Done').replace(/_/g, ' '))); el.setAttribute('data-ev', 'tap'); break;

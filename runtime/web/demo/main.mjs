@@ -71,6 +71,16 @@ export function start(root, sources) {
     li.append(b); list.append(li);
   }
   nav.append(list);
+  // lessons open on their own page (molde-lessons.html, built next to this one): one lesson drawn by
+  // several programs, with the learner's answers and notes kept through every change
+  const lh = $('p', 'dm-group'); lh.textContent = 'Lessons';
+  const llist = $('ul', 'dm-list');
+  for (const [id, t] of [['g3', 'Halves and quarters'], ['g6', 'The water cycle'], ['tt', 'Checking understanding']]) {
+    const li = $('li'); const a = $('a', 'dm-item', { href: `molde-lessons.html#lesson=${id}` });
+    a.innerHTML = `<span class="dm-item-t">${esc(t)}</span><span class="dm-item-n">lesson</span>`;
+    li.append(a); llist.append(li);
+  }
+  nav.append(lh, llist);
 
   // the phone: the app, and a strip at the bottom with the chat button
   const stage = $('section', 'dm-stage', { 'aria-label': 'Live app' });
