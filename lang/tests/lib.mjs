@@ -9,8 +9,10 @@ export const edits = () => readdirSync(join(LANG, 'examples', 'edits')).sort().m
   const p = join(LANG, 'examples', 'edits', d);
   return { name: d, dir: p, before: read(join(p, 'before.mo')), after: read(join(p, 'after.mo')), request: read(join(p, 'request.txt')) };
 });
-// every program the tests treat as valid: 30 examples + 20 edit befores + 20 edit afters
+export const demo15 = () => readdirSync(join(LANG, 'examples', 'demo15')).filter(f => f.endsWith('.mo')).sort().map(f => ({ name: 'demo15/' + f, src: read(join(LANG, 'examples', 'demo15', f)) }));
+// every program the tests treat as valid: 30 examples + 20 edit befores + 20 edit afters + the 15 demos written with the std library
 export const allPrograms = () => [
   ...examples().map(e => ({ name: e.name, src: e.src })),
+  ...demo15(),
   ...edits().flatMap(e => [{ name: e.name + '/before.mo', src: e.before }, { name: e.name + '/after.mo', src: e.after }]),
 ];
