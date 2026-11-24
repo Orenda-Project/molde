@@ -1,0 +1,509 @@
+@rich domain=r5_family_clinic topic=clinic patient visits style=detailed
+we run a small family clinic with two doctors. every patient visit should be written down with the name, complaint, which doctor saw them and the fee, and the screen should tell us how many patients came today, fees collected today, and who is due back for a follow-up in the next 7 days
+needs: add a visit with patient, complaint, doctor, fee and follow-up date | patients seen today | fees collected today | follow-ups due in the next 7 days | visits per doctor this week | list of visits by day
+---
+app "Clinic visits" heart ocean
+table visit patient text, complaint text, doctor pick Dr_Amna|Dr_Bilal = Dr_Amna, fee money, followup date?
+topbar "Clinic visits", visit, "New visit"
+row gap 2
+  statcard count(visit today), "patients seen today"
+  statcard sum(visit.fee today), "fees collected today"
+section "Due back this week", "total" count(visit where followup >= today and followup <= today + 7)
+  each visit where followup >= today and followup <= today + 7 sort followup as v empty "Nobody is due back in the next 7 days."
+    row gap 2
+      v.patient bold grow
+      v.followup "·" v.complaint faint
+section "Visits per doctor", "this week"
+  each options visit.doctor as dr
+    row gap 1
+      dr grow
+      count(visit week where doctor = dr) bold
+list visit by day, "No visits yet. Tap New visit when the first patient walks in."
+===
+@rich domain=r5_pharmacy_sales topic=pharmacy daily sales style=multi_feature
+pharmacy counter sales: i type the medicine name, quantity, unit price and whether it was cash or card, then see today's takings, cash vs card split, and a bar chart of the last 7 days of sales so I know the slow days
+needs: add a sale with medicine, quantity, price and payment type | today's takings | cash versus card split today | bar chart of last 7 days sales | list of today's sales
+---
+app "Pharmacy sales" pill mint
+table sale item text, qty num 1..500 = 1, price money, pay pick Cash|Card|Easypaisa = Cash
+let takings = sum(sale today, it.qty * it.price)
+topbar "Pharmacy sales", sale, "New sale"
+statcard takings, "taken today from" plural(count(sale today), "sale")
+section "Payment split", "today"
+  each options sale.pay as p
+    row gap 1
+      p grow
+      sum(sale today where pay = p, it.qty * it.price) bold
+section "Sales per day", "last 7 days"
+  daybars last 7 days, sum(sale on it, it.qty * it.price)
+list sale today, "No sales yet today. Add the first one when a customer pays."
+===
+@rich domain=r5_pharmacy_expiry topic=medicine expiry watch style=custom_ui
+shelf check for my pharmacy: add each batch with the medicine name, batch number, boxes in stock and expiry date. I need to see what expires within 60 days in orange, what is already expired in red, and a count of boxes at risk
+needs: add a batch with name, batch number, boxes and expiry date | red for expired batches | orange for expiring within 60 days | count of boxes at risk | list sorted by expiry date
+---
+app "Expiry watch" pill orange
+table batch name text, batchno text, boxes num 0..5000, expiry date
+let risky = sum(batch.boxes where expiry <= today + 60)
+topbar "Expiry watch", batch, "Add batch"
+row gap 2
+  statcard count(batch where expiry < today), "batches already expired"
+  statcard risky, "boxes expire within 60 days"
+each batch sort expiry as b empty "No batches yet. Add what is on your shelf with its expiry date."
+  row card gap 2 fill if(b.expiry < today, bad, if(b.expiry <= today + 60, warn, soft)) tap edit b swipe remove b
+    stack grow gap 0
+      b.name bold
+      "Batch" b.batchno "·" b.boxes "boxes" faint
+    stack gap 0 align end
+      b.expiry bold
+      if(b.expiry < today, "expired", plural(b.expiry - today, "day")) faint
+===
+@rich domain=r5_elder_meds topic=grandfather medicine schedule style=detailed
+my father is 78 and takes pills at different times of the day. i want a list of his medicines with the dose and time, a tick for each one he took today, a reminder at the time, and a percent of doses taken over the last 7 days so i can see if he is missing any
+needs: add a medicine with dose and time | tick when taken today | reminder at the dose time | percent of doses taken in the last 7 days | week dots for each medicine
+---
+app "Father's pills" pill plum
+table pill name text, dose text, time time
+table took pill ref pill
+let n = count(pill)
+remind "Time for a pill" at pill.time
+topbar "Father's pills", pill, "Add pill"
+row gap 2
+  statcard count(pill, count(it.took today) > 0), "of" plural(n, "pill") "taken today", n
+  statcard round(count(took last 7 days) * 100 / max(n * 7, 1)), "% taken in the last 7 days", 100
+each pill sort time as p empty "No pills yet. Add each one with its dose and the time he takes it."
+  stack card gap 2 tap edit p swipe remove p
+    row gap 2
+      stack grow gap 0
+        p.name bold
+        p.time "·" p.dose faint
+      toggle p.took
+    weekdots count(p.took on it) > 0
+===
+@rich domain=r5_bp_log topic=blood pressure readings style=custom_ui
+blood pressure diary for me and my wife. top number, bottom number, pulse, and morning or evening. colour each reading green when normal, orange when high-ish and red when 140/90 or over. a line chart of the last readings would be great too
+needs: add a reading with top number, bottom number, pulse and time of day | green orange red colour for each reading | line chart of top and bottom numbers | latest reading card | average of the last 7 days
+---
+app "BP diary" heart red
+table bp sys num 60..260 "Top number (systolic)", dia num 40..160 "Bottom number (diastolic)", pulse num 30..200 = 72, when_taken pick Morning|Evening = Morning
+let hi(r bp) = r.sys >= 140 or r.dia >= 90
+let mid(r bp) = r.sys >= 130 or r.dia >= 85
+topbar "BP diary", bp, "Add reading"
+row gap 2
+  statcard last(bp.sys), "latest top number"
+  statcard last(bp.dia), "latest bottom number"
+section "Last 7 days", "average" round(avg(bp.sys last 7 days)) "/" round(avg(bp.dia last 7 days))
+  plot 0..max(count(bp last 14 days), 2) - 1, 40..200 axes gridlines
+    poly stroke bad thick 2
+      each bp last 14 days sort at
+        pt index, it.sys
+    poly stroke accent thick 2
+      each bp last 14 days sort at
+        pt index, it.dia
+each bp sort at desc top 20 as r empty "No readings yet. Add the first one after sitting for five minutes."
+  row card gap 2 tap edit r swipe remove r
+    box width 14 height 14 radius 7 fill if(hi(r), bad, if(mid(r), warn, good))
+    stack grow gap 0
+      r.sys "/" r.dia bold
+      r.at r.when_taken faint
+    r.pulse "bpm" faint
+===
+@rich domain=r5_sugar_log topic=blood sugar log ranges style=multi_feature
+sugar log for my diabetes. every reading with mg/dl and when i took it, fasting or after meal or bedtime. colour low ones blue, normal green and high red, show the average of the week and how many readings were in range
+needs: add a reading with value and context | colour bands low normal high | average of the week | percent of readings in range | trend line of readings
+---
+app "Sugar log" drop teal
+table sugar mgdl num 20..600 unit "mg/dl", ctx pick Fasting|After_meal|Bedtime = Fasting
+let inr(r sugar) = r.mgdl >= 70 and r.mgdl <= 180
+topbar "Sugar log", sugar, "Add reading"
+row gap 2
+  statcard round(avg(sugar.mgdl week)), "mg/dl average this week"
+  statcard round(count(sugar week where mgdl >= 70 and mgdl <= 180) * 100 / max(count(sugar week), 1)), "% in range (70 to 180)", 100
+section "Trend", "last 30 days"
+  trend sugar last 30 days sort at, it.mgdl
+each sugar sort at desc top 15 as s empty "No readings yet. Add one after you test."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.mgdl "mg/dl" bold color if(s.mgdl < 70, blue, if(inr(s), good, bad))
+      s.ctx faint
+    s.at faint
+===
+@rich domain=r5_physio_home topic=physiotherapy home exercises style=detailed
+my physio gave me knee exercises. list each exercise with sets and reps, let me tick it when I have done it today, and ask how much pain I felt from 0 to 10 after the session so I can watch the pain come down over the weeks
+needs: add an exercise with sets and reps | tick when done today | log pain score after a session | pain trend line | done today count
+---
+app "Knee rehab" run green
+table ex name text, sets num 1..10 = 3, reps num 1..50 = 10
+table done ex ref ex
+table pain score num 0..10, note text?
+let todo = count(ex)
+topbar "Knee rehab", ex, "Add exercise"
+statcard count(ex, count(it.done today) > 0), "of" plural(todo, "exercise") "done today", todo
+each ex sort name as e empty "No exercises yet. Add the ones your physio gave you."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.name bold
+      e.sets "sets of" e.reps faint
+    toggle e.done
+section "Pain after session", "latest" last(pain.score) "of 10"
+  trend pain last 30 days sort at, it.score
+  row gap 1
+    each [0, 2, 4, 6, 8, 10]
+      button it tap add pain score = it
+===
+@rich domain=r5_antenatal topic=antenatal visits $ weeks style=multi_feature
+antenatal checkups for my wife, we write the week of pregnancy, weight in kg, blood pressure and the date of the next visit. i want to see the next visit date first, weight gained since the first visit, and a weight line
+needs: add a checkup with week, weight, blood pressure and next visit | next visit date | weight gained since first visit | weight trend line | list of checkups
+---
+app "Pregnancy visits" baby pink
+table checkup week num 4..42, kg num 30..150 unit "kg", sys num 60..220 = 110, dia num 40..140 = 70, next date?
+topbar "Pregnancy visits", checkup, "Add checkup"
+row gap 2
+  statcard last(checkup.week), "weeks pregnant at last visit"
+  statcard round((last(checkup.kg) - first(checkup.kg)) * 10) / 10, "kg gained since first visit"
+section "Next visit", "date"
+  first(checkup.next where next >= today sort next) head
+  since(checkup) "days since the last checkup" faint
+section "Weight", "kg"
+  trend checkup sort week, it.kg
+each checkup sort week desc as c empty "No checkups yet. Add the first one from the clinic card."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      "Week" c.week bold
+      c.kg "kg ·" c.sys "/" c.dia faint
+    c.next faint
+===
+@rich domain=r5_baby_growth topic=baby clinic weight height style=custom_ui
+baby clinic card: each visit I note the baby's age in months, weight, length and what the nurse said. show the latest weight big, how much he gained since the last visit, and a growth line of weight by age
+needs: add a visit with age in months, weight, length and note | latest weight | gain since previous visit | growth line of weight by age | list of visits
+---
+app "Baby growth" baby yellow
+table babyvisit months num 0..60, kg num 1..30 unit "kg", cm num 30..130 unit "cm", note text?
+let prev = nth(babyvisit sort months desc, 2)
+topbar "Baby growth", babyvisit, "Add visit"
+row gap 2
+  statcard last(babyvisit.kg), "kg at the latest visit"
+  statcard if(count(babyvisit) > 1, round((last(babyvisit.kg) - prev.kg) * 100) / 100, 0), "kg gained since the visit before"
+section "Weight by age", "months"
+  trend babyvisit sort months, it.kg
+each babyvisit sort months desc as v empty "No visits yet. Add the first clinic visit."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.months "months" bold
+      v.kg "kg ·" v.cm "cm" faint
+    v.note faint
+===
+@rich domain=r5_vaccine_record topic=child vaccination records style=detailed
+vaccination record for my two kids. each shot has the child's name, vaccine, date given and the date the next dose is due. highlight overdue next doses in red, show what is due in the next 30 days and let me add a reminder from the due date
+needs: add a shot with child, vaccine, date given and next due date | overdue doses in red | doses due in 30 days | reminder before the due date | list by child
+---
+app "Vaccine record" shield blue
+table shot child pick Hamza|Aiza = Hamza, vaccine text, given date = today, due date?
+remind "Vaccine due in 3 days" at shot.due - 3d at 9:00
+topbar "Vaccine record", shot, "Add shot"
+row gap 2
+  statcard count(shot where due < today), "overdue doses"
+  statcard count(shot where due >= today and due <= today + 30), "due in the next 30 days"
+each options shot.child as c
+  section c, "shots" count(shot where child = c)
+    each shot where child = c sort given desc as s empty "No shots recorded yet."
+      row gap 2 fill if(s.due < today, bad, bg) tap edit s swipe remove s
+        stack grow gap 0
+          s.vaccine bold
+          "Given" s.given faint
+        s.due faint
+===
+@rich domain=r5_dental_appts topic=dental appointment book style=multi_feature
+dental clinic bookings. patient name, treatment (cleaning, filling, root canal, extraction, checkup), date and time, and status. let me filter by status with chips, show today's appointments first and count of done today
+needs: add an appointment with patient, treatment, date, time and status | chips to filter by status | today's appointments | count of done today | tap to change status
+---
+app "Dental book" tooth teal
+table appt patient text, treat pick Cleaning|Filling|Root_canal|Extraction|Checkup = Checkup, day date = today, slot time, status pick Booked|Done|No_show = Booked
+state f pick All|Booked|Done|No_show = All
+topbar "Dental book", appt, "Book patient"
+row gap 2
+  statcard count(appt today), "booked today"
+  statcard count(appt where day = today and status = Done), "done today"
+choice f
+each appt where f = All or status = f sort day desc as a empty "No appointments here. Book a patient or pick another chip."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.patient bold
+      a.treat "·" a.day a.slot faint
+    a.status color if(a.status = Done, good, if(a.status = No_show, bad, ink))
+===
+@rich domain=r5_gym_members topic=gym members and plans style=detailed
+gym front desk: members with name, phone, plan (monthly, quarterly, yearly), joining date and fee paid. I want to see active members, whose plan ends in the next 10 days, and total fees this month
+needs: add a member with name, phone, plan, joining date and fee | plans' end dates | members ending in the next 10 days | active member count | fees collected this month
+---
+app "Gym desk" dumbbell slate
+table member name text, phone text?, plan pick Monthly|Quarterly|Yearly = Monthly, joined date = today, fee money
+let ends(m member) = if(m.plan = Monthly, m.joined + 30, if(m.plan = Quarterly, m.joined + 90, m.joined + 365))
+topbar "Gym desk", member, "New member"
+row gap 2
+  statcard count(member, ends(it) >= today), "active members"
+  statcard sum(member.fee month), "fees this month"
+section "Ending in 10 days", "members" count(member, ends(it) >= today and ends(it) <= today + 10)
+  each member where joined >= today - 365 sort joined as m empty "No members yet. Add the first one at the desk."
+    if ends(m) >= today and ends(m) <= today + 10
+      row gap 2
+        m.name bold grow
+        m.plan "ends" ends(m) faint
+section "All members"
+  each member sort name as m
+    row gap 2 tap edit m swipe remove m
+      m.name grow
+      m.plan faint
+      ends(m) color if(ends(m) < today, bad, muted)
+===
+@rich domain=r5_pt_client topic=personal training lifts style=custom_ui
+i'm a personal trainer. for each client i log lift, weight and reps every session. pick the client at the top, see the best weight per lift for that client and a line of the weight over time for the lift i choose
+needs: add a client | log a lift with weight and reps for a client | chips to pick the client | best weight for each lift | line of weight over time
+---
+app "PT progress" dumbbell ink
+table client name text
+table lift client ref client, move pick Squat|Bench|Deadlift|Press = Squat, kg num 5..400, reps num 1..30 = 5
+state who text = ""
+state mv pick Squat|Bench|Deadlift|Press = Squat
+topbar "PT progress", client, "Add client"
+scroll gap 1
+  each client sort name as c
+    button c.name fill if(who = c.name, accent, soft) tap set who = c.name
+choice mv
+section who, "best" max(lift.kg where client.name = who and move = mv) "kg"
+  trend lift where client.name = who and move = mv sort at, it.kg
+each lift where client.name = who sort at desc top 10 as l empty "No lifts yet for this client. Tap a name above and log one."
+  row card gap 2 tap edit l swipe remove l
+    l.move bold grow
+    l.kg "kg x" l.reps faint
+button "Log set" tap add lift client = first(client where name = who), move = mv, kg = 20
+===
+@rich domain=r5_run_plan topic=10k running plan weeks style=detailed
+i'm training for a 10k in 8 weeks. plan has three runs a week with a target distance each. let me add a planned run with week number, date and target km, tick it when done, and show kilometres run against the total planned and a bar chart of km per week
+needs: add a planned run with week, date and target km | tick when done | total km done against planned | bar chart of km per week | next run coming up
+---
+app "10k plan" run green
+table plan week num 1..8, day date, km num 1..30 unit "km", ran bool
+let done = sum(plan.km where ran = yes)
+topbar "10k plan", plan, "Add run"
+statcard done, "km done of" sum(plan.km) "planned", sum(plan.km)
+section "Next run"
+  if count(plan where ran = no) > 0
+    first(plan.day where ran = no sort day) head
+    first(plan.km where ran = no sort day) "km" faint
+  else
+    "All runs done" head
+section "Km per week", "planned"
+  bars 1..8, sum(plan.km where week = it), it
+each plan sort day as p empty "No runs planned. Add three runs for week 1."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.ran
+    stack grow gap 0
+      "Week" p.week "·" p.km "km" bold
+      p.day faint
+===
+@rich domain=r5_cycle_log topic=cycling rides weekly km style=short
+cycling log with distance and time, weekly km goal
+needs: add a ride with distance and time | weekly km goal | bar chart of km per day | average speed
+---
+app "Rides" bike blue dark
+table ride km num 1..300 unit "km", mins num 5..900
+setting weekly num = 100 "Weekly km goal"
+statcard sum(ride.km week), "km this week of" weekly, weekly
+section "Km per day", "avg speed" round(sum(ride.km last 30 days) * 60 / max(sum(ride.mins last 30 days), 1)) "km/h"
+  goalbars last 7 days, sum(ride.km on it), weekly / 7
+form ride, "Add ride"
+list ride by day, "No rides yet."
+===
+@rich domain=r5_yoga_streak topic=yoga streak grid style=multi_feature
+yoga every morning. just a one tap check for today, my streak, the longest streak ever, and a grid of the last 6 weeks so I can see the gaps. also a field for what style I did (vinyasa, hatha, yin)
+needs: check in for today with a style | current streak | longest streak ever | grid of the last 6 weeks | sessions this month
+---
+app "Yoga" leaf purple
+table yoga style pick Vinyasa|Hatha|Yin|Restorative = Hatha
+topbar "Yoga", yoga, "Log session"
+row gap 2
+  statcard streak(yoga), "day streak"
+  statcard best(yoga), "longest streak"
+  statcard count(yoga month), "sessions this month"
+if(count(yoga today) > 0, "Done for today", "Not yet today") head
+button "Quick check-in" tap toggle yoga today
+section "Last 6 weeks"
+  daygrid last 42 days, count(yoga on it)
+each options yoga.style as s
+  row gap 1
+    s grow
+    count(yoga where style = s) bold
+===
+@rich domain=r5_meditation topic=meditation timer streak style=custom_ui
+meditation: a 10 minute timer, and when it ends it should log a session automatically. I want to know the minutes this week, the streak and see a bar chart of minutes per day
+needs: countdown timer that logs a session when done | minutes this week | streak in days | bar chart of minutes per day | change session length in settings
+---
+app "Sit" moon plum dark
+table sit mins num 1..120
+setting len dur = 10m "Session length"
+timer len, "Sit quietly", add sit mins = len / 1m then notify "Session done. Breathe out."
+row gap 2
+  statcard sum(sit.mins week), "minutes this week"
+  statcard streak(sit), "day streak"
+section "Minutes per day", "last 7 days"
+  goalbars last 7 days, sum(sit.mins on it), 10
+list sit today, "No sessions yet today. Press Start when you are ready."
+===
+@rich domain=r5_swim_laps topic=swimming lap counter style=multi_feature
+swimming laps. the pool is 25 m so each tap is one lap, plus I want to enter a longer set. show metres today, total laps this month, a goal line of 1000 m per swim and a chart per day
+needs: tap to add one lap | enter a set of laps | metres swum today | goal of metres per swim | bar chart of metres per day with goal line
+---
+app "Laps" drop blue
+table lap n num 1..80 = 1 "Laps"
+setting pool num = 25 "Pool length (m)"
+setting target num = 1000 "Metres per swim"
+let metres = sum(lap.n today) * pool
+topbar "Laps", lap, "Add set"
+statcard metres, "m swum today of" target, target
+button "+1 lap" fill accent tap add lap n = 1
+section "Metres per day", "laps this month" sum(lap.n month)
+  goalbars last 7 days, sum(lap.n on it) * pool, target
+list lap today, "No laps yet today."
+===
+@rich domain=r5_diet_calories topic=meals calories budget style=detailed
+diet plan of 1800 calories a day. I add every meal or snack with calories and whether it was breakfast, lunch, dinner or snack. show what is left for today, the split by meal type and how many days this week I stayed under
+needs: add a meal with calories and type | calories left today | split by meal type | days under the limit this week | list of today's meals
+---
+app "Calorie diary" apple orange
+table meal what text, kcal num 10..3000 unit "kcal", kind pick Breakfast|Lunch|Dinner|Snack = Lunch
+setting limit num = 1800 "Daily calories"
+let eaten = sum(meal.kcal today)
+topbar "Calorie diary", meal, "Add meal"
+goal eaten, limit, if(eaten > limit, "over the limit today", "eaten today"), "kcal"
+statcard max(limit - eaten, 0), "kcal left today"
+section "By meal", "today"
+  each options meal.kind as k
+    row gap 1
+      k grow
+      sum(meal.kcal today where kind = k) bold
+section "This week", "days under the limit:" count(days week, sum(meal.kcal on it) > 0 and sum(meal.kcal on it) <= limit)
+  goalbars week, sum(meal.kcal on it), limit
+list meal today, "Nothing eaten yet today. Add breakfast when you have it."
+===
+@rich domain=r5_weight_loss topic=weight loss weekly weigh-in style=multi_feature
+I'm trying to drop from 92 to 80 kg. I weigh myself on Sunday morning. show the latest weight, how many kg I have lost from the start, how many are left to go and a line chart of all weigh-ins
+needs: add a weigh-in with kg | kg lost since the first weigh-in | kg left to the goal weight | line chart of weigh-ins | goal weight setting
+---
+app "Weigh in" scale teal
+table wt kg num 30..250 unit "kg"
+setting goalkg num = 80 "Goal weight (kg)"
+topbar "Weigh in", wt, "Add weight"
+row gap 2
+  statcard last(wt.kg), "kg now"
+  statcard round((first(wt.kg) - last(wt.kg)) * 10) / 10, "kg lost so far"
+goal first(wt.kg) - last(wt.kg), first(wt.kg) - goalkg, "lost on the way to" goalkg "kg", "kg"
+section "Every weigh-in"
+  trend wt sort at, it.kg
+list wt top 12, "No weigh-ins yet. Step on the scale and add the first one."
+===
+@rich domain=r5_sleep_wake topic=sleep and wake time style=detailed
+sleep diary: when I went to bed, when I woke up and how rested I feel from 1 to 5. show last night's hours, the average of the week, my usual wake time and a bar chart of hours slept for the last 7 nights. reminder to go to bed at 22:30
+needs: add a night with bed time, wake time and rested score | last night's hours | average hours this week | bar chart of hours per night | reminder at bedtime
+---
+app "Sleep diary" bed ink dark
+table night bed time, woke time, rested num 1..5 = 3
+setting need dur = 8h "Sleep goal"
+let hrs(n night) = (n.woke - n.bed) / 1h
+remind "Time to wind down for bed" at 22:30
+topbar "Sleep diary", night, "Add night"
+row gap 2
+  statcard round(hrs(last(night)) * 10) / 10, "hours last night"
+  statcard round(sum(night last 7 days, hrs(it)) * 10 / max(count(night last 7 days), 1)) / 10, "hours average this week"
+section "Hours per night", "goal" need / 1h "h"
+  goalbars last 7 days, sum(night on it, hrs(it)), need / 1h
+each night sort at desc top 7 as n empty "No nights yet. Add last night when you wake up."
+  row card gap 2 tap edit n swipe remove n
+    stack grow gap 0
+      n.bed "to" n.woke bold
+      "Rested" n.rested "of 5" faint
+    round(hrs(n) * 10) / 10 "h" color if(n.woke - n.bed >= need, good, warn)
+===
+@rich domain=r5_migraine topic=migraine attack diary style=custom_ui
+migraine diary: each attack, how bad 1 to 10, how many hours it lasted, and the trigger (stress, lack of sleep, weather, food, screen). I want to see attacks this month, the average severity and which trigger shows up most
+needs: add an attack with severity, hours and trigger | attacks this month | average severity | triggers ranked by count | list of attacks coloured by severity
+---
+app "Migraine" brain red
+table attack sev num 1..10 "Severity", hours num 1..72 = 4, trigger pick Stress|Lack_of_sleep|Weather|Food|Screen|Unknown = Unknown
+topbar "Migraine", attack, "Log attack"
+row gap 2
+  statcard count(attack month), "attacks this month"
+  statcard round(avg(attack.sev month) * 10) / 10, "average severity"
+section "Triggers", "all time"
+  share attack by trigger, count(it), it.key
+each attack sort at desc top 15 as a empty "No attacks logged. Hopefully it stays that way."
+  row card gap 2 tap edit a swipe remove a
+    box width 14 height 14 radius 7 fill if(a.sev >= 7, bad, if(a.sev >= 4, warn, good))
+    stack grow gap 0
+      "Severity" a.sev "for" a.hours "h" bold
+      a.trigger faint
+    a.at faint
+===
+@rich domain=r5_allergy_diary topic=hay fever symptom diary style=multi_feature
+hay fever season. each day I log itchy eyes, sneezing and blocked nose each as none, mild or bad, plus the pollen level that day and whether I took the tablet. show how many bad days I had this month and the symptoms on a weekly grid
+needs: add an entry with eyes, sneezing, nose, pollen level and tablet | bad days this month | tablets taken this week | grid of the last 5 weeks | list of entries
+---
+app "Hay fever" plant yellow
+table sym eyes pick None|Mild|Bad = None, sneeze pick None|Mild|Bad = None, nose pick None|Mild|Bad = None, pollen pick Low|Medium|High = Medium, tablet bool
+let score(s sym) = if(s.eyes = Bad, 1, 0) + if(s.sneeze = Bad, 1, 0) + if(s.nose = Bad, 1, 0)
+topbar "Hay fever", sym, "Log today"
+row gap 2
+  statcard count(days month, count(sym on it where eyes = Bad or sneeze = Bad or nose = Bad) > 0), "bad days this month"
+  statcard count(sym week where tablet = yes), "tablets this week"
+section "Last 5 weeks", "darker is worse"
+  daygrid last 35 days, max(sym on it, score(it)), 3
+each sym sort at desc top 10 as s empty "No entries yet. Add one each evening in pollen season."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      "Eyes" s.eyes "· Sneeze" s.sneeze "· Nose" s.nose bold
+      "Pollen" s.pollen faint
+    if s.tablet
+      icon pill
+===
+@rich domain=r5_peak_flow topic=asthma peak flow zones style=detailed
+asthma peak flow: I blow into the meter morning and night and write the number. my best is 450. green zone is 80% of best or above, yellow 50 to 80, red below 50. show the colour of the latest reading, a line chart and how many puffs of the reliever I used each day
+needs: add a peak flow reading | colour zone against personal best | line chart of readings | log reliever puffs | puffs used today
+---
+app "Peak flow" cloud mint
+table pf lpm num 50..800 unit "L/min", slot pick Morning|Night = Morning
+table puff n num 1..10 = 1
+setting best num = 450 "Personal best (L/min)"
+let zone(v num) = if(v >= best * 0.8, good, if(v >= best * 0.5, warn, bad))
+topbar "Peak flow", pf, "Add reading"
+row card gap 2 fill zone(last(pf.lpm))
+  stack grow gap 0
+    last(pf.lpm) huge
+    if(last(pf.lpm) >= best * 0.8, "Green zone", if(last(pf.lpm) >= best * 0.5, "Yellow zone: take care", "Red zone: use your plan")) bold
+  round(last(pf.lpm) * 100 / best) "% of best" faint
+section "Last 14 days"
+  trend pf last 14 days sort at, it.lpm
+section "Reliever puffs", "today" sum(puff.n today)
+  button "+1 puff" tap add puff n = 1
+  daybars last 7 days, sum(puff.n on it)
+===
+@rich domain=r5_mood_checkin topic=mood check-in chips style=custom_ui
+a quick mood check-in for my mental health. tap one of five faces for how I feel, write one line if I want, and show the week as dots, my average mood and the days I felt low (1 or 2) this month
+needs: tap a mood from 1 to 5 | optional note | week dots for check-ins | average mood this week | low days this month
+---
+app "Mood" smile pink
+table mood score num 1..5, note text?
+state pick num = 3
+let lbl = if(pick = 1, "Very low", if(pick = 2, "Low", if(pick = 3, "Okay", if(pick = 4, "Good", "Great"))))
+if(count(mood today) > 0, "Checked in today", "How are you right now?") head
+row gap 1
+  each 1..5
+    button it fill if(pick = it, accent, soft) grow tap set pick = it
+lbl faint
+button "Save check-in" fill accent tap add mood score = pick
+weekdots count(mood on it) > 0
+row gap 2
+  statcard round(avg(mood.score week) * 10) / 10, "average this week", 5
+  statcard count(days month, avg(mood.score on it) <= 2 and count(mood on it) > 0), "low days this month"
+section "Mood, last 30 days"
+  trend mood last 30 days sort at, it.score
+list mood by day, "No check-ins yet."

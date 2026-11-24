@@ -1,0 +1,209 @@
+@rich domain=c4_mcq_negative topic=mcq_negative_marking style=detailed
+entry test has 100 mcqs, 1 mark for right and a quarter mark off for each wrong, blanks are zero. let me type how many i got right, how many wrong, and see my score, how many i left blank and the percentage, and whether it beats a cutoff i can set
+needs: number right | number wrong | marks lost per wrong answer | score and blanks | percentage against a cutoff
+---
+app "Test Score" check ocean
+state right num = 62
+state wrong num = 20
+state pen num = 0.25
+state total num = 100
+state cut num = 55
+let score = right - wrong * pen
+let blank = max(total - right - wrong, 0)
+field right "Right answers"
+field wrong "Wrong answers"
+"Marks lost per wrong answer" pen faint
+slider pen 0..1
+field total "Questions in the paper"
+statcard round(score * 100) / 100, "marks scored of" total, total
+"Left blank:" blank faint
+"Cutoff" cut "%" faint
+slider cut 0..100
+if score * 100 / max(total, 1) >= cut
+  "Above the cutoff at" round(score * 1000 / max(total, 1)) / 10 "%." bold color good
+else
+  "Below the cutoff. You are at" round(score * 1000 / max(total, 1)) / 10 "%." bold color bad
+===
+@rich domain=c4_class_rank topic=my_class_rank style=multi_feature
+teacher read out marks for the whole class. let me add every classmate's mark, type mine, and show my rank, how many scored higher than me, the class average and how far i am above or below it
+needs: add the marks of classmates | my mark | my rank in class | students scoring higher | difference from class average
+---
+app "Class Rank" users mint
+table pupil mark num 0..100
+state mine num = 70
+let above = count(pupil where mark > mine)
+topbar "Class Rank", pupil, "Add classmate mark"
+field mine "My mark"
+if count(pupil) > 0
+  statcard above + 1, "my rank among" count(pupil) + 1 "students"
+  "Class average" round(avg(pupil.mark) * 10) / 10 faint
+  "I am" abs(round(mine - avg(pupil.mark))) "marks" if(mine >= avg(pupil.mark), "above", "below") "the average." bold
+else
+  "Add the classmates' marks to see where you stand." faint
+section "Class marks", "Higher than me:" above
+  list pupil, "No marks yet."
+===
+@rich domain=c4_late_penalty topic=assignment_late_penalty style=short
+prof takes 5 percent off per day late, max 5 days, then zero. my assignment got 88 and i submitted 3 days late
+needs: mark before penalty | days late | penalty percent per day | final mark after penalty | the day it becomes zero
+---
+app "Late Penalty" pencil red
+state raw num = 88
+state late num = 3
+state pd num = 5
+let final = if(late > 5, 0, raw * (1 - pd * late / 100))
+field raw "Mark before penalty"
+"Days late" late faint
+slider late 0..7
+"Penalty per day" pd "%" faint
+slider pd 0..20
+statcard round(final * 10) / 10, "final mark after penalty"
+if late > 5
+  "More than 5 days late. The assignment scores zero." color bad
+else
+  "You lose" round(raw - final) "marks. After day 5 it is zero." faint
+===
+@rich domain=c4_timezone_meeting topic=team_timezone_meeting style=custom_ui
+my team is in karachi, london and new york. i pick the hour for the meeting in my time and want to see the local time for each person and a green tick if it is between 9 am and 6 pm for them, so i can find a fair hour
+needs: meeting hour in my time | time zone offsets as settings | local hour for each city | tick if it is working hours | slider to move the hour
+---
+app "Meeting Hour" clock slate
+state hr num = 16
+setting me num = 5 "My offset from UTC (hours)"
+setting uk num = 0 "London offset"
+setting us num = -5 "New York offset"
+let at_(o num) = (hr - me + o + 48) % 24
+"My meeting hour" hr ":00" huge
+slider hr 0..23
+row gap 2
+  each [0, 1, 2]
+    stack grow card gap 0 align center
+      text if(index = 0, "London", if(index = 1, "New York", "Me")) faint
+      text at_(if(it = 0, uk, if(it = 1, us, me))) ":00" big
+      text if(at_(if(it = 0, uk, if(it = 1, us, me))) >= 9 and at_(if(it = 0, uk, if(it = 1, us, me))) < 18, "working hours", "outside hours") small color if(at_(if(it = 0, uk, if(it = 1, us, me))) >= 9 and at_(if(it = 0, uk, if(it = 1, us, me))) < 18, good, bad)
+if at_(uk) >= 9 and at_(uk) < 18 and at_(us) >= 9 and at_(us) < 18
+  "Everyone is at work. Good hour." bold color good
+else
+  "Slide the hour to find a time that suits both." faint
+===
+@rich domain=c4_cashiers_needed topic=cashiers_needed_per_hour style=detailed
+how many cashiers do i keep at the counter in the rush hour. customers arrive per hour, each cashier serves a customer in a number of minutes, and i want cashiers busy at most 80 percent of the time so queues stay short
+needs: customers per hour | minutes to serve one customer | maximum busy percent | cashiers needed | how busy each cashier would be
+---
+app "Cashier Count" users yellow
+state cust num = 90
+state mins num = 3
+state busy num = 80
+let load = cust * mins / 60
+let need = (0 - floor(0 - (load * 100 / max(busy, 1))))
+field cust "Customers per hour"
+"Minutes to serve one customer" mins faint
+slider mins 1..15
+"Keep cashiers busy at most" busy "%" faint
+slider busy 40..100
+statcard need, "cashiers needed"
+"Each would be busy" round(load * 100 / max(need, 1)) "% of the hour." faint
+grid 6 gap 1
+  each 1..min(need, 12)
+    box height 28 radius 6 fill accent
+===
+@rich domain=c4_workdays_left topic=working_days_to_deadline style=short
+how many working days until my deadline on a date, not counting weekends, and the hours i get if i work 6 a day
+needs: deadline date | working days left | hours available per day | total hours available
+---
+app "Workdays Left" calendar green
+state due date = today + 14
+state hpd num = 6
+let n = max(due - today, 0)
+let wd = count(1..n, weekday(today + it) < 6)
+field due "Deadline"
+"Productive hours per day" hpd faint
+slider hpd 1..10
+statcard wd, "working days left"
+"That is" wd * hpd "hours of work before the deadline." bold
+"Calendar days:" n faint
+===
+@rich domain=c4_tutor_income topic=tutoring_income_students style=multi_feature
+i tutor a few students after school. add each student with the fee per session and sessions per month, and show what i earn each month in total, per student, and a yearly figure counting 10 working months
+needs: add a student with fee and sessions per month | monthly income total | income per student | yearly figure for 10 months | bars per student
+---
+app "Tutoring Income" school plum
+table pupil name text, fee money, sess num 1..30 = 8
+let earn(p pupil) = p.fee * p.sess
+topbar "Tutoring Income", pupil, "Add student"
+row gap 2
+  statcard round(sum(pupil, earn(it))), "per month"
+  statcard round(sum(pupil, earn(it)) * 10), "per year, 10 months"
+section "By student", "Students:" count(pupil)
+  share pupil sort earn(it) desc, earn(it), it.name
+section "Students"
+  list pupil, "No students yet. Add the first one with fee and sessions."
+===
+@rich domain=c4_team_lunch_budget topic=team_lunch_budget style=short
+office lunch fund, 14 people, 1800 per person budget, tax and tip
+needs: number of people | budget per person | tax and tip percent | total budget | what is left to order
+---
+app "Lunch Budget" food orange
+state ppl num = 14
+state per money = 1800
+state extra num = 15
+state ordered money = 22000
+let total = ppl * per
+let usable = total / (1 + extra / 100)
+field ppl "People"
+field per "Budget per person"
+"Tax and tip" extra "%" faint
+slider extra 0..30
+statcard round(total), "total lunch budget"
+"Food you can order:" round(usable) bold
+field ordered "Already ordered"
+"Left to order" round(usable - ordered) faint color if(usable - ordered < 0, bad, ink)
+===
+@rich domain=c4_course_payback topic=course_cost_vs_raise style=detailed
+thinking of paying for a coding bootcamp. fee is some amount, i will lose income for the months i study, and a new job pays more per month. type those and show how many months until the extra pay covers everything, and what i gain after 3 years
+needs: course fee | months without income | current and new monthly pay | months to recover the cost | gain after 3 years
+---
+app "Course Payback" brain teal dark
+state fee money = 400000
+state months_off num = 4
+state oldp money = 80000
+state newp money = 160000
+let cost = fee + months_off * oldp
+let gain_m = newp - oldp
+let back = if(gain_m > 0, cost / gain_m, 0)
+field fee "Course fee"
+"Months studying with no pay" months_off faint
+slider months_off 0..12
+field oldp "Current monthly pay"
+field newp "Pay after the course"
+if gain_m > 0
+  statcard round(back * 10) / 10, "months to recover" round(cost) "total cost"
+  "After 3 years you are ahead by" round(gain_m * 36 - cost) bold color if(gain_m * 36 > cost, good, bad)
+else
+  "The new pay must be higher than the current pay." color bad
+===
+@rich domain=c4_stall_rent_cups topic=cups_to_cover_rent style=custom_ui
+my chai cart pays rent for the spot by the month and each cup costs me a little and sells for more. how many cups a day cover the rent, and what do i make if i sell 150 a day? show it as a bar so i can see how far i am from the line
+needs: monthly spot rent | cost per cup | selling price per cup | cups per day to cover rent | profit at planned cups
+---
+app "Chai Cart" cup orange
+state rent money = 15000
+state costc money = 18
+state sellc money = 50
+state plan num = 150
+let need = if(sellc > costc, rent / 30 / (sellc - costc), 0)
+field rent "Rent per month"
+field costc "Cost per cup"
+field sellc "Selling price per cup"
+"Cups I plan to sell a day" plan faint
+slider plan 10..500
+if sellc > costc
+  statcard (0 - floor(0 - need)), "cups a day cover the rent"
+  draw 100, 6
+    rect 0, 0, 100, 6 fill soft radius 3
+    rect 0, 0, 100 * clamp(plan / max(need * 2, 1), 0, 1), 6 fill if(plan >= need, accent, warn) radius 3
+    line 50, 0, 50, 6 stroke ink thick 1
+  "Line marks the break-even point." faint
+  "Daily profit after rent:" round(plan * (sellc - costc) - rent / 30) bold color if(plan >= need, good, bad)
+else
+  "Selling price must be above the cost per cup." color bad

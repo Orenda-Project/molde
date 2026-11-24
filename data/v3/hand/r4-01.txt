@@ -1,0 +1,552 @@
+@rich domain=r4_gradebook_ranks topic=gradebook_with_ranks style=detailed
+i teach class 8 and my marks are on loose paper. i want a student list, a place to put a mark for each kid on a named test, each kid's average percent, their rank in class, and a bar chart of how the class did per test
+needs: add students to a class list | enter a mark for a student on a named test | shows each student's average percent | shows class rank | bar chart of the class average per test
+---
+app "Gradebook" school ocean
+table student name text
+table mark student ref student, test text, score num 0..100, total num 5..100 = 20
+topbar "Gradebook", student, "Add student"
+statcard round(sum(mark.score) * 100 / max(sum(mark.total), 1)), "% class average"
+section "Enter a mark", "score out of the test total"
+  form mark, "Save mark"
+section "Class ranking", plural(count(student), "student")
+  each student sort sum(it.mark.score) * 100 / max(sum(it.mark.total), 1) desc as s empty "No students yet. Add your class list with the button above."
+    row gap 2 tap edit s swipe remove s
+      "#" index + 1 bold
+      s.name grow
+      round(sum(s.mark.score) * 100 / max(sum(s.mark.total), 1)) "%" bold
+section "Average per test"
+  bars mark by test, round(sum(it.score) * 100 / max(sum(it.total), 1)), it.key
+===
+@rich domain=r4_class_register_late topic=daily_register_present_late style=multi_feature
+need a quick daily register for my class, tap P, L or A next to each name. show how many are in today and how many absences each child has this month. add new kids as they join
+needs: add students to the register | mark present, late or absent for today | shows how many are in class today | shows each child's absences this month
+---
+app "Class Register" users mint
+table student name text
+table mark student ref student, status pick Present|Late|Absent = Present
+let here = count(mark today where status != Absent)
+topbar "Class Register", student, "Add student"
+statcard here, "of" count(student) "in class today", count(student)
+each student sort name as s empty "No students yet. Add your class with the button above."
+  row card gap 1 tap edit s
+    stack grow gap 0
+      s.name bold
+      count(s.mark month where status = Absent) "absences this month" faint
+    button "P" fill if(count(s.mark today where status = Present) > 0, good, soft) tap remove all mark today where student = s then add mark student = s, status = Present
+    button "L" fill if(count(s.mark today where status = Late) > 0, warn, soft) tap remove all mark today where student = s then add mark student = s, status = Late
+    button "A" fill if(count(s.mark today where status = Absent) > 0, bad, soft) tap remove all mark today where student = s then add mark student = s, status = Absent
+section "Absences, last 14 days"
+  daybars last 14 days, count(mark on it where status = Absent)
+===
+@rich domain=r4_lesson_plan_weeks topic=weekly_lesson_plans style=custom_ui
+lesson plans by week for my subjects. each one has topic, subject, week number and a status of planned, taught or revised. let me filter by subject and tap to move a lesson along
+needs: add a lesson with topic, subject and week | filter lessons by subject | tap to move a lesson from planned to taught to revised | shows how many lessons are taught | lessons sorted by week
+---
+app "Lesson Plans" pencil slate
+table plan topic text, subject pick Maths|Science|English|Urdu|Social = Maths, week num 1..40 = 1, status pick Planned|Taught|Revised = Planned
+state f text = ""
+topbar "Lesson Plans", plan, "Plan a lesson"
+statcard count(plan where status != Planned), "of" count(plan) "lessons taught", count(plan)
+scroll
+  button "All" fill if(f = "", accent, soft) tap set f = ""
+  each options plan.subject
+    button it fill if(f = it, accent, soft) tap set f = it
+each plan where f = "" or subject = f sort week as p empty "Nothing planned yet. Add the first lesson with the button above."
+  row card gap 2 tap edit p swipe remove p
+    "Wk" p.week bold
+    stack grow gap 0
+      p.topic bold
+      p.subject faint
+    button p.status fill if(p.status = Planned, soft, good) tap set p.status = if(p.status = Planned, Taught, Revised)
+===
+@rich domain=r4_syllabus_chapters topic=syllabus_chapter_progress style=multi_feature
+syllabus progress per subject. i list the chapters under each subject and tick them off when covered. want a progress bar for each subject, the overall percent and how many days are left to the board exam
+needs: add subjects | add chapters under a subject | tick a chapter when covered | progress bar per subject | days left to the exam date
+---
+app "Syllabus" book teal
+table subject name text
+table chapter subject ref subject, title text, done bool
+setting exam date = 2027-03-01 "Board exam date"
+let all = count(chapter)
+let covered = count(chapter where done = yes)
+topbar "Syllabus", subject, "Add subject"
+row gap 2
+  statcard round(covered * 100 / max(all, 1)), "% covered"
+  statcard max(exam - today, 0), "days to the exam"
+each subject sort name as s empty "No subjects yet. Add the first subject."
+  stack card gap 1
+    row
+      s.name head grow
+      count(s.chapter where done = yes) "of" count(s.chapter) faint
+    goal count(s.chapter where done = yes), max(count(s.chapter), 1), "chapters covered"
+    each s.chapter as c empty "No chapters under this subject yet."
+      row gap 2
+        toggle c.done
+        c.title grow
+section "Add a chapter"
+  form chapter, "Save chapter"
+===
+@rich domain=r4_homework_parent_view topic=homework_due_for_kids style=detailed
+i am a mum of three and cannot keep track of homework. each kid has tasks with a subject and a due date. i want to tick them off, see what is late in red and what is due today in orange, and know how many are still pending
+needs: add homework with child, subject and due date | tick homework as done | late homework in red and due today in orange | shows how many are still pending | grouped by child
+---
+app "Homework" pencil orange
+table child name text
+table task child ref child, subject text, due date, done bool
+let pending = count(task where done = no)
+topbar "Homework", task, "Add homework"
+statcard pending, "tasks still pending", count(task)
+if count(task where done = no and due < today) > 0
+  count(task where done = no and due < today) "late. Do these first." bold color bad
+each child sort name as c empty "No children added yet."
+  stack card gap 1
+    row
+      c.name head grow
+      count(c.task where done = no) "pending" faint
+    each c.task where done = no sort due as t empty "All done. Nothing pending."
+      row gap 2
+        toggle t.done
+        t.subject grow
+        t.due bold color if(t.due < today, bad, if(t.due = today, warn, muted))
+section "New child"
+  form child, "Add child"
+===
+@rich domain=r4_exam_revision_plan topic=exam_topic_confidence style=multi_feature
+my exams start soon and i panic. list my topics with how confident i feel (weak, okay or strong), count down the days left, and tell me how many weak topics i still need to revise
+needs: add a topic with subject and name | mark confidence weak okay or strong | days left until the exam | count of weak topics | weak topics listed first
+---
+app "Revision" brain purple
+table topic subject text, name text, confidence pick Weak|Okay|Strong = Weak
+setting exam date = 2026-12-15 "First exam"
+let left = max(exam - today, 0)
+let weak = count(topic where confidence = Weak)
+topbar "Revision", topic, "Add topic"
+row gap 2
+  statcard left, "days until the exam"
+  statcard weak, "weak topics", count(topic)
+if weak > 0 and left > 0
+  "About" round(weak / max(left, 1) * 10) / 10 "weak topics a day to be safe." faint
+each topic sort confidence as t empty "No topics yet. Add everything the exam covers."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.subject faint
+    each options topic.confidence as o
+      button o fill if(t.confidence = o, if(o = Weak, bad, if(o = Okay, warn, good)), soft) tap set t.confidence = o
+===
+@rich domain=r4_school_timetable_days topic=weekly_timetable_by_day style=custom_ui
+timetable for my son's school, monday to saturday. periods have a slot number, subject, room and teacher. want to pick a day and see its periods in order, with today's day opened by default
+needs: add a period with day, slot number, subject and room | pick a weekday to see its periods | periods shown in slot order | today's periods shown at the top
+---
+app "Timetable" clock pink
+table period day pick Mon|Tue|Wed|Thu|Fri|Sat = Mon, slot num 1..9 = 1, subject text, room text?, teacher text?
+state d text = ""
+let shown = if(d = "", dayname(today), d)
+topbar "Timetable", period, "Add period"
+row gap 1
+  each options period.day
+    button it grow fill if(shown = it, accent, soft) tap set d = it
+section shown, plural(count(period where day = shown), "period")
+  each period where day = shown sort slot as p empty "No periods on this day. Add one with the button above."
+    row gap 2 tap edit p swipe remove p
+      draw width 32 height 32
+        circle 50, 50, 46 fill accent
+        label 50, 52, p.slot bold color bg
+      stack grow gap 0
+        p.subject bold
+        p.teacher p.room faint
+===
+@rich domain=r4_tuition_fee_dues topic=tuition_centre_fee_dues style=detailed
+i run a small tuition centre. each student has a monthly fee. i note every payment i get and want to see who has paid this month, who still owes and the total pending, plus the money collected per day
+needs: add students with a monthly fee | record a payment from a student | shows who paid this month in green | total still pending this month | bar chart of money collected per day
+---
+app "Tuition Fees" coin red dark
+table student name text, class text?, monthly money
+table fee student ref student, amount money
+let due = sum(student.monthly) - sum(fee.amount month)
+topbar "Tuition Fees", student, "Add student"
+row gap 2
+  statcard sum(fee.amount month), "collected this month"
+  statcard max(due, 0), "still pending"
+section "Record a payment"
+  form fee, "Save payment"
+each student sort name as s empty "No students yet. Add the first one with their monthly fee."
+  row card gap 2 tap edit s swipe remove s fill if(sum(s.fee.amount month) >= s.monthly, soft, surface)
+    stack grow gap 0
+      s.name bold
+      s.class faint
+    stack gap 0 align end
+      sum(s.fee.amount month) "of" s.monthly bold color if(sum(s.fee.amount month) >= s.monthly, good, bad)
+section "Collected, last 14 days"
+  daybars last 14 days, sum(fee.amount on it)
+===
+@rich domain=r4_fee_instalments topic=school_fee_instalments style=multi_feature
+school fee is paid in instalments. i put each one with its due date and amount, tick it when paid, see how much is left to pay and when the next one is due. remind me 3 days before
+needs: add an instalment with label, due date and amount | tick when paid | total still to pay | next due date | reminder before each due date
+---
+app "Fee Plan" wallet green
+table instalment label text, due date, amount money, paid bool
+remind "School fee instalment due soon" at instalment.due - 3d at 9:00
+let left = sum(instalment.amount where paid = no)
+topbar "Fee Plan", instalment, "Add instalment"
+let nxt = nth(instalment where paid = no sort due, 1)
+row gap 2
+  statcard left, "left to pay"
+  stack card gap 0
+    nxt.due big
+    "next instalment due" faint
+goal sum(instalment.amount where paid = yes), max(sum(instalment.amount), 1), "paid so far"
+each instalment sort due as i empty "No instalments yet. Add each one with its due date."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.paid
+    stack grow gap 0
+      i.label bold
+      "due" i.due faint color if(i.paid = no and i.due < today, bad, muted)
+    i.amount bold
+===
+@rich domain=r4_library_loans_fines topic=library_loans_with_fines style=detailed
+small school library. i lend books to students, write the date it is due back, and tick when returned. late books should be red and the fine per day is 5 rupees, add up what is owed. also show how many books are on the shelf
+needs: add books to the library | lend a book to a borrower with a due date | tick when a book is returned | late loans shown red with the fine owed | shows how many books are on the shelf
+---
+app "Library" book yellow
+table book title text
+table loan book ref book, borrower text, due date, returned bool
+setting fine money = 5 "Fine per late day"
+let late = sum(loan, if(it.returned = no and it.due < today, (today - it.due) * fine, 0))
+topbar "Library", loan, "Lend a book"
+row gap 2
+  statcard count(book, count(it.loan where returned = no) = 0), "of" count(book) "books on the shelf", count(book)
+  statcard late, "fines owed"
+each loan where returned = no sort due as l empty "No books are out. Lend the first one."
+  row card gap 2 tap edit l
+    stack grow gap 0
+      l.book.title bold
+      l.borrower faint
+    stack gap 0 align end
+      "due" l.due bold color if(l.due < today, bad, ink)
+      if l.due < today
+        text today - l.due "days late" tiny color bad
+    toggle l.returned
+section "Add a book"
+  form book, "Save book"
+===
+@rich domain=r4_hostel_mess_account topic=hostel_mess_balance style=multi_feature
+i live in a hostel and eat from the mess on credit. i top up the account now and then and every meal takes some. show my balance, warn me when it is low, and show a chart of what i spent each day
+needs: add a meal with kind and price | top up the mess account | shows the balance left | warns when the balance is low | bar chart of spending per day
+---
+app "Mess Account" food blue
+table meal item text, kind pick Breakfast|Lunch|Dinner|Tea|Snack = Lunch, price money
+table topup amount money
+setting low money = 500 "Warn me below"
+let balance = sum(topup.amount) - sum(meal.price)
+topbar "Mess Account", meal, "Add meal"
+statcard balance, "balance left"
+if balance < low
+  "Balance is low. Time to top up before the next meal." bold color bad
+section "Top up"
+  form topup, "Add money"
+section "Spent per day", "this week:" sum(meal.price week)
+  daybars last 10 days, sum(meal.price on it)
+list meal by day, "No meals yet. Add what you ate today."
+===
+@rich domain=r4_quran_para_grid topic=quran_para_progress style=custom_ui
+i take my daughter to quran class. there are 30 paras, i want a grid where i tap a para when she finishes it, and a log of how many lines she read each day this week, with her lines goal per day
+needs: grid of 30 paras to tap when finished | log lines read with the para | bar chart of lines per day with a goal line | count of paras finished
+---
+app "Quran Class" mosque mint dark
+table finished para num 1..30
+table reading para num 1..30, lines num 1..60 = 10
+setting goal num = 15 "Lines a day"
+topbar "Quran Class", reading, "Log reading"
+statcard count(finished), "of 30 paras finished", 30
+section "Paras", "tap one when finished"
+  grid 6 gap 1
+    each 1..30 as n
+      box height 40 radius 8 fill if(count(finished where para = n) > 0, accent, soft) tap toggle finished where para = n
+        text n bold align center color if(count(finished where para = n) > 0, bg, ink)
+section "Lines read", "goal line" goal
+  goalbars last 7 days, sum(reading.lines on it), goal
+===
+@rich domain=r4_vocab_flashcards_reveal topic=vocabulary_flashcard_deck style=custom_ui
+learning german for a visa test. i keep words with their meaning, want one card shown at a time, tap to reveal the meaning, then mark i knew it or not, and move on. show how many i knew
+needs: add a word with its meaning | one card at a time with tap to reveal | mark knew it or missed it | go to the next card | count of cards known
+---
+app "Wortschatz" cards teal
+table card word text, meaning text
+table review card ref card, knew bool
+state i num = 1
+state open bool = no
+let c = nth(card sort word, i)
+topbar "Wortschatz", card, "Add word"
+statcard count(review today where knew = yes), "known today of" count(review today) "reviewed"
+if count(card) = 0
+  "No words yet. Add the first word and its meaning." faint
+else
+  stack card gap 2 align center tap set open = not open
+    c.word huge
+    if open
+      c.meaning large color accent
+    else
+      "Tap to show the meaning" faint
+  row gap 1
+    button "Missed it" fill bad tap add review card = c, knew = no then set open = no then set i = i % count(card) + 1
+    button "Knew it" fill good tap add review card = c, knew = yes then set open = no then set i = i % count(card) + 1
+  "Card" i "of" count(card) faint align center
+===
+@rich domain=r4_university_deadlines topic=university_assignment_deadlines style=multi_feature
+uni is a mess. i have several courses and each assignment has a due date and a weight in the final grade. show what is coming up first, how many days are left, how much weight is still open per course, and remind me two days before
+needs: add courses | add an assignment with course, due date and weight | days left shown with colours | tick when submitted | open weight per course | reminder two days before
+---
+app "Deadlines" calendar ink dark
+table course name text
+table work course ref course, title text, due date, weight num 1..100 = 10, done bool
+remind "Assignment due in two days" at work.due - 2d at 9:00
+topbar "Deadlines", work, "Add assignment"
+statcard count(work where done = no), "assignments to go", count(work)
+each work where done = no sort due as w empty "Nothing due. Add your next assignment."
+  row card gap 2 tap edit w
+    toggle w.done
+    stack grow gap 0
+      w.title bold
+      w.course.name w.weight "% of grade" faint
+    stack gap 0 align end
+      w.due bold
+      if(w.due < today, "late", join(plural(w.due - today, "day"), " left")) tiny color if(w.due - today <= 2, bad, muted)
+section "Open weight per course"
+  each course as c
+    row
+      c.name grow
+      sum(c.work.weight where done = no) "%" bold
+section "Add a course"
+  form course, "Save course"
+===
+@rich domain=r4_thesis_word_count topic=thesis_writing_progress style=detailed
+writing my masters thesis, need a log of words written each day with the chapter, a target of 20000 words total, a progress bar, a daily goal line on the last two weeks chart, and which chapter has the most words
+needs: log words written with chapter | progress bar toward the total word target | bar chart of the last 14 days with a daily goal line | words per chapter comparison | current writing streak
+---
+app "Thesis" pen plum
+table session chapter pick Intro|Literature|Method|Results|Discussion = Intro, words num 50..5000 = 400
+setting total num = 20000 "Thesis target (words)"
+setting daily num = 500 "Daily goal"
+topbar "Thesis", session, "Log words"
+goal sum(session.words), total, "words written", "words"
+row gap 2
+  stat streak(session), "day writing streak"
+  stat sum(session.words today), "words today"
+section "Last 14 days", "goal line"
+  goalbars last 14 days, sum(session.words on it), daily
+section "By chapter"
+  share session by chapter, sum(it.words), it.key
+===
+@rich domain=r4_paper_reading_search topic=research_paper_reading_log style=custom_ui
+phd student. i read lots of papers and forget which. log title, authors, stage (to read, skimmed, read), a one line takeaway, and let me search by words in the title. a chart of papers fully read per day
+needs: add a paper with title, authors, stage and takeaway | search papers by a word in the title | change a paper's stage with a tap | count by stage | chart of papers read per day
+---
+app "Paper Log" note grey
+table paper title text, authors text?, stage pick To_read|Skimmed|Read = To_read, takeaway long?
+state q text = ""
+topbar "Paper Log", paper, "Add paper"
+field q "Search titles"
+row gap 2
+  each options paper.stage as s
+    statcard count(paper where stage = s), s
+each paper where has(title, q) sort title as p empty "No papers match. Add one or clear the search."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 1
+      p.title bold grow
+      button p.stage fill if(p.stage = Read, good, soft) tap set p.stage = if(p.stage = To_read, Skimmed, Read)
+    p.authors faint
+    p.takeaway
+"Read per day" head
+daybars last 14 days, count(paper on it where stage = Read)
+===
+@rich domain=r4_leitner_boxes topic=leitner_flashcard_boxes style=multi_feature
+flashcards in 5 boxes like leitner. i pick a box, it shows one card, tap to see the back, then right moves it up a box and wrong sends it back to box 1. also show how many cards are in each box
+needs: add a card with front and back | pick one of five boxes | tap to flip the card | right moves the card up a box | wrong sends it back to box one | count of cards per box
+---
+app "Leitner" cards mint
+table card front text, back text, box num 1..5 = 1
+state b num = 1
+state flip bool = no
+topbar "Leitner", card, "Add card"
+row gap 1
+  each 1..5 as n
+    button n count(card where box = n) grow fill if(b = n, accent, soft) tap set b = n then set flip = no
+each card where box = b sort at top 1 as c empty "This box is empty. Pick another box or add a card."
+  stack card gap 2 align center tap set flip = not flip
+    c.front huge
+    if flip
+      c.back large color accent
+    else
+      "Tap to flip" faint
+  row gap 1
+    button "Wrong" fill bad tap set c.box = 1 then set flip = no
+    button "Right" fill good tap set c.box = min(c.box + 1, 5) then set flip = no
+"Cards in box" b count(card where box = b) faint align center
+===
+@rich domain=r4_typing_speed_log topic=typing_speed_practice style=multi_feature
+practising typing for a data entry job. log my words per minute and accuracy after each test, tell me my best score, the average of the last ten and chart how my speed is going. i want to reach 45 wpm
+needs: log wpm and accuracy for a test | shows the best speed | shows the average of the last tests | trend chart of speed | progress toward a target wpm
+---
+app "Typing" pen orange dark
+table test wpm num 5..250, accuracy num 50..100 = 95, kind pick Words|Quotes|Code = Words
+setting target num = 45 "Target wpm"
+topbar "Typing", test, "Log a test"
+goal max(test.wpm), target, "best wpm so far"
+row gap 2
+  stat round(sum(test sort at desc top 10, it.wpm) / max(min(count(test), 10), 1)), "wpm, last 10 average"
+  stat round(avg(test.accuracy)), "% average accuracy"
+section "Speed over time"
+  trend test sort at, it.wpm
+each test sort at desc top 8 as t empty "No tests yet. Do a one minute test and log it."
+  row card gap 2 tap edit t swipe remove t
+    t.wpm "wpm" bold grow
+    t.kind faint
+    t.accuracy "%" color if(t.accuracy >= 95, good, warn)
+===
+@rich domain=r4_driving_lesson_log topic=driving_lessons_hours_skills style=detailed
+learning to drive. i log each lesson with the skill we practised, minutes and how confident i felt from 1 to 5. my school says 20 hours before the test, show hours done and my confidence per skill, and when my test date is
+needs: log a lesson with skill, minutes and confidence | progress toward 20 hours | confidence per skill | days until the driving test | recent lessons list
+---
+app "Driving" car red
+table lesson skill pick Parking|Gears|Roundabouts|Highway|Night|Reversing = Parking, mins num 15..240 = 60, confidence num 1..5 = 3
+setting test date = 2027-01-20 "Test date"
+let hours = sum(lesson.mins) / 60
+topbar "Driving", lesson, "Log lesson"
+goal round(hours * 10) / 10, 20, "hours of lessons", "h"
+statcard max(test - today, 0), "days until the driving test"
+section "Confidence per skill", "out of 5"
+  share lesson by skill, round(avg(it.confidence) * 10) / 10, it.key
+each lesson sort at desc top 5 as l empty "No lessons yet. Log your first one."
+  row card gap 2 tap edit l swipe remove l
+    l.skill bold grow
+    l.mins "min" faint
+    "felt" l.confidence "/ 5" color if(l.confidence <= 2, bad, good)
+===
+@rich domain=r4_piano_practice_goal topic=piano_practice_minutes style=short
+piano practice minutes
+needs: log minutes with the piece | daily minutes goal | bar chart of the week with a goal line | practice streak
+---
+app "Piano" music pink
+table practice piece text, mins num 5..240 = 20
+setting daily num = 30 "Daily goal (min)"
+topbar "Piano", practice, "Log practice"
+goal sum(practice.mins today), daily, "minutes today", "min"
+goalbars last 7 days, sum(practice.mins on it), daily
+weekdots count(practice on it) > 0
+streak(practice) "day streak, best" best(practice) faint
+list practice by day, "No practice yet. Even ten minutes counts."
+===
+@rich domain=r4_sketchbook_gallery topic=sketchbook_with_pictures style=custom_ui
+my art teacher wants me to sketch weekly. i want to add each sketch with a photo, title and medium (pencil, charcoal, watercolour, ink), see them as a gallery of two columns, and keep count of how many i drew this week out of my goal
+needs: add a sketch with photo, title and medium | gallery in two columns | count of sketches this week against a goal | sketches by medium
+---
+app "Sketchbook" pencil orange
+table sketch title text, medium pick Pencil|Charcoal|Watercolour|Ink = Pencil, photo image?
+setting weekly num = 3 "Sketches a week"
+topbar "Sketchbook", sketch, "Add sketch"
+statcard count(sketch week), "sketches this week", weekly
+grid 2 gap 1
+  each sketch sort at desc as s empty "No sketches yet. Add your first drawing with a photo."
+    stack card gap 1 tap edit s swipe remove s
+      image s.photo
+      s.title bold
+      s.medium faint
+section "By medium"
+  share sketch by medium, count(it), it.key
+===
+@rich domain=r4_scholarship_pipeline topic=scholarship_application_stages style=multi_feature
+applying to scholarships and i keep missing deadlines. each has a name, deadline, amount and a stage: researching, drafting, submitted, won or rejected. show them by stage, warn me about the ones closing within a week, remind me before deadlines
+needs: add a scholarship with name, deadline and amount | filter by stage | tap to advance the stage | closing within a week highlighted | reminder before the deadline | total amount won
+---
+app "Scholarships" trophy green
+table scholarship name text, deadline date, amount money?, stage pick Researching|Drafting|Submitted|Won|Rejected = Researching
+remind "Scholarship deadline in 3 days" at scholarship.deadline - 3d at 9:00
+state f text = Researching
+topbar "Scholarships", scholarship, "Add scholarship"
+row gap 2
+  statcard count(scholarship where stage = Won), "won"
+  statcard sum(scholarship.amount where stage = Won), "amount won"
+scroll
+  each options scholarship.stage
+    button it count(scholarship where stage = it) fill if(f = it, accent, soft) tap set f = it
+each scholarship where stage = f sort deadline as s empty "Nothing at this stage yet."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.amount faint
+    stack gap 0 align end
+      s.deadline bold color if(s.deadline - today <= 7 and s.stage != Submitted, bad, ink)
+      if(s.deadline < today, "closed", join(plural(s.deadline - today, "day"), " left")) tiny faint
+    if s.stage = Researching
+      button "Draft" tap set s.stage = Drafting
+    if s.stage = Drafting
+      button "Submit" fill accent tap set s.stage = Submitted
+===
+@rich domain=r4_class_duty_roster topic=class_monitor_duty_roster style=detailed
+i am the class monitor and make the duty chart each week. kids have names, and each duty has a weekday, a task like board, water, dusting or door, and who does it. show today's duties first, the whole week by day, and who has had the most duties so it is fair
+needs: add kids | assign a duty with day, task and kid | today's duties at the top | week laid out by weekday | count of duties per kid
+---
+app "Duty Roster" users blue
+table kid name text
+table duty day pick Mon|Tue|Wed|Thu|Fri = Mon, task pick Board|Water|Dusting|Door|Registers = Board, kid ref kid
+topbar "Duty Roster", duty, "Assign duty"
+section "Today", dayname(today)
+  each duty where day = dayname(today) as d empty "No duties today."
+    row gap 2
+      d.task bold grow
+      d.kid.name
+each options duty.day as dd
+  stack card gap 1
+    dd head
+    each duty where day = dd as r empty "Nobody assigned yet."
+      row gap 2 tap edit r swipe remove r
+        r.task grow
+        r.kid.name faint
+section "Duties per kid", "fair share"
+  share kid sort count(it.duty) desc, count(it.duty), it.name
+section "Add a kid"
+  form kid, "Save kid"
+===
+@rich domain=r4_ptm_slots topic=parent_teacher_meeting_slots style=multi_feature
+parent teacher meeting day on friday. slots with time, parent name, child and the topic (marks, behaviour, attendance, fees). tick each when finished and show how many meetings are done, and what is left in time order
+needs: add a slot with time, parent, child and topic | list slots in time order | tick when the meeting is done | progress of meetings done | count meetings per topic
+---
+app "PTM Day" users teal
+table slot at_time time, parent text, child text, topic pick Marks|Behaviour|Attendance|Fees|Other = Marks, done bool
+topbar "PTM Day", slot, "Add slot"
+goal count(slot where done = yes), max(count(slot), 1), "meetings done"
+each slot where done = no sort at_time as s empty "No meetings waiting. Add a slot or enjoy the quiet."
+  row card gap 2 tap edit s swipe remove s
+    s.at_time bold
+    stack grow gap 0
+      s.parent bold
+      s.child s.topic faint
+    toggle s.done
+section "Done", count(slot where done = yes)
+  each slot where done = yes sort at_time as s
+    s.at_time s.parent "-" s.topic faint
+section "By topic"
+  share slot by topic, count(it), it.key
+===
+@rich domain=r4_science_fair_steps topic=science_fair_milestones style=detailed
+science fair is in a month. i need milestones like hypothesis, experiment, poster with a due date each, tick when finished, a bar showing how far i am and how many days until the fair, with late steps in red
+needs: add a milestone with a due date | tick when finished | progress bar of steps done | days until the fair | late steps in red
+---
+app "Science Fair" bolt purple
+table step title text, due date, done bool
+setting fair date = 2026-12-20 "Fair day"
+topbar "Science Fair", step, "Add step"
+row gap 2
+  statcard max(fair - today, 0), "days to the fair"
+  statcard count(step where done = yes), "of" count(step) "steps done", count(step)
+draw 100, 8
+  rect 0, 3, 100, 2 fill soft radius 1
+  each step sort due as s
+    circle 100 * (s.due - today) / max(fair - today, 1), 4, 3 fill if(s.done, good, if(s.due < today, bad, muted))
+each step sort due as s empty "No steps yet. Break the project into small steps."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    s.title grow color if(s.done, muted, ink)
+    s.due bold color if(s.done, good, if(s.due < today, bad, muted))

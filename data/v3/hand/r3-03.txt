@@ -2,7 +2,7 @@
 tubewell motors and pumps keep breaking. I want to write what broke, which machine, the mechanic bill and whether it is fixed, see money spent on repairs this year, and the machine that cost me most
 needs: log a repair with machine, problem and bill | tick when fixed | repair money this year | machine that cost the most | count of unfixed repairs
 ---
-app "Pump repairs" tool slate
+app "Pump repairs" tool slate dark
 table repair machine pick North_well|Canal_well|Tractor|Thresher|Generator = North_well, problem text, bill money = 0, fixed bool, day date = today
 topbar "Pump repairs", repair, "Log repair"
 row gap 2
@@ -53,9 +53,428 @@ each field sort name as f empty "No fields yet. Add each field with how often it
 section "Waterings", "last 7 days"
   daybars last 7 days, count(watered on it)
 ===
-@rich domain=land_lease payments topic=land_lease_receipts style=detailed
-I took 20 acres on lease for 3 years. each half year I pay rent. record each payment with date and amount, show the total paid, what is left of the full lease money, and the next payment date with a reminder
-needs: record a rent payment with date and amount | total paid | amount still to pay | next payment date | reminder
+@rich domain=land_lease_rent topic=land_lease_receipts style=detailed
+I took 20 acres on lease for 3 years. each half year I pay rent. record each payment with date and amount, show the total paid, what is left of the full lease money, and a reminder before the next payment
+needs: record a rent payment with date and amount | total paid | amount still to pay | next payment date and reminder | progress bar
 ---
 app "Land lease" home purple
-EOF_BAD
+table rent paid date = today, amount money
+table plan due date, amount money
+setting total money = 1800000 "Total lease money"
+remind "Lease rent due in 3 days" at plan.due - 3d at 9:00
+let paid_all = sum(rent.amount)
+let next_due = first(plan.due where due >= today)
+topbar "Land lease", rent, "Record payment"
+goal paid_all, total, "paid of the lease money"
+row gap 2
+  statcard max(total - paid_all, 0), "still to pay"
+  statcard next_due - today, "days to next payment"
+section "Plan the next payment", "reminder 3 days before"
+  form plan, "Save date"
+list rent by day, "No rent paid yet. Record the first half-year payment."
+===
+@rich domain=milk_collection_centre topic=village_milk_collection style=detailed
+I run a small milk collection point. farmers bring milk, I write the farmer name, litres and fat percent. payment is litres times rate, with 1 rupee extra per 0.1 fat above 6. show litres collected today and money to pay each farmer this week
+needs: add a farmer | record litres and fat percent | money by litres and fat | litres collected today | money due per farmer this week
+---
+app "Milk centre" milk blue
+table farmer name text, village text?
+table intake farmer ref farmer, litres num 1..200, fat num 3..10 = 6 unit "%"
+setting rate money = 150 "Base rate per litre"
+let pay(l num, f num) = l * (rate + max(f - 6, 0) * 10)
+topbar "Milk centre", farmer, "Add farmer"
+row gap 2
+  statcard sum(intake.litres today), "litres collected today"
+  statcard round(sum(intake week, pay(it.litres, it.fat))), "to pay this week"
+each farmer sort name as f empty "No farmers yet. Add the people who bring milk."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      text f.name bold
+      text sum(f.intake.litres week) "L this week, owed" round(sum(f.intake week, pay(it.litres, it.fat))) faint
+    button "+ 10 L" tap add intake farmer = f, litres = 10, fat = 6
+section "Litres per day"
+  daybars last 7 days, sum(intake.litres on it)
+===
+@rich domain=chick_brooder topic=chick_brooder_checks style=custom_ui
+new chicks need heat. each day I note the brooder temperature morning and evening and how many chicks died. the right temperature drops each week, so show the target for the week of life and warn if I am off by more than 2 degrees
+needs: log brooder temperature | chicks dead | week of life from arrival date | target temperature for the week | warning when off by more than 2 degrees
+---
+app "Brooder" sun orange
+table temp reading num 20..45 unit "C"
+table loss n num 1..100 = 1
+setting arrival date = today "Day chicks arrived"
+setting chicks num 10..20000 = 500 "Chicks arrived"
+let wk = floor((today - arrival) / 7) + 1
+let target = max(35 - (wk - 1) * 3, 24)
+topbar "Brooder", temp, "Log temperature"
+row gap 2
+  statcard target, "C target in week" wk
+  statcard last(temp.reading), "C at last check"
+if abs(last(temp.reading) - target) > 2
+  text "Temperature is off target. Adjust the heater." bold color bad
+else
+  text "Brooder is on target." color good
+statcard chicks - sum(loss.n), "chicks alive of" chicks, chicks
+quick loss, n, [1, 3, 5]
+section "Temperature", "last readings"
+  trend temp top 16, it.reading
+===
+@rich domain=pigeon_loft topic=pigeon_loft_records style=multi_feature
+racing pigeons: each bird has a ring number and a pair mate, and I record races with the position it came. show best position per bird, number of races, and which birds have not flown in a month
+needs: add a bird with ring number | record a race with distance and position | races per bird | best position | birds not flown in a month
+---
+app "Pigeon loft" star purple
+table bird ring text, mate text?
+table race bird ref bird, km num 50..1500 = 200, pos num 1..500 "Position"
+topbar "Pigeon loft", bird, "Add bird"
+statcard count(bird, due(it.race, 30)), "birds not flown in a month", count(bird)
+each bird sort ring as b empty "No birds yet. Add each pigeon by its ring number."
+  stack card gap 1 fill if(due(b.race, 30), warn, soft) tap edit b swipe remove b
+    row gap 1
+      text b.ring bold grow
+      text count(b.race) "races" faint
+    row gap 1
+      text "Best position" min(b.race.pos) grow
+      text "Last flew" since(b.race) "days ago" faint
+section "Log a race"
+  form race, "Save race"
+===
+@rich domain=honey_extraction topic=honey_extraction_batches style=short
+honey extraction batches by season, kg per batch and the flower source
+needs: log a batch with kg and flower source | total honey kg this year | chart of kg per batch | list to edit
+---
+app "Honey batches" cup yellow
+table batch source pick Sarson|Berry|Eucalyptus|Wildflower = Sarson, kg num 1..500
+topbar "Honey batches", batch, "Add batch"
+statcard sum(batch.kg year), "kg of honey this year"
+section "Kg by flower", "this year"
+  share batch year by source, sum(it.kg), it.key
+section "Batches"
+  bars batch top 8, it.kg, it.source
+list batch top 8, "No honey batches yet. Add the first extraction."
+===
+@rich domain=aquarium_stock topic=aquarium_fish_list style=custom_ui
+my tank has many fish, some die. keep a list of fish with species, number, price paid and date added. let me tap a button to say one died, show how many are alive and the money spent on fish this year
+needs: add fish with species, number and price | tap to say one died | alive count | money spent this year | list with edit
+---
+app "Fish list" fish teal
+table fish species text, n num 1..100 = 1 "Number bought", price money, added date = today
+table died fish ref fish
+let alive = sum(fish.n) - count(died)
+topbar "Fish list", fish, "Add fish"
+row gap 2
+  statcard alive, "fish alive of" sum(fish.n), sum(fish.n)
+  statcard sum(fish year, it.n * it.price), "spent on fish this year"
+each fish sort added desc as f empty "No fish yet. Add the species you bought."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      text f.species bold
+      text f.n - count(f.died) "alive of" f.n "bought" faint
+    button "One died" tap add died fish = f
+===
+@rich domain=pet_feeding_board topic=family_pet_feeding_tick style=multi_feature
+cat, dog and two birds in the house, and everybody forgets who fed them. each pet has a feeding twice a day. tap morning or evening to mark fed, show which pet is not fed yet today and the dots for last week
+needs: add pets | tap morning or evening fed | pets not fed yet today | dots for the last 7 days | list of pets
+---
+app "Pet meals" paw pink
+table pet name text, kind pick Cat|Dog|Bird|Fish|Other = Cat
+table meal pet ref pet, slot pick Morning|Evening = Morning
+let hungry = count(pet, count(it.meal today) = 0)
+topbar "Pet meals", pet, "Add pet"
+statcard hungry, "pets not fed yet today", count(pet)
+each pet sort name as p empty "No pets yet. Add the animals in your house."
+  stack card gap 1 fill if(count(p.meal today) = 0, warn, soft) tap edit p
+    row gap 1
+      text p.name bold grow
+      text p.kind faint
+    row gap 1
+      button "Morning" fill if(count(p.meal today where slot = Morning) > 0, good, surface) tap toggle p.meal today where slot = Morning
+      button "Evening" fill if(count(p.meal today where slot = Evening) > 0, good, surface) tap toggle p.meal today where slot = Evening
+    weekdots count(p.meal on it) > 0
+===
+@rich domain=puppy_training topic=puppy_commands_progress style=detailed
+training my puppy with commands: sit, stay, come, heel, leave it. every session I write the command and how many times out of 10 he got it. show best score per command, sessions this week and a line of the scores for the command I choose
+needs: log a session with command and score out of 10 | best score per command | sessions this week | choose a command to see its line | list to edit
+---
+app "Puppy school" star orange
+table drill cmd pick Sit|Stay|Come|Heel|Leave_it = Sit, score num 0..10 = 5
+state c pick Sit|Stay|Come|Heel|Leave_it = Sit
+topbar "Puppy school", drill, "Log session"
+statcard count(drill week), "sessions this week"
+row gap 1
+  each options drill.cmd
+    button it fill if(c = it, accent, soft) tap set c = it
+row gap 2
+  statcard max(drill.score where cmd = c), "best score for" c
+  statcard avg(drill.score where cmd = c), "average score"
+section "Score line", c
+  trend drill where cmd = c top 15, it.score
+list drill top 8, "No training sessions yet. Log the first one."
+===
+@rich domain=pet_medicine_course topic=pet_medicine_doses style=multi_feature
+my dog is on antibiotics twice a day for 10 days, and later eye drops. add a medicine with times a day, the first day and number of days. tap each dose given today, remind me at the two times, and show days left of the course
+needs: add medicine with doses per day and days | tap each dose given | days left of the course | reminders at fixed times | doses given today
+---
+app "Pet medicine" pill red
+table med name text, per_day num 1..4 = 2 "Doses per day", days num 1..60 = 10, start date = today
+table dose med ref med
+remind "Dog medicine time" at 8:00, 20:00
+let left(m med) = max(m.start + m.days - today, 0)
+topbar "Pet medicine", med, "Add medicine"
+statcard count(dose today), "doses given today"
+each med sort start as m empty "No medicine yet. Add the course the vet gave you."
+  stack card gap 1 fill if(left(m) = 0, soft, surface) tap edit m swipe remove m
+    row gap 1
+      text m.name bold grow
+      text left(m) "days left" faint
+    row gap 1
+      text count(m.dose today) "of" m.per_day "doses given today" grow
+      button "Dose given" tap add dose med = m
+===
+@rich domain=farm_vet_calls topic=vet_callout_records style=detailed
+when the vet comes to the farm I note the animal, illness, medicine, bill and the date he said to call again. show money spent on the vet this year, animals with a follow up date coming, and what illness is most common
+needs: log vet visit with animal, illness, medicine and bill | follow up date | vet money this year | follow ups coming soon | most common illness
+---
+app "Vet calls" heart green
+table call animal text, illness text, medicine text?, bill money = 0, follow date?
+topbar "Vet calls", call, "Log vet visit"
+row gap 2
+  statcard sum(call.bill year), "spent on the vet this year"
+  statcard count(call where follow >= today and follow <= today + 7), "follow ups this week"
+section "Common illnesses"
+  share call year by illness, count(it), it.key
+section "Follow ups"
+  each call where follow >= today sort follow as c empty "No follow up visits planned."
+    row card gap 2 fill if(c.follow - today <= 3, warn, soft) tap edit c
+      stack grow gap 0
+        text c.animal bold
+        text c.illness faint
+      text c.follow bold
+===
+@rich domain=donkey_cart_trips topic=cart_delivery_trips style=short
+my donkey cart takes bricks and sand, and I count trips and money
+needs: log a trip with load and money | trips today | money this week | list to remove
+---
+app "Cart trips" bus yellow
+table trip load pick Bricks|Sand|Gravel|Fodder|Other = Bricks, money money
+topbar "Cart trips", trip, "Log trip"
+row gap 2
+  statcard count(trip today), "trips today"
+  statcard sum(trip.money week), "earned this week"
+section "Money per day", "last 7 days"
+  daybars last 7 days, sum(trip.money on it)
+list trip top 10, "No trips yet. Log the first load you carry."
+===
+@rich domain=trek_diary topic=multi_day_trek_diary style=custom_ui
+we are doing a 6 day trek. each day I write the camp name, km walked, altitude gained and how I feel from 1 to 5. show total km against the 80 km plan, a line of how I feel and altitude per day as bars
+needs: log a day with camp, km, altitude and feeling | total km against plan | line of feeling | bars of altitude per day | list to edit
+---
+app "Trek diary" map teal dark
+table daylog camp text, km num 1..60, up num 0..3000 = 0 "Climb (m)", feel num 1..5 = 3
+setting plan num = 80 "Planned km"
+topbar "Trek diary", daylog, "Log day"
+goal sum(daylog.km), plan, "km walked"
+section "How I felt", "1 to 5"
+  trend daylog top 10, it.feel
+section "Climb per day", "metres"
+  bars daylog top 10, it.up, it.camp
+list daylog top 8, "No days yet. Log the first camp."
+===
+@rich domain=camp_meal_plan topic=camp_food_per_person style=multi_feature
+planning food for a camping weekend with 8 people. add meals with how many grams per person, and show total kg for the group, so I can shop. change number of people and it updates, and tick items once bought
+needs: number of people setting | add food with grams per person | total kg for the group | tick when bought | kg still to buy
+---
+app "Camp food" food orange dark
+table food item text, grams num 10..2000 "Grams per person", bought bool
+setting people num 1..60 = 8 "People"
+let total_kg = sum(food, it.grams * people) / 1000
+topbar "Camp food", food, "Add food"
+row gap 2
+  statcard total_kg, "kg of food for" people "people"
+  statcard sum(food where bought = no, it.grams * people) / 1000, "kg still to buy"
+each food sort bought as f empty "No food yet. Add rice, tea, bread and whatever you plan."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      text f.item bold
+      text f.grams * people / 1000 "kg for the group" faint
+    toggle f.bought
+===
+@rich domain=fishing_catch topic=angling_catch_log style=detailed
+fishing at the river and lake on weekends. I note the date, place, species, weight in grams and which bait worked. show my biggest fish, total caught this season and which bait catches the most
+needs: log a catch with place, species, weight and bait | biggest fish | total caught this season | best bait | list to edit
+---
+app "Catch log" fish ocean
+table catch place pick River|Lake|Canal = River, species text, grams num 20..40000, bait pick Worm|Dough|Fly|Spinner = Worm
+topbar "Catch log", catch, "Log catch"
+row gap 2
+  statcard max(catch.grams), "g biggest fish"
+  statcard count(catch year), "fish caught this season"
+section "Fish per bait"
+  share catch year by bait, count(it), it.key
+section "Weight of catches", "oldest to newest"
+  trend catch top 15, it.grams
+list catch top 8, "No fish yet. Log the first catch."
+===
+@rich domain=weather_diary topic=garden_weather_diary style=multi_feature
+a weather diary for my garden: each evening high and low temperature, wind and a note. show the average high this month, the hottest day, a line of highs, and count the frosty nights below 2 degrees
+needs: log high, low and wind | average high this month | hottest day | line of highs | frost nights count
+---
+app "Weather diary" cloud blue
+table wx high num -10..55 unit "C", low num -15..40 unit "C", wind pick Calm|Breeze|Strong|Storm = Calm, note text?
+topbar "Weather diary", wx, "Log weather"
+row gap 2
+  statcard round(avg(wx.high month)), "C average high this month"
+  statcard max(wx.high year), "C hottest day"
+statcard count(wx where low < 2), "frost nights so far"
+section "High temperature", "last 15 entries"
+  trend wx top 15, it.high
+list wx top 7, "No weather noted yet. Add today's high and low."
+===
+@rich domain=garden_watering_rota topic=family_garden_watering_rota style=custom_ui
+the kids and I take turns watering the garden. 4 people, each day someone is on duty. show who is on today (rotates by day), tap done, how many times each person watered this week, and a week strip
+needs: add family members | who is on duty today | tap done | times each watered this week | weekly strip
+---
+app "Garden rota" plant green
+table member name text
+table done member ref member
+let n = count(member)
+let duty = nth(member sort name, weekday(today) % max(n, 1) + 1)
+topbar "Garden rota", member, "Add person"
+if n > 0
+  stack card gap 1
+    text "On duty today" faint
+    text duty.name head
+    text if(count(done today) > 0, "Done for today", "Not watered yet") bold color if(count(done today) > 0, good, warn)
+each member sort name as m empty "No members yet. Add each person in the family."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      text m.name bold
+      text count(m.done week) "times this week" faint
+    button "Watered" tap add done member = m
+weekdots count(done on it) > 0
+===
+@rich domain=orchard_pruning topic=orchard_pruning_calendar style=detailed
+fruit trees need pruning in winter: peach, plum, guava, apple. add a tree group with how many trees and the month to prune, tick when pruned, and show how many trees are still to prune with the unpruned groups highlighted
+needs: add tree group with number and prune month | tick when pruned | trees still to prune | unpruned groups highlighted | list to edit
+---
+app "Orchard pruning" tree green
+table grove fruit text, trees num 1..500, month pick Dec|Jan|Feb|Mar = Dec, pruned bool
+topbar "Orchard pruning", grove, "Add trees"
+row gap 2
+  statcard sum(grove.trees where pruned = no), "trees still to prune"
+  statcard sum(grove.trees where pruned = yes), "trees done"
+each grove sort pruned as g empty "No tree groups yet. Add guava, plum or peach."
+  row card gap 2 fill if(g.pruned, soft, warn) tap edit g swipe remove g
+    stack grow gap 0
+      text g.fruit bold
+      text g.trees "trees, prune in" g.month faint
+    toggle g.pruned
+===
+@rich domain=date_palm_harvest topic=date_palm_bunches style=short
+date palms with bunches picked each season, weight per bunch
+needs: add a palm with name | log bunches and kg | total kg this season | kg per palm
+---
+app "Date palms" tree orange
+table palm name text
+table bunch palm ref palm, kg num 1..80
+topbar "Date palms", palm, "Add palm"
+statcard sum(bunch.kg year), "kg of dates this season"
+each palm sort name as p empty "No palms yet. Add each palm by name or number."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      text p.name bold
+      text count(p.bunch year) "bunches," sum(p.bunch.kg year) "kg" faint
+    button "+ 1 bunch 25 kg" tap add bunch palm = p, kg = 25
+===
+@rich domain=kinnow_grading topic=citrus_grade_boxes style=custom_ui
+packing kinnow into boxes of 3 grades, A, B and C, with different prices. tap to add a box of a grade, price per grade in settings, show boxes per grade, money by grade and total money for the week
+needs: tap to add a box of each grade | price per grade settings | boxes per grade | money by grade | total money this week
+---
+app "Kinnow boxes" apple orange
+table box grade pick A|B|C = A
+setting pa money = 1800 "Price of A box"
+setting pb money = 1300 "Price of B box"
+setting pc money = 800 "Price of C box"
+let money_a = count(box week where grade = A) * pa
+let money_b = count(box week where grade = B) * pb
+let money_c = count(box week where grade = C) * pc
+row bar
+  text "Kinnow boxes" head grow
+  text money_a + money_b + money_c "this week" bold
+row gap 1
+  button "Box A" tap add box grade = A
+  button "Box B" tap add box grade = B
+  button "Box C" tap add box grade = C
+section "This week"
+  row gap 1
+    text "Grade A" grow
+    text count(box week where grade = A) "boxes" money_a bold
+  row gap 1
+    text "Grade B" grow
+    text count(box week where grade = B) "boxes" money_b bold
+  row gap 1
+    text "Grade C" grow
+    text count(box week where grade = C) "boxes" money_c bold
+section "Boxes per day"
+  daybars last 7 days, count(box on it)
+===
+@rich domain=seed_germination topic=seed_germination_test style=multi_feature
+before sowing I test old seed: put 50 seeds in wet cloth and count how many sprouted after a week. keep the test with variety, seeds tested and sprouted, show percent germination, and say whether the seed is good (above 80), poor or bad
+needs: add a test with variety, seeds and sprouted | germination percent | good, poor or bad verdict | colour for the verdict | best variety
+---
+app "Seed test" plant mint
+table test variety text, seeds num 5..500 = 50, sprouted num 0..500
+topbar "Seed test", test, "Add test"
+statcard round(sum(test.sprouted) * 100 / max(sum(test.seeds), 1)), "% of all seeds tested sprouted"
+each test sort at desc as t empty "No tests yet. Count the sprouts after a week and add the result."
+  let pct = round(t.sprouted * 100 / max(t.seeds, 1))
+  row card gap 2 fill if(pct >= 80, good, if(pct >= 60, warn, bad)) tap edit t swipe remove t
+    stack grow gap 0
+      text t.variety bold
+      text t.sprouted "of" t.seeds "sprouted" faint
+    stack gap 0 align end
+      text pct "%" bold
+      text if(pct >= 80, "Good", if(pct >= 60, "Poor", "Bad")) faint
+===
+@rich domain=grain_bins topic=grain_bin_moisture style=detailed
+wheat stored in 3 bins. when I check a bin I write moisture percent and temperature, and if moisture is above 12 or heat above 30 I want a red warning. also how many bags went in and out and bags left per bin
+needs: log a check with bin, moisture and temperature | red warning when moisture or heat is high | bags in and out | bags left per bin | list of checks
+---
+app "Grain bins" bag red dark
+table check bin pick Bin_1|Bin_2|Bin_3 = Bin_1, moisture num 5..30 unit "%", heat num 10..60 = 25 unit "C"
+table move bin pick Bin_1|Bin_2|Bin_3 = Bin_1, bags num -500..500 "Bags (minus = out)"
+topbar "Grain bins", check, "Log check"
+each options check.bin as b
+  let hot = last(check.moisture where bin = b) > 12 or last(check.heat where bin = b) > 30
+  row card gap 2 fill if(hot, bad, soft)
+    stack grow gap 0
+      text b bold
+      text "Moisture" last(check.moisture where bin = b) "% heat" last(check.heat where bin = b) "C" faint
+    stack gap 0 align end
+      text sum(move.bags where bin = b) "bags" bold
+      if hot
+        text "Check now" bold
+section "Move bags"
+  form move, "Save move"
+===
+@rich domain=tractor_service_due topic=tractor_service_hours style=multi_feature
+my tractor needs oil change every 250 hours and the air filter every 500. I write the hour meter reading when I use it, and the hours of each service. show hours left to the next oil change and filter in orange when under 25, with a service history
+needs: log the hour meter reading | log a service with oil or filter | hours left to next oil change | hours left to next filter | warning colour under 25 hours
+---
+app "Tractor service" tool orange
+table meter hours num 0..20000 unit "h"
+table service kind pick Oil|Filter|Greasing = Oil, at_hours num 0..20000 "At hour meter", cost money?
+let now_h = last(meter.hours)
+let oil_left = last(service.at_hours where kind = Oil) + 250 - now_h
+let filter_left = last(service.at_hours where kind = Filter) + 500 - now_h
+topbar "Tractor service", meter, "Log meter"
+row gap 2
+  statcard now_h, "hours on the meter"
+  statcard sum(service.cost year), "spent on service this year"
+stack card gap 1 fill if(oil_left < 25, warn, soft)
+  text "Oil change in" oil_left "hours" bold
+stack card gap 1 fill if(filter_left < 25, warn, soft)
+  text "Air filter in" filter_left "hours" bold
+section "Add a service"
+  form service, "Save service"
+list service top 6, "No service logged yet."

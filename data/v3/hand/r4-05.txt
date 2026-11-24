@@ -1,0 +1,227 @@
+@rich domain=r4_school_book_club topic=school_book_club_meetings style=multi_feature
+i run the book club at our school. each meeting has the book, author, who hosts and the date. after the meeting we rate the book out of 5 and i keep a few discussion questions for the next one. show the next meeting, the ratings so far and the average
+needs: add a meeting with book, author, host and date | shows the next meeting | rate a book out of 5 after the meeting | discussion questions for a meeting | average rating of all books
+---
+app "Book Club" book ink dark
+table meeting book text, author text?, host text, held date, score num? 1..5
+table ask meeting ref meeting, q text
+let nxt = nth(meeting where held >= today sort held, 1)
+topbar "Book Club", meeting, "Add meeting"
+stack card gap 1
+  "Next meeting" faint
+  nxt.book head
+  nxt.held "hosted by" nxt.host faint
+  each nxt.ask as a empty "No questions yet. Add some below."
+    "-" a.q
+statcard round(avg(meeting.score) * 10) / 10, "average rating", 5
+section "Add a question"
+  form ask, "Save question"
+section "Rated books"
+  each meeting where held < today sort held desc as m empty "No past meetings yet."
+    row gap 2 tap edit m swipe remove m
+      m.book bold grow
+      m.score "/ 5" faint
+===
+@rich domain=r4_student_council_tally topic=student_council_vote_tally style=custom_ui
+we hold the student council election in class. tap a candidate's button each time a ballot is read out, show bars for each one with percent, the total ballots counted, an undo for the last vote and a button to reset when we are done
+needs: add candidates | one tap adds a vote | bar and percent per candidate | total ballots counted | undo the last vote | reset all votes
+---
+app "Council Vote" users ocean
+table cand name text, grade text?
+table vote cand ref cand
+topbar "Council Vote", cand, "Add candidate"
+statcard count(vote), "ballots counted"
+each cand sort count(it.vote) desc as c empty "No candidates yet. Add everyone who is standing."
+  stack card gap 1
+    row gap 2
+      c.name head grow
+      count(c.vote) "votes" bold
+      round(count(c.vote) * 100 / max(count(vote), 1)) "%" faint
+    draw 100, 5
+      rect 0, 0, 100, 5 fill soft radius 2
+      rect 0, 0, 100 * count(c.vote) / max(count(vote), 1), 5 fill accent radius 2
+    row gap 1
+      button "Add a vote" fill accent grow tap add vote cand = c
+      button "Undo" tap remove last(c.vote)
+button "Reset all votes" tap remove all vote
+===
+@rich domain=r4_quiz_night_scoreboard topic=inter_school_quiz_scoreboard style=multi_feature
+running the inter-school quiz. teams are added once, then after each question i give points: ten for right, five for a bonus, minus five for a wrong buzz. show the live leaderboard with bars and a count of scores given
+needs: add teams | buttons for plus ten, plus five and minus five | leaderboard sorted by points with bars | counter of scores given | button to start a new quiz
+---
+app "Quiz Night" trophy plum dark
+table team name text
+table score team ref team, pts num -10..30 = 10
+topbar "Quiz Night", team, "Add team"
+statcard count(score), "scores given so far"
+each team sort sum(it.score.pts) desc as t empty "No teams yet. Add the schools taking part."
+  stack card gap 1
+    row gap 2
+      "#" index + 1 faint
+      t.name bold grow
+      sum(t.score.pts) big
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(t.score.pts) / max(max(team, sum(it.score.pts)), 1), 0, 1), 4 fill accent radius 2
+    row gap 1
+      button "+10" fill good grow tap add score team = t, pts = 10
+      button "+5" grow tap add score team = t, pts = 5
+      button "-5" fill bad grow tap add score team = t, pts = -5
+button "Start a new quiz" tap remove all score
+===
+@rich domain=r4_assignment_missing_list topic=assignment_submissions_missing_list style=detailed
+i teach 30 students and they hand in assignments late. i add each assignment with a due date, then tap a student's name when their work arrives. under every assignment show how many handed in and who is still missing, with late ones in red
+needs: add students | add an assignment with a due date | tap a student when their work arrives | count handed in per assignment | names of students still missing | overdue assignments in red
+---
+app "Handed In" list slate
+table student name text
+table work title text, due date
+table sub work ref work, student ref student
+topbar "Handed In", work, "Add assignment"
+section "Add a student"
+  form student, "Save student"
+each work sort due as w empty "No assignments yet. Add the first one with its due date."
+  stack card gap 1 tap edit w swipe remove w
+    row
+      w.title head grow
+      w.due bold color if(w.due < today and count(w.sub) < count(student), bad, muted)
+    goal count(w.sub), max(count(student), 1), "handed in"
+    each student sort name as s
+      if count(w.sub where student = s) = 0
+        row gap 2
+          s.name grow
+          "missing" tiny color bad
+          button "Arrived" tap add sub work = w, student = s
+===
+@rich domain=r4_mcq_accuracy_subjects topic=mcq_practice_accuracy style=multi_feature
+solving mcqs for the entry test. after each practice set i enter the subject, how many i attempted and how many i got right. show my accuracy per subject, a trend of accuracy over time, and how many questions i solved this week against 300
+needs: log a set with subject, attempted and correct | accuracy per subject | accuracy trend over sets | questions solved this week against a goal | list of recent sets
+---
+app "MCQ Practice" target green
+table set subject pick Biology|Chemistry|Physics|English = Biology, tried num 5..200 = 30, right num 0..200 = 20
+setting weekly num = 300 "Questions a week"
+topbar "MCQ Practice", set, "Log a set"
+goal sum(set.tried week), weekly, "questions this week"
+statcard round(sum(set.right) * 100 / max(sum(set.tried), 1)), "% overall accuracy", 100
+section "Accuracy by subject"
+  share set by subject, round(sum(it.right) * 100 / max(sum(it.tried), 1)), it.key
+section "Accuracy over time"
+  trend set sort at, round(it.right * 100 / max(it.tried, 1))
+each set sort at desc top 5 as s empty "No sets yet. Solve thirty questions and log them."
+  row card gap 2 tap edit s swipe remove s
+    s.subject bold grow
+    s.right "/" s.tried faint
+===
+@rich domain=r4_scout_badge_steps topic=scout_badge_requirements style=detailed
+my daughter is a girl guide working on badges. each badge has steps like tie three knots or cook on a fire. i add the badge, add its steps, tick them off and see progress for each badge, and how many badges are fully earned
+needs: add a badge | add steps under a badge | tick a step when done | progress bar per badge | count of badges fully earned
+---
+app "Badges" flag teal
+table badge name text
+table step badge ref badge, what text, done bool
+topbar "Badges", badge, "Add badge"
+statcard count(badge, count(it.step) > 0 and count(it.step where done = no) = 0), "badges earned of" count(badge), count(badge)
+section "Add a step"
+  form step, "Save step"
+each badge sort name as b empty "No badges yet. Add the first one she wants to earn."
+  stack card gap 1 tap edit b swipe remove b
+    b.name head
+    goal count(b.step where done = yes), max(count(b.step), 1), "steps done"
+    each b.step as s empty "No steps yet."
+      row gap 2
+        toggle s.done
+        s.what grow
+===
+@rich domain=r4_tuition_leads_funnel topic=tuition_enquiries_funnel style=multi_feature
+parents call asking about home tuition. i note the parent, the class, subject and where we are: new, trial, joined or dropped. tap to move them along, show how many are at each stage, set a follow up date with a reminder and show the joining rate
+needs: add an enquiry with parent, class, subject and follow up date | stage of each enquiry | tap to move to the next stage | count at each stage | reminder on the follow up date | joining rate
+---
+app "Enquiries" phone orange
+table lead parent text, grade text, subject text, status pick New|Trial|Joined|Dropped = New, follow date?
+remind "Follow up with a tuition enquiry" at lead.follow
+state f text = New
+topbar "Enquiries", lead, "Add enquiry"
+row gap 1
+  each options lead.status as s
+    stat count(lead where status = s), s
+statcard round(count(lead where status = Joined) * 100 / max(count(lead), 1)), "% of enquiries joined"
+row gap 1
+  each options lead.status
+    button it grow fill if(f = it, accent, soft) tap set f = it
+each lead where status = f sort follow as l empty "Nobody at this stage."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.parent bold
+      l.grade l.subject faint
+    l.follow faint color if(l.follow < today, bad, muted)
+    if l.status = New
+      button "Trial" tap set l.status = Trial
+    if l.status = Trial
+      button "Joined" fill good tap set l.status = Joined
+===
+@rich domain=r4_school_year_calendar topic=school_year_events_calendar style=detailed
+the school year dates are scattered across circulars. i put holidays, exams, events and meetings in one list with a date, show how many days until the next holiday, filter by kind and remind me the day before each thing
+needs: add an event with name, date and kind | days until the next holiday | filter by kind | reminder the day before | events in date order
+---
+app "School Year" calendar mint dark
+table event name text, start date, kind pick Holiday|Exam|Event|Meeting = Event
+remind "Something at school tomorrow" at event.start - 1d at 18:00
+state f text = ""
+let nh = nth(event where kind = Holiday and start >= today sort start, 1)
+topbar "School Year", event, "Add event"
+stack card gap 0
+  "Next holiday" faint
+  nh.name head
+  plural(nh.start - today, "day") "to go" big
+scroll
+  button "All" fill if(f = "", accent, soft) tap set f = ""
+  each options event.kind
+    button it count(event where kind = it) fill if(f = it, accent, soft) tap set f = it
+each event where f = "" or kind = f sort start as e empty "No dates yet. Add the first holiday or exam."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.name bold
+      e.start faint
+    e.kind bold color if(e.kind = Exam, bad, if(e.kind = Holiday, good, muted))
+===
+@rich domain=r4_mental_maths_drills topic=mental_maths_drill_times style=multi_feature
+my son does timed mental maths drills of 20 sums. after each one i write the kind (add, subtract, times, divide), the seconds it took and how many he got right. show his fastest time per kind, a trend of times and the average accuracy
+needs: log a drill with kind, seconds and correct answers | fastest time per kind | trend of times | average accuracy | list of recent drills
+---
+app "Maths Drills" calc blue
+table drill kind pick Add|Subtract|Times|Divide = Add, secs num 10..900 = 120, right num 0..20 = 18
+topbar "Maths Drills", drill, "Log a drill"
+statcard round(sum(drill.right) * 100 / max(count(drill) * 20, 1)), "% average accuracy", 100
+section "Fastest per kind"
+  each options drill.kind as k
+    row gap 2
+      k grow
+      min(drill.secs where kind = k) "sec" bold
+section "Time over drills"
+  trend drill sort at, it.secs
+each drill sort at desc top 6 as d empty "No drills yet. Time the first set of 20 sums."
+  row card gap 2 tap edit d swipe remove d
+    d.kind bold grow
+    d.secs "s" faint
+    d.right "/ 20" color if(d.right >= 18, good, warn)
+===
+@rich domain=r4_term_end_checklist topic=teacher_term_end_checklist style=multi_feature
+end of term is chaos. my checklist has things like submit marks, write reports, clean the cupboard and meet parents. each has an area and a due date, tick when done, show overdue in red, a bar per area, and remind me the day before it is due
+needs: add a task with area and due date | tick when done | overdue tasks in red | progress bar per area | reminder the day before | days until the term ends
+---
+app "Term End" check yellow
+table task what text, area pick Marks|Reports|Room|Admin|Parents = Marks, due date, done bool
+setting term_end date = 2026-12-12 "Term ends"
+remind "Term-end task due tomorrow" at task.due - 1d at 8:00
+topbar "Term End", task, "Add task"
+row gap 2
+  statcard max(term_end - today, 0), "days until the term ends"
+  statcard count(task where done = no and due < today), "tasks overdue"
+each options task.area as a
+  stack card gap 1
+    goal count(task where area = a and done = yes), max(count(task where area = a), 1), a
+    each task where area = a and done = no sort due as t
+      row gap 2 tap edit t swipe remove t
+        toggle t.done
+        t.what grow
+        t.due bold color if(t.due < today, bad, muted)

@@ -1,0 +1,468 @@
+@rich domain=t2_salary_advance topic=salary_advance_balance style=detailed
+my company lets me take advances and by the 20th there is nothing left. let me enter each advance with the reason, show what salary remains this month, how much i can spend per remaining day, and a bar for how much of the salary is gone.
+needs: log an advance with amount and reason | salary left this month | spend per remaining day | progress bar of salary used | change monthly salary
+---
+app "Advances" wallet plum
+table advance amount money, reason text?
+setting salary money = 65000 "Monthly salary"
+let taken = sum(advance.amount month)
+let daysleft = monthdays(today) - monthday(today) + 1
+topbar "Advances", advance, "Add advance"
+goal taken, salary, "of salary already taken"
+row gap 2
+  statcard salary - taken, "salary left"
+  statcard round((salary - taken) / daysleft), "per day for the" plural(daysleft, "day") "left"
+list advance month, "No advance this month. Good."
+===
+@rich domain=t2_chai_stall_sales topic=tea_stall_daily_sales style=custom_ui
+tea stall at the bus stop. i write the day's sale after closing. show the average sale per day this month, my best day, and flip between the last week and the last month for the bars. the line for the target is 4000
+needs: log a day's sale amount | average sale this month | best sale | switch between week and month bars | target line on the bars
+---
+app "Chai stall" cup red dark
+table sale amount money
+state range pick Week|Month = Week
+topbar "Chai stall", sale, "Add sale"
+row gap 2
+  statcard round(avg(sale.amount month)), "average sale this month"
+  statcard max(sale.amount), "best day so far"
+choice range
+section "Daily sale", if(range = Week, "last 7 days", "last 30 days")
+  if range = Week
+    goalbars last 7 days, sum(sale.amount on it), 4000
+  else
+    goalbars last 30 days, sum(sale.amount on it), 4000
+list sale top 7, "No sales yet. Add today's after you close."
+===
+@rich domain=t2_cow_milk_yield topic=dairy_cow_milking_yield style=multi_feature
+two cows, morning and evening milking. note the litres at both times for each cow, add them for the day, add each cow by name, show litres today, the money at 190 a litre this month, and a chart so i can see if a cow's yield is dropping
+needs: log morning and evening litres for a cow | litres for the day | income this month at a set price | chart of daily litres | add a cow
+---
+app "Dairy" milk yellow
+table cow name text
+table milking cow ref cow, morn num 0..30 = 0 "Morning litres", eve num 0..30 = 0 "Evening litres"
+setting price money = 190 "Price per litre"
+let litres(m milking) = m.morn + m.eve
+topbar "Milking", milking, "Add milking"
+row gap 2
+  statcard sum(milking today, litres(it)), "litres today"
+  statcard sum(milking month, litres(it)) * price, "earned this month"
+section "Litres per day", "last 10 days"
+  daybars last 10 days, sum(milking on it, litres(it))
+each milking top 8 as m empty "No milking yet. Add this morning's litres."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.cow.name bold
+      m.morn "morning +" m.eve "evening" faint
+    litres(m) "L" bold
+form cow, "Add cow"
+===
+@rich domain=t2_poultry_feed topic=poultry_feed_cost_per_bird style=detailed
+we raise broilers in batches. i buy feed bags with weight and price, and each batch has a bird count. show the feed cost per bird, the average price of a bag, the total kilos bought, the number of birds as a setting, and the price per kg trend so i know when the dealer raises prices.
+needs: add a feed bag purchase with kilos and price | feed cost per bird | average bag price | total kilos bought | line chart of price per kilo
+---
+app "Poultry feed" egg purple
+table feed kilos num 1..100 = 50, price money
+setting birds num = 500 "Birds in the shed"
+topbar "Feed", feed, "Add purchase"
+row gap 2
+  statcard round(sum(feed.price) / max(birds, 1) * 10) / 10, "feed cost per bird"
+  statcard round(avg(feed.price)), "average price per bag"
+text "Total bought" sum(feed.kilos) "kg in" count(feed) "bags" faint
+section "Price per kg", "oldest to newest"
+  trend feed sort at, it.price / it.kilos
+list feed top 8, "No purchases yet. Add the first feed bag."
+===
+@rich domain=t2_rickshaw_earnings topic=rickshaw_daily_earnings style=short
+rickshaw driver. each trip i write fare and km. show today's earning against 3000, earning per km, and the best fare
+needs: add a trip with fare and km | today's earnings against a target | earning per km | best fare | trips per day chart
+---
+app "Rickshaw" car blue
+table trip fare money, km num 1..80 = 5
+let earned = sum(trip.fare today)
+topbar "Trips", trip, "Add trip"
+goal earned, 3000, "earned today"
+row gap 2
+  stat round(sum(trip.fare week) / max(sum(trip.km week), 1)), "earned per km this week"
+  stat max(trip.fare week), "best fare this week"
+section "Trips per day"
+  daybars last 7 days, count(trip on it)
+===
+@rich domain=t2_courier_slots topic=parcel_delivery_time_slots style=custom_ui
+parcels go out in slots, morning, noon, evening. add a parcel with who it is for and the slot time and let me filter by pending, out and delivered with one tap. count how many are for the morning, before noon, and mark each delivered
+needs: add a parcel with recipient and slot time | filter by status | count of morning parcels | advance status with a tap | slots sorted by time
+---
+app "Parcel slots" package grey
+table parcel to text, slot time, status pick Pending|Out|Delivered = Pending
+state tab pick Pending|Out|Delivered = Pending
+topbar "Parcels", parcel, "Add parcel"
+statcard count(parcel where hour(slot) < 12 and status != Delivered), "morning parcels still to go"
+row gap 1
+  each options parcel.status
+    button it count(parcel where status = it) fill if(tab = it, accent, soft) grow tap set tab = it
+each parcel where status = tab sort slot as p empty "No parcels in this list."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.to bold
+      "slot" p.slot faint
+    if p.status = Pending
+      button "Out" tap set p.status = Out
+    if p.status = Out
+      button "Delivered" tap set p.status = Delivered
+===
+@rich domain=t2_piano_practice topic=piano_practice_minutes style=multi_feature
+my daughter must do 150 minutes of piano practice a week. add each practice with the piece and how long, show minutes this week against 150, the streak of days and a bar chart of minutes per day
+needs: add a practice with piece and time | minutes this week against 150 | day streak | bar chart of minutes per day | list of practices
+---
+app "Piano" music ocean
+table practice piece text, spent dur = 20m "Time practised"
+topbar "Practice", practice, "Add practice"
+goal sum(practice.spent week) / 1m, 150, "minutes this week", "min"
+row gap 2
+  statcard streak(practice), "day streak"
+  statcard sum(practice.spent today) / 1m, "minutes today"
+section "Minutes per day", "last 7 days"
+  goalbars last 7 days, sum(practice.spent on it) / 1m, 25
+list practice top 8, "No practice yet. Add the first session."
+===
+@rich domain=t2_running_pace topic=running_pace_trend style=detailed
+training for a 10k. every run i put km and the time it took. i want pace in minutes per km for each run, my best pace so far, total km this month, and a line showing if the pace is getting better.
+needs: add a run with km and time taken | pace per run in minutes per km | best pace | total km this month | line chart of pace
+---
+app "Run pace" run mint
+table run km num 0.5..50 = 5, took dur = 30m
+let pace(r run) = r.took / 1m / r.km
+topbar "Runs", run, "Add run"
+row gap 2
+  statcard sum(run.km month), "km this month"
+  statcard round(min(run, pace(it)) * 10) / 10, "best pace, min per km"
+section "Pace over time", "lower is better"
+  trend run sort at, pace(it)
+each run top 8 as r empty "No runs yet. Add your first run."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.km "km in" r.took bold
+      r.at faint
+    round(pace(r) * 10) / 10 "min/km" bold
+===
+@rich domain=t2_swim_laps topic=pool_laps_distance style=custom_ui
+Swimming at the club pool, I lose count of laps. A big plus button to add a lap count, the pool length in metres as a setting, distance covered today and this week, and a weekly goal of 1500 m with a dot grid of the days I swam.
+needs: add laps swum | pool length setting | distance today and this week | weekly goal progress | grid of days swum
+---
+app "Laps" drop teal dark
+table swim laps num 1..100 = 10
+setting pool num = 25 "Pool length (m)"
+quick swim, laps, [4, 10, 20]
+row gap 2
+  statcard sum(swim.laps today) * pool, "metres today"
+  statcard sum(swim.laps week) * pool, "metres this week"
+goal sum(swim.laps week) * pool, 1500, "weekly goal", "m"
+section "Days in the pool", "last 5 weeks"
+  daygrid last 35 days, sum(swim.laps on it)
+list swim top 6, "No laps yet. Tap 10 after your first set."
+===
+@rich domain=t2_race_countdown topic=half_marathon_training_countdown style=multi_feature
+half marathon on 2027-02-14. i want weeks and days left, my long run each weekend in km, the total long run km this month and a line of how the long runs are growing. also the target long run is 18 km
+needs: weeks and days until the race | log a long run in km | long run total this month | line chart of long runs | target long run
+---
+app "Half marathon" flag orange
+table longrun km num 1..30
+setting race date = 2027-02-14 "Race day"
+setting peak num = 18 "Target long run (km)"
+let daysleft = race - today
+topbar "Long runs", longrun, "Add run"
+statcard floor(daysleft / 7), "weeks and" daysleft % 7 "days to the race", 12
+goal max(longrun.km), peak, "longest run so far", "km"
+text "This month" sum(longrun.km month) "km in" count(longrun month) "runs" faint
+section "Long run growth"
+  trend longrun sort at, it.km
+list longrun top 6, "No long runs yet. Add last weekend's."
+===
+@rich domain=t2_pregnancy_weeks topic=pregnancy_week_tracker style=detailed
+first baby due soon-ish. put in the first day of my last period once, show which week i am in, the trimester, the expected due date and days left, and a list of my doctor visits with date and what was checked
+needs: setting for last period date | current week of pregnancy | trimester | due date and days left | list of doctor visits
+---
+app "Pregnancy" heart pink
+setting lmp date = 2026-06-01 "First day of last period"
+table visit held date = today, note text
+let weeks = floor((today - lmp) / 7)
+let duedate = lmp + 280
+topbar "Doctor visits", visit, "Add visit"
+statcard weeks, "weeks pregnant, due" duedate, 40
+row gap 2
+  stack card grow gap 0
+    if(weeks < 13, "First", if(weeks < 27, "Second", "Third")) big
+    "trimester" faint
+  stack card grow gap 0
+    duedate - today big
+    "days to go" faint
+each visit sort held desc as v empty "No visits yet. Add the next appointment."
+  row card gap 2 tap edit v swipe remove v
+    v.held bold
+    v.note grow faint
+===
+@rich domain=t2_baby_feeds topic=baby_feeding_gaps style=short
+newborn feeds every 3 hours and the nights blur. tap to log a feed, show how long since the last one and ml today
+needs: tap to log a feed in ml | minutes since the last feed | total ml today | feeds per day chart | list of feeds
+---
+app "Baby feeds" baby purple
+table feed ml num 10..300 = 90
+quick feed, ml, [60, 90, 120]
+statcard round((now - last(feed).at) / 1m), "minutes since the last feed"
+statcard sum(feed.ml today), "ml today across" count(feed today) "feeds"
+section "Feeds per day"
+  daybars last 7 days, count(feed on it)
+list feed today, "No feeds yet today."
+===
+@rich domain=t2_insulin_log topic=insulin_dose_by_meal style=detailed
+my father takes insulin before meals. log units with the meal (breakfast, lunch, dinner, bedtime), show units today, the average units for each meal, and keep the list in time order. a warning if today's total passes the 60 units his doctor set
+needs: log units with meal | units today | average units per meal | warning above 60 units | list of doses
+---
+app "Insulin" pill red
+table dose units num 1..60, meal pick Breakfast|Lunch|Dinner|Bedtime = Breakfast
+setting cap num = 60 "Daily limit (units)"
+let today_units = sum(dose.units today)
+topbar "Insulin", dose, "Log dose"
+statcard today_units, if(today_units > cap, "units today: over the daily limit", "units today"), cap
+section "Average per meal"
+  each options dose.meal as m
+    row gap 2
+      m grow
+      round(avg(dose.units where meal = m)) "units" bold
+list dose today, "No doses logged today."
+===
+@rich domain=t2_blood_pressure topic=blood_pressure_readings style=multi_feature
+mother checks her pressure twice a day. add high, low and pulse readings, show her averages this week, how many readings were above 140 over 90, and a line of the high number so we can show the doctor
+needs: add a reading with high, low and pulse | weekly average high and low | count of high readings | line chart of the high value | list of readings
+---
+app "BP log" heart slate
+table reading high num 60..250 = 120, low num 40..150 = 80, pulse num 30..200 = 72
+let hi = count(reading where high >= 140 or low >= 90)
+topbar "Blood pressure", reading, "Add reading"
+row gap 2
+  statcard round(avg(reading.high week)), "average high this week"
+  statcard round(avg(reading.low week)), "average low"
+text "High readings:" hi "of" count(reading) color if(hi > 0, warn, ink) bold
+section "High value", "oldest to newest"
+  trend reading sort at, it.high
+each reading top 8 as r empty "No readings yet. Add the first."
+  row card gap 2 tap edit r swipe remove r fill if(r.high >= 140 or r.low >= 90, warn, soft)
+    r.high "/" r.low bold grow
+    "pulse" r.pulse faint
+===
+@rich domain=t2_homework_due topic=kids_homework_due_dates style=custom_ui
+two kids, homework everywhere. add homework with subject and due date, show what is due tomorrow, what is overdue and let me switch between open and done work. tap the tick when it is done.
+needs: add homework with subject and due date | count due tomorrow | count overdue | switch between open and done | tick when done
+---
+app "Homework" pencil yellow
+table hw subject pick Maths|Urdu|English|Science|Islamiat = Maths, task text, due date, done bool
+state tab pick Open|Done = Open
+topbar "Homework", hw, "Add homework"
+row gap 2
+  statcard count(hw where done = no and due = today + 1), "due tomorrow"
+  statcard count(hw where done = no and due < today), "overdue"
+choice tab
+each hw where done = (tab = Done) sort due as h empty "Nothing here. Add homework with Add homework."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.subject h.task bold
+      "due" h.due faint color if(h.due < today and h.done = no, bad, muted)
+    toggle h.done
+===
+@rich domain=t2_subject_marks topic=subject_marks_average style=detailed
+class 9 student keeping every test mark. each test has subject, marks got and total marks. show the percentage per subject so i know the weak one, my overall percentage, and a bar chart that compares subjects
+needs: add a test with subject, marks and total | percentage per subject | overall percentage | bar chart comparing subjects | list of tests
+---
+app "Test marks" book blue
+table test subject text, got num 0..200, total num 1..200 = 50
+topbar "Tests", test, "Add test"
+statcard round(sum(test.got) * 100 / max(sum(test.total), 1)), "% overall"
+section "By subject", "red below 50%"
+  each test by subject as g
+    stack gap 0
+      row gap 2
+        g.key grow
+        round(sum(g.got) * 100 / sum(g.total)) "%" bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, sum(g.got) * 100 / sum(g.total), 3 fill if(sum(g.got) * 100 / sum(g.total) < 50, bad, accent) radius 1
+list test top 6, "No tests yet. Add your first marks."
+===
+@rich domain=t2_wedding_costs topic=wedding_cost_balance style=multi_feature
+sister's wedding. every cost goes in with the kind (hall, food, clothes, photos, cards), the full price and what we paid so far. tell me how much balance is still to pay, how much of the budget (a number i can change) is committed, and split by kind
+needs: add a cost with kind, price and paid so far | balance still to pay | budget committed against a limit | split by kind | change budget
+---
+app "Wedding" gift pink
+table cost item text, kind pick Hall|Food|Clothes|Photos|Cards|Other = Hall, price money, paid money = 0
+setting budget money = 1500000 "Budget"
+let committed = sum(cost.price)
+topbar "Wedding costs", cost, "Add cost"
+goal committed, budget, "committed so far"
+row gap 2
+  statcard sum(cost, it.price - it.paid), "balance to pay"
+  statcard sum(cost.paid), "already paid"
+section "By kind", "full price"
+  share cost by kind, sum(it.price), it.key
+each cost sort price desc top 8 as c
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.item bold
+      c.kind "· paid" c.paid faint
+    c.price bold
+===
+@rich domain=t2_eid_gifts topic=eid_gift_list style=short
+eid gifts for everyone. list person and price, tick when bought, show what is left to spend from my budget
+needs: add a gift with person and price | tick when bought | money still to spend | budget setting | count of gifts left
+---
+app "Eid gifts" gift green
+table gift person text, price money, bought bool
+setting budget money = 20000 "Gift budget"
+topbar "Gifts", gift, "Add gift"
+row gap 2
+  statcard count(gift where bought = no), "gifts left to buy", count(gift)
+  statcard budget - sum(gift.price where bought = yes), "budget left"
+each gift sort bought as g empty "No gifts yet. Add the first person."
+  row card gap 2 tap edit g swipe remove g
+    g.person bold grow
+    g.price faint
+    toggle g.bought
+===
+@rich domain=t2_kiryana_list topic=monthly_kiryana_order style=custom_ui
+monthly kiryana order, i write item, qty and price per unit and see the total with a bar for each item, then i can go back and see last month's total
+needs: add item with quantity and unit price | total of the month | bar per item | move to previous month | list of items
+---
+app "Kiryana" bag ink
+table item name text, qty num 0.5..100 = 1, price money, unit pick Kg|Litre|Pack|Dozen = Kg
+state m date = today
+topbar "Kiryana", item, "Add item"
+monthnav m
+statcard sum(item month of m, it.qty * it.price), "ordered in" monthname(m)
+section "Cost per item"
+  bars item month of m sort qty * price desc top 8, it.qty * it.price, it.name
+each item month of m sort name as i empty "Nothing ordered this month yet."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      i.qty i.unit "at" i.price faint
+    i.qty * i.price bold
+===
+@rich domain=t2_electricity_units topic=electricity_slab_bill style=detailed
+electric bill goes crazy after 200 units. i note the meter reading now and then. work out units used this month from the lowest and highest reading, bill with one rate up to 200 units and a higher one after, show how many units are left before the higher rate starts, and keep both rates as settings i can change
+needs: add a meter reading | units used this month | bill with two rates | units left before the higher rate | change the two rates
+---
+app "Bijli bill" bolt yellow dark
+table reading meter num 0.. "Meter reading"
+setting low money = 30 "Rate up to 200 units"
+setting high money = 48 "Rate above 200 units"
+let units = max(reading.meter month) - min(reading.meter month)
+let cheap = min(units, 200)
+let extra = max(units - 200, 0)
+topbar "Meter", reading, "Add reading"
+row gap 2
+  statcard units, "units used this month", 200
+  statcard round(cheap * low + extra * high), "estimated bill"
+text max(200 - units, 0) "units left before the higher rate" faint
+section "Readings", "this month"
+  list reading month, "No reading this month. Add today's meter."
+===
+@rich domain=t2_gas_cylinder topic=gas_cylinder_refills style=multi_feature
+how long does a gas cylinder last in our house? log each refill with cost, show days since the last one, the average days between refills, tell me when it is time to book if it has been 40 days, and monthly gas spend
+needs: log a refill with cost | days since last refill | average days between refills | time-to-book alert after 40 days | spend this year
+---
+app "Gas cylinder" fire orange
+table refill cost money = 3200
+topbar "Gas", refill, "Log refill"
+row gap 2
+  statcard since(refill), "days since the last refill", 40
+  statcard round(gap(refill)), "days between refills on average"
+if due(refill, 40)
+  "Time to book the next cylinder." bold color warn
+section "Spent this year", "total" sum(refill.cost year)
+  bars refill sort at top 8, it.cost, it.at
+list refill top 8, "No refills yet. Log the last one you remember."
+===
+@rich domain=t2_kamiti_committee topic=neighbourhood_committee_payments style=custom_ui
+neighbourhood committee, 5000 each every month, one member takes the whole pot in turn. first add the members, then show each member as paid or owing for this month, the pot collected so far, and who takes the pot this month
+needs: add members | log a payment for a member | paid or owing for this month | pot collected this month | who takes the pot
+---
+app "Committee" users teal
+table member name text
+table pay member ref member, amount money = 5000
+setting share money = 5000 "Monthly share"
+let taker = nth(member sort name, month(today) % max(count(member), 1) + 1)
+topbar "Committee", member, "Add member"
+row gap 2
+  statcard sum(pay.amount month), "pot collected of" share * count(member), share * count(member)
+  stack card grow gap 0
+    taker.name big
+    "takes the pot" faint
+each member sort name as m empty "No members yet. Add everyone in the committee."
+  row card gap 2 tap edit m swipe remove m
+    m.name bold grow
+    if sum(m.pay.amount month) >= share
+      "Paid" color good bold
+    else
+      "Owes" share - sum(m.pay.amount month) color bad
+    button "Paid" tap add pay member = m
+===
+@rich domain=t2_crop_harvest topic=crop_sowing_harvest_dates style=detailed
+farm with wheat, cotton, sugarcane, each sown on a different day. record crop, the sowing date and how many days it takes to harvest. show the harvest date, days left, which ones are within 2 weeks and a bar chart of days left per crop
+needs: add a crop with sowing date and days to harvest | harvest date | days left | crops harvesting within 14 days | bar chart of days left
+---
+app "Crops" leaf green
+table crop name text, sown date = today, grow num 30..365 = 120 "Days to harvest"
+let harvest(c crop) = c.sown + c.grow
+topbar "Crops", crop, "Add crop"
+statcard count(crop, harvest(it) >= today and harvest(it) - today <= 14), "ready within 14 days", count(crop)
+section "Days left to harvest"
+  bars crop sort grow, max(harvest(it) - today, 0), it.name
+each crop sort sown as c empty "No crops yet. Add what is in the field."
+  row card gap 2 tap edit c swipe remove c fill if(harvest(c) <= today, good, soft)
+    stack grow gap 0
+      c.name bold
+      "sown" c.sown "· harvest" harvest(c) faint
+    max(harvest(c) - today, 0) "days" bold
+===
+@rich domain=t2_irrigation_turns topic=canal_water_turns style=multi_feature
+canal water comes in turns at night. add each turn with the field name, start and finish time, the turn can end after midnight, and show total hours per field, hours this week, diesel cost with the rate i set per hour
+needs: add a turn with field, start and finish | hours of each turn across midnight | total hours per field | hours this week | diesel cost per hour setting
+---
+app "Water turns" drop grey
+table turn field text, start time, finish time
+setting diesel money = 400 "Diesel per hour"
+let hrs(t turn) = (t.finish - t.start) / 1h
+topbar "Water turns", turn, "Add turn"
+row gap 2
+  statcard sum(turn week, hrs(it)), "hours this week"
+  statcard round(sum(turn week, hrs(it)) * diesel), "diesel cost this week"
+section "Per field", "all turns"
+  each turn by field as g
+    row gap 2
+      g.key grow
+      count(g.field) "turns" faint
+      sum(g, hrs(it)) "hours" bold
+list turn top 6, "No turns yet. Add the next one from the roster."
+===
+@rich domain=t2_shop_credit_aging topic=shop_udhaar_aging style=custom_ui
+my udhaar book is a mess. add customer, amount and the date i gave credit, tick when they pay. show how much is out there in total, how much is older than 30 days, and bars for 0-15, 16-30 and over 30 days old
+needs: add a credit with customer, amount and date | total unpaid credit | credit older than 30 days | bars by age | tick when paid
+---
+app "Udhaar" book plum
+table credit customer text, amount money, given date = today, paid bool
+let age(c credit) = today - c.given
+topbar "Udhaar", credit, "Add credit"
+row gap 2
+  statcard sum(credit.amount where paid = no), "unpaid in total"
+  statcard sum(credit.amount where paid = no and today - given > 30), "older than 30 days"
+section "By age", "unpaid only"
+  row gap 2
+    each ["0-15", "16-30", "30+"] as b
+      stack grow gap 0
+        b faint
+        sum(credit.amount where paid = no and (if(b = "0-15", today - given <= 15, if(b = "16-30", today - given > 15 and today - given <= 30, today - given > 30)))) bold
+each credit where paid = no sort given as c empty "No unpaid credit. Lovely."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.customer bold
+      age(c) "days old" faint color if(age(c) > 30, bad, muted)
+    c.amount bold
+    toggle c.paid

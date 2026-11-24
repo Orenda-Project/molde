@@ -1,0 +1,551 @@
+@rich domain=c4_conversion_log topic=conversion_rate_log style=multi_feature
+i run an online shop and every evening i note how many people visited and how many bought. keep a daily log, show the conversion rate in percent for today and for the last 7 days, and a bar chart of orders per day
+needs: log visitors and orders each day | conversion rate for the week | conversion rate of the latest day | bar chart of orders per day | list of past days
+---
+app "Conversion Log" chart pink
+table visit visitors num 1.., orders num 0..
+let wk_v = sum(visit.visitors last 7 days)
+let wk_o = sum(visit.orders last 7 days)
+topbar "Conversion Log", visit, "Log today"
+row gap 2
+  statcard round(if(wk_v > 0, wk_o * 1000 / wk_v, 0)) / 10, "% conversion, last 7 days"
+  statcard round(if(last(visit.visitors) > 0, last(visit.orders) * 1000 / last(visit.visitors), 0)) / 10, "% conversion, latest day"
+section "Orders per day"
+  daybars last 7 days, sum(visit.orders on it)
+section "Past days"
+  each visit top 7 as v empty "No days logged yet. Tap Log today after closing the shop."
+    row card gap 2 tap edit v swipe remove v
+      v.visitors "visitors" grow
+      v.orders "orders" faint
+      round(v.orders * 1000 / v.visitors) / 10 "%" bold
+===
+@rich domain=c4_ab_compare topic=ab_test_comparison style=detailed
+we ran two versions of the landing page. version a had 1200 visitors and 36 signups, version b had 1150 visitors and 46 signups. let me type the numbers for both, show each conversion rate, the lift of b over a, and a warning if there are too few signups to trust it
+needs: visitors and signups for version a | visitors and signups for version b | conversion rate of each | lift of b over a | warning when sample is small
+---
+app "A B Result" chart blue
+state va num = 1200
+state sa num = 36
+state vb num = 1150
+state sb num = 46
+let ra = if(va > 0, sa * 100 / va, 0)
+let rb = if(vb > 0, sb * 100 / vb, 0)
+let lift = if(ra > 0, (rb - ra) * 100 / ra, 0)
+row gap 2
+  stack grow gap 1
+    "Version A" bold
+    field va "Visitors"
+    field sa "Signups"
+  stack grow gap 1
+    "Version B" bold
+    field vb "Visitors"
+    field sb "Signups"
+row gap 2
+  statcard round(ra * 100) / 100, "% signup rate, A"
+  statcard round(rb * 100) / 100, "% signup rate, B"
+if ra > 0
+  "B is" abs(round(lift)) "%" if(lift >= 0, "better", "worse") "than A." bold color if(lift >= 0, good, bad)
+if sa < 100 or sb < 100
+  "Careful: fewer than 100 signups in a version. This gap may be luck, keep the test running." color warn
+===
+@rich domain=c4_unit_price_kg topic=unit_price_per_kg style=short
+which rice pack is cheaper per kg, one is 5kg and the other is 900 grams
+needs: price of pack one | weight of pack one with kg or grams | price of pack two | weight of pack two | which is cheaper per kg
+---
+app "Price Per Kg" scale mint
+state p1 money = 1450
+state w1 num = 5
+state u1 pick Kg|Grams = Kg
+state p2 money = 320
+state w2 num = 900
+state u2 pick Kg|Grams = Grams
+let kg1 = if(u1 = Grams, w1 / 1000, w1)
+let kg2 = if(u2 = Grams, w2 / 1000, w2)
+let c1 = if(kg1 > 0, p1 / kg1, 0)
+let c2 = if(kg2 > 0, p2 / kg2, 0)
+row gap 2
+  stack grow gap 1
+    "Pack one" bold
+    field p1 "Price"
+    field w1 "Weight"
+    choice u1
+  stack grow gap 1
+    "Pack two" bold
+    field p2 "Price"
+    field w2 "Weight"
+    choice u2
+row gap 2
+  statcard round(c1), "per kg, pack one"
+  statcard round(c2), "per kg, pack two"
+if c1 > 0 and c2 > 0
+  if c1 < c2
+    "Pack one is cheaper by" round(c2 - c1) "per kg." bold color good
+  else
+    if c2 < c1
+      "Pack two is cheaper by" round(c1 - c2) "per kg." bold color good
+    else
+      "Both cost the same per kg." faint
+===
+@rich domain=c4_pizza_hunger topic=pizza_split_hunger style=custom_ui
+we ordered a 8 slice pizza and some of us are starving and others just peckish. list everybody with how hungry they are, light, normal or big, and give each person a fair number of slices, and draw the slices
+needs: add a person with a hunger level | number of slices in the pizza | slices for each person | drawn pizza with slices | shows who gets the most
+---
+app "Pizza Split" food red
+table guest name text, hunger pick Light|Normal|Big = Normal
+setting slices num = 8 "Slices in the pizza"
+let appetite(g guest) = if(g.hunger = Light, 1, if(g.hunger = Normal, 2, 3))
+let total = sum(guest, appetite(it))
+let share_of(g guest) = if(total > 0, slices * appetite(g) / total, 0)
+topbar "Pizza Split", guest, "Add person"
+row gap 3 align center
+  draw width 120
+    circle 50, 50, 46 fill soft stroke accent thick 3
+    each 1..slices
+      line 50, 50, 50 + 46 * sin(360 * index / slices), 50 - 46 * cos(360 * index / slices) stroke accent thick 1
+  stack grow gap 0
+    slices big
+    "slices to share between" count(guest) "people" faint
+section "Fair slices"
+  each guest sort appetite(it) desc as g empty "Add the people at the table."
+    row card gap 2 tap edit g swipe remove g
+      g.name grow
+      g.hunger faint
+      round(share_of(g) * 10) / 10 "slices" bold
+===
+@rich domain=c4_required_rate topic=cricket_required_run_rate style=multi_feature
+chasing in a tape ball match. the target is 142 in 15 overs. we are 64 for 3 after 8 overs. show runs needed, balls left, the required run rate and our current run rate so i know how hard it is
+needs: target and total overs | current score and wickets | overs bowled so far | required run rate | current run rate and runs needed
+---
+app "Chase Rate" ball green
+state target num = 142
+state maxov num = 15
+state score num = 64
+state wk num = 3
+state ov num = 8
+let left = max(maxov - ov, 0)
+let need = max(target - score, 0)
+let rrr = if(left > 0, need / left, 0)
+let crr = if(ov > 0, score / ov, 0)
+row gap 2
+  stack grow gap 1
+    field target "Target"
+    field maxov "Total overs"
+  stack grow gap 1
+    field score "Score"
+    field wk "Wickets"
+field ov "Overs bowled"
+if need = 0
+  "Target reached!" big color good
+else
+  if left = 0
+    "Overs finished, target missed by" need "runs." big color bad
+  else
+    statcard need, "runs needed from" left * 6 "balls"
+    row gap 2
+      statcard round(rrr * 100) / 100, "required run rate"
+      statcard round(crr * 100) / 100, "current run rate"
+    "Wickets in hand:" 10 - wk faint
+===
+@rich domain=c4_points_table topic=tournament_points_table style=multi_feature
+running the street football league. every team has played some matches, i enter wins, draws, losses and goals for and against. rank the teams by points, 3 for a win and 1 for a draw, break ties on goal difference
+needs: add a team with wins, draws, losses and goals | points with 3 for a win | goal difference | teams ranked by points | tap a team to change its record
+---
+app "League Table" trophy orange
+table team name text, won num 0.. = 0, drawn num 0.. = 0, lost num 0.. = 0, gf num 0.. = 0, ga num 0.. = 0
+let pts(t team) = t.won * 3 + t.drawn
+let gd(t team) = t.gf - t.ga
+topbar "League Table", team, "Add team"
+section "Standings", "Pts = 3 per win + 1 per draw"
+  each team sort pts(it) * 1000 + gd(it) desc as t empty "No teams yet. Add the first team."
+    row card gap 2 tap edit t swipe remove t
+      (index + 1) bold
+      t.name grow
+      t.won + t.drawn + t.lost "P" faint
+      gd(t) "GD" faint
+      pts(t) "pts" bold
+section "Points"
+  share team sort pts(it) desc, pts(it), it.name
+===
+@rich domain=c4_drop_lowest topic=drop_lowest_quiz style=detailed
+my teacher drops the lowest quiz out of five. i add my quiz scores out of 10 and want to see the average with all of them, the average after dropping the lowest, and the lowest score that gets dropped
+needs: add quiz scores | average of all quizzes | lowest quiz score | average after dropping the lowest | list of quiz scores
+---
+app "Drop Lowest" pencil purple
+table quiz label text, score num 0..10
+let n = count(quiz)
+let all_avg = avg(quiz.score)
+let low = min(quiz.score)
+let dropped = if(n > 1, (sum(quiz.score) - low) / (n - 1), all_avg)
+topbar "Drop Lowest", quiz, "Add quiz"
+row gap 2
+  statcard round(all_avg * 100) / 100, "average, all quizzes"
+  statcard round(dropped * 100) / 100, "average, lowest dropped"
+if n > 1
+  "Dropped score:" low "out of 10" faint
+section "Quizzes", "Count:" n
+  each quiz as q empty "No quizzes yet. Add your first score out of 10."
+    row card gap 2 tap edit q swipe remove q
+      q.label grow
+      q.score "/ 10" bold color if(q.score = low and n > 1, warn, ink)
+===
+@rich domain=c4_percent_letter topic=percent_to_letter_grade style=short
+what letter grade is my percentage and how far to the next grade
+needs: type percentage | letter grade by cut-offs | points to the next grade | message for each grade
+---
+app "Letter Grade" school plum
+state pct num = 78
+let letter = if(pct >= 90, "A", if(pct >= 80, "B", if(pct >= 70, "C", if(pct >= 60, "D", "F"))))
+let nxt = if(pct >= 90, 100, if(pct >= 80, 90, if(pct >= 70, 80, if(pct >= 60, 70, 60))))
+field pct "My percentage"
+letter huge
+if pct >= 90
+  "Excellent. Keep it up." faint
+else
+  "You need" nxt - pct "more percent to reach the next grade." faint
+"Cut-offs: A 90, B 80, C 70, D 60, below that F." faint
+===
+@rich domain=c4_study_split topic=study_hours_by_subject style=custom_ui
+exam week and i have 6 hours a day to study. maths is hard, english is easy, physics is medium. let me add subjects with a difficulty 1 to 5 and split my daily hours so harder subjects get more time, show it as bars
+needs: add a subject with difficulty | hours available per day | hours given to each subject | bar for each subject | total check
+---
+app "Study Split" book teal
+table subj name text, hard num 1..5 = 3
+state hours num = 6
+let load = sum(subj.hard)
+let hrs(s subj) = if(load > 0, hours * s.hard / load, 0)
+topbar "Study Split", subj, "Add subject"
+"Hours I can study per day" hours faint
+slider hours 1..14
+section "Today's plan", "Total:" hours "h"
+  each subj sort it.hard desc as s empty "Add your subjects to split the day."
+    stack gap 0 tap edit s swipe remove s
+      row gap 2
+        s.name grow
+        s.hard "of 5" faint
+        round(hrs(s) * 10) / 10 "h" bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * s.hard / 5, 3 fill accent radius 1
+===
+@rich domain=c4_cgpa_semesters topic=cgpa_across_semesters style=multi_feature
+cgpa across my eight semesters. each semester i add the gpa and how many credit hours it had and the app should give my overall cgpa, total credits so far and a line of how my gpa moved
+needs: add a semester with gpa and credit hours | overall cgpa weighted by credits | total credit hours | line chart of semester gpa | credits left to a 130 credit degree
+---
+app "CGPA" school slate
+table sem name text, gpa num 0..4, credits num 1..30 = 18
+let cr = sum(sem.credits)
+let cg = if(cr > 0, sum(sem, it.gpa * it.credits) / cr, 0)
+topbar "CGPA", sem, "Add semester"
+row gap 2
+  statcard round(cg * 100) / 100, "overall CGPA", 4
+  statcard cr, "credit hours done"
+"Credits left for a 130 credit degree:" max(130 - cr, 0) faint
+section "GPA by semester"
+  trend sem, it.gpa
+section "Semesters"
+  list sem, "No semesters yet. Add the first one with its GPA and credits."
+===
+@rich domain=c4_exam_countdown topic=exam_countdown_revision style=detailed
+board exams start on a date i choose. i have 18 chapters still not revised and want to keep 3 days at the end for past papers. tell me days left, the days i have for revision, and how many chapters per day i must cover
+needs: exam date | chapters left to revise | days kept for past papers | days left | chapters per day
+---
+app "Exam Countdown" hourglass red dark
+state exam date = today
+state chap num = 18
+state buffer num = 3
+let daysleft = exam - today
+let rev = max(daysleft - buffer, 0)
+field exam "Exam date"
+field chap "Chapters not yet revised"
+"Days kept for past papers" buffer faint
+slider buffer 0..10
+if daysleft > 0
+  statcard daysleft, "days until the exam"
+  if rev > 0
+    "Cover" (0 - floor(0 - (chap / rev))) "chapters a day for" plural(rev, "revision day") bold
+  else
+    "No days left for revision. Use the buffer days for the weakest chapters." color warn
+else
+  "Pick a future exam date." faint
+===
+@rich domain=c4_school_fee_sibling topic=school_fee_sibling_discount style=detailed
+school fee is the same per child per month, second child gets a discount and third child gets a bigger one. plus an annual fee once a year. type the fee and discounts, number of children, and show monthly total, yearly total and the monthly instalment if i pay in 3 parts a year
+needs: monthly fee per child | number of children | sibling discount percent | monthly and yearly total | three instalment amount
+---
+app "School Fees" school yellow
+state fee money = 12000
+state kids num = 2
+state annual money = 8000
+setting d2 num = 10 "Second child discount %"
+setting d3 num = 20 "Third child and after discount %"
+let monthly = fee * min(kids, 1) + fee * (1 - d2 / 100) * clamp(kids - 1, 0, 1) + fee * (1 - d3 / 100) * max(kids - 2, 0)
+let yearly = monthly * 12 + annual * kids
+field fee "Monthly fee per child"
+field annual "Annual fee per child"
+row gap 2 align center
+  "Children" bold grow
+  button "-" tap set kids = max(kids - 1, 1)
+  kids big
+  button "+" tap set kids = min(kids + 1, 8)
+row gap 2
+  statcard round(monthly), "per month"
+  statcard round(yearly), "per year"
+"Three instalments of" round(yearly / 3) "each." faint
+===
+@rich domain=c4_class_marks_stats topic=class_marks_statistics style=multi_feature
+i teach grade 7 maths. let me type each student's mark out of 50, and show the class average, highest and lowest, how many passed with 40 percent and a bar for every student
+needs: add a student with a mark out of 50 | class average | highest and lowest mark | number passed at 40 percent | bar per student
+---
+app "Class Marks" users mint
+table stu name text, mark num 0..50
+let pass_n = count(stu where mark >= 20)
+topbar "Class Marks", stu, "Add student"
+row gap 2
+  statcard round(avg(stu.mark) * 10) / 10, "class average of 50", 50
+  statcard pass_n, "passed, of" count(stu)
+"Highest" max(stu.mark) "and lowest" min(stu.mark) faint
+section "Every student"
+  share stu sort it.mark desc, it.mark, it.name
+section "Marks"
+  list stu, "No students yet. Add the first mark out of 50."
+===
+@rich domain=c4_reading_wpm topic=reading_speed_wpm style=short
+check my reading speed, i read 6 pages in 12 minutes, about 300 words a page
+needs: pages read | minutes taken | words per page | words per minute | time to finish a longer text
+---
+app "Reading Speed" book ocean
+state pages num = 6
+state mins num = 12
+state wpp num = 300
+state longtxt num = 40000
+let wpm = if(mins > 0, pages * wpp / mins, 0)
+field pages "Pages read"
+field mins "Minutes taken"
+field wpp "Words per page"
+statcard round(wpm), "words per minute"
+field longtxt "Words in the text I must read"
+if wpm > 0
+  "That text takes about" floor(longtxt / wpm / 60) "h" round(longtxt / wpm % 60) "min." faint
+===
+@rich domain=c4_thesis_words topic=thesis_words_per_day style=multi_feature
+writing my thesis chapter, 8000 words due on a date. each night i log how many words i wrote. show total so far, how many words per day i still need until the date, and a bar chart of the last 7 days
+needs: log words written each day | total words so far | the deadline date | words needed per day from now | bar chart of the last 7 days
+---
+app "Thesis Words" pen plum
+table wrote words num 1..20000
+setting goal_words num = 8000 "Chapter length (words)"
+setting deadline date = today "Due date"
+let total = sum(wrote.words)
+let dleft = max(deadline - today, 1)
+topbar "Thesis Words", wrote, "Log words"
+statcard total, "words written of" goal_words, goal_words
+if total >= goal_words
+  "Chapter complete. Time to edit." bold color good
+else
+  "Write" (0 - floor(0 - ((goal_words - total) / dleft))) "words a day for" plural(dleft, "day") bold
+section "Last 7 days", "Today:" sum(wrote.words today)
+  daybars last 7 days, sum(wrote.words on it)
+===
+@rich domain=c4_vocab_per_day topic=vocab_words_per_day style=short
+have to learn 600 words for the ielts test in 45 days
+needs: total words to learn | days until the test | words already learned | words per day | weekly target
+---
+app "Vocab Plan" brain pink
+state words num = 600
+state days_to num = 45
+state known num = 80
+let left = max(words - known, 0)
+let perday = if(days_to > 0, left / days_to, 0)
+field words "Words to learn"
+field known "Words already known"
+"Days until the test" days_to faint
+slider days_to 1..180
+(0 - floor(0 - perday)) big
+"new words a day" faint
+"Weekly target:" (0 - floor(0 - (perday * 7))) "words" faint
+goal known, words, "learned so far", "words"
+===
+@rich domain=c4_paper_pacing topic=exam_section_pacing style=multi_feature
+my exam paper has sections with different marks. add each section and its marks, tell me the paper's total minutes, and it works out how many minutes to give each section by marks, and when to be done with each
+needs: add a section with marks | total minutes of the paper | minutes for each section | running finish time for each | minutes per mark
+---
+app "Paper Pacing" timer green
+table sec name text, marks num 1..100
+setting mins num = 180 "Paper length (minutes)"
+let tm = sum(sec.marks)
+let alloc(s sec) = if(tm > 0, mins * s.marks / tm, 0)
+topbar "Paper Pacing", sec, "Add section"
+row gap 2
+  statcard tm, "total marks"
+  statcard round(if(tm > 0, mins * 10 / tm, 0)) / 10, "minutes per mark"
+section "Time for each section", "Paper:" mins "min"
+  each sec sort at as s empty "Add the sections of the paper with their marks."
+    row card gap 2 tap edit s swipe remove s
+      s.name grow
+      s.marks "marks" faint
+      round(alloc(s)) "min" bold
+===
+@rich domain=c4_hourly_to_salary topic=hourly_to_monthly_pay style=detailed
+got a job offer paid per hour. want to type the hourly rate, hours per week and weeks off per year, and see weekly, monthly and yearly pay, also what it is as an annual salary if i got paid for 2 more unpaid holiday weeks
+needs: hourly rate | hours per week | weeks off per year | weekly monthly and yearly pay | pay per day
+---
+app "Hourly Pay" money ink
+state rate money = 800
+state hpw num = 40
+state off num = 2
+let weeks = 52 - off
+let yearly = rate * hpw * weeks
+field rate "Hourly rate"
+"Hours per week" hpw faint
+slider hpw 5..70
+"Weeks off per year" off faint
+slider off 0..12
+statcard round(yearly), "per year"
+row gap 2
+  statcard round(yearly / 12), "per month"
+  statcard round(rate * hpw), "per week"
+"Per working day (5 days):" round(rate * hpw / 5) faint
+===
+@rich domain=c4_weekly_timesheet topic=weekly_timesheet_pay style=multi_feature
+tracking my hours at the cafe. each shift i add start day, hours worked and the rate that day (weekends pay more). show total hours this week, my pay this week and a chart of hours per day
+needs: add a shift with hours and rate | total hours this week | pay this week | chart of hours per day | list of shifts
+---
+app "Timesheet" clock orange
+table shift role text, hrs num 0.5..16 = 6, rate money = 600
+topbar "Timesheet", shift, "Add shift"
+row gap 2
+  statcard sum(shift.hrs week), "hours this week", 40
+  statcard round(sum(shift week, it.hrs * it.rate)), "pay this week"
+section "Hours per day"
+  daybars last 7 days, sum(shift.hrs on it)
+section "Shifts"
+  list shift by day, "No shifts yet. Add the one you just worked."
+===
+@rich domain=c4_leave_balance topic=leave_balance_accrual style=multi_feature
+i get 21 days of paid leave a year, earned month by month. type how many months i have worked this year, add every leave day i take, and show how much i earned so far, how much i used and what is left
+needs: annual leave days | months worked this year | add leave days taken | leave earned so far | leave balance left
+---
+app "Leave Balance" calendar blue
+table taken reason text, days num 0.5..30 = 1
+setting yearly num = 21 "Leave days per year"
+state months num = 6
+let earned = yearly * months / 12
+let used = sum(taken.days year)
+topbar "Leave Balance", taken, "Add leave"
+"Months worked this year" months faint
+slider months 1..12
+row gap 2
+  statcard round(earned * 10) / 10, "days earned so far"
+  statcard round((earned - used) * 10) / 10, "days left to take"
+goal used, yearly, "leave used this year", "days"
+section "Leave taken"
+  list taken by day, "No leave taken yet this year."
+===
+@rich domain=c4_notice_end topic=notice_period_end_date style=short
+i resign today, notice is 30 days, when is my last day and how many working days is that
+needs: date i hand in notice | notice length in days | last working day date | weekdays in the notice
+---
+app "Notice Period" calendar grey
+state start date = today
+state notice num = 30
+let last_day = start + notice
+let weekdays_n = notice - floor(notice / 7) * 2
+field start "Notice given on"
+"Notice period" notice "days" faint
+slider notice 7..120
+last_day big
+"is your last day, about" weekdays_n "working days away" faint
+"That is" last_day - today "days from today." faint
+===
+@rich domain=c4_raise_percent topic=pay_raise_percent style=short
+boss offered me a raise from 85k to 95k, what percent is that and what happens at 5 percent
+needs: current salary | new salary offered | raise percent | extra per month | slider for a raise percent to try
+---
+app "Raise Check" trophy yellow
+state oldp money = 85000
+state newp money = 95000
+state tryp num = 5
+field oldp "Current salary"
+field newp "Offered salary"
+if oldp > 0
+  statcard round((newp - oldp) * 1000 / oldp) / 10, "% raise offered"
+  "That is" newp - oldp "more a month, about" (newp - oldp) * 12 "a year." faint
+"Or try a raise of" tryp "%" bold
+slider tryp 1..30
+"New salary would be" round(oldp * (1 + tryp / 100)) faint
+===
+@rich domain=c4_take_home_pay topic=take_home_after_deductions style=detailed
+my gross pay is on the slip, then there is income tax, pension and health insurance each as a percent. type gross and the three percents and show every deduction in money and what i take home, as bars
+needs: gross pay | tax percent | pension percent | insurance percent | deductions in money and take home pay | bars for each deduction
+---
+app "Take Home" wallet slate
+state gross money = 150000
+state taxp num = 10
+state pen num = 8
+state ins num = 2
+let tx = gross * taxp / 100
+let pn = gross * pen / 100
+let hi = gross * ins / 100
+field gross "Gross monthly pay"
+"Income tax" taxp "%" faint
+slider taxp 0..40
+"Pension" pen "%" faint
+slider pen 0..20
+"Health insurance" ins "%" faint
+slider ins 0..10
+statcard round(gross - tx - pn - hi), "take home"
+section "Deductions", "Total:" round(tx + pn + hi)
+  draw 100, 8
+    rect 0, 0, 100, 8 fill soft radius 2
+    rect 0, 0, 100 * tx / max(gross, 1), 8 fill accent radius 2
+    rect 100 * tx / max(gross, 1), 0, 100 * pn / max(gross, 1), 8 fill warn radius 2
+    rect 100 * (tx + pn) / max(gross, 1), 0, 100 * hi / max(gross, 1), 8 fill bad radius 2
+  "Tax" round(tx) faint
+  "Pension" round(pn) faint
+  "Insurance" round(hi) faint
+===
+@rich domain=c4_meeting_cost topic=meeting_cost_calculator style=multi_feature
+our weekly meetings run long and nobody notices what they cost. type how many people, their average hourly cost and how long it lasts, show the cost of the meeting, per minute, and keep a list of past meetings with their cost
+needs: number of people | average hourly cost per person | meeting length in minutes | cost of the meeting and per minute | saves meetings to a list with a total
+---
+app "Meeting Cost" users purple
+table meet title text, cost money
+state people num = 6
+state rate money = 1500
+state mins num = 60
+state title text = ""
+let cost = people * rate * mins / 60
+"People in the room" people faint
+slider people 1..30
+field rate "Average hourly cost per person"
+"Length" mins "min" faint
+slider mins 5..240
+statcard round(cost), "cost of this meeting"
+"That is" round(people * rate / 60) "every minute." faint
+field title "Name this meeting"
+button "Save meeting" fill accent tap add meet title = title, cost = round(cost) then set title = ""
+section "Saved meetings", "Total:" sum(meet.cost)
+  each meet top 5 as m empty "No meetings saved yet."
+    row card gap 2 swipe remove m
+      m.title grow
+      m.cost bold
+===
+@rich domain=c4_commute_cost topic=monthly_commute_cost style=detailed
+should i take the bike or the car to the office. type the distance each way, my days in office a month, fuel price and the km per litre of my vehicle, and show the fuel cost per day and per month plus the yearly cost
+needs: distance each way | office days per month | fuel price | km per litre | fuel cost per day and month and year
+---
+app "Commute Cost" car teal
+state dist num = 14
+state days_m num = 22
+state fuel money = 270
+state kpl num = 12
+let day_cost = if(kpl > 0, dist * 2 / kpl * fuel, 0)
+field dist "Distance each way (km)"
+field kpl "Vehicle km per litre"
+field fuel "Fuel price per litre"
+"Office days per month" days_m faint
+slider days_m 1..31
+statcard round(day_cost), "fuel cost per day"
+row gap 2
+  statcard round(day_cost * days_m), "per month"
+  statcard round(day_cost * days_m * 12), "per year"

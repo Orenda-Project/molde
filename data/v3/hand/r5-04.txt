@@ -1,0 +1,461 @@
+@rich domain=r5_pushup_30 topic=thirty day push-up challenge style=multi_feature
+30 day push-up challenge with my brother. day 1 starts on the date I set, and the target for the day goes up by 2 each day from 12. I log reps through the day, see the reps done today against the target, and a grid of the 30 days that fills in as I hit it
+needs: start date setting | target that grows each day | log reps any time | reps today against target | grid of 30 days
+---
+app "Push-up 30" dumbbell orange
+table pu reps num 1..500
+setting start date = today "Day 1 of the challenge"
+let day = min(today - start + 1, 30)
+let target = 10 + day * 2
+topbar "Push-up 30", pu, "Log reps"
+statcard sum(pu.reps today), "reps today, target" target, target
+row gap 2
+  statcard day, "day of 30", 30
+  statcard sum(pu.reps), "reps in total"
+section "The 30 days", "days on target:" count(days last 30 days, sum(pu.reps on it) >= 10 + 2 * (it - start + 1))
+  daygrid last 30 days, sum(pu.reps on it), 10 + 2 * (it - start + 1)
+button "Add 10 reps" tap add pu reps = 10
+===
+@rich domain=r5_plank_records topic=plank hold records style=short
+plank hold times, I want to beat my record every week
+needs: log a hold time | best hold ever | line of hold times | holds this week
+---
+app "Plank" timer purple
+table plank held dur
+topbar "Plank", plank, "Log hold"
+row gap 2
+  statcard max(plank.held) / 1s, "seconds, best hold ever"
+  statcard count(plank week), "holds this week"
+section "Hold times"
+  trend plank last 30 days sort at, it.held / 1s
+list plank top 8, "No holds yet. Time your first plank."
+===
+@rich domain=r5_pullups topic=pull-up max reps style=detailed
+working towards 15 pull-ups. every session I write my max reps in one go and the type (strict, assisted, negatives). show my best, how far I am from 15, a line of the max reps and what I did most this month
+needs: log a session with max reps and type | best so far | gap to the goal of 15 | line of max reps | count by type this month
+---
+app "Pull-ups" dumbbell blue
+table pull reps num 0..60, kind pick Strict|Assisted|Negatives = Strict
+setting aim num = 15 "Goal reps"
+topbar "Pull-ups", pull, "Log session"
+goal max(pull.reps), aim, "best set so far", "reps"
+statcard max(aim - max(pull.reps), 0), "reps to go"
+section "Max reps over time"
+  trend pull sort at, it.reps
+section "This month", "sessions" count(pull month)
+  share pull month by kind, count(it), it.key
+===
+@rich domain=r5_beep_test topic=team fitness beep test style=custom_ui
+I coach under-16 football. every few weeks we run the beep test. add the players once, then enter each player's level and shuttle. show the squad ranked by their latest level, who improved since the first test and the squad average
+needs: add a player | add a beep test result with level and shuttle | squad ranked by latest level | improvement since first test | squad average level
+---
+app "Beep test" ball green
+table player name text
+table beep player ref player, level num 1..21, shuttle num 1..16 = 1
+topbar "Beep test", player, "Add player"
+statcard round(sum(player, last(it.beep.level)) * 10 / max(count(player), 1)) / 10, "squad average level"
+each player sort last(it.beep.level) desc as p empty "No players yet. Add your squad first."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.name bold grow
+      if count(p.beep) > 0
+        last(p.beep.level) "." last(p.beep.shuttle) bold
+    if count(p.beep) > 1
+      last(p.beep.level) - first(p.beep.level) "levels since the first test" faint color if(last(p.beep.level) > first(p.beep.level), good, muted)
+    row gap 1
+      button "+ result" tap add beep player = p, level = 8, shuttle = 1
+===
+@rich domain=r5_boxing_rounds topic=boxing round timer style=multi_feature
+boxing gym training: 3 minute round timer and I choose if it was bag work, sparring or shadow. when the timer ends it should save one round of that type. show rounds today by type and rounds this week as a chart
+needs: choose bag, sparring or shadow | three minute round timer | saves a round when the timer ends | rounds today by type | chart of rounds per day
+---
+app "Boxing" fire red dark
+table rnd kind pick Bag|Sparring|Shadow = Bag
+state k pick Bag|Sparring|Shadow = Bag
+choice k
+timer 3m, "Round", add rnd kind = k then notify "Round over. Rest one minute."
+timer 1m, "Rest"
+section "Rounds today", "total" count(rnd today)
+  each options rnd.kind as o
+    row gap 1
+      o grow
+      count(rnd today where kind = o) bold
+section "Rounds per day", "last 7 days"
+  daybars last 7 days, count(rnd on it)
+===
+@rich domain=r5_hiking_log topic=hiking trails log style=detailed
+hiking log for the north: trail name, distance in km, climb in metres and how hard (easy, moderate, hard). I want total km this year, the biggest climb so far, how many hikes of each difficulty and a bar chart of km by month
+needs: add a hike with trail, km, climb and difficulty | total km this year | biggest climb | hikes by difficulty | km by month
+---
+app "Hikes" map green
+table hike trail text, km num 1..100 unit "km", climb num 0..5000 unit "m", level pick Easy|Moderate|Hard = Moderate
+topbar "Hikes", hike, "Add hike"
+row gap 2
+  statcard sum(hike.km year), "km hiked this year"
+  statcard max(hike.climb), "m, biggest climb"
+section "By difficulty"
+  share hike by level, count(it), it.key
+section "Km by month", "this year"
+  bars 1..12, sum(hike.km year where month(at) = it), it
+list hike top 8, "No hikes yet. Add the first trail you walked."
+===
+@rich domain=r5_rowing_splits topic=rowing machine pace style=multi_feature
+rowing machine pieces: metres rowed and the time. work out the pace per 500 m for each piece, show my best pace ever and a line of the pace over the pieces so I can see if I am getting faster
+needs: add a piece with metres and time | pace per 500 m for each piece | best pace | line of pace over time | total metres this week
+---
+app "Rowing" ball teal
+table piece metres num 100..30000 unit "m", time dur
+let pace(p piece) = p.time / (p.metres / 500)
+topbar "Rowing", piece, "Add piece"
+row gap 2
+  statcard round(min(piece, pace(it) / 1s)), "seconds per 500 m, best pace"
+  statcard sum(piece.metres week), "metres this week"
+section "Pace per 500 m", "lower is faster"
+  trend piece sort at, pace(it) / 1s
+each piece sort at desc top 8 as p empty "No pieces yet. Row 2000 m and add it."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.metres "m in" p.time bold
+      p.at faint
+    pace(p) "/500m" faint
+===
+@rich domain=r5_bike_commute topic=bike commute savings style=custom_ui
+I started cycling to work. each day I add the km and whether I biked, walked or took the bus. petrol costs me 30 rupees a km so show the money saved on days I did not drive, the km under my own power this month and a bar chart of the week
+needs: add a commute with km and mode | petrol price setting | money saved by biking or walking | km under own power this month | bar chart of the week
+---
+app "Commute" bike yellow
+table trip km num 1..100 unit "km", mode pick Bike|Walk|Bus = Bike
+setting petrol money = 30 "Petrol cost per km"
+let own = sum(trip.km month where mode != Bus)
+topbar "Commute", trip, "Add trip"
+row gap 2
+  statcard own, "km on my own power this month"
+  statcard round(sum(trip.km month where mode != Bus) * petrol), "saved on petrol this month"
+section "Km per day", "last 7 days"
+  daybars last 7 days, sum(trip.km on it)
+section "By mode", "this month"
+  share trip month by mode, sum(it.km), it.key
+===
+@rich domain=r5_yoga_booking topic=yoga studio class booking style=detailed
+I run a small yoga studio. add classes with name, date and capacity, then book people in with their name. each class shows how many spots are left, and when it is full the Book button goes away
+needs: add a class with name, date and capacity | book a person into a class | spots left on each class | full class has no Book button | bookings count this week
+---
+app "Studio classes" leaf plum
+table klass name text, day date, cap num 1..60 = 12 "Capacity"
+table booking klass ref klass, who text
+state name text = ""
+topbar "Studio classes", klass, "Add class"
+statcard count(booking week), "bookings this week"
+field name "Name for the next booking"
+each klass where day >= today sort day as k empty "No classes yet. Add the first class."
+  let left = k.cap - count(k.booking)
+  stack card gap 1 tap edit k swipe remove k
+    row gap 2
+      stack grow gap 0
+        k.name bold
+        k.day faint
+      left "spots left" bold color if(left <= 2, warn, ink)
+    if left > 0
+      button "Book" tap add booking klass = k, who = name
+    else
+      "Class is full" faint color bad
+===
+@rich domain=r5_flexibility topic=toe touch reach distance style=short
+sit and reach flexibility test in cm, plus or minus from my toes
+needs: add a reach in cm | line of reach | best reach | change since first
+---
+app "Flexibility" user pink
+table reach cm num -30..40 unit "cm"
+topbar "Flexibility", reach, "Add reach"
+row gap 2
+  statcard max(reach.cm), "cm, best reach"
+  statcard last(reach.cm) - first(reach.cm), "cm change since the first test"
+trend reach sort at, it.cm
+list reach top 8, "No tests yet."
+===
+@rich domain=r5_meditation_mood topic=mood before and after sitting style=multi_feature
+after each sitting I write the minutes and how calm I felt before and after from 1 to 10. show the average lift in calm, my minutes this week, a line of after-scores and the days I sat in the last two weeks
+needs: add a sitting with minutes, calm before and after | average lift in calm | minutes this week | line of after scores | days sat in the last 14
+---
+app "Calm" smile mint
+table sit mins num 1..180 = 10, before num 1..10, after num 1..10
+topbar "Calm", sit, "Add sitting"
+row gap 2
+  statcard round(sum(sit, it.after - it.before) * 10 / max(count(sit), 1)) / 10, "average lift in calm"
+  statcard sum(sit.mins week), "minutes this week"
+section "Calm after sitting"
+  trend sit last 30 days sort at, it.after
+section "Last 14 days", "days sat:" count(days last 14 days, count(sit on it) > 0)
+  weekdots count(sit on it) > 0
+list sit top 6, "No sittings yet."
+===
+@rich domain=r5_breathing_478 topic=4-7-8 breathing practice style=custom_ui
+4-7-8 breathing before sleep. show the steps (in 4, hold 7, out 8), a 19 second timer for one breath, save each finished breath, count today's breaths against a goal of 4 and show the week as dots
+needs: instruction of the three steps | 19 second timer for one breath | saves a breath when done | breaths today against goal of 4 | week dots
+---
+app "Breathe" cloud blue dark
+table breath n num 1..1
+setting aim num = 4 "Breaths per night"
+section "One breath", "19 seconds"
+  row gap 1
+    each ["In 4", "Hold 7", "Out 8"]
+      text it bold grow align center
+  timer 19s, "Breathe", add breath n = 1 then notify "One breath done"
+statcard count(breath today), "breaths today of" aim, aim
+weekdots count(breath on it) >= aim
+remind "Time for your breathing" at 21:30
+===
+@rich domain=r5_anxiety_check topic=weekly anxiety questionnaire style=detailed
+every Sunday I answer the 7 anxiety questions (0 to 3 each: not at all, several days, more than half the days, nearly every day) and want the total score with the band: 0 to 4 minimal, 5 to 9 mild, 10 to 14 moderate, 15 and above severe. show my score over the weeks and tell me when it is high
+needs: answer seven questions from 0 to 3 | total score | band name | line of scores over weeks | warning when moderate or higher
+---
+app "Anxiety check" brain ink
+table gad q1 num 0..3 = 0, q2 num 0..3 = 0, q3 num 0..3 = 0, q4 num 0..3 = 0, q5 num 0..3 = 0, q6 num 0..3 = 0, q7 num 0..3 = 0
+let tot(r gad) = r.q1 + r.q2 + r.q3 + r.q4 + r.q5 + r.q6 + r.q7
+let band(v num) = if(v < 5, "Minimal", if(v < 10, "Mild", if(v < 15, "Moderate", "Severe")))
+topbar "Anxiety check", gad, "Answer now"
+if count(gad) > 0
+  row card gap 2 fill if(tot(last(gad)) >= 10, warn, soft)
+    stack grow gap 0
+      tot(last(gad)) huge
+      band(tot(last(gad))) bold
+    if tot(last(gad)) >= 10
+      "Consider talking to a doctor or someone you trust." faint
+section "Score over the weeks", "out of 21"
+  trend gad sort at, tot(it)
+each gad sort at desc top 6 as r empty "No answers yet. Do the first check on Sunday."
+  row card gap 2 tap edit r swipe remove r
+    r.at grow
+    tot(r) bold
+    band(tot(r)) faint
+"This is a self-check, not a diagnosis." faint
+===
+@rich domain=r5_stress_diary topic=stress triggers diary style=multi_feature
+stress diary: when I feel stressed I tap the level 1 to 5, choose the cause (work, home, money, health, traffic) and add a short note. show which cause comes up most, my average level this week and how many high stress days (4 or 5) this month
+needs: add a stress entry with level, cause and note | causes ranked | average level this week | high stress days this month | list of entries
+---
+app "Stress diary" cloud grey
+table stress lvl num 1..5, cause pick Work|Home|Money|Health|Traffic = Work, note text?
+topbar "Stress diary", stress, "Add entry"
+row gap 2
+  statcard round(avg(stress.lvl week) * 10) / 10, "average level this week", 5
+  statcard count(days month, max(stress on it, it.lvl) >= 4), "high stress days this month"
+section "What stresses me", "all entries"
+  share stress by cause, count(it), it.key
+each stress sort at desc top 10 as s empty "No entries yet. Add one when stress hits."
+  row card gap 2 tap edit s swipe remove s
+    box width 14 height 14 radius 7 fill if(s.lvl >= 4, bad, if(s.lvl = 3, warn, good))
+    stack grow gap 0
+      s.cause bold
+      s.note faint
+    s.at faint
+===
+@rich domain=r5_cpap_hours topic=CPAP nightly use style=detailed
+my sleep clinic wants proof I use the CPAP at least 4 hours a night on 70 percent of nights. I log the hours each morning. show the percent of nights in the last 30 days that reached 4 hours, average hours, a bar chart of the week with the 4 hour line and a nightly reminder at 22:00
+needs: log hours worn each night | percent of nights at 4 hours or more | average hours | bar chart with 4 hour line | reminder at 22:00
+---
+app "CPAP" moon teal dark
+table cpap hrs num 0..14 "Hours worn" unit "h"
+remind "Put your CPAP on" at 22:00
+topbar "CPAP", cpap, "Log night"
+row gap 2
+  statcard round(count(cpap last 30 days where hrs >= 4) * 100 / max(count(cpap last 30 days), 1)), "% of nights over 4 hours", 100
+  statcard round(avg(cpap.hrs last 30 days) * 10) / 10, "hours average per night"
+if count(cpap last 30 days where hrs >= 4) * 100 < 70 * count(cpap last 30 days)
+  "Below the 70% the clinic asks for." color warn
+section "Last 7 nights"
+  goalbars last 7 days, sum(cpap.hrs on it), 4
+list cpap top 7, "No nights logged yet."
+===
+@rich domain=r5_caffeine topic=caffeine and sleep style=custom_ui
+I think coffee ruins my sleep. log each cup (coffee, espresso, tea, cola, energy drink), the app estimates the caffeine in mg, shows today against a 400 mg limit and counts cups after 2 pm
+needs: log a cup by type | estimated mg for each type | mg today against 400 limit | cups after 2 pm | bar chart of mg per day
+---
+app "Caffeine" coffee orange
+table cup kind pick Coffee|Espresso|Tea|Cola|Energy_drink = Coffee
+setting cap num = 400 "Daily limit (mg)"
+let mg(k text) = if(k = Coffee, 95, if(k = Espresso, 64, if(k = Tea, 40, if(k = Cola, 35, 80))))
+topbar "Caffeine", cup, "Add cup"
+goal sum(cup today, mg(it.kind)), cap, "caffeine today", "mg"
+row gap 2
+  statcard count(cup today where hour(at) >= 14), "cups after 2 pm today"
+  statcard count(cup today), "cups today"
+section "Caffeine per day", "mg"
+  goalbars last 7 days, sum(cup on it, mg(it.kind)), cap
+each cup today sort at desc as c empty "No cups yet today."
+  row gap 2 swipe remove c
+    c.kind grow
+    mg(c.kind) "mg" faint
+===
+@rich domain=r5_alcohol_free topic=alcohol free days counter style=multi_feature
+cutting out alcohol. I only log when I do drink, with the number of drinks. show days since my last drink, alcohol free days in the last 30, a grid of the last 5 weeks where drinking days are coloured, and drinks this month
+needs: log a drink with count | days since my last drink | alcohol free days in the last 30 | grid of last 5 weeks | drinks this month
+---
+app "Dry days" cup purple
+table drink n num 1..20 = 1 "Drinks"
+topbar "Dry days", drink, "Log drinks"
+row gap 2
+  statcard if(count(drink) > 0, since(drink), 0), "days since the last drink"
+  statcard count(days last 30 days, count(drink on it) = 0), "alcohol free days in the last 30"
+statcard sum(drink.n month), "drinks this month"
+section "Last 5 weeks", "coloured days had a drink"
+  daygrid last 35 days, sum(drink.n on it), 4
+list drink by day, "Nothing logged. A dry streak is a good streak."
+===
+@rich domain=r5_sweet_tooth topic=sugar snacks reduction style=short
+cutting sweets to 2 a day. count what I eat and compare this week with last week
+needs: tap to add a sweet | sweets today against limit | this week against last week | bar chart of the week
+---
+app "Sweet limit" cart pink
+table sweet what text?, n num 1..10 = 1
+setting cap num = 2 "Sweets per day"
+topbar "Sweet limit", sweet, "Add sweet"
+goal sum(sweet.n today), cap, "sweets today", ""
+row gap 2
+  statcard sum(sweet.n week), "this week"
+  statcard sum(sweet.n prev week), "last week"
+goalbars last 7 days, sum(sweet.n on it), cap
+===
+@rich domain=r5_craving_log topic=nicotine craving coping methods style=detailed
+quitting nicotine gum. each craving: how strong 1 to 10, what I did (gum, walk, water, called a friend, breathing) and whether it worked. show which method works best by the percent it worked, cravings today and the average strength this week
+needs: log a craving with strength, method and worked | percent success for each method | cravings today | average strength this week | list of cravings
+---
+app "Cravings" fire red
+table crave str num 1..10, how pick Gum|Walk|Water|Call_friend|Breathing = Gum, worked bool = yes
+topbar "Cravings", crave, "Log craving"
+row gap 2
+  statcard count(crave today), "cravings today"
+  statcard round(avg(crave.str week) * 10) / 10, "average strength this week", 10
+section "What works", "percent that worked"
+  each options crave.how as h
+    row gap 1
+      h grow
+      count(crave where how = h and worked = yes) "of" count(crave where how = h) faint
+      round(count(crave where how = h and worked = yes) * 100 / max(count(crave where how = h), 1)) "%" bold
+list crave top 8, "No cravings logged yet."
+===
+@rich domain=r5_daily_steps topic=daily steps goal streak style=multi_feature
+walking 8000 steps a day. I type my steps from the phone, and I want to see the days I reached the goal as dots for the week, my average steps over 7 days, best day in the last month and a bar chart with the goal line
+needs: log steps | goal setting 8000 | week dots for days at the goal | average of the last 7 days | best day this month
+---
+app "Daily steps" walk green
+table walk steps num 100..80000
+setting target num = 8000 "Steps goal"
+topbar "Daily steps", walk, "Add steps"
+statcard sum(walk.steps today), "steps today of" target, target
+weekdots sum(walk.steps on it) >= target
+row gap 2
+  statcard round(sum(walk.steps last 7 days) / 7), "average per day, last 7 days"
+  statcard max(days month, sum(walk.steps on it)), "best day this month"
+section "Steps per day"
+  goalbars last 7 days, sum(walk.steps on it), target
+===
+@rich domain=r5_trainer_fees topic=personal trainer client fees style=detailed
+I train 10 clients and each pays a monthly fee. add clients with their fee, note each payment when it comes, and show who has paid this month and who has not, the total collected this month and what is still due
+needs: add a client with monthly fee | record a payment | paid or unpaid this month | total collected this month | amount still due
+---
+app "Client fees" users blue
+table client name text, fee money
+table payment client ref client, amount money
+topbar "Client fees", client, "Add client"
+row gap 2
+  statcard sum(payment.amount month), "collected this month"
+  statcard sum(client.fee) - sum(payment.amount month), "still due"
+each client sort sum(it.payment.amount month) as c empty "No clients yet. Add the first person you train."
+  row card gap 2 tap edit c swipe remove c fill if(sum(c.payment.amount month) >= c.fee, soft, warn)
+    stack grow gap 0
+      c.name bold
+      if sum(c.payment.amount month) >= c.fee
+        "Paid" faint
+      else
+        "Due" c.fee - sum(c.payment.amount month) faint
+    button "Paid" tap add payment client = c, amount = c.fee
+===
+@rich domain=r5_vaccine_fridge topic=vaccine fridge temperature style=custom_ui
+the clinic vaccine fridge must stay between 2 and 8 degrees. staff note the temperature twice a day. mark anything outside the range red, count how many times it went out this month and plot the readings with the two limits
+needs: log a temperature reading | red when below 2 or above 8 | count of out-of-range readings this month | plot with limit lines | latest reading
+---
+app "Cold chain" cloud ocean
+table fr deg num -20..30 unit "C", slot pick Morning|Evening = Morning
+let bad_r(r fr) = r.deg < 2 or r.deg > 8
+topbar "Cold chain", fr, "Log temperature"
+row gap 2
+  statcard last(fr.deg), "C, latest reading"
+  statcard count(fr month where deg < 2 or deg > 8), "readings out of range this month"
+section "Last 14 readings", "safe band 2 to 8"
+  plot 0..max(count(fr), 2) - 1, -2..12 axes gridlines
+    line 0, 2, max(count(fr), 2) - 1, 2 stroke good thick 1
+    line 0, 8, max(count(fr), 2) - 1, 8 stroke bad thick 1
+    poly stroke accent thick 2
+      each fr sort at
+        pt index, it.deg
+each fr sort at desc top 8 as r empty "No readings yet."
+  row card gap 2 tap edit r swipe remove r fill if(bad_r(r), bad, soft)
+    r.deg "C" bold
+    r.slot grow faint
+    r.at faint
+===
+@rich domain=r5_clinic_billing topic=clinic bills and unpaid style=multi_feature
+reception billing for a small clinic: patient name, service (consultation, lab, x-ray, dressing, injection) and the amount, with a tick when paid. show money received today, the total unpaid and a split of income by service this month
+needs: add a bill with patient, service and amount | tick when paid | money received today | total unpaid | income by service this month
+---
+app "Clinic bills" money slate
+table bill patient text, service pick Consultation|Lab|X_ray|Dressing|Injection = Consultation, amount money, paid bool
+topbar "Clinic bills", bill, "New bill"
+row gap 2
+  statcard sum(bill.amount today where paid = yes), "received today"
+  statcard sum(bill.amount where paid = no), "still unpaid"
+section "Income by service", "this month, paid only"
+  share bill month where paid = yes by service, sum(it.amount), it.key
+each bill sort at desc top 15 as b empty "No bills yet. Add the first one at reception."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    stack grow gap 0
+      b.patient bold
+      b.service faint
+    b.amount bold color if(b.paid, good, warn)
+===
+@rich domain=r5_lab_samples topic=lab sample tracking board style=custom_ui
+medical lab: each sample has a code, the test (CBC, urine, culture, sugar, lipid) and a status that moves from collected to processing to reported to delivered. chips filter by status, counts under each, and a button on each sample to move it to the next stage
+needs: add a sample with code and test | status of each sample | chips to filter by status | count per status | button to advance the status
+---
+app "Lab samples" eye teal
+table samp code text, test pick CBC|Urine|Culture|Sugar|Lipid = CBC, status pick Collected|Processing|Reported|Delivered = Collected
+state f pick All|Collected|Processing|Reported|Delivered = All
+topbar "Lab samples", samp, "Add sample"
+row gap 1
+  each options samp.status as s
+    stack grow card gap 0 align center
+      count(samp where status = s) big
+      s tiny faint
+choice f
+each samp where f = All or status = f sort at as s empty "No samples here. Add one or pick another chip."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.code bold
+      s.test "·" s.status faint
+    if s.status = Collected
+      button "Start" tap set s.status = Processing
+    if s.status = Processing
+      button "Report" tap set s.status = Reported
+    if s.status = Reported
+      button "Deliver" tap set s.status = Delivered
+===
+@rich domain=r5_dental_plan topic=dental treatment plan costs style=detailed
+treatment plan I give dental patients: tooth number, the work (filling, root canal, crown, extraction, scaling), the cost, and a tick when it is done. show total cost of the plan, how much is done, how much is left and a progress bar of the jobs done
+needs: add a job with tooth, work and cost | tick when done | total cost of the plan | cost still left | progress bar of jobs done
+---
+app "Dental plan" tooth purple
+table job tooth num 11..48, work pick Filling|Root_canal|Crown|Extraction|Scaling = Filling, cost money, done bool
+topbar "Dental plan", job, "Add job"
+row gap 2
+  statcard sum(job.cost), "total cost of the plan"
+  statcard sum(job.cost where done = no), "cost still left"
+goal count(job where done = yes), count(job), "jobs done"
+each job sort tooth as j empty "No jobs yet. Add the first tooth to treat."
+  row card gap 2 tap edit j swipe remove j
+    toggle j.done
+    stack grow gap 0
+      "Tooth" j.tooth bold
+      j.work faint
+    j.cost bold

@@ -1,0 +1,527 @@
+@rich domain=c4_invoice_builder topic=invoice_total_builder style=multi_feature
+need to bill a client for a website job: i add each line with description, quantity and unit price, then a discount percent and gst percent, and it shows subtotal, discount, tax and the final amount due
+needs: add invoice lines with quantity and unit price | discount percent | tax percent | subtotal and tax shown | amount due
+---
+app "Invoice" note teal
+table line what text, qty num 1.. = 1, price money
+setting disc num = 0 "Discount %"
+setting taxr num = 17 "Tax %"
+let sub = sum(line, it.qty * it.price)
+let after = sub * (1 - disc / 100)
+let tax = after * taxr / 100
+topbar "Invoice", line, "Add line"
+statcard round(after + tax), "amount due"
+section "Breakdown"
+  row
+    "Subtotal" grow
+    sub bold
+  row
+    "Discount" disc "%" grow
+    0 - round(sub - after) bold
+  row
+    "Tax" taxr "%" grow
+    round(tax) bold
+section "Lines"
+  each line as l empty "No lines yet. Add the first item you are billing."
+    row card gap 2 tap edit l swipe remove l
+      l.what grow
+      l.qty "x" l.price faint
+      l.qty * l.price bold
+===
+@rich domain=c4_markup_margin topic=markup_vs_margin style=short
+i buy jackets at 2400 and sell at 3600, what is my margin and my markup, they are not the same right
+needs: cost price | selling price | profit amount | margin percent | markup percent
+---
+app "Markup Margin" tag red
+state cost money = 2400
+state sell money = 3600
+field cost "Cost price"
+field sell "Selling price"
+statcard sell - cost, "profit per piece"
+row gap 2
+  statcard round(if(sell > 0, (sell - cost) * 1000 / sell, 0)) / 10, "% margin of the price"
+  statcard round(if(cost > 0, (sell - cost) * 1000 / cost, 0)) / 10, "% markup on the cost"
+"Margin is profit over the selling price. Markup is profit over what you paid." faint
+===
+@rich domain=c4_price_from_margin topic=price_from_target_margin style=detailed
+i make hand soaps. materials and packaging cost me some amount, labour is by the minute, and i want a 40 percent profit margin on the final shelf price. tell me what to charge, and what the shop gets if it takes 25 percent
+needs: material cost | labour minutes and rate per minute | margin percent wanted | selling price | price the shop sells at with its cut
+---
+app "Soap Pricing" gift pink
+state mat money = 180
+state mins num = 20
+state rate money = 5
+state mg num = 40
+state cut num = 25
+let cost = mat + mins * rate
+let price = if(mg < 100, cost / (1 - mg / 100), 0)
+field mat "Materials and packaging"
+"Labour minutes per soap" mins faint
+slider mins 0..120
+field rate "Labour rate per minute"
+"Profit margin" mg "%" faint
+slider mg 0..90
+statcard round(cost), "cost per soap"
+statcard round(price), "sell it for"
+"If the shop keeps" cut "% it will price it at" round(price / (1 - cut / 100)) faint
+slider cut 0..60
+===
+@rich domain=c4_vat_add_remove topic=vat_add_or_remove style=short
+shop till: sometimes i have the price with vat included and need the base price, sometimes the other way
+needs: amount | add tax or remove tax choice | tax percent | tax amount | final amount
+---
+app "VAT Till" calc slate
+state amt money = 1000
+state tp num = 16
+state mode pick Add|Remove = Add
+let net = if(mode = Add, amt, amt / (1 + tp / 100))
+let taxv = net * tp / 100
+field amt "Amount"
+choice mode
+"Tax rate" tp "%" faint
+slider tp 0..30
+statcard round(taxv * 100) / 100, "tax amount"
+"Price without tax" round(net * 100) / 100 faint
+"Price with tax" round((net + taxv) * 100) / 100 bold
+===
+@rich domain=c4_stacked_discounts topic=stacked_discount_coupons style=detailed
+the store has 30 percent off, and i also have a 10 percent coupon and a flat 200 off voucher. does the coupon apply after the sale price? type the price and tell me the final one, and the total percent i actually saved
+needs: original price | sale percent | coupon percent | flat voucher amount | final price | total percent saved
+---
+app "Stacked Deals" tag orange
+state price money = 5000
+state sale num = 30
+state coupon num = 10
+state flat money = 200
+let p1 = price * (1 - sale / 100)
+let p2 = p1 * (1 - coupon / 100)
+let fin = max(p2 - flat, 0)
+field price "Original price"
+"Sale" sale "%" faint
+slider sale 0..80
+"Coupon" coupon "%" faint
+slider coupon 0..50
+field flat "Flat voucher"
+statcard round(fin), "you pay"
+if price > 0
+  "You save" round((price - fin) * 100 / price) "% in total, not" sale + coupon "%." faint
+===
+@rich domain=c4_sales_profit_log topic=profit_per_sale_log style=multi_feature
+i sell phone covers on facebook. i want to log every sale with item name, what it cost me, what i sold it for and how many, and see profit per sale, total profit this month and my profit margin percent
+needs: log a sale with cost, price and quantity | profit per sale | total profit this month | margin percent | list of sales
+---
+app "Sales Profit" bag green
+table sale item text, cost money, price money, qty num 1.. = 1
+let profit(s sale) = (s.price - s.cost) * s.qty
+let revenue = sum(sale month, it.price * it.qty)
+let gain = sum(sale month, profit(it))
+topbar "Sales Profit", sale, "Log sale"
+row gap 2
+  statcard round(gain), "profit this month"
+  statcard round(if(revenue > 0, gain * 100 / revenue, 0)), "% margin"
+section "Recent sales", "Sales:" count(sale month)
+  each sale top 8 as s empty "No sales logged yet this month."
+    row card gap 2 tap edit s swipe remove s
+      s.item grow
+      s.qty "sold" faint
+      profit(s) bold color if(profit(s) >= 0, good, bad)
+===
+@rich domain=c4_daily_sales_target topic=daily_sales_target style=custom_ui
+my juice stall needs 12000 a day to cover costs. each sale i tap in the amount and the app shows how much is left to reach the target, a progress bar and a bar chart of the last 7 days against the target line
+needs: add each sale amount | daily target setting | amount left for today | progress bar | bar chart of 7 days with a target line
+---
+app "Sales Target" cup yellow
+table take amount money
+setting target money = 12000 "Daily target"
+let sold = sum(take.amount today)
+topbar "Sales Target", take, "Add sale"
+statcard sold, "sold today of" target, target
+if sold >= target
+  "Target reached. Everything now is profit." bold color good
+else
+  "Still to sell:" target - sold bold
+section "Last 7 days"
+  goalbars last 7 days, sum(take.amount on it), target
+list take today, "Nothing sold yet today. Tap Add sale when the first customer pays."
+===
+@rich domain=c4_change_notes topic=cash_change_notes style=custom_ui
+at the counter i give back change all day. type the bill and the cash the customer gave, show the change and how many 1000, 500, 100, 50 and 10 notes to hand back
+needs: bill amount | cash given | change to return | number of notes of each size | warns if cash is not enough
+---
+app "Change Maker" money mint dark
+state bill money = 0
+state cash money = 0
+let chg = cash - bill
+let n1000 = floor(chg / 1000)
+let r1 = chg % 1000
+let n500 = floor(r1 / 500)
+let r2 = r1 % 500
+let n100 = floor(r2 / 100)
+let r3 = r2 % 100
+let n50 = floor(r3 / 50)
+let r4 = r3 % 50
+field bill "Bill"
+field cash "Cash given"
+if bill > 0 and cash > 0
+  if chg < 0
+    "Customer still owes" 0 - chg big color bad
+  else
+    statcard chg, "change to return"
+    grid 3 gap 1
+      each [1000, 500, 100, 50]
+        stack card gap 0 align center
+          text it small faint
+          text if(it = 1000, n1000, if(it = 500, n500, if(it = 100, n100, n50))) big
+    "Remaining coins:" r4 faint
+else
+  "Type the bill and the cash given." faint
+===
+@rich domain=c4_rent_by_room topic=rent_split_by_room_size style=multi_feature
+we are four flatmates with rooms of different size and one has an attached bath. add each flatmate with the room size in square feet, type the total rent, and split the rent by room size so the big room pays more
+needs: add a flatmate with room size | total monthly rent | rent for each person by room size | share bars | total check
+---
+app "Rent Split" home blue
+table mate name text, sqft num 20..400 = 120
+setting rent money = 60000 "Total monthly rent"
+let area = sum(mate.sqft)
+let due(m mate) = if(area > 0, rent * m.sqft / area, 0)
+topbar "Rent Split", mate, "Add flatmate"
+statcard rent, "total rent per month"
+section "Each person pays", "Rooms:" area "sq ft"
+  each mate sort it.sqft desc as m empty "Add the flatmates and the size of their rooms."
+    stack gap 0 tap edit m swipe remove m
+      row gap 2
+        m.name grow
+        m.sqft "sq ft" faint
+        round(due(m)) bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * m.sqft / max(area, 1), 3 fill accent radius 1
+===
+@rich domain=c4_payback_period topic=investment_payback_months style=short
+bought a coffee machine for 450k, makes about 28k profit a month, when do i get my money back
+needs: amount invested | monthly profit | months to pay back | progress after months passed | yearly return percent
+---
+app "Payback Time" coin purple
+state invest money = 450000
+state monthly money = 28000
+state passed num = 6
+let months = if(monthly > 0, invest / monthly, 0)
+field invest "Money invested"
+field monthly "Profit per month"
+statcard round(months * 10) / 10, "months to pay back"
+"Yearly return" round(monthly * 1200 / max(invest, 1)) / 10 "%" faint
+"Months passed so far" passed faint
+slider passed 0..60
+goal monthly * passed, invest, "paid back so far"
+===
+@rich domain=c4_roi_ads topic=campaign_roi_percent style=multi_feature
+before we repeat a campaign, work out the return. add each campaign with what it cost and the revenue it brought, and show roi percent for each and for all of them together, and which campaign was best
+needs: add a campaign with cost and revenue | roi percent for each campaign | combined roi | best campaign | list of campaigns
+---
+app "Campaign ROI" chart red
+table camp name text, spent money, earned money
+let roi(c camp) = if(c.spent > 0, (c.earned - c.spent) * 100 / c.spent, 0)
+let allspent = sum(camp.spent)
+topbar "Campaign ROI", camp, "Add campaign"
+row gap 2
+  statcard round(if(allspent > 0, (sum(camp.earned) - allspent) * 100 / allspent, 0)), "% combined ROI"
+  statcard round(max(camp, roi(it))), "% best campaign"
+section "Return by campaign"
+  share camp sort roi(it) desc, round(roi(it)), it.name
+section "Campaigns"
+  list camp, "No campaigns yet. Add the cost and what it brought in."
+===
+@rich domain=c4_days_of_stock topic=days_of_stock_left style=short
+i have 340 units of shampoo in the store and sell about 15 a day, how long will it last
+needs: units in stock | units sold per day | days of stock left | date when it runs out | warning to reorder
+---
+app "Stock Days" box orange
+state stock num = 340
+state perday num = 15
+let daysleft = if(perday > 0, floor(stock / perday), 0)
+field stock "Units in stock"
+field perday "Sold per day"
+if perday > 0
+  statcard daysleft, "days of stock left"
+  "Runs out around" today + daysleft faint
+  if daysleft < 14
+    "Under two weeks left. Time to reorder." bold color bad
+else
+  "Type how many you sell per day." faint
+===
+@rich domain=c4_cake_pricing topic=cake_pricing_ingredients style=custom_ui
+i bake birthday cakes. i list each ingredient with what it cost me for the cake, add my hours of work at an hourly pay, and a profit percent. show what to charge for the cake and the price per slice for 12 slices
+needs: add ingredients with cost | hours of work and hourly pay | profit percent | price to charge | price per slice
+---
+app "Cake Price" bread pink
+table ingr name text, cost money
+state hours num = 3
+state wage money = 400
+state profit num = 30
+let ing = sum(ingr.cost)
+let base = ing + hours * wage
+let price = base * (1 + profit / 100)
+topbar "Cake Price", ingr, "Add ingredient"
+"My work" hours "hours" faint
+slider hours 0..12
+field wage "Pay per hour"
+"Profit on top" profit "%" faint
+slider profit 0..100
+statcard round(price), "charge for the cake"
+"Each of 12 slices:" round(price / 12) bold
+section "Ingredients", "Total:" ing
+  each ingr as i empty "Add the flour, eggs, butter and everything else."
+    row card gap 2 tap edit i swipe remove i
+      i.name grow
+      i.cost bold
+===
+@rich domain=c4_customer_value topic=customer_lifetime_value style=detailed
+how much is one customer worth to my gym? average membership fee per month, how many months members stay, and the profit percent. then what i can afford to spend on getting a new member
+needs: monthly fee | average months a member stays | profit percent | lifetime value | most to spend to win a member
+---
+app "Customer Value" users ocean
+state fee money = 5000
+state stay num = 14
+state pm num = 60
+state spend num = 30
+let life = fee * stay
+let gain = life * pm / 100
+field fee "Monthly membership fee"
+"Average months a member stays" stay faint
+slider stay 1..60
+"Profit on membership" pm "%" faint
+slider pm 5..100
+statcard round(life), "revenue per member"
+statcard round(gain), "profit per member"
+"Spend up to" round(gain * spend / 100) "to win one new member, which keeps" spend "% of the profit." faint
+slider spend 5..80
+===
+@rich domain=c4_currency_rates topic=currency_converter_rates style=multi_feature
+i get freelance payments in dollars, euros and pounds and need rupees. let me set today's rate for each myself, type an amount, pick the currency and see the rupees, plus my total earned this month
+needs: rate setting for each currency | amount | currency choice | converted rupees | monthly total saved from payments
+---
+app "Currency Convert" coin green
+table pay cur text, amount money, rupees money
+setting r_usd num = 280 "Rupees per dollar"
+setting r_eur num = 305 "Rupees per euro"
+setting r_gbp num = 355 "Rupees per pound"
+state c pick Dollar|Euro|Pound = Dollar
+state amt money = 0
+let rate = if(c = Dollar, r_usd, if(c = Euro, r_eur, r_gbp))
+field amt "Amount received"
+choice c
+if amt > 0
+  statcard round(amt * rate), "rupees today"
+  button "Save this payment" fill accent tap add pay cur = if(c = Dollar, "USD", if(c = Euro, "EUR", "GBP")), amount = amt, rupees = round(amt * rate)
+else
+  "Type the amount you received." faint
+section "This month", "Total:" sum(pay.rupees month)
+  each pay month top 6 as p empty "No payments saved this month."
+    row card gap 2 swipe remove p
+      p.cur grow
+      p.amount faint
+      p.rupees bold
+===
+@rich domain=c4_fd_compound topic=fixed_deposit_compound style=detailed
+my bank gives 15 percent a year on a fixed deposit with profit added every year. type the amount, the yearly rate and the years, and show what it grows to, the profit earned, and compare with simple interest
+needs: deposit amount | yearly rate | number of years | final value with compounding | profit and the simple interest value
+---
+app "Deposit Growth" coin teal
+state amt money = 500000
+state rt num = 15
+state yrs num = 5
+let fin = amt * pow(1 + rt / 100, yrs)
+field amt "Deposit amount"
+"Yearly rate" rt "%" faint
+slider rt 1..30
+"Years" yrs faint
+slider yrs 1..30
+statcard round(fin), "value after" yrs "years"
+row gap 2
+  statcard round(fin - amt), "profit, compounded"
+  statcard round(amt * rt / 100 * yrs), "profit, simple interest"
+plot 0..yrs, 0..fin axes
+  poly stroke accent thick 2
+    each 0..yrs
+      pt it, amt * pow(1 + rt / 100, it)
+===
+@rich domain=c4_depreciation_line topic=straight_line_depreciation style=short
+bought a delivery bike for 320000, will sell for 80000 after 5 years, how much does it lose each year
+needs: purchase price | resale value | years of use | loss per year | value after chosen year
+---
+app "Bike Value" bike slate
+state cost money = 320000
+state scrap money = 80000
+state life num = 5
+state yr num = 2
+let per = if(life > 0, (cost - scrap) / life, 0)
+field cost "Purchase price"
+field scrap "Resale value at the end"
+"Years of use" life faint
+slider life 1..15
+statcard round(per), "lost each year"
+"Value after year" yr round(max(cost - per * yr, scrap)) bold
+slider yr 0..15
+===
+@rich domain=c4_wholesale_retail topic=wholesale_vs_retail style=detailed
+supplier says buy a carton of 24 for one price or single pieces at a higher price. i type the carton price, the single price and how many i really sell before expiry, and want to know if the carton is cheaper per piece and what i waste
+needs: carton price and pieces | single piece price | pieces i expect to sell | cost per piece in carton | cheaper option
+---
+app "Carton Or Single" package yellow
+state carton money = 1800
+state inbox num = 24
+state single money = 90
+state sell num = 20
+let per = if(inbox > 0, carton / inbox, 0)
+let waste = max(inbox - sell, 0)
+field carton "Carton price"
+field inbox "Pieces in the carton"
+field single "Single piece price"
+"Pieces I will really sell" sell faint
+slider sell 1..100
+row gap 2
+  statcard round(per * 100) / 100, "per piece in a carton"
+  statcard round(if(sell > 0, carton / min(sell, inbox), 0) * 100) / 100, "per piece sold"
+if sell >= inbox or carton / max(min(sell, inbox), 1) < single
+  "The carton is cheaper, wasting" waste "pieces." bold color good
+else
+  "Buy singles. The carton leaves" waste "pieces unsold." bold color warn
+===
+@rich domain=c4_delivery_per_order topic=delivery_cost_per_order style=multi_feature
+what does a delivery really cost my food business. riders pay, fuel and packaging per order. i type those, the number of orders in a day and fixed costs, and see the cost for each order and what to charge as a delivery fee to break even
+needs: rider pay | fuel cost per order | packaging per order | orders per day | cost and delivery fee per order
+---
+app "Delivery Cost" bus red
+state rider money = 80
+state fuel money = 40
+state pack money = 25
+state orders num = 30
+state fixed money = 3000
+let each_c = rider + fuel + pack + if(orders > 0, fixed / orders, 0)
+field rider "Rider pay per order"
+field fuel "Fuel per order"
+field pack "Packaging per order"
+field fixed "Fixed costs per day"
+"Orders per day" orders faint
+slider orders 5..200
+statcard round(each_c), "cost of one delivery"
+"Charge a delivery fee of at least" (0 - floor(0 - each_c)) "to break even." bold
+===
+@rich domain=c4_quote_revisions topic=client_quote_revisions style=detailed
+logo design quote. a base price covers 2 rounds of changes, every extra revision costs more, and rush delivery adds a percent. type the number of revisions i expect and whether it is rush and give me the quote i send
+needs: base price | included revisions | price per extra revision | rush delivery choice and percent | final quote
+---
+app "Design Quote" pen purple
+state base money = 15000
+state incl num = 2
+state extra money = 2500
+state revs num = 4
+state rush pick Normal|Rush = Normal
+let extras = max(revs - incl, 0) * extra
+let sub = base + extras
+let quote = if(rush = Rush, sub * 1.3, sub)
+field base "Base price"
+field extra "Price per extra revision"
+"Revisions I expect" revs faint
+slider revs 0..12
+choice rush
+statcard round(quote), "quote to send"
+"Base" base ", extra revisions" extras faint
+if rush = Rush
+  "Rush adds 30%:" round(quote - sub) faint
+===
+@rich domain=c4_rental_yield topic=rental_yield_percent style=short
+flat costs 9 million, rent is 55k a month and maintenance 6k a month
+needs: purchase price | monthly rent | monthly upkeep | yearly yield percent | years to earn back the price
+---
+app "Rental Yield" home blue
+state price money = 9000000
+state rent money = 55000
+state upkeep money = 6000
+let net = (rent - upkeep) * 12
+field price "Purchase price"
+field rent "Monthly rent"
+field upkeep "Monthly upkeep"
+statcard round(net * 100 / max(price, 1) * 100) / 100, "% yearly yield"
+"Net rent per year" net faint
+"Years to earn back the price:" round(price / max(net, 1) * 10) / 10 bold
+===
+@rich domain=c4_uptime_budget topic=uptime_downtime_budget style=detailed
+our api promises 99.9 percent uptime. how many minutes of downtime is that per month and per year? let me change the promise with a slider, and type the minutes we were really down this month so i see if we broke it
+needs: uptime promise percent | allowed downtime per month and year | minutes actually down | whether the promise was broken
+---
+app "Uptime Budget" bolt grey dark
+state up num = 99.9
+state down num = 12
+let allowm = 30 * 24 * 60 * (100 - up) / 100
+let allowy = 365 * 24 * 60 * (100 - up) / 100
+"Uptime promise" up "%" faint
+slider up 90..99.99
+row gap 2
+  statcard round(allowm * 10) / 10, "minutes allowed a month"
+  statcard round(allowy / 60 * 10) / 10, "hours allowed a year"
+field down "Minutes down this month"
+goal down, max(allowm, 1), if(down > allowm, "promise broken", "of the budget used"), "min"
+if down > allowm
+  "Over budget by" round(down - allowm) "minutes." bold color bad
+else
+  "Within budget, with" round(allowm - down) "minutes to spare." color good
+===
+@rich domain=c4_sprint_capacity topic=sprint_capacity_points style=multi_feature
+planning sprints for our dev team. add each developer with the days they will actually work this sprint and the points they usually finish per day, and show the team capacity in points and how many days we have in total
+needs: add a developer with days available and points per day | team capacity in points | total developer days | points per developer | tap to change
+---
+app "Sprint Capacity" tool ink
+table dev name text, days num 0..15 = 10, ppd num 0.1..10 = 1
+let cap(d dev) = d.days * d.ppd
+topbar "Sprint Capacity", dev, "Add developer"
+row gap 2
+  statcard round(sum(dev, cap(it))), "points of capacity"
+  statcard sum(dev.days), "developer days"
+section "By developer", "Devs:" count(dev)
+  each dev sort cap(it) desc as d empty "Add each developer and the days they are available."
+    row card gap 2 tap edit d swipe remove d
+      d.name grow
+      d.days "days" faint
+      round(cap(d) * 10) / 10 "pts" bold
+===
+@rich domain=c4_bug_density topic=bug_density_per_kloc style=short
+we found 38 bugs in 24000 lines of code, is that bad
+needs: number of bugs | lines of code | bugs per thousand lines | rating against a target | lines per bug
+---
+app "Bug Density" tool plum
+state bugs num = 38
+state loc num = 24000
+setting limit num = 1.5 "Acceptable bugs per 1000 lines"
+let dens = if(loc > 0, bugs * 1000 / loc, 0)
+field bugs "Bugs found"
+field loc "Lines of code"
+statcard round(dens * 100) / 100, "bugs per 1000 lines"
+if dens <= limit
+  "Under your limit of" limit ". Looks healthy." color good
+else
+  "Above your limit of" limit ". Add more review and tests." color bad
+"One bug every" round(loc / max(bugs, 1)) "lines." faint
+===
+@rich domain=c4_data_cap_burn topic=mobile_data_cap_burn style=custom_ui
+my phone plan has a monthly data cap and i burn through it too fast. type the cap, how many gb i used so far and which day of the month it is, and show the pace per day, the predicted use by month end and how much per day i can still use
+needs: monthly data cap in GB | gb used so far | day of the month | predicted use at month end | gb per day still allowed
+---
+app "Data Cap" phone mint
+state cap num = 30
+state used num = 18
+state day num = 12
+let pace = if(day > 0, used / day, 0)
+let pred = pace * 30
+let left_d = max(30 - day, 1)
+field cap "Monthly cap (GB)"
+field used "Used so far (GB)"
+"Day of the month" day faint
+slider day 1..30
+goal used, cap, "of the cap used", "GB"
+if pred > cap
+  "At this pace you will use" round(pred) "GB, over by" round(pred - cap) "GB." bold color bad
+  "Slow down to" round(max(cap - used, 0) / left_d * 10) / 10 "GB a day." faint
+else
+  "On track for" round(pred) "GB. You can use" round((cap - used) / left_d * 10) / 10 "GB a day." color good

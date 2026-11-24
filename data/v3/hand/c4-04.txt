@@ -1,0 +1,501 @@
+@rich domain=c4_photo_storage topic=photos_per_storage style=short
+how many photos fit on my 128gb phone if each photo is about 4 mb and i already use 70gb
+needs: storage size in GB | storage already used | size of one photo | photos that still fit | days of storage at photos per day
+---
+app "Photo Space" cloud ocean
+state total num = 128
+state used num = 70
+state mb num = 4
+state perday num = 25
+let free_gb = max(total - used, 0)
+let fits = if(mb > 0, floor(free_gb * 1024 / mb), 0)
+field total "Phone storage (GB)"
+field used "Already used (GB)"
+field mb "One photo (MB)"
+statcard fits, "more photos fit"
+"Photos per day" perday faint
+slider perday 1..200
+"That lasts about" floor(fits / max(perday, 1)) "days." bold
+goal used, total, "storage used", "GB"
+===
+@rich domain=c4_stream_data topic=streaming_data_per_hour style=detailed
+i watch youtube on mobile data. pick the video quality, 360p, 720p or 1080p, say how many hours i watch each day, and show the data used per day and per month so i know which package to buy. use about 0.3, 1.1 and 2.5 gb per hour
+needs: video quality choice | hours watched per day | data used per day | data used per month | package size needed
+---
+app "Streaming Data" phone red
+state q pick Low|HD|Full = HD
+state hrs num = 2
+let gbh = if(q = Low, 0.3, if(q = HD, 1.1, 2.5))
+let month = gbh * hrs * 30
+"Quality: Low is 360p, HD is 720p, Full is 1080p" faint
+choice q
+"Hours per day" hrs faint
+slider hrs 0.5..8
+row gap 2
+  statcard round(gbh * hrs * 10) / 10, "GB per day"
+  statcard round(month), "GB per month"
+"Buy a package of at least" (0 - floor(0 - (month / 10))) * 10 "GB." bold
+===
+@rich domain=c4_print_pixels topic=print_size_from_pixels style=detailed
+i have a photo that is 4000 by 3000 pixels and want to print it. tell me the largest print in inches that stays sharp at 300 dpi, and what the print looks like at a lower dpi if i choose a poster size
+needs: image width and height in pixels | dpi for print quality | maximum print size in inches | quality at a chosen poster width
+---
+app "Print Size" pen pink
+state pw num = 4000
+state ph num = 3000
+state dpi num = 300
+state poster num = 24
+field pw "Width (pixels)"
+field ph "Height (pixels)"
+"Print quality" dpi "dpi" faint
+slider dpi 72..600
+statcard round(pw / dpi * 10) / 10, "inches wide at" dpi "dpi"
+"Height" round(ph / dpi * 10) / 10 "inches" faint
+"If I print" poster "inches wide" bold
+slider poster 4..60
+"That is" round(pw / poster) "dpi," if(pw / poster >= 200, "good", "soft and blurry") faint
+===
+@rich domain=c4_resize_ratio topic=resize_keep_ratio style=short
+resize my banner to 1200 wide but keep the shape, original is 1920 by 1080
+needs: original width and height | new width | new height keeping the ratio | scale percent
+---
+app "Resize Ratio" grid blue
+state ow num = 1920
+state oh num = 1080
+state nw num = 1200
+let nh = if(ow > 0, nw * oh / ow, 0)
+field ow "Original width"
+field oh "Original height"
+field nw "New width"
+statcard round(nh), "new height in pixels"
+"Scale" round(if(ow > 0, nw * 100 / ow, 0)) "% of the original." faint
+===
+@rich domain=c4_byte_bits topic=number_to_binary_bits style=custom_ui
+i am learning how computers store numbers. show a number from 0 to 255 as 8 bits drawn as lit and unlit squares, with each bit's value above it, and the sum of the lit ones, and let me change it with a slider and with plus and minus
+needs: slider for the number 0 to 255 | 8 bit squares lit or unlit | value of each bit | sum of lit bits | plus and minus buttons
+---
+app "Byte Bits" brain slate dark
+state n num = 173
+"The number" n huge
+slider n 0..255
+row gap 2
+  button "-1" tap set n = max(n - 1, 0)
+  button "+1" tap set n = min(n + 1, 255)
+  button "x2" tap set n = min(n * 2, 255)
+grid 8 gap 1
+  each 1..8
+    stack gap 0 align center
+      text pow(2, 8 - it) tiny faint
+      box height 36 radius 6 fill if(floor(n / pow(2, 8 - it)) % 2 = 1, accent, soft)
+        text floor(n / pow(2, 8 - it)) % 2 align center
+"Lit squares add up to" n "." faint
+===
+@rich domain=c4_backup_queue topic=backup_time_queue style=multi_feature
+i have to upload client folders to the cloud over my slow office line. list each folder with its size in gb, type my upload speed in mbps and show total size, total hours to upload everything, and how long each folder takes
+needs: add a folder with size in GB | upload speed in Mbps | total size | total upload hours | hours for each folder
+---
+app "Upload Queue" cloud teal
+table folder name text, gb num 0.1..2000 = 5
+setting mbps num = 20 "Upload speed (Mbps)"
+let hrs(f folder) = f.gb * 8192 / mbps / 3600
+topbar "Upload Queue", folder, "Add folder"
+row gap 2
+  statcard round(sum(folder.gb) * 10) / 10, "GB in total"
+  statcard round(sum(folder, hrs(it)) * 10) / 10, "hours to upload"
+section "Each folder", "At" mbps "Mbps"
+  each folder as f empty "Add the folders you need to upload."
+    row card gap 2 tap edit f swipe remove f
+      f.name grow
+      f.gb "GB" faint
+      round(hrs(f) * 10) / 10 "h" bold
+===
+@rich domain=c4_cloud_bill topic=cloud_hosting_monthly_cost style=detailed
+estimate our monthly cloud bill before we launch. a server costs so much per hour and i run a number of them all month, storage costs per gb, and data going out costs per gb. type my usage and show each part of the bill and the total, and what it is per user
+needs: server count and hourly price | storage in GB and price | outgoing data and price | each part of the bill and total | cost per user
+---
+app "Cloud Bill" cloud purple
+state srv num = 2
+state sprice money = 12
+state store num = 500
+state gprice money = 3
+state egress num = 800
+state eprice money = 6
+state users num = 1000
+let a = srv * sprice * 720
+let b = store * gprice
+let c = egress * eprice
+field srv "Servers running all month"
+field sprice "Price per server hour"
+field store "Storage (GB)"
+field gprice "Price per GB stored"
+field egress "Data out (GB)"
+field eprice "Price per GB out"
+section "Bill", "Total" round(a + b + c)
+  "Servers" round(a) faint
+  "Storage" round(b) faint
+  "Data out" round(c) faint
+"Users" users faint
+slider users 10..100000
+"That is" round((a + b + c) * 100 / max(users, 1)) / 100 "per user per month." bold
+===
+@rich domain=c4_api_batch_time topic=api_rate_limit_batch style=short
+api allows 60 requests a minute and i must call it for 12500 records, how long will it take
+needs: records to process | requests allowed per minute | requests per record | total time | parallel workers
+---
+app "API Batch" bolt ink
+state recs num = 12500
+state rpm num = 60
+state per num = 1
+state workers num = 1
+let reqs = recs * per
+let mins = if(rpm * workers > 0, reqs / (rpm * workers), 0)
+field recs "Records"
+field rpm "Requests allowed per minute"
+field per "Requests per record"
+"Workers in parallel" workers faint
+slider workers 1..10
+statcard floor(mins / 60), "hours and" round(mins % 60) "minutes"
+"Total requests:" reqs faint
+===
+@rich domain=c4_powerbank_charges topic=power_bank_phone_charges style=short
+my power bank is 20000mah, my phone battery is 4500mah, how many full charges do i get
+needs: power bank capacity | phone battery capacity | efficiency | number of full charges | percent left over
+---
+app "Power Bank" bolt yellow
+state bank num = 20000
+state phone num = 4500
+state eff num = 70
+let charges = if(phone > 0, bank * eff / 100 / phone, 0)
+field bank "Power bank (mAh)"
+field phone "Phone battery (mAh)"
+"Real efficiency" eff "%" faint
+slider eff 50..95
+statcard floor(charges), "full phone charges"
+"Plus" round(charges % 1 * 100) "% of one more charge." faint
+===
+@rich domain=c4_ups_runtime topic=ups_backup_runtime style=detailed
+shop has a ups for the computer and router. it is a 12v 7ah battery and the load is about 90 watts. how many minutes of backup do i get, and what if i unplug the monitor and the load drops. let me change the volts, amp hours, the load and keep it to 80 percent usable
+needs: battery volts and amp hours | load in watts | usable percent | minutes of backup | minutes after reducing the load
+---
+app "UPS Backup" shield grey
+state volts num = 12
+state ah num = 7
+state load num = 90
+state usable num = 80
+let wh = volts * ah * usable / 100
+let mins(w num) = if(w > 0, wh / w * 60, 0)
+field volts "Battery volts"
+field ah "Battery amp hours"
+"Usable" usable "%" faint
+slider usable 50..100
+"Load" load "watts" faint
+slider load 10..800
+statcard round(mins(load)), "minutes of backup"
+"With the monitor off (load" round(load * 0.6) "W):" round(mins(load * 0.6)) "minutes" bold
+===
+@rich domain=c4_users_per_server topic=users_per_server_capacity style=custom_ui
+planning servers for a launch. one server handles some number of requests per second, each user sends a request every few seconds, and i expect so many users at the same time. show how many servers i need with 30 percent headroom and draw each server as a box showing how full it is
+needs: requests per second per server | seconds between requests per user | concurrent users | servers needed with headroom | boxes showing load per server
+---
+app "Server Count" tool blue
+state cap num = 200
+state gap num = 5
+state users num = 3000
+state head num = 30
+let rps = users / max(gap, 1)
+let need = (0 - floor(0 - (rps * (1 + head / 100) / max(cap, 1))))
+field cap "Requests per second one server handles"
+"Seconds between a user's requests" gap faint
+slider gap 1..30
+field users "Users online at once"
+"Headroom" head "%" faint
+slider head 0..100
+statcard need, "servers needed for" round(rps) "requests per second"
+grid 4 gap 1
+  each 1..min(need, 12)
+    box radius 6 height 40 fill soft
+      box radius 6 height 40 fill accent opacity clamp(rps / max(need, 1) / max(cap, 1), 0.2, 1)
+===
+@rich domain=c4_stall_cash_log topic=daily_cash_in_out style=multi_feature
+tea stall cash book. each day i note money in from sales and money out for milk, gas and helpers. show profit today, profit this week and a bar chart so i see which days were good
+needs: add a cash entry in or out | profit today | profit this week | bar chart of profit per day | list of entries by day
+---
+app "Cash Book" money orange
+table cash what text, amount money, kind pick In|Out = In
+let today_net = sum(cash.amount today where kind = In) - sum(cash.amount today where kind = Out)
+topbar "Cash Book", cash, "Add entry"
+row gap 2
+  statcard today_net, "profit today"
+  statcard sum(cash.amount week where kind = In) - sum(cash.amount week where kind = Out), "profit this week"
+section "Profit per day"
+  daybars last 7 days, sum(cash.amount on it where kind = In) - sum(cash.amount on it where kind = Out)
+list cash by day, "No entries yet. Add the first sale or expense."
+===
+@rich domain=c4_stock_value topic=inventory_value_table style=multi_feature
+shop inventory. i add every item with how many i have, what each cost me and the lowest stock i want before reordering. show the total value of stock on my shelves and highlight what is running low
+needs: add an item with quantity cost and low level | total stock value | count of low items | low stock highlighted | tap to change quantity
+---
+app "Stock Value" box green
+table item name text, qty num 0.. = 0, cost money, low num 0.. = 5
+topbar "Stock Value", item, "Add item"
+row gap 2
+  statcard round(sum(item, it.qty * it.cost)), "value of stock"
+  statcard count(item, it.qty <= it.low), "items running low"
+section "Items", "Count:" count(item)
+  each item sort it.qty - it.low as i empty "No items yet. Add what is on your shelves."
+    row card gap 2 tap edit i swipe remove i fill if(i.qty <= i.low, soft, surface)
+      i.name grow
+      i.qty "left" faint color if(i.qty <= i.low, bad, muted)
+      round(i.qty * i.cost) bold
+===
+@rich domain=c4_invoice_ageing topic=unpaid_invoice_ageing style=detailed
+i am chasing unpaid invoices. add each one with the client, amount and due date, and show how much is not due yet, how much is up to 30 days late, and how much is over 30 days late, plus the total owed
+needs: add an unpaid invoice with amount and due date | amount not yet due | amount up to 30 days late | amount over 30 days late | total owed
+---
+app "Invoice Ageing" note red
+table inv client text, amount money, due date
+let notdue = sum(inv.amount where due >= today)
+let late1 = sum(inv, if(today - it.due > 0 and today - it.due <= 30, it.amount, 0))
+let late2 = sum(inv, if(today - it.due > 30, it.amount, 0))
+topbar "Invoice Ageing", inv, "Add invoice"
+statcard sum(inv.amount), "total owed to me"
+row gap 2
+  statcard notdue, "not due yet"
+  statcard late1, "1 to 30 days late"
+  statcard late2, "over 30 days late"
+section "Invoices", "Count:" count(inv)
+  each inv sort it.due as i empty "No unpaid invoices. Add one when you send it."
+    row card gap 2 tap edit i swipe remove i
+      i.client grow
+      i.amount bold
+      if i.due < today
+        (today - i.due) "days late" faint color bad
+      else
+        "due" i.due faint
+===
+@rich domain=c4_utilisation_log topic=billable_utilisation_log style=multi_feature
+as a consultant i log my work hours every day and mark which hours are billable. show my utilisation, billable hours divided by all hours, for this week, and a chart of billable hours per day compared to a daily goal of 6
+needs: log hours and whether billable | utilisation percent this week | billable hours this week | daily billable goal chart | list of entries
+---
+app "Utilisation" clock purple
+table hrs what text, h num 0.25..14 = 2, bill bool
+let tot = sum(hrs.h week)
+let bl = sum(hrs.h week where bill = yes)
+topbar "Utilisation", hrs, "Log hours"
+row gap 2
+  statcard round(if(tot > 0, bl * 100 / tot, 0)), "% utilisation this week", 100
+  statcard bl, "billable hours this week"
+section "Billable hours per day", "Goal 6 h"
+  goalbars last 7 days, sum(hrs.h on it where bill = yes), 6
+list hrs by day, "No hours logged yet. Log what you worked on."
+===
+@rich domain=c4_overtime_multiplier topic=overtime_pay_multipliers style=detailed
+factory overtime rules. weekday overtime is paid 1.5 times, sunday work 2 times and public holidays 3 times. i type hourly rate, normal hours and overtime hours, pick the type of day and see overtime pay and total pay for the day
+needs: hourly rate | normal hours | overtime hours | type of day weekday sunday or holiday | overtime pay and total pay
+---
+app "Overtime Pay" tool orange
+state rate money = 450
+state norm num = 8
+state ot num = 3
+state day pick Weekday|Sunday|Holiday = Weekday
+let mult = if(day = Weekday, 1.5, if(day = Sunday, 2, 3))
+field rate "Hourly rate"
+"Normal hours" norm faint
+slider norm 0..12
+"Overtime hours" ot faint
+slider ot 0..12
+choice day
+row gap 2
+  statcard round(ot * rate * mult), "overtime pay at" mult "times"
+  statcard round(norm * rate + ot * rate * mult), "total pay for the day"
+===
+@rich domain=c4_night_shift_pay topic=night_shift_differential style=short
+nurse here, night shift pays 20 percent more per hour. 12 hour shift, how much for a month of 10 night shifts and 8 day shifts
+needs: base hourly rate | night differential percent | night shifts and day shifts in a month | pay for the month
+---
+app "Shift Pay" moon ink dark
+state rate money = 900
+state diff num = 20
+state nights num = 10
+state days_n num = 8
+let night_pay = rate * (1 + diff / 100) * 12 * nights
+let day_pay = rate * 12 * days_n
+field rate "Base hourly rate"
+"Night differential" diff "%" faint
+slider diff 0..60
+"Night shifts" nights faint
+slider nights 0..31
+"Day shifts" days_n faint
+slider days_n 0..31
+statcard round(night_pay + day_pay), "pay for the month"
+"Nights" round(night_pay) ", days" round(day_pay) faint
+===
+@rich domain=c4_mileage_claim topic=work_mileage_claim style=multi_feature
+sales visits by my own car are repaid per km by the company. let me log each trip with the place and the km, set the rate per km, and show the km and the claim this month so i can submit it
+needs: log a trip with place and km | rate per km setting | total km this month | claim amount this month | list of trips
+---
+app "Mileage Claim" car blue
+table trip place text, km num 0.1..1000 = 10
+setting perkm money = 28 "Rate per km"
+topbar "Mileage Claim", trip, "Log trip"
+row gap 2
+  statcard round(sum(trip.km month) * 10) / 10, "km this month"
+  statcard round(sum(trip.km month) * perkm), "claim this month"
+section "Trips", "Count:" count(trip month)
+  list trip month by day, "No trips this month. Log the first visit."
+===
+@rich domain=c4_trip_allowance topic=business_trip_allowance style=detailed
+going on a work trip for some days. company gives a daily food allowance and pays hotel up to a limit per night. type days, the food allowance, hotel rate per night and limit, and local travel, and show what i can claim and what i pay myself over the limit
+needs: number of days | daily food allowance | hotel rate per night and company limit | local travel cost | amount claimable and amount i pay myself
+---
+app "Trip Allowance" plane teal
+state days_t num = 4
+state food money = 3000
+state hotel money = 14000
+state limit money = 12000
+state local money = 5000
+let hotelnights = max(days_t - 1, 0)
+let claim = food * days_t + min(hotel, limit) * hotelnights + local
+let mine = max(hotel - limit, 0) * hotelnights
+"Trip days" days_t faint
+slider days_t 1..30
+field food "Food allowance per day"
+field hotel "Hotel per night"
+field limit "Company hotel limit"
+field local "Local travel"
+statcard round(claim), "you can claim"
+if mine > 0
+  "Hotel goes over the limit, you pay" round(mine) "yourself." color warn
+else
+  "Everything is within the company limits." color good
+===
+@rich domain=c4_gratuity_calc topic=gratuity_end_of_service style=short
+leaving after 7 years, last salary 120k, gratuity is half a month per year i think
+needs: last monthly salary | years of service | days of salary per year | gratuity amount
+---
+app "Gratuity" bag mint
+state sal money = 120000
+state yrs num = 7
+state dpy num = 15
+let grat = sal / 30 * dpy * yrs
+field sal "Last monthly salary"
+"Years of service" yrs faint
+slider yrs 1..40
+"Days of salary per year" dpy faint
+slider dpy 10..30
+statcard round(grat), "gratuity due"
+"About" round(grat / max(sal, 1) * 10) / 10 "months of salary." faint
+===
+@rich domain=c4_prorata_bonus topic=prorata_bonus_months style=detailed
+company gives a yearly bonus of two months salary but i joined in the middle of the year so it is pro rata. type my monthly salary, bonus months, the month i joined and show how many months i worked, the bonus share and the bonus amount
+needs: monthly salary | bonus in months of salary | joining month | months worked this year | bonus amount pro rata
+---
+app "Bonus Share" gift yellow
+state sal money = 90000
+state bm num = 2
+state joined num = 5
+let worked = 13 - joined
+let amt = sal * bm * worked / 12
+field sal "Monthly salary"
+"Bonus of" bm "months of salary" faint
+slider bm 0..6
+"I joined in month" joined "of the year" faint
+slider joined 1..12
+statcard worked, "months worked this year", 12
+statcard round(amt), "bonus you receive"
+"Full year bonus would be" sal * bm faint
+===
+@rich domain=c4_remaining_tests_avg topic=average_needed_remaining_tests style=detailed
+i have 3 tests left this term and i need an overall average of 75 percent for the scholarship. i already did 4 tests with an average of 70. what average do i need on the last three
+needs: tests already done | average so far | tests remaining | target average | average needed on the remaining tests
+---
+app "Test Average" pencil green
+state done_n num = 4
+state avg_so_far num = 70
+state left_n num = 3
+state aim num = 75
+let need = if(left_n > 0, (aim * (done_n + left_n) - avg_so_far * done_n) / left_n, 0)
+"Tests done" done_n faint
+slider done_n 0..20
+field avg_so_far "Average so far (%)"
+"Tests remaining" left_n faint
+slider left_n 1..10
+field aim "Average I want (%)"
+if need > 100
+  "Out of reach" big color bad
+  "You would need" round(need) "% on each remaining test." faint
+else
+  round(need * 10) / 10 big
+  "percent average needed on each remaining test" faint
+===
+@rich domain=c4_scholarship_check topic=scholarship_eligibility style=custom_ui
+scholarship rules: you need at least 85 percent marks, at least 80 percent attendance and family income under a limit. type my marks, attendance and family income and show a tick or a cross for each rule and whether i qualify
+needs: marks percent | attendance percent | family monthly income | tick or cross for each rule | overall result
+---
+app "Scholarship Check" trophy purple
+state marks num = 86
+state att num = 78
+state income money = 60000
+setting maxinc money = 80000 "Income limit"
+let ok1 = marks >= 85
+let ok2 = att >= 80
+let ok3 = income <= maxinc
+field marks "My marks (%)"
+field att "My attendance (%)"
+field income "Family monthly income"
+section "Rules"
+  row gap 2
+    if ok1
+      icon check
+    else
+      icon minus
+    "Marks at least 85%" grow color if(ok1, good, bad)
+  row gap 2
+    if ok2
+      icon check
+    else
+      icon minus
+    "Attendance at least 80%" grow color if(ok2, good, bad)
+  row gap 2
+    if ok3
+      icon check
+    else
+      icon minus
+    "Income under" maxinc grow color if(ok3, good, bad)
+if ok1 and ok2 and ok3
+  "You qualify." big color good
+else
+  "Not eligible yet." big color bad
+===
+@rich domain=c4_grade_curve topic=grade_curve_adjust style=short
+class average was low so teacher adds points, curve it so the top mark becomes 100
+needs: my mark | highest mark in class | points added | curved mark with flat add and with scaling
+---
+app "Grade Curve" school pink
+state mine num = 54
+state top num = 82
+state add num = 10
+let scaled = if(top > 0, mine * 100 / top, 0)
+field mine "My mark"
+field top "Highest mark in class"
+"Flat points added" add faint
+slider add 0..30
+row gap 2
+  statcard min(mine + add, 100), "with flat add"
+  statcard round(min(scaled, 100)), "scaled so top is 100"
+===
+@rich domain=c4_homework_minutes topic=homework_minutes_log style=multi_feature
+my daughter in grade 6 does homework for different subjects. log each session with the subject and minutes, show minutes done today, total for the week, a bar chart for the last 7 days with a 90 minute goal and the subject she spends most time on
+needs: log a session with subject and minutes | minutes today | minutes this week | bar chart against 90 minute goal | bars of time per subject
+---
+app "Homework Time" pencil blue
+table hw subject pick Maths|Urdu|English|Science|Other = Maths, mins num 5..240 = 30
+topbar "Homework Time", hw, "Log session"
+row gap 2
+  statcard sum(hw.mins today), "minutes today", 90
+  statcard sum(hw.mins week), "minutes this week"
+section "Last 7 days", "Goal 90 min"
+  goalbars last 7 days, sum(hw.mins on it), 90
+section "By subject"
+  share hw week by subject, sum(it.mins), it.key
+list hw today, "No homework logged today. Log a session after she finishes."

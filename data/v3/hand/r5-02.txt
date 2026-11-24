@@ -1,0 +1,497 @@
+@rich domain=r5_quit_smoking topic=quit smoking savings style=detailed
+quit smoking on 1 november, used to smoke 15 a day and a pack of 20 costs 450. show me how many days smoke free, cigarettes not smoked, money saved so far, and let me log a craving or a slip with a note so I can see how many cravings I beat each week
+needs: quit date, cigarettes per day and pack price settings | days smoke free | cigarettes not smoked | money saved | log a craving or slip with a note | cravings per week
+---
+app "Smoke free" lock grey
+table crave kind pick Craving_beaten|Slip = Craving_beaten, note text?
+setting quit date = 2026-11-01 "Quit date"
+setting perday num = 15 "Cigarettes per day before"
+setting pack money = 450 "Price of a pack of 20"
+let free = max(today - quit, 0)
+topbar "Smoke free", crave, "Log craving"
+row gap 2
+  statcard free, "days smoke free"
+  statcard free * perday, "cigarettes not smoked"
+statcard round(free * perday * pack / 20), "saved so far"
+section "Cravings", "slips this month:" count(crave month where kind = Slip)
+  goalbars last 7 days, count(crave on it where kind = Craving_beaten), 3
+list crave top 10, "No cravings logged. When one hits, tap Log craving and beat it."
+===
+@rich domain=r5_step_challenge topic=friends step challenge board style=custom_ui
+step challenge between four friends. everyone adds their steps each day, board should rank friends by steps this week with a bar, show who is leading, and I want one tap buttons to add 1000 or 5000 steps for a friend
+needs: add a friend | add steps for a friend | one tap +1000 and +5000 buttons | ranking by steps this week | who is leading
+---
+app "Step challenge" walk green
+table friend name text
+table steps friend ref friend, n num 100..60000
+topbar "Step challenge", friend, "Add friend"
+let top = max(friend, sum(it.steps.n week))
+if top > 0
+  statcard top, "steps by the leader this week"
+each friend sort sum(it.steps.n week) desc as f empty "No friends yet. Add the four of you to start the race."
+  stack card gap 1
+    row gap 2
+      stack grow gap 0
+        f.name bold
+        sum(f.steps.n week) "steps this week" faint
+      if sum(f.steps.n week) = top and top > 0
+        icon trophy
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * sum(f.steps.n week) / max(top, 1), 3 fill accent radius 1
+    row gap 1
+      button "+1000" tap add steps friend = f, n = 1000
+      button "+5000" tap add steps friend = f, n = 5000
+===
+@rich domain=r5_ankle_recovery topic=sprained ankle recovery style=multi_feature
+I sprained my ankle playing football. keep the injury date, then each day log pain 0 to 10 and tick my rehab tasks (ice, calf raises, balance, walking). show days since the injury, pain trend and how many rehab tasks I did today
+needs: injury date setting | log daily pain score | tick rehab tasks done today | days since injury | pain trend line
+---
+app "Ankle recovery" run purple
+table pain score num 0..10
+table rehab task pick Ice|Calf_raises|Balance|Walking = Ice
+setting hurt date = today "Injury date"
+statcard today - hurt, "days since the injury"
+section "Rehab today", "tasks done:" count(rehab today)
+  each options rehab.task as t
+    row gap 2
+      t grow
+      toggle rehab today where task = t
+section "Pain", "latest" last(pain.score) "of 10"
+  trend pain last 30 days sort at, it.score
+  row gap 1
+    each [0, 2, 4, 6, 8]
+      button it tap add pain score = it
+===
+@rich domain=r5_clinic_queue topic=waiting room tokens style=custom_ui
+waiting room tokens for the clinic: receptionist types the patient name and gets the next token number, doctor taps Call next, then Done. screen should show who is in the room now, how many are waiting and how many were seen today
+needs: add a patient to the queue | token numbers | call next button | mark done | count waiting and seen today
+---
+app "Queue" users orange
+table token name text, status pick Waiting|In_room|Done = Waiting
+let waiting = count(token today where status = Waiting)
+topbar "Queue", token, "Add patient"
+row gap 2
+  statcard waiting, "waiting"
+  statcard count(token today where status = Done), "seen today"
+section "In the room now"
+  each token today where status = In_room as t empty "Nobody in the room."
+    row gap 2
+      "#" count(token today where at <= t.at) bold
+      t.name grow
+      button "Done" tap set t.status = Done
+each token today where status = Waiting sort at top 1 as t
+  button "Call next" fill accent tap set t.status = In_room
+section "Waiting", waiting
+  each token today where status = Waiting sort at as t empty "Queue is empty. Nice."
+    row gap 2 swipe remove t
+      "#" count(token today where at <= t.at) bold
+      t.name grow
+      t.at faint
+===
+@rich domain=r5_lab_results topic=lab results reference ranges style=detailed
+keep my blood test results: test name (HbA1c, LDL, HDL, vitamin D, TSH), the value and the lab date. each result must show green if inside the normal range and red if outside, with the range printed beside it, and a line of the values for the test I pick
+needs: add a result with test, value and date | normal range for each test | green or red status | choose a test to see its line | latest value per test
+---
+app "Lab results" eye blue
+table lab test pick HbA1c|LDL|HDL|Vitamin_D|TSH = HbA1c, val num 0..1000, on date = today
+state sel pick HbA1c|LDL|HDL|Vitamin_D|TSH = HbA1c
+let lo(t text) = if(t = HbA1c, 4, if(t = LDL, 0, if(t = HDL, 40, if(t = Vitamin_D, 30, 0.4))))
+let hi(t text) = if(t = HbA1c, 5.7, if(t = LDL, 100, if(t = HDL, 100, if(t = Vitamin_D, 100, 4))))
+topbar "Lab results", lab, "Add result"
+choice sel
+section sel, "normal" lo(sel) "to" hi(sel)
+  trend lab where test = sel sort on, it.val
+  "Latest" last(lab.val where test = sel) faint color if(last(lab.val where test = sel) >= lo(sel) and last(lab.val where test = sel) <= hi(sel), good, bad)
+each lab sort on desc as l empty "No results yet. Add the first one from your report."
+  row card gap 2 tap edit l swipe remove l
+    box width 14 height 14 radius 7 fill if(l.val >= lo(l.test) and l.val <= hi(l.test), good, bad)
+    stack grow gap 0
+      l.test bold
+      l.on faint
+    l.val bold
+===
+@rich domain=r5_ward_beds topic=hospital ward bed map style=custom_ui
+small hospital ward with 12 beds. show the beds as a grid, tap a bed to mark it occupied or free, write the patient name when it is occupied, and count free beds and occupancy percent at the top
+needs: bed grid | tap to mark occupied or free | patient name per bed | free beds count | occupancy percent
+---
+app "Ward beds" bed teal
+table bed bnum num 1..40, patient text?, busy bool
+let used = count(bed where busy = yes)
+topbar "Ward beds", bed, "Add bed"
+row gap 2
+  statcard count(bed) - used, "free beds"
+  statcard round(used * 100 / max(count(bed), 1)), "% occupied", 100
+grid 3 gap 1
+  each bed sort bnum as b empty "No beds yet. Add the beds in your ward."
+    stack radius 10 pad 1 gap 0 fill if(b.busy, bad, good) tap set b.busy = not b.busy
+      "Bed" b.bnum bold
+      if(b.busy, b.patient, "Free") small
+"Tap a bed to switch it between free and occupied. Hold to edit." faint
+===
+@rich domain=r5_nurse_rounds topic=nurse vitals rounds style=multi_feature
+night shift nurse: my patients with bed number, and I need to do vitals every 4 hours. one button per patient to log a round, show the time of the last round, turn the card red if more than 4 hours have passed and show how many rounds each patient had tonight
+needs: add a patient with bed number | log a round with one tap | time since last round | red card after 4 hours | rounds done today per patient
+---
+app "Night rounds" bell slate dark
+table patient name text, bed num 1..60
+table round patient ref patient
+topbar "Night rounds", patient, "Add patient"
+statcard count(round today), "rounds done today"
+each patient sort bed as p empty "No patients yet. Add who is on your ward tonight."
+  let fresh = count(p.round where at >= now - 4h) > 0
+  row card gap 2 fill if(fresh, soft, bad) tap edit p swipe remove p
+    stack grow gap 0
+      "Bed" p.bed p.name bold
+      if count(p.round) = 0
+        "No round yet" faint
+      else
+        "Last round" last(p.round.at) faint
+      count(p.round today) "rounds today" faint
+    button "Round done" tap add round patient = p
+===
+@rich domain=r5_insulin_doses topic=insulin dose log style=detailed
+insulin diary: each injection with units, which insulin (rapid or long-acting), and meal. show total units today, the units of long-acting I took last, a bar chart of total units per day and a reminder at 8 am and 9 pm for my basal dose
+needs: log an injection with units, type and meal | total units today | last long-acting dose | bar chart of units per day | reminder for basal doses
+---
+app "Insulin" pill pink
+table shot units num 1..100, kind pick Rapid|Long_acting = Rapid, meal pick Breakfast|Lunch|Dinner|Bedtime|Correction = Breakfast
+remind "Basal insulin time" at 8:00, 21:00
+topbar "Insulin", shot, "Log dose"
+row gap 2
+  statcard sum(shot.units today), "units today"
+  statcard last(shot.units where kind = Long_acting), "units, last long-acting dose"
+section "Units per day", "last 7 days"
+  daybars last 7 days, sum(shot.units on it)
+list shot by day, "No doses logged yet."
+===
+@rich domain=r5_fluid_limit topic=daily fluid limit heart style=multi_feature
+my doctor limited my fluids to 1500 ml a day because of my heart. let me add what I drink with one tap for a cup 150, glass 250 or bottle 500, show how much room is left, turn red if I cross the limit and show last week day by day
+needs: one tap cup, glass, bottle buttons | fluid left today | red warning when over the limit | limit setting | last 7 days chart with limit line
+---
+app "Fluid limit" cup red
+table sip ml num 10..2000 unit "ml"
+setting cap num = 1500 "Daily limit (ml)"
+let used = sum(sip.ml today)
+row gap 1
+  button "Cup 150" tap add sip ml = 150
+  button "Glass 250" tap add sip ml = 250
+  button "Bottle 500" tap add sip ml = 500
+goal used, cap, if(used > cap, "over your limit", "drunk today"), "ml"
+statcard max(cap - used, 0), "ml left today"
+section "Last 7 days", "over the limit on" count(days last 7 days, sum(sip.ml on it) > cap) "days"
+  goalbars last 7 days, sum(sip.ml on it), cap
+list sip today, "Nothing yet today."
+===
+@rich domain=r5_blood_donation topic=blood donor eligibility style=short
+I donate blood every few months. save the date, and tell me when I can donate again
+needs: log a donation date | date when next donation is allowed after 90 days | days left to wait | total donations
+---
+app "Donor" drop red
+table gift place text?
+let nextok = last(gift).at + 90
+topbar "Donor", gift, "Log donation"
+statcard count(gift), "donations so far"
+section "Next donation"
+  if count(gift) > 0
+    if nextok <= today
+      "You can donate today" head color good
+    else
+      nextok - today "days to wait" head
+      "Next on" nextok faint
+  else
+    "Log your first donation to start the count." faint
+list gift, "No donations yet."
+remind "You can donate blood again" at gift.at + 90d
+===
+@rich domain=r5_pill_organizer topic=weekly pill organizer grid style=custom_ui
+weekly pill box for my mother. a grid with Monday to Sunday and morning, noon and night. tap a box when she took that dose, and show how many doses of the 21 were taken this week
+needs: grid of 7 days by 3 times | tap a box to mark taken | doses taken this week of 21 | reset the week | highlight today
+---
+app "Pill box" pill purple
+table taken day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, slot pick Morning|Noon|Night = Morning
+let n = count(taken week)
+goal n, 21, "doses taken this week"
+grid 4 gap 1
+  text ""
+  each options taken.slot as s
+    text s faint align center
+  each options taken.day as d
+    text d bold fill if(d = dayname(today), soft, bg)
+    each options taken.slot as s
+      box height 36 radius 8 fill if(count(taken week where day = d and slot = s) > 0, good, soft) tap toggle taken week where day = d and slot = s
+button "Clear the week" tap remove all taken week
+===
+@rich domain=r5_doctor_appts topic=my doctor appointments style=detailed
+my own hospital and doctor appointments: who, what for, date and time, and where. remind me the day before, show the next one at the top and separate upcoming from past ones
+needs: add an appointment with doctor, reason, date, time and place | reminder the day before | next appointment at the top | upcoming list | past list
+---
+app "My appointments" calendar mint
+table appt doctor text, reason text, day date, slot time, place text?
+remind "Doctor appointment tomorrow" at appt.day - 1d at 18:00
+topbar "My appointments", appt, "Add appointment"
+section "Next one"
+  if count(appt where day >= today) > 0
+    first(appt.doctor where day >= today sort day) head
+    first(appt.day where day >= today sort day) "at" first(appt.slot where day >= today sort day) faint
+  else
+    "Nothing booked. Add your next appointment." faint
+section "Upcoming", count(appt where day >= today)
+  each appt where day >= today sort day as a empty "No upcoming appointments."
+    row gap 2 tap edit a swipe remove a
+      stack grow gap 0
+        a.doctor bold
+        a.reason "·" a.place faint
+      a.day faint
+section "Past", count(appt where day < today)
+  each appt where day < today sort day desc top 5 as a
+    row gap 2 tap edit a swipe remove a
+      a.doctor grow
+      a.day faint
+===
+@rich domain=r5_refill_tracker topic=prescription refill countdown style=multi_feature
+I take a few long-term tablets and keep running out. for each medicine note how many pills I have and how many I take a day, work out how many days they will last, show red when under 7 days, and tell me the date I run out
+needs: add a medicine with pills in hand and pills per day | days the supply will last | red when under 7 days | run-out date | button to add a refill
+---
+app "Refills" pill orange
+table rx name text, pills num 0..1000, perday num 1..10 = 1, packsize num 1..500 = 30
+topbar "Refills", rx, "Add medicine"
+statcard count(rx where pills / perday < 7), "medicines running low"
+each rx sort pills / perday as r empty "No medicines yet. Add each one with the pills you have left."
+  row card gap 2 fill if(r.pills / r.perday < 7, bad, soft) tap edit r swipe remove r
+    stack grow gap 0
+      r.name bold
+      floor(r.pills / r.perday) "days left · runs out" today + floor(r.pills / r.perday) faint
+    button "+" r.packsize tap set r.pills = r.pills + r.packsize
+===
+@rich domain=r5_pharmacy_credit topic=pharmacy customer credit ledger style=detailed
+some regular customers take medicines on credit. ledger for my pharmacy: customer name, what was taken and the amount, then payments when they come back. show who owes the most and the total I am waiting to collect
+needs: add a customer | add a credit amount | add a payment | balance for each customer | total to collect
+---
+app "Pharmacy khata" book yellow
+table cust name text, phone text?
+table credit cust ref cust, amount money, item text?
+table paid cust ref cust, amount money
+let owed(c cust) = sum(c.credit.amount) - sum(c.paid.amount)
+topbar "Pharmacy khata", cust, "Add customer"
+statcard sum(credit.amount) - sum(paid.amount), "total waiting to collect", sum(credit.amount)
+each cust sort sum(it.credit.amount) - sum(it.paid.amount) desc as c empty "No customers yet. Add the first regular who takes credit."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.phone faint
+    stack gap 1 align end
+      owed(c) bold color if(owed(c) > 0, bad, good)
+      row gap 1
+        button "+ credit" tap add credit cust = c, amount = 500
+        button "Paid 500" tap add paid cust = c, amount = 500
+===
+@rich domain=r5_physio_clinic topic=physio sessions pain change style=multi_feature
+physio clinic: each session has the patient name, body area, pain before and pain after (0 to 10). show sessions today, the average pain drop across all sessions and a list where sessions with a big improvement are green
+needs: add a session with patient, body area, pain before and pain after | sessions today | average pain drop | green for big improvement | list of sessions
+---
+app "Physio clinic" bolt teal
+table sess patient text, area pick Neck|Shoulder|Back|Knee|Ankle = Back, before num 0..10, after num 0..10
+topbar "Physio clinic", sess, "Add session"
+row gap 2
+  statcard count(sess today), "sessions today"
+  statcard round(sum(sess, it.before - it.after) * 10 / max(count(sess), 1)) / 10, "average pain drop"
+section "By area", "sessions"
+  share sess by area, count(it), it.key
+each sess sort at desc top 15 as s empty "No sessions yet. Add one after the patient leaves the bed."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.patient bold
+      s.area faint
+    s.before "to" s.after bold color if(s.before - s.after >= 3, good, ink)
+===
+@rich domain=r5_kick_counter topic=baby kick counter style=custom_ui
+I am 30 weeks pregnant and the doctor said count baby kicks. big button to tap for each kick, count for today, a goal of 10 kicks, and how long it took me to reach 10. also a small chart per day
+needs: big tap button for each kick | kicks today | goal of 10 kicks | time to reach the tenth kick | chart of kicks per day
+---
+app "Kick count" baby pink
+table kick n num 1..1
+let k = count(kick today)
+statcard k, "kicks today of 10", 10
+draw width 240 tap add kick n = 1
+  circle 50, 50, 44 fill if(k >= 10, good, soft) stroke accent thick 2
+  label 50, 42, k huge
+  label 50, 66, "tap for each kick" tiny color muted
+if k >= 10
+  "Reached 10 kicks after" nth(kick today sort at, 10).at - nth(kick today sort at, 1).at faint
+button "Undo last kick" tap remove last(kick today)
+section "Kicks per day", "last 7 days"
+  goalbars last 7 days, count(kick on it), 10
+===
+@rich domain=r5_contractions topic=labour contraction timer style=multi_feature
+labour contraction timer. press start when a contraction begins and stop when it ends, it should save the length, then show the last contractions with how long each lasted and how far apart they are, plus the average length
+needs: start and stop buttons | saved length of each contraction | list with start time | average length | contraction count in the last hour
+---
+app "Contractions" timer plum dark
+table contraction len dur
+state began when = now
+state going bool = no
+row gap 2
+  statcard count(contraction last 7 days), "contractions logged"
+  statcard count(contraction where at >= now - 1h), "in the last hour"
+if going
+  "Contraction running since" began head
+  button "Stop" fill bad tap add contraction len = now - began then set going = no
+else
+  button "Start contraction" fill accent tap set began = now then set going = yes
+section "Last contractions", "average" round(sum(contraction last 7 days, it.len / 1s) / max(count(contraction last 7 days), 1)) "seconds"
+  each contraction sort at desc top 8 as c empty "Nothing timed yet."
+    row gap 2 swipe remove c
+      c.at grow
+      c.len bold
+===
+@rich domain=r5_baby_feeds topic=newborn feeds and diapers style=custom_ui
+newborn log in the night: three big buttons for feed, wet diaper and dirty diaper. show how many of each today and how long since the last feed. mom is tired so please keep it simple
+needs: one tap feed button | one tap diaper buttons | counts of each today | time since last feed | list of today
+---
+app "Newborn log" baby yellow
+table event kind pick Feed|Wet|Dirty = Feed
+row gap 1
+  each options event.kind
+    button it fill accent grow tap add event kind = it
+row gap 2
+  each options event.kind as k
+    stack grow card gap 0 align center
+      count(event today where kind = k) big
+      k faint
+if count(event where kind = Feed) > 0
+  "Last feed" since(event where kind = Feed) "days ago," last(event.at where kind = Feed) faint
+list event today, "Nothing logged today. Tap a button after each feed or change."
+===
+@rich domain=r5_nap_log topic=toddler nap times style=detailed
+toddler sleep: write when each nap started and ended, and I will see how many hours he slept in total today, the average nap this week and a bar chart of nap hours per day. he usually naps after lunch so remind me at 13:00 to start the nap routine
+needs: add a nap with start and end time | hours slept today | average nap length this week | bar chart of nap hours per day | reminder at 13:00
+---
+app "Nap log" moon blue dark
+table nap start time, stop time
+let hrs(n nap) = (n.stop - n.start) / 1h
+remind "Nap routine time" at 13:00
+topbar "Nap log", nap, "Add nap"
+row gap 2
+  statcard round(sum(nap today, hrs(it)) * 10) / 10, "hours slept today"
+  statcard round(sum(nap week, hrs(it)) * 10 / max(count(nap week), 1)) / 10, "hours average per nap"
+section "Nap hours per day", "last 7 days"
+  daybars last 7 days, sum(nap on it, hrs(it))
+each nap sort at desc top 10 as n empty "No naps yet. Add today's nap."
+  row card gap 2 tap edit n swipe remove n
+    n.start "to" n.stop bold grow
+    round(hrs(n) * 10) / 10 "h" faint
+===
+@rich domain=r5_child_height topic=child height chart style=short
+height chart for my kids on the door frame, date and cm
+needs: add a height with child and cm | line chart per child | growth since last measurement | latest height
+---
+app "Height chart" tool purple
+table ht child pick Sara|Omar = Sara, cm num 40..200 unit "cm"
+state who pick Sara|Omar = Sara
+topbar "Height chart", ht, "Measure"
+choice who
+row gap 2
+  statcard last(ht.cm where child = who), "cm now"
+  statcard last(ht.cm where child = who) - first(ht.cm where child = who), "cm grown since the first mark"
+trend ht where child = who sort at, it.cm
+list ht where child = who, "No marks yet for this child."
+===
+@rich domain=r5_desk_stretch topic=desk stretch break reminders style=multi_feature
+I sit 9 hours at a desk. remind me to stand up and stretch every 45 minutes between 9 and 5, let me log each break with one tap and what I did (stand, neck, wrists, walk), and show how many breaks against a goal of 8 each day
+needs: reminder every 45 minutes in work hours | log a break with one tap | what kind of stretch | breaks today against goal of 8 | week dots for hitting the goal
+---
+app "Desk breaks" clock green
+table brk kind pick Stand|Neck|Wrists|Walk = Stand
+setting aim num = 8 "Breaks per day"
+remind "Stand up and stretch" every 45m from 9:00 to 17:00
+statcard count(brk today), "breaks today of" aim, aim
+row gap 1
+  each options brk.kind
+    button it grow tap add brk kind = it
+section "Goal hit", "this week"
+  weekdots count(brk on it) >= aim
+section "By kind", "this month"
+  share brk month by kind, count(it), it.key
+===
+@rich domain=r5_marathon_weeks topic=marathon plan long runs style=custom_ui
+marathon plan in 16 weeks. I want to pick the week with chips or arrows and see that week's long run, easy runs and rest day. each week has a long run distance I type in once. also tick weeks completed and show how far through the plan I am
+needs: add a week with long run distance | choose a week | tick week complete | how far through the plan | next long run distance
+---
+app "Marathon plan" flag red
+table wk week num 1..16, longkm num 5..42 unit "km", easykm num 0..40 = 20 unit "km", done bool
+state cur num = 1
+let this = first(wk where week = cur)
+topbar "Marathon plan", wk, "Add week"
+goal count(wk where done = yes), 16, "weeks complete of 16"
+row align center gap 1
+  button "<" tap set cur = max(cur - 1, 1)
+  "Week" cur bold grow align center
+  button ">" tap set cur = min(cur + 1, 16)
+section "Week" cur
+  if count(wk where week = cur) > 0
+    row gap 2
+      statcard first(wk.longkm where week = cur), "km long run"
+      statcard first(wk.easykm where week = cur), "km easy runs"
+  else
+    "Nothing planned for this week yet. Add it with the button above." faint
+section "Long run per week", "km"
+  bars wk sort week, it.longkm, it.week
+===
+@rich domain=r5_gym_split topic=gym push pull legs days style=custom_ui
+push pull legs routine. pick the day type at the top, and the screen lists the exercises for that day with sets and reps and lets me tick each one done today. I also want to add my own exercises to a day
+needs: chips for push, pull, legs | add an exercise to a day with sets and reps | tick exercise done today | exercises done today count | list for the picked day
+---
+app "PPL split" dumbbell ink
+table move name text, day pick Push|Pull|Legs = Push, sets num 1..8 = 3, reps num 1..30 = 10
+table fin move ref move
+state d pick Push|Pull|Legs = Push
+topbar "PPL split", move, "Add exercise"
+choice d
+statcard count(move where day = d, count(it.fin today) > 0), "of" count(move where day = d) "done today", count(move where day = d)
+each move where day = d sort name as m empty "No exercises for this day yet. Add the first one."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.fin
+    stack grow gap 0
+      m.name bold
+      m.sets "x" m.reps faint
+===
+@rich domain=r5_one_rep_max topic=estimated 1RM strength style=detailed
+strength log with exercise, weight and reps. the app should work out my estimated one rep max with weight times (1 + reps / 30), show my best estimate per lift as bars and a line of the estimate over time for the lift I choose
+needs: add a set with lift, weight and reps | estimated 1RM for each set | best estimate for each lift | line over time for the chosen lift | personal best card
+---
+app "Strength" bolt slate
+table setx lift pick Squat|Bench|Deadlift|Press = Squat, kg num 5..400, reps num 1..30
+state sel pick Squat|Bench|Deadlift|Press = Squat
+let e1(s setx) = s.kg * (1 + s.reps / 30)
+topbar "Strength", setx, "Log set"
+choice sel
+statcard round(max(setx where lift = sel, e1(it))), "kg estimated 1RM for" sel
+section "Best estimate per lift", "kg"
+  bars options setx.lift, max(setx where lift = it, e1(it)), it
+section "Over time", sel
+  trend setx where lift = sel sort at, e1(it)
+each setx where lift = sel sort at desc top 8 as s empty "No sets yet for this lift."
+  row card gap 2 tap edit s swipe remove s
+    s.kg "kg x" s.reps bold grow
+    round(e1(s)) "est. 1RM" faint
+===
+@rich domain=r5_body_measure topic=body measurements tape style=multi_feature
+body tape measurements every two weeks: waist, chest, hips and arm in cm. pick which one to look at with chips, see the change since the first measurement and a line chart of it
+needs: add measurements for waist, chest, hips and arm | choose a part | change since first | line chart of the chosen part | latest values
+---
+app "Body tape" scale pink
+table tape waist num 30..200 unit "cm", chest num 30..200 unit "cm", hips num 30..200 unit "cm", arm num 15..80 unit "cm"
+state part pick Waist|Chest|Hips|Arm = Waist
+let v(r tape) = if(part = Waist, r.waist, if(part = Chest, r.chest, if(part = Hips, r.hips, r.arm)))
+topbar "Body tape", tape, "Measure"
+choice part
+row gap 2
+  statcard v(last(tape)), "cm now"
+  statcard round((v(last(tape)) - v(first(tape))) * 10) / 10, "cm change since the first"
+section part, "every measurement"
+  trend tape sort at, v(it)
+each tape sort at desc top 6 as t empty "No measurements yet. Take the first tape reading."
+  row card gap 2 tap edit t swipe remove t
+    t.at grow
+    "W" t.waist "· C" t.chest "· H" t.hips "· A" t.arm faint

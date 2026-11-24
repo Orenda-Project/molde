@@ -1,0 +1,196 @@
+@rich domain=r5_aligner_wear topic=aligner trays wear hours style=detailed
+invisalign-type aligners must be worn 22 hours a day. each evening I note how many hours I wore them, and each time I switch to the next tray I add the tray number. show hours today against 22, the tray I am on, days on this tray and a chart of hours per day with a 22 hour line
+needs: log hours worn each day | log a tray change with tray number | hours against 22 | current tray and days on it | chart with 22 hour line
+---
+app "Aligners" tooth ocean
+table wear hrs num 0..24 unit "h"
+table tray no_ num 1..60
+setting need num = 22 "Hours per day"
+topbar "Aligners", wear, "Log hours"
+row gap 2
+  statcard last(wear.hrs), "hours worn, last entry of" need, need
+  statcard last(tray.no_), "tray number now"
+section "This tray", "changed" last(tray.at)
+  if count(tray) > 0
+    "Tray" last(tray.no_) "for" plural(today - last(tray.at), "day") bold
+  else
+    "Add your first tray change." faint
+  button "Next tray" tap add tray no_ = last(tray.no_) + 1
+section "Hours per day", "days at goal:" count(days last 14 days, sum(wear.hrs on it) >= need)
+  goalbars last 14 days, sum(wear.hrs on it), need
+===
+@rich domain=r5_contact_lenses topic=contact lens replacement style=short
+monthly contact lenses, remind me to change them
+needs: log when I put in a new pair | date of the next change | days left | reminder before the due date
+---
+app "Lenses" eye mint
+table pair type pick Monthly|Two_weekly|Daily = Monthly
+setting life num = 30 "Days per pair"
+remind "Contact lenses are due for a change" at pair.at + 28d
+topbar "Lenses", pair, "New pair"
+if count(pair) > 0
+  statcard last(pair.at) + life - today, "days left on this pair"
+  "Change on" last(pair.at) + life head color if(last(pair.at) + life <= today, bad, ink)
+list pair top 6, "No pairs logged yet."
+===
+@rich domain=r5_eye_drops topic=glaucoma eye drops schedule style=multi_feature
+grandma has glaucoma and puts drops in the right and left eye at 8, 14 and 20. tick each dose when done, remind at those times, count the drops left in the bottle (200 drops at the start) and show the adherence of the last 7 days
+needs: three dose times with tick | reminder at 8, 14 and 20 | drops left in the bottle | adherence over 7 days | new bottle button
+---
+app "Eye drops" drop teal
+table slot name text, at_ time
+table put slot ref slot
+setting bottle num = 200 "Drops in a new bottle"
+state start when = now
+let used = count(put) * 2
+remind "Eye drops time" at slot.at_
+topbar "Eye drops", slot, "Add dose time"
+row gap 2
+  statcard max(bottle - used, 0), "drops left in the bottle", bottle
+  statcard round(count(put last 7 days) * 100 / max(count(slot) * 7, 1)), "% of doses taken in 7 days", 100
+each slot sort at_ as s empty "No dose times yet. Add 8:00, 14:00 and 20:00."
+  stack card gap 2 tap edit s swipe remove s
+    row gap 2
+      stack grow gap 0
+        s.name bold
+        s.at_ faint
+      toggle s.put
+    weekdots count(s.put on it) > 0
+button "New bottle" tap remove all put
+===
+@rich domain=r5_first_aid_kit topic=first aid kit expiry check style=custom_ui
+school first aid box: items like bandages, antiseptic, paracetamol, burn gel, each with the quantity and expiry date. I want a screen to see what is expired in red, what expires in the next 90 days in orange and a button to mark an item as replaced
+needs: add an item with quantity and expiry date | red expired | orange within 90 days | button to mark replaced | count of items needing action
+---
+app "First aid box" plus red
+table aid name text, qty num 0..500, expiry date
+topbar "First aid box", aid, "Add item"
+statcard count(aid where expiry <= today + 90), "items need action"
+each aid sort expiry as a empty "The box is empty. Add each item with its expiry date."
+  row card gap 2 fill if(a.expiry < today, bad, if(a.expiry <= today + 90, warn, soft)) tap edit a swipe remove a
+    stack grow gap 0
+      a.name bold
+      a.qty "in the box · expires" a.expiry faint
+    if a.expiry <= today + 90
+      button "Replaced" tap set a.expiry = today + 365
+===
+@rich domain=r5_spo2_log topic=oxygen saturation readings style=detailed
+checking my father's oxygen saturation with a finger oximeter during his chest infection. log SpO2 and pulse. 95 and above is green, 90 to 94 orange, below 90 is red and needs a call to the doctor. show the lowest today, a trend and the readings coloured
+needs: log SpO2 and pulse | green orange red colour bands | warning below 90 | lowest today | trend of SpO2
+---
+app "Oxygen" cloud blue dark
+table ox spo2 num 50..100 unit "%", pulse num 30..200 = 80
+topbar "Oxygen", ox, "Add reading"
+if last(ox.spo2) < 90
+  "Below 90. Call the doctor now." head color bad
+row gap 2
+  statcard last(ox.spo2), "% at the last reading"
+  statcard min(ox.spo2 today), "% lowest today"
+section "Trend", "last 7 days"
+  trend ox last 7 days sort at, it.spo2
+each ox sort at desc top 10 as o empty "No readings yet."
+  row card gap 2 tap edit o swipe remove o fill if(o.spo2 < 90, bad, if(o.spo2 < 95, warn, good))
+    o.spo2 "%" bold
+    o.pulse "bpm" faint grow
+    o.at faint
+===
+@rich domain=r5_flu_recovery topic=flu recovery day checklist style=custom_ui
+I have flu and want to track recovery. each day tick the symptoms I still have (fever, cough, sore throat, aches, tiredness), and pick how I feel overall from 1 to 5. show how many symptoms I had today, day count since I got sick and a line of how I feel
+needs: tick symptoms each day | overall feeling 1 to 5 | symptoms today count | days since I got sick | line of feeling
+---
+app "Flu recovery" bed yellow
+table sx kind pick Fever|Cough|Sore_throat|Aches|Tiredness = Fever
+table feel score num 1..5
+setting sick date = today "First day sick"
+state f num = 3
+statcard today - sick + 1, "days since I got sick"
+section "Symptoms today", "still have:" count(sx today)
+  each options sx.kind as k
+    row gap 2
+      k grow
+      toggle sx today where kind = k
+section "How do I feel?", "today"
+  row gap 1
+    each 1..5
+      button it fill if(f = it, accent, soft) grow tap set f = it
+  button "Save feeling" tap add feel score = f
+section "Feeling so far"
+  trend feel sort at, it.score
+===
+@rich domain=r5_discharge_calls topic=hospital discharge follow-up calls style=multi_feature
+ward follow-up: patients discharged get a phone call after 3 days. add patient name, ward and discharge date, mark when called with the result (fine, needs visit, no answer). show who is due for a call today or earlier and not yet called, and how many are fine
+needs: add a patient with ward and discharge date | calls due after 3 days | mark called with result | count not yet called | count fine
+---
+app "Discharge calls" phone slate
+table pt name text, ward pick Medical|Surgical|Paediatric|Maternity = Medical, out date = today, result pick Not_called|Fine|Needs_visit|No_answer = Not_called
+topbar "Discharge calls", pt, "Add patient"
+row gap 2
+  statcard count(pt where result = Not_called and out + 3 <= today), "calls due now"
+  statcard count(pt where result = Fine), "patients doing fine"
+each pt where result = Not_called or result = No_answer sort out as p empty "Nobody to call. All follow-ups are done."
+  stack card gap 1 tap edit p swipe remove p fill if(p.out + 3 <= today, warn, soft)
+    row gap 2
+      p.name bold grow
+      p.ward faint
+    "Discharged" p.out "· call on" p.out + 3 faint
+    row gap 1
+      button "Fine" tap set p.result = Fine
+      button "Needs visit" tap set p.result = Needs_visit
+      button "No answer" tap set p.result = No_answer
+===
+@rich domain=r5_iron_vitamins topic=pregnancy supplements stock style=detailed
+my wife takes iron and folic acid and calcium during pregnancy. tick each supplement each day, keep a count of the tablets left in each strip, show how many days in a row she took all three and remind her at 9 in the evening
+needs: tick three supplements each day | tablets left per supplement | streak of days all taken | reminder at 21:00 | restock buttons
+---
+app "Supplements" pill pink
+table supp name text, left num 0..500 "Tablets left"
+table took supp ref supp
+let n = count(supp)
+remind "Take your supplements" at 21:00
+topbar "Supplements", supp, "Add supplement"
+statcard count(supp, count(it.took today) > 0), "of" n "taken today", n
+each supp sort name as s empty "No supplements yet. Add iron, folic acid and calcium."
+  row card gap 2 tap edit s swipe remove s fill if(s.left < 7, warn, soft)
+    toggle s.took
+    stack grow gap 0
+      s.name bold
+      s.left "tablets left" faint
+    button "-1" tap set s.left = s.left - 1
+    button "+30" tap set s.left = s.left + 30
+section "Days with all taken", "last 14 days"
+  weekdots n > 0 and count(took on it) >= n
+===
+@rich domain=r5_vaccine_camp topic=vaccination camp tally style=custom_ui
+we run a one-day vaccination camp in the village. big tally buttons for polio, measles, BCG, pentavalent and tetanus, tap each time a dose is given, count doses so far, total doses this week and a bar chart comparing vaccines
+needs: tap a button for each dose given | doses by vaccine | total so far today | doses this week | bar chart by vaccine
+---
+app "Vaccine camp" shield green
+table dose vac pick Polio|Measles|BCG|Pentavalent|Tetanus = Polio
+statcard count(dose today), "doses given today"
+grid 2 gap 1
+  each options dose.vac as v
+    button v tap add dose vac = v
+button "Undo last dose" tap remove last(dose today)
+section "By vaccine", "this week" count(dose week)
+  share dose week by vac, count(it), it.key
+section "Doses per day", "last 7 days"
+  daybars last 7 days, count(dose on it)
+===
+@rich domain=r5_pe_fitness topic=school PE fitness records style=multi_feature
+PE teacher: each pupil has a shuttle run time in seconds, sit-ups in one minute and a standing jump in cm, tested each term. I add pupils, enter results, and want to see the class best for each test and a ranking by sit-ups with bars
+needs: add a pupil | enter shuttle, sit-ups and jump results | class best for each test | ranking by sit-ups | latest test date
+---
+app "PE fitness" ball orange
+table pupil name text
+table fit pupil ref pupil, shuttle num 5..40 unit "s", situps num 0..80, jump num 30..250 unit "cm"
+topbar "PE fitness", pupil, "Add pupil"
+row gap 2
+  statcard min(fit.shuttle), "s, best shuttle run"
+  statcard max(fit.situps), "best sit-ups"
+  statcard max(fit.jump), "cm, best jump"
+section "Sit-ups ranking", "latest test"
+  share pupil sort last(it.fit.situps) desc, last(it.fit.situps), it.name
+each pupil sort name as p empty "No pupils yet. Add the class list."
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    button "+ test" tap add fit pupil = p, shuttle = 12, situps = 20, jump = 120

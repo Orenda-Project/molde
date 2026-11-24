@@ -1,0 +1,473 @@
+@rich domain=t2_shift_pay topic=petrol_pump_shift_pay style=detailed
+i work shifts at a petrol pump, 6 to 2, 2 to 10 or the night one, and the owner never pays what i counted. let me log each shift with start, finish and the hourly rate, show the hours of each shift even when it crosses midnight, my pay so far this month, and a bar chart of pay per day this week.
+needs: log a shift with start time, finish time and hourly rate | hours per shift including past midnight | pay for each shift | total pay this month | bar chart of pay per day for the last 7 days
+---
+app "Shift pay" coin mint
+table shift start time, finish time, rate money = 450 "Hourly rate"
+let hrs(s time, f time) = (f - s) / 1h
+let worth(r shift) = hrs(r.start, r.finish) * r.rate
+topbar "Shifts", shift, "Add shift"
+statcard round(sum(shift month, worth(it))), "pay this month", 60000
+section "Pay per day", "last 7 days"
+  daybars last 7 days, round(sum(shift on it, worth(it)))
+each shift top 10 as s empty "No shifts yet. Add the first one after you clock out."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.start "to" s.finish bold
+      hrs(s.start, s.finish) "hours at" s.rate faint
+    worth(s) bold
+===
+@rich domain=t2_tuition_dues topic=tuition_fee_instalment_dues style=multi_feature
+tuition academy owner here, students pay in instalments and i keep forgetting who is due. list instalments with the student, amount and due date, tell me how many fall due in the next 7 days and how much is already overdue, and let me tick one when it is paid
+needs: add an instalment with student, amount and due date | count of instalments due within 7 days | total overdue amount | tick an instalment as paid | list sorted by due date
+---
+app "Fee dues" school ocean
+table student name text
+table instalment student ref student, amount money, due date, paid bool
+let soon = count(instalment where paid = no and due >= today and due - today <= 7)
+let late = sum(instalment.amount where paid = no and due < today)
+topbar "Fee dues", instalment, "Add instalment"
+row gap 2
+  statcard soon, "due in 7 days"
+  statcard late, "overdue"
+each instalment where paid = no sort due as i empty "Nothing pending. Add an instalment when a student agrees a plan."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.student.name bold
+      "due" i.due "·" i.due - today "days" faint color if(i.due < today, bad, muted)
+    i.amount bold
+    toggle i.paid
+form student, "Add student"
+===
+@rich domain=t2_vaccine_dates topic=child_vaccination_schedule style=detailed
+my baby has a vaccine card full of dates i cannot read. record each dose with the child, the vaccine, the date given and how many days until the next dose, then show the date the next one is due, count the ones due in the next two weeks, colour the late ones, and let me add each child.
+needs: record a dose with child, vaccine, date and gap in days | next due date for each dose | count of doses due in 14 days | late doses coloured | add a child
+---
+app "Vaccines" pill slate
+table child name text
+table dose child ref child, vaccine pick BCG|Polio|Measles|Penta|Typhoid = Polio, given date = today, gap num 7..365 = 28 "Days to next dose"
+let soon = count(dose where given + gap >= today and given + gap - today <= 14)
+let late = count(dose where given + gap < today)
+topbar "Vaccines", dose, "Add dose"
+row gap 2
+  statcard soon, "due in 14 days"
+  statcard late, "past due"
+each dose sort given desc as d empty "No doses yet. Add the first vaccine from the card."
+  row card gap 2 tap edit d swipe remove d fill if(d.given + d.gap < today, bad, soft)
+    stack grow gap 0
+      d.child.name d.vaccine bold
+      "given" d.given "· next" d.given + d.gap faint
+    d.given + d.gap - today "days" bold
+form child, "Add child"
+===
+@rich domain=t2_rent_receipts topic=flat_rent_receipts style=custom_ui
+Four flats, four tenants and everyone pays on a different day. I want a receipt book: tenant, flat, amount, and how they paid (cash, bank or easypaisa). Show what I collected this month against what I should get, the amount per flat, and a list of receipts by day. The rent per flat should be something I can change.
+needs: add a receipt with tenant, flat, amount and payment mode | collected this month against expected rent | amount per flat bars | receipts grouped by day | change expected rent per flat
+---
+app "Rent book" home ink dark
+table receipt tenant text, flat pick A1|A2|B1|B2 = A1, amount money, mode pick Cash|Bank|Easypaisa = Cash
+setting rent money = 28000 "Rent per flat"
+let expected = rent * 4
+topbar "Rent book", receipt, "Add receipt"
+statcard sum(receipt.amount month), "collected of" expected, expected
+statcard expected - sum(receipt.amount month), "still to collect"
+section "By flat", "this month"
+  share receipt month by flat, sum(it.amount), it.key
+list receipt by day, "No receipts yet. Add one when a tenant pays."
+===
+@rich domain=t2_mess_rebate topic=hostel_mess_rebate style=short
+hostel mess charges the full month even when i am home. need to log leave days and see my rebate
+needs: log leave with start and return date | days away this month | rebate amount | grid of days away | change daily mess rate
+---
+app "Mess rebate" food green
+table leave begins date, back date, reason text?
+setting rate money = 350 "Mess rate per day"
+let away = sum(leave where month(begins) = month(today), it.back - it.begins + 1)
+topbar "Mess leave", leave, "Add leave"
+statcard away, "days away this month", monthdays(today)
+statcard away * rate, "rebate to ask for"
+section "Last 30 days", "dark days = away"
+  daygrid last 30 days, count(leave where begins <= it and back >= it)
+list leave, "No leave yet. Add the dates when you go home."
+===
+@rich domain=t2_tailor_orders topic=tailor_delivery_deadlines style=multi_feature
+tailor shop, eid rush is coming. every order needs customer, item, the delivery date, price and advance taken. show how much is left to collect, how many orders are due within 3 days, paint late orders red, and tick off when it is ready for pickup.
+needs: add an order with customer, item, delivery date, price and advance | money left to collect | orders due within 3 days | late orders coloured red | tick when ready | sorted by delivery date
+---
+app "Tailor orders" pen red
+table order customer text, item pick Shalwar_kameez|Waistcoat|Bridal|Kurta|Alteration = Shalwar_kameez, due date, price money, advance money = 0, ready bool
+let left = sum(order where ready = no, it.price - it.advance)
+let rush = count(order where ready = no and due - today <= 3)
+topbar "Tailor orders", order, "Add order"
+row gap 2
+  statcard rush, "due within 3 days"
+  statcard left, "left to collect"
+each order where ready = no sort due as o empty "No open orders. Add one when a customer leaves cloth."
+  row card gap 2 tap edit o swipe remove o fill if(o.due < today, bad, if(o.due - today <= 3, warn, soft))
+    stack grow gap 0
+      o.customer o.item bold
+      "due" o.due "· balance" o.price - o.advance faint
+    toggle o.ready
+===
+@rich domain=t2_gym_expiry topic=gym_membership_expiry style=detailed
+i run a small gym and members vanish when their plan ends. add members with plan (monthly, quarterly, yearly), the join date and fee. work out each expiry date, warn me about the ones ending in the next 10 days, show how many members are on each plan and the fees collected this month.
+needs: add a member with plan, join date and fee | expiry date for each member | count expiring within 10 days | members per plan | fees collected this month
+---
+app "Gym members" dumbbell orange
+table member name text, plan pick Monthly|Quarterly|Yearly = Monthly, joined date = today, fee money
+let ends(m member) = m.joined + if(m.plan = Monthly, 30, if(m.plan = Quarterly, 90, 365))
+let soon = count(member, ends(it) >= today and ends(it) - today <= 10)
+topbar "Gym members", member, "Add member"
+row gap 2
+  statcard soon, "expire in 10 days"
+  statcard sum(member.fee month), "fees this month"
+section "Members per plan"
+  share member by plan, count(it), it.key
+each member sort joined as m empty "No members yet. Add the first one with Add member."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.name bold
+      m.plan "· ends" ends(m) faint
+    if ends(m) < today
+      "Expired" bold color bad
+    else
+      ends(m) - today "days left" bold
+===
+@rich domain=t2_loan_instalments topic=bike_loan_instalment_tracker style=custom_ui
+took a loan for the bike. 12 instalments, i pay 10000 each when i can. log each payment, show how much of the loan is still left, how many instalments remain and the date the next one is due, which comes a month after the last. loan size and number of instalments should be changeable.
+needs: log a payment amount | amount still owed | instalments remaining | next due date | progress bar toward the loan | change loan size and instalment count
+---
+app "Bike loan" bike yellow
+table paid amount money = 10000
+setting loan money = 120000 "Loan taken"
+setting months num = 12 "Number of instalments"
+setting first date = 2026-12-05 "First due date"
+let left = loan - sum(paid.amount)
+let nextdue = addmonths(first, count(paid))
+topbar "Bike loan", paid, "Log payment"
+goal sum(paid.amount), loan, "paid back so far"
+row gap 2
+  statcard left, "still owed"
+  statcard months - count(paid), "instalments left"
+text "Next due" nextdue "in" nextdue - today "days" head
+section "Payments", "latest first"
+  list paid top 12, "No payments yet. Log the first instalment."
+===
+@rich domain=t2_exam_countdown topic=exam_date_countdown style=multi_feature
+board exams are close and i panic every morning. put my papers in with subject and date, tell me how many days to the next one, show days left for every paper in a bar chart and keep the list in date order. a setting for my study hours per day too.
+needs: add an exam with subject and date | days to the next exam | bar chart of days left per exam | list in date order | change study hours per day
+---
+app "Exam countdown" school green
+table exam subject text, held date
+setting hours num = 4 "Study hours per day"
+let upcoming = nth(exam where held >= today sort held, 1)
+topbar "Exams", exam, "Add exam"
+statcard upcoming.held - today, "days until" upcoming.subject, 30
+section "Days left", "next six papers"
+  bars exam where held >= today sort held top 6, it.held - today, it.subject
+each exam where held >= today sort held as e empty "No papers coming up. Add your datesheet."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.subject bold
+      e.held faint
+    e.held - today "days" bold
+    (e.held - today) * hours "study hours" faint
+===
+@rich domain=t2_box_cricket_overs topic=box_cricket_over_tracker style=custom_ui
+we play box cricket every friday, 8 overs a side. log each over with the bowler, runs and wickets, show the run rate, the target and runs still needed, a bar for runs in each over, and who is giving away the most runs
+needs: add an over with bowler, runs and wickets | run rate per over | runs still needed for the target | bar per over | runs conceded by bowler
+---
+app "Box cricket" ball teal
+table over bowler text, runs num 0..36, wickets num 0..3 = 0
+setting target num = 80 "Target"
+let total = sum(over.runs)
+let done = count(over)
+topbar "Box cricket", over, "Add over"
+row gap 2
+  statcard total, "runs for" sum(over.wickets) "wickets after" plural(done, "over")
+  statcard max(target - total, 0), "runs needed from" max(8 - done, 0) "overs"
+text "Run rate" round(total * 10 / max(done, 1)) / 10 "per over" faint
+section "Runs per over"
+  bars over sort at, it.runs, join("O", index + 1)
+section "Conceded", "by bowler"
+  share over by bowler, sum(it.runs), it.key
+===
+@rich domain=t2_medicine_course_end topic=antibiotic_course_end_date style=detailed
+doctor gave me three different courses, 5 days, 7 days and 10 days and i cannot remember when each ends. enter the medicine, the start date, the number of days and how many times a day. show the last day, days left, tablets still to take and a bar that fills as the course goes on.
+needs: add a course with medicine, start date, days and doses per day | last day of each course | days left | tablets still to take | progress bar for each course
+---
+app "Course end" pill pink
+table course name text, start date = today, days num 1..60 = 7 "Course days", perday num 1..4 = 2 "Times a day"
+let finish(c course) = c.start + c.days - 1
+let left(c course) = max(finish(c) - today + 1, 0)
+topbar "Courses", course, "Add course"
+statcard count(course where start + days - 1 >= today), "courses still running"
+each course sort start desc as c empty "No courses yet. Add the medicine your doctor gave."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 2
+      c.name bold grow
+      if left(c) > 0
+        left(c) "days left"
+      else
+        "Finished" color good
+    "Last day" finish(c) "· tablets still to take" left(c) * c.perday faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp((today - c.start + 1) / c.days, 0, 1), 4 fill accent radius 2
+===
+@rich domain=t2_fuel_economy topic=car_fuel_economy_log style=multi_feature
+how many km per litre am i really getting? every fill up i want to add the km since last time, litres and what i paid, then see the km per litre for each fill, my overall average, petrol cost per km and a line over time
+needs: add a fill-up with km, litres and cost | km per litre for each fill | overall average km per litre | cost per km | trend line of economy
+---
+app "Fuel economy" car grey
+table fill km num 1..2000, litres num 1..120, cost money
+let kpl = sum(fill.km) / max(sum(fill.litres), 1)
+topbar "Fill-ups", fill, "Add fill-up"
+row gap 2
+  statcard round(kpl * 10) / 10, "km per litre overall"
+  statcard round(sum(fill.cost) / max(sum(fill.km), 1) * 10) / 10, "cost per km"
+section "Economy over time", "km per litre"
+  trend fill sort at, it.km / it.litres
+each fill as f empty "No fill-ups yet. Add one next time you pay at the pump."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.km "km on" f.litres "litres" bold
+      f.cost faint
+    round(f.km * 10 / f.litres) / 10 "km/l" bold
+===
+@rich domain=t2_school_fee_terms topic=school_fee_term_instalments style=detailed
+three kids, three terms and a different due date every time. add each child with class, then the fee for a term with the amount and due date. for every child show what is unpaid and the nearest due date, and a button to mark a term paid
+needs: add a child with class | add a term fee with amount and due date | unpaid amount per child | nearest unpaid due date per child | button to mark a fee paid
+---
+app "School fees" school plum
+table child name text, class pick Nursery|Prep|One|Two|Three = Prep
+table fee child ref child, term pick Term1|Term2|Term3 = Term1, amount money, due date, paid bool
+let owed = sum(fee.amount where paid = no)
+topbar "School fees", fee, "Add term fee"
+statcard owed, "unpaid across all children"
+each child as c empty "No children yet. Add each child below."
+  stack card gap 1
+    row gap 2
+      c.name bold grow
+      c.class faint
+    "Unpaid" sum(c.fee.amount where paid = no) "· next due in" first(c.fee where paid = no sort due).due - today "days" faint
+    each c.fee where paid = no sort due as f
+      row gap 2 tap edit f
+        f.term f.amount grow
+        button "Paid" tap set f.paid = yes
+form child, "Add child"
+===
+@rich domain=t2_water_tanker topic=water_tanker_schedule style=short
+tanker comes every 4 days but i lose count. log deliveries and tell me when to call next
+needs: log a tanker delivery with size and price | days until the next one is due | order now alert | spend this month | change days between tankers
+---
+app "Water tanker" cloud blue
+table delivery size pick Small|Large = Large, price money
+setting every num = 4 "Days between tankers"
+let left = every - since(delivery)
+topbar "Tanker", delivery, "Log delivery"
+statcard if(due(delivery, every), 0, left), if(due(delivery, every), "Order the tanker now", "days until the next tanker"), every
+statcard sum(delivery.price month), "spent this month"
+section "Last deliveries"
+  list delivery top 8, "No deliveries yet. Log one when the tanker arrives."
+===
+@rich domain=t2_event_board topic=event_countdown_board style=custom_ui
+a board for the family calendar, every wedding, birthday and trip with a big countdown card showing days to go. the ones within a week should stand out. let me pick what kind of event it is and filter by kind. past events should disappear.
+needs: add an event with title, date and kind | countdown card with days to go | events within a week highlighted | filter by kind | past events hidden
+---
+app "Countdowns" calendar purple
+table event title text, day date, kind pick Wedding|Birthday|Trip|Exam|Other = Other
+state show pick All|Wedding|Birthday|Trip|Exam|Other = All
+topbar "Countdowns", event, "Add event"
+choice show
+grid 2 gap 1
+  each event where day >= today and (show = All or kind = show) sort day as e empty "No upcoming events. Add the next one you are waiting for."
+    stack card gap 0 tap edit e swipe remove e fill if(e.day - today <= 7, warn, soft)
+      e.day - today big
+      "days to" bold
+      e.title faint
+===
+@rich domain=t2_parking_fees topic=parking_lot_hourly_fees style=multi_feature
+small parking lot near the market. bikes, cars and vans. i write the plate, vehicle type, time in and time out, and it should charge by the hour, rounded, at least one hour, with the rate i can change. total earned today and per vehicle type please.
+needs: add a vehicle with plate, type, time in and time out | fee by rounded hours with a one hour minimum | change hourly rate | total earned today | earnings per vehicle type
+---
+app "Parking" car slate
+table car plate text, kind pick Bike|Car|Van = Car, tin time, tout time
+setting rate money = 60 "Rate per hour"
+let fee(c car) = max(round((c.tout - c.tin) / 1h), 1) * rate
+topbar "Parking", car, "Add vehicle"
+statcard sum(car today, fee(it)), "earned today"
+section "By vehicle type", "today"
+  each options car.kind as k
+    row gap 2
+      k grow
+      count(car today where kind = k) "vehicles" faint
+      sum(car today where kind = k, fee(it)) bold
+each car today as c empty "No vehicles yet today. Add one when it leaves."
+  row card gap 2 tap edit c swipe remove c
+    c.plate bold grow
+    c.tin "to" c.tout faint
+    fee(c) bold
+===
+@rich domain=t2_library_fines topic=lending_library_fines style=detailed
+i look after a small mohalla library. members borrow a book for 14 days and then it is five rupees per late day. record the book, member and when it went out, tick when returned, keep the loan days and fine as settings, and show how much fine is running right now and how many books are late.
+needs: record a book lent with member and date | tick when returned | fine per late day setting | total running fine | count of late books
+---
+app "Library" book mint
+table lend book text, member text, lent date = today, returned bool
+setting days num = 14 "Loan days"
+setting fine money = 5 "Fine per late day"
+let late(l lend) = max(today - l.lent - days, 0)
+topbar "Library", lend, "Lend book"
+row gap 2
+  statcard sum(lend where returned = no, late(it) * fine), "fine running"
+  statcard count(lend where returned = no and today - lent > days), "late books"
+each lend where returned = no sort lent as l empty "All books are back. Lend one with Lend book."
+  row card gap 2 tap edit l swipe remove l fill if(late(l) > 0, bad, soft)
+    stack grow gap 0
+      l.book bold
+      l.member "· out since" l.lent faint
+    if late(l) > 0
+      late(l) * fine bold
+    toggle l.returned
+===
+@rich domain=t2_milk_bill topic=daily_milk_delivery_bill style=short
+milkman never remembers how many litres. one tap to log litres each day and show this month's bill
+needs: one tap litres per day | bill for this month | compare with last month | bar chart of daily litres | change price per litre
+---
+app "Milk" milk orange
+table milk litres num 0..10
+setting rate money = 220 "Price per litre"
+quick milk, litres, [1, 1.5, 2]
+statcard sum(milk.litres month) * rate, "bill this month"
+text "Last month" sum(milk.litres prev month) * rate faint
+section "Litres per day", "last 14 days"
+  daybars last 14 days, sum(milk.litres on it)
+===
+@rich domain=t2_bus_next topic=village_bus_next_departure style=custom_ui
+the local bus has no real timetable so i wrote down the departure times. put each route with its leave time and arrival time, tell me which one goes next after the current time and how many minutes the trip takes
+needs: add a route with leave and arrival time | next bus after the current time | trip minutes per route | routes sorted by leave time
+---
+app "Next bus" bus blue
+table bus route text, leaves time, arrives time
+let nowm = hour(now) * 60 + minute(now)
+let nxt = nth(bus where hour(leaves) * 60 + minute(leaves) >= nowm sort leaves, 1)
+topbar "Buses", bus, "Add route"
+"Next bus to" nxt.route "leaves at" nxt.leaves head
+each bus sort leaves as b empty "No routes yet. Add the bus you take."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.route bold
+      b.leaves "to" b.arrives faint
+    (b.arrives - b.leaves) / 1m "min" bold
+===
+@rich domain=t2_night_guard_sleep topic=night_guard_day_sleep style=multi_feature
+i am a night guard so i sleep in the day. keep my sleep with the time i went to bed and woke up, work out hours slept even if bed is 9:00 and wake is 17:00 or the usual overnight, show my average, how much sleep debt against 7 hours a night, and a bar chart for the week
+needs: log sleep with bed time and wake time | hours slept across midnight | average hours | sleep debt against a need | bar chart of the week
+---
+app "Day sleep" bed ink dark
+table sleep bed time, wake time
+setting need num = 7 "Hours I need"
+let hours(s sleep) = (s.wake - s.bed) / 1h
+let total = sum(sleep, hours(it))
+topbar "Sleep", sleep, "Log sleep"
+row gap 2
+  statcard round(total * 10 / max(count(sleep), 1)) / 10, "hours on average"
+  statcard max(need * count(sleep) - total, 0), "hours of sleep debt"
+section "Hours per day", "last 7 days"
+  goalbars last 7 days, sum(sleep on it, hours(it)), need
+each sleep top 7 as s empty "No sleep logged yet. Log it when you wake."
+  row card gap 2 tap edit s swipe remove s
+    s.bed "to" s.wake grow
+    hours(s) "h" bold
+===
+@rich domain=t2_cooking_times topic=dinner_prep_cook_times style=custom_ui
+Eid dinner for many guests. I list each dish with prep time, cooking time and how many people one pot serves. Then tell me the batches needed for my guest count, the total time of prep plus cook for each dish, and a bar chart of cook times so I start the longest first.
+needs: add a dish with prep time, cook time and servings | prep plus cook total per dish | batches needed for the guest count | bar chart of cook times | change guest count
+---
+app "Dinner plan" food orange
+table dish name text, prep dur = 15m, cook dur = 30m, serves num 1..40 = 6
+setting guests num = 20 "Guests"
+topbar "Dishes", dish, "Add dish"
+statcard (sum(dish.prep) + sum(dish.cook)) / 1m, "minutes of prep and cooking in all"
+section "Cook time", "start the longest first"
+  bars dish sort cook desc top 6, it.cook / 1m, it.name
+each dish sort name as d empty "No dishes yet. Add what you plan to cook."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      "prep" d.prep "+ cook" d.cook faint
+    d.prep + d.cook bold
+    floor((guests + d.serves - 1) / d.serves) "batches" faint
+===
+@rich domain=t2_freelance_hours topic=freelance_billable_hours style=detailed
+freelance editor. i bill by the hour at 1500 so i log a job with client and time spent, show what is unpaid, hours worked this week and let me switch between all jobs and only the unpaid ones. tick when a client pays
+needs: log a job with client and time spent | amount billed from hours and rate | unpaid total | hours this week | switch between all and unpaid | tick when paid
+---
+app "Billable hours" pen green
+table job client text, work dur = 1h, paid bool
+setting rate money = 1500 "Rate per hour"
+state show pick All|Unpaid = Unpaid
+let worth(j job) = j.work / 1h * rate
+topbar "Jobs", job, "Log job"
+row gap 2
+  statcard sum(job where paid = no, worth(it)), "unpaid"
+  statcard sum(job.work week) / 1h, "hours this week"
+choice show
+each job where show = All or paid = no sort at desc as j empty "No jobs here. Log one with Log job."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.client bold
+      j.work faint
+    worth(j) bold
+    toggle j.paid
+===
+@rich domain=t2_plant_watering topic=plant_watering_reminders style=multi_feature
+balcony plants, each needs water at its own rhythm, ferns every 2 days, cactus every 14. list plants with how often to water, a button that says watered, how many days since the last water, and flag the ones that are overdue
+needs: add a plant with watering interval | button to mark watered | days since last water | overdue plants flagged | count of plants needing water
+---
+app "Plants" plant teal
+table plant name text, every num 1..30 = 3 "Water every (days)"
+table water plant ref plant
+let thirsty = count(plant, due(it.water, it.every))
+topbar "Plants", plant, "Add plant"
+statcard thirsty, "plants need water", count(plant)
+each plant sort name as p empty "No plants yet. Add the first one."
+  stack card gap 1 tap edit p swipe remove p fill if(due(p.water, p.every), warn, soft)
+    row gap 2
+      p.name bold grow
+      button "Watered" tap add water plant = p
+    "Every" p.every "days · last watered" since(p.water) "days ago" faint
+    weekdots count(p.water on it) > 0
+===
+@rich domain=t2_car_service topic=car_service_history style=short
+when did i last change oil? log services with type and cost and warn me when 180 days pass
+needs: log a service with type and cost | days since last service | overdue warning after a set number of days | spend this year by type
+---
+app "Car service" tool slate
+table service what pick Oil|Tyres|Brakes|Battery|Wash = Oil, cost money
+setting interval num = 180 "Service every (days)"
+topbar "Service", service, "Log service"
+statcard since(service), if(due(service, interval), "days since service: it is due", "days since service"), interval
+section "Spend this year", "by type"
+  share service year by what, sum(it.cost), it.key
+list service top 8, "No services yet. Log the last one you remember."
+===
+@rich domain=t2_document_expiry topic=passport_and_cnic_expiry style=detailed
+passports, cnics, driving licenses for the whole family and half of them are close to expiring. add a document with name, owner and expiry date, show how many expire within 6 months, colour expired ones red and the next 90 days orange, and remind me a month before
+needs: add a document with owner and expiry date | count expiring within 180 days | expired red and next 90 days orange | sorted by expiry | reminder a month before
+---
+app "Documents" shield pink
+table doc name text, owner text, expires date
+let soon = count(doc where expires >= today and expires - today <= 180)
+topbar "Documents", doc, "Add document"
+row gap 2
+  statcard soon, "expire in 6 months"
+  statcard count(doc where expires < today), "already expired"
+remind "A document expires in a month" at doc.expires - 30d at 9:00
+each doc sort expires as d empty "No documents yet. Add the ones that have an expiry date."
+  row card gap 2 tap edit d swipe remove d fill if(d.expires < today, bad, if(d.expires - today <= 90, warn, soft))
+    stack grow gap 0
+      d.name bold
+      d.owner "· expires" d.expires faint
+    d.expires - today "days" bold

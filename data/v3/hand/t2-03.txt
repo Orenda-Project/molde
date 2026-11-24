@@ -1,0 +1,481 @@
+@rich domain=t2_sim_pack_expiry topic=mobile_data_pack_expiry style=short
+my data packs end without warning. log pack, buy date and validity days and show days left on each
+needs: log a pack with buy date and validity days | expiry date | days left on each pack | count of packs ending within 3 days | active packs counted
+---
+app "Data packs" phone blue
+table pack name text, bought date = today, valid num 1..365 = 30 "Valid for (days)"
+let ends(p pack) = p.bought + p.valid
+topbar "Data packs", pack, "Add pack"
+row gap 2
+  statcard count(pack, ends(it) >= today), "active packs"
+  statcard count(pack, ends(it) >= today and ends(it) - today <= 3), "ending in 3 days"
+each pack sort bought desc as p empty "No packs yet. Add the one you bought last."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      "ends" ends(p) faint
+    if ends(p) < today
+      "Expired" color bad
+    else
+      ends(p) - today "days left" bold
+===
+@rich domain=t2_warranty_tracker topic=appliance_warranty_expiry style=detailed
+fridge, ac, washing machine, phone. i never know which ones are still under warranty. add the item, the purchase date and warranty months, show the date it ends, days left, how many are still covered and how many just ran out
+needs: add an item with purchase date and warranty months | warranty end date | days left | covered item count | expired item count
+---
+app "Warranties" shield teal
+table item name text, bought date = today, months num 1..60 = 12 "Warranty (months)"
+let ends(i item) = addmonths(i.bought, i.months)
+topbar "Warranties", item, "Add item"
+row gap 2
+  statcard count(item, ends(it) >= today), "still covered", count(item)
+  statcard count(item, ends(it) < today), "expired"
+each item sort bought desc as i empty "No items yet. Add something you bought with a warranty."
+  row card gap 2 tap edit i swipe remove i fill if(ends(i) < today, soft, if(ends(i) - today <= 60, warn, soft))
+    stack grow gap 0
+      i.name bold
+      "bought" i.bought "· ends" ends(i) faint
+    if ends(i) >= today
+      ends(i) - today "days" bold
+    else
+      "Ended" faint
+===
+@rich domain=t2_insurance_renewal topic=insurance_policy_renewals style=multi_feature
+car, life, health and the shop all renew in different months. add each policy with premium and renewal date, show the total premium for the year, the policy that renews next and how many days away it is, and the ones within 60 days in orange
+needs: add a policy with premium and renewal date | total yearly premium | next renewal and days away | policies within 60 days highlighted | sorted by renewal date
+---
+app "Policies" lock grey
+table policy name text, premium money, renews date
+let nxt = first(policy where renews >= today sort renews)
+topbar "Policies", policy, "Add policy"
+row gap 2
+  statcard sum(policy.premium), "premium per year"
+  statcard nxt.renews - today, "days to" nxt.name
+each policy sort renews as p empty "No policies yet. Add the first one."
+  row card gap 2 tap edit p swipe remove p fill if(p.renews >= today and p.renews - today <= 60, warn, soft)
+    stack grow gap 0
+      p.name bold
+      "renews" p.renews faint
+    p.premium bold
+===
+@rich domain=t2_blood_donation topic=blood_donation_eligibility style=custom_ui
+i donate blood and the centre says wait 90 days between donations. log each donation with the place and the date, show whether i can donate again and how many days are left, how many times i gave this year and a plain drop count
+needs: log a donation with place and date | days left before the next donation | can donate again message | donations this year | donation history
+---
+app "Blood donor" heart red dark
+table gift place text, given date = today
+let waitover = last(gift.given) + 90
+topbar "Donations", gift, "Log donation"
+stack card gap 1
+  if due(gift, 90)
+    "You can donate again" head
+    "It has been" since(gift) "days since the last one" faint
+  else
+    "Wait a little longer" head
+    waitover - today "days to go, until" waitover faint
+statcard count(gift year), "donations this year", 4
+each gift sort given desc as g empty "No donations yet. Log the first one."
+  row card gap 2 tap edit g swipe remove g
+    icon drop
+    g.place bold grow
+    g.given faint
+===
+@rich domain=t2_pet_vet topic=pet_vet_visit_log style=detailed
+two cats and a dog. keep each visit with the pet, what it was for (vaccine, checkup, deworm), the date, cost and the date it is due again if there is one. add the pets first, and show the visits due in the next 14 days, what i spent on vets this year, and send a reminder on the due date
+needs: add a pet | log a visit with pet, kind, date, cost and next due date | visits due in the next 14 days | vet spend this year | reminder on the next due date
+---
+app "Pet vet" paw mint
+table pet name text
+table visit pet ref pet, kind pick Vaccine|Checkup|Deworm|Other = Checkup, held date = today, cost money, next date?
+let soon = count(visit where next >= today and next - today <= 14)
+topbar "Vet visits", visit, "Add visit"
+row gap 2
+  statcard soon, "due in 14 days"
+  statcard sum(visit.cost year), "spent on vets this year"
+remind "Pet due for a vet visit" at visit.next
+each visit sort held desc as v empty "No visits yet. Add the pets first, then the visits."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.pet.name v.kind bold
+      v.held "· next" v.next faint
+    v.cost bold
+form pet, "Add pet"
+===
+@rich domain=t2_chore_points topic=kids_chore_points_board style=custom_ui
+the kids fight about who did more chores. add each child, then chores with points from 1 to 10, give the points to a kid with a tap, show this week's points per child as a bar so they can see who is ahead, and a prize target
+needs: add a child | add a chore with points for a child | points this week per child bar | prize target setting | list of chores
+---
+app "Chore stars" star orange
+table kid name text
+table chore kid ref kid, what text, pts num 1..10 = 2
+setting prize num = 40 "Points for the weekend prize"
+topbar "Chores", chore, "Add chore"
+section "This week", "points per child"
+  bars kid sort sum(it.chore.pts week) desc, sum(it.chore.pts week), it.name
+each kid sort name as k empty "No children yet. Add each child below."
+  row card gap 2
+    k.name bold grow
+    sum(k.chore.pts week) "of" prize faint
+    if sum(k.chore.pts week) >= prize
+      "Prize!" color good bold
+list chore top 6, "No chores yet. Add the first chore."
+form kid, "Add child"
+===
+@rich domain=t2_screen_time topic=kids_daily_screen_time style=multi_feature
+limit screens to 2 hours a day. log minutes by app (youtube, games, cartoons, study) and show how much of the 2 hours is used today, how many minutes remain, and a bar for each day of the week. i want the setting for the limit so i can change it on weekends
+needs: log screen time with app and duration | time used today against the limit | minutes remaining | bar per day this week | change the daily limit
+---
+app "Screen time" phone purple
+table screen app pick YouTube|Games|Cartoons|Study = YouTube, used dur = 30m
+setting limit dur = 2h "Daily limit"
+let usedm = sum(screen.used today) / 1m
+topbar "Screen time", screen, "Log time"
+goal usedm, limit / 1m, if(usedm > limit / 1m, "minutes, over the limit", "minutes used today"), "min"
+statcard max(limit / 1m - usedm, 0), "minutes left today"
+section "This week", "minutes per day"
+  goalbars last 7 days, sum(screen.used on it) / 1m, limit / 1m
+list screen today, "No screen time logged today."
+===
+@rich domain=t2_doctor_visits topic=doctor_appointment_countdown style=detailed
+a few specialists, each with their own appointment day and time. add doctor, the date and time and the fee, show the next appointment and how many days to it, the total of fees for the upcoming ones and keep past ones lower in the list
+needs: add an appointment with doctor, date and time, and fee | next appointment and days away | total fees for upcoming visits | upcoming and past separated | remove an appointment
+---
+app "Appointments" calendar ocean
+table appt doctor text, held when, fee money
+let nxt = nth(appt where held >= now sort held, 1)
+topbar "Appointments", appt, "Add appointment"
+row gap 2
+  statcard floor((nxt.held - now) / 1d), "days to" nxt.doctor
+  statcard sum(appt.fee where held >= now), "fees for upcoming visits"
+section "Upcoming"
+  each appt where held >= now sort held as a empty "Nothing booked. Add your next appointment."
+    row gap 2 tap edit a swipe remove a
+      a.doctor bold grow
+      a.held faint
+section "Past"
+  each appt where held < now sort held desc top 5 as a
+    row gap 2
+      a.doctor grow
+      a.held faint
+===
+@rich domain=t2_physio_package topic=physio_session_package style=short
+bought a physio package that is valid till 2027-01-31. log each session i attend and show how many are left, the days left to use them, a small chart of sessions over the last two weeks, and let me change the package size when i renew
+needs: log a session attended | sessions left in the package | days until the package expires | sessions in the last 14 days chart | package size setting
+---
+app "Physio" heart pink
+table session note text?
+setting pack num = 12 "Sessions in package"
+setting valid date = 2027-01-31 "Valid until"
+topbar "Physio", session, "Log session"
+statcard pack - count(session), "sessions left of" pack, pack
+statcard valid - today, "days left to use them"
+section "Sessions", "last 14 days"
+  daybars last 14 days, count(session on it)
+===
+@rich domain=t2_pharmacy_expiry topic=pharmacy_batch_expiry style=custom_ui
+pharmacy shelf check. each batch has medicine, quantity, price per strip and expiry date. show the stock value of all batches, the value of what expires in the next 90 days, expired ones in red, and a count of batches by how soon they expire
+needs: add a batch with quantity, price and expiry | stock value | value expiring within 90 days | expired batches in red | count of batches expiring soon
+---
+app "Shelf expiry" pill green
+table batch name text, qty num 0..1000 = 10, price money, expiry date
+topbar "Batches", batch, "Add batch"
+row gap 2
+  statcard sum(batch, it.qty * it.price), "stock value"
+  statcard sum(batch where expiry >= today and expiry < today + 90, it.qty * it.price), "value expiring in 90 days"
+text count(batch where expiry < today) "expired and" count(batch where expiry >= today and expiry - today < 90) "expiring soon" faint
+each batch sort expiry as b empty "No batches yet. Add the first batch from the shelf."
+  row card gap 2 tap edit b swipe remove b fill if(b.expiry < today, bad, if(b.expiry - today < 90, warn, soft))
+    stack grow gap 0
+      b.name bold
+      b.qty "strips · expires" b.expiry faint
+    b.qty * b.price bold
+===
+@rich domain=t2_badminton_courts topic=badminton_court_hours style=multi_feature
+three courts, booked by the hour at an indoor hall. add a booking with the name, court, start time and finish time, charge by hours at the rate i can change, show hours booked today on each court and the money for today
+needs: add a booking with name, court, start and finish | amount from hours and rate | hours booked per court today | money today | change hourly rate
+---
+app "Courts" ball yellow
+table booking name text, court pick Court_1|Court_2|Court_3 = Court_1, start time, finish time
+setting rate money = 1200 "Rate per hour"
+let hrs(b booking) = (b.finish - b.start) / 1h
+topbar "Bookings", booking, "Add booking"
+statcard sum(booking today, hrs(it)) * rate, "booked today"
+grid 3 gap 1
+  each options booking.court as c
+    stack card gap 0 align center
+      c faint
+      sum(booking today where court = c, hrs(it)) big
+      "hours" faint
+each booking today sort start as b empty "No bookings today."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.name b.court bold
+      b.start "to" b.finish faint
+    hrs(b) * rate bold
+===
+@rich domain=t2_futsal_league topic=futsal_league_standings style=detailed
+street futsal league, six teams. enter each result with team, goals for and goals against, give 3 points for a win and 1 for a draw, and show points and goal difference for each team in a standings list, with a bar chart of points
+needs: add a result with team, goals for and against | points per team with 3 for a win | goal difference per team | bar chart of points | list of results
+---
+app "Futsal" ball slate
+table result team pick Reds|Blues|Greens|Tigers|Hawks|Lions = Reds, gf num 0..30, ga num 0..30
+let pts(r result) = if(r.gf > r.ga, 3, if(r.gf = r.ga, 1, 0))
+topbar "Futsal", result, "Add result"
+section "Standings", "points · goal difference"
+  each options result.team as t
+    row gap 2
+      t grow
+      sum(result where team = t, pts(it)) "pts" bold
+      sum(result.gf where team = t) - sum(result.ga where team = t) faint
+section "Points"
+  bars result by team, sum(it.gf), it.key
+list result top 8, "No results yet. Add the first match."
+===
+@rich domain=t2_chess_games topic=chess_win_rate_log style=short
+log my chess games win draw loss and who i played so i can see my win rate
+needs: log a game with result and opponent rating | win rate | score with half a point per draw | last 20 games as coloured dots | average opponent rating
+---
+app "Chess" game ink dark
+table game result pick Win|Draw|Loss = Win, opp num 400..2800 = 1200 "Opponent rating"
+let score = count(game where result = Win) + count(game where result = Draw) / 2
+topbar "Games", game, "Log game"
+row gap 2
+  statcard round(score * 100 / max(count(game), 1)), "% win rate"
+  statcard round(avg(game.opp)), "average opponent rating"
+text "Score" score "from" count(game) "games" faint
+grid 10 gap 1
+  each game top 20 as g
+    box ratio 1 radius 4 fill if(g.result = Win, good, if(g.result = Draw, muted, bad))
+list game top 6, "No games yet. Log your last one."
+===
+@rich domain=t2_lecture_pay topic=visiting_teacher_lecture_pay style=multi_feature
+i run a coaching centre with visiting teachers paid per lecture hour. log each lecture with the teacher, course and length, show hours per teacher this month, their pay at the hourly rate i set and the total payroll
+needs: log a lecture with teacher, course and length | hours per teacher this month | pay per teacher from hours and rate | total payroll | change hourly rate
+---
+app "Teacher pay" school plum
+table lecture teacher text, course text, len dur = 1h "Length"
+setting rate money = 1800 "Pay per lecture hour"
+topbar "Lectures", lecture, "Log lecture"
+statcard round(sum(lecture.len month) / 1h * rate), "payroll this month"
+section "Per teacher", "this month"
+  each lecture month by teacher as g
+    row gap 2
+      g.key bold grow
+      sum(g.len) / 1h "h" faint
+      round(sum(g.len) / 1h * rate) bold
+list lecture top 6, "No lectures yet. Log the first one."
+===
+@rich domain=t2_driving_lessons topic=driving_lesson_progress style=detailed
+learning to drive, test on 2027-01-20. log each lesson with what we practised (parking, highway, reverse, night, test route), its length and fee. show hours driven, days to the test, how many lessons per topic so i know what is weak, and the average cost per lesson
+needs: log a lesson with topic, length and fee | hours driven | days to the test | lessons per topic | average fee per lesson
+---
+app "Driving" car red
+table lesson topic pick Parking|Highway|Reverse|Night|Test_route = Parking, len dur = 1h, fee money = 1500
+setting test date = 2027-01-20 "Test day"
+topbar "Lessons", lesson, "Log lesson"
+row gap 2
+  statcard sum(lesson.len) / 1h, "hours driven"
+  statcard test - today, "days to the test"
+text "Average fee" round(avg(lesson.fee)) "per lesson" faint
+section "Lessons per topic"
+  each options lesson.topic as t
+    row gap 2
+      t grow
+      count(lesson where topic = t) bold
+list lesson top 6, "No lessons yet. Log the first one."
+===
+@rich domain=t2_vocab_search topic=english_word_list_search style=custom_ui
+learning english. i keep new words with the meaning and mark them learned. a search box that finds words by part of the word or meaning, a count of long words over 8 letters and the percent learned
+needs: add a word with meaning | search by word or meaning | count of words longer than 8 letters | tick when learned | percent learned
+---
+app "Word list" pencil blue
+table word term text, meaning text, learned bool
+state q text = ""
+topbar "Words", word, "Add word"
+row gap 2
+  statcard round(count(word where learned = yes) * 100 / max(count(word), 1)), "% learned"
+  statcard count(word where len(term) > 8), "long words"
+field q "Search"
+each word where has(term, q) or has(meaning, q) sort term as w empty "No words match. Add one or clear the search."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.term bold
+      w.meaning faint
+    toggle w.learned
+===
+@rich domain=t2_book_club topic=book_club_meeting_pages style=multi_feature
+book club meets every few weeks. add a meeting with the book, date and number of pages to read. tell me the next meeting, days left, how many pages a day i must read to finish in time, and the total pages of the season in a list of meetings
+needs: add a meeting with book, date and pages | next meeting and days left | pages per day to finish | list of meetings | total pages this season
+---
+app "Book club" book purple
+table meeting book text, held date, pages num 10..1000 = 200
+let nxt = nth(meeting where held >= today sort held, 1)
+topbar "Meetings", meeting, "Add meeting"
+row gap 2
+  statcard nxt.held - today, "days until" nxt.book
+  statcard round(nxt.pages / max(nxt.held - today, 1)), "pages a day to be ready"
+text "Season total" sum(meeting.pages) "pages in" plural(count(meeting), "meeting") faint
+each meeting sort held as m empty "No meetings yet. Add the next book."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.book bold
+      m.held faint
+    m.pages "pages" faint
+===
+@rich domain=t2_podcast_queue topic=podcast_commute_queue style=custom_ui
+long podcast queue for the commute. list episodes with show and length, tick when listened. tell me how many hours are left unlistened, how many commutes that fills if a commute is 45 minutes (a setting i can change), and keep the longest ones visible
+needs: add an episode with show and length | tick when listened | unlistened hours | commutes the queue fills | change commute length
+---
+app "Podcast queue" music teal
+table ep show text, length dur = 45m, listened bool
+setting commute dur = 45m "One commute"
+let left = sum(ep.length where listened = no)
+topbar "Podcasts", ep, "Add episode"
+row gap 2
+  statcard round(left / 1h * 10) / 10, "hours unlistened"
+  statcard floor(left / commute), "commutes of listening"
+each ep where listened = no sort length desc as e empty "Queue is empty. Add an episode."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.show bold
+      e.length faint
+    toggle e.listened
+===
+@rich domain=t2_film_watchlist topic=film_watchlist_runtime style=short
+films i want to watch with runtime and a rating after. show total hours still to watch and my average rating
+needs: add a film with runtime | tick when seen | rating after watching | hours still to watch | average rating
+---
+app "Watchlist" star pink dark
+table film title text, runtime dur = 120m, seen bool, rating num? 1..10
+state show pick To_watch|Seen = To_watch
+topbar "Films", film, "Add film"
+row gap 2
+  statcard round(sum(film.runtime where seen = no) / 1h * 10) / 10, "hours still to watch"
+  statcard round(avg(film.rating) * 10) / 10, "average rating"
+choice show
+each film where seen = (show = Seen) sort title as f empty "No films here."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.title bold
+      f.runtime f.rating faint
+    toggle f.seen
+===
+@rich domain=t2_bug_sla topic=bug_triage_sla_deadlines style=detailed
+we promise fixes by severity, critical in 1 day, high in 3 days, everything else in a week. add bugs with title, severity and the opened date, work out the deadline for each, flag the ones that already breached, and show how many open bugs we have per severity
+needs: add a bug with title, severity and opened date | deadline from severity | breached bugs flagged | open bugs per severity | tick when fixed
+---
+app "Bug SLA" tool orange
+table bug title text, sev pick Low|Medium|High|Critical = Medium, opened date = today, fixed bool
+let sla(b bug) = if(b.sev = Critical, 1, if(b.sev = High, 3, 7))
+let due_on(b bug) = b.opened + sla(b)
+topbar "Bugs", bug, "Add bug"
+row gap 2
+  statcard count(bug, it.fixed = no and due_on(it) < today), "breached the deadline"
+  statcard count(bug where fixed = no), "open bugs", count(bug)
+row gap 1
+  each options bug.sev as s
+    stack grow gap 0 align center
+      count(bug where sev = s and fixed = no) big
+      s faint
+each bug where fixed = no sort opened as b empty "No open bugs."
+  row card gap 2 tap edit b swipe remove b fill if(due_on(b) < today, bad, soft)
+    stack grow gap 0
+      b.title bold
+      b.sev "· fix by" due_on(b) faint
+    toggle b.fixed
+===
+@rich domain=t2_milestone_payments topic=freelance_milestone_payments style=multi_feature
+client pays in milestones. add each milestone with name, amount and due date, tick when paid, show what percent of the project money has arrived, the next unpaid milestone and how many days away, and what i received this month
+needs: add a milestone with name, amount and due date | percent of money received | next unpaid milestone and days | received this month | tick when paid
+---
+app "Milestones" flag mint
+table milestone name text, amount money, due date, paid bool
+let nxt = first(milestone where paid = no sort due)
+topbar "Milestones", milestone, "Add milestone"
+goal round(sum(milestone.amount where paid = yes) * 100 / max(sum(milestone.amount), 1)), 100, "% of the project money received", "%"
+row gap 2
+  statcard nxt.due - today, "days to" nxt.name
+  statcard sum(milestone.amount where paid = yes and due >= today - 30), "paid in the last 30 days"
+each milestone sort due as m empty "No milestones yet. Add the first one."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.name bold
+      "due" m.due faint color if(m.due < today and m.paid = no, bad, muted)
+    m.amount bold
+    toggle m.paid
+===
+@rich domain=t2_overtime_pay topic=factory_overtime_pay style=custom_ui
+factory job, 8 hours is normal and after that overtime pays one and a half. i write hours worked each day. show the overtime hours this week, the overtime pay at my hourly rate, and my total hours, with bars of hours per day and a line at 8
+needs: log hours worked for a day | overtime hours this week | overtime pay at one and a half rate | total hours this week | bar chart of hours per day with a line at 8
+---
+app "Overtime" clock grey
+table day worked dur = 8h
+setting rate money = 350 "Hourly rate"
+let ot = sum(day week, max(it.worked / 1h - 8, 0))
+topbar "Hours", day, "Log day"
+row gap 2
+  statcard ot, "overtime hours this week"
+  statcard round(ot * rate * 1.5), "overtime pay"
+text "Total this week" sum(day.worked week) / 1h "hours" faint
+section "Hours per day", "last 7 days"
+  goalbars last 7 days, sum(day.worked on it) / 1h, 8
+===
+@rich domain=t2_petty_cash topic=office_petty_cash_balance style=detailed
+office petty cash box. add each entry with what it was, the amount and whether it is cash in or cash out, show the balance in the box, turn it orange when it falls under 2000 so i refill it, show only in, only out or all entries, and what was spent this month
+needs: add an entry with description, amount and in or out | balance in the box | warning under 2000 | filter by in or out | total spent this month
+---
+app "Petty cash" coin yellow
+table cash what text, amount money, kind pick In|Out = Out
+state show pick All|In|Out = All
+let balance = sum(cash.amount where kind = In) - sum(cash.amount where kind = Out)
+topbar "Petty cash", cash, "Add entry"
+row gap 2
+  stack card grow gap 0
+    balance big color if(balance < 2000, warn, ink)
+    if(balance < 2000, "left: time to refill", "in the box") faint
+  statcard sum(cash.amount month where kind = Out), "spent this month"
+choice show
+each cash where show = All or kind = show as c empty "No entries here."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.what bold
+      c.kind faint
+    c.amount bold color if(c.kind = In, good, ink)
+===
+@rich domain=t2_hall_bookings topic=banquet_hall_bookings style=multi_feature
+banquet hall in a small town. bookings with family name, the function date, the price and the advance received. show the balance still due, the next booking and days away, and highlight two bookings on the same date so i stop double booking
+needs: add a booking with family, date, price and advance | balance still due | next booking and days away | double booked dates highlighted | list by date
+---
+app "Hall bookings" home plum
+table booking family text, day date, price money, advance money = 0
+let nxt = first(booking where day >= today sort day)
+topbar "Bookings", booking, "Add booking"
+row gap 2
+  statcard sum(booking, it.price - it.advance), "balance still due"
+  statcard nxt.day - today, "days to" nxt.family
+each booking where day >= today sort day as b empty "No bookings yet. Add the first function."
+  row card gap 2 tap edit b swipe remove b fill if(count(booking where day = b.day) > 1, bad, soft)
+    stack grow gap 0
+      b.family bold
+      b.day "· advance" b.advance faint
+    if count(booking where day = b.day) > 1
+      "Double booked" color bad bold
+    else
+      b.price - b.advance bold
+===
+@rich domain=t2_tenant_arrears topic=tenant_months_overdue style=custom_ui
+tenants who are months behind. each tenant has a rent and the date up to which they have paid. show how many months overdue each one is, the money they owe, total arrears, and a button to move paid-till forward by a month when they pay
+needs: add a tenant with rent and paid-till date | months overdue for each tenant | amount owed per tenant | total arrears | button to advance paid-till by a month
+---
+app "Arrears" key ocean
+table tenant name text, rent money, paidtill date
+let behind(t tenant) = max(floor((today - t.paidtill) / 30), 0)
+topbar "Tenants", tenant, "Add tenant"
+statcard sum(tenant, behind(it) * it.rent), "arrears in total"
+each tenant sort paidtill as t empty "No tenants yet. Add the first tenant."
+  row card gap 2 tap edit t swipe remove t fill if(behind(t) > 0, warn, soft)
+    stack grow gap 0
+      t.name bold
+      "paid till" t.paidtill "·" plural(behind(t), "month") "behind" faint
+    behind(t) * t.rent bold
+    button "Paid" tap set t.paidtill = addmonths(t.paidtill, 1)

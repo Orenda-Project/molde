@@ -1,0 +1,213 @@
+@rich domain=t2_madrasa_fee_ledger topic=madrasa_fee_dues_screens style=custom_ui
+small madrasa, 40 children. i want two tabs, one for dues and one for money already collected. each fee entry has the child's name, amount and the date it is due, and a button to mark it received. on the dues tab show the amount overdue and how many fall in the coming 10 days
+needs: add a fee entry with name, amount and due date | two tabs for dues and collected | overdue amount | entries due in the next 10 days | button to mark received
+---
+app "Madrasa fees" school ocean
+table fee child text, amount money, due date, got bool
+topbar "Fees", fee, "Add fee"
+screen dues "Dues" list
+  row gap 2
+    statcard sum(fee.amount where got = no and due < today), "overdue"
+    statcard count(fee where got = no and due >= today and due - today <= 10), "due in 10 days"
+  each fee where got = no sort due as f empty "No dues. Add a fee with Add fee."
+    row card gap 2 tap edit f swipe remove f fill if(f.due < today, bad, soft)
+      stack grow gap 0
+        f.child bold
+        "due" f.due "·" f.due - today "days" faint
+      f.amount bold
+      button "Received" tap set f.got = yes
+screen paid "Collected" check
+  statcard sum(fee.amount where got = yes), "collected so far"
+  section "Collected per month", "last 30 days"
+    daybars last 30 days, sum(fee.amount on it where got = yes)
+  each fee where got = yes sort due desc top 10 as f
+    row gap 2
+      f.child grow
+      f.amount faint
+===
+@rich domain=t2_cattle_shots topic=cattle_vaccination_rounds style=multi_feature
+i look after twenty buffaloes and cows for a farm. each animal has a tag, and when it gets a shot (fmd, hs or anthrax) i tap the button. show how many days since the last shot for each animal, mark the ones past 180 days in orange and tell me how many animals are due
+needs: add an animal with a tag | tap to log a shot | days since the last shot | animals past 180 days marked | count of animals due
+---
+app "Cattle shots" paw slate
+table animal tag text
+table shot animal ref animal, kind pick FMD|HS|Anthrax = FMD
+topbar "Herd", animal, "Add animal"
+statcard count(animal, due(it.shot, 180)), "animals due for a shot", count(animal)
+grid 2 gap 1
+  each animal sort tag as a empty "No animals yet. Add each tag."
+    stack card gap 1 tap edit a swipe remove a fill if(due(a.shot, 180), warn, soft)
+      a.tag bold
+      if count(a.shot) = 0
+        "No shot yet" faint
+      else
+        since(a.shot) "days since" last(a.shot).kind faint
+      row gap 1
+        each options shot.kind as k
+          button k tap add shot animal = a, kind = k
+===
+@rich domain=t2_tank_level topic=overhead_water_tank_level style=custom_ui
+overhead tank on the roof holds 1000 litres (a capacity i can change). every time the motor runs i add the litres filled, and when we use water i add what was used. draw the tank with the level, tell me litres left, and how many days it lasts at the average daily use
+needs: add litres filled or used | tank drawn with its level | litres left | days it lasts at average use | change tank capacity
+---
+app "Water tank" cup plum
+table flow litres num 1..2000 = 100, kind pick Filled|Used = Used
+setting capacity num = 1000 "Tank capacity (litres)"
+let level = clamp(sum(flow.litres where kind = Filled) - sum(flow.litres where kind = Used), 0, capacity)
+let daily = sum(flow.litres last 7 days where kind = Used) / 7
+quick flow, litres, [50, 100, 200]
+draw 120, 120 width 160
+  rect 20, 10, 80, 100 fill soft radius 8
+  rect 20, 110 - 100 * level / capacity, 80, 100 * level / capacity fill if(level / capacity < 0.2, bad, accent) radius 8
+  label 60, 60, round(level * 100 / capacity) "%" big
+row gap 1
+  each options flow.kind
+    button it tap add flow litres = 100, kind = it
+statcard round(level), "litres left", capacity
+text "Lasts about" floor(level / max(daily, 1)) "days at" round(daily) "litres a day" bold
+section "Used per day", "last 7 days"
+  daybars last 7 days, sum(flow.litres on it where kind = Used)
+===
+@rich domain=t2_wedding_ring topic=wedding_countdown_tasks style=detailed
+getting married on 2027-03-20. a big ring that shows how far we are through the planning period from 2026-11-01 to the wedding, weeks and days left, and my to-do tasks with a due date that i tick. show how many tasks are due this week and mark the overdue ones red
+needs: ring of planning progress | weeks and days to the wedding | tasks with due date and tick | tasks due this week | overdue tasks in red
+---
+app "Wedding plan" gift ink dark
+table task what text, due date, done bool
+setting wedding date = 2027-03-20 "Wedding day"
+setting began date = 2026-11-01 "Planning started"
+let span = wedding - began
+let gone = clamp((today - began) / max(span, 1), 0, 1)
+topbar "Tasks", task, "Add task"
+row gap 3 align center
+  draw 100, 100 width 110
+    circle 42 stroke soft thick 10
+    arc 42, 0, 360 * gone stroke accent thick 10
+    label 50, 50, round(gone * 100) "%" bold
+  stack grow gap 0
+    floor((wedding - today) / 7) big
+    "weeks and" (wedding - today) % 7 "days to go" faint
+statcard count(task where done = no and due >= today and due - today <= 7), "tasks due this week"
+each task where done = no sort due as t empty "No tasks left. Add the next thing to arrange."
+  row card gap 2 tap edit t swipe remove t fill if(t.due < today, bad, soft)
+    stack grow gap 0
+      t.what bold
+      t.due "·" t.due - today "days" faint
+    toggle t.done
+===
+@rich domain=t2_duty_roster topic=weekly_duty_roster_hours style=custom_ui
+security company roster. each duty has the guard, the day (mon to sun), start time and finish time and nights can run past midnight. show the week as columns with who is on and hours, and the total hours for each guard
+needs: add a duty with guard, day, start and finish | week laid out by day | hours of each duty across midnight | total hours per guard | count of duties per day
+---
+app "Duty roster" shield grey
+table duty guard text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, start time, finish time
+let hrs(d duty) = (d.finish - d.start) / 1h
+topbar "Roster", duty, "Add duty"
+scroll
+  each options duty.day as d
+    stack card gap 1 width 120
+      d bold
+      count(duty where day = d) "duties" faint
+      each duty where day = d sort start as x
+        stack gap 0 tap edit x swipe remove x
+          x.guard bold
+          x.start "-" x.finish hrs(x) "h" tiny
+section "Hours per guard", "all duties"
+  each duty by guard as g
+    row gap 2
+      g.key grow
+      count(g.guard) "duties" faint
+      sum(g, hrs(it)) "h" bold
+===
+@rich domain=t2_dairy_society topic=milk_society_fat_payment style=detailed
+we sell milk to the village society and they pay by fat. each pour has litres and fat percent, and the payment is litres times fat times the rate per fat point. show the amount for each pour, my average fat weighted by litres, what i earned in the last 10 days and a bar for litres per day
+needs: log a pour with litres and fat percent | payment from litres, fat and rate | weighted average fat | earned in the last 10 days | bar chart of litres per day
+---
+app "Milk society" milk ocean dark
+table pour litres num 1..100, fat num 3..9 = 5
+setting perfat money = 12 "Rate per fat point per litre"
+let pay(p pour) = p.litres * p.fat * perfat
+topbar "Pours", pour, "Log pour"
+row gap 2
+  statcard round(sum(pour last 10 days, pay(it))), "earned in 10 days"
+  statcard round(sum(pour, it.litres * it.fat) * 10 / max(sum(pour.litres), 1)) / 10, "average fat"
+section "Litres per day", "last 10 days"
+  daybars last 10 days, sum(pour.litres on it)
+each pour top 8 as p empty "No pours yet. Log this morning's milk."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.litres "L at" p.fat "% fat" bold
+      p.at faint
+    round(pay(p)) bold
+===
+@rich domain=t2_umrah_savings topic=umrah_trip_saving_plan style=multi_feature
+planning umrah in 2027-04-10, total cost 650000, both changeable. i add the money i put aside each time. tell me how much is saved, how much still needed, the months left until the trip and what i must save per month to make it
+needs: add money saved | saved so far against the total cost | months left until the trip | monthly saving needed | change total cost and trip date
+---
+app "Umrah fund" mosque slate
+table put amount money
+setting cost money = 650000 "Total cost"
+setting trip date = 2027-04-10 "Trip date"
+let months = max(floor((trip - today) / 30), 1)
+topbar "Savings", put, "Add money"
+goal sum(put.amount), cost, "saved so far"
+row gap 2
+  statcard max(cost - sum(put.amount), 0), "still needed"
+  statcard trip - today, "days to the trip"
+text "Save about" round(max(cost - sum(put.amount), 0) / months) "a month for" plural(months, "month") bold
+section "Latest amounts"
+  list put top 6, "Nothing saved yet. Add the first amount."
+===
+@rich domain=t2_restaurant_waits topic=restaurant_order_wait_times style=short
+waiter notes the time an order is placed and served for each table. i need the average wait, how many waited more than 20 minutes, and the slowest table
+needs: log an order with table, placed and served time | average wait in minutes | orders over 20 minutes | slowest order | wait bar per order
+---
+app "Order waits" food grey
+table order tablen num 1..40, placed time, served time
+let wait(o order) = (o.served - o.placed) / 1m
+topbar "Orders", order, "Add order"
+row gap 2
+  statcard round(sum(order, wait(it)) / max(count(order), 1)), "minutes average wait"
+  statcard count(order where served - placed > 20m), "waited over 20 minutes"
+text "Slowest wait" max(order, wait(it)) "minutes" faint
+section "Wait per order"
+  bars order top 10, wait(it), join("T", it.tablen)
+===
+@rich domain=t2_term_calendar topic=school_term_dates_progress style=detailed
+principal's term dates: name, start date and end date for each term. show which term we are in, days left in it, how far through it we are in percent with a bar, and how long the holiday is before the next term starts
+needs: add a term with name, start and end date | current term and days left | percent through the term | holiday days before the next term | list of terms
+---
+app "Term dates" calendar plum
+table term name text, starts date, ends date
+let now_term = first(term where starts <= today and ends >= today)
+let next_term = first(term where starts > today sort starts)
+topbar "Terms", term, "Add term"
+statcard now_term.ends - today, "days left in" now_term.name
+goal round(clamp((today - now_term.starts) / max(now_term.ends - now_term.starts, 1), 0, 1) * 100), 100, "% through the term", "%"
+text "Holiday before" next_term.name next_term.starts - now_term.ends - 1 "days" faint
+each term sort starts as t empty "No terms yet. Add the dates from the school calendar."
+  row card gap 2 tap edit t swipe remove t fill if(t.starts <= today and t.ends >= today, soft, bg)
+    t.name bold grow
+    t.starts "to" t.ends faint
+===
+@rich domain=t2_laundry_pickups topic=laundry_pickup_orders style=custom_ui
+dry cleaning counter. i write the customer, number of pieces and the rate per piece is a setting. clothes are ready two days after drop. show what is ready to pick up today, what is still being washed and the money waiting, switch between ready and washing, and mark picked
+needs: add an order with customer and pieces | ready two days after drop | switch between ready and washing | money waiting to be collected | mark picked
+---
+app "Laundry" cart pink
+table load customer text, pieces num 1..80 = 4, dropped date = today, picked bool
+setting rate money = 150 "Rate per piece"
+state tab pick Ready|Washing = Ready
+let readyon(l load) = l.dropped + 2
+topbar "Laundry", load, "Add order"
+row gap 2
+  statcard count(load where picked = no and dropped + 2 <= today), "ready to pick up"
+  statcard sum(load where picked = no, it.pieces * rate), "money waiting"
+choice tab
+each load where picked = no and ((dropped + 2 <= today) = (tab = Ready)) sort dropped as l empty "Nothing in this list."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.customer bold
+      l.pieces "pieces · ready" readyon(l) faint
+    l.pieces * rate bold
+    button "Picked" tap set l.picked = yes

@@ -1,0 +1,480 @@
+@rich domain=r5_heart_zones topic=heart rate zones workouts style=detailed
+I wear a pulse watch. each time I note the heart rate, whether it was resting, a walk, a run or a bike ride, and I want the app to tell me the zone: easy under 60 percent of max, aerobic up to 80, hard above. max is 220 minus my age. also a line of my resting pulse over the month
+needs: add a heart rate with activity | age setting for max pulse | zone name for each reading | colour for hard zone | line of resting pulse over the month
+---
+app "Heart zones" heart red dark
+table hr bpm num 30..220 "Heart rate", what pick Resting|Walk|Run|Cycle = Resting
+setting age num = 35 "Your age"
+let maxhr = 220 - age
+let zone(v num) = if(v < maxhr * 0.6, "Easy", if(v < maxhr * 0.8, "Aerobic", "Hard"))
+topbar "Heart zones", hr, "Add reading"
+row gap 2
+  statcard maxhr, "max heart rate for age" age
+  statcard round(avg(hr.bpm last 30 days where what = Resting)), "average resting pulse"
+section "Resting pulse", "last 30 days"
+  trend hr last 30 days where what = Resting sort at, it.bpm
+each hr sort at desc top 12 as h empty "No readings yet. Add one after your workout."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.bpm "bpm" bold
+      h.what faint
+    zone(h.bpm) bold color if(h.bpm >= maxhr * 0.8, bad, if(h.bpm >= maxhr * 0.6, good, muted))
+===
+@rich domain=r5_macros topic=protein carbs fat targets style=multi_feature
+tracking macros for muscle gain: for each food I put protein, carbs and fat in grams. show three progress bars against my daily targets (150 g protein, 300 g carbs, 70 g fat) and total calories for today using 4, 4 and 9 per gram
+needs: add a food with protein, carbs and fat | progress for each macro | targets in settings | calories today | list of today's foods
+---
+app "Macros" food orange
+table food what text, protein num 0..200, carbs num 0..400, fat num 0..200
+setting pt num = 150 "Protein target (g)"
+setting ct num = 300 "Carbs target (g)"
+setting ft num = 70 "Fat target (g)"
+topbar "Macros", food, "Add food"
+statcard sum(food today, it.protein * 4 + it.carbs * 4 + it.fat * 9), "kcal eaten today"
+section "Today against targets"
+  goal sum(food.protein today), pt, "protein", "g"
+  goal sum(food.carbs today), ct, "carbs", "g"
+  goal sum(food.fat today), ft, "fat", "g"
+list food today, "No food logged today. Add your first meal."
+===
+@rich domain=r5_fasting_window topic=intermittent fasting timer style=custom_ui
+16:8 fasting. press start when I stop eating, press end when I eat again, and it should save how many hours I fasted. show the fast running now, my longest fast this month, how many fasts reached 16 hours and a chart of the last 7 days
+needs: start and end buttons | hours of each fast saved | fast running now | fasts that reached 16 hours | chart of hours per day
+---
+app "Fasting" clock mint
+table fast hrs num 0..72 unit "h"
+state began when = now
+state going bool = no
+setting aim num = 16 "Fasting goal (hours)"
+section "Right now"
+  if going
+    "Fasting for" round((now - began) / 1h * 10) / 10 "hours" big color if((now - began) / 1h >= aim, good, ink)
+    button "End fast" fill accent tap add fast hrs = round((now - began) / 1h * 10) / 10 then set going = no
+  else
+    "Not fasting" head
+    button "Start fast" fill accent tap set began = now then set going = yes
+row gap 2
+  statcard max(fast.hrs month), "longest fast this month (h)"
+  statcard count(fast where hrs >= aim), "fasts that reached the goal"
+section "Hours fasted", "last 7 days"
+  goalbars last 7 days, sum(fast.hrs on it), aim
+list fast top 8, "No fasts saved yet."
+===
+@rich domain=r5_screen_breaks topic=20-20-20 eye breaks style=short
+I stare at screens all day. remind me every 20 minutes to look away for 20 seconds, and count the breaks I took
+needs: reminder every 20 minutes | tap to log a break | breaks today | chart of breaks per day
+---
+app "Eye breaks" eye teal
+table brk mark text?
+remind "Look at something 20 feet away for 20 seconds" every 20m from 9:00 to 18:00
+statcard count(brk today), "eye breaks today of 24", 24
+button "I took a break" fill accent tap add brk
+section "Last 7 days"
+  daybars last 7 days, count(brk on it)
+===
+@rich domain=r5_tooth_brushing topic=kids tooth brushing stars style=custom_ui
+tooth brushing chart for my two boys. each has a morning and a night box, tap to give the tick, count how many ticks each got this week and show a star when they have 14 out of 14
+needs: add a child | morning and night tick each day | ticks this week per child | star at 14 of 14 | week dots per child
+---
+app "Brush chart" tooth blue
+table kid name text
+table brush kid ref kid, slot pick Morning|Night = Morning
+topbar "Brush chart", kid, "Add child"
+each kid sort name as k empty "No children yet. Add each child to start the chart."
+  stack card gap 2 tap edit k swipe remove k
+    row gap 2
+      k.name head grow
+      if count(k.brush week) >= 14
+        icon star
+      count(k.brush week) "of 14 this week" faint
+    row gap 1
+      each options brush.slot as s
+        button s grow fill if(count(k.brush today where slot = s) > 0, good, soft) tap toggle k.brush today where slot = s
+    weekdots count(k.brush on it) >= 2
+===
+@rich domain=r5_fever_chart topic=child fever chart doses style=detailed
+my daughter has fever. note her temperature each time and tell me if I gave the paracetamol. paint 37.5 and above orange and 39 and above red, show when the next dose is allowed (6 hours after the last one) and plot the temperatures
+needs: add a temperature reading with dose given flag | colour by fever level | next dose time 6 hours after the last | plot of temperatures | highest temperature today
+---
+app "Fever chart" cloud pink
+table temp deg num 34..43 unit "C", dose bool "Paracetamol given"
+topbar "Fever chart", temp, "Add temperature"
+row gap 2
+  statcard last(temp.deg), "C at the last reading"
+  statcard max(temp.deg today), "C highest today"
+section "Next dose"
+  if count(temp where dose = yes) = 0
+    "No dose given yet" head
+  else
+    if last(temp.at where dose = yes) + 6h > now
+      "Not before" last(temp.at where dose = yes) + 6h head color warn
+    else
+      "A dose is allowed now" head color good
+section "Temperature", "last 3 days"
+  trend temp last 3 days sort at, it.deg
+each temp sort at desc top 10 as t empty "No readings yet. Take her temperature and add it."
+  row card gap 2 tap edit t swipe remove t
+    t.deg "C" bold color if(t.deg >= 39, bad, if(t.deg >= 37.5, warn, good))
+    if t.dose
+      "dose given" faint
+    t.at faint grow align end
+===
+@rich domain=r5_care_log topic=elderly daily care checklist style=multi_feature
+I look after my grandmother in the day. a daily checklist of meal, bath, walk, medicine and physio with a tick each, and a box where I write one observation about how she was today (appetite, mood). show how many items were done today and what I wrote last
+needs: tick each care item today | write an observation | items done today | last observation | week dots of days all done
+---
+app "Care log" home slate
+table care kind pick Meal|Bath|Walk|Medicine|Physio = Meal
+table obs text long
+topbar "Care log", obs, "Write note"
+statcard count(days today, count(care on it) > 0) * count(care today), "of 5 items done today", 5
+each options care.kind as k
+  row card gap 2
+    k grow
+    toggle care today where kind = k
+section "Last 7 days", "all five done on" count(days last 7 days, count(care on it) >= 5) "days"
+  weekdots count(care on it) >= 5
+section "Last note"
+  if count(obs) > 0
+    last(obs.text) faint
+  else
+    "No notes yet." faint
+===
+@rich domain=r5_dialysis topic=dialysis session weights style=detailed
+my dad goes for dialysis three times a week. we write the weight before and after each session, and the blood pressure after. show how much fluid was removed each time, the average, and whether his weight after is close to the dry weight of 62 kg
+needs: add a session with weight before, after and blood pressure | fluid removed each session | average removed | dry weight setting and difference | trend of weight after
+---
+app "Dialysis" drop purple
+table dial pre num 30..150 unit "kg", post num 30..150 unit "kg", sys num 60..220 = 120
+setting dry num = 62 "Dry weight (kg)"
+topbar "Dialysis", dial, "Add session"
+row gap 2
+  statcard round(sum(dial last 30 days, it.pre - it.post) * 10 / max(count(dial last 30 days), 1)) / 10, "kg removed on average"
+  statcard round((last(dial.post) - dry) * 10) / 10, "kg above dry weight after last session"
+section "Weight after session", "dry weight" dry "kg"
+  trend dial sort at, it.post
+each dial sort at desc top 8 as d empty "No sessions yet. Add one after each dialysis."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      round((d.pre - d.post) * 10) / 10 "kg removed" bold
+      d.pre "to" d.post "kg" faint
+    d.sys "systolic" faint
+===
+@rich domain=r5_chemo_diary topic=chemotherapy symptom diary style=custom_ui
+my sister is on chemo. every evening she rates nausea, tiredness and appetite from 0 to 10, and ticks if there was a fever. let us choose which symptom to look at as a line, show the worst day this cycle and flag fever days
+needs: add a day with nausea, tiredness, appetite and fever | choose a symptom to see as a line | worst day | fever days count | list of days
+---
+app "Chemo diary" heart ink
+table sx nausea num 0..10, tired num 0..10, appetite num 0..10, fever bool
+state show pick Nausea|Tired|Appetite = Nausea
+let val(r sx) = if(show = Nausea, r.nausea, if(show = Tired, r.tired, r.appetite))
+topbar "Chemo diary", sx, "Add today"
+choice show
+row gap 2
+  statcard max(sx, val(it)), "highest" show "score"
+  statcard count(sx where fever = yes), "fever days"
+section show, "last 30 days"
+  trend sx last 30 days sort at, val(it)
+each sx sort at desc top 10 as s empty "Nothing yet. Add how she feels each evening."
+  row card gap 2 tap edit s swipe remove s fill if(s.fever, bad, soft)
+    s.at grow
+    "N" s.nausea "· T" s.tired "· A" s.appetite faint
+===
+@rich domain=r5_carb_ratio topic=carb counting insulin ratio style=multi_feature
+type 1 diabetes meal calculator. I type the grams of carbs in the meal, the app divides by my ratio (1 unit for every 10 g) and tells me the units, rounded to half a unit. keep a log of meals with the dose and total units today
+needs: enter carbs and get units | ratio setting | rounded to half units | log of meals with dose | total units today
+---
+app "Carb dose" calc teal
+table meal what text, carbs num 0..300 unit "g"
+setting ratio num = 10 "Grams of carbs per unit"
+state g num = 0
+let dose(c num) = round(c / ratio * 2) / 2
+section "Calculator"
+  field g "Carbs in this meal (g)"
+  "Dose" dose(g) "units" big
+  button "Save to log as snack" tap add meal what = "Snack", carbs = g
+topbar "Meals", meal, "Add meal"
+statcard sum(meal today, dose(it.carbs)), "units for today's meals"
+each meal sort at desc top 10 as m empty "No meals logged yet."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.what bold
+      m.carbs "g carbs" faint
+    dose(m.carbs) "units" bold
+===
+@rich domain=r5_seizure_log topic=seizure diary days free style=detailed
+son has epilepsy. every seizure gets the length in minutes, type (absence, focal, tonic-clonic) and a likely trigger. I want to see days since the last seizure, how many this month and a calendar-like grid of the last 8 weeks showing days with a seizure
+needs: add a seizure with length, type and trigger | days since the last seizure | seizures this month | grid of the last 8 weeks | list with type and length
+---
+app "Seizure log" bolt grey
+table seiz mins num 1..30 = 1, kind pick Absence|Focal|Tonic_clonic = Absence, trigger pick Unknown|Missed_dose|Lack_of_sleep|Fever|Stress = Unknown
+topbar "Seizure log", seiz, "Log seizure"
+row gap 2
+  statcard since(seiz), "days since the last seizure"
+  statcard count(seiz month), "seizures this month"
+section "Last 8 weeks", "filled days had a seizure"
+  daygrid last 56 days, count(seiz on it)
+each seiz sort at desc top 10 as s empty "No seizures logged. That is good news."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.kind bold
+      s.trigger faint
+    s.mins "min" faint
+===
+@rich domain=r5_salt_intake topic=daily salt intake limit style=short
+doctor said under 5 grams of salt a day for my pressure. add what I eat with grams of salt and show the week
+needs: add a food with salt grams | salt today against 5 g limit | warning colour when over | bar chart of the week
+---
+app "Salt" food yellow
+table salty what text, g num 0..20 = 1 unit "g"
+setting lim num = 5 "Daily salt limit (g)"
+topbar "Salt", salty, "Add food"
+goal sum(salty.g today), lim, "salt today", "g"
+section "This week"
+  goalbars week, sum(salty.g on it), lim
+list salty today, "Nothing yet today."
+===
+@rich domain=r5_thyroid topic=thyroid levels and dose style=detailed
+thyroid: I get a TSH blood test every six weeks and the doctor changes my tablet dose. log TSH with the dose I was on, show the normal band 0.4 to 4 in colours, the date my next test is due, and a line of the TSH over time
+needs: add a TSH result with dose | colour for in range or out of range | next test due six weeks after the last | line of TSH over time | current dose
+---
+app "Thyroid" bolt purple
+table tsh val num 0..100 "TSH", dose num 25..300 unit "mcg"
+topbar "Thyroid", tsh, "Add result"
+row gap 2
+  statcard last(tsh.val), "TSH at the last test"
+  statcard last(tsh.dose), "mcg current dose"
+section "Next blood test"
+  if count(tsh) > 0
+    last(tsh.at) + 42 head color if(last(tsh.at) + 42 < today, bad, ink)
+    if(last(tsh.at) + 42 < today, "overdue", plural(last(tsh.at) + 42 - today, "day")) faint
+  else
+    "Add your first result to start the six week clock." faint
+section "TSH over time", "normal 0.4 to 4"
+  trend tsh sort at, it.val
+each tsh sort at desc as t empty "No results yet."
+  row card gap 2 tap edit t swipe remove t
+    t.val bold color if(t.val >= 0.4 and t.val <= 4, good, bad)
+    t.dose "mcg" faint grow
+    t.at faint
+===
+@rich domain=r5_clinic_supplies topic=clinic consumables stock style=multi_feature
+supplies cupboard of our clinic: gloves, syringes, gauze, masks, alcohol swabs. each has quantity and a minimum level. buttons to use one or add a box of ten, red when at or under the minimum, and a count of items to reorder
+needs: add an item with quantity and minimum | use one button | add ten button | red at or under the minimum | count of items to reorder
+---
+app "Supplies" box slate
+table sup name text, qty num 0..10000, minq num 0..10000 "Minimum"
+topbar "Supplies", sup, "Add item"
+statcard count(sup where qty <= minq), "items to reorder"
+each sup sort qty - minq as s empty "Cupboard is empty. Add gloves, syringes and gauze."
+  row card gap 2 fill if(s.qty <= s.minq, bad, soft) tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.qty "left, minimum" s.minq faint
+    button "-1" tap set s.qty = s.qty - 1
+    button "+10" tap set s.qty = s.qty + 10
+===
+@rich domain=r5_ambulance_log topic=ambulance response times style=custom_ui
+ambulance dispatch log: area, urgency (red, amber, green) and the response time in minutes. our target is 8 minutes for red calls. show the average response by urgency, the percent of red calls inside the target and calls per day
+needs: add a call with area, urgency and minutes | average response per urgency | percent of red calls within target | target setting | calls per day chart
+---
+app "Dispatch log" bolt red
+table call area text, urgency pick Red|Amber|Green = Red, mins num 1..180 "Response minutes"
+setting target num = 8 "Red call target (min)"
+topbar "Dispatch log", call, "Add call"
+statcard round(count(call where urgency = Red and mins <= target) * 100 / max(count(call where urgency = Red), 1)), "% of red calls within" target "minutes", 100
+section "Average response", "minutes"
+  each options call.urgency as u
+    row gap 1
+      u grow color if(u = Red, bad, if(u = Amber, warn, good))
+      round(sum(call.mins where urgency = u) / max(count(call where urgency = u), 1)) bold
+section "Calls per day", "last 7 days"
+  daybars last 7 days, count(call on it)
+list call top 8, "No calls logged yet."
+===
+@rich domain=r5_chw_visits topic=household health visits style=detailed
+I am a lady health worker with about 40 households. add each household with the head of family and village, log each visit with its purpose (pregnancy, child, vaccination, general), and show who has not been visited in 30 days so I can plan tomorrow
+needs: add a household with head and village | log a visit with purpose | households not visited in 30 days | visits this month | last visit date on each household
+---
+app "Home visits" home green
+table house head text, village text
+table visit house ref house, why pick Pregnancy|Child|Vaccination|General = General
+topbar "Home visits", house, "Add household"
+row gap 2
+  statcard count(visit month), "visits this month"
+  statcard count(house, due(it.visit, 30)), "households not seen in 30 days"
+each house sort since(it.visit) desc as h empty "No households yet. Add the first family on your list."
+  row card gap 2 tap edit h swipe remove h fill if(due(h.visit, 30), warn, soft)
+    stack grow gap 0
+      h.head bold
+      h.village faint
+      if count(h.visit) = 0
+        "Never visited" faint
+      else
+        "Last visit" since(h.visit) "days ago" faint
+    button "Visited" tap add visit house = h
+===
+@rich domain=r5_sickbay topic=school nurse sick bay log style=multi_feature
+I'm the nurse at a school. each time a child comes I write name, class, what is wrong (headache, stomach, fever, injury, other) and whether I sent them home. show how many came today, how many went home, and a chart of complaints this month
+needs: add a visit with student, class, complaint and sent home | visits today | sent home today | complaints chart for the month | list by day
+---
+app "Sick bay" school blue
+table sick student text, grade num 1..12, why pick Headache|Stomach|Fever|Injury|Other = Headache, home bool "Sent home"
+topbar "Sick bay", sick, "Log visit"
+row gap 2
+  statcard count(sick today), "children came today"
+  statcard count(sick today where home = yes), "sent home today"
+section "Complaints", "this month"
+  share sick month by why, count(it), it.key
+list sick by day, "Nobody has visited the sick bay yet."
+===
+@rich domain=r5_muac_screen topic=child malnutrition arm band style=custom_ui
+nutrition camp: we measure the mid-upper arm in mm. under 115 is red severe, 115 to 124 is yellow moderate, 125 and above is green. add child name and age in months with the mm, colour each, count red and yellow, and total children screened today
+needs: add a child with age and arm measurement | red yellow green colour | count of red children | count of yellow children | screened today
+---
+app "MUAC screen" user orange
+table muac child text, months num 6..59, mm num 70..220 unit "mm"
+topbar "MUAC screen", muac, "Screen child"
+row gap 2
+  statcard count(muac where mm < 115), "red, severe"
+  statcard count(muac where mm >= 115 and mm < 125), "yellow, moderate"
+statcard count(muac today), "children screened today"
+each muac sort mm as c empty "Nobody screened yet. Measure the first child."
+  row card gap 2 tap edit c swipe remove c fill if(c.mm < 115, bad, if(c.mm < 125, warn, good))
+    stack grow gap 0
+      c.child bold
+      c.months "months" small
+    c.mm "mm" bold
+===
+@rich domain=r5_tb_course topic=TB treatment doses taken style=detailed
+my uncle is on TB treatment for six months. tick the day when he took the tablets, keep the start date, show day number of the 180, how many doses he missed, adherence percent and remind us every morning at 8
+needs: start date setting | tick today's dose | day number of 180 | missed doses | adherence percent with daily reminder
+---
+app "TB course" shield green
+table dose note text?
+setting began date = today "Treatment start date"
+let days = min(today - began + 1, 180)
+remind "TB tablets time" at 8:00
+goal days, 180, "days into treatment of 180"
+row gap 2
+  statcard count(dose), "doses taken"
+  statcard max(days - count(dose), 0), "doses missed"
+  statcard round(count(dose) * 100 / max(days, 1)), "% adherence", 100
+toggle dose today
+"Tick when today's tablets are taken" faint
+section "Last 6 weeks"
+  daygrid last 42 days, count(dose on it)
+===
+@rich domain=r5_dengue_platelets topic=dengue platelet count line style=custom_ui
+dengue patient at home, the lab sends platelet count every day. add the count in thousands and the date, draw a line chart with a red line at 100, show the latest, the lowest so far and say clearly when it is below 100
+needs: add a platelet count | line chart with red threshold line | latest count | lowest so far | warning below 100
+---
+app "Platelets" drop red dark
+table cbc plt num 1..600 unit "thousand"
+topbar "Platelets", cbc, "Add count"
+row gap 2
+  statcard last(cbc.plt), "thousand platelets, latest"
+  statcard min(cbc.plt), "thousand, lowest so far"
+if last(cbc.plt) < 100
+  "Below 100. Call the doctor today." head color bad
+section "Platelet count", "red line is 100"
+  plot 0..max(count(cbc), 2) - 1, 0..max(300, max(cbc.plt)) axes gridlines
+    line 0, 100, max(count(cbc), 2) - 1, 100 stroke bad thick 1
+    poly stroke accent thick 2
+      each cbc sort at
+        pt index, it.plt
+list cbc top 7, "No counts yet."
+===
+@rich domain=r5_wound_dressing topic=wound dressing care style=multi_feature
+wound care after my surgery. each dressing change I measure the wound length in cm, note how it looks (clean, red, draining, healing) and the next change is due every 3 days. show the next change date, wound size line and whether it is getting smaller
+needs: log a dressing change with length and look | next change date | interval setting | line of wound length | smaller or bigger than first
+---
+app "Wound care" shield pink
+table dress cm num 0..30 unit "cm", look pick Clean|Red|Draining|Healing = Clean
+setting every num = 3 "Change every (days)"
+topbar "Wound care", dress, "Dressing change"
+if count(dress) > 0
+  row gap 2
+    statcard last(dress.cm), "cm now"
+    statcard first(dress.cm) - last(dress.cm), "cm smaller than the first"
+  section "Next change", "every" every "days"
+    last(dress.at) + every head color if(last(dress.at) + every <= today, bad, ink)
+section "Wound length"
+  trend dress sort at, it.cm
+each dress sort at desc as d empty "No dressing changes yet. Log the first change."
+  row card gap 2 tap edit d swipe remove d
+    d.at grow
+    d.look faint
+    d.cm "cm" bold
+===
+@rich domain=r5_walk_recovery topic=post surgery walking plan style=multi_feature
+after hip surgery the physio wants me to walk 5 minutes more each day than the day before the start. I log the minutes I walked. show my target for today which grows each day, minutes walked today and a bar chart with the target line
+needs: start date setting | target minutes that grows each day | log minutes walked | minutes walked today | bar chart with target
+---
+app "Walk back" walk teal
+table walk mins num 1..120
+setting began date = today "Start date"
+setting stepmin num = 5 "Add minutes per day"
+let target = min(10 + (today - began) * stepmin, 60)
+topbar "Walk back", walk, "Log walk"
+statcard sum(walk.mins today), "min walked today of" target, target
+section "Today's target", "day" today - began + 1
+  target "minutes" head
+  "Capped at 60 minutes" faint
+section "Minutes walked", "last 7 days"
+  goalbars last 7 days, sum(walk.mins on it), target
+list walk by day, "No walks logged yet."
+===
+@rich domain=r5_morning_stretch topic=guided stretch routine timer style=custom_ui
+a morning stretch routine of five moves, 30 seconds each: neck, shoulders, back, hamstrings, calves. show the current move big, a timer, and go to the next move when the timer ends. when all five are done, save the routine and count my streak
+needs: five moves one after another | 30 second timer per move | next move automatically | save finished routine | streak of days
+---
+app "Morning stretch" leaf yellow
+table routine note text?
+state step num = 1
+let move = if(step = 1, "Neck rolls", if(step = 2, "Shoulder circles", if(step = 3, "Cat and cow", if(step = 4, "Hamstring reach", "Calf stretch"))))
+when step > 5 add routine then notify "Routine finished. Well done." then set step = 1
+row gap 2
+  statcard streak(routine), "day streak"
+  statcard count(routine month), "routines this month"
+section "Move", "step" step "of 5"
+  move huge
+  timer 30s, "Hold and breathe", set step = step + 1
+button "Skip this move" tap set step = step + 1
+===
+@rich domain=r5_couch_5k topic=couch to 5k nine weeks style=detailed
+couch to 5k, nine weeks, three runs a week. pick the week with arrows, it tells me what the interval is that week (run and walk), and I tick run 1, 2 and 3 as I finish them. show which week I am on and how many of the 27 runs I have done
+needs: choose a week with arrows | interval plan for that week | tick three runs a week | runs done of 27 | week summary
+---
+app "Couch to 5k" run ocean
+table ran wk num 1..9, n num 1..3
+state w num = 1
+let plan = if(w <= 2, "Run 1 min, walk 90 sec, 8 times", if(w <= 4, "Run 3 min, walk 90 sec, 5 times", if(w <= 6, "Run 8 min, walk 5 min, twice", if(w <= 8, "Run 20 minutes, no walking", "Run 30 minutes, you did it"))))
+goal count(ran), 27, "runs done of 27"
+row align center gap 1
+  button "<" tap set w = max(w - 1, 1)
+  "Week" w bold grow align center
+  button ">" tap set w = min(w + 1, 9)
+section "This week's plan", "runs done:" count(ran where wk = w)
+  plan head
+  row gap 1
+    each 1..3 as s
+      box grow height 48 radius 10 fill if(count(ran where wk = w and n = s) > 0, good, soft) tap toggle ran all where wk = w and n = s
+        text "Run" s align center bold
+===
+@rich domain=r5_hiit_rounds topic=tabata rounds counter style=custom_ui
+tabata workout, 8 rounds. a row of 8 circles that fill as I finish each round with a tap on a big button, a countdown timer of 20 seconds for each round, and when I finish round 8 it saves the workout so I can see how many I did this week
+needs: eight round circles | button to finish a round | 20 second timer | save workout when round 8 is done | workouts this week
+---
+app "Tabata" bolt orange dark
+table hiit n num 8..8
+state r num = 0
+draw 100, 14 alt "rounds done"
+  each 1..8
+    circle index * 12 + 6, 7, 5 fill if(it <= r, accent, soft)
+timer 20s, "Work", set r = min(r + 1, 8)
+button "Reset" tap set r = 0
+when r >= 8 add hiit n = 8 then notify "Tabata finished"
+row gap 2
+  statcard r, "of 8 rounds done", 8
+  statcard count(hiit week), "workouts this week"

@@ -1,0 +1,239 @@
+@rich domain=seedling_trays topic=seedling_tray_board style=custom_ui
+nursery seedling trays: each tray has a crop and a status (sown, sprouted, hardened, sold). show every tray as a coloured tile, tap a tile to move it to the next status, and count how many are in each status
+needs: add a tray with crop and number of cells | tap tile to move to next status | tiles coloured by status | count per status | tiles in a grid
+---
+app "Seedling trays" plant green
+table tray crop text, cells num 24..300 = 104, status pick Sown|Sprouted|Hardened|Sold = Sown
+topbar "Seedling trays", tray, "Add tray"
+grid 4 gap 1
+  each options tray.status as s
+    stack card gap 0 align center
+      text count(tray where status = s) big
+      text s faint
+grid 2 gap 1
+  each tray sort status as t empty "No trays yet. Add the first tray you sow."
+    stack radius 10 pad 1 gap 0 fill if(t.status = Sown, soft, if(t.status = Sprouted, warn, if(t.status = Hardened, good, surface))) tap set t.status = if(t.status = Sown, Sprouted, if(t.status = Sprouted, Hardened, Sold))
+      text t.crop bold
+      text t.cells "cells" faint
+      text t.status small
+===
+@rich domain=veg_basket_subscribers topic=weekly_vegetable_basket_orders style=detailed
+I sell weekly vegetable baskets to 20 families from my small farm. each family has a name, a basket size (small or big) and a price per size in settings. every week I tick the ones I delivered and who paid. show baskets to deliver this week and money collected
+needs: add a family with basket size | prices per size in settings | tick delivered this week | tick paid | money collected this week
+---
+app "Veg baskets" bag mint dark
+table family name text, size pick Small|Big = Small
+table sent family ref family
+table paid family ref family
+setting p_small money = 1200 "Small basket price"
+setting p_big money = 2000 "Big basket price"
+let to_send = count(family) - count(family, count(it.sent week) > 0)
+topbar "Veg baskets", family, "Add family"
+row gap 2
+  statcard to_send, "baskets to deliver"
+  statcard sum(family, if(count(it.paid week) > 0, if(it.size = Small, p_small, p_big), 0)), "money collected this week"
+each family sort name as f empty "No families yet. Add the households that order a basket."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      text f.name bold
+      text f.size "basket" faint
+    stack gap 0 align center
+      text "Sent" tiny faint
+      toggle f.sent
+    stack gap 0 align center
+      text "Paid" tiny faint
+      toggle f.paid
+===
+@rich domain=soil_test_fields topic=soil_test_results style=multi_feature
+I send soil samples to the lab each year. keep field, date, pH, organic matter percent and the nitrogen level (low, medium, high). choose a field to see its pH line, tell me which fields have pH above 8.5 (too salty) and which have low nitrogen
+needs: add a soil test with field, pH, organic matter and nitrogen | choose a field to see its pH line | fields with pH above 8.5 | fields with low nitrogen | list to edit
+---
+app "Soil tests" leaf orange
+table soil field text, ph num 4..10, om num 0..10 = 0.8 "Organic matter (%)", n pick Low|Medium|High = Low, day date = today
+state f text = ""
+topbar "Soil tests", soil, "Add test"
+row gap 2
+  statcard count(soil where ph > 8.5), "tests with pH above 8.5"
+  statcard count(soil where n = Low), "tests with low nitrogen"
+section "Pick a field"
+  scroll
+    each soil sort field as s
+      button s.field fill if(f = s.field, accent, soft) tap set f = s.field
+  trend soil where field = f, it.ph
+each soil sort day desc top 8 as s empty "No soil tests yet. Add the lab result for a field."
+  row card gap 2 fill if(s.ph > 8.5, warn, if(s.n = Low, soft, surface)) tap edit s swipe remove s
+    stack grow gap 0
+      text s.field bold
+      text "pH" s.ph "OM" s.om "% N" s.n faint
+    text s.day faint
+===
+@rich domain=pest_scouting topic=field_pest_scouting_notes style=detailed
+I walk through the fields every week and note pests: which field, which pest (whitefly, aphid, bollworm, none), how bad on a scale from 1 to 5 and what I did. show bad ones (4 or 5) in red and which pest is most common this month
+needs: log a scouting note with field, pest, severity and action | severe in red | most common pest this month | scouting count this week | list to edit
+---
+app "Pest scouting" eye red
+table scout field text, pest pick Whitefly|Aphid|Bollworm|Mites|None = None, sev num 1..5 = 1, did text?
+topbar "Pest scouting", scout, "Add note"
+row gap 2
+  statcard count(scout week), "field walks this week"
+  statcard count(scout month where sev >= 4), "severe cases this month"
+section "Pests this month"
+  share scout month by pest, count(it), it.key
+each scout sort at desc top 10 as s empty "No notes yet. Write what you saw in the first field."
+  row card gap 2 fill if(s.sev >= 4, bad, soft) tap edit s swipe remove s
+    stack grow gap 0
+      text s.field s.pest bold
+      text s.did faint
+    text "Level" s.sev bold
+===
+@rich domain=harvest_crew_tally topic=picking_crew_bucket_tally style=custom_ui
+during the guava harvest the crew brings buckets. I tap plus for a picker each time he brings a bucket, each bucket is 12 kg and they are paid per bucket. show buckets today, kg today and money owed to each picker today
+needs: add pickers | tap plus for a bucket | kg today | pay per bucket setting | money owed per picker today
+---
+app "Bucket tally" apple yellow
+table picker name text
+table bucket picker ref picker
+setting pay money = 60 "Pay per bucket"
+setting size num 5..40 = 12 "Kg per bucket"
+topbar "Bucket tally", picker, "Add picker"
+row gap 2
+  statcard count(bucket today), "buckets today"
+  statcard count(bucket today) * size, "kg picked today"
+each picker sort name as p empty "No pickers yet. Add each person in the crew."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      text p.name bold
+      text count(p.bucket today) "buckets, owed" count(p.bucket today) * pay faint
+    button "-" tap remove all bucket today where picker = p
+    button "+ bucket" tap add bucket picker = p
+===
+@rich domain=land_units_converter topic=kanal_marla_acre_converter style=short
+convert my land between acres, kanal and marla, and what it is worth
+needs: enter area and unit | converted to acres, kanal and marla | price per acre setting | worth of the land
+---
+app "Land units" map blue
+state amount num = 1
+state measure pick Acre|Kanal|Marla = Acre
+setting price money = 3500000 "Price per acre"
+let acres = if(measure = Acre, amount, if(measure = Kanal, amount / 8, amount / 160))
+section "Your land"
+  field amount "Area"
+  choice measure
+statcard round(acres * 1000) / 1000, "acres"
+row gap 2
+  statcard round(acres * 800) / 100, "kanal"
+  statcard round(acres * 1600) / 10, "marla"
+statcard round(acres * price), "worth at the price per acre"
+===
+@rich domain=feed_ration_calc topic=livestock_feed_ration style=detailed
+how much feed for my animals each day? I have buffaloes that eat 12 kg, cows 10 kg, goats 1.5 kg and calves 4 kg. type how many of each and show total kg a day and per month, and what it costs at my feed price per kg
+needs: number of each animal | feed per animal per day | total kg per day and per month | cost at price per kg | kg per animal type
+---
+app "Feed ration" milk green
+state buffalo num = 4
+state cow num = 3
+state goat num = 10
+state calf num = 2
+setting price money = 55 "Feed price per kg"
+let per_day = buffalo * 12 + cow * 10 + goat * 1.5 + calf * 4
+section "How many animals"
+  field buffalo "Buffaloes (12 kg a day)"
+  field cow "Cows (10 kg a day)"
+  field goat "Goats (1.5 kg a day)"
+  field calf "Calves (4 kg a day)"
+row gap 2
+  statcard per_day, "kg of feed a day"
+  statcard per_day * 30, "kg a month"
+statcard round(per_day * 30 * price), "feed cost per month"
+section "Feed by animal", "kg a day"
+  row gap 1
+    text "Buffaloes" grow
+    text buffalo * 12 bold
+  row gap 1
+    text "Cows" grow
+    text cow * 10 bold
+  row gap 1
+    text "Goats" grow
+    text goat * 1.5 bold
+  row gap 1
+    text "Calves" grow
+    text calf * 4 bold
+===
+@rich domain=water_tank_level topic=farm_water_tank_level style=custom_ui
+farm water tank for the animals. pumped litres go in, litres used go out. draw the tank with the water level and show litres left, percent full, and warn when it is under 20 percent. tap buttons for pumped and used amounts
+needs: tank size setting | log litres pumped in | log litres used | tank drawn with water level | warning when under 20 percent
+---
+app "Water tank" drop ocean
+table inflow litres num 100..20000
+table outflow litres num 50..20000
+setting size num 500..100000 = 5000 "Tank size (litres)"
+let inside = clamp(sum(inflow.litres) - sum(outflow.litres), 0, size)
+let pct = round(inside * 100 / size)
+row gap 3
+  draw 60, 100 width 90
+    rect 10, 10, 40, 80 fill soft radius 6
+    rect 10, 90 - 80 * inside / size, 40, 80 * inside / size fill if(pct < 20, bad, accent) radius 6
+    label 30, 50, pct "%" small
+  stack grow gap 1
+    text inside big
+    text "litres left of" size faint
+    if pct < 20
+      text "Tank is almost empty. Run the pump." bold color bad
+row gap 1
+  button "Pumped 1000 L" tap add inflow litres = 1000
+  button "Pumped 2000 L" tap add inflow litres = 2000
+row gap 1
+  button "Used 200 L" tap add outflow litres = 200
+  button "Used 500 L" tap add outflow litres = 500
+section "Water used", "last 7 days"
+  daybars last 7 days, sum(outflow.litres on it)
+===
+@rich domain=farm_home_screens topic=small_farm_three_tabs style=multi_feature
+one app for my small farm with tabs: Today for the jobs I tick off, Animals for milk litres and eggs, and Money for what I earned and spent. the Today tab has the jobs list with a tick, the Animals tab quick buttons, the Money tab income and expense totals
+needs: tabs for Today, Animals and Money | add a job and tick it | quick buttons for milk and eggs | add income and expense | profit this month
+---
+app "My farm" home green
+table job what text, done bool
+table milk litres num 1..60
+table egg n num 1..500
+table cash what text, amount money, kind pick Income|Expense = Income
+topbar "My farm", job, "Add job"
+statcard count(job where done = no), "jobs left today", count(job)
+each job sort done as j empty "No jobs yet. Add the first thing to do today."
+  row card gap 2 tap edit j swipe remove j
+    text j.what grow
+    toggle j.done
+screen animals "Animals" paw
+  statcard sum(milk.litres today), "litres of milk today"
+  row gap 1
+    button "+ 5 L" tap add milk litres = 5
+    button "+ 10 L" tap add milk litres = 10
+  statcard sum(egg.n today), "eggs today"
+  row gap 1
+    button "+ 12 eggs" tap add egg n = 12
+    button "+ 30 eggs" tap add egg n = 30
+  section "Milk per day"
+    daybars last 7 days, sum(milk.litres on it)
+screen money "Money" coin
+  statcard sum(cash.amount month where kind = Income) - sum(cash.amount month where kind = Expense), "profit this month"
+  form cash, "Save"
+  list cash top 8, "No money entries yet."
+===
+@rich domain=bee_syrup_feeding topic=hive_sugar_syrup_feeding style=multi_feature
+in winter I feed my bees sugar syrup. each hive gets some litres per feeding and I tick the feeding with the litres. show litres and sugar kg used (1 kg sugar per 1.5 litre syrup), which hives have not been fed for 10 days in orange, and a reminder every Sunday
+needs: add hives | log a feeding in litres | litres and sugar used this month | orange for hives not fed in 10 days | weekly reminder
+---
+app "Bee feeding" cup orange
+table hive name text
+table feeding hive ref hive, litres num 0.5..10 = 2
+remind "Check the bee feeders" at 9:00 on sun
+topbar "Bee feeding", hive, "Add hive"
+row gap 2
+  statcard sum(feeding.litres month), "litres of syrup this month"
+  statcard round(sum(feeding.litres month) / 1.5), "kg of sugar used"
+each hive sort name as h empty "No hives yet. Add the hives you feed in winter."
+  row card gap 2 fill if(due(h.feeding, 10), warn, soft) tap edit h swipe remove h
+    stack grow gap 0
+      text h.name bold
+      text "Fed" since(h.feeding) "days ago," sum(h.feeding.litres) "litres in all" faint
+    button "Fed 2 L" tap add feeding hive = h, litres = 2
