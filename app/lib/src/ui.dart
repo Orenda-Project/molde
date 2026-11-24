@@ -215,6 +215,7 @@ class _Chat extends StatelessWidget {
     final t = input.text;
     if (t.trim().isEmpty || c.busy) return;
     input.clear();
+    FocusManager.instance.primaryFocus?.unfocus(); // the keyboard goes away so the answer is fully visible
     c.send(t);
   }
 
