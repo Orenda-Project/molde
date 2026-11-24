@@ -54,9 +54,10 @@ std::string jesc(const std::string & s) {
   }
   return o;
 }
+int g_n_full = 0; double g_ms_full = 0;   // times the grammar had to filter the whole vocabulary, and how long that took
 std::string result(const char * stop, const std::string & text, int n_prompt, int n_cache, int n_gen, double ms_p, double ms_g, const std::string & err = "") {
-  char b[256];
-  snprintf(b, sizeof b, "\",\"n_prompt\":%d,\"n_cache\":%d,\"n_gen\":%d,\"ms_prompt\":%.1f,\"ms_gen\":%.1f", n_prompt, n_cache, n_gen, ms_p, ms_g);
+  char b[320];
+  snprintf(b, sizeof b, "\",\"n_prompt\":%d,\"n_cache\":%d,\"n_gen\":%d,\"ms_prompt\":%.1f,\"ms_gen\":%.1f,\"n_full\":%d,\"ms_full\":%.1f", n_prompt, n_cache, n_gen, ms_p, ms_g, g_n_full, g_ms_full);
   return std::string("{\"stop\":\"") + stop + "\",\"text\":\"" + jesc(text) + b + (err.empty() ? "" : ",\"error\":\"" + jesc(err) + "\"") + "}";
 }
 
@@ -97,7 +98,7 @@ bool eval_tokens(const std::vector<llama_token> & toks, size_t from) {
 
 extern "C" {
 
-JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeLoad(JNIEnv * env, jobject, jstring jpath, jstring jlibdir, jint n_ctx, jint n_threads) {
+JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeLoad(JNIEnv * env, jobject, jstring jpath, jstring jlibdir, jint n_ctx, jint n_threads, jboolean use_mmap) {
   const char * path = env->GetStringUTFChars(jpath, nullptr);
   const char * libdir = env->GetStringUTFChars(jlibdir, nullptr);
   std::string p = path, ld = libdir;
@@ -112,6 +113,8 @@ JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeLoad(JNIEnv * 
     g_backends_loaded = true;
   }
   llama_model_params mp = llama_model_default_params();
+  // anonymous memory instead of mmap: on a phone short of RAM, file-backed model pages are dropped and re-read from flash on every token
+  mp.load_mode = use_mmap ? LLAMA_LOAD_MODE_MMAP : LLAMA_LOAD_MODE_NONE;
   g_model = llama_model_load_from_file(p.c_str(), mp);
   if (!g_model) return env->NewStringUTF("could not load the model file (not a GGUF this build can read, or out of memory)");
   g_vocab = llama_model_get_vocab(g_model);
@@ -182,6 +185,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_oyekamal_molde_NativeLlm_nativeComplete(JN
   std::string text;      // raw bytes generated so far
   std::string stop = "limit";
   int n_gen = 0;
+  g_n_full = 0; g_ms_full = 0;
   auto t1 = clk::now();
   for (int i = 0; i < n_predict; i++) {
     if (g_cancel) { stop = "cancel"; break; }
@@ -191,12 +195,14 @@ JNIEXPORT jbyteArray JNICALL Java_com_oyekamal_molde_NativeLlm_nativeComplete(JN
       llama_token_data_array arr = { &one, 1, -1, false };
       llama_sampler_apply(gram, &arr);
       if (one.logit == -INFINITY) {               // grammar rejects it: filter the full distribution
+        auto tf = clk::now();
         const float * logits = llama_get_logits_ith(g_ctx, -1);
         for (int k = 0; k < n_vocab; k++) cand[k] = { k, logits[k], 0.0f };
         llama_token_data_array full = { cand.data(), (size_t) n_vocab, -1, false };
         llama_sampler_apply(gram, &full);
         llama_sampler_apply(chain, &full);
         id = full.selected >= 0 ? full.data[full.selected].id : full.data[0].id;
+        g_n_full++; g_ms_full += ms_since(tf);
       }
       llama_sampler_accept(gram, id);
     }
@@ -218,6 +224,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_oyekamal_molde_NativeLlm_nativeComplete(JN
   if (gram) llama_sampler_free(gram);
   llama_sampler_free(chain);
   if (stop == "error") { g_cached.clear(); llama_memory_clear(mem, true); }
+  LOGI("complete: stop=%s prompt_eval=%d cached=%d gen=%d ms_prompt=%.0f ms_gen=%.0f full_vocab_filters=%d (%.0f ms)", stop.c_str(), n_prompt_eval, (int) common, n_gen, ms_p, ms_g, g_n_full, g_ms_full);
   return tobytes(env, result(stop.c_str(), text, n_prompt_eval, (int) common, n_gen, ms_p, ms_g));
 }
 

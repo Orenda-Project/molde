@@ -35,15 +35,22 @@ class LlmService {
   static Future<File?> locate(List<Directory> dirs) async {
     for (final d in dirs) {
       final models = Directory('${d.path}/models');
-      if (!await models.exists()) continue;
+      // a folder made by `adb shell` may not be listable by the app, but its files can still be opened
+      final direct = File('${models.path}/model.gguf');
+      try {
+        if (await direct.exists()) return direct;
+      } catch (_) {}
       final files = <File>[];
-      await for (final e in models.list()) {
-        if (e is File && e.path.toLowerCase().endsWith('.gguf')) files.add(e);
+      try {
+        if (!await models.exists()) continue;
+        await for (final e in models.list()) {
+          if (e is File && e.path.toLowerCase().endsWith('.gguf')) files.add(e);
+        }
+      } catch (_) {
+        continue;
       }
       if (files.isEmpty) continue;
-      final preferred = files.where((f) => f.uri.pathSegments.last == 'model.gguf');
-      if (preferred.isNotEmpty) return preferred.first;
-      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+            files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
       return files.first;
     }
     return null;
@@ -77,7 +84,7 @@ class LlmService {
   /// Loads (once). Returns null when the model is ready, or a plain-language reason it is not.
   Future<String?> ensureLoaded(List<Directory> dirs, {File? bundled}) {
     if (model != null) return Future.value(null);
-    _loading ??= _load(dirs, bundled).whenComplete(() => _loading = null);
+    _loading ??= _load(dirs, bundled).catchError((Object e) { loadError = 'The model could not be loaded: $e'; }).whenComplete(() => _loading = null);
     return _loading!.then((_) => model == null ? (loadError ?? 'no model') : null);
   }
 
@@ -90,7 +97,7 @@ class LlmService {
     }
     final p = await info();
     final cores = (p['cores'] as int?) ?? 4;
-    final threads = (cores ~/ 2).clamp(2, 4);
+    final threads = (cores * 3 ~/ 4).clamp(2, 4);
     final side = await readSidecar(f);
     final sw = Stopwatch()..start();
     final err = await _ch.invokeMethod<String>('load', {'path': f.path, 'nCtx': 2048, 'threads': threads});

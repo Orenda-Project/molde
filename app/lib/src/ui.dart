@@ -46,7 +46,13 @@ class _ShellPageState extends State<ShellPage> {
     final mq = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
     final panelH = (mq.size.height * 0.62).clamp(280.0, 640.0);
-    return Scaffold(
+    return PopScope(
+      canPop: !open,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (showApps) { setState(() => showApps = false); } else { FocusManager.instance.primaryFocus?.unfocus(); setState(() => open = false); }
+      },
+      child: Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: cs.surface,
       body: Stack(children: [
@@ -85,7 +91,7 @@ class _ShellPageState extends State<ShellPage> {
             ),
           ),
       ]),
-    );
+    ));
   }
 }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'bridge.dart';
 import 'llm.dart';
 import 'store.dart';
@@ -68,6 +69,10 @@ class MoldeController extends ChangeNotifier {
         notifyListeners();
       }
     };
+    try {
+      final j = await AppStore.readValid(File('${store.root.path}/last_stats.json'));
+      if (j is Map && j['stats'] is Map) { lastStats = Map<String, dynamic>.from(j['stats'] as Map); lastStatsRequest = '${j['request']}'; }
+    } catch (_) {}
     apps = await store.list();
     final id = await store.currentId();
     final r = apps.where((a) => a.id == id).isNotEmpty ? apps.firstWhere((a) => a.id == id) : (apps.isNotEmpty ? apps.first : null);
@@ -80,7 +85,12 @@ class MoldeController extends ChangeNotifier {
   Future<void> loadModel() async {
     modelStatus = 'Loading the model…';
     notifyListeners();
-    final err = await llm.ensureLoaded(modelDirs);
+    String? err;
+    try {
+      err = await llm.ensureLoaded(modelDirs);
+    } catch (e) {
+      err = 'The model could not be loaded: $e';
+    }
     final m = llm.model;
     modelStatus = err == null && m != null ? 'Model ready: ${m.path.split('/').last} (${(m.sizeBytes / 1048576).round()} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s)' : err ?? 'No model';
     notifyListeners();
@@ -186,7 +196,7 @@ class MoldeController extends ChangeNotifier {
     notifyListeners();
     try {
       final err = await llm.ensureLoaded(modelDirs);
-      if (err != null) { _finishLive(live, err); return; }
+      if (err != null) { _finishLive(live, err); return; }  // plain reason: no model installed, or it failed to load
       live.text = 'Writing the app…';
       notifyListeners();
       final m = llm.model!;
@@ -195,7 +205,10 @@ class MoldeController extends ChangeNotifier {
         'system': m.system, 'arm': m.arm ?? arm,
       }));
       final stats = res['stats'] is Map ? Map<String, dynamic>.from(res['stats'] as Map) : null;
-      if (stats != null) { lastStats = stats; lastStatsRequest = request; }
+      if (stats != null) {
+        lastStats = stats; lastStatsRequest = request;
+        unawaited(AppStore.writeAtomic(File('${store.root.path}/last_stats.json'), jsonEncode({'v': 1, 'request': request, 'stats': stats})).catchError((Object _) {}));
+      }
       await _afterGenerate(live, kind, request, res);
     } catch (e) {
       _finishLive(live, 'Something went wrong while building: $e. Your app is unchanged.');
@@ -237,7 +250,12 @@ class MoldeController extends ChangeNotifier {
     if (kind == 'create') {
       final r = await _newRecord(program, 'create', request: request);
       final d = await bridge.rpc<Map>('describe', {'source': program});
+      // the request and the answer belong to the new app's chat
+      final here = chat;
+      final moved = here.length >= 2 ? here.sublist(here.length - 2) : List<ChatMsg>.of(here);
+      here.removeRange(here.length - moved.length, here.length);
       await openApp(r);
+      chat.addAll(moved);
       _finishLive(live, 'Made ${r.name} in ${_fmtSecs(secs)}. It is open now and keeps what you enter.\n${_plain('${d['text']}')}');
       return;
     }

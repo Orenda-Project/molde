@@ -39,10 +39,10 @@ class MainActivity : FlutterActivity() {
             "cancel" -> { llm?.nativeCancel(); result.success(null) }
             "load" -> {
                 val path = call.argument<String>("path")!!
-                val nCtx = call.argument<Int>("nCtx") ?: 2048
-                val threads = call.argument<Int>("threads") ?: 4
+                val nCtx = call.argument<Number>("nCtx")?.toInt() ?: 2048
+                val threads = call.argument<Number>("threads")?.toInt() ?: 4
                 worker.execute {
-                    val out = try { engine().nativeLoad(path, applicationInfo.nativeLibraryDir, nCtx, threads) }
+                    val out = try { engine().nativeLoad(path, applicationInfo.nativeLibraryDir, nCtx, threads, call.argument<Boolean>("mmap") ?: false) }
                     catch (e: Throwable) { "native library failed: ${e.message}" }
                     main.post { result.success(out) }
                 }
@@ -50,9 +50,9 @@ class MainActivity : FlutterActivity() {
             "complete" -> {
                 val prompt = (call.argument<String>("prompt") ?: "").toByteArray(Charsets.UTF_8)
                 val grammar = (call.argument<String>("grammar") ?: "").toByteArray(Charsets.UTF_8)
-                val nPredict = call.argument<Int>("nPredict") ?: 200
-                val temp = (call.argument<Double>("temp") ?: 0.0).toFloat()
-                val seed = call.argument<Int>("seed") ?: 1
+                val nPredict = call.argument<Number>("nPredict")?.toInt() ?: 200
+                val temp = (call.argument<Number>("temp")?.toFloat() ?: 0f)
+                val seed = call.argument<Number>("seed")?.toInt() ?: 1
                 val stopNl = call.argument<Boolean>("stopNl") ?: true
                 worker.execute {
                     val out = try { String(engine().nativeComplete(prompt, grammar, nPredict, temp, seed, stopNl), Charsets.UTF_8) }

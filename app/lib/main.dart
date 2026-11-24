@@ -13,6 +13,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final docs = await getApplicationDocumentsDirectory();
   final ext = await getExternalStorageDirectory(); // /sdcard/Android/data/<pkg>/files (adb push works here)
+  // the app creates its own models folder, so `adb push` into it is readable by the app
+  if (ext != null) { try { await Directory('${ext.path}/models').create(recursive: true); } catch (_) {} }
   final web = WebHost();
   final llm = LlmService();
   final dirs = <Directory>[if (ext != null) ext, docs];
