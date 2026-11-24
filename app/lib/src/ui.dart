@@ -179,6 +179,8 @@ class _Sheet extends StatelessWidget {
                     ]),
                     if (!showApps)
                       Semantics(
+                        container: true,
+                        excludeSemantics: true,
                         label: 'Mode: ${c.modeLabel}',
                         child: Container(
                           key: const Key('mode-label'),

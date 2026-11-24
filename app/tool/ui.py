@@ -73,4 +73,5 @@ def main():
         for n in nodes():
             t = (n.get('text') or '').strip(); d = (n.get('content-desc') or '').strip()
             if t or d: print(n.get('bounds'), '|', t[:100], '|', d[:100])
-main()
+if __name__ == "__main__":
+    main()

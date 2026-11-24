@@ -91,3 +91,23 @@ test('edit: the current program is in the prompt and the full new program comes 
   assert.ok(f.calls[0].prompt.includes('Edit request: make it blue\n\nCurrent program:\napp "'));
   assert.equal(check(r.program).ok, true);
 });
+
+test('the deadline interrupts a line in progress (native cancel is called) and reports a timeout', async () => {
+  let release;
+  const hang = new Promise(r => { release = r; });
+  let cancelled = 0;
+  const complete = async () => { await hang; return { stop: 'cancel', text: '', n_gen: 0 }; };
+  const r = await generate({ kind: 'create', request: 'x', complete, deadlineMs: 50, cancelNative: () => { cancelled++; release(); } });
+  assert.equal(cancelled, 1);
+  assert.equal(r.timedOut, true);
+  assert.equal(r.ok, false);
+});
+
+test('allowAsk=false: the first call gets a grammar without ask-stmt; allowAsk=true keeps it', async () => {
+  const grammars = [];
+  const mk = () => async req => { grammars.push(req.grammar); return { stop: 'eos', text: '', n_gen: 0 }; };
+  await generate({ request: 'budget', complete: mk(), allowAsk: false });
+  await generate({ request: 'make me an app', complete: mk(), allowAsk: true });
+  assert.ok(!grammars[0].includes('( ask-stmt | app-stmt ) nl'));
+  assert.ok(grammars[1].includes('ask-stmt | app-stmt'));
+});
