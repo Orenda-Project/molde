@@ -283,7 +283,7 @@ class MoldeController extends ChangeNotifier {
       final name = current!.name;
       _say('bot', 'That sounds like a new app. Do you want a new app, or a change to $name?', buttons: [
         ChatBtn('New app', () async { startNewApp(); await _run('create', request); }, primary: true),
-        ChatBtn('Change $name', () async { await _run('edit', request); }),
+        ChatBtn('Change $name', () async { changeCurrent(); await _run('edit', request); }),
       ]);
       return;
     }
