@@ -187,8 +187,8 @@ class App {
     this.ok = c.ok && r.verdict !== 'refused'; this.errors = [...c.errors.map(String), ...(r.verdict === 'refused' ? r.refused : [])];
     this.prog = c.ast; this.env = c.ast.env || { tables: new Map(), settings: new Map() };
     if (r.verdict !== 'refused') this.ever = r.ever;
-    if (r.verdict !== 'refused') this.assignStatementIds(oldProg, c.ast, r, opts);
     this.map = this.ever.versions.length ? this.ever.versions[this.ever.versions.length - 1].map : { tables: {}, fields: {}, settings: {}, states: {} };
+    if (r.verdict !== 'refused') this.assignStatementIds(oldProg, c.ast, r, opts); // after the map: anchors name slots
     // the stored program is the recorded version's text: canonical, with no was (rule 2)
     if (r.verdict !== 'refused' && this.ever.versions.length) { this.source = this.ever.versions[this.ever.versions.length - 1].src; r.stored = this.source; }
     this.annotateOptions();
@@ -214,36 +214,67 @@ class App {
   // kind and text first, in order; then the same kind and name, nearest first); new ones get new ids.
   // Every version records its ids, so Undo, restore-to-version and backups read them.
   flatStatements(ast) { const out = []; const walk = l => { for (const st of l || []) { out.push(st); walk(st.children); } }; walk(ast.body); return out; }
-  stmtKey(st) { return st.kind + '|' + (st.src || ''); }
-  stmtName(st) { return st.kind === 'state' ? [st.name, st.was].filter(Boolean) : st.kind === 'use' ? [st.name] : st.kind === 'each' ? [JSON.stringify(st.source)] : st.kind === 'every' || st.kind === 'when' ? [JSON.stringify(st.actions)] : []; }
+  // the statements as written: a component call is one statement (its expansion is inside it)
+  sourceStatements(ast) { const out = []; const walk = l => { for (const st of l || []) { out.push(st); if (st.kind !== 'use') walk(st.children); } }; walk(ast.body); return out; }
+  bodyStates(st) { const n = []; const walk = l => { for (const x of l || []) { if (x.kind === 'state') n.push(x.name); else if (x.kind !== 'each' && x.kind !== 'use') walk(x.children); } }; walk(st.children); return n; }
+  bodyText(st) { const t = []; const walk = l => { for (const x of l || []) { t.push(x.src || x.kind); if (x.kind !== 'use') walk(x.children); } }; walk(st.children); return t.join('\n'); }
+  eachSlot(st) {
+    const src = st.source;
+    if (src.k === 'query') { const p = src.q.path; return (p.head !== 'it' && this.env.tables.has(p.head) ? 't' + this.tk(p.head) : p.head) + (p.parts.length ? '.' + p.parts.join('.') : ''); }
+    if (src.k === 'options') return 'o' + (src.path.parts.length ? `${this.tk(src.path.head)}.${this.fk(src.path.head, src.path.parts[0])}` : src.path.head);
+    return src.k;
+  }
+  // the exact key (text; for an each also what it declares and holds) and the anchors tried next
+  stmtKey(st) { return st.kind + '|' + (st.src || '') + (st.kind === 'each' ? '|' + this.bodyStates(st).join(',') + '|' + this.bodyText(st) : ''); }
+  stmtAnchors(st) {
+    switch (st.kind) {
+      case 'use': {
+        if (st.name === 'timer') return ['timer:' + (st.args[1] ?? st.args[0] ?? ''), 'timer!' + (st.args[2] ?? '')];
+        if (st.name === 'form') return ['form:' + (this.env.tables.has(st.args[0]) ? this.tk(st.args[0]) : st.args[0])];
+        return [st.name + ':' + (st.args[0] ?? '')];
+      }
+      case 'each': return ['each:' + this.eachSlot(st) + '|' + (st.as || '') + '|' + this.bodyStates(st).join(','), 'each:' + this.eachSlot(st) + '|' + (st.as || '')];
+      case 'when': return ['whenA:' + JSON.stringify(st.actions), 'whenC:' + JSON.stringify(st.cond)];
+      case 'every': return ['every:' + JSON.stringify(st.actions)];
+      case 'state': return [st.name, st.was].filter(Boolean).map(n => 'state:' + n);
+      default: return [];
+    }
+  }
   assignStatementIds(oldProg, ast, r, opts) {
-    const now = this.flatStatements(ast), V = this.ever.versions, cur = V[V.length - 1];
-    if (!cur) { now.forEach((st, i) => { st.sid = i; }); return; }
+    const now = this.sourceStatements(ast), V = this.ever.versions, cur = V[V.length - 1];
+    const inner = st => { if (st.kind === 'use') this.flatStatements({ body: st.children }).forEach((x, k) => { x.sid = `${st.sid}.${k}`; }); }; // inside a component: (instance, place in the def)
+    if (!cur) { now.forEach((st, i) => { st.sid = i; inner(st); }); return; }
     let ids = null;
-    const fits = v => v && Array.isArray(v.stmt) && v.stmt.length === now.length;
+    const fits = v => v && Array.isArray(v.stmt) && v.stmt.length === now.length && !v.flat;
     if (opts.restore && Number.isInteger(r.restoredFrom)) { if (fits(V[r.restoredFrom])) ids = V[r.restoredFrom].stmt; } // the version's own ids
     else if (!(oldProg && oldProg.body && oldProg.header)) { if (fits(cur)) ids = cur.stmt; } // a load: the stored version's ids
+    this.rearm = new Set(); // whens whose condition is new or changed: their edge is set without firing
     if (!ids && oldProg && oldProg.body && oldProg.header && !opts.restore) {
-      const old = this.flatStatements(oldProg).filter(st => st.sid !== undefined);
-      const a = old.map(st => this.stmtKey(st)), b = now.map(st => this.stmtKey(st));
-      // longest common subsequence of the statement texts
+      const old = this.sourceStatements(oldProg).filter(st => st.sid !== undefined);
+      const a = old.map(st => st._key ?? this.stmtKey(st)), b = now.map(st => this.stmtKey(st));
+      const oa = old.map(st => st._anchors ?? this.stmtAnchors(st)); // anchors made with the old program's names
+      // 1. the same text (an each: and what it declares and holds), in order
       const L = Array.from({ length: a.length + 1 }, () => new Int32Array(b.length + 1));
       for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
       ids = new Array(now.length).fill(null); const used = new Set();
       for (let i = 0, j = 0; i < a.length && j < b.length;) { if (a[i] === b[j]) { ids[j] = old[i].sid; used.add(i); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++; }
-      for (let j = 0; j < now.length; j++) { // then the same kind and name, nearest position first
+      // the same text elsewhere (a moved line), first come first paired
+      for (let j = 0; j < now.length; j++) if (ids[j] === null) { const i = old.findIndex((o, k) => !used.has(k) && a[k] === b[j]); if (i >= 0) { ids[j] = old[i].sid; used.add(i); } }
+      // 2. the same kind and anchor, anchor by anchor, nearest first
+      for (let level = 0; level < 2; level++) for (let j = 0; j < now.length; j++) {
         if (ids[j] !== null) continue;
-        const names = this.stmtName(now[j]);
+        const an = this.stmtAnchors(now[j])[level]; if (!an) continue;
         let best = -1;
-        for (let i = 0; i < old.length; i++) if (!used.has(i) && old[i].kind === now[j].kind && (names.length === 0 || this.stmtName(old[i]).some(n => names.includes(n))) && (best < 0 || Math.abs(i - j) < Math.abs(best - j))) best = i;
-        if (best >= 0) { ids[j] = old[best].sid; used.add(best); }
+        for (let i = 0; i < old.length; i++) if (!used.has(i) && old[i].kind === now[j].kind && oa[i][level] === an && (best < 0 || Math.abs(i - j) < Math.abs(best - j))) best = i;
+        if (best >= 0) { ids[j] = old[best].sid; used.add(best); if (now[j].kind === 'when' && JSON.stringify(old[best].cond) !== JSON.stringify(now[j].cond)) this.rearm.add(String(ids[j])); }
       }
     }
-    if (!ids) ids = Array.isArray(cur.stmt) && cur.stmt.length === now.length ? cur.stmt : now.map((_, i) => i); // a version from before statement ids: by position
-    let next = Math.max(this.ever.nextSid || 0, ...ids.filter(x => x !== null).map(x => x + 1), now.length);
+    if (!ids) ids = fits(cur) ? cur.stmt : now.map((_, i) => i); // a version from before statement ids: by position
+    let next = Math.max(this.ever.nextSid || 0, ...ids.filter(x => x !== null).map(x => +x + 1), now.length);
+    const isNew = ids.map(x => x === null);
     ids = ids.map(x => x === null ? next++ : x);
-    now.forEach((st, i) => { st.sid = ids[i]; });
-    cur.stmt = ids; this.ever.nextSid = next;
+    now.forEach((st, i) => { st.sid = ids[i]; inner(st); st._key = this.stmtKey(st); st._anchors = this.stmtAnchors(st); if (isNew[i] && oldProg && oldProg.header && !opts.restore) for (const x of [st, ...this.flatStatements({ body: st.children })]) if (x.kind === 'when') this.rearm.add(String(x.sid)); });
+    cur.stmt = ids; delete cur.flat; this.ever.nextSid = next;
   }
   // tables and settings the program declares but the data lacks get their empty/default values
   initData() {
@@ -264,6 +295,7 @@ class App {
     const before = this.source, ver = this.ever.versions.length - 1; // the version Undo goes back to, by index (texts can repeat)
     const r = this.setProgram(source);
     if (r.verdict !== 'refused') { this.versionsUndo = [...(this.versionsUndo || []), { src: before, ver, settings: r.settingWrites || {} }]; this.screen = null; if (r.changes && r.changes.length) this.touch(); }
+    if (this.rearm && this.rearm.size && this.hasWhen) { const keep = this.rearm; this.build(); this.rearm = keep; for (const h of this.H.when) if (keep.has(h.sid)) this.lastWhen.set(h.key, this.truthy(h.cond())); this.rearm = null; } // at the edit, not at the next tap
     return r;
   }
   // Chat undo: go back to the previous program; data entered since stays.
@@ -526,6 +558,7 @@ class App {
   // for at most CATCH_UP_MS of wall time per tick, and stops early once a fire changes nothing; the rest are skipped and logged; `after` actions run
   // in due order; `when` conditions are evaluated once at the end.
   tick(ms) {
+    if (typeof ms !== 'number' || !isFinite(ms) || ms < 0 || ms > 100 * 365 * 86400000) return false; // not a time span: the clock is not touched
     this.lastChange = null; this.undoGroup = null;
     if (!(ms > 0)) { this.step(() => this.runWhen()); return; }
     this.step(() => {
@@ -535,7 +568,7 @@ class App {
       // one timeline for every rules and pending afters (also afters scheduled during it), in time order
       const evs = handlers.every.map(h => ({ h, next: start + h.period - (this.everyAcc.get(h.key) || 0), idle: false, dep: td(h.condAst) || td(h.actions) }));
       const whens = handlers.when;
-      const whenNow = () => { for (const w of whens) { const v = this.truthy(w.cond()); const was = this.lastWhen.get(w.key) || false; this.lastWhen.set(w.key, v); if (v && !was) this.run(w.actions, w.env, false); } };
+      const whenNow = () => { for (let guard = 0; guard < 5; guard++) { let fired = false; for (const w of whens) { const v = this.truthy(w.cond()); const was = this.lastWhen.get(w.key) || false; this.lastWhen.set(w.key, v); if (v && !was) { this.run(w.actions, w.env, false); fired = true; } } if (!fired) break; } }; // settled as live: an action that makes its own condition false re-arms it
       const fire = fn => { // run one event in its own sub-journal: did it change stored data?
         const parent = this.journal, sub = { cells: new Map(), lens: new Map(), seq: this.seq, id: parent ? parent.id : 0 };
         this.journal = sub; this.curStep = sub.id;
@@ -544,6 +577,7 @@ class App {
         if (parent) { for (const [obj, m] of sub.cells) { let pm = parent.cells.get(obj); if (!pm) parent.cells.set(obj, pm = new Map()); for (const [k, rec] of m) if (!pm.has(k)) pm.set(k, rec); } for (const [arr, len] of sub.lens) if (!parent.lens.has(arr)) parent.lens.set(arr, len); }
         return changed;
       };
+      if (this.hasWhen) fire(() => {}); // settle the whens at the start, as a live tick does
       let out = false;
       for (;;) {
         const pend = (this.pending || []).filter(p => p.due <= end).sort((a, b) => a.due - b.due)[0];
@@ -602,6 +636,8 @@ class App {
       const at = k => Math.min(start + k * 1000, end);
       while (hi - lo > 1) { const mid = (lo + hi) >> 1; this.clock = at(mid); if (this.truthy(w.cond())) hi = mid; else lo = mid; }
       this.clock = at(hi); this.lastWhen.set(w.key, true); this.run(w.actions, w.env, false);
+      // whens that follow from it happen at that moment too (a row they add is dated then)
+      for (let guard = 0; guard < 5; guard++) { let fired = false; for (const x of handlers.when) { const v = this.truthy(x.cond()); const was = this.lastWhen.get(x.key) || false; this.lastWhen.set(x.key, v); if (v && !was) { this.run(x.actions, x.env, false); fired = true; } } if (!fired) break; }
       this.clock = end;
     }
   }
@@ -614,6 +650,10 @@ class App {
   get everyAcc() { return this._ea || (this._ea = new Map()); }
   runWhen() {
     if (!this.hasWhen) return;
+    if (this.rearm && this.rearm.size) { // an edit made or changed these conditions: their edge is their value now, nothing fires
+      for (const h of this.build().handlers.when) if (this.rearm.has(h.sid)) this.lastWhen.set(h.key, this.truthy(h.cond()));
+      this.rearm = null;
+    }
     for (let guard = 0; guard < 5; guard++) {
       const { handlers } = this.build();
       let fired = false;
@@ -895,7 +935,7 @@ class App {
       case 'state': this.declareState(s, env); return { nodes: [] };
       case 'let': if (!s.params) this.declare(env, s.name, { let: s.e, env }); return { nodes: [] };
       case 'every': this.H.every.push({ key: `e${s.sid}${env.scope}`, period: s.every * 1000, cond: s.cond ? () => this.evalIn(s.cond, env) : null, condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
-      case 'when': this.H.when.push({ key: `w${s.sid}${env.scope}`, cond: () => this.evalIn(s.cond, env), condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
+      case 'when': this.H.when.push({ sid: String(s.sid), key: `w${s.sid}${env.scope}`, cond: () => this.evalIn(s.cond, env), condAst: s.cond, actions: s.actions, env }); return { nodes: [] };
       case 'screen': {
         const visible = this.screen === s.name;
         const kids = this.render(s.children, this.child(env, {}), id, { top: false }); // hidden screens still run their states and events
