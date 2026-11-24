@@ -829,13 +829,14 @@ class App {
         const at = seg.lastIndexOf('@'); if (at < 0) { ok = false; break; }
         const id = seg.slice(0, at), item = seg.slice(at + 1);
         let node = null;
-        if (/^\d+$/.test(id)) node = eachById.get(id) || null; // already by statement id
+        if (/^\d+$/.test(id)) { node = eachById.get(id) || null; if (!node) { ok = 'keep'; break; } } // already by statement id (a statement not in this version keeps its state: Undo may bring it back)
         else if (/^[a-z]:|^[dl]$/.test(id)) node = all.find(n => n.kind === 'each' && this.eachSig(n.source) === id) || null;
         else { const path = id.replace(/@[^.]*/g, '').split('.').slice(1).map(Number); let list = this.prog.body; for (const ix of path) { node = list && list[ix]; list = node && node.children; } }
         if (!node || node.kind !== 'each') { ok = false; break; }
         const it2 = node.source.k === 'options' && !item.startsWith('#') ? (this.sourceItems(node.source, this.rootEnv()).find(x => x.v === item)?.key ?? item) : item;
         nk += `/${node.sid}@${it2}`; last = node;
       }
+      if (ok === 'keep') continue;
       if (!ok) { this.del(st, k); continue; }
       if (!last || last === 'u') continue; // a component instance's state is known by its name in the def
       const sn = /^s\d+$/.test(name) ? name : (stateIn(last, name) ? 's' + stateIn(last, name).sid : null);
