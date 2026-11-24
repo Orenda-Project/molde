@@ -58,7 +58,7 @@ export function splitLines(src) {
   return { lines: out, errors };
 }
 
-const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
+const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'grey'];
 const WINDOW_RE = /\b(today|yesterday|week|month|year|prev \w+|last \d+ \w+|on \w+)\)?$/;
 
 // Is the line a valid text line once "text " is put in front? (a line that starts with a bare name)
@@ -251,6 +251,7 @@ const BUILD = {
   'app-stmt': n => {
     const o = { kind: 'app', name: str(child(n, 'string')), icon: child(n, 'ident') ? id(child(n, 'ident')) : null, theme: null };
     if (child(n, 'theme')) o.theme = lits(child(n, 'theme'))[0];
+    o.mode = child(n, 'mode') ? lits(child(n, 'mode'))[0] : null;
     return o;
   },
   'ask-stmt': n => {
@@ -293,7 +294,7 @@ const BUILD = {
   },
   'every-stmt': n => ({ kind: 'every', every: durSec(child(n, 'dur').v), cond: child(n, 'expr') ? expr(child(n, 'expr')) : null, actions: actions(child(n, 'actions')) }),
   'when-stmt': n => ({ kind: 'when', cond: expr(child(n, 'expr')), actions: actions(child(n, 'actions')) }),
-  'each-stmt': n => ({ kind: 'each', source: source(child(n, 'source')), as: child(n, 'ident') ? id(child(n, 'ident')) : null, empty: child(n, 'string') ? str(child(n, 'string')) : null }),
+  'each-stmt': n => ({ kind: 'each', source: source(child(n, 'source')), as: child(n, 'ident') ? id(child(n, 'ident')) : null, empty: child(n, 'string') ? str(child(n, 'string')) : child(n, 'path') ? path(child(n, 'path')) : null }),
   'plot-stmt': n => { const r = children(n, 'range').map(x => children(x, 'sum-expr').map(expr)); return { kind: 'plot', x: r[0], y: r[1], mods: mods(n) }; },
   'tick-stmt': n => ({ kind: 'tick', axis: lits(n).includes('ytick') ? 'y' : 'x', x: expr(child(n, 'expr')), parts: tparts(child(n, 'tparts')) }),
   'if-stmt': n => ({ kind: 'if', cond: expr(child(n, 'expr')) }),

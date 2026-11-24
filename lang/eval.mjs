@@ -744,7 +744,7 @@ class App {
     const handlers = { nodes: new Map(), every: [], when: [] };
     this.H = handlers;
     const h = this.prog.header || {};
-    const root = { id: 'app', t: 'app', name: h.name || '', icon: h.icon || null, theme: h.theme || null, screens: [], children: [] };
+    const root = { id: 'app', t: 'app', name: h.name || '', icon: h.icon || null, theme: h.theme || null, mode: h.mode || null, screens: [], children: [] }; // mode: dark or light chosen by the program (else the phone's setting)
     if (!h || h.kind !== 'app') return { tree: root, handlers };
     const env = this.rootEnv();
     const screens = this.prog.body.filter(s => s.kind === 'screen');
@@ -963,7 +963,7 @@ class App {
           if (s.as) this.declare(e2, s.as, { value: item.v });
           out.push(...this.render(s.children, e2, `${id}@${key}`, cx));
         });
-        if (!items.length && s.empty) out.push({ id: id + ':empty', t: 'text', text: s.empty, style: { role: 'faint' }, empty: true });
+        if (!items.length && s.empty) out.push({ id: id + ':empty', t: 'text', text: typeof s.empty === 'string' ? s.empty : fmt(this.evalIn(s.empty, env), this), style: { role: 'faint' }, empty: true });
         if (all.length > limit) { const mid = id + ':more'; out.push({ id: mid, t: 'more', count: all.length - limit, tap: true }); this.H.nodes.set(mid, { tap: () => { (this.pages ||= new Map()).set(pageKey, limit + EACH_PAGE); this.gen++; } }); }
         return { nodes: out };
       }

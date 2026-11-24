@@ -253,7 +253,7 @@ export function describe(src) {
   if (p.header.kind === 'ask') return `Question for you: "${p.header.question}" Answers: ${p.header.options.map(o => `"${o}"`).join(', ')}.`;
   const out = [];
   const h = p.header;
-  out.push(`${h.name}${h.theme ? `, in the ${h.theme} colours` : ''}.`);
+  out.push(`${h.name}${h.theme ? `, in the ${h.theme} colours` : ''}${h.mode ? `, ${h.mode}` : ''}.`);
   const tables = p.body.filter(s => s.kind === 'table');
   if (tables.length) {
     out.push('Keeps:');

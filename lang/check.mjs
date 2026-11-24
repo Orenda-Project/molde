@@ -207,6 +207,7 @@ class Checker {
         if (s.cond) this.bool(s.cond, `the ${s.kind} condition`);
         return this.actions(s.actions);
       case 'each': {
+        if (s.empty && typeof s.empty === 'object') this.expr(s.empty); // a text value shown when there is nothing
         const item = this.source(s.source);
         const scope = { it: s.as ? this.curIt() : item, names: new Map(), each: true, asName: s.as || null, asItem: item };
         if (s.as) { scope.names.set(s.as, item); this.readonly.add(s.as); }
