@@ -18,3 +18,22 @@ def goal value num, target num, caption text = words(value), suffix text = ""
       rect 0, 0, 100 * clamp(value / target, 0, 1), 4 fill if(value > target, warn, accent) radius 2
     text caption faint
 
+
+# describe: a card with a big number {value}, labelled {caption}, with a ring toward {target} when there is one
+def statcard value num, caption text = words(value), target num = 0
+  row card gap 3 align center
+    if target > 0
+      draw width 64
+        circle 42 stroke soft thick 10
+        arc 42, 0, 360 * clamp(value / target, 0, 1) stroke accent thick 10
+    stack grow gap 0
+      text value big
+      text caption faint
+
+# describe: a card titled {title} with {note} on the right, holding the lines under it
+def section title text, note text = ""
+  stack card gap 2
+    row
+      text title head grow
+      text note faint
+    slot

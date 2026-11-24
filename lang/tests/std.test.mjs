@@ -25,6 +25,12 @@ const SAMPLES = {
   timer: 'timer 90s, "Rest", add t n = 1',
   calendar: 'calendar t, d',
   monthnav: 'monthnav d',
+  topbar: 'topbar "Things", t, "+ Add"',
+  goalbars: 'goalbars last 7 days, sum(t.n on it), 5',
+  daygrid: 'daygrid last 28 days, count(t on it), 2',
+  statcard: 'statcard count(t today), "today", 5',
+  section: 'section "Today", "note"',
+  weekdots: 'weekdots count(t on it) > 0',
 };
 
 test('every std component has a sample here and a describe line', () => {
