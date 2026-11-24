@@ -17,6 +17,7 @@ export function lockstepPrograms() {
   // small programs that put the stateful statements next to each other (when that adds rows, every
   // counters, timers, state per row, links); every other chain uses one of them
   const SYN = [
+    'app "Z"\ntable item n num\ntable log x num\ntimer 2m, "Tea", add log x = 1\ntimer 3m, "Rice", add log x = 2\nform item\nform log\neach item\n  state a num = 0\n  "a" a\n  button "a+" tap set a = a + 1\neach item\n  state b num = 0\n  "b" b\n  button "b+" tap set b = b + 1\nwhen count(log) >= 2 add item n = 9\nbutton "n" tap add item n = 1\n"logs" count(log)\n',
     'app "W"\ntable log x num\nbutton "b" tap add log x = 1\nwhen count(log) > 0 add log x = 9\n"n" count(log)\n',
     'app "E"\nstate n num = 0\nevery 60s set n = n + 1\n"n" n\nbutton "z" tap set n = 0\n',
     'app "T"\ntimer 2m, "Two"\ntimer 30s, "Short"\n',
@@ -37,7 +38,7 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
   const V = (c, st, why, src) => stats.violations.push({ c, st, why, prog: src.split('\n')[0] });
   for (let c = 0; c < chains; c++) {
     stats.chains++;
-    const src0 = c % 2 ? progs[c % 6] : progs[c % progs.length];
+    const src0 = c % 3 === 1 ? progs[0] : c % 3 === 2 ? progs[1 + c % 6] : progs[c % progs.length]; // a third of the chains on the program with two timers, two forms, two eaches
     let a = load(src0, { now: '2026-11-23T10:00:00Z' });
     let heading = 0; // headings inserted by edits
     for (let st = 0; st < steps; st++) {
@@ -58,7 +59,39 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
           }
         } else if (op === 6) { a.tick([1000, 60000, 3600000][ri(3)] * (1 + ri(5))); stats.ticks++; }
         else if (op === 7) { a.undo(); stats.undos++; }
-        else if (op === 8) { // a safe edit: a line inserted at a random top-level place, or removed, or two text lines swapped
+        else if (op === 8 && rnd() < 0.6) { // an edit of whole statements: timers, forms, each blocks, whens
+          const lines = a.source.replace(/\n$/, '').split('\n');
+          const blocks = []; for (let i = 1; i < lines.length; i++) { if (!lines[i].startsWith(' ')) blocks.push([lines[i]]); else blocks[blocks.length - 1].push(lines[i]); }
+          const movable = blocks.map((b, i) => i).filter(i => !/^(table|setting|state|let|def)\b/.test(blocks[i][0]));
+          const k = ri(7); let kind = null;
+          const pick = () => movable[ri(movable.length)];
+          if (k === 0 && movable.length > 1) { const x = pick(), y = pick(); [blocks[x], blocks[y]] = [blocks[y], blocks[x]]; kind = 'swap'; }
+          else if (k === 1 && movable.length > 2) { const [x, y, z] = [pick(), pick(), pick()]; if (new Set([x, y, z]).size === 3) { const t = blocks[x]; blocks[x] = blocks[y]; blocks[y] = blocks[z]; blocks[z] = t; kind = 'rotate'; } }
+          else if (k === 2 && movable.length > 1) { blocks.splice(pick(), 1); kind = 'delete'; }
+          else if (k === 3 && movable.length) { const x = pick(); blocks.splice(x + 1, 0, blocks[x].slice()); kind = 'duplicate'; }
+          else if (k === 4) { const e = movable.filter(i => /^each \w+/.test(blocks[i][0])); if (e.length) { const x = e[ri(e.length)], h = blocks[x][0]; blocks[x] = [/ (sort|where|top) /.test(h) ? h.replace(/ (sort|where|top) .*$/, '') : h + [' sort n desc', ' where n > 0', ' top 5'][ri(3)], ...blocks[x].slice(1)]; kind = 'each modifier'; } }
+          else if (k === 5) { const w = movable.filter(i => /^when /.test(blocks[i][0])); if (w.length) { const x = w[ri(w.length)]; blocks[x] = [rnd() < 0.5 ? blocks[x][0].replace(/>= (\d+)/, (m, d) => '>= ' + (+d + 1)) : blocks[x][0].replace(/n = (\d+)$/, (m, d) => 'n = ' + (+d + 1))]; kind = 'when reworded'; } }
+          else if (k === 6 && /^table item /m.test(a.source)) { kind = 'table rename'; }
+          let next = kind ? ['app' + lines[0].slice(3), ...blocks.flat()].join('\n') + '\n' : null;
+          if (kind === 'table rename') next = a.source.replace(/^table item /m, 'table item2 was item ').replace(/\bitem\b(?! was)/g, (m, off, str) => str.slice(Math.max(0, off - 9), off) === 'item2 was ' ? m : 'item2').replace('table item2 was item2', 'table item2 was item');
+          if (next) {
+            const twin = load(a.source, { data: a.snapshot(), now: a.clock }); twin.tree();
+            const notes = a.log.filter(e => e.kind === 'notify').length;
+            const r = a.applyEdit(next); stats.edits++;
+            if (r.verdict === 'refused') stats.refused++;
+            else {
+              a.tree(); a.tick(0); a.tree(); twin.tick(0); twin.tree();
+              stats.blockEdits = (stats.blockEdits || 0) + 1;
+              // nothing ran because of the edit, and every surviving statement's state is as it was
+              if (J(a.data.tables) !== J(twin.data.tables) || J(a.data.settings) !== J(twin.data.settings)) V(c, st, `a ${kind} edit ran an action`, a.source);
+              for (const [key, v] of Object.entries(twin.data.state)) if (key in a.data.state && J(a.data.state[key]) !== J(v)) { V(c, st, `a ${kind} edit changed state ${key}`, a.source); break; }
+              if (a.log.filter(e => e.kind === 'notify').length !== notes) V(c, st, `a ${kind} edit notified`, a.source);
+              // what each statement shows is unchanged when statements only moved (or a table was renamed)
+              const texts = x => J(x.findAll(n => n.t === 'text' || n.t === 'button' || (n.t === 'input' && n.value !== null)).map(n => n.t === 'input' ? n.label + '=' + n.value : n.text).sort());
+              if ((kind === 'swap' || kind === 'rotate' || kind === 'table rename') && texts(a) !== texts(twin)) V(c, st, `a ${kind} edit changed what is shown: ${texts(twin)} -> ${texts(a)}`, a.source);
+            }
+          }
+        } else if (op === 8) { // a safe edit: a line inserted at a random top-level place, or removed, or two text lines swapped
           const lines = a.source.split('\n');
           const top = lines.map((l, i) => i).filter(i => i > 0 && lines[i] && !lines[i].startsWith(' ') && !/^(table|setting|state|let|def)\b/.test(lines[i]));
           let next = null;

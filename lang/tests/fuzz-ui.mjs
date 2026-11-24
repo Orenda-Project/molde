@@ -24,14 +24,13 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
     let fresh = 0;
     const decl = (F, ren = {}) => F.map(f => `${f.name} ${f.type === 'pick' ? 'pick Home|Work' : f.type}${f.req || f.dflt !== undefined ? '' : '?'}${f.dflt !== undefined ? ' = ' + f.dflt : ''}${ren[f.slot] ? ' was ' + ren[f.slot] : ''}`).join(', ');
     // a second part: per-option state (a baseline per option of cat.c) and per-row state (an open flag)
-    let O = ['A', 'B', 'C'], H = false;
+    let O = ['A', 'B', 'C'], H = false, SW = false, DUP = false; // SW: the two each blocks swapped; DUP: the form written twice
     const prog = (F, ren, oren = {}) => [
       'app "U"', `table s ${decl(F, ren)}`, 'table log x num', `table cat c pick ${O.map((o, i) => oren[i] ? `${o} was ${oren[i]}` : o).join('|')}`, 'setting g num = 1', 'state q text = ""',
       'form s', 'field g', 'field q', '"rows" count(s)', '"logs" count(log)', '"g" g',
       'button "plus" tap add log x = 1', 'every 60s if g > 5 add log x = 2', 'when count(log) > 2 notify "many"',
       ...(H ? ['"Heading"'] : []),
-      'each options cat.c', '  state base num = 0', '  row', '    "b" it base', '    button "inc" tap set base = base + 1',
-      'each s', '  state open bool = no', '  toggle open', '  field it.t',
+      ...(() => { const e1 = ['each options cat.c', '  state base num = 0', '  row', '    "b" it base', '    button "inc" tap set base = base + 1'], e2 = ['each s', '  state open bool = no', '  toggle open', '  field it.t']; return SW ? [...e2, ...e1] : [...e1, ...e2]; })(),
     ].join('\n') + '\n';
     // the block state as shown: per option slot (index in O) and per row id
     const blockState = () => {
@@ -115,15 +114,15 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
       } else if (op <= 9) { // a safe edit of the form's table
         const N = F.map(f => ({ ...f })), ren = {}, oren = {};
         const k = ri(6);
-        const shownBefore = blockState(), O0 = O.slice(), H0 = H;
+        const shownBefore = blockState(), O0 = O.slice(), H0 = H, SW0 = SW;
         if (k === 0) { const f = N[1 + ri(N.length - 1)]; ren[f.slot] = f.name; f.name = 'f' + (fresh++); }
         else if (k === 1) { const sl = 'p' + (fresh++); N.push(rnd() < 0.5 ? { slot: sl, name: sl, type: 'pick', dflt: 'Home' } : { slot: sl, name: sl, type: 'num', dflt: 3 }); }
         else if (k === 2 && N.length > 2) { const i = 1 + ri(N.length - 1); N.splice(i, 1); }
         else if (k === 4) { const i = ri(3); oren[i] = O[i]; O[i] = 'Q' + (fresh++); } // rename an option of cat.c
-        else if (k === 5) H = !H; // a line added or removed above the each blocks
+        else if (k === 5) { if (rnd() < 0.5) H = !H; else SW = !SW; } // a line added or removed above the each blocks, or the two each blocks swapped
         else { const f = N.find(x => x.type === 'text' && !x.req); if (f) f.type = 'long'; else continue; }
         const r = app.applyEdit(prog(N, ren, oren)); stats.edits++; lastChange = null; group = null;
-        if (r.verdict === 'refused') { stats.refused++; O = O0; H = H0; if (process.env.UIDEBUG) console.error(r.refused[0]); continue; }
+        if (r.verdict === 'refused') { stats.refused++; O = O0; H = H0; SW = SW0; if (process.env.UIDEBUG) console.error(r.refused[0]); continue; }
         stats.blockChecks = (stats.blockChecks || 0) + 1;
         if (/:[1-9]|true/.test(shownBefore)) stats.blockChecksWithState = (stats.blockChecksWithState || 0) + 1;
         if (blockState() !== shownBefore) V(st, `a safe edit changed block state: ${shownBefore} -> ${blockState()}`);
@@ -162,13 +161,13 @@ export function runUiFuzz(chains = 1000, seed = 3, steps = 16) {
           const r = app.restore(b.snap);
           if (!r.ok) { V(st, 'restore refused: ' + r.reason); continue; }
           if (app.clock !== host) V(st, 'restore changed the clock');
-          F = b.F; O = b.O; H = b.H; for (const k of Object.keys(typed)) delete typed[k]; Object.assign(typed, b.typed);
+          F = b.F; O = b.O; H = b.H; SW = b.SW; for (const k of Object.keys(typed)) delete typed[k]; Object.assign(typed, b.typed);
           stack = []; lastChange = null; group = null;
           other(() => app.dispatch(app.find(x => x.t === 'button' && x.text === 'plus').id, 'tap'));
           const newest = app.rows('log').reduce((m, r) => (m && m.id > r.id ? m : r), null);
           if (newest && newest.at !== app.clock) V(st, `after a restore a new row is dated ${newest.at}, not the host clock ${app.clock}`);
           stats.restores = (stats.restores || 0) + 1;
-        } else backups.push({ snap: app.snapshot(), F: F.map(f => ({ ...f })), O: O.slice(), H, typed: { ...typed } });
+        } else backups.push({ snap: app.snapshot(), F: F.map(f => ({ ...f })), O: O.slice(), H, SW, typed: { ...typed } });
       } else { // set g so the every runs or stops (through the setting's input)
         const n = app.find(x => x.t === 'input' && x.label === 'g');
         if (!n) continue;
