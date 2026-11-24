@@ -78,7 +78,7 @@ class Renderer {
     this.root.textContent = '';
     const shell = h('div', 'mo-app');
     shell.setAttribute('data-theme', t.theme || 'mint');
-    shell.setAttribute('data-mode', this.opts.mode || 'light');
+    shell.setAttribute('data-mode', t.mode || this.opts.mode || 'light'); // the program's dark/light wins over the phone
     this.shell = shell;
     this.head = h('header', 'mo-head');
     this.scroller = h('main', 'mo-scrollarea');
@@ -94,7 +94,7 @@ class Renderer {
     this.root.append(shell);
   }
   onChange() { if (this.opts.onChange) try { this.opts.onChange(this.app); } catch { /* host problem, not ours */ } }
-  setMode(mode) { this.opts.mode = mode; this.shell.setAttribute('data-mode', mode); }
+  setMode(mode) { this.opts.mode = mode; this.shell.setAttribute('data-mode', (this.lastTree && this.lastTree.mode) || mode); }
   destroy() { this.destroyed = true; clearInterval(this.timer); if (this.ro) this.ro.disconnect(); this.root.textContent = ''; document.removeEventListener('visibilitychange', this.onVis); }
 
   startClock() {
@@ -111,6 +111,7 @@ class Renderer {
     const t = this.app.tree();
     this.lastTree = t;
     this.shell.setAttribute('data-theme', t.theme || 'mint');
+    this.shell.setAttribute('data-mode', t.mode || this.opts.mode || 'light');
     this.renderHead(t);
     if (this.app.prog && this.app.prog.header && this.app.prog.header.kind === 'ask') this.renderAsk(this.app.prog.header);
     else if (!this.app.ok && this.app.errors && this.app.errors.length) {

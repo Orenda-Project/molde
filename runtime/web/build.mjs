@@ -42,7 +42,8 @@ const order = []; const seen = new Set();
 const { CATALOG } = await import(join(DEMO, 'catalog.mjs'));
 const { EDIT_FILES } = await import(join(DEMO, 'requests.mjs'));
 const sources = {};
-for (const c of CATALOG) sources[c.id] = readFileSync(resolve(DEMO, c.src), 'utf8');
+// PROGRAMS=dir builds the same demo over other copies of the programs (same file names), e.g. lang/examples/demo15
+for (const c of CATALOG) sources[c.id] = readFileSync(process.env.PROGRAMS ? join(ROOT, process.env.PROGRAMS, c.src.replace('programs/', '')) : resolve(DEMO, c.src), 'utf8');
 for (const e of EDIT_FILES) for (const [k, f] of [['before', 'before.mo'], ['after', 'after.mo'], ['request', 'request.txt']]) sources[`edit:${e}:${k}`] = readFileSync(join(ROOT, 'lang/examples/edits', e, f), 'utf8');
 
 const js = order.map(m => m.code).join('\n') +
@@ -69,6 +70,6 @@ const html = `<!doctype html>
 </html>
 `;
 mkdirSync(join(WEB, 'dist'), { recursive: true });
-const out = join(WEB, 'dist', 'molde-demo.html');
+const out = join(WEB, 'dist', process.env.OUT || 'molde-demo.html');
 writeFileSync(out, html);
 console.log(`${relative(ROOT, out)}: ${(Buffer.byteLength(html) / 1024).toFixed(1)} KB, ${order.length} modules, ${CATALOG.length} programs, ${EDIT_FILES.length} edit pairs`);
