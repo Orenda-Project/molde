@@ -249,7 +249,7 @@ await scenario('chat: "make me a new app" switches to another program', 'ex=wate
 await scenario('every scripted request produces a program that checks and is safe', 'ex=water', async page => {
   const bad = await page.evaluate(async () => {
     const S = window.__molde; const out = [];
-    for (const b of document.querySelectorAll('.dm-item')) {
+    for (const b of document.querySelectorAll('.dm-item[data-ex]')) {
       b.click();
       await new Promise(r => setTimeout(r, 20));
       S.openChat();
