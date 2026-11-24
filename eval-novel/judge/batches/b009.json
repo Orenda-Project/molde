@@ -1,0 +1,564 @@
+[
+ {
+  "key": "w2-d05|092d3883e906",
+  "uid": "9cbc790f",
+  "category_hint": "create",
+  "request": "api key expiry reminders: name of key, service, expires on. warn 14 days before",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a key with name, service and expiry date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows days left per key",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "keys expiring within 14 days highlighted or counted",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "reminder notification before expiry",
+    "must": false
+   },
+   {
+    "n": 5,
+    "item": "sorted by soonest expiry",
+    "must": false
+   }
+  ],
+  "program": "app \" Api keys\" key plum\ntable key name text, service text, expires date, renewed bool\nremind \"API key expires soon\" at key.expires - 14d at 9:00\n\"Revivids\" head\neach key where renewed = yes sort expires as k\n  row card gap 2 tap edit k\n    k.name bold grow\n    k.service faint\n    toggle k.renewed\nform key, \"Add key\"\n",
+  "describe": " Api keys, in the plum colours.\nKeeps:\n- key: name: text; service: text; expires: date; renewed: yes or no. Every entry also keeps when it was added.\nShows:\n- text: \"Revivids\".\n- for each key where renewed is yes sorted by expires:\n  - a group; a tap opens the key for editing:\n    - text: the name of the key.\n    - text: the service of the key.\n    - a tick box for the renewed of the key.\n- a form to add a key.\nReminder \"API key expires soon\" on each expires of the key entries, 336 hours before at 9:00.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/092d3883e906.png"
+ },
+ {
+  "key": "w2-l05|f9a91339b338",
+  "uid": "8ee8169e",
+  "category_hint": "create",
+  "request": "kids school supplies for new term, 2 kids (Hamza and Zara). each item has price in rupees and bought or not. show total cost and how much is still to buy.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add item with name, child (pick Hamza/Zara), price",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "bought tick per item",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total cost of all items",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows remaining amount still to buy",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "subtotal per child",
+    "must": false
+   }
+  ],
+  "program": "app \"School supplies\" school ocean\ntable supply name text, qty num 0.., low num 0.. = 2, price money?\n\"Still to buy\" sum(supply, it.qty * it.price) big\neach supply sort qty as s empty \"No supplies yet\"\n  row card gap 1 tap edit s swipe remove s\n    stack grow\n      s.name bold\n      s.qty s.price faint\n    s.qty * s.price bold\nform supply\n",
+  "describe": "School supplies, in the ocean colours.\nKeeps:\n- supply: name: text; qty: number, at least 0; low: number, at least 0, starts at 2; price: money, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Still to buy\", the sum of its qty times its price over the supply.\n- for each supply sorted by qty:\n  - a group; a tap opens the supply for editing; a swipe removes the supply, with undo:\n    - text: the name of the supply.\n    - text: the qty of the supply, the price of the supply.\n    - text: the qty of the supply times the price of the supply.\n- a form to add a supply.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f9a91339b338.png"
+ },
+ {
+  "key": "w1-k03|b39f7ebe9a31",
+  "uid": "fcacfc36",
+  "category_hint": "create",
+  "request": "Fabric needed for shalwar kameez: enter my height, chest and sleeve length and whether I want a wide or slim shalwar. Gives me metres of cloth.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for height, chest and sleeve length",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "choice of wide or slim shalwar",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "outputs metres of fabric",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "gives breakdown for kameez and shalwar",
+    "must": false
+   }
+  ],
+  "program": "app \" Shalwar Kameez\" cloud ocean\nsetting chest num = 20 \"Chest length\"\nsetting sleeve num = 20 \" sleeve length\"\nlet wide = max(chest * 100, chest)\nlet slim = max(sleeve * 100, sleeve)\nrow gap 3\n  stack grow align center card\n    \"Chest\" bold\n    round(wide * 100 / max(chest, 1)) big\n  stack grow align center card\n    \"Sleeve\" bold\n    round(slim * 100 / max(sleeve, 1)) big\nif wide > slim\n  \"Wide cloth\" color warn\nif slim > wide\n  \"Slim cloth\" color good\n",
+  "describe": " Shalwar Kameez, in the ocean colours.\nYou can change: \"Chest length\": number, starts at 20; \" sleeve length\": number, starts at 20.\nWorks out:\n- wide is the larger of chest times 100 and chest.\n- slim is the larger of sleeve times 100 and sleeve.\nShows:\n- text: \"Chest\".\n- text: wide times 100 divided by the larger of chest and 1 rounded.\n- text: \"Sleeve\".\n- text: slim times 100 divided by the larger of sleeve and 1 rounded.\n- if wide is more than slim:\n  - text: \"Wide cloth\".\n- if slim is more than wide:\n  - text: \"Slim cloth\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/b39f7ebe9a31.png"
+ },
+ {
+  "key": "w1-k12|02795419dec8",
+  "uid": "c1c53edd",
+  "category_hint": "create",
+  "request": "gold price calculator - weight in tola, karat 18/21/22/24, today's rate per tola for 24k. gives price",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for weight, karat and 24k rate",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "adjusts price by karat purity",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total price",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "making charges input",
+    "must": false
+   }
+  ],
+  "program": "app \"Gold price\" coin plum\nsetting rate money = 250000 \"Price per tola\"\nstate tola num = 0\nfield tola \"Weight (tola)\"\nlet karat = round(tola * rate)\n\"Price\" round(tola * rate) big\n\"Weight\" round(tola * rate) faint\n",
+  "describe": "Gold price, in the plum colours.\nYou can change: \"Price per tola\": money, starts at 250000.\nWorks out:\n- karat is tola times rate rounded.\nRemembers while you use it: tola, starting at 0.\nShows:\n- a box to fill in tola, labelled \"Weight (tola)\".\n- text: \"Price\", tola times rate rounded.\n- text: \"Weight\", tola times rate rounded.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/02795419dec8.png"
+ },
+ {
+  "key": "w1-k13|842bea98f7b0",
+  "uid": "3b910150",
+  "category_hint": "create",
+  "request": "BMI for the gym members i train, height in feet and inches, weight in kg",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for height in feet and inches and weight in kg",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows BMI number",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows a category such as normal or overweight",
+    "must": true
+   }
+  ],
+  "program": "app \"BMI\" scale ocean\ntable member name text\ntable trainer member ref member, kg num 0..\ntable lift member ref member, kg num 1..\neach member as m\n  row card\n    m.name bold grow\n    last(m.lift.kg) \"kg\" big\n    button \"Log lift\" tap add lift member = m, kg = 30\nform member, \"Add member\"\n\"Changements in the last year\" head\neach member sort last(it.lift.kg) desc as m\n  row\n    m.name \"kg\"\n    last(m.lift.kg) \"kg\" faint\n",
+  "describe": "BMI, in the ocean colours.\nKeeps:\n- member: name: text. Every entry also keeps when it was added.\n- trainer: member: a member; kg: number, at least 0. Every entry also keeps when it was added.\n- lift: member: a member; kg: number, at least 1. Every entry also keeps when it was added.\nShows:\n- for each member:\n  - text: the name of the member.\n  - text: the latest kg of the member's lift entries, \"kg\".\n  - a button \"Log lift\"; a tap adds a lift with member set to the member, kg set to 30.\n- a form to add a member.\n- text: \"Changements in the last year\".\n- for each member sorted by the latest kg of its lift entries, highest first:\n  - text: the name of the member, \"kg\".\n  - text: the latest kg of the member's lift entries, \"kg\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/842bea98f7b0.png"
+ },
+ {
+  "key": "w2-m01|480fa2d0a4e7",
+  "uid": "b3ceac7a",
+  "category_hint": "create",
+  "request": "Home tuition centre app: students with class and monthly fee, fee payments with date and amount, attendance by day, a monthly fee collected chart, and a reminder on the 5th to collect fees.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add students with name, class and monthly fee",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can record fee payments linked to a student with amount",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "attendance can be marked per student per day",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "chart of fees collected per month",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "reminder scheduled on the 5th",
+    "must": true
+   },
+   {
+    "n": 6,
+    "item": "shows who has not paid this month",
+    "must": false
+   }
+  ],
+  "program": "app \"Tuition centre\" school ocean\ntable student name text, level pick Class_6|Class_7|Class_8|Class_9|Class_10 = Class_6, fee money\ntable visit student ref student, kind pick Absent|Present = Absent\ntable paid student ref student, amount money\nstate m date = today\nmonthnav m\n\"collected this month\" sum(paid.amount month of m) big\n\"Fees\" head\neach student as s\n  let due = s.fee\n  row card gap 2\n    stack grow\n      s.name bold\n      \"Monthly fee\" s.fee faint\n    due bold\n    button \"Paid\" tap add paid student = s, amount = s.fee\nform student, \"Add student\"\nform visit, \"Add visit\"\nlist paid by day\nremind \"Client today's fees\" monthly on 5 at 9:00\n",
+  "describe": "Tuition centre, in the ocean colours.\nKeeps:\n- student: name: text; level: one of Class 6, Class 7, Class 8, Class 9, Class 10, starts at Class 6; fee: money. Every entry also keeps when it was added.\n- visit: student: a student; kind: one of Absent, Present, starts at Absent. Every entry also keeps when it was added.\n- paid: student: a student; amount: money. Every entry also keeps when it was added.\nRemembers while you use it: m, starting at today.\nShows:\n- arrows that move m back and forward one month.\n- text: \"collected this month\", the total amount of paid in the month of m.\n- text: \"Fees\".\n- for each student:\n  - text: the name of the student.\n  - text: \"Monthly fee\", the fee of the student.\n  - text: due.\n  - a button \"Paid\"; a tap adds a paid with student set to the student, amount set to the fee of the student.\n- a form to add a student.\n- a form to add a visit.\n- a list of paid by day; tap one to edit it, swipe to remove it.\nReminder \"Client today's fees\" every month on day 5 at 9:00.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/480fa2d0a4e7.png"
+ },
+ {
+  "key": "w2-l20|b08afa7d02c6",
+  "uid": "81e9e785",
+  "category_hint": "create",
+  "request": "movies and shows to watch with who recommended it and where (netflix, youtube, cinema). tick when seen",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add title with recommender and platform pick",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "seen tick",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows count still to watch",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list grouped or filterable by platform",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "rating after seen",
+    "must": false
+   }
+  ],
+  "program": "app \"Movie list\" star slate\ntable show title text, star text?, genre pick Action|Comedy|Drama|Horror|Family|Other = Drama, seen bool\n\"Recomend it\" head\neach show where seen = yes and genre = if(count(show where seen = yes) > 0, \"Recommended\", \"Average\") sort at desc top 5\n  row card\n    it.title grow\n    it.star bold\nform show\n",
+  "describe": "Movie list, in the slate colours.\nKeeps:\n- show: title: text; star: text, optional; genre: one of Action, Comedy, Drama, Horror, Family, Other, starts at Drama; seen: yes or no. Every entry also keeps when it was added.\nShows:\n- text: \"Recomend it\".\n- for each show where seen is yes and genre is \"Recommended\" when how many show entries where seen is yes is more than 0, otherwise \"Average\" sorted by at, highest first, first 5:\n  - text: its title.\n  - text: its star.\n- a form to add a show.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/b08afa7d02c6.png"
+ },
+ {
+  "key": "w2-l17|d6e53a9c4ac8",
+  "uid": "49d3f29a",
+  "category_hint": "create",
+  "request": "school bag checklist for tomorrow, timetable based: mon to fri each with the books needed",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an entry with weekday and book or item",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "day is a pick Mon-Fri",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list grouped by or filterable by day",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "can tick item as packed",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows tomorrow's items first",
+    "must": false
+   }
+  ],
+  "program": "app \"Bag\" box ocean\ntable item name text, due date, ready bool\n\"Packed\" count(item where ready = yes) \"of\" count(item) big\neach item sort due as i\n  row card gap 2\n    toggle i.ready\n    i.name grow\n    i.due faint\nform item\n",
+  "describe": "Bag, in the ocean colours.\nKeeps:\n- item: name: text; due: date; ready: yes or no. Every entry also keeps when it was added.\nShows:\n- text: \"Packed\", how many item entries where ready is yes, \"of\", how many item entries.\n- for each item sorted by due:\n  - a tick box for the ready of the item.\n  - text: the name of the item.\n  - text: the due of the item.\n- a form to add a item.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/d6e53a9c4ac8.png"
+ },
+ {
+  "key": "w2-l19|72f95344dc3b",
+  "uid": "f996ac57",
+  "category_hint": "create",
+  "request": "shaadi shopping budget list - items with estimated price and actual price, show difference",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add item with name, estimated price and actual price",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows total estimated and total actual",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows the difference or per-item overspend",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "bought tick",
+    "must": false
+   }
+  ],
+  "program": "app \"Shaadi\" gift mint\nsetting budget money = 800000 \"Total budget\"\ntable item name text, estimated money, price money\n\" differenza\" budget - sum(item.price) big color if(sum(item.price) >= budget, good, bad)\neach item sort name as i\n  row card gap 2 tap edit i swipe remove i\n    i.name grow\n    i.price i.estimated faint\nform item\n",
+  "describe": "Shaadi, in the mint colours.\nKeeps:\n- item: name: text; estimated: money; price: money. Every entry also keeps when it was added.\nYou can change: \"Total budget\": money, starts at 800000.\nShows:\n- text: \" differenza\", budget minus the total price of item.\n- for each item sorted by name:\n  - a group; a tap opens the item for editing; a swipe removes the item, with undo:\n    - text: the name of the item.\n    - text: the price of the item, the estimated of the item.\n- a form to add a item.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/72f95344dc3b.png"
+ },
+ {
+  "key": "w2-l11|a4b0d7041e18",
+  "uid": "342048af",
+  "category_hint": "create",
+  "request": "books to read, with author and a star rating after I finish. status want/reading/done",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a book with title and author",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "status pick want/reading/done",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "rating 1 to 5 field",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows count of books done",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "list grouped by status",
+    "must": false
+   }
+  ],
+  "program": "app \"Reading\" book plum\ntable book title text, author text?, stars num 1..5\ncount(book where stars >= 4) \"books finished\" big\neach book where stars >= 4 sort stars as b\n  row card gap 2 tap edit b swipe remove b\n    stack grow\n      b.title bold\n      b.author faint\n    b.stars \"stars\" faint\nform book\n",
+  "describe": "Reading, in the plum colours.\nKeeps:\n- book: title: text; author: text, optional; stars: number, 1 to 5. Every entry also keeps when it was added.\nShows:\n- text: how many book entries where stars is at least 4, \"books finished\".\n- for each book where stars is at least 4 sorted by stars:\n  - a group; a tap opens the book for editing; a swipe removes the book, with undo:\n    - text: the title of the book.\n    - text: the author of the book.\n    - text: the stars of the book, \"stars\".\n- a form to add a book.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a4b0d7041e18.png"
+ },
+ {
+  "key": "w1-t28|9658c6eb6bad",
+  "uid": "b6a8396f",
+  "category_hint": "create",
+  "request": "Chicken coop egg count. Number of eggs each day from 12 hens, how many cracked. Weekly total and avg per hen per day. Sell eggs at 40 rs each so show income too.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a day with eggs collected and cracked count",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows weekly total eggs",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows average per hen per day using 12 hens",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows income at 40 rs per egg",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "chart of eggs per day",
+    "must": false
+   }
+  ],
+  "program": "app \"Hen Eggs\" egg mint\ntable lay eggs num 1..200\n\"Eggs this week\" sum(lay.eggs week) big\n\"Average per day\" round(sum(lay.eggs last 30 days) / 30) bold\neach lay sort eggs desc as l\n  row card gap 2\n    stack grow\n      l.eggs bold\n",
+  "describe": "Hen Eggs, in the mint colours.\nKeeps:\n- lay: eggs: number, 1 to 200. Every entry also keeps when it was added.\nShows:\n- text: \"Eggs this week\", the total eggs of lay this week.\n- text: \"Average per day\", the total eggs of lay in the last 30 days divided by 30 rounded.\n- for each lay sorted by eggs, highest first:\n  - text: the eggs of the lay.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/9658c6eb6bad.png"
+ },
+ {
+  "key": "w2-m08|a1019cc983c8",
+  "uid": "6d42976a",
+  "category_hint": "create",
+  "request": "quran memorization tracker: surah or para, ayahs memorized, daily revision log, weekly revision streak, and a reminder every day after fajr",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add memorization entries with surah or para and ayahs",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "revision log with date",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows streak of revision days",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "daily reminder at a morning time",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "total ayahs memorized",
+    "must": false
+   }
+  ],
+  "program": "app \"Quran\" book mint\ntable surah orparaayah num 1..300\ntable rehearsal surah text, ayahs num 1..20\ntable read surah ref surah, done bool\nremind \"Sehri ayahs, ghusl and early to Jumrah\" at 7:30\n\"Revise your Quran today\" head\neach rehearsal today as r\n  row card\n    toggle rehearsal\n    r.surah grow\n    r.ayahs \"ayahs\" faint\n\"All surahs\" head\neach surah as s\n  stack card gap 1\n    s.orparaayah big\n    \"ab\" count(s.read) \"of 30\" count(s.read week) faint\n    toggle s.read\nform surah, \"Add surah\"\nform rehearsal, \"Record rehearsal\"\n",
+  "describe": "Quran, in the mint colours.\nKeeps:\n- surah: orparaayah: number, 1 to 300. Every entry also keeps when it was added.\n- rehearsal: surah: text; ayahs: number, 1 to 20. Every entry also keeps when it was added.\n- read: surah: a surah; done: yes or no. Every entry also keeps when it was added.\nShows:\n- text: \"Revise your Quran today\".\n- for each rehearsal today:\n  - a tick box for rehearsal.\n  - text: the surah of the rehearsal.\n  - text: the ayahs of the rehearsal, \"ayahs\".\n- text: \"All surahs\".\n- for each surah:\n  - text: the orparaayah of the surah.\n  - text: \"ab\", how many the surah's read entries, \"of 30\", how many the surah's read entries this week.\n  - a tick box for the read of the surah.\n- a form to add a surah.\n- a form to add a rehearsal.\nReminder \"Sehri ayahs, ghusl and early to Jumrah\" at 7:30 every day.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a1019cc983c8.png"
+ },
+ {
+  "key": "w2-m10|d470a0b17ea4",
+  "uid": "eefbdf9e",
+  "category_hint": "create",
+  "request": "home expenses: spending by category (food, bills, fuel, kids, other), monthly budget per category with warning when over, pie or bars of this month's spend, and a recurring bills reminder on the 1st",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an expense with amount and category pick",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "budget per category",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "warning when category over budget",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "chart of this month's spend by category",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "reminder on the 1st for bills",
+    "must": true
+   }
+  ],
+  "program": "app \"Home expenses\" wallet ocean\ntable expense what text, amount money, category pick Food|Bills|Fuel|Kids|Other = Food, note text?\nlet spent = sum(expense.amount month)\nsetting budget money = 80000 \"Monthly budget\"\nif(spent > budget, \"Over budget by\", \"Left to spend\") abs(budget - spent) big\ngoal spent, budget, \"spent\"\nform expense\nshare expense month by category, sum(it.amount), it.key\nlist expense month by day\nremind \"Add today's expenses\" monthly on 1 at 9:00\n",
+  "describe": "Home expenses, in the ocean colours.\nKeeps:\n- expense: what: text; amount: money; category: one of Food, Bills, Fuel, Kids, Other, starts at Food; note: text, optional. Every entry also keeps when it was added.\nYou can change: \"Monthly budget\": money, starts at 80000.\nWorks out:\n- spent is the total amount of expense this month.\nShows:\n- text: \"Over budget by\" when spent is more than budget, otherwise \"Left to spend\", budget minus spent without its sign.\n- spent out of budget with a progress bar, labelled \"spent\".\n- a form to add a expense.\n- bars that compare the total amount of the item across group of expense entries this month by category.\n- a list of expense this month by day; tap one to edit it, swipe to remove it.\nReminder \"Add today's expenses\" every month on day 1 at 9:00.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/d470a0b17ea4.png"
+ },
+ {
+  "key": "w1-t30|cb228230b19b",
+  "uid": "92be87e8",
+  "category_hint": "create",
+  "request": "scrap dealer (kabari) daily buying: item (iron, paper, plastic, copper), weight kg, rate per kg, seller name. profit when i sell later too",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a purchase with item type, weight and rate per kg",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes cost as weight times rate",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has item choices iron/paper/plastic/copper",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total spent",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "has a seller name field",
+    "must": false
+   }
+  ],
+  "program": "app \"Kabari\" package ink\ntable buy item text, kg num 0.., rate money, seller text?\n\"Profit on today's sale\" sum(buy today, it.kg * it.rate) big\neach buy today sort at desc as b\n  row card gap 2 tap edit b swipe remove b\n    stack grow\n      b.item bold\n      b.kg \"kg\" faint\n    b.rate bold\n    b.seller grow\nform buy, \"Add item\"\n",
+  "describe": "Kabari, in the ink colours.\nKeeps:\n- buy: item: text; kg: number, at least 0; rate: money; seller: text, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Profit on today's sale\", the sum of its kg times its rate over the buy today.\n- for each buy today sorted by at, highest first:\n  - a group; a tap opens the buy for editing; a swipe removes the buy, with undo:\n    - text: the item of the buy.\n    - text: the kg of the buy, \"kg\".\n    - text: the rate of the buy.\n    - text: the seller of the buy.\n- a form to add a buy.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/cb228230b19b.png"
+ },
+ {
+  "key": "w2-u03|ef1bd2b287d5",
+  "uid": "4dbcdfc3",
+  "category_hint": "create",
+  "request": "ludo dice for the kids, big dice face with dots and a roll button",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a visible dice face with dots or a big number",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "a button rolls it and gives random 1 to 6",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "history of last rolls",
+    "must": false
+   }
+  ],
+  "program": "app \"Ludo\" dice ocean\ntable dice roll num 1..9\nstate kid num = 1\nlet heads = count(dice)\n\"Total\" heads \"dice\" big\ndraw 100, 100 width 220\n  rect 2, 6, 88, 92 radius 14 fill ink\n  rect 92, 14, 6, 82 radius 12 fill ink\n  circle 12 + 82 * sin(42 * kid), 5, 12 fill ink\nrow gap 1\n  button \"Roll\" tap set kid = random(heads)\nbutton \"Next\" tap set kid = random(heads)\n\"Darts:\" head\neach dice sort at as d\n  if index = kid\n    stack card\n      d.roll big\n      button \"Next\" tap set d.roll = d.roll + 1\nrow gap 1\n  each [1, 2, 3, 4, 6]\n    button it tap add dice roll = it\n",
+  "describe": "Ludo, in the ocean colours.\nKeeps:\n- dice: roll: number, 1 to 9. Every entry also keeps when it was added.\nWorks out:\n- heads is how many dice entries.\nRemembers while you use it: kid, starting at 1.\nShows:\n- text: \"Total\", heads, \"dice\".\n- a drawing made of rectangles, circles.\n- a button \"Roll\"; a tap sets kid to a random whole number from 1 to heads.\n- a button \"Next\"; a tap sets kid to a random whole number from 1 to heads.\n- text: \"Darts:\".\n- for each dice sorted by at:\n  - if its position is kid:\n    - text: the roll of the dice.\n    - a button \"Next\"; a tap sets the roll of the dice to the roll of the dice plus 1.\n- for 1, 2, 3, 4, 6:\n  - a button the value; a tap adds a dice with roll set to the value.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/ef1bd2b287d5.png"
+ },
+ {
+  "key": "w1-t15|59145ca30e61",
+  "uid": "574016a4",
+  "category_hint": "create",
+  "request": "plant cuttings - plant name, date cut, rooted yes/no, date potted",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a cutting with plant name and date cut",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has rooted yes/no",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has date potted field",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list shown",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows days since cutting",
+    "must": false
+   }
+  ],
+  "program": "app \"C cuttings\" plant mint\ntable cuttings name text, cut date, rooted bool\neach cuttings sort at desc\n  row card tap edit it\n    stack grow\n      it.name bold\n      \"prayed\" it.at \"days ago\" faint\n    if it.rooted\n      \"Healthy\" color good\n    else\n      button \"Done\" tap set it.rooted = yes\nform cuttings, \"Add cuttings\"\n",
+  "describe": "C cuttings, in the mint colours.\nKeeps:\n- cuttings: name: text; cut: date; rooted: yes or no. Every entry also keeps when it was added.\nShows:\n- for each cuttings sorted by at, highest first:\n  - a group; a tap opens the cuttings for editing:\n    - text: its name.\n    - text: \"prayed\", its at, \"days ago\".\n    - if its rooted:\n      - text: \"Healthy\".\n    - otherwise:\n      - a button \"Done\"; a tap sets its rooted to yes.\n- a form to add a cuttings.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/59145ca30e61.png"
+ }
+]

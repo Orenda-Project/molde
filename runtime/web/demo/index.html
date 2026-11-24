@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Molde live demo</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../molde.css">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<div id="demo"></div>
+<!-- development page: run a static server at the repo root and open /runtime/web/demo/.
+     node runtime/web/build.mjs writes the single-file version to runtime/web/dist/molde-demo.html -->
+<script type="module">
+import { start } from './main.mjs';
+import { CATALOG } from './catalog.mjs';
+import { EDIT_FILES } from './requests.mjs';
+const sources = {};
+await Promise.all(CATALOG.map(async c => { sources[c.id] = await (await fetch(c.src)).text(); }));
+await Promise.all(EDIT_FILES.flatMap(n => [['before', 'before.mo'], ['after', 'after.mo'], ['request', 'request.txt']].map(async ([k, f]) => {
+  sources[`edit:${n}:${k}`] = await (await fetch(`../../../lang/examples/edits/${n}/${f}`)).text();
+})));
+start(document.getElementById('demo'), sources);
+</script>
+</body>
+</html>

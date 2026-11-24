@@ -1,0 +1,687 @@
+[
+ {
+  "key": "REPEAT|w1-r10|4b3f48dca6e7",
+  "uid": "eb6673fd",
+  "category_hint": "create",
+  "request": "pomodoro 25/5 with a long break after 4",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "25 minute work timer",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "5 minute break",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "long break after 4 rounds",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows round count",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "start and pause buttons",
+    "must": false
+   }
+  ],
+  "program": "app \"Pomodoro\" timer ink\nstate phase pick Work|Break|Long = Work\nstate round num = 1\nstate held dur = 25m\nstate ends when = now\nstate going bool = no\nwhen going and phase = Work and round < 4 and now >= ends set phase = Break then set ends = now + 5m then notify \"Break time\"\nwhen going and phase = Work and round >= 4 and now >= ends set phase = Long then set ends = now + 15m then notify \"Long break\"\nwhen going and phase = Break and now >= ends set phase = Work then set round = round + 1 then set ends = now + 25m then notify \"Back to work\"\nwhen going and phase = Long and now >= ends set phase = Work then set round = 1 then set ends = now + 25m then notify \"New cycle\"\n\"Round\" round \"of 4\" head align center\ntext phase color if(phase = Work, accent, good) align center\ntext if(going, max(ends - now, 0s), held) huge align center\nrow gap 1\n  if going\n    button \"Pause\" tap set held = ends - now then set going = no\n  else\n    button \"Start\" tap set ends = now + held then set going = yes\n  button \"Reset\" tap set going = no then set phase = Work then set round = 1 then set held = 25m\n",
+  "describe": "Pomodoro, in the ink colours.\nRemembers while you use it: phase, starting at Work; round, starting at 1; held, starting at 25 minutes; ends, starting at now; going, starting at no.\nShows:\n- when going and phase is Work and round is less than 4 and now is at least ends, it sets phase to Break, then sets ends to now plus 5 minutes, then shows the notice \"Break time\".\n- when going and phase is Work and round is at least 4 and now is at least ends, it sets phase to Long, then sets ends to now plus 15 minutes, then shows the notice \"Long break\".\n- when going and phase is Break and now is at least ends, it sets phase to Work, then sets round to round plus 1, then sets ends to now plus 25 minutes, then shows the notice \"Back to work\".\n- when going and phase is Long and now is at least ends, it sets phase to Work, then sets round to 1, then sets ends to now plus 25 minutes, then shows the notice \"New cycle\".\n- text: \"Round\", round, \"of 4\".\n- text: phase.\n- text: the larger of ends minus now and 0 hours when going, otherwise held.\n- if going:\n  - a button \"Pause\"; a tap sets held to ends minus now, then sets going to no.\n- otherwise:\n  - a button \"Start\"; a tap sets ends to now plus held, then sets going to yes.\n- a button \"Reset\"; a tap sets going to no, then sets phase to Work, then sets round to 1, then sets held to 25 minutes.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/4b3f48dca6e7.png"
+ },
+ {
+  "key": "REPEAT|w2-c10|eee8e15e9195",
+  "uid": "e03207bb",
+  "category_hint": "change",
+  "request": "put rate for each sauda and show the total bill per shop",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "items have a price field",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "a total of prices is shown",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing item form, shop pick and bought tick still present",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "total per shop",
+    "must": false
+   }
+  ],
+  "program": "app \"Grocery by shop\" cart mint\ntable item name text, shop pick Imtiaz|Sabzi_mandi|Dairy|Pharmacy, price money?, bought bool\nstat count(item where bought = no), \"items left\"\nform item, \"Add item\"\neach options item.shop as sh\n  if count(item where shop = sh) > 0\n    row gap 1\n      sh head grow\n      sum(item.price where shop = sh) \"total bill\"\n    each item where shop = sh as i\n      row card swipe remove i\n        toggle i.bought\n        i.name grow\n        i.price\n",
+  "describe": "Grocery by shop, in the mint colours.\nKeeps:\n- item: name: text; shop: one of Imtiaz, Sabzi mandi, Dairy, Pharmacy; price: money, optional; bought: yes or no. Every entry also keeps when it was added.\nShows:\n- a big number: how many item entries where bought is no, labelled \"items left\".\n- a form to add a item.\n- for each choice of the shop of the item:\n  - if how many item entries where shop is the choice is more than 0:\n    - text: the choice.\n    - text: the total price of item where shop is the choice, \"total bill\".\n    - for each item where shop is the choice:\n      - a group; a swipe removes the item, with undo:\n        - a tick box for the bought of the item.\n        - text: the name of the item.\n        - text: the price of the item.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/eee8e15e9195.png"
+ },
+ {
+  "key": "REPEAT|w2-u04|0922a3d5e3a4",
+  "uid": "efa88afd",
+  "category_hint": "create",
+  "request": "classroom seating grid 5 rows by 6 columns where I tap a seat to put a student name in",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows a grid of 5 rows and 6 columns of seats",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tapping a seat lets user set a student name",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "filled seats look different from empty ones",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows count of filled seats",
+    "must": false
+   }
+  ],
+  "program": "app \"Seating\" seat slate\ntable seat rw num 1..5, cl num 1..6, name text\nstate sr num = 1\nstate sc num = 1\nstate nm text\nstat count(1..30, count(seat where rw = floor((it - 1) / 6) + 1 and cl = (it - 1) % 6 + 1) > 0), \"seats filled\"\ngrid 6 gap 1\n  each 1..5 as rr\n    each 1..6 as cc\n      let cn = last(seat where rw = rr and cl = cc)\n      box height 44 radius 8 tap set sr = rr then set sc = cc fill if(count(seat where rw = rr and cl = cc) > 0, accent, soft) stroke if(sr = rr and sc = cc, ink, edge)\n        cn.name tiny align center\n\"Row\" sr \"seat\" sc bold\nfield nm \"Student name\"\nrow gap 1\n  button \"Seat here\" tap add seat rw = sr, cl = sc, name = nm then set nm = \"\"\n  button \"Clear seat\" tap remove all seat where rw = sr and cl = sc\n",
+  "describe": "Seating, in the slate colours.\nKeeps:\n- seat: rw: number, 1 to 5; cl: number, 1 to 6; name: text. Every entry also keeps when it was added.\nRemembers while you use it: sr, starting at 1; sc, starting at 1; nm.\nShows:\n- a big number: how many of the number from 1 to 30 have how many seat entries where rw is the result of the number minus 1 divided by 6 rounded down plus 1 and cl is the result of the number minus 1 leaves over when divided by 6 plus 1 is more than 0, labelled \"seats filled\".\n- a grid of 6 columns:\n  - for each number from 1 to 5:\n    - for each number from 1 to 6:\n      - a group; a tap sets sr to the number, then sets sc to the number:\n        - text: the name of the cn.\n- text: \"Row\", sr, \"seat\", sc.\n- a box to fill in nm, labelled \"Student name\".\n- a button \"Seat here\"; a tap adds a seat with rw set to sr, cl set to sc, name set to nm, then sets nm to \"\".\n- a button \"Clear seat\"; a tap removes all seat entries where rw is sr and cl is sc, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/0922a3d5e3a4.png"
+ },
+ {
+  "key": "REPEAT|w1-k09|7815b472babf",
+  "uid": "f38acc1b",
+  "category_hint": "create",
+  "request": "Loan EMI: amount, yearly interest rate, months. Show monthly payment and total interest paid. I'd like it to fetch today's bank rates too.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for amount, annual rate and months",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes monthly EMI",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total interest paid",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total repayment",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows total repayment",
+    "must": false
+   }
+  ],
+  "program": "app \"EMI\" money ocean\nstate amount money = 50000\nstate rate num = 12\nstate months num = 12\nfield amount \"Loan amount\"\nfield rate \"Yearly rate %\"\nfield months \"Months\"\n\"Monthly payment\" round(amount * pow(1 + rate / 1200, months) / 12) big\n\"Total interest paid\" round(amount * (1 + rate / 1200 * months) / 12) faint\n",
+  "describe": "EMI, in the ocean colours.\nRemembers while you use it: amount, starting at 50000; rate, starting at 12; months, starting at 12.\nShows:\n- a box to fill in amount, labelled \"Loan amount\".\n- a box to fill in rate, labelled \"Yearly rate %\".\n- a box to fill in months, labelled \"Months\".\n- text: \"Monthly payment\", amount times the pow of 1 plus rate divided by 1200 divided by 12 rounded.\n- text: \"Total interest paid\", amount times the result of 1 plus rate divided by 1200 times months divided by 12 rounded.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/7815b472babf.png"
+ },
+ {
+  "key": "REPEAT|w1-t06|48c591c02d03",
+  "uid": "a4f2dcca",
+  "category_hint": "create",
+  "request": "bike service history",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a service entry with date and odometer km",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has cost field",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list of past services shown",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total spent on service",
+    "must": false
+   },
+   {
+    "n": 5,
+    "item": "has notes on what was done",
+    "must": false
+   }
+  ],
+  "program": "app \"Bike Service\" bike mint\ntable service what text, km num 0..2000000, cost money, next date?\n\"Total spent\" sum(service.cost all) big\nform service\nlist service by day\n",
+  "describe": "Bike Service, in the mint colours.\nKeeps:\n- service: what: text; km: number, 0 to 2000000; cost: money; next: date, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Total spent\", the total cost of service.\n- a form to add a service.\n- a list of service by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/48c591c02d03.png"
+ },
+ {
+  "key": "REPEAT|w1-c04|9dce0e65c20b",
+  "uid": "38cd18ca",
+  "category_hint": "change",
+  "request": "too many people in the udhaar book now, put a box to find someone by name",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a search or filter by customer name exists",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "existing credit list still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing entry form and grand total still present",
+    "must": true
+   }
+  ],
+  "program": "app \"Udhaar book\" book mint\ntable entry customer text, kind pick Took|Paid_back, amount money \"Amount (Rs)\", day date = today\nstate q text\nlet pending = sum(entry where kind = Took, it.amount) - sum(entry where kind = Paid_back, it.amount)\nstat pending, \"total pending (Rs)\"\nform entry, \"Add entry\"\nfield q \"Find someone by name\"\n\"Who owes\" head\neach entry where has(customer, q) by customer\n  row card\n    it.key bold grow\n    sum(it, if(it.kind = Took, it.amount, 0 - it.amount)) bold\nlist entry where has(customer, q) by day\n",
+  "describe": "Udhaar book, in the mint colours.\nKeeps:\n- entry: customer: text; kind: one of Took, Paid back; \"Amount (Rs)\": money; day: date, starts at today. Every entry also keeps when it was added.\nWorks out:\n- pending is the sum of its amount over the entry where kind is Took minus the sum of its amount over the entry where kind is Paid back.\nRemembers while you use it: q.\nShows:\n- a big number: pending, labelled \"total pending Rs\".\n- a form to add a entry.\n- a box to fill in q, labelled \"Find someone by name\".\n- text: \"Who owes\".\n- for each group of entry entries where customer contains q by customer:\n  - text: its key.\n  - text: the sum of its amount when its kind is Took, otherwise 0 minus its amount over the the group.\n- a list of entry where customer contains q by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/9dce0e65c20b.png"
+ },
+ {
+  "key": "REPEAT|w2-l05|f9a91339b338",
+  "uid": "e6b9126c",
+  "category_hint": "create",
+  "request": "kids school supplies for new term, 2 kids (Hamza and Zara). each item has price in rupees and bought or not. show total cost and how much is still to buy.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add item with name, child (pick Hamza/Zara), price",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "bought tick per item",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total cost of all items",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows remaining amount still to buy",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "subtotal per child",
+    "must": false
+   }
+  ],
+  "program": "app \"School supplies\" school ocean\ntable supply name text, qty num 0.., low num 0.. = 2, price money?\n\"Still to buy\" sum(supply, it.qty * it.price) big\neach supply sort qty as s empty \"No supplies yet\"\n  row card gap 1 tap edit s swipe remove s\n    stack grow\n      s.name bold\n      s.qty s.price faint\n    s.qty * s.price bold\nform supply\n",
+  "describe": "School supplies, in the ocean colours.\nKeeps:\n- supply: name: text; qty: number, at least 0; low: number, at least 0, starts at 2; price: money, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Still to buy\", the sum of its qty times its price over the supply.\n- for each supply sorted by qty:\n  - a group; a tap opens the supply for editing; a swipe removes the supply, with undo:\n    - text: the name of the supply.\n    - text: the qty of the supply, the price of the supply.\n    - text: the qty of the supply times the price of the supply.\n- a form to add a supply.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f9a91339b338.png"
+ },
+ {
+  "key": "REPEAT|w2-d12|f99a64bd78d6",
+  "uid": "3ca41b9a",
+  "category_hint": "create",
+  "request": "ssl cert renewals - domain, issuer, expiry, and who renews. flag anything under 30 days",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a cert with domain, issuer, expiry date and owner",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows days left per cert",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "certs under 30 days flagged or counted",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "sorted by expiry",
+    "must": false
+   }
+  ],
+  "program": "app \"SSL certs\" lock ink\ntable cert domain text, issuer text, expiry date, owner text\nstat count(cert where expiry - today < 30), \"expiring in under 30 days\"\nform cert, \"Add cert\"\neach cert sort expiry as c empty \"No certs yet\"\n  row card tap edit c swipe remove c fill if(c.expiry - today < 30, warn, surface)\n    stack gap 0 grow\n      c.domain bold\n      c.issuer \"\u00b7\" c.owner faint\n    c.expiry - today \"days left\"\n",
+  "describe": "SSL certs, in the ink colours.\nKeeps:\n- cert: domain: text; issuer: text; expiry: date; owner: text. Every entry also keeps when it was added.\nShows:\n- a big number: how many cert entries where expiry minus today is less than 30, labelled \"expiring in under 30 days\".\n- a form to add a cert.\n- for each cert sorted by expiry:\n  - a group; a tap opens the cert for editing; a swipe removes the cert, with undo:\n    - text: the domain of the cert.\n    - text: the issuer of the cert, \"\u00b7\", the owner of the cert.\n    - text: the expiry of the cert minus today, \"days left\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f99a64bd78d6.png"
+ },
+ {
+  "key": "REPEAT|w1-r08|765c95a8c2c9",
+  "uid": "a7f60426",
+  "category_hint": "create",
+  "request": "screen work eye rest: every 20 min look away for 20 sec. buzz me and count how many times i actually did it today",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "reminder or alert every 20 minutes",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "20 second countdown for the break",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "start button",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "counts breaks taken today",
+    "must": false
+   }
+  ],
+  "program": "app \"Eye Break\" eye ocean\ntable brk\nsetting work dur = 20m \"Work length\"\nsetting rest dur = 20m \"Rest length\"\nstate now_state num = 0\nrow gap 1\n  each 1..count(brk today)\n    button it \"Done\" tap add brk\nbutton \"Reset today\" tap remove all brk today\n\"Days done\" count(brk today) \"of 20\" faint\n",
+  "describe": "Eye Break, in the ocean colours.\nKeeps:\n- brk: just the time of each entry. Every entry also keeps when it was added.\nYou can change: \"Work length\": length of time, starts at 20 minutes; \"Rest length\": length of time, starts at 20 minutes.\nRemembers while you use it: now state, starting at 0.\nShows:\n- for each number from 1 to how many brk entries today:\n  - a button the number, \"Done\"; a tap adds a brk.\n- a button \"Reset today\"; a tap removes all brk entries today, with one undo.\n- text: \"Days done\", how many brk entries today, \"of 20\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/765c95a8c2c9.png"
+ },
+ {
+  "key": "REPEAT|w1-k02|e3b07070f444",
+  "uid": "903a8b5a",
+  "category_hint": "create",
+  "request": "how many tiles do I need for a floor. room length and width in feet, tile size in inches, add 10% wastage",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for length, width and tile size",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes number of tiles",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "applies 10 percent wastage",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows the result",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows number of boxes",
+    "must": false
+   }
+  ],
+  "program": "app \"Tiles\" calc slate\nstate fl num = 10\nstate hw num = 2\nfield fl \"Floor length (m)\"\nfield hw \"Width (m)\"\nlet t = fl * hw * 100 / max(fl * hw, 1)\n\"Tiles with 10% wastage\" round(t * 10) / 10 big\n\"Floor\" fl * hw \"sq ft\" faint\n",
+  "describe": "Tiles, in the slate colours.\nWorks out:\n- t is fl times hw times 100 divided by the larger of fl times hw and 1.\nRemembers while you use it: fl, starting at 10; hw, starting at 2.\nShows:\n- a box to fill in fl, labelled \"Floor length (m)\".\n- a box to fill in hw, labelled \"Width (m)\".\n- text: \"Tiles with 10% wastage\", t times 10 rounded divided by 10.\n- text: \"Floor\", fl times hw, \"sq ft\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/e3b07070f444.png"
+ },
+ {
+  "key": "REPEAT|w1-t25|ce818b84a30d",
+  "uid": "404f37ee",
+  "category_hint": "create",
+  "request": "Rent collection from 5 flats: tenant, flat no, rent, due day, paid/not paid, electricity bill share. total expected vs collected this month pls",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a tenant with flat number and rent",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has paid/not paid status",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total expected vs total collected",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "has electricity share field",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows unpaid tenants",
+    "must": false
+   }
+  ],
+  "program": "app \"Rent\" home slate\ntable tenant name text, flat text, rent money, due num 1..28 \"Due day\", elec money = 0 \"Electricity share\", paid bool\nlet expected = sum(tenant, it.rent + it.elec)\nlet collected = sum(tenant where paid = yes, it.rent + it.elec)\nrow gap 3\n  stat expected, \"expected\"\n  stat collected, \"collected\"\ngoal collected, expected, \"collected this month\"\nform tenant, \"Add tenant\"\neach tenant sort it.flat empty \"No tenants yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.name bold\n      \"Flat\" it.flat \"due on\" it.due faint\n    it.rent + it.elec bold\n    toggle it.paid\n\"Not paid yet\" head\neach tenant where paid = no\n  text it.name it.rent + it.elec color bad\nbutton \"New month\" tap set all tenant.paid = no\n",
+  "describe": "Rent, in the slate colours.\nKeeps:\n- tenant: name: text; flat: text; rent: money; \"Due day\": number, 1 to 28; \"Electricity share\": money, starts at 0; paid: yes or no. Every entry also keeps when it was added.\nWorks out:\n- expected is the sum of its rent plus its elec over the tenant.\n- collected is the sum of its rent plus its elec over the tenant where paid is yes.\nShows:\n- a big number: expected, labelled \"expected\".\n- a big number: collected, labelled \"collected\".\n- collected out of expected with a progress bar, labelled \"collected this month\".\n- a form to add a tenant.\n- for each tenant sorted by its flat:\n  - a group; a tap opens the tenant for editing:\n    - text: its name.\n    - text: \"Flat\", its flat, \"due on\", its due.\n    - text: its rent plus its elec.\n    - a tick box for its paid.\n- text: \"Not paid yet\".\n- for each tenant where paid is no:\n  - text: its name, its rent plus its elec.\n- a button \"New month\"; a tap sets the paid of the tenant to no for every tenant.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/ce818b84a30d.png"
+ },
+ {
+  "key": "REPEAT|w2-d09|c18b0442eb82",
+  "uid": "4dae48d4",
+  "category_hint": "create",
+  "request": "release notes drafts: version number, date, and lists of what is new, fixed and changed. mark published.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a release with version, date and text for new, fixed, changed",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "published tick or status",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list shows latest release first",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "count of drafts not yet published",
+    "must": false
+   }
+  ],
+  "program": "app \"Release notes\" note ink\ntable release version text, on date = today, new long, fixed long, changed long, published bool\nstat count(release where published = no), \"drafts\"\nform release, \"Add release\"\neach release sort on desc as r empty \"No releases yet\"\n  stack card gap 1 tap edit r swipe remove r\n    row\n      r.version bold grow\n      r.on faint\n      toggle r.published\n    \"New:\" r.new\n    \"Fixed:\" r.fixed\n    \"Changed:\" r.changed\n",
+  "describe": "Release notes, in the ink colours.\nKeeps:\n- release: version: text; on: date, starts at today; new: long text; fixed: long text; changed: long text; published: yes or no. Every entry also keeps when it was added.\nShows:\n- a big number: how many release entries where published is no, labelled \"drafts\".\n- a form to add a release.\n- for each release sorted by on, highest first:\n  - a group; a tap opens the release for editing; a swipe removes the release, with undo:\n    - text: the version of the release.\n    - text: the on of the release.\n    - a tick box for the published of the release.\n    - text: \"New:\", the new of the release.\n    - text: \"Fixed:\", the fixed of the release.\n    - text: \"Changed:\", the changed of the release.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/c18b0442eb82.png"
+ },
+ {
+  "key": "REPEAT|w2-l18|631132c54af7",
+  "uid": "405bbd7f",
+  "category_hint": "create",
+  "request": "Plant watering schedule for my balcony plants. each plant gets watered every N days, show which ones are due today and let me tap watered.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a plant with name and water-every-N-days number",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "a button or tick marks a plant as watered now",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows which plants are due today or overdue",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "uses last watered date to compute due status",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "count of plants due",
+    "must": false
+   }
+  ],
+  "program": "app \"Balcony\" plant mint\ntable plant name text, every num 1..60 = 4\ntable watered plant ref plant\ncount(watered today) \"plants due today\" big\neach plant sort at as p\n  row card gap 2\n    p.name bold grow\n    button \"Watered\" tap add watered plant = p\nform plant, \"Add plant\"\n",
+  "describe": "Balcony, in the mint colours.\nKeeps:\n- plant: name: text; every: number, 1 to 60, starts at 4. Every entry also keeps when it was added.\n- watered: plant: a plant. Every entry also keeps when it was added.\nShows:\n- text: how many watered entries today, \"plants due today\".\n- for each plant sorted by at:\n  - text: the name of the plant.\n  - a button \"Watered\"; a tap adds a watered with plant set to the plant.\n- a form to add a plant.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/631132c54af7.png"
+ },
+ {
+  "key": "REPEAT|w1-r03|cc99e812d718",
+  "uid": "71d21ebf",
+  "category_hint": "create",
+  "request": "Tasbeeh counter. I pick the target: 33, 99 or 100, and it counts taps and tells me when I reach it. Also reset button.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "tap button increments count",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "choice of target 33, 99 or 100",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows when target reached",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "reset button",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "remembers a total across sessions",
+    "must": false
+   }
+  ],
+  "program": "app \"Tasbeeh\" beads mint\ntable zikr\nstate n num = 0\nstate target num = 33\nwhen n > 0 and n = target notify \"Target reached\"\nrow gap 1\n  button \"33\" fill if(target = 33, accent, soft) tap set target = 33\n  button \"99\" fill if(target = 99, accent, soft) tap set target = 99\n  button \"100\" fill if(target = 100, accent, soft) tap set target = 100\ndraw width 240 tap set n = n + 1 then add zikr\n  circle 44 stroke soft thick 8\n  arc 44, 0, 360 * min(n, target) / target stroke if(n >= target, good, accent) thick 8\n  label 50, 50, n big\nif n >= target\n  \"Target of\" target \"reached\" head color good\nbutton \"Reset\" tap set n = 0\n\"Total count ever\" count(zikr) faint\n",
+  "describe": "Tasbeeh, in the mint colours.\nKeeps:\n- zikr: just the time of each entry. Every entry also keeps when it was added.\nRemembers while you use it: n, starting at 0; target, starting at 33.\nShows:\n- when n is more than 0 and n is target, it shows the notice \"Target reached\".\n- a button \"33\"; a tap sets target to 33.\n- a button \"99\"; a tap sets target to 99.\n- a button \"100\"; a tap sets target to 100.\n- a drawing made of circles, arcs, labels; a tap sets n to n plus 1, then adds a zikr.\n- if n is at least target:\n  - text: \"Target of\", target, \"reached\".\n- a button \"Reset\"; a tap sets n to 0.\n- text: \"Total count ever\", how many zikr entries.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/cc99e812d718.png"
+ },
+ {
+  "key": "REPEAT|w1-r03|030e36a71d10",
+  "uid": "3b019618",
+  "category_hint": "create",
+  "request": "Tasbeeh counter. I pick the target: 33, 99 or 100, and it counts taps and tells me when I reach it. Also reset button.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "tap button increments count",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "choice of target 33, 99 or 100",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows when target reached",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "reset button",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "remembers a total across sessions",
+    "must": false
+   }
+  ],
+  "program": "app \"Tasbeeh\" beads mint\ntable tap\nsetting target num = 33 \"Count to\"\nrow gap 1\n  each 1..count(tap today)\n    stack grow align center tap add tap\n      icon if(count(tap today) = target, \"Target reached\", \"OK\")\nbutton \"Reset today\" tap remove all tap today\n",
+  "describe": "Tasbeeh, in the mint colours.\nKeeps:\n- tap: just the time of each entry. Every entry also keeps when it was added.\nYou can change: \"Count to\": number, starts at 33.\nShows:\n- for each number from 1 to how many tap entries today:\n  - a group; a tap adds a tap:\n    - an icon.\n- a button \"Reset today\"; a tap removes all tap entries today, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/030e36a71d10.png"
+ },
+ {
+  "key": "REPEAT|w1-k10|fed8e0bcc97e",
+  "uid": "3143a281",
+  "category_hint": "create",
+  "request": "meeting time helper for Islamabad, London and New York",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "input for a time in one city",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows the equivalent time in all three cities",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "handles the offsets for PKT, London and New York",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "day change indicated",
+    "must": false
+   }
+  ],
+  "program": "app \" Islamabad\" mosque ocean\ntable lift\nsetting start date = today \"Lift start\"\ntable move\n\"Today\" start - today \"min\" big\n\"Packed\" count(lift today) \" arrivals\" faint\neach lift today sort at desc top 1 as l\n  row card\n    l.at l.id grow\n    button \"Packed\" tap add move\n\"New arrivals\" count(move today) big\nlist move today\n",
+  "describe": " Islamabad, in the ocean colours.\nKeeps:\n- lift: just the time of each entry. Every entry also keeps when it was added.\n- move: just the time of each entry. Every entry also keeps when it was added.\nYou can change: \"Lift start\": date, starts at today.\nShows:\n- text: \"Today\", start minus today, \"min\".\n- text: \"Packed\", how many lift entries today, \" arrivals\".\n- for each lift today sorted by at, highest first, first 1:\n  - text: the at of the lift, the id of the lift.\n  - a button \"Packed\"; a tap adds a move.\n- text: \"New arrivals\", how many move entries today.\n- a list of move today; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/fed8e0bcc97e.png"
+ },
+ {
+  "key": "REPEAT|w1-t29|c294c5f08e0c",
+  "uid": "2d31f8a3",
+  "category_hint": "create",
+  "request": "quran para progress for ramzan, 30 paras, tick each as finished with the date. also how many sipara left and days left till eid",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "has 30 paras that can be marked finished",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "records finish date",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows how many paras are left",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows progress",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows a days-left countdown",
+    "must": false
+   }
+  ],
+  "program": "app \"Ranaf\" book mint\ntable para q text, done bool\nlet total = count(para)\nif count(para) >= 30\n  \"Done\" big color good\nelse\n  \"Sipsar complete\" faint\n\"Total para so far\" total faint\neach para sort at as p empty \"No verses yet\"\n  row card tap edit p swipe remove p\n    p.q grow\n    p.done faint\nform para, \"Add verse\"\n",
+  "describe": "Ranaf, in the mint colours.\nKeeps:\n- para: q: text; done: yes or no. Every entry also keeps when it was added.\nWorks out:\n- total is how many para entries.\nShows:\n- if how many para entries is at least 30:\n  - text: \"Done\".\n- otherwise:\n  - text: \"Sipsar complete\".\n- text: \"Total para so far\", total.\n- for each para sorted by at:\n  - a group; a tap opens the para for editing; a swipe removes the para, with undo:\n    - text: the q of the para.\n    - text: the done of the para.\n- a form to add a para.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/c294c5f08e0c.png"
+ },
+ {
+  "key": "REPEAT|w2-d11|5bc2ab964bc1",
+  "uid": "031a2cd6",
+  "category_hint": "create",
+  "request": "code review checklist: tests added, no secrets, naming ok, error handling, docs updated. one tick per item per PR, with a PR name field and a count of fully passed PRs",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can enter a PR name",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tick boxes for the five named criteria",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows count of PRs where all criteria passed",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of reviewed PRs",
+    "must": false
+   }
+  ],
+  "program": "app \"Code Review\" list plum\ntable review item text, name text, qty num 0.. = 1, level pick Low|Normal|High = Normal, body long?\ncount(review where level = Normal) \"tests passed, total\" count(review) \"tests\" head\neach review sort at as v\n  row card gap 2 tap edit v swipe remove v\n    v.name bold grow\n    v.qty \"x\" v.level faint\n    button \"New Secret\" tap remove v\nform review, \"Add code\"\n",
+  "describe": "Code Review, in the plum colours.\nKeeps:\n- review: item: text; name: text; qty: number, at least 0, starts at 1; level: one of Low, Normal, High, starts at Normal; body: long text, optional. Every entry also keeps when it was added.\nShows:\n- text: how many review entries where level is Normal, \"tests passed, total\", how many review entries, \"tests\".\n- for each review sorted by at:\n  - a group; a tap opens the review for editing; a swipe removes the review, with undo:\n    - text: the name of the review.\n    - text: the qty of the review, \"x\", the level of the review.\n    - a button \"New Secret\"; a tap removes the review, with undo.\n- a form to add a review.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/5bc2ab964bc1.png"
+ },
+ {
+  "key": "REPEAT|w2-c01|48e630ac525a",
+  "uid": "1771eac0",
+  "category_hint": "change",
+  "request": "can u add severity Critical too",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "severity pick now includes Critical",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "existing bug list and form still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "can still mark bug fixed",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "critical bugs sorted or shown first",
+    "must": false
+   }
+  ],
+  "program": "app \"Bugs\" tool slate\ntable bug title text, severity pick High|Medium|Low|Critical, fixed bool\nstat count(bug where fixed = no), \"open bugs\"\nstat count(bug where fixed = no and severity = High), \"open high\"\nstat count(bug where fixed = no and severity = Critical), \"open critical\"\nform bug, \"Add bug\"\neach options bug.severity as sv\n  if count(bug where severity = sv) > 0\n    sv head\n    each bug where severity = sv sort fixed as b\n      row card swipe remove b\n        toggle b.fixed\n        b.title grow\n",
+  "describe": "Bugs, in the slate colours.\nKeeps:\n- bug: title: text; severity: one of High, Medium, Low, Critical; fixed: yes or no. Every entry also keeps when it was added.\nShows:\n- a big number: how many bug entries where fixed is no, labelled \"open bugs\".\n- a big number: how many bug entries where fixed is no and severity is High, labelled \"open high\".\n- a big number: how many bug entries where fixed is no and severity is Critical, labelled \"open critical\".\n- a form to add a bug.\n- for each choice of the severity of the bug:\n  - if how many bug entries where severity is the choice is more than 0:\n    - text: the choice.\n    - for each bug where severity is the choice sorted by fixed:\n      - a group; a swipe removes the bug, with undo:\n        - a tick box for the fixed of the bug.\n        - text: the title of the bug.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/48e630ac525a.png"
+ },
+ {
+  "key": "REPEAT|w1-k15|9334e82f9612",
+  "uid": "643635bc",
+  "category_hint": "create",
+  "request": "biryani party bill: total from the restaurant, 16% GST, 10% service, divide among the guys who came",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for bill, tax percent, service percent and number of people",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows total with tax and service",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows per-person share",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "rounds to nearest rupee",
+    "must": false
+   }
+  ],
+  "program": "app \"Bill split\" food mint\nstate bill money = 0\nstate gst num = 16\nstate svc num = 10\nstate people num = 4\nstack card gap 2\n  field bill \"Restaurant bill\"\n  field gst \"GST (percent)\"\n  field svc \"Service (percent)\"\n  field people \"People\"\nlet total = bill * (1 + (gst + svc) / 100)\nstat round(total), \"total with tax and service\"\nstat round(total / people), \"per person\"\n",
+  "describe": "Bill split, in the mint colours.\nWorks out:\n- total is bill times the result of 1 plus the result of gst plus svc divided by 100.\nRemembers while you use it: bill, starting at 0; gst, starting at 16; svc, starting at 10; people, starting at 4.\nShows:\n- a box to fill in bill, labelled \"Restaurant bill\".\n- a box to fill in gst, labelled \"GST (percent)\".\n- a box to fill in svc, labelled \"Service (percent)\".\n- a box to fill in people, labelled \"People\".\n- a big number: total rounded, labelled \"total with tax and service\".\n- a big number: total divided by people rounded, labelled \"per person\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/9334e82f9612.png"
+ }
+]

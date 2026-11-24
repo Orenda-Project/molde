@@ -1,0 +1,877 @@
+[
+ {
+  "key": "w2-d09|6fc76b614d91",
+  "uid": "2708a20e",
+  "category_hint": "create",
+  "request": "release notes drafts: version number, date, and lists of what is new, fixed and changed. mark published.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a release with version, date and text for new, fixed, changed",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "published tick or status",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list shows latest release first",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "count of drafts not yet published",
+    "must": false
+   }
+  ],
+  "program": "app \"Release notes\" book plum\ntable draft title text, number text, due date, fixed bool, changed bool\ncount(draft where changed = no) \"open\" head\neach draft where changed = no sort due as r\n  row card gap 2 tap edit r swipe remove r\n    toggle r.changed\n    stack grow\n      r.title bold\n      r.due small color if(r.due < today, bad, muted)\nform draft\n\"Done\" faint\nlist draft where changed = yes\n",
+  "describe": "Release notes, in the plum colours.\nKeeps:\n- draft: title: text; number: text; due: date; fixed: yes or no; changed: yes or no. Every entry also keeps when it was added.\nShows:\n- text: how many draft entries where changed is no, \"open\".\n- for each draft where changed is no sorted by due:\n  - a group; a tap opens the draft for editing; a swipe removes the draft, with undo:\n    - a tick box for the changed of the draft.\n    - text: the title of the draft.\n    - text: the due of the draft.\n- a form to add a draft.\n- text: \"Done\".\n- a list of draft where changed is yes; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/6fc76b614d91.png"
+ },
+ {
+  "key": "w2-u10|682d6b845e10",
+  "uid": "3bbfb5a7",
+  "category_hint": "create",
+  "request": "monthly budget as a fuel gauge, add spends and the needle goes down. budget 50000",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "has a gauge or bar showing remaining budget out of 50000",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can add a spend with amount and note",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "remaining amount shown as number",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "gauge visibly changes with spending",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "list of spends",
+    "must": false
+   }
+  ],
+  "program": "app \"Fuel gauge\" car mint\ntable fuel spendamount money\nsetting budget money = 50000 \"Monthly budget\"\nlet p = clamp(sum(fuel.spendamount month) / budget, 0, 1)\ndraw 100, 6\n  line 0, 6, 100, 6 stroke soft thick 10\n  poly stroke accent thick 10\n    each 1..min(budget, 100) as i\n      i tiny color muted\n      if(i <= budget, \"Over budget by\", \"Left to spend\") abs(i - budget) big\nquick fuel, spendamount, [2000, 5000, 10000]\nform fuel\n",
+  "describe": "Fuel gauge, in the mint colours.\nKeeps:\n- fuel: spendamount: money. Every entry also keeps when it was added.\nYou can change: \"Monthly budget\": money, starts at 50000.\nWorks out:\n- p is the total spendamount of fuel this month divided by budget kept between 0 and 1.\nShows:\n- a drawing made of lines, a line through points.\n- one-tap buttons that add a fuel with spendamount set to each of 2000, 5000, 10000.\n- a form to add a fuel.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/682d6b845e10.png"
+ },
+ {
+  "key": "w1-t10|b325fd08d4df",
+  "uid": "3a762978",
+  "category_hint": "create",
+  "request": "books i lent to neighbours - who has what book and since when. mark returned",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a lent book with book title, borrower name and date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can mark a book as returned",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list shows who still has books",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows days lent",
+    "must": false
+   }
+  ],
+  "program": "app \"Book lending\" book plum\ntable lent item text, who text, what text, due date?, back bool\ncount(lent month) \"lent this month\" big\nstat since(lent), \"days since the last time\"\nbutton \"Clear lent\" tap remove all lent\nform lent, \"Add receipt\"\nlist lent by day\n",
+  "describe": "Book lending, in the plum colours.\nKeeps:\n- lent: item: text; who: text; what: text; due: date, optional; back: yes or no. Every entry also keeps when it was added.\nShows:\n- text: how many lent entries this month, \"lent this month\".\n- a big number: days since the last of lent entries, labelled \"days since the last time\".\n- a button \"Clear lent\"; a tap removes all lent entries, with one undo.\n- a form to add a lent.\n- a list of lent by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/b325fd08d4df.png"
+ },
+ {
+  "key": "w2-d11|5bc2ab964bc1",
+  "uid": "d36f5eae",
+  "category_hint": "create",
+  "request": "code review checklist: tests added, no secrets, naming ok, error handling, docs updated. one tick per item per PR, with a PR name field and a count of fully passed PRs",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can enter a PR name",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tick boxes for the five named criteria",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows count of PRs where all criteria passed",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of reviewed PRs",
+    "must": false
+   }
+  ],
+  "program": "app \"Code Review\" list plum\ntable review item text, name text, qty num 0.. = 1, level pick Low|Normal|High = Normal, body long?\ncount(review where level = Normal) \"tests passed, total\" count(review) \"tests\" head\neach review sort at as v\n  row card gap 2 tap edit v swipe remove v\n    v.name bold grow\n    v.qty \"x\" v.level faint\n    button \"New Secret\" tap remove v\nform review, \"Add code\"\n",
+  "describe": "Code Review, in the plum colours.\nKeeps:\n- review: item: text; name: text; qty: number, at least 0, starts at 1; level: one of Low, Normal, High, starts at Normal; body: long text, optional. Every entry also keeps when it was added.\nShows:\n- text: how many review entries where level is Normal, \"tests passed, total\", how many review entries, \"tests\".\n- for each review sorted by at:\n  - a group; a tap opens the review for editing; a swipe removes the review, with undo:\n    - text: the name of the review.\n    - text: the qty of the review, \"x\", the level of the review.\n    - a button \"New Secret\"; a tap removes the review, with undo.\n- a form to add a review.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/5bc2ab964bc1.png"
+ },
+ {
+  "key": "w1-r05|8e4d6232d178",
+  "uid": "6b370693",
+  "category_hint": "create",
+  "request": "baby feeding: which side did i feed from last, left or right, and timer for how long. log of feeds with times",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "buttons for left and right side",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "timer for feed duration",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "records each feed with time and side",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows which side was last",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "average feed length",
+    "must": false
+   }
+  ],
+  "program": "app \"Feed-time\" baby mint\ntable feed side pick Left|Right, kg num 1..30 = 1 unit \"kg\"\ntimer 15m, \"Feed\", add feed side = Left then add feed side = Right then remove all feed\ncount(feed today) \"feeds today\" big\nlist feed today\n",
+  "describe": "Feed-time, in the mint colours.\nKeeps:\n- feed: side: one of Left, Right; kg: number, 1 to 30, in kg, starts at 1. Every entry also keeps when it was added.\nShows:\n- a countdown timer of 15 minutes, labelled \"Feed\"; when it ends it adds a feed with side set to Left, then adds a feed with side set to Right, then removes all feed entries, with one undo.\n- text: how many feed entries today, \"feeds today\".\n- a list of feed today; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/8e4d6232d178.png"
+ },
+ {
+  "key": "w2-u08|239f6e7902d1",
+  "uid": "331ff3d9",
+  "category_hint": "create",
+  "request": "voting tally for our family group. options pizza, biryani, burger. tap to add a vote, show bars",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "lists the three named options",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tap adds a vote to an option",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows bars or visual proportion per option",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total votes",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "reset votes",
+    "must": false
+   }
+  ],
+  "program": "app \"Voting\" users ocean\ntable vote options pick Pizza|Biryani|Burger\ncount(vote) \"votes\" big\nbars options vote.options, count(vote where options = it), it\neach options vote.options as o\n  row\n    o grow\n    count(vote where options = o) bold\nform vote, \"Cast vote\"\n",
+  "describe": "Voting, in the ocean colours.\nKeeps:\n- vote: options: one of Pizza, Biryani, Burger. Every entry also keeps when it was added.\nShows:\n- text: how many vote entries, \"votes\".\n- a bar chart of how many vote entries where options is the item for each of choice of the options of the vote.\n- for each choice of the options of the vote:\n  - text: the choice.\n  - text: how many vote entries where options is the choice.\n- a form to add a vote.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/239f6e7902d1.png"
+ },
+ {
+  "key": "w1-r04|f3dc350c1b86",
+  "uid": "0a654039",
+  "category_hint": "create",
+  "request": "rest timer between sets, 60/90/120 sec buttons, and a count of sets done",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "buttons for 60, 90 and 120 seconds",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "countdown shown",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "counts sets completed",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "add set button",
+    "must": false
+   }
+  ],
+  "program": "app \"Rest\" timer ink\ntable set done bool\nsetting length dur = 60s \"Reps\"\ntimer length, \"Reps\", add set then notify \"Reps done\"\ncount(set today) \"sets today\" head\ndaybars last 7 days, count(set on it)\nlist set today\n",
+  "describe": "Rest, in the ink colours.\nKeeps:\n- set: done: yes or no. Every entry also keeps when it was added.\nYou can change: \"Reps\": length of time, starts at 1 minute.\nShows:\n- a countdown timer of length, labelled \"Reps\"; when it ends it adds a set, then shows the notice \"Reps done\".\n- text: how many set entries today, \"sets today\".\n- a bar chart of how many set entries on that day for each day in the last 7 days.\n- a list of set today; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f3dc350c1b86.png"
+ },
+ {
+  "key": "w1-c02|85a96bafc63f",
+  "uid": "9252a76d",
+  "category_hint": "change",
+  "request": "put a chart of the solar units added up for each week, about two months back",
+  "program_before": "app \"Solar log\" sun ocean\ntable output day date = today, kwh num 0.. unit \"kWh\", weather pick Sunny|Cloudy|Rainy\nlet mon = today - monthday(today) + 1\nstat max(output.kwh), \"best day so far (kWh)\"\n\"This month\" sum(output.kwh where day >= mon) \"kWh\" faint\nform output, \"Add today's output\"\n\"Last 14 days\" head\ndaybars last 14 days, sum(output.kwh where day = it)\nlist output\n",
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a chart of weekly kWh is shown",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "existing daily entry form still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "existing entry list still present",
+    "must": true
+   }
+  ],
+  "program": "app \"Solar log\" sun ocean\ntable output day date = today, kwh num 0.. unit \"kWh\", weather pick Sunny|Cloudy|Rainy\nlet mon = today - monthday(today) + 1\nstat max(output.kwh), \"best day so far (kWh)\"\n\"This month\" sum(output.kwh where day >= mon) \"kWh\" faint\nstat sum(output.kwh month), \"this month\"\nform output, \"Add today's output\"\n\"Last 14 days\" head\ndaybars last 14 days, sum(output.kwh where day = it)\nlist output\n",
+  "describe": "Solar log, in the ocean colours.\nKeeps:\n- output: day: date, starts at today; kwh: number, at least 0, in kWh; weather: one of Sunny, Cloudy, Rainy. Every entry also keeps when it was added.\nWorks out:\n- mon is today minus the day of the month of today plus 1.\nShows:\n- a big number: the highest kwh of output, labelled \"best day so far kWh\".\n- text: \"This month\", the total kwh of output where day is at least mon, \"kWh\".\n- a big number: the total kwh of output this month, labelled \"this month\".\n- a form to add a output.\n- text: \"Last 14 days\".\n- a bar chart of the total kwh of output where day is the item for each day in the last 14 days.\n- a list of output; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/85a96bafc63f.png"
+ },
+ {
+  "key": "w1-k09|7815b472babf",
+  "uid": "6ed0d5c4",
+  "category_hint": "create",
+  "request": "Loan EMI: amount, yearly interest rate, months. Show monthly payment and total interest paid. I'd like it to fetch today's bank rates too.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for amount, annual rate and months",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes monthly EMI",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total interest paid",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total repayment",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows total repayment",
+    "must": false
+   }
+  ],
+  "program": "app \"EMI\" money ocean\nstate amount money = 50000\nstate rate num = 12\nstate months num = 12\nfield amount \"Loan amount\"\nfield rate \"Yearly rate %\"\nfield months \"Months\"\n\"Monthly payment\" round(amount * pow(1 + rate / 1200, months) / 12) big\n\"Total interest paid\" round(amount * (1 + rate / 1200 * months) / 12) faint\n",
+  "describe": "EMI, in the ocean colours.\nRemembers while you use it: amount, starting at 50000; rate, starting at 12; months, starting at 12.\nShows:\n- a box to fill in amount, labelled \"Loan amount\".\n- a box to fill in rate, labelled \"Yearly rate %\".\n- a box to fill in months, labelled \"Months\".\n- text: \"Monthly payment\", amount times the pow of 1 plus rate divided by 1200 divided by 12 rounded.\n- text: \"Total interest paid\", amount times the result of 1 plus rate divided by 1200 times months divided by 12 rounded.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/7815b472babf.png"
+ },
+ {
+  "key": "w1-t14|0f674cdce885",
+  "uid": "87f9ba1b",
+  "category_hint": "create",
+  "request": "School van fees tracker for the 14 kids I drive. Each child has monthly fee (some 3000, some 3500), I mark which months are paid. At the end I want to see who hasn't paid this month and the total collected.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a child with a monthly fee",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can record a payment for a child and month",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows who has not paid this month",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total collected",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows total still to collect",
+    "must": false
+   }
+  ],
+  "program": "app \"Van fees\" bus slate\ntable kid name text\ntable fee kid ref kid, amount money\n\"Collected this month\" sum(fee.amount month) big\neach kid as k\n  let due = sum(k.fee.amount month)\n  stack card gap 1\n    row\n      k.name head grow\n      \"due\" due bold color if(due > 0, bad, good)\n    each k.fee month as f\n      row gap 1\n        f.amount bold grow\n        round(f.amount * 3000 / max(k.fee.amount month) * 30) \"%\" faint\n",
+  "describe": "Van fees, in the slate colours.\nKeeps:\n- kid: name: text. Every entry also keeps when it was added.\n- fee: kid: a kid; amount: money. Every entry also keeps when it was added.\nShows:\n- text: \"Collected this month\", the total amount of fee this month.\n- for each kid:\n  - text: the name of the kid.\n  - text: \"due\", due.\n  - for each the kid's fee this month:\n    - text: the amount of the fee.\n    - text: the amount of the fee times 3000 divided by the highest amount of the kid's fee entries this month times 30 rounded, \"%\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/0f674cdce885.png"
+ },
+ {
+  "key": "w2-d06|8ab461812b5c",
+  "uid": "fe873404",
+  "category_hint": "create",
+  "request": "sprint points tracker. each story has points and status todo/doing/done. show burn progress for the sprint of 40 points.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add story with title, points and status pick",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows total points done",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows progress against 40 point sprint goal",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list grouped or filterable by status",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "remaining points",
+    "must": false
+   }
+  ],
+  "program": "app \"Sprint\" fire mint\ntable sprint story text, pts num 0..400 = 0, status pick Todo|Doing|Done = Todo\n\"Burn rate\" round(sum(sprint.pts where status = Todo) * 40 / max(count(sprint), 1)) / 100 big\neach sprint sort at desc top 40 as s empty \"No stories yet\"\n  row card gap 2 tap edit s swipe remove s\n    stack grow\n      s.story bold\n      round(s.pts * 100 / max(s.pts, 1)) \"%\" faint\n    round((s.pts * 40 / max(s.pts, 1)) * 100 / max(s.pts, 1)) bold\nform sprint, \"Add story\"\n",
+  "describe": "Sprint, in the mint colours.\nKeeps:\n- sprint: story: text; pts: number, 0 to 400, starts at 0; status: one of Todo, Doing, Done, starts at Todo. Every entry also keeps when it was added.\nShows:\n- text: \"Burn rate\", the total pts of sprint where status is Todo times 40 divided by the larger of how many sprint entries and 1 rounded divided by 100.\n- for each sprint sorted by at, highest first, first 40:\n  - a group; a tap opens the sprint for editing; a swipe removes the sprint, with undo:\n    - text: the story of the sprint.\n    - text: the pts of the sprint times 100 divided by the larger of the pts of the sprint and 1 rounded, \"%\".\n    - text: the result of the pts of the sprint times 40 divided by the larger of the pts of the sprint and 1 times 100 divided by the larger of the pts of the sprint and 1 rounded.\n- a form to add a sprint.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/8ab461812b5c.png"
+ },
+ {
+  "key": "w2-d08|5170af798bcc",
+  "uid": "26e8a518",
+  "category_hint": "create",
+  "request": "server uptime notes. we have 5 servers, I log when one goes down and when it came back, and the app should ping them every minute and tell me if one is down.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an outage with server name, down time and back-up time",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows downtime duration per outage",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total downtime or outage count",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "server name is a pick or a text field",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "outages this month",
+    "must": false
+   }
+  ],
+  "program": "app \"Server Uptime\" clock ocean\ntable server name text, rooms num 1..5 = 4, uptime num 0..5 = 0\n\"Ready in\" count(server where uptime >= 5) \"days\" big\neach server sort name as s empty \"No servers yet\"\n  row card gap 2 tap edit s swipe remove s\n    stack grow\n      s.name bold\n      \"up\" s.uptime \"days\" faint\n    s.rooms \"rooms\" faint\nform server, \"Add server\"\n",
+  "describe": "Server Uptime, in the ocean colours.\nKeeps:\n- server: name: text; rooms: number, 1 to 5, starts at 4; uptime: number, 0 to 5, starts at 0. Every entry also keeps when it was added.\nShows:\n- text: \"Ready in\", how many server entries where uptime is at least 5, \"days\".\n- for each server sorted by name:\n  - a group; a tap opens the server for editing; a swipe removes the server, with undo:\n    - text: the name of the server.\n    - text: \"up\", the uptime of the server, \"days\".\n    - text: the rooms of the server, \"rooms\".\n- a form to add a server.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/5170af798bcc.png"
+ },
+ {
+  "key": "w1-t26|9646a3e07e68",
+  "uid": "972b2985",
+  "category_hint": "create",
+  "request": "wedding card orders for my print shop. customer, qty of cards, rate per card, design chosen, delivery date",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an order with customer, quantity and rate per card",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes total price from qty times rate",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has delivery date",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of orders shown",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows orders due soon",
+    "must": false
+   }
+  ],
+  "program": "app \"Wedding Cards\" gift plum\ntable order customer text, qty num 1..1000, rate money, day date\n\"Ready for print\" count(order where day >= today and day <= today + 1) big\neach order where day >= today sort day as o\n  row card gap 1 tap edit o swipe remove o\n    stack grow\n      o.customer bold\n      o.qty \"cards\" faint\n    o.day o\n    button \"New card\" tap remove all order\nform order, \"New order\"\n\" Designers\" head\neach order sort day as o\n  stack card gap 1\n    o.customer \"name\" bold\n    o.qty \"items\" faint\n    o.day \"day\" o\n    button \"Edit\" tap edit o\n",
+  "describe": "Wedding Cards, in the plum colours.\nKeeps:\n- order: customer: text; qty: number, 1 to 1000; rate: money; day: date. Every entry also keeps when it was added.\nShows:\n- text: \"Ready for print\", how many order entries where day is at least today and day is at most today plus 1.\n- for each order where day is at least today sorted by day:\n  - a group; a tap opens the order for editing; a swipe removes the order, with undo:\n    - text: the customer of the order.\n    - text: the qty of the order, \"cards\".\n    - text: the day of the order, the order.\n    - a button \"New card\"; a tap removes all order entries, with one undo.\n- a form to add a order.\n- text: \" Designers\".\n- for each order sorted by day:\n  - text: the customer of the order, \"name\".\n  - text: the qty of the order, \"items\".\n  - text: the day of the order, \"day\", the order.\n  - a button \"Edit\"; a tap opens the order for editing.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/9646a3e07e68.png"
+ },
+ {
+  "key": "w1-k06|f755d35f36b7",
+  "uid": "b31dd335",
+  "category_hint": "create",
+  "request": "Electricity bill estimator. Enter units used this month. Slabs: first 100 units at 7 rs, next 100 at 11 rs, anything above 200 at 20 rs. Add 17 percent GST at the end.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "input for units",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "slab rates 7, 11, 20 applied correctly",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "adds 17 percent GST",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total bill",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows cost per slab",
+    "must": false
+   }
+  ],
+  "program": "app \"Electricity\" bolt ocean\nstate m date = today\nstate used num = 0\nfield m \"Units used this month\"\nlet r = max(used, 0)\nlet t = used * 100 / max(r * 100, 1)\n\"After\" round(t) \"hours\" faint\n\"Estimated bill\" round(t * 100) \"%\" bold\n",
+  "describe": "Electricity, in the ocean colours.\nWorks out:\n- r is the larger of used and 0.\n- t is used times 100 divided by the larger of r times 100 and 1.\nRemembers while you use it: m, starting at today; used, starting at 0.\nShows:\n- a box to fill in m, labelled \"Units used this month\".\n- text: \"After\", t rounded, \"hours\".\n- text: \"Estimated bill\", t times 100 rounded, \"%\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/f755d35f36b7.png"
+ },
+ {
+  "key": "w2-l02|7613a463df34",
+  "uid": "b3a7f812",
+  "category_hint": "create",
+  "request": "umrah bag: ihram, chappal, documents, medicines etc. tick when packed, show how many left",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an item with name",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "each item can be ticked as packed",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows how many items are left or packed out of total",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "items grouped by category such as clothes, documents, medicines",
+    "must": false
+   }
+  ],
+  "program": "app \"Umrah\" mosque mint\ntable packed item text, who pick Irah|Chappal|Documents|Medicine = Irah, left num 0..3 = 0\n\"Left empty\" count(packed where left <= 3) big\neach options packed.who as w\n  row card\n    w bold grow\n    count(packed where who = w) \"left\" faint\nform packed, \"Add to the umrah bag\"\nlist packed where left <= 3\n",
+  "describe": "Umrah, in the mint colours.\nKeeps:\n- packed: item: text; who: one of Irah, Chappal, Documents, Medicine, starts at Irah; left: number, 0 to 3, starts at 0. Every entry also keeps when it was added.\nShows:\n- text: \"Left empty\", how many packed entries where left is at most 3.\n- for each choice of the who of the packed:\n  - text: the choice.\n  - text: how many packed entries where who is the choice, \"left\".\n- a form to add a packed.\n- a list of packed where left is at most 3; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/7613a463df34.png"
+ },
+ {
+  "key": "w1-r15|b8bcf743c2e5",
+  "uid": "9572de26",
+  "category_hint": "create",
+  "request": "speech practice timer, set minutes, shows green then yellow in last minute then red at zero",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "input to set minutes",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "countdown",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "colour changes green then yellow then red",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "start button",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "pause",
+    "must": false
+   }
+  ],
+  "program": "app \"Speech practice\" smile mint\ntable drill name text\ntable drill_done drill ref drill\neach drill sort at as d empty \"No drill yet\"\n  row card gap 2 tap edit d swipe remove d\n    stack grow\n      d.name bold\n      \"done\" count(d.drill_done) \"of\" count(drill) faint\n    button \"Play\" tap set d.at = min(d.at, 12)\nform drill\n",
+  "describe": "Speech practice, in the mint colours.\nKeeps:\n- drill: name: text. Every entry also keeps when it was added.\n- drill done: drill: a drill. Every entry also keeps when it was added.\nShows:\n- for each drill sorted by at:\n  - a group; a tap opens the drill for editing; a swipe removes the drill, with undo:\n    - text: the name of the drill.\n    - text: \"done\", how many the drill's drill done entries, \"of\", how many drill entries.\n    - a button \"Play\"; a tap sets the at of the drill to the smaller of the at of the drill and 12.\n- a form to add a drill.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/b8bcf743c2e5.png"
+ },
+ {
+  "key": "w1-t08|74100281cfd3",
+  "uid": "60264c1a",
+  "category_hint": "create",
+  "request": "my pigeon loft. birds with ring number, colour, gender, pair partner, and eggs/chicks log",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a bird with ring number, colour and gender",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has a pair partner field",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list of birds shown",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "has an egg or chick log with dates",
+    "must": false
+   },
+   {
+    "n": 5,
+    "item": "shows total bird count",
+    "must": false
+   }
+  ],
+  "program": "app \"Pet Loft\" paw mint\ntable pet name text, kind pick Dog|Cat|Bird = Dog, phone text?\neach pet sort name as p\n  stack card gap 1 tap edit p\n    row\n      p.name bold grow\n      p.kind faint\n",
+  "describe": "Pet Loft, in the mint colours.\nKeeps:\n- pet: name: text; kind: one of Dog, Cat, Bird, starts at Dog; phone: text, optional. Every entry also keeps when it was added.\nShows:\n- for each pet sorted by name:\n  - a group; a tap opens the pet for editing:\n    - text: the name of the pet.\n    - text: the kind of the pet.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/74100281cfd3.png"
+ },
+ {
+  "key": "w1-t17|76d4af3a3974",
+  "uid": "1655235a",
+  "category_hint": "create",
+  "request": "sourdough starter feeding log. time, flour g, water g, jar temp, did it double?",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a feeding with time, flour grams and water grams",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has temperature field",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has did-it-double yes/no",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of feedings shown",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows the ratio flour to water",
+    "must": false
+   }
+  ],
+  "program": "app \"Sourdines\" bread ocean\ntable feeding kind pick Dry|Treat|Water|Gas = Dry, litres num 0..10 = 0\n\"Deliorets\" sum(feeding.litres today) \"L\" big\n\"Water\" sum(feeding.litres today) \"L\" faint\n\"Returned\" sum(feeding.litres today) \"L\" faint\nform feeding\nlist feeding by day\n",
+  "describe": "Sourdines, in the ocean colours.\nKeeps:\n- feeding: kind: one of Dry, Treat, Water, Gas, starts at Dry; litres: number, 0 to 10, starts at 0. Every entry also keeps when it was added.\nShows:\n- text: \"Deliorets\", the total litres of feeding today, \"L\".\n- text: \"Water\", the total litres of feeding today, \"L\".\n- text: \"Returned\", the total litres of feeding today, \"L\".\n- a form to add a feeding.\n- a list of feeding by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/76d4af3a3974.png"
+ },
+ {
+  "key": "w1-r01|32e30bc959e7",
+  "uid": "073697d1",
+  "category_hint": "create",
+  "request": "plank intervals timer: 40 s hold 20 s rest, 6 rounds",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "has a work period of 40 seconds and rest of 20",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "counts down",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows current round out of 6",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "start button",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "switches label between hold and rest",
+    "must": false
+   }
+  ],
+  "program": "app \"Plank\" dumbbell ink\ntable hold interval pick s1|s2|s4|s6\nsetting length dur = 40s \"Plank length\"\nstate left dur = 20s\nstate going bool = no\nevery 1s if going set left = left - 1s\nwhen going and left <= 0s set going = no then notify \"Plank done\"\nfloor(left / 40) \"rounds\" head\nleft big\nbutton if(going, \"Pause\", \"Start\") tap set going = not going\nbutton \"Reset\" tap set going = no then set left = 20s then set going = no\n",
+  "describe": "Plank, in the ink colours.\nKeeps:\n- hold: interval: one of s1, s2, s4, s6. Every entry also keeps when it was added.\nYou can change: \"Plank length\": length of time, starts at 40 seconds.\nRemembers while you use it: left, starting at 20 seconds; going, starting at no.\nShows:\n- every 1 seconds while going, it sets left to left minus 1 seconds.\n- when going and left is at most 0 hours, it sets going to no, then shows the notice \"Plank done\".\n- text: left divided by 40 rounded down, \"rounds\".\n- text: left.\n- a button \"Pause\" when going, otherwise \"Start\"; a tap sets going to not going.\n- a button \"Reset\"; a tap sets going to no, then sets left to 20 seconds, then sets going to no.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/32e30bc959e7.png"
+ },
+ {
+  "key": "w2-d02|9f45c7c899ae",
+  "uid": "7e63ea36",
+  "category_hint": "create",
+  "request": "bug list with severity",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a bug with title and severity pick (e.g. Low/Medium/High/Critical)",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can mark a bug fixed",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows count of open bugs",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list sorted or grouped by severity",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "open critical count highlighted",
+    "must": false
+   }
+  ],
+  "program": "app \"Bug log\" bolt slate\ntable bug title text, sev pick Low|Normal|High|Last = Normal, severity num 1..10 = 5, note text?\ncount(bug where severity <= 5) \"open bugs\" big\ncount(bug where severity <= 10) \"small bugs\" faint\neach bug where severity <= 5 as b\n  row card gap 2 tap edit b swipe remove b\n    stack grow\n      b.title bold\n      b.at b.severity faint\n    b.note faint\nform bug, \"Add bug\"\n",
+  "describe": "Bug log, in the slate colours.\nKeeps:\n- bug: title: text; sev: one of Low, Normal, High, Last, starts at Normal; severity: number, 1 to 10, starts at 5; note: text, optional. Every entry also keeps when it was added.\nShows:\n- text: how many bug entries where severity is at most 5, \"open bugs\".\n- text: how many bug entries where severity is at most 10, \"small bugs\".\n- for each bug where severity is at most 5:\n  - a group; a tap opens the bug for editing; a swipe removes the bug, with undo:\n    - text: the title of the bug.\n    - text: the at of the bug, the severity of the bug.\n    - text: the note of the bug.\n- a form to add a bug.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/9f45c7c899ae.png"
+ },
+ {
+  "key": "w2-u01|80e0d8dbd0f0",
+  "uid": "cedacab5",
+  "category_hint": "create",
+  "request": "carrom scoreboard for two teams, tap to add points, boards played count",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows two team scores large",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "buttons to add points to each team",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has a board counter or new board/reset button",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "undo last point",
+    "must": false
+   }
+  ],
+  "program": "app \"Carrom\" board ink\ntable point team pick Us|Them, pts num 1..500 = 1\nlet a = sum(point.pts where team = Us)\nlet b = sum(point.pts where team = Them)\nrow gap 2\n  stack card grow align center\n    \"Us\" bold\n    a big\n    button \"+1\" tap add point team = Us, pts = 1\n  stack card grow align center\n    \"Them\" bold\n    b big\n    button \"+1\" tap add point team = Them, pts = 1\nbutton \"Undo\" tap remove last(point)\nbutton \"New game\" tap remove all point\n",
+  "describe": "Carrom, in the ink colours.\nKeeps:\n- point: team: one of Us, Them; pts: number, 1 to 500, starts at 1. Every entry also keeps when it was added.\nWorks out:\n- a is the total pts of point where team is Us.\n- b is the total pts of point where team is Them.\nShows:\n- text: \"Us\".\n- text: a.\n- a button \"+1\"; a tap adds a point with team set to Us, pts set to 1.\n- text: \"Them\".\n- text: b.\n- a button \"+1\"; a tap adds a point with team set to Them, pts set to 1.\n- a button \"Undo\"; a tap removes the latest point entries, with undo.\n- a button \"New game\"; a tap removes all point entries, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/80e0d8dbd0f0.png"
+ },
+ {
+  "key": "w1-k04|77c7ad7bd7ff",
+  "uid": "75457d5f",
+  "category_hint": "create",
+  "request": "trip fuel cost split. distance km, car km per litre, petrol price, number of people sharing",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for distance, mileage, fuel price and people",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes total fuel cost",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "computes cost per person",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "supports round trip toggle",
+    "must": false
+   }
+  ],
+  "program": "app \"Trip fuel\" car ocean\nsetting petrol money = 2000 \"Petrol price per litre\"\nsetting km num = 20 \"Car km per litre\"\nsetting people num = 4 \"People share the cost\"\nlet litres = km / max(people, 1)\nlet p = clamp(litres / max(km, 1), 0, 1)\n\"Total cost\" round(litres * p * petrol) big\n\"Each share\" round(p * petrol) head\n\"Each pays\" round(p * petrol) big\n",
+  "describe": "Trip fuel, in the ocean colours.\nYou can change: \"Petrol price per litre\": money, starts at 2000; \"Car km per litre\": number, starts at 20; \"People share the cost\": number, starts at 4.\nWorks out:\n- litres is km divided by the larger of people and 1.\n- p is litres divided by the larger of km and 1 kept between 0 and 1.\nShows:\n- text: \"Total cost\", litres times p times petrol rounded.\n- text: \"Each share\", p times petrol rounded.\n- text: \"Each pays\", p times petrol rounded.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/77c7ad7bd7ff.png"
+ },
+ {
+  "key": "w1-t06|48c591c02d03",
+  "uid": "95c2b2c8",
+  "category_hint": "create",
+  "request": "bike service history",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a service entry with date and odometer km",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has cost field",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "list of past services shown",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total spent on service",
+    "must": false
+   },
+   {
+    "n": 5,
+    "item": "has notes on what was done",
+    "must": false
+   }
+  ],
+  "program": "app \"Bike Service\" bike mint\ntable service what text, km num 0..2000000, cost money, next date?\n\"Total spent\" sum(service.cost all) big\nform service\nlist service by day\n",
+  "describe": "Bike Service, in the mint colours.\nKeeps:\n- service: what: text; km: number, 0 to 2000000; cost: money; next: date, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Total spent\", the total cost of service.\n- a form to add a service.\n- a list of service by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/48c591c02d03.png"
+ },
+ {
+  "key": "w1-k14|ee9a501dd2fa",
+  "uid": "3318c1fa",
+  "category_hint": "create",
+  "request": "Water tank filler: tank is 4ft x 3ft x 3ft, pump gives 20 litres per minute. How long to fill and how many litres does it hold?",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for tank dimensions and pump rate",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes volume in litres",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "computes minutes to fill",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "converts cubic feet to litres correctly",
+    "must": false
+   }
+  ],
+  "program": "app \"Fuel\" car slate\ntable fill litres num 1..200\n\"Capacity\" max(fill, 20) \"litres\" big\n\"Each add one\" sum(fill.litres) \"litres\" faint\neach fill sort at as f\n  row card gap 2\n    f.at bold grow\n    f.litres \"litres\" bold\nform fill, \"Add fill\"\n",
+  "describe": "Fuel, in the slate colours.\nKeeps:\n- fill: litres: number, 1 to 200. Every entry also keeps when it was added.\nShows:\n- text: \"Capacity\", the highest of 20 over the fill, \"litres\".\n- text: \"Each add one\", the total litres of fill, \"litres\".\n- for each fill sorted by at:\n  - text: the at of the fill.\n  - text: the litres of the fill, \"litres\".\n- a form to add a fill.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/ee9a501dd2fa.png"
+ },
+ {
+  "key": "w1-t04|5bc81779768f",
+  "uid": "6c7e0802",
+  "category_hint": "create",
+  "request": "cricket net sessions - date, how long (min), bowling or batting, what I worked on. chart per week would be nice",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can log a session with date, minutes and bowling/batting choice",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has a field for what was worked on",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows a list of sessions",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows a chart of minutes per week or per day",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "shows total minutes",
+    "must": false
+   }
+  ],
+  "program": "app \"Net sessions\" ball ocean\ntable session day date, team text, length num 1..240 = 240, bowling bool\nlet on_side = count(session week where day >= today)\n\"Net sessions this week\" on_side big\neach session week sort day as s\n  row card gap 2\n    stack grow\n      s.day bold\n      s.team \"min\" faint\n    s.length \"min\" bold\n    toggle s.bowling\nform session, \"Add session\"\n",
+  "describe": "Net sessions, in the ocean colours.\nKeeps:\n- session: day: date; team: text; length: number, 1 to 240, starts at 240; bowling: yes or no. Every entry also keeps when it was added.\nWorks out:\n- on side is how many session entries this week where day is at least today.\nShows:\n- text: \"Net sessions this week\", on side.\n- for each session this week sorted by day:\n  - text: the day of the session.\n  - text: the team of the session, \"min\".\n  - text: the length of the session, \"min\".\n  - a tick box for the bowling of the session.\n- a form to add a session.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/5bc81779768f.png"
+ }
+]

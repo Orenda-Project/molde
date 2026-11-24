@@ -1,0 +1,422 @@
+{
+ "w1-c01": {
+  "program": "app \"Tailoring orders\" pen plum\ntable order customer text, suit pick Shalwar_kameez|Three_piece|Waistcoat|Sherwani|Other, fabric text? \"Fabric colour\", note long?, due date, price money, advance money = 0, delivered bool\nlet owed = sum(order where delivered = no, it.price - it.advance)\nstat owed, \"still owed to me\"\n\"Due this week:\" count(order where delivered = no and due >= today and due <= today + 7) faint\nform order, \"Add order\"\n\"Who still owes me\" head\neach order where delivered = no and price > advance sort due\n  row card tap edit it\n    stack grow gap 0\n      it.customer bold\n      it.suit it.fabric faint\n      \"Due\" it.due faint\n    it.price - it.advance bold color bad\n    toggle it.delivered\nlist order\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c02": {
+  "program": "app \"Solar log\" sun ocean\ntable output day date = today, kwh num 0.. unit \"kWh\", weather pick Sunny|Cloudy|Rainy\nlet mon = today - monthday(today) + 1\nlet wk = today - weekday(today) + 1\nstat max(output.kwh), \"best day so far (kWh)\"\n\"This month\" sum(output.kwh where day >= mon) \"kWh\" faint\nform output, \"Add today's output\"\n\"Last 14 days\" head\ndaybars last 14 days, sum(output.kwh where day = it)\n\"kWh per week, last 8 weeks\" head\nbars 1..8, sum(output.kwh where day >= wk - 7 * (8 - it) and day < wk - 7 * (7 - it)), join(\"W\", it)\nlist output\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c03": {
+  "program": "app \"Water changes\" drop ocean\ntable change day date = today, pct num 1..100 unit \"%\" \"Percent changed\", tank pick Living_room was Big|Bedroom was Small, ph num 0..14, ammonia num 0.. unit \"ppm\"\nremind \"Water change day\" at 9:00 on sun\nrow gap 3\n  each options change.tank as t\n    stack gap 0\n      t bold\n      text last(change.day where tank = t) faint\nform change, \"Log water change\"\nlist change by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c04": {
+  "program": "app \"Udhaar book\" book mint\ntable entry customer text, kind pick Took|Paid_back, amount money \"Amount (Rs)\", day date = today\nstate q text\nlet pending = sum(entry where kind = Took, it.amount) - sum(entry where kind = Paid_back, it.amount)\nstat pending, \"total pending (Rs)\"\nform entry, \"Add entry\"\nfield q \"Find someone by name\"\n\"Who owes\" head\neach entry where has(customer, q) by customer\n  row card\n    it.key bold grow\n    sum(it, if(it.kind = Took, it.amount, 0 - it.amount)) bold\nlist entry where has(customer, q) by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c05": {
+  "program": "app \"Dialysis log\" heart ocean\ntable session day date = today, start time, hours num 0.5..12 unit \"h\", before num 20..200 unit \"kg\" \"Weight before\", after num 20..200 unit \"kg\" \"Weight after\"\nstat last(session.before) - last(session.after), \"fluid removed last session (kg)\"\nform session, \"Add session\"\n\"Weight after each session\" head\ntrend session, it.after\neach session as s empty \"No sessions yet\"\n  row card tap edit s swipe remove s\n    stack grow gap 0\n      s.day bold\n      \"Start\" s.start \"for\" s.hours \"h\" faint\n    \"removed\" fixed(s.before - s.after, 1) \"kg\" bold\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c06": {
+  "program": "app \"Egg count\" egg mint\ntable eggs day date = today, n num 0.. \"Eggs collected\", cracked num 0.. = 0\nsetting hens num 1.. = 12 \"Hens\"\nsetting price money = 40 \"Price per egg (Rs)\"\nlet mon = today - weekday(today) + 1\nlet wk = sum(eggs.n where day >= mon)\nrow gap 3\n  stat wk, \"eggs this week\"\n  stat fixed(wk / (hens * 7), 2), \"per hen per day\"\nstat sum(eggs where day >= mon, (it.n - it.cracked) * price), \"income this week (Rs)\"\nform eggs, \"Add day\"\n\"Eggs per day\" head\ndaybars last 14 days, sum(eggs.n where day = it)\nremind \"Enter today's eggs\" at 20:00\nlist eggs by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c07": {
+  "program": "app \"Mehndi bookings\" pen plum\ntable booking bride text, event date, people num 1..50 \"Hands / people\", price money, advance money = 0, travel bool \"Travel needed\"\nstat sum(booking, it.price - it.advance), \"total balance due\"\n\"Upcoming this month:\" count(booking where event >= today and event <= today + 30) faint\nform booking, \"Add booking\"\neach booking where event >= today sort it.event empty \"No upcoming bookings\"\n  row card tap edit it\n    stack grow gap 0\n      it.bride bold\n      it.event \"for\" it.people faint\n      if it.travel\n        \"Travel needed\" faint color warn\n    stack gap 0 align end\n      it.price bold\n      \"balance\" it.price - it.advance faint\nlist booking\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c08": {
+  "program": "app \"Rest timer\" timer ocean\ntable setdone\nstate ends when = now\nstate going bool = no\nstate secs dur = 90s\nwhen going and now >= ends set going = no then notify \"Rest over, next set\"\nrow gap 1\n  button \"60 s\" tap set secs = 60s then set ends = now + 60s then set going = yes\n  button \"90 s\" tap set secs = 90s then set ends = now + 90s then set going = yes\n  button \"120 s\" tap set secs = 120s then set ends = now + 120s then set going = yes\n  button \"150 s\" tap set secs = 150s then set ends = now + 150s then set going = yes\ntext if(going, max(ends - now, 0s), secs) huge align center\nrow gap 1\n  button \"Set done\" tap add setdone\n  button \"Stop\" tap set going = no\nstat count(setdone today), \"sets done today\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c09": {
+  "program": "app \"Zakat\" coin mint\nstate gold num = 0\nstate gold_rate money = 0\nstate silver num = 0\nstate silver_rate money = 0\nstate cash money = 0\nlet total = gold * gold_rate + silver * silver_rate + cash\nlet nisab = 52.5 * silver_rate\nstack card gap 2\n  field gold \"Gold (tola)\"\n  field gold_rate \"Gold rate per tola\"\n  field silver \"Silver (tola)\"\n  field silver_rate \"Silver rate per tola\"\n  field cash \"Cash at home and savings\"\n\"Total wealth\" total head\nstat total * 0.025, \"zakat due (2.5 percent)\"\nrow gap 3\n  stat gold * gold_rate * 0.025, \"gold zakat\"\n  stat silver * silver_rate * 0.025, \"silver zakat\"\n  stat cash * 0.025, \"cash zakat\"\nif silver_rate > 0\n  if total >= nisab\n    \"Above nisab (52.5 tola silver = \" nisab \"): zakat is due\" color good\n  else\n    \"Below nisab (\" nisab \"): no zakat due\" color warn\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-c10": {
+  "program": "app \"Tuition\" school plum\ntable student name text, class text, fee money \"Fee per month\", comes pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, status pick Waiting was Unpaid|Paid = Waiting\nstate show pick All|Waiting = All\nrow gap 3\n  stat sum(student.fee), \"monthly fee income\"\n  stat sum(student where status = Paid, it.fee), \"received\"\nform student, \"Add student\"\nchoice show\neach student where show = All or status = Waiting sort it.name empty \"No students yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.name bold\n      \"Class\" it.class \"on\" it.comes faint\n    it.fee bold\n    button it.status fill if(it.status = Paid, good, warn) tap set it.status = if(it.status = Paid, Waiting, Paid)\n\"Waiting this month\" head\neach student where status = Waiting\n  text it.name it.fee\nbutton \"Start new month\" tap set all student.status = Waiting\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k01": {
+  "program": "app \"Zakat\" coin mint\nstate gold num = 0\nstate gold_rate money = 0\nstate silver num = 0\nstate silver_rate money = 0\nstate cash money = 0\nlet total = gold * gold_rate + silver * silver_rate + cash\nlet nisab = 52.5 * silver_rate\nstack card gap 2\n  field gold \"Gold (tola)\"\n  field gold_rate \"Gold rate per tola\"\n  field silver \"Silver (tola)\"\n  field silver_rate \"Silver rate per tola\"\n  field cash \"Cash at home and savings\"\n\"Total wealth\" total head\nstat total * 0.025, \"zakat due (2.5 percent)\"\nif silver_rate > 0\n  if total >= nisab\n    \"Above nisab (52.5 tola silver = \" nisab \"): zakat is due\" color good\n  else\n    \"Below nisab (\" nisab \"): no zakat due\" color warn\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k02": {
+  "program": "app \"Tile counter\" grid ocean\nstate len num = 12\nstate wid num = 10\nstate tw num = 24\nstate th num = 24\nstate per num = 4\nsetting waste num 0..50 = 10 \"Wastage (percent)\"\nlet raw = len * wid * 144 / (tw * th)\nlet tiles = 0 - floor(0 - raw * (1 + waste / 100))\nstack card gap 2\n  field len \"Room length (ft)\"\n  field wid \"Room width (ft)\"\n  field tw \"Tile width (in)\"\n  field th \"Tile length (in)\"\n  field per \"Tiles per box\"\nstat tiles, join(\"tiles to buy, incl. \", waste, \"% wastage\")\n\"Boxes:\" 0 - floor(0 - tiles / per) bold\n\"Floor area\" len * wid \"sq ft\" faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k03": {
+  "program": "app \"Cloth needed\" tag plum\nstate height num = 66\nstate chest num = 38\nstate sleeve num = 24\nstate style pick Wide|Slim = Wide\nlet kameez = 2 * (height * 0.58 + 4) + 2 * (sleeve + 2) + if(chest > 44, 12, 0)\nlet shalwar = 2 * (height * 0.58) + if(style = Wide, 36, 12)\nstack card gap 2\n  field height \"Height (inches)\"\n  field chest \"Chest (inches)\"\n  field sleeve \"Sleeve length (inches)\"\n  \"Shalwar style\" faint\n  choice style\nstat fixed((kameez + shalwar) * 0.0254, 2), \"metres of cloth (estimate)\"\nrow gap 3\n  stat fixed(kameez * 0.0254, 2), \"kameez (m)\"\n  stat fixed(shalwar * 0.0254, 2), \"shalwar (m)\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k04": {
+  "program": "app \"Trip fuel split\" car ocean\nstate dist num = 300\nstate kmpl num = 12\nstate price money = 270\nstate people num = 4\nstate round bool = no\nstack card gap 2\n  field dist \"Distance (km)\"\n  field kmpl \"Car km per litre\"\n  field price \"Petrol price per litre\"\n  field people \"People sharing\"\n  \"Round trip\" faint\n  toggle round\nlet km = dist * if(round, 2, 1)\nlet cost = km / kmpl * price\nstat cost, \"total fuel cost\"\nstat cost / people, \"per person\"\n\"Distance driven\" km \"km,\" fixed(km / kmpl, 1) \"litres\" faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k05": {
+  "program": "app \"Recipe scaler\" food mint\ntable ingredient name text, amount num 0.., unit text? \"Unit\"\nstate orig num = 4\nstate want num = 6\nrow gap 2\n  field orig \"Recipe serves\"\n  field want \"I want to serve\"\n\"Multiply everything by\" fixed(want / orig, 2) head\neach ingredient as i empty \"Add ingredients below\"\n  row card tap edit i swipe remove i\n    i.name grow\n    fixed(i.amount * want / orig, 1) i.unit bold\nform ingredient, \"Add ingredient\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k06": {
+  "program": "app \"Bill estimator\" bolt slate\nstate units num = 250\nlet s1 = min(units, 100) * 7\nlet s2 = clamp(units - 100, 0, 100) * 11\nlet s3 = max(units - 200, 0) * 20\nlet energy = s1 + s2 + s3\nfield units \"Units used this month\"\nstat round(energy * 1.17), \"total bill with 17% GST (Rs)\"\n\"First 100 units at 7:\" s1 faint\n\"Next 100 units at 11:\" s2 faint\n\"Above 200 units at 20:\" s3 faint\n\"Energy charges\" energy \"+ GST\" round(energy * 0.17) faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k07": {
+  "program": "app \"Paracetamol dose\" pill ocean\nstate kg num = 10\nfield kg \"Child weight (kg)\"\nstat kg * 15, \"dose in mg (15 mg per kg)\"\nstat fixed(kg * 15 / 120 * 5, 1), \"syrup in ml (120 mg per 5 ml)\"\n\"Check the dose with a doctor or pharmacist before giving it.\" faint color warn\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k08": {
+  "program": "app \"Tola converter\" scale mint\nstate tola num = 1\nstate grams num = 0\nstate price money = 0\nrow gap 2\n  field tola \"Tola\"\n  field grams \"Grams\"\n\"Tola to grams\" head\nstat fixed(tola * 11.6638, 3), \"grams\"\nrow gap 3\n  stat fixed(tola * 12, 2), \"masha\"\n  stat fixed(tola * 96, 1), \"ratti\"\n\"Grams to tola\" head\nstat fixed(grams / 11.6638, 4), \"tola\"\nrow gap 3\n  stat fixed(grams / 11.6638 * 12, 3), \"masha\"\n  stat fixed(grams / 11.6638 * 96, 2), \"ratti\"\n\"1 tola = 12 masha = 96 ratti = 11.6638 g\" faint\nfield price \"Gold price per tola\"\nstat tola * price, \"value of the tola entered\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k09": {
+  "program": "app \"Loan EMI\" money slate\nstate amount money = 500000\nstate rate num = 15\nstate months num = 36\nlet r = rate / 1200\nlet emi = if(r = 0, amount / months, amount * r * pow(1 + r, months) / (pow(1 + r, months) - 1))\nstack card gap 2\n  field amount \"Loan amount\"\n  field rate \"Yearly interest rate (percent)\"\n  field months \"Months\"\nstat round(emi), \"monthly payment\"\nrow gap 3\n  stat round(emi * months - amount), \"total interest\"\n  stat round(emi * months), \"total repayment\"\n",
+  "expressible": "partial",
+  "dropped": "fetching today's bank rates (no network in v0); the rate is typed",
+  "musts_met": "all"
+ },
+ "w1-k10": {
+  "program": "app \"Meeting time\" clock ocean\nstate city pick Islamabad|London|New_York = Islamabad\nstate t time = 9:00\nstate bst bool = no\nstate edt bool = no\nlet off_src = if(city = Islamabad, 5, if(city = London, if(bst, 1, 0), if(edt, -4, -5)))\nlet utc = hour(t) - off_src\nlet shift_ldn = utc + if(bst, 1, 0)\nlet shift_ny = utc + if(edt, -4, -5)\nlet shift_isb = utc + 5\nlet m = if(minute(t) < 10, join(\"0\", minute(t)), join(minute(t)))\n\"Time is in\" faint\nchoice city\nfield t \"Time\"\ntoggle bst\n\"London on summer time\" faint\ntoggle edt\n\"New York on summer time\" faint\ndef zone name text, h num\n  row card\n    text name bold grow\n    text join(h % 24, \":\", m) big\n    text if(floor(h / 24) > 0, \"next day\", if(floor(h / 24) < 0, \"previous day\", \"\")) faint\nzone \"Islamabad\", shift_isb\nzone \"London\", shift_ldn\nzone \"New York\", shift_ny\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k11": {
+  "program": "app \"Paint litres\" pen ocean\nstate len num = 14\nstate wid num = 12\nstate high num = 10\nstate doors num = 2\nstate windows num = 1\nstate coats num = 2\nsetting cover num 10.. = 100 \"Sq ft per litre\"\nlet walls = 2 * (len + wid) * high - doors * 21 - windows * 15\nlet litres = walls * coats / cover\nstack card gap 2\n  field len \"Length (ft)\"\n  field wid \"Width (ft)\"\n  field high \"Height (ft)\"\n  field doors \"Doors\"\n  field windows \"Windows\"\n  field coats \"Coats\"\nstat 0 - floor(0 - litres), \"litres of emulsion to buy\"\n\"Paintable wall area\" walls \"sq ft (door 21, window 15)\" faint\n\"Exact need\" fixed(litres, 1) \"litres\" faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k12": {
+  "program": "app \"Gold price\" coin plum\nstate tola num = 1\nstate karat pick K18|K21|K22|K24 = K22\nstate rate money = 0\nstate making money = 0\nlet purity = if(karat = K18, 18, if(karat = K21, 21, if(karat = K22, 22, 24))) / 24\nfield tola \"Weight (tola)\"\n\"Karat\" faint\nchoice karat\nfield rate \"Today's 24k rate per tola\"\nfield making \"Making charges per tola\"\nstat tola * rate * purity + tola * making, \"total price\"\n\"Gold value\" tola * rate * purity faint\n\"Making\" tola * making faint\n\"Purity\" fixed(purity * 100, 1) \"percent\" faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k13": {
+  "program": "app \"BMI\" scale ocean\nstate ft num = 5\nstate inch num = 8\nstate kg num = 70\nlet m = (ft * 12 + inch) * 0.0254\nlet bmi = kg / (m * m)\nlet cat = if(bmi < 18.5, \"Underweight\", if(bmi < 25, \"Normal\", if(bmi < 30, \"Overweight\", \"Obese\")))\nstack card gap 2\n  field ft \"Height (feet)\"\n  field inch \"Height (inches)\"\n  field kg \"Weight (kg)\"\nstat fixed(bmi, 1), \"BMI\"\ntext cat head color if(bmi >= 18.5 and bmi < 25, good, warn)\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k14": {
+  "program": "app \"Tank filler\" drop ocean\nstate l num = 4\nstate w num = 3\nstate h num = 3\nstate pump num = 20\nlet litres = l * w * h * 28.3168\nstack card gap 2\n  field l \"Length (ft)\"\n  field w \"Width (ft)\"\n  field h \"Height (ft)\"\n  field pump \"Pump (litres per minute)\"\nstat round(litres), \"litres the tank holds\"\nstat fixed(litres / pump, 1), \"minutes to fill\"\n\"Volume\" fixed(l * w * h, 1) \"cubic feet\" faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-k15": {
+  "program": "app \"Bill split\" food mint\nstate bill money = 0\nstate gst num = 16\nstate svc num = 10\nstate people num = 4\nstack card gap 2\n  field bill \"Restaurant bill\"\n  field gst \"GST (percent)\"\n  field svc \"Service (percent)\"\n  field people \"People\"\nlet total = bill * (1 + (gst + svc) / 100)\nstat round(total), \"total with tax and service\"\nstat round(total / people), \"per person\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r01": {
+  "program": "app \"Plank intervals\" timer ocean\nstate round num = 1\nstate resting bool = no\nstate going bool = no\nstate ends when = now\nsetting work dur = 40s \"Hold\"\nsetting rest dur = 20s \"Rest\"\nwhen going and now >= ends and round >= 6 and not resting set going = no then notify \"All 6 rounds done\"\nwhen going and now >= ends and not resting and round < 6 set resting = yes then set ends = now + rest\nwhen going and now >= ends and resting set resting = no then set round = round + 1 then set ends = now + work\n\"Round\" round \"of 6\" head\ntext if(going, if(resting, \"Rest\", \"Hold\"), \"Ready\") big color if(resting, good, accent)\ntext if(going, max(ends - now, 0s), work) big\nrow gap 1\n  button \"Start\" tap set round = 1 then set resting = no then set ends = now + work then set going = yes\n  button \"Stop\" tap set going = no\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r02": {
+  "program": "app \"Tea timer\" cup mint\nstate secs dur = 4m\nstate kind pick Green|Black|Doodh_patti = Black\nstate ends when = now\nstate going bool = no\nwhen going and now >= ends set going = no then notify \"Your tea is ready\"\nrow gap 1\n  button \"Green 2 min\" fill if(kind = Green, accent, soft) tap set kind = Green then set secs = 2m then set going = no\n  button \"Black 4 min\" fill if(kind = Black, accent, soft) tap set kind = Black then set secs = 4m then set going = no\n  button \"Doodh patti 6 min\" fill if(kind = Doodh_patti, accent, soft) tap set kind = Doodh_patti then set secs = 6m then set going = no\ntext if(going, max(ends - now, 0s), secs) huge align center\nbutton \"Start\" large tap set ends = now + secs then set going = yes\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r03": {
+  "program": "app \"Tasbeeh\" beads mint\ntable zikr\nstate n num = 0\nstate target num = 33\nwhen n > 0 and n = target notify \"Target reached\"\nrow gap 1\n  button \"33\" fill if(target = 33, accent, soft) tap set target = 33\n  button \"99\" fill if(target = 99, accent, soft) tap set target = 99\n  button \"100\" fill if(target = 100, accent, soft) tap set target = 100\ndraw width 240 tap set n = n + 1 then add zikr\n  circle 44 stroke soft thick 8\n  arc 44, 0, 360 * min(n, target) / target stroke if(n >= target, good, accent) thick 8\n  label 50, 50, n big\nif n >= target\n  \"Target of\" target \"reached\" head color good\nbutton \"Reset\" tap set n = 0\n\"Total count ever\" count(zikr) faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r04": {
+  "program": "app \"Rest timer\" timer ocean\ntable setdone\nstate ends when = now\nstate going bool = no\nstate secs dur = 90s\nwhen going and now >= ends set going = no then notify \"Rest over, next set\"\nrow gap 1\n  button \"60 s\" tap set secs = 60s then set ends = now + 60s then set going = yes\n  button \"90 s\" tap set secs = 90s then set ends = now + 90s then set going = yes\n  button \"120 s\" tap set secs = 120s then set ends = now + 120s then set going = yes\ntext if(going, max(ends - now, 0s), secs) huge align center\nrow gap 1\n  button \"Set done\" tap add setdone\n  button \"Stop\" tap set going = no\nstat count(setdone today), \"sets done today\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r05": {
+  "program": "app \"Baby feeds\" baby plum\ntable feed side pick Left|Right, len dur\nstate going bool = no\nstate side pick Left|Right = Left\nstate started when = now\nstat last(feed.side), \"last fed from\"\nif going\n  text now - started big align center\n  button \"Stop and save\" large tap add feed side = side, len = now - started then set going = no\nelse\n  row gap 1\n    button \"Left\" large tap set side = Left then set started = now then set going = yes\n    button \"Right\" large tap set side = Right then set started = now then set going = yes\n\"Average feed\" avg(feed.len) faint\nlist feed by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r06": {
+  "program": "app \"Chess clock\" board ink\nstate a dur = 10m\nstate b dur = 10m\nstate turn num = 0\nevery 1s if turn = 1 and a > 0s set a = a - 1s\nevery 1s if turn = 2 and b > 0s set b = b - 1s\nwhen a <= 0s and turn = 1 set turn = 0\nwhen b <= 0s and turn = 2 set turn = 0\n\"Tap your side after your move\" faint align center\nbox card fill if(turn = 2, accent, soft) height 160 tap set turn = 1\n  text a huge align center\n  text if(a <= 0s, \"Player 1 lost on time\", \"Player 1\") align center\nbox card fill if(turn = 1, accent, soft) height 160 tap set turn = 2\n  text b huge align center\n  text if(b <= 0s, \"Player 2 lost on time\", \"Player 2\") align center\nbutton \"Reset\" tap set a = 10m then set b = 10m then set turn = 0\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r07": {
+  "program": "app \"Screen time\" phone ocean\ntable use kid pick Kid_1|Kid_2, spent dur\nstate cur pick Nobody|Kid_1|Kid_2 = Nobody\nstate st when = now\nsetting allowance dur = 90m \"Daily allowance\"\nlet left(sp dur, on bool) = max(allowance - sp - if(on, now - st, 0s), 0s) / 1m\ndef kidrow name text, mins num, on bool, go act, stop act\n  stack card gap 1\n    row gap 2 align center\n      text name bold grow\n      text mins big\n      text \"min left\" faint\n    if on\n      button \"Stop\" tap stop\n    else\n      button \"Start\" tap go\nkidrow \"Kid 1\", left(sum(use.spent today where kid = Kid_1), cur = Kid_1), cur = Kid_1, set st = now then set cur = Kid_1, add use kid = Kid_1, spent = now - st then set cur = Nobody\nkidrow \"Kid 2\", left(sum(use.spent today where kid = Kid_2), cur = Kid_2), cur = Kid_2, set st = now then set cur = Kid_2, add use kid = Kid_2, spent = now - st then set cur = Nobody\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r08": {
+  "program": "app \"Eye rest\" eye mint\ntable breakdone\nstate on bool = no\nremind \"Look away for 20 seconds\" every 20m from 9:00 to 21:00 if on\ntoggle on\n\"Reminders every 20 minutes\" faint\ntimer 20s, \"Look away\", add breakdone then notify \"Break done\"\nstat count(breakdone today), \"breaks taken today\"\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r09": {
+  "program": "app \"Morning routine\" sun mint\ntable stepdone step pick Wake_up|Wudu|Fajr|Quran_10_min|Exercise|Shower|Breakfast\nlet full(d date) = count(stepdone on d) = 7\nlet off = if(full(today), 0, 1)\nlet run(k num) = count(1..k, full(today - it + 1 - off)) = k\nlet streak_days = count(1..60, run(it))\nstat streak_days, \"day streak of full mornings\"\ngoal count(stepdone today), 7, \"done today\"\neach options stepdone.step as s\n  row card\n    s grow\n    toggle stepdone where step = s\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r10": {
+  "program": "app \"Pomodoro\" timer ink\nstate phase pick Work|Break|Long = Work\nstate round num = 1\nstate held dur = 25m\nstate ends when = now\nstate going bool = no\nwhen going and phase = Work and round < 4 and now >= ends set phase = Break then set ends = now + 5m then notify \"Break time\"\nwhen going and phase = Work and round >= 4 and now >= ends set phase = Long then set ends = now + 15m then notify \"Long break\"\nwhen going and phase = Break and now >= ends set phase = Work then set round = round + 1 then set ends = now + 25m then notify \"Back to work\"\nwhen going and phase = Long and now >= ends set phase = Work then set round = 1 then set ends = now + 25m then notify \"New cycle\"\n\"Round\" round \"of 4\" head align center\ntext phase color if(phase = Work, accent, good) align center\ntext if(going, max(ends - now, 0s), held) huge align center\nrow gap 1\n  if going\n    button \"Pause\" tap set held = ends - now then set going = no\n  else\n    button \"Start\" tap set ends = now + held then set going = yes\n  button \"Reset\" tap set going = no then set phase = Work then set round = 1 then set held = 25m\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r11": {
+  "program": "app \"Jog laps\" run ocean\ntable lap\nsetting lap_len num 50.. = 400 \"Lap length (m)\"\nbutton \"+1 lap\" large tap add lap\nstat count(lap) * lap_len, \"metres covered\"\n\"Laps\" count(lap) \"=\" fixed(count(lap) * lap_len / 1000, 2) \"km\" faint\nrow gap 1\n  button \"Undo last lap\" tap remove last(lap)\n  button \"Reset\" tap remove all lap\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r12": {
+  "program": "app \"Egg timer\" egg mint\nstate secs dur = 8m\nstate kind pick Soft|Medium|Hard = Medium\nstate ends when = now\nstate going bool = no\nwhen going and now >= ends set going = no then notify \"Eggs are done. Take them out.\"\nrow gap 1\n  button \"Soft 6 min\" fill if(kind = Soft, accent, soft) tap set kind = Soft then set secs = 6m then set going = no\n  button \"Medium 8 min\" fill if(kind = Medium, accent, soft) tap set kind = Medium then set secs = 8m then set going = no\n  button \"Hard 11 min\" fill if(kind = Hard, accent, soft) tap set kind = Hard then set secs = 11m then set going = no\ntext if(going, max(ends - now, 0s), secs) huge align center\nbutton \"Start\" large tap set ends = now + secs then set going = yes\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r13": {
+  "program": "app \"Dhikr counters\" beads mint\ntable zikr phrase pick Subhanallah|Alhamdulillah|Allahu_Akbar|La_ilaha_illallah|Astaghfirullah\nsetting target num = 33 \"Target for each\"\neach options zikr.phrase as p\n  row card gap 2 align center tap add zikr phrase = p\n    text p bold grow\n    text count(zikr where phrase = p) big color if(count(zikr where phrase = p) >= target, good, ink)\n    button \"+1\" tap add zikr phrase = p\nbutton \"Reset all\" tap remove all zikr\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r14": {
+  "program": "app \"Stretch routine\" walk mint\nstate idx num = 0\nstate going bool = no\nstate ends when = now\nlet cur = if(idx = 0, \"Neck roll\", if(idx = 1, \"Shoulder circles\", if(idx = 2, \"Chest opener\", if(idx = 3, \"Triceps stretch\", if(idx = 4, \"Side bend\", if(idx = 5, \"Hamstring reach\", if(idx = 6, \"Quad stretch\", \"Calf stretch\")))))))\nwhen going and now >= ends and idx < 7 set idx = idx + 1 then set ends = now + 30s\nwhen going and now >= ends and idx >= 7 set going = no then set idx = 0 then notify \"Stretch routine done\"\ntext cur head align center\ntext if(going, max(ends - now, 0s), 30s) huge align center\ngoal idx + if(going, 1, 0), 8, \"stretches\", \"\"\nrow gap 1\n  button \"Start\" tap set idx = 0 then set ends = now + 30s then set going = yes\n  button \"Stop\" tap set going = no\neach [\"Neck roll\", \"Shoulder circles\", \"Chest opener\", \"Triceps stretch\", \"Side bend\", \"Hamstring reach\", \"Quad stretch\", \"Calf stretch\"]\n  row fill if(going and index = idx, accent, soft) pad 1\n    text index + 1 bold\n    text it grow\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-r15": {
+  "program": "app \"Speech timer\" clock ocean\nstate mins num = 5\nstate held dur\nstate paused bool = no\nstate ends when = now\nstate going bool = no\nlet left = if(going, max(ends - now, 0s), if(paused, held, 1m * mins))\nwhen going and now >= ends set going = no then set paused = no then notify \"Time is up\"\nfield mins \"Minutes\"\nbox card pad 3 fill if(left <= 0s, bad, if(left <= 60s, warn, good))\n  text left huge align center\nrow gap 1\n  if going\n    button \"Pause\" tap set held = ends - now then set paused = yes then set going = no\n  else\n    button \"Start\" tap set ends = now + if(paused, held, 1m * mins) then set going = yes\n  button \"Reset\" tap set going = no then set paused = no\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t01": {
+  "program": "app \"Tailoring orders\" pen plum\ntable order customer text, suit pick Shalwar_kameez|Three_piece|Waistcoat|Sherwani|Other, note long?, due date, price money, advance money = 0, delivered bool\nlet owed = sum(order where delivered = no, it.price - it.advance)\nstat owed, \"still owed to me\"\n\"Due this week:\" count(order where delivered = no and due >= today and due <= today + 7) faint\nform order, \"Add order\"\n\"Who still owes me\" head\neach order where delivered = no and price > advance sort due\n  row card tap edit it\n    stack grow gap 0\n      it.customer bold\n      it.suit faint\n      \"Due\" it.due faint\n    it.price - it.advance bold color bad\n    toggle it.delivered\nlist order\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t02": {
+  "program": "app \"Hive log\" leaf mint\ntable inspection hive num 1..200, day date = today, queen bool, brood num 0..20 unit \"frames\", mites pick None|Few|Many = None\neach 1..12\n  if count(inspection where hive = it) > 0\n    row card\n      \"Hive\" it bold grow\n      \"last checked\" since(inspection where hive = it) \"days ago\" faint\nform inspection, \"Add inspection\"\nlist inspection by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t03": {
+  "program": "app \"Qaza namaz\" mosque mint\ntable prayed prayer pick Fajr|Zuhr|Asr|Maghrib|Isha|Witr\nsetting fajr num 0.. = 1200 \"Fajr missed\"\nsetting zuhr num 0.. = 900 \"Zuhr missed\"\nsetting asr num 0.. = 1000 \"Asr missed\"\nsetting maghrib num 0.. = 800 \"Maghrib missed\"\nsetting isha num 0.. = 700 \"Isha missed\"\nsetting witr num 0.. = 300 \"Witr missed\"\nlet total = fajr + zuhr + asr + maghrib + isha + witr - count(prayed)\nstat total, \"qaza prayers remaining\"\ndef qrow name text, left num, go act\n  row card gap 2 align center\n    text name bold grow\n    text left big\n    button \"-1\" tap go\nqrow \"Fajr\", fajr - count(prayed where prayer = Fajr), add prayed prayer = Fajr\nqrow \"Zuhr\", zuhr - count(prayed where prayer = Zuhr), add prayed prayer = Zuhr\nqrow \"Asr\", asr - count(prayed where prayer = Asr), add prayed prayer = Asr\nqrow \"Maghrib\", maghrib - count(prayed where prayer = Maghrib), add prayed prayer = Maghrib\nqrow \"Isha\", isha - count(prayed where prayer = Isha), add prayed prayer = Isha\nqrow \"Witr\", witr - count(prayed where prayer = Witr), add prayed prayer = Witr\n\"Prayed today\" count(prayed today) faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t04": {
+  "program": "app \"Net sessions\" ball ocean\ntable session day date = today, minutes num 1..600 unit \"min\", kind pick Bowling|Batting, worked text \"What I worked on\"\nstat sum(session.minutes), \"total minutes in nets\"\n\"Minutes per week\" head\nbars 1..8, sum(session.minutes where day >= today - 7 * (8 - it) - weekday(today) + 1 and day < today - 7 * (7 - it) - weekday(today) + 1), join(\"W\", it)\nform session, \"Log session\"\nlist session\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t05": {
+  "program": "app \"Dad insulin\" pill ocean\ntable dose day when = now, units num 0.5..100 unit \"units\", kind pick Fast|Long, sugar num 20..600 unit \"mg/dl\" \"Blood sugar before\"\nstate d new dose\nstat sum(dose.units today), \"units today\"\nstack card gap 2\n  field d\n  button \"Save dose\" large tap save d\neach dose top 10 empty \"No doses yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.day large bold\n      it.kind large\n    it.units huge bold\n    \"sugar\" it.sugar faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t06": {
+  "program": "app \"Bike service\" bike slate\ntable service day date = today, odo num 0.. unit \"km\" \"Odometer\", cost money, work long? \"What was done\"\nstat sum(service.cost), \"spent on service\"\n\"Last service at\" last(service.odo) \"km\" faint\nform service, \"Add service\"\nlist service\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t07": {
+  "program": "app \"Udhaar book\" book mint\ntable entry customer text, kind pick Took|Paid_back, amount money \"Amount (Rs)\", day date = today\nlet pending = sum(entry where kind = Took, it.amount) - sum(entry where kind = Paid_back, it.amount)\nstat pending, \"total pending (Rs)\"\nform entry, \"Add entry\"\n\"Who owes\" head\neach entry by customer\n  row card\n    it.key bold grow\n    sum(it, if(it.kind = Took, it.amount, 0 - it.amount)) bold\nlist entry by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t08": {
+  "program": "app \"Pigeon loft\" paw mint\ntable bird ring text, colour text, gender pick Cock|Hen, partner text? \"Pair partner (ring)\"\ntable clutch bird ref bird, kind pick Egg|Chick, n num 1..4 = 2, day date = today\nstat count(bird), \"birds in the loft\"\nform bird, \"Add bird\"\neach bird empty \"No birds yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.ring bold\n      it.colour it.gender faint\n    \"pair\" it.partner faint\n    \"eggs/chicks\" sum(it.clutch.n) faint\n\"Egg and chick log\" head\nform clutch, \"Log eggs or chicks\"\nlist clutch by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t09": {
+  "program": "app \"Kite stock\" box ocean\ntable item name text, kind pick Patang|Dor|Manjha, size text?, qty num 0.. unit \"pcs\", buy money, sell money\nstat sum(item, it.qty * it.buy), \"stock value at cost\"\n\"Low stock (under 20):\" count(item where qty < 20) color if(count(item where qty < 20) > 0, warn, ink)\nform item, \"Add item\"\neach item sort it.qty\n  row card fill if(it.qty < 20, warn, surface) tap edit it\n    stack grow gap 0\n      it.name bold\n      it.kind it.size faint\n    button \"-\" tap set it.qty = it.qty - 1\n    it.qty bold\n    button \"+\" tap set it.qty = it.qty + 1\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t10": {
+  "program": "app \"Lent books\" book plum\ntable lent title text, who text \"Borrower\", since date = today, back bool \"Returned\"\n\"Still out\" head\neach lent where back = no sort it.since empty \"Everything is back home\"\n  row card\n    stack grow gap 0\n      it.title bold\n      it.who faint\n    text today - it.since \"days\" faint\n    toggle it.back\nform lent, \"Lend a book\"\n\"Returned\" head\neach lent where back = yes\n  row\n    it.title faint grow\n    it.who faint\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t11": {
+  "program": "app \"Solar log\" sun ocean\ntable output day date = today, kwh num 0.. unit \"kWh\", weather pick Sunny|Cloudy|Rainy\nlet mon = today - monthday(today) + 1\nstat max(output.kwh), \"best day so far (kWh)\"\n\"This month\" sum(output.kwh where day >= mon) \"kWh\" faint\nform output, \"Add today's output\"\n\"Last 14 days\" head\ndaybars last 14 days, sum(output.kwh where day = it)\nlist output\n",
+  "expressible": "partial",
+  "dropped": "automatic weather pull (no network in v0); weather is typed by hand",
+  "musts_met": "all"
+ },
+ "w1-t12": {
+  "program": "app \"Dialysis log\" heart ocean\ntable session day date = today, start time, hours num 0.5..12 unit \"h\", before num 20..200 unit \"kg\" \"Weight before\", after num 20..200 unit \"kg\" \"Weight after\", note long? \"Cramps or low BP notes\"\nstat last(session.before) - last(session.after), \"fluid removed last session (kg)\"\nform session, \"Add session\"\n\"Weight after each session\" head\ntrend session, it.after\neach session as s empty \"No sessions yet\"\n  row card tap edit s swipe remove s\n    stack grow gap 0\n      s.day bold\n      \"Start\" s.start \"for\" s.hours \"h\" faint\n      s.note faint\n    \"removed\" fixed(s.before - s.after, 1) \"kg\" bold\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t13": {
+  "program": "app \"Generator fuel\" bolt slate\ntable fill litres num 0.1.., price money \"Price per litre\", hours num 0.. \"Hours it ran\"\nstat fixed(sum(fill.litres) / sum(fill.hours), 2), \"litres of diesel per hour\"\n\"Total fuel cost\" sum(fill, it.litres * it.price) bold\nform fill, \"Add fill\"\nlist fill by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t14": {
+  "program": "app \"Van fees\" bus mint\ntable child name text, fee money \"Monthly fee\"\ntable paid who ref child, ym num\nstate m date = today\nlet k = year(m) * 12 + month(m)\nlet collected = sum(paid where ym = k, it.who.fee)\nmonthnav m\nrow gap 3\n  stat collected, \"collected\"\n  stat sum(child.fee) - collected, \"still to collect\"\nform child, \"Add child\"\neach child\n  row card\n    it.name bold grow\n    it.fee faint\n    toggle it.paid all where ym = k\n\"Not paid this month\" head\neach child empty \"Nobody yet\"\n  if count(it.paid where ym = k) = 0\n    row card\n      it.name grow\n      it.fee bold color bad\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t15": {
+  "program": "app \"Cuttings\" plant mint\ntable cutting plant text, cut date = today \"Date cut\", rooted bool, potted date? \"Date potted\"\nform cutting, \"Add cutting\"\neach cutting sort it.cut desc empty \"No cuttings yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.plant bold\n      text \"Cut\" it.cut \"(\" today - it.cut \"days ago)\" faint\n      \"Potted\" it.potted faint\n    toggle it.rooted\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t16": {
+  "program": "app \"Water changes\" drop ocean\ntable change day date = today, pct num 1..100 unit \"%\" \"Percent changed\", tank pick Big|Small, ph num 0..14, ammonia num 0.. unit \"ppm\"\nremind \"Water change day\" at 9:00 on sun\nrow gap 3\n  each options change.tank as t\n    stack gap 0\n      t bold\n      text last(change.day where tank = t) faint\nform change, \"Log water change\"\nlist change by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t17": {
+  "program": "app \"Starter log\" bread mint\ntable feed fed when = now \"Time\", flour num 1.. unit \"g\", water num 1.. unit \"g\", temp num 0..45 unit \"C\" \"Jar temp\", doubled bool \"Did it double?\"\nstat fixed(last(feed.water) / last(feed.flour), 2), \"last water to flour ratio\"\nform feed, \"Add feeding\"\neach feed as f empty \"No feedings yet\"\n  row card tap edit f swipe remove f\n    stack grow gap 0\n      f.fed bold\n      f.flour \"g flour,\" f.water \"g water\" faint\n      \"ratio\" fixed(f.water / f.flour, 2) f.temp \"C\" faint\n    icon if(f.doubled, \"check\", \"minus\")\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t18": {
+  "program": "app \"Rickshaw\" bus ocean\ntable shift day date = today, earned money, petrol money, hours num 0.5..24\nlet mon = today - weekday(today) + 1\nlet profit = sum(shift, it.earned - it.petrol)\nrow gap 3\n  stat profit, \"total profit\"\n  stat fixed(profit / sum(shift.hours), 0), \"average per hour\"\n\"This week\" sum(shift where day >= mon, it.earned - it.petrol) bold\nform shift, \"Add day\"\n\"Profit per week\" head\nbars 1..8, sum(shift where day >= mon - 7 * (8 - it) and day < mon - 7 * (7 - it), it.earned - it.petrol), join(\"W\", it)\neach shift as s\n  row card tap edit s swipe remove s\n    s.day bold grow\n    \"profit\" s.earned - s.petrol bold\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t19": {
+  "program": "app \"Hajj savings\" mosque mint\ntable deposit amount money, day date = today\nsetting target money = 750000 \"Goal (Rs)\"\ngoal sum(deposit.amount), target, \"saved so far\", \"Rs\"\n\"Left to save\" target - sum(deposit.amount) big\nform deposit, \"Add deposit\"\nlist deposit by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t20": {
+  "program": "app \"Tuition\" school plum\ntable student name text, class text, fee money \"Fee per month\", comes pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, status pick Unpaid|Paid = Unpaid\nrow gap 3\n  stat sum(student.fee), \"monthly fee income\"\n  stat sum(student where status = Paid, it.fee), \"received\"\nform student, \"Add student\"\neach student sort it.name empty \"No students yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.name bold\n      \"Class\" it.class \"on\" it.comes faint\n    it.fee bold\n    button it.status fill if(it.status = Paid, good, warn) tap set it.status = if(it.status = Paid, Unpaid, Paid)\n\"Unpaid this month\" head\neach student where status = Unpaid\n  text it.name it.fee\nbutton \"Start new month\" tap set all student.status = Unpaid\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t21": {
+  "program": "app \"Mehndi bookings\" pen plum\ntable booking bride text, event date, people num 1..50 \"Hands / people\", price money, advance money = 0, travel bool \"Travel needed\"\n\"Upcoming this month:\" count(booking where event >= today and event <= today + 30) faint\nform booking, \"Add booking\"\neach booking where event >= today sort it.event empty \"No upcoming bookings\"\n  row card tap edit it\n    stack grow gap 0\n      it.bride bold\n      it.event \"for\" it.people faint\n      if it.travel\n        \"Travel needed\" faint color warn\n    stack gap 0 align end\n      it.price bold\n      \"balance\" it.price - it.advance faint\nlist booking\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t22": {
+  "program": "app \"Goat feed\" paw mint\ntable feed day date = today, fodder num 0.. unit \"kg\", wanda num 0.. unit \"kg\" \"Concentrate\", cost money\ntable vaccine day date = today, note text? \"Which vaccine\"\nstat sum(feed.cost), \"total feed cost\"\n\"This month\" sum(feed.cost where day >= today - monthday(today) + 1) faint\nform feed, \"Add feed entry\"\nlist feed by day\n\"Vaccinations\" head\nform vaccine, \"Add vaccination date\"\nlist vaccine\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t23": {
+  "program": "app \"Mum BP\" heart ocean\ntable reading period pick Morning|Evening, sys num 50..300 \"Systolic\", dia num 30..200 \"Diastolic\", pulse num 30..250\nstat if(last(reading.sys) > 140 or last(reading.dia) > 90, \"High\", \"OK\"), \"last reading\"\nform reading, \"Add reading\"\n\"Systolic over time\" head\ntrend reading, it.sys\neach reading as r empty \"No readings yet\"\n  row card fill if(r.sys > 140 or r.dia > 90, bad, surface) tap edit r swipe remove r\n    r.period bold grow\n    r.sys \"/\" r.dia bold\n    \"pulse\" r.pulse faint\n",
+  "expressible": "partial",
+  "dropped": "sending readings to the doctor on WhatsApp (no messaging in v0); readings are listed for showing or reading out",
+  "musts_met": "all"
+ },
+ "w1-t24": {
+  "program": "app \"Fish log\" fish ocean\ntable catch day date = today, spot pick River|Lake|Canal, fish text, kg num 0.., bait text\nstat sum(catch.kg), \"total kg caught\"\nform catch, \"Add catch\"\nlist catch by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t25": {
+  "program": "app \"Rent\" home slate\ntable tenant name text, flat text, rent money, due num 1..28 \"Due day\", elec money = 0 \"Electricity share\", paid bool\nlet expected = sum(tenant, it.rent + it.elec)\nlet collected = sum(tenant where paid = yes, it.rent + it.elec)\nrow gap 3\n  stat expected, \"expected\"\n  stat collected, \"collected\"\ngoal collected, expected, \"collected this month\"\nform tenant, \"Add tenant\"\neach tenant sort it.flat empty \"No tenants yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.name bold\n      \"Flat\" it.flat \"due on\" it.due faint\n    it.rent + it.elec bold\n    toggle it.paid\n\"Not paid yet\" head\neach tenant where paid = no\n  text it.name it.rent + it.elec color bad\nbutton \"New month\" tap set all tenant.paid = no\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t26": {
+  "program": "app \"Card orders\" note plum\ntable order customer text, qty num 1.., rate money \"Rate per card\", design text, due date \"Delivery date\"\nstat sum(order, it.qty * it.rate), \"total order value\"\n\"Due within a week:\" count(order where due >= today and due <= today + 7) faint\nform order, \"Add order\"\neach order sort it.due empty \"No orders yet\"\n  row card tap edit it swipe remove it\n    stack grow gap 0\n      it.customer bold\n      it.qty \"cards,\" it.design faint\n      \"Delivery\" it.due faint\n    it.qty * it.rate bold\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t27": {
+  "program": "app \"Machine care\" tool slate\ntable care day date = today, kind pick Oil|Repair, cost money = 0\nstat today - last(care.day where kind = Oil), \"days since last oiling\"\n\"Spent on repairs\" sum(care.cost where kind = Repair) faint\nform care, \"Add entry\"\nlist care by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t28": {
+  "program": "app \"Egg count\" egg mint\ntable eggs day date = today, n num 0.. \"Eggs collected\", cracked num 0.. = 0\nsetting hens num 1.. = 12 \"Hens\"\nsetting price money = 40 \"Price per egg (Rs)\"\nlet mon = today - weekday(today) + 1\nlet wk = sum(eggs.n where day >= mon)\nrow gap 3\n  stat wk, \"eggs this week\"\n  stat fixed(wk / (hens * 7), 2), \"per hen per day\"\nstat sum(eggs where day >= mon, (it.n - it.cracked) * price), \"income this week (Rs)\"\nform eggs, \"Add day\"\n\"Eggs per day\" head\ndaybars last 14 days, sum(eggs.n where day = it)\nlist eggs by day\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t29": {
+  "program": "app \"Quran paras\" book mint\ntable finished para num 1..30\nlet left = 30 - count(finished)\nsetting eid date = 2027-03-10 \"Eid date\"\ngoal count(finished), 30, \"paras finished\"\nrow gap 3\n  stat left, \"paras left\"\n  stat eid - today, \"days till Eid\"\ngrid 2 gap 1\n  each 1..30\n    row card\n      \"Para\" it bold grow\n      last(finished.at where para = it) faint\n      toggle finished all where para = it\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ },
+ "w1-t30": {
+  "program": "app \"Kabari\" scale slate\ntable purchase item pick Iron|Paper|Plastic|Copper, kg num 0.., rate money \"Rate per kg\", seller text?\ntable sale item pick Iron|Paper|Plastic|Copper, kg num 0.., rate money \"Sale rate per kg\"\nlet spent = sum(purchase, it.kg * it.rate)\nlet sold = sum(sale, it.kg * it.rate)\nrow gap 3\n  stat spent, \"total spent\"\n  stat sold, \"total sales\"\nform purchase, \"Add purchase\"\neach purchase as p empty \"No purchases yet\"\n  row card tap edit p swipe remove p\n    stack grow gap 0\n      p.item p.kg \"kg\" bold\n      p.seller faint\n    p.kg * p.rate bold\n\"Selling later\" head\nform sale, \"Add sale\"\neach options purchase.item as o\n  row card\n    o bold grow\n    \"profit\" sum(sale where item = o, it.kg * it.rate) - sum(sale where item = o, it.kg) * sum(purchase where item = o, it.kg * it.rate) / max(sum(purchase.kg where item = o), 1) bold\n",
+  "expressible": "in",
+  "dropped": "",
+  "musts_met": "all"
+ }
+}

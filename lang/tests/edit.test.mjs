@@ -529,3 +529,217 @@ test('UI fuzz: 200 chains through tree and dispatch only (undo groups, drafts ac
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
   assert.ok(r.undos > 50 && r.draftChecks > 100 && r.garbage > 50 && r.reloads > 50);
 });
+
+// ---- round 10: the host clock, block state by identity, at and dates, Undo deltas ----
+test('round 10 S1: the clock belongs to the host: restore keeps it, load takes now, schedules catch up', () => {
+  const S = 'app "T"\ntable log x num\nbutton "plus" tap add log x = 1\n"n" count(log today)\n';
+  const a = load(S, { now: '2026-11-23T10:00:00Z' });
+  const old = a.snapshot();
+  const b = load(a.source, { data: old, now: '2026-11-28T10:00:00Z' });
+  assert.equal(new Date(b.clock).toISOString(), '2026-11-28T10:00:00.000Z');
+  b.restore(old);
+  assert.equal(new Date(b.clock).toISOString(), '2026-11-28T10:00:00.000Z', 'restore never moves the clock');
+  b.dispatch(b.find(n => n.t === 'button').id, 'tap');
+  assert.equal(new Date(b.rows('log')[0].at).toISOString(), '2026-11-28T10:00:00.000Z');
+  const E = 'app "T"\ntable log x num\nevery 1h add log x = 1\n';
+  const c = load(E, { now: '2026-11-23T10:00:00Z' });
+  const d = load(c.source, { data: c.snapshot(), now: '2026-11-23T15:30:00Z' });
+  assert.equal(d.rows('log').length, 5, 'an hourly every caught up 5 times');
+  assert.ok(d.rows('log').every(r => r.at <= d.clock));
+});
+
+test('round 10 S2a: state inside each keeps its value across safe edits (a heading above, an option rename)', () => {
+  const P = (opts, head = '') => `app "T"\ntable cat c pick ${opts}\ntable s n num\n${head}each options cat.c\n  state base num = 0\n  row\n    "b" it base\n    button "inc" tap set base = base + 1\neach s\n  state open bool = no\n  toggle open\n`;
+  const a = load(P('A|B'));
+  const r = a.addRow('s', { n: 1 });
+  a.dispatch(a.findAll(n => n.t === 'button')[1].id, 'tap'); // B's baseline 1
+  a.dispatch(a.find(n => n.t === 'toggle').id, 'tap');
+  const shown = () => [a.findAll(n => n.t === 'text').map(n => n.text).filter(t => t.startsWith('b ')), a.find(n => n.t === 'toggle').on];
+  assert.deepEqual(shown(), [['b A 0', 'b B 1'], true]);
+  a.applyEdit(P('A|B', '"Heading"\n'));
+  assert.deepEqual(shown(), [['b A 0', 'b B 1'], true], 'a line above the each');
+  a.applyEdit(P('A|Beta was B', '"Heading"\n'));
+  assert.deepEqual(shown(), [['b A 0', 'b Beta 1'], true], 'an option renamed');
+  assert.deepEqual(load(a.source, { data: a.snapshot() }).findAll(n => n.t === 'text').map(n => n.text).filter(t => t.startsWith('b ')), ['b A 0', 'b Beta 1']);
+  void r;
+});
+
+test('round 10 S2a: block state saved by line position (before round 10) is migrated at load; state of gone rows is dropped', () => {
+  const S = 'app "T"\ntable s n num\neach s\n  state open bool = no\n  toggle open\n';
+  const a = load(S); const r1 = a.addRow('s', { n: 1 }); const r2 = a.addRow('s', { n: 2 });
+  a.tree();
+  const snap = a.snapshot();
+  const keys = Object.keys(snap.data.state).filter(k => k.startsWith('/'));
+  for (const k of keys) { const v = snap.data.state[k]; delete snap.data.state[k]; snap.data.state[k.replace(/^\/q:s@/, '/n.1@')] = k.includes('@r' + r1.id) ? true : v; }
+  snap.data.state[`/n.1@r999|open`] = true; // a row that is gone
+  const b = load(a.source, { data: snap });
+  assert.deepEqual(b.findAll(n => n.t === 'toggle').map(n => n.on).sort(), [false, true]);
+  assert.ok(!Object.keys(b.data.state).some(k => k.includes('r999')));
+  void r2;
+});
+
+test('round 10 S2b: the added time and dates reject impossible values; the stored value stays', () => {
+  const a = load('app "T"\ntable s d date?, w when?\nlist s\n'); const r = a.addRow('s', {});
+  const t = { table: 's', id: r.id };
+  for (const v of ['', null, NaN, Infinity, 1e20, 'abc']) assert.equal(a.setField(t, 'at', v), false, String(v));
+  for (const v of ['2026-02-30', '2026-13-01', '0000-00-00', '10000-01-01']) assert.equal(a.setField(t, 'd', v), false, v);
+  for (const v of [1e20, -8640000000000001, 'x']) assert.equal(a.setField(t, 'w', v), false, String(v));
+  assert.equal(a.setField(t, 'd', '2026-02-28'), true);
+  assert.equal(a.rows('s')[0].at, r.at);
+});
+
+test('round 10 S3: Undo clears the edge of a when that is false again; an operation that changes nothing records no step', () => {
+  const a = load('app "T"\ntable log x num\nsetting g num 0..10 = 5\nbutton "b" tap add log x = 1\nwhen count(log) > 1 notify "many"\n');
+  const tap = () => a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  tap(); tap();
+  assert.equal(a.log.filter(e => e.kind === 'notify').length, 1);
+  a.undo(); tap();
+  assert.equal(a.log.filter(e => e.kind === 'notify').length, 2, 'it may notify again after Undo made it false');
+  const n = a.undoStack.length;
+  a.setField('g', null, 5);
+  assert.equal(a.undoStack.length, n, 'setting the same value records no step');
+});
+
+// ---- round 11: statement identity, caches by generation, exact catch-up ----
+const tapT = (a, t) => a.dispatch(a.find(n => (n.t === 'button' && n.text === t) || (n.t === 'toggle')).id, 'tap');
+test('round 11 A1: adding or removing an unrelated line never re-fires a true when (also after a restart)', () => {
+  const S = h => `app "W"\ntable log x num\n${h}button "b" tap add log x = 1\nwhen count(log) > 0 add log x = 9 then notify "first"\n"n" count(log)\n`;
+  const a = load(S('')); tapT(a, 'b');
+  assert.equal(a.rows('log').length, 2);
+  a.applyEdit(S('"Heading"\n')); a.tick(1000);
+  a.applyEdit(S('"Heading"\n"Second"\n')); a.tick(1000);
+  const b = load(a.source, { data: a.snapshot(), now: a.clock }); b.tick(1000);
+  assert.deepEqual([a.rows('log').length, b.rows('log').length, a.log.filter(e => e.kind === 'notify').length], [2, 2, 1]);
+});
+
+test('round 11 A2: a running timer keeps running when another timer or a line is inserted above it', () => {
+  const a = load('app "T"\ntimer 2m, "Two"\n');
+  tapT(a, 'Start'); a.tick(30000);
+  a.applyEdit('app "T"\ntimer 5m, "Five"\n"Heading"\ntimer 2m, "Two"\n'); a.tick(30000);
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === '1:00'), JSON.stringify(a.findAll(n => n.t === 'text').map(n => n.text)));
+});
+
+test('round 11 A3: two each blocks over one table with a same-named state are two states; was inside one touches only it', () => {
+  const P = n => `app "B"\ntable s x num\neach s\n  state ${n} num = 0\n  "A" ${n}\n  button "a" tap set ${n} = ${n} + 1\neach s\n  state n num = 0\n  "B" n\n  button "b" tap set n = n + 10\n`;
+  const a = load(P('n')); a.addRow('s', { x: 1 });
+  tapT(a, 'a'); tapT(a, 'b');
+  const shown = () => a.findAll(n => n.t === 'text').map(n => n.text);
+  assert.deepEqual(shown(), ['A 1', 'B 10']);
+  a.applyEdit(P('m was n').replace(/"A" m was n/, '"A" m').replace(/set m was n = m was n \+ 1/, 'set m = m + 1'));
+  assert.deepEqual(shown(), ['A 1', 'B 10']);
+});
+
+test('round 11 A4/A5: restore migrates old keys like load; an idle timer shows the length after an edit or a setting change', () => {
+  const S = 'app "F"\nsetting work dur = 25m\ntimer work, "Focus"\n';
+  const a = load(S);
+  a.setField('work', null, 1800);
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === '30:00'));
+  a.applyEdit('app "F"\nsetting work dur = 25m\ntimer 10m, "Focus"\n');
+  assert.ok(a.findAll(n => n.t === 'text').some(n => n.text === '10:00'));
+  const T = 'app "T"\ntable s n num\neach s\n  state open bool = no\n  toggle open\n';
+  const b = load(T); b.addRow('s', { n: 1 }); tapT(b, ''); const old = b.snapshot();
+  const k = Object.keys(old.data.state).find(x => x.startsWith('/')); old.data.state['/n.1@r1|open'] = old.data.state[k]; delete old.data.state[k];
+  b.addRow('s', { n: 2 });
+  assert.equal(b.restore(old).ok, true);
+  assert.equal(b.find(n => n.t === 'toggle').on, true, 'restore converts a key by line position, as load does');
+});
+
+test('round 11 B: caches follow the data generation; handlers hold ids; tap, undo, tap, tap with no tree in between', () => {
+  const a = load('app "R"\ntable item q text, n num = 0\ntable ans item ref item\neach ans as r\n  r.item.q\n  r.item.n\n  button "inc" tap set r.item.n = r.item.n + 1\n', { freezeTree: true });
+  const it = a.addRow('item', { q: 'one' }); a.addRow('ans', { item: it.id });
+  const id = a.find(n => n.t === 'button').id;
+  a.setField({ table: 'item', id: it.id }, 'q', 'two'); a.undo();
+  assert.deepEqual(a.findAll(n => n.t === 'text').map(n => n.text), ['one', '0']);
+  a.dispatch(id, 'tap'); a.undo(); a.dispatch(id, 'tap'); a.dispatch(id, 'tap');
+  assert.equal(a.rows('item')[0].n, 2);
+  const t = a.tree(); assert.throws(() => { t.children.push(1); }, TypeError, 'a frozen tree cannot be changed by a caller');
+});
+
+test('round 11 C: catch-up matches step-by-step ticks; Undo cancels an after; time-dependent every keeps firing', () => {
+  const S = 'app "D"\ntable t n num\nevery 1h if count(t today) < 3 add t n = 1\n"n" count(t)\n';
+  const x = load(S), y = load(S);
+  x.tick(5 * 86400000); for (let i = 0; i < 120; i++) y.tick(3600000);
+  assert.deepEqual([x.rows('t').length, JSON.stringify(x.data)], [y.rows('t').length, JSON.stringify(y.data)]);
+  const a = load('app "A"\ntable log x num\nbutton "b" tap add log x = 1 then after 90s add log x = 2\n');
+  tapT(a, 'b'); a.undo(); a.tick(120000);
+  assert.equal(a.rows('log').length, 0, 'the after of an undone step does not run');
+});
+
+test('round 11 D: time, dur and moment checks; an invalid now; revert ends a change group', () => {
+  const a = load('app "T"\ntable s t time?, d dur?\nlist s\n'); const r = a.addRow('s', {});
+  for (const v of ['25:00', '12:60']) assert.equal(a.setField({ table: 's', id: r.id }, 't', v), false);
+  for (const v of [-1, Infinity]) assert.equal(a.setField({ table: 's', id: r.id }, 'd', v), false);
+  assert.equal(a.setField({ table: 's', id: r.id }, 'at', Date.parse('1900-01-01T00:00:00Z')), true);
+  assert.equal(load('app "T"\n', { now: 'nope' }).ok, false);
+  const b = load('app "G"\nsetting g num = 1\nfield g\n'); const g = () => b.find(n => n.t === 'input');
+  b.dispatch(g().id, 'change', 2); b.revert(); b.dispatch(g().id, 'change', 3); b.undo();
+  assert.equal(b.data.settings.g, 2, 'the change after a revert is its own step');
+});
+
+test('lockstep fuzz: 150 chains (reload, undo, twin and tick checks)', async () => {
+  const { runLockstep } = await import('./fuzz-lockstep.mjs');
+  const r = runLockstep(150, 3);
+  assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
+  assert.ok(r.programs >= 30 && r.twinChecks > 50 && r.tickChecks > 50);
+});
+
+// ---- round 12: identity matching on the statements as written ----
+const shownT = a => a.findAll(n => n.t === 'text').map(n => n.text);
+test('round 12 S1: timers keep their instances when swapped, inserted above, deleted or rotated (28-pomodoro)', () => {
+  const src = readFileSync(new URL('../examples/28-pomodoro.mo', import.meta.url), 'utf8');
+  const a = load(src);
+  a.dispatch(a.findAll(n => n.t === 'button' && n.text === 'Start')[1].id, 'tap'); // the Break timer
+  a.tick(60000);
+  const L = src.split('\n'), i = L.findIndex(l => l.startsWith('timer work')), j = L.findIndex(l => l.startsWith('timer 5m'));
+  [L[i], L[j]] = [L[j], L[i]];
+  assert.notEqual(a.applyEdit(L.join('\n')).verdict, 'refused');
+  a.tick(5 * 60000);
+  assert.equal(a.rows('session').length, 0, 'the Break timer ended; Focus never ran, so no session');
+  assert.equal(a.log.filter(l => l.text === 'Take a short break').length, 0);
+  const t = load('app "T"\ntimer 2m, "A"\n'); t.dispatch(t.find(n => n.text === 'Start').id, 'tap'); t.tick(30000);
+  for (const next of ['app "T"\ntimer 9m, "Z"\ntimer 2m, "A"\n', 'app "T"\ntimer 2m, "A"\ntimer 9m, "Z"\n', 'app "T"\ntimer 2m, "A"\n']) { t.applyEdit(next); t.tick(10000); }
+  assert.ok(shownT(t).includes('1:00'), JSON.stringify(shownT(t)));
+});
+
+test('round 12 S1: form drafts follow their form when forms are duplicated, added above or swapped', () => {
+  const P = forms => `app "F"\ntable a x text?\ntable b y text?\n${forms}`;
+  const a = load(P('form a\nform b\n'));
+  const fb = () => a.findAll(n => n.t === 'form').find(f => f.table === 'b');
+  a.dispatch(fb().fields[0].id, 'change', 'typed');
+  for (const f of ['form a\nform a\nform b\n', 'form b\nform a\n', '"Top"\nform b\nform a\n']) { a.applyEdit(P(f)); assert.equal(fb().fields[0].value, 'typed', f); }
+});
+
+test('round 12 S2: each blocks: swapped ones keep their states; sort, where, top and a table rename keep the id', () => {
+  const P = (one, two, t = 's') => `app "E"\ntable ${t} n num\n${one}\n${two}\n`;
+  const A = 'each s\n  state x num = 0\n  "x" x\n  button "x" tap set x = x + 1', B = 'each s\n  state y num = 0\n  "y" y\n  button "y" tap set y = y + 5';
+  const a = load(P(A, B)); a.addRow('s', { n: 1 });
+  a.dispatch(a.find(n => n.text === 'x' && n.t === 'button').id, 'tap'); a.dispatch(a.find(n => n.text === 'y' && n.t === 'button').id, 'tap');
+  const want = s => ['x 1', 'y 5'].every(t => s.includes(t));
+  a.applyEdit(P(B, A)); assert.ok(want(shownT(a)), JSON.stringify(shownT(a)));
+  a.applyEdit(P(B.replace('each s', 'each s sort n desc'), A.replace('each s', 'each s where n > 0 top 5'))); assert.ok(want(shownT(a)), JSON.stringify(shownT(a)));
+  a.applyEdit(P(B.replace('each s', 'each s2 sort n desc'), A.replace('each s', 'each s2 where n > 0 top 5'), 's2 was s')); assert.ok(want(shownT(a)), JSON.stringify(shownT(a)));
+});
+
+test('round 12 S2/S3: a when keeps its id when its condition or action is reworded; a changed condition is re-armed without firing', () => {
+  const P = (cond, act) => `app "W"\ntable t n num\ntable log x num\nbutton "b" tap add t n = 1\nwhen ${cond} ${act}\n"logs" count(log)\n`;
+  const a = load(P('count(t) >= 2', 'add log x = 1'));
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap'); a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  assert.equal(a.rows('log').length, 1);
+  a.applyEdit(P('count(t) >= 2', 'add log x = 2')); a.tick(1000);
+  assert.equal(a.rows('log').length, 1, 'a reworded action keeps the edge and does not fire');
+  a.applyEdit(P('count(t) >= 3', 'add log x = 2')); a.tick(1000);
+  assert.equal(a.rows('log').length, 1, 'the new condition is false now: no firing');
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  assert.equal(a.rows('log').length, 2, 'it fires when the new condition becomes true');
+  a.applyEdit(P('count(t) >= 3', 'add log x = 2') + 'when count(t) >= 1 add log x = 9\n'); a.tick(1000);
+  assert.equal(a.rows('log').length, 2, 'a new when that is already true does not fire because of the edit');
+});
+
+test('round 12 S2/S5: catch-up settles whens like live; tick rejects non-numbers', () => {
+  const P = 'app "B"\nstate n num = 0\nstate best num = 0\nevery 1s set n = n + 1\nwhen n > best set best = n\n"n" n\n"best" best\n';
+  const a = load(P), b = load(P);
+  a.tick(10000); for (let i = 0; i < 10; i++) b.tick(1000);
+  assert.deepEqual(shownT(a), shownT(b)); assert.deepEqual(shownT(a), ['n 10', 'best 10']);
+  const c = load(a.source, { data: a.snapshot(), now: a.clock + 60000 }); assert.deepEqual(shownT(c), ['n 70', 'best 70']);
+  const k = c.clock; for (const v of [NaN, Infinity, -5, '10', null, {}, 1e20]) assert.equal(c.tick(v), false); assert.equal(c.clock, k);
+});

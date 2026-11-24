@@ -1,0 +1,857 @@
+[
+ {
+  "key": "w1-k07|6566408247cc",
+  "uid": "990b06bf",
+  "category_hint": "create",
+  "request": "paracetamol dose by child weight (kg) \u2013 15mg per kg, syrup is 120mg per 5ml",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "input for weight in kg",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes dose in mg using 15 mg per kg",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "converts to ml using 120 mg per 5 ml",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows result",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "warns to check with a doctor",
+    "must": false
+   }
+  ],
+  "program": "app \"Paracetamol dose\" pill ocean\nstate kg num = 10\nfield kg \"Child weight (kg)\"\nstat kg * 15, \"dose in mg (15 mg per kg)\"\nstat fixed(kg * 15 / 120 * 5, 1), \"syrup in ml (120 mg per 5 ml)\"\n\"Check the dose with a doctor or pharmacist before giving it.\" faint color warn\n",
+  "describe": "Paracetamol dose, in the ocean colours.\nRemembers while you use it: kg, starting at 10.\nShows:\n- a box to fill in kg, labelled \"Child weight (kg)\".\n- a big number: kg times 15, labelled \"dose in mg 15 mg per kg\".\n- a big number: the fixed of kg times 15 divided by 120 times 5, labelled \"syrup in ml 120 mg per 5 ml\".\n- text: \"Check the dose with a doctor or pharmacist before giving it.\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/6566408247cc.png"
+ },
+ {
+  "key": "w1-t05|0f4a00711769",
+  "uid": "ada8f5c1",
+  "category_hint": "create",
+  "request": "insulin doses for my dad: time, units, which type (fast or long acting), blood sugar before. he is 68 so big clear buttons please",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a dose with units and type fast/long",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has blood sugar before field",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "records time or date of each dose",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows today's total units",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "list of recent doses",
+    "must": true
+   },
+   {
+    "n": 6,
+    "item": "large readable buttons",
+    "must": false
+   }
+  ],
+  "program": "app \"Dad insulin\" pill ocean\ntable dose day when = now, units num 0.5..100 unit \"units\", kind pick Fast|Long, sugar num 20..600 unit \"mg/dl\" \"Blood sugar before\"\nstate d new dose\nstat sum(dose.units today), \"units today\"\nstack card gap 2\n  field d\n  button \"Save dose\" large tap save d\neach dose top 10 empty \"No doses yet\"\n  row card tap edit it\n    stack grow gap 0\n      it.day large bold\n      it.kind large\n    it.units huge bold\n    \"sugar\" it.sugar faint\n",
+  "describe": "Dad insulin, in the ocean colours.\nKeeps:\n- dose: day: date and time, starts at now; units: number, 0.5 to 100, in units; kind: one of Fast, Long; \"Blood sugar before\": number, 20 to 600, in mg/dl. Every entry also keeps when it was added.\nRemembers while you use it: d, a new dose being filled in.\nShows:\n- a big number: the total units of dose today, labelled \"units today\".\n- a box to fill in d.\n- a button \"Save dose\"; a tap saves the new d.\n- for each dose, first 10:\n  - a group; a tap opens the dose for editing:\n    - text: its day.\n    - text: its kind.\n    - text: its units.\n    - text: \"sugar\", its sugar.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/0f4a00711769.png"
+ },
+ {
+  "key": "w2-m09|6d7c1728dc2f",
+  "uid": "c6729057",
+  "category_hint": "create",
+  "request": "team sprint dashboard: stories with points and status, bugs with severity, a burndown or progress bar for points, and a retro notes screen with went well and to improve",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "stories with points and status",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "bugs with severity",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "progress bar or chart for points done",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "separate retro notes screen or section with went well / to improve",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "count of open bugs",
+    "must": false
+   }
+  ],
+  "program": "app \"Sprint dashboard\" target ocean\ntable story title text, points num 1..21, status pick Todo|Doing|Done = Todo\ntable bug title text, severity pick High|Medium|Low, fixed bool\ntable retro kind pick Went_well|To_improve, note text\nsetting sprint num = 40 \"Sprint points\"\ngoal sum(story.points where status = Done), sprint, \"points done\"\nstat count(bug where fixed = no), \"open bugs\"\nform story, \"Add story\"\neach story as s\n  row card swipe remove s\n    s.title grow\n    s.points faint\n    choice s.status\n\"Bugs\" head\nform bug, \"Add bug\"\neach bug where fixed = no sort severity as b\n  row card swipe remove b\n    toggle b.fixed\n    b.title grow\n    b.severity faint\nscreen notes \"Retro\" note\nform retro, \"Add note\"\neach options retro.kind as k\n  k head\n  each retro where kind = k as r\n    row card swipe remove r\n      r.note grow\n",
+  "describe": "Sprint dashboard, in the ocean colours.\nKeeps:\n- story: title: text; points: number, 1 to 21; status: one of Todo, Doing, Done, starts at Todo. Every entry also keeps when it was added.\n- bug: title: text; severity: one of High, Medium, Low; fixed: yes or no. Every entry also keeps when it was added.\n- retro: kind: one of Went well, To improve; note: text. Every entry also keeps when it was added.\nYou can change: \"Sprint points\": number, starts at 40.\nShows:\n- the total points of story where status is Done out of sprint with a progress bar, labelled \"points done\".\n- a big number: how many bug entries where fixed is no, labelled \"open bugs\".\n- a form to add a story.\n- for each story:\n  - a group; a swipe removes the story, with undo:\n    - text: the title of the story.\n    - text: the points of the story.\n    - a choice of the status of the story.\n- text: \"Bugs\".\n- a form to add a bug.\n- for each bug where fixed is no sorted by severity:\n  - a group; a swipe removes the bug, with undo:\n    - a tick box for the fixed of the bug.\n    - text: the title of the bug.\n    - text: the severity of the bug.\n- a screen \"Retro\":\n- a form to add a retro.\n- for each choice of the kind of the retro:\n  - text: the choice.\n  - for each retro where kind is the choice:\n    - a group; a swipe removes the retro, with undo:\n      - text: the note of the retro.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/6d7c1728dc2f.png"
+ },
+ {
+  "key": "w2-c07|435b3e5c8c0b",
+  "uid": "88b7d5e1",
+  "category_hint": "change",
+  "request": "under the gauge also write how much i have burned this month",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a total of spent amounts shown",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "can still add a spend and gauge still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "remaining budget still shown",
+    "must": true
+   }
+  ],
+  "program": "app \"Fuel gauge\" bolt ocean\nsetting budget money = 50000 \"Monthly budget\"\ntable spend amount money, note text\nlet used = sum(spend.amount month)\nlet left = budget - used\nlet frac = clamp(left / budget, 0, 1)\ndraw 100, 60 width 240 middle\n  arc 50, 55, 40, 270, 450 stroke soft thick 8\n  arc 50, 55, 40, 270, 270 + 180 * frac stroke accent thick 8\n  line 50, 55, 50 + 34 * sin(-90 + 180 * frac), 55 - 34 * cos(-90 + 180 * frac) stroke ink thick 2\n  label 50, 50, left big\nstat used, \"burned this month\"\n\"Remaining of\" budget faint align center\nform spend, \"Add spend\"\nlist spend by day\n",
+  "describe": "Fuel gauge, in the ocean colours.\nKeeps:\n- spend: amount: money; note: text. Every entry also keeps when it was added.\nYou can change: \"Monthly budget\": money, starts at 50000.\nWorks out:\n- used is the total amount of spend this month.\n- left is budget minus used.\n- frac is left divided by budget kept between 0 and 1.\nShows:\n- a drawing made of arcs, lines, labels.\n- a big number: used, labelled \"burned this month\".\n- text: \"Remaining of\", budget.\n- a form to add a spend.\n- a list of spend by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/435b3e5c8c0b.png"
+ },
+ {
+  "key": "w1-k13|3dab3e870a91",
+  "uid": "fd69babc",
+  "category_hint": "create",
+  "request": "BMI for the gym members i train, height in feet and inches, weight in kg",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for height in feet and inches and weight in kg",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows BMI number",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows a category such as normal or overweight",
+    "must": true
+   }
+  ],
+  "program": "app \"BMI\" scale ocean\nstate ft num = 5\nstate inch num = 8\nstate kg num = 70\nlet m = (ft * 12 + inch) * 0.0254\nlet bmi = kg / (m * m)\nlet cat = if(bmi < 18.5, \"Underweight\", if(bmi < 25, \"Normal\", if(bmi < 30, \"Overweight\", \"Obese\")))\nstack card gap 2\n  field ft \"Height (feet)\"\n  field inch \"Height (inches)\"\n  field kg \"Weight (kg)\"\nstat fixed(bmi, 1), \"BMI\"\ntext cat head color if(bmi >= 18.5 and bmi < 25, good, warn)\n",
+  "describe": "BMI, in the ocean colours.\nWorks out:\n- m is the result of ft times 12 plus inch times 0.0254.\n- bmi is kg divided by the result of m times m.\n- cat is \"Underweight\" when bmi is less than 18.5, otherwise \"Normal\" when bmi is less than 25, otherwise \"Overweight\" when bmi is less than 30, otherwise \"Obese\".\nRemembers while you use it: ft, starting at 5; inch, starting at 8; kg, starting at 70.\nShows:\n- a box to fill in ft, labelled \"Height (feet)\".\n- a box to fill in inch, labelled \"Height (inches)\".\n- a box to fill in kg, labelled \"Weight (kg)\".\n- a big number: the fixed of bmi, labelled \"BMI\".\n- text: cat.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/3dab3e870a91.png"
+ },
+ {
+  "key": "w2-l01|a1d8d71f8fce",
+  "uid": "df9968ff",
+  "category_hint": "create",
+  "request": "wedding guest list with RSVP and bride or groom side. need total headcount too",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a guest with name, side (bride/groom) and RSVP status",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "RSVP is a pick such as Yes/No/Pending",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows total count of guests that said yes",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list shows each guest with side and RSVP",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "count per side",
+    "must": false
+   }
+  ],
+  "program": "app \"Wedding guests\" users plum\ntable guest name text, side pick Bride|Groom, rsvp pick Yes|No|Pending = Pending\nstat count(guest where rsvp = Yes), \"total headcount (said yes)\"\nrow gap 2\n  stat count(guest where side = Bride), \"bride side\"\n  stat count(guest where side = Groom), \"groom side\"\nform guest, \"Add guest\"\neach guest as g empty \"No guests yet\"\n  row card tap edit g swipe remove g\n    g.name bold grow\n    g.side faint\n    g.rsvp fill if(g.rsvp = Yes, good, soft)\n",
+  "describe": "Wedding guests, in the plum colours.\nKeeps:\n- guest: name: text; side: one of Bride, Groom; rsvp: one of Yes, No, Pending, starts at Pending. Every entry also keeps when it was added.\nShows:\n- a big number: how many guest entries where rsvp is Yes, labelled \"total headcount said yes\".\n- a big number: how many guest entries where side is Bride, labelled \"bride side\".\n- a big number: how many guest entries where side is Groom, labelled \"groom side\".\n- a form to add a guest.\n- for each guest:\n  - a group; a tap opens the guest for editing; a swipe removes the guest, with undo:\n    - text: the name of the guest.\n    - text: the side of the guest.\n    - text: the rsvp of the guest.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a1d8d71f8fce.png"
+ },
+ {
+  "key": "w2-u01|2d91279fc9b8",
+  "uid": "926d33d9",
+  "category_hint": "create",
+  "request": "carrom scoreboard for two teams, tap to add points, boards played count",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "shows two team scores large",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "buttons to add points to each team",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has a board counter or new board/reset button",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "undo last point",
+    "must": false
+   }
+  ],
+  "program": "app \"Carrom\" game ink\ntable point team pick A|B, n num 1..9 = 1\ntable board\nlet sa = sum(point.n where team = A)\nlet sb = sum(point.n where team = B)\nrow gap 2\n  stack align center grow\n    \"Team A\" bold\n    sa huge\n    row gap 1\n      button \"+1\" tap add point team = A, n = 1\n      button \"+2\" tap add point team = A, n = 2\n      button \"+3\" tap add point team = A, n = 3\n  stack align center grow\n    \"Team B\" bold\n    sb huge\n    row gap 1\n      button \"+1\" tap add point team = B, n = 1\n      button \"+2\" tap add point team = B, n = 2\n      button \"+3\" tap add point team = B, n = 3\n\"Boards played:\" count(board) big\nrow gap 1\n  button \"Undo last point\" tap remove last(point)\n  button \"New board\" tap add board then remove all point\n",
+  "describe": "Carrom, in the ink colours.\nKeeps:\n- point: team: one of A, B; n: number, 1 to 9, starts at 1. Every entry also keeps when it was added.\n- board: just the time of each entry. Every entry also keeps when it was added.\nWorks out:\n- sa is the total n of point where team is A.\n- sb is the total n of point where team is B.\nShows:\n- text: \"Team A\".\n- text: sa.\n- a button \"+1\"; a tap adds a point with team set to A, n set to 1.\n- a button \"+2\"; a tap adds a point with team set to A, n set to 2.\n- a button \"+3\"; a tap adds a point with team set to A, n set to 3.\n- text: \"Team B\".\n- text: sb.\n- a button \"+1\"; a tap adds a point with team set to B, n set to 1.\n- a button \"+2\"; a tap adds a point with team set to B, n set to 2.\n- a button \"+3\"; a tap adds a point with team set to B, n set to 3.\n- text: \"Boards played:\", how many board entries.\n- a button \"Undo last point\"; a tap removes the latest point entries, with undo.\n- a button \"New board\"; a tap adds a board, then removes all point entries, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/2d91279fc9b8.png"
+ },
+ {
+  "key": "w1-r10|4b3f48dca6e7",
+  "uid": "cf3454d3",
+  "category_hint": "create",
+  "request": "pomodoro 25/5 with a long break after 4",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "25 minute work timer",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "5 minute break",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "long break after 4 rounds",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows round count",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "start and pause buttons",
+    "must": false
+   }
+  ],
+  "program": "app \"Pomodoro\" timer ink\nstate phase pick Work|Break|Long = Work\nstate round num = 1\nstate held dur = 25m\nstate ends when = now\nstate going bool = no\nwhen going and phase = Work and round < 4 and now >= ends set phase = Break then set ends = now + 5m then notify \"Break time\"\nwhen going and phase = Work and round >= 4 and now >= ends set phase = Long then set ends = now + 15m then notify \"Long break\"\nwhen going and phase = Break and now >= ends set phase = Work then set round = round + 1 then set ends = now + 25m then notify \"Back to work\"\nwhen going and phase = Long and now >= ends set phase = Work then set round = 1 then set ends = now + 25m then notify \"New cycle\"\n\"Round\" round \"of 4\" head align center\ntext phase color if(phase = Work, accent, good) align center\ntext if(going, max(ends - now, 0s), held) huge align center\nrow gap 1\n  if going\n    button \"Pause\" tap set held = ends - now then set going = no\n  else\n    button \"Start\" tap set ends = now + held then set going = yes\n  button \"Reset\" tap set going = no then set phase = Work then set round = 1 then set held = 25m\n",
+  "describe": "Pomodoro, in the ink colours.\nRemembers while you use it: phase, starting at Work; round, starting at 1; held, starting at 25 minutes; ends, starting at now; going, starting at no.\nShows:\n- when going and phase is Work and round is less than 4 and now is at least ends, it sets phase to Break, then sets ends to now plus 5 minutes, then shows the notice \"Break time\".\n- when going and phase is Work and round is at least 4 and now is at least ends, it sets phase to Long, then sets ends to now plus 15 minutes, then shows the notice \"Long break\".\n- when going and phase is Break and now is at least ends, it sets phase to Work, then sets round to round plus 1, then sets ends to now plus 25 minutes, then shows the notice \"Back to work\".\n- when going and phase is Long and now is at least ends, it sets phase to Work, then sets round to 1, then sets ends to now plus 25 minutes, then shows the notice \"New cycle\".\n- text: \"Round\", round, \"of 4\".\n- text: phase.\n- text: the larger of ends minus now and 0 hours when going, otherwise held.\n- if going:\n  - a button \"Pause\"; a tap sets held to ends minus now, then sets going to no.\n- otherwise:\n  - a button \"Start\"; a tap sets ends to now plus held, then sets going to yes.\n- a button \"Reset\"; a tap sets going to no, then sets phase to Work, then sets round to 1, then sets held to 25 minutes.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/4b3f48dca6e7.png"
+ },
+ {
+  "key": "w1-r11|c9d9721252e5",
+  "uid": "829f82ac",
+  "category_hint": "create",
+  "request": "count rounds around the ground when I jog. +1 button, lap length 400 m, show distance",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "plus one button for laps",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "lap length 400 m",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows distance covered",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "reset",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "undo last lap",
+    "must": false
+   }
+  ],
+  "program": "app \"Jog laps\" run ocean\ntable lap\nsetting lap_len num 50.. = 400 \"Lap length (m)\"\nbutton \"+1 lap\" large tap add lap\nstat count(lap) * lap_len, \"metres covered\"\n\"Laps\" count(lap) \"=\" fixed(count(lap) * lap_len / 1000, 2) \"km\" faint\nrow gap 1\n  button \"Undo last lap\" tap remove last(lap)\n  button \"Reset\" tap remove all lap\n",
+  "describe": "Jog laps, in the ocean colours.\nKeeps:\n- lap: just the time of each entry. Every entry also keeps when it was added.\nYou can change: \"Lap length (m)\": number, at least 50, starts at 400.\nShows:\n- a button \"+1 lap\"; a tap adds a lap.\n- a big number: how many lap entries times lap len, labelled \"metres covered\".\n- text: \"Laps\", how many lap entries, \"=\", the fixed of how many lap entries times lap len divided by 1000, \"km\".\n- a button \"Undo last lap\"; a tap removes the latest lap entries, with undo.\n- a button \"Reset\"; a tap removes all lap entries, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/c9d9721252e5.png"
+ },
+ {
+  "key": "w1-k04|d5a4fc42abbc",
+  "uid": "86725d3a",
+  "category_hint": "create",
+  "request": "trip fuel cost split. distance km, car km per litre, petrol price, number of people sharing",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for distance, mileage, fuel price and people",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes total fuel cost",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "computes cost per person",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "supports round trip toggle",
+    "must": false
+   }
+  ],
+  "program": "app \"Trip fuel split\" car ocean\nstate dist num = 300\nstate kmpl num = 12\nstate price money = 270\nstate people num = 4\nstate round bool = no\nstack card gap 2\n  field dist \"Distance (km)\"\n  field kmpl \"Car km per litre\"\n  field price \"Petrol price per litre\"\n  field people \"People sharing\"\n  \"Round trip\" faint\n  toggle round\nlet km = dist * if(round, 2, 1)\nlet cost = km / kmpl * price\nstat cost, \"total fuel cost\"\nstat cost / people, \"per person\"\n\"Distance driven\" km \"km,\" fixed(km / kmpl, 1) \"litres\" faint\n",
+  "describe": "Trip fuel split, in the ocean colours.\nWorks out:\n- km is dist times 2 when round, otherwise 1.\n- cost is km divided by kmpl times price.\nRemembers while you use it: dist, starting at 300; kmpl, starting at 12; price, starting at 270; people, starting at 4; round, starting at no.\nShows:\n- a box to fill in dist, labelled \"Distance (km)\".\n- a box to fill in kmpl, labelled \"Car km per litre\".\n- a box to fill in price, labelled \"Petrol price per litre\".\n- a box to fill in people, labelled \"People sharing\".\n- text: \"Round trip\".\n- a tick box for round.\n- a big number: cost, labelled \"total fuel cost\".\n- a big number: cost divided by people, labelled \"per person\".\n- text: \"Distance driven\", km, \"km,\", the fixed of km divided by kmpl, \"litres\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/d5a4fc42abbc.png"
+ },
+ {
+  "key": "w2-l07|952824166e50",
+  "uid": "8cf66f89",
+  "category_hint": "create",
+  "request": "meal plan for the week. for each day of the week I want breakfast lunch and dinner written in, and a simple note if something needs to be soaked or defrosted the night before.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a meal entry with day (Mon-Sun pick), meal type (breakfast/lunch/dinner) and dish",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has a prep-ahead note field",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "entries shown grouped or ordered by day",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows today's meals at the top",
+    "must": false
+   }
+  ],
+  "program": "app \"Weekly meals\" food mint\ntable meal day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, kind pick Breakfast|Lunch|Dinner, dish text, prep text?\n\"Today\" head\neach options meal.day as d\n  if index + 1 = weekday(today)\n    each meal where day = d as m empty \"Nothing planned today\"\n      row card\n        m.kind faint\n        m.dish bold grow\n        m.prep\nform meal, \"Add meal\"\neach options meal.day as d\n  if count(meal where day = d) > 0\n    d head\n    each meal where day = d as m\n      row card tap edit m swipe remove m\n        m.kind faint\n        m.dish grow\n        m.prep faint\n",
+  "describe": "Weekly meals, in the mint colours.\nKeeps:\n- meal: day: one of Mon, Tue, Wed, Thu, Fri, Sat, Sun; kind: one of Breakfast, Lunch, Dinner; dish: text; prep: text, optional. Every entry also keeps when it was added.\nShows:\n- text: \"Today\".\n- for each choice of the day of the meal:\n  - if its position plus 1 is the weekday number of today:\n    - for each meal where day is the choice:\n      - text: the kind of the meal.\n      - text: the dish of the meal.\n      - text: the prep of the meal.\n- a form to add a meal.\n- for each choice of the day of the meal:\n  - if how many meal entries where day is the choice is more than 0:\n    - text: the choice.\n    - for each meal where day is the choice:\n      - a group; a tap opens the meal for editing; a swipe removes the meal, with undo:\n        - text: the kind of the meal.\n        - text: the dish of the meal.\n        - text: the prep of the meal.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/952824166e50.png"
+ },
+ {
+  "key": "w2-l19|d074587b1e3f",
+  "uid": "2b6c5c72",
+  "category_hint": "create",
+  "request": "shaadi shopping budget list - items with estimated price and actual price, show difference",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add item with name, estimated price and actual price",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows total estimated and total actual",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows the difference or per-item overspend",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "bought tick",
+    "must": false
+   }
+  ],
+  "program": "app \"Shaadi budget\" gift plum\ntable item name text, estimate money, actual money?, bought bool\nrow gap 2\n  stat sum(item.estimate), \"estimated\"\n  stat sum(item.actual), \"actual\"\nstat sum(item.actual) - sum(item, if(it.actual > 0, it.estimate, 0)), \"over or under on bought\"\nform item, \"Add item\"\neach item as i empty \"No items yet\"\n  row card tap edit i swipe remove i\n    toggle i.bought\n    i.name grow\n    i.estimate faint\n    i.actual - i.estimate color if(i.actual > i.estimate, bad, good)\n",
+  "describe": "Shaadi budget, in the plum colours.\nKeeps:\n- item: name: text; estimate: money; actual: money, optional; bought: yes or no. Every entry also keeps when it was added.\nShows:\n- a big number: the total estimate of item, labelled \"estimated\".\n- a big number: the total actual of item, labelled \"actual\".\n- a big number: the total actual of item minus the sum of its estimate when its actual is more than 0, otherwise 0 over the item, labelled \"over or under on bought\".\n- a form to add a item.\n- for each item:\n  - a group; a tap opens the item for editing; a swipe removes the item, with undo:\n    - a tick box for the bought of the item.\n    - text: the name of the item.\n    - text: the estimate of the item.\n    - text: the actual of the item minus the estimate of the item.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/d074587b1e3f.png"
+ },
+ {
+  "key": "w2-c03|280f1bd170b1",
+  "uid": "34f1dd81",
+  "category_hint": "change",
+  "request": "rename Pending to Waiting",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "RSVP option Pending is now Waiting",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "other RSVP options and guest list still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "can still add a guest with name, side and RSVP",
+    "must": true
+   }
+  ],
+  "program": "app \"Wedding guests\" users plum\ntable guest name text, side pick Bride|Groom, rsvp pick Yes|No|Waiting was Pending = Waiting\nstat count(guest where rsvp = Yes), \"total headcount (said yes)\"\nrow gap 2\n  stat count(guest where side = Bride), \"bride side\"\n  stat count(guest where side = Groom), \"groom side\"\nform guest, \"Add guest\"\neach guest as g empty \"No guests yet\"\n  row card tap edit g swipe remove g\n    g.name bold grow\n    g.side faint\n    g.rsvp fill if(g.rsvp = Yes, good, soft)\n",
+  "describe": "Wedding guests, in the plum colours.\nKeeps:\n- guest: name: text; side: one of Bride, Groom; rsvp: one of Yes, No, Waiting, starts at Waiting. Every entry also keeps when it was added.\nShows:\n- a big number: how many guest entries where rsvp is Yes, labelled \"total headcount said yes\".\n- a big number: how many guest entries where side is Bride, labelled \"bride side\".\n- a big number: how many guest entries where side is Groom, labelled \"groom side\".\n- a form to add a guest.\n- for each guest:\n  - a group; a tap opens the guest for editing; a swipe removes the guest, with undo:\n    - text: the name of the guest.\n    - text: the side of the guest.\n    - text: the rsvp of the guest.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/280f1bd170b1.png"
+ },
+ {
+  "key": "w2-d06|3593f007ba49",
+  "uid": "ef5f8fa7",
+  "category_hint": "create",
+  "request": "sprint points tracker. each story has points and status todo/doing/done. show burn progress for the sprint of 40 points.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add story with title, points and status pick",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows total points done",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows progress against 40 point sprint goal",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list grouped or filterable by status",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "remaining points",
+    "must": false
+   }
+  ],
+  "program": "app \"Sprint points\" target ocean\ntable story title text, points num 1..21, status pick Todo|Doing|Done = Todo\ngoal sum(story.points where status = Done), 40, \"points done in sprint of 40\"\nstat 40 - sum(story.points where status = Done), \"points remaining\"\nform story, \"Add story\"\neach options story.status as st\n  row gap 1\n    st head grow\n    sum(story.points where status = st) \"pts\" faint\n  each story where status = st as s\n    row card swipe remove s\n      s.title grow\n      s.points\n      choice s.status\n",
+  "describe": "Sprint points, in the ocean colours.\nKeeps:\n- story: title: text; points: number, 1 to 21; status: one of Todo, Doing, Done, starts at Todo. Every entry also keeps when it was added.\nShows:\n- the total points of story where status is Done out of 40 with a progress bar, labelled \"points done in sprint of 40\".\n- a big number: 40 minus the total points of story where status is Done, labelled \"points remaining\".\n- a form to add a story.\n- for each choice of the status of the story:\n  - text: the choice.\n  - text: the total points of story where status is the choice, \"pts\".\n  - for each story where status is the choice:\n    - a group; a swipe removes the story, with undo:\n      - text: the title of the story.\n      - text: the points of the story.\n      - a choice of the status of the story.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/3593f007ba49.png"
+ },
+ {
+  "key": "w2-c06|8b74da388535",
+  "uid": "e606e3ff",
+  "category_hint": "change",
+  "request": "add a reminder at 7am every day to take them",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "a daily reminder at 7:00",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "medicine list and tick boxes still present",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "stock left field still present",
+    "must": true
+   }
+  ],
+  "program": "app \"Mom's medicines\" pill ocean\ntable medicine name text, dose text, slot pick Morning|Afternoon|Night, stock num 0..\ntable taken medicine ref medicine\nstat count(medicine where stock < 2), \"running low\"\nremind \"Take your medicines\" at 7:00\nform medicine, \"Add medicine\"\neach options medicine.slot as sl\n  if count(medicine where slot = sl) > 0\n    sl head\n    each medicine where slot = sl as m\n      row card swipe remove m fill if(m.stock < 2, warn, surface)\n        toggle m.taken\n        stack gap 0 grow\n          m.name bold\n          m.dose faint\n        button \"-\" tap set m.stock = m.stock - 1\n        m.stock \"strips\"\n",
+  "describe": "Mom's medicines, in the ocean colours.\nKeeps:\n- medicine: name: text; dose: text; slot: one of Morning, Afternoon, Night; stock: number, at least 0. Every entry also keeps when it was added.\n- taken: medicine: a medicine. Every entry also keeps when it was added.\nShows:\n- a big number: how many medicine entries where stock is less than 2, labelled \"running low\".\n- a form to add a medicine.\n- for each choice of the slot of the medicine:\n  - if how many medicine entries where slot is the choice is more than 0:\n    - text: the choice.\n    - for each medicine where slot is the choice:\n      - a group; a swipe removes the medicine, with undo:\n        - a tick box for the taken of the medicine.\n        - text: the name of the medicine.\n        - text: the dose of the medicine.\n        - a button \"-\"; a tap sets the stock of the medicine to the stock of the medicine minus 1.\n        - text: the stock of the medicine, \"strips\".\nReminder \"Take your medicines\" at 7:00 every day.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/8b74da388535.png"
+ },
+ {
+  "key": "w1-k14|188cbd5504f1",
+  "uid": "8ee2cc2f",
+  "category_hint": "create",
+  "request": "Water tank filler: tank is 4ft x 3ft x 3ft, pump gives 20 litres per minute. How long to fill and how many litres does it hold?",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "inputs for tank dimensions and pump rate",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "computes volume in litres",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "computes minutes to fill",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "converts cubic feet to litres correctly",
+    "must": false
+   }
+  ],
+  "program": "app \"Tank filler\" drop ocean\nstate l num = 4\nstate w num = 3\nstate h num = 3\nstate pump num = 20\nlet litres = l * w * h * 28.3168\nstack card gap 2\n  field l \"Length (ft)\"\n  field w \"Width (ft)\"\n  field h \"Height (ft)\"\n  field pump \"Pump (litres per minute)\"\nstat round(litres), \"litres the tank holds\"\nstat fixed(litres / pump, 1), \"minutes to fill\"\n\"Volume\" fixed(l * w * h, 1) \"cubic feet\" faint\n",
+  "describe": "Tank filler, in the ocean colours.\nWorks out:\n- litres is l times w times h times 28.3168.\nRemembers while you use it: l, starting at 4; w, starting at 3; h, starting at 3; pump, starting at 20.\nShows:\n- a box to fill in l, labelled \"Length (ft)\".\n- a box to fill in w, labelled \"Width (ft)\".\n- a box to fill in h, labelled \"Height (ft)\".\n- a box to fill in pump, labelled \"Pump (litres per minute)\".\n- a big number: litres rounded, labelled \"litres the tank holds\".\n- a big number: the fixed of litres divided by pump, labelled \"minutes to fill\".\n- text: \"Volume\", the fixed of l times w times h, \"cubic feet\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/188cbd5504f1.png"
+ },
+ {
+  "key": "w2-l13|6319d1ef4139",
+  "uid": "eb6d552d",
+  "category_hint": "create",
+  "request": "my mom's medicine schedule: name, dose, morning/afternoon/night, and tick for today. also stock left in strips, tell me when under 2.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a medicine with name, dose and time of day pick (morning/afternoon/night)",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "tick per medicine for today",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has stock left number field",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "low stock under 2 flagged or counted",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "list grouped by time of day",
+    "must": false
+   }
+  ],
+  "program": "app \"Mom's medicines\" pill ocean\ntable medicine name text, dose text, slot pick Morning|Afternoon|Night, stock num 0..\ntable taken medicine ref medicine\nstat count(medicine where stock < 2), \"running low\"\nform medicine, \"Add medicine\"\neach options medicine.slot as sl\n  if count(medicine where slot = sl) > 0\n    sl head\n    each medicine where slot = sl as m\n      row card swipe remove m fill if(m.stock < 2, warn, surface)\n        toggle m.taken\n        stack gap 0 grow\n          m.name bold\n          m.dose faint\n        button \"-\" tap set m.stock = m.stock - 1\n        m.stock \"strips\"\n",
+  "describe": "Mom's medicines, in the ocean colours.\nKeeps:\n- medicine: name: text; dose: text; slot: one of Morning, Afternoon, Night; stock: number, at least 0. Every entry also keeps when it was added.\n- taken: medicine: a medicine. Every entry also keeps when it was added.\nShows:\n- a big number: how many medicine entries where stock is less than 2, labelled \"running low\".\n- a form to add a medicine.\n- for each choice of the slot of the medicine:\n  - if how many medicine entries where slot is the choice is more than 0:\n    - text: the choice.\n    - for each medicine where slot is the choice:\n      - a group; a swipe removes the medicine, with undo:\n        - a tick box for the taken of the medicine.\n        - text: the name of the medicine.\n        - text: the dose of the medicine.\n        - a button \"-\"; a tap sets the stock of the medicine to the stock of the medicine minus 1.\n        - text: the stock of the medicine, \"strips\".\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/6319d1ef4139.png"
+ },
+ {
+  "key": "w1-t02|4a64f37599b0",
+  "uid": "5d318ef8",
+  "category_hint": "create",
+  "request": "Log my bee hive inspections. Each hive has a number, I note the date, queen seen yes or no, how many frames of brood, and whether I saw mites. Want to see when I last checked each hive.",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an inspection with hive number and date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has a yes/no field for queen seen",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "has a numeric field for brood frames",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "has a field or option for mites",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "list of inspections shown with dates",
+    "must": true
+   },
+   {
+    "n": 6,
+    "item": "shows days since last inspection",
+    "must": false
+   }
+  ],
+  "program": "app \"Hive log\" leaf mint\ntable inspection hive num 1..200, day date = today, queen bool, brood num 0..20 unit \"frames\", mites pick None|Few|Many = None\neach 1..12\n  if count(inspection where hive = it) > 0\n    row card\n      \"Hive\" it bold grow\n      \"last checked\" since(inspection where hive = it) \"days ago\" faint\nform inspection, \"Add inspection\"\nlist inspection by day\n",
+  "describe": "Hive log, in the mint colours.\nKeeps:\n- inspection: hive: number, 1 to 200; day: date, starts at today; queen: yes or no; brood: number, 0 to 20, in frames; mites: one of None, Few, Many, starts at None. Every entry also keeps when it was added.\nShows:\n- for each number from 1 to 12:\n  - if how many inspection entries where hive is the number is more than 0:\n    - text: \"Hive\", the number.\n    - text: \"last checked\", days since the last of inspection entries where hive is the number, \"days ago\".\n- a form to add a inspection.\n- a list of inspection by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/4a64f37599b0.png"
+ },
+ {
+  "key": "w1-r13|a8db4b927812",
+  "uid": "b297e8ab",
+  "category_hint": "create",
+  "request": "dhikr counter for 5 different adhkar each with its own count, subhanallah alhamdulillah etc",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "five separate counters with names",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "each has a tap button",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "each shows its count",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "reset",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "individual targets",
+    "must": false
+   }
+  ],
+  "program": "app \"Dhikr counters\" beads mint\ntable zikr phrase pick Subhanallah|Alhamdulillah|Allahu_Akbar|La_ilaha_illallah|Astaghfirullah\nsetting target num = 33 \"Target for each\"\neach options zikr.phrase as p\n  row card gap 2 align center tap add zikr phrase = p\n    text p bold grow\n    text count(zikr where phrase = p) big color if(count(zikr where phrase = p) >= target, good, ink)\n    button \"+1\" tap add zikr phrase = p\nbutton \"Reset all\" tap remove all zikr\n",
+  "describe": "Dhikr counters, in the mint colours.\nKeeps:\n- zikr: phrase: one of Subhanallah, Alhamdulillah, Allahu Akbar, La ilaha illallah, Astaghfirullah. Every entry also keeps when it was added.\nYou can change: \"Target for each\": number, starts at 33.\nShows:\n- for each choice of the phrase of the zikr:\n  - a group; a tap adds a zikr with phrase set to the choice:\n    - text: the choice.\n    - text: how many zikr entries where phrase is the choice.\n    - a button \"+1\"; a tap adds a zikr with phrase set to the choice.\n- a button \"Reset all\"; a tap removes all zikr entries, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/a8db4b927812.png"
+ },
+ {
+  "key": "w2-m08|738cf1d09de6",
+  "uid": "6cb4c980",
+  "category_hint": "create",
+  "request": "quran memorization tracker: surah or para, ayahs memorized, daily revision log, weekly revision streak, and a reminder every day after fajr",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add memorization entries with surah or para and ayahs",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "revision log with date",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows streak of revision days",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "daily reminder at a morning time",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "total ayahs memorized",
+    "must": false
+   }
+  ],
+  "program": "app \"Hifz tracker\" book mint\ntable memo surah text, ayahs num 1..300\ntable revision memo ref memo\nremind \"Revise today's lesson\" at 6:30\nrow gap 2\n  stat sum(memo.ayahs), \"ayahs memorized\"\n  stat streak(revision), \"day revision streak\"\nform memo, \"Add memorization\"\neach memo as m empty \"Nothing added yet\"\n  row card swipe remove m\n    stack gap 0 grow\n      m.surah bold\n      m.ayahs \"ayahs\" faint\n    count(m.revision) \"revisions\" faint\n    toggle m.revision\n\"Revision this week\" head\ndaybars last 7 days, count(revision on it)\n",
+  "describe": "Hifz tracker, in the mint colours.\nKeeps:\n- memo: surah: text; ayahs: number, 1 to 300. Every entry also keeps when it was added.\n- revision: memo: a memo. Every entry also keeps when it was added.\nShows:\n- a big number: the total ayahs of memo, labelled \"ayahs memorized\".\n- a big number: the current day streak of revision entries, labelled \"day revision streak\".\n- a form to add a memo.\n- for each memo:\n  - a group; a swipe removes the memo, with undo:\n    - text: the surah of the memo.\n    - text: the ayahs of the memo, \"ayahs\".\n    - text: how many the memo's revision entries, \"revisions\".\n    - a tick box for the revision of the memo.\n- text: \"Revision this week\".\n- a bar chart of how many revision entries on that day for each day in the last 7 days.\nReminder \"Revise today's lesson\" at 6:30 every day.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/738cf1d09de6.png"
+ },
+ {
+  "key": "w2-c08|87b441fcfd52",
+  "uid": "dbe74db9",
+  "category_hint": "change",
+  "request": "add a 3rd team, Team C. and a button to reset everything",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "Team C score shown with add buttons",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "reset button clears scores",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "scores for existing two teams still work",
+    "must": true
+   }
+  ],
+  "program": "app \"Carrom\" game ink\ntable point team pick A|B|C, n num 1..9 = 1\ntable board\nlet sa = sum(point.n where team = A)\nlet sb = sum(point.n where team = B)\nlet sc = sum(point.n where team = C)\nrow gap 2\n  stack align center grow\n    \"Team A\" bold\n    sa huge\n    row gap 1\n      button \"+1\" tap add point team = A, n = 1\n      button \"+2\" tap add point team = A, n = 2\n      button \"+3\" tap add point team = A, n = 3\n  stack align center grow\n    \"Team B\" bold\n    sb huge\n    row gap 1\n      button \"+1\" tap add point team = B, n = 1\n      button \"+2\" tap add point team = B, n = 2\n      button \"+3\" tap add point team = B, n = 3\n  stack align center grow\n    \"Team C\" bold\n    sc huge\n    row gap 1\n      button \"+1\" tap add point team = C, n = 1\n      button \"+2\" tap add point team = C, n = 2\n      button \"+3\" tap add point team = C, n = 3\n\"Boards played:\" count(board) big\nrow gap 1\n  button \"Undo last point\" tap remove last(point)\n  button \"New board\" tap add board then remove all point\n  button \"Reset everything\" tap remove all point then remove all board\n",
+  "describe": "Carrom, in the ink colours.\nKeeps:\n- point: team: one of A, B, C; n: number, 1 to 9, starts at 1. Every entry also keeps when it was added.\n- board: just the time of each entry. Every entry also keeps when it was added.\nWorks out:\n- sa is the total n of point where team is A.\n- sb is the total n of point where team is B.\n- sc is the total n of point where team is C.\nShows:\n- text: \"Team A\".\n- text: sa.\n- a button \"+1\"; a tap adds a point with team set to A, n set to 1.\n- a button \"+2\"; a tap adds a point with team set to A, n set to 2.\n- a button \"+3\"; a tap adds a point with team set to A, n set to 3.\n- text: \"Team B\".\n- text: sb.\n- a button \"+1\"; a tap adds a point with team set to B, n set to 1.\n- a button \"+2\"; a tap adds a point with team set to B, n set to 2.\n- a button \"+3\"; a tap adds a point with team set to B, n set to 3.\n- text: \"Team C\".\n- text: sc.\n- a button \"+1\"; a tap adds a point with team set to C, n set to 1.\n- a button \"+2\"; a tap adds a point with team set to C, n set to 2.\n- a button \"+3\"; a tap adds a point with team set to C, n set to 3.\n- text: \"Boards played:\", how many board entries.\n- a button \"Undo last point\"; a tap removes the latest point entries, with undo.\n- a button \"New board\"; a tap adds a board, then removes all point entries, with one undo.\n- a button \"Reset everything\"; a tap removes all point entries, with one undo, then removes all board entries, with one undo.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/87b441fcfd52.png"
+ },
+ {
+  "key": "w1-t19|98d045b16e8b",
+  "uid": "7d6a847b",
+  "category_hint": "create",
+  "request": "Hajj savings goal 750000 rs. I deposit whenever I can. show progress bar and how much left",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a deposit with amount and date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows a progress bar toward 750000",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows remaining amount",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list of deposits",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "goal is editable setting",
+    "must": false
+   }
+  ],
+  "program": "app \"Hajj savings\" mosque mint\ntable deposit amount money, day date = today\nsetting target money = 750000 \"Goal (Rs)\"\ngoal sum(deposit.amount), target, \"saved so far\", \"Rs\"\n\"Left to save\" target - sum(deposit.amount) big\nform deposit, \"Add deposit\"\nlist deposit by day\n",
+  "describe": "Hajj savings, in the mint colours.\nKeeps:\n- deposit: amount: money; day: date, starts at today. Every entry also keeps when it was added.\nYou can change: \"Goal (Rs)\": money, starts at 750000.\nShows:\n- the total amount of deposit out of target with a progress bar, labelled \"saved so far\".\n- text: \"Left to save\", target minus the total amount of deposit.\n- a form to add a deposit.\n- a list of deposit by day; tap one to edit it, swipe to remove it.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/98d045b16e8b.png"
+ },
+ {
+  "key": "w1-t09|caa57ea72ea6",
+  "uid": "62a224f6",
+  "category_hint": "create",
+  "request": "Kite shop stock: I sell patang, dor (reels), and manjha. need item, size, qty in stock, buying price, selling price. low stock warning below 20 pcs",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add an item with name, qty, buying price and selling price",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "has a category or type for patang, dor, manjha",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "highlights or lists items with qty below 20",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "shows total stock value or total quantity",
+    "must": true
+   },
+   {
+    "n": 5,
+    "item": "can edit quantity quickly with plus/minus",
+    "must": false
+   }
+  ],
+  "program": "app \"Kite stock\" box ocean\ntable item name text, kind pick Patang|Dor|Manjha, size text?, qty num 0.. unit \"pcs\", buy money, sell money\nstat sum(item, it.qty * it.buy), \"stock value at cost\"\n\"Low stock (under 20):\" count(item where qty < 20) color if(count(item where qty < 20) > 0, warn, ink)\nform item, \"Add item\"\neach item sort it.qty\n  row card fill if(it.qty < 20, warn, surface) tap edit it\n    stack grow gap 0\n      it.name bold\n      it.kind it.size faint\n    button \"-\" tap set it.qty = it.qty - 1\n    it.qty bold\n    button \"+\" tap set it.qty = it.qty + 1\n",
+  "describe": "Kite stock, in the ocean colours.\nKeeps:\n- item: name: text; kind: one of Patang, Dor, Manjha; size: text, optional; qty: number, at least 0, in pcs; buy: money; sell: money. Every entry also keeps when it was added.\nShows:\n- a big number: the sum of its qty times its buy over the item, labelled \"stock value at cost\".\n- text: \"Low stock (under 20):\", how many item entries where qty is less than 20.\n- a form to add a item.\n- for each item sorted by its qty:\n  - a group; a tap opens the item for editing:\n    - text: its name.\n    - text: its kind, its size.\n    - a button \"-\"; a tap sets its qty to its qty minus 1.\n    - text: its qty.\n    - a button \"+\"; a tap sets its qty to its qty plus 1.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/caa57ea72ea6.png"
+ },
+ {
+  "key": "w2-l08|ede6ce6910e3",
+  "uid": "fbc8d0e1",
+  "category_hint": "create",
+  "request": "car docs renewal tracker: registration, insurance, token tax, fitness. enter expiry date and warn me when under 30 days",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add a document with type and expiry date",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "shows days left until each expiry",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "items expiring in under 30 days are highlighted or counted",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "list sorted by soonest expiry",
+    "must": false
+   },
+   {
+    "n": 5,
+    "item": "reminder before expiry",
+    "must": false
+   }
+  ],
+  "program": "app \"Car documents\" car slate\ntable doc kind pick Registration|Insurance|Token_tax|Fitness, expiry date\nstat count(doc where expiry - today < 30), \"expiring in under 30 days\"\nform doc, \"Add document\"\neach doc sort expiry as d empty \"No documents yet\"\n  row card tap edit d swipe remove d fill if(d.expiry - today < 30, warn, surface)\n    d.kind bold grow\n    d.expiry - today \"days left\"\nremind \"A car document expires soon\" at doc.expiry - 30d at 9:00\n",
+  "describe": "Car documents, in the slate colours.\nKeeps:\n- doc: kind: one of Registration, Insurance, Token tax, Fitness; expiry: date. Every entry also keeps when it was added.\nShows:\n- a big number: how many doc entries where expiry minus today is less than 30, labelled \"expiring in under 30 days\".\n- a form to add a doc.\n- for each doc sorted by expiry:\n  - a group; a tap opens the doc for editing; a swipe removes the doc, with undo:\n    - text: the kind of the doc.\n    - text: the expiry of the doc minus today, \"days left\".\nReminder \"A car document expires soon\" on each expiry of the doc entries, 720 hours before at 9:00.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/ede6ce6910e3.png"
+ },
+ {
+  "key": "w2-d04|e4ecf4a4c72d",
+  "uid": "ae1bf340",
+  "category_hint": "create",
+  "request": "on-call log - when paged, what service, how long it took to resolve in minutes, and what fixed it",
+  "program_before": null,
+  "checklist": [
+   {
+    "n": 1,
+    "item": "can add entry with time paged, service, minutes to resolve, fix notes",
+    "must": true
+   },
+   {
+    "n": 2,
+    "item": "list shows entries newest first",
+    "must": true
+   },
+   {
+    "n": 3,
+    "item": "shows average or total resolve minutes",
+    "must": true
+   },
+   {
+    "n": 4,
+    "item": "count of pages this week",
+    "must": false
+   }
+  ],
+  "program": "app \"On-call log\" bell slate\ntable page service text, minutes num 0.., fix long\nrow gap 2\n  stat avg(page.minutes), \"avg minutes to resolve\"\n  stat count(page week), \"pages this week\"\nform page, \"Log page\"\neach page as p empty \"No pages yet\"\n  stack card gap 0 tap edit p swipe remove p\n    row\n      p.service bold grow\n      p.minutes \"min\"\n    p.at faint\n    p.fix\n",
+  "describe": "On-call log, in the slate colours.\nKeeps:\n- page: service: text; minutes: number, at least 0; fix: long text. Every entry also keeps when it was added.\nShows:\n- a big number: the average minutes of page, labelled \"avg minutes to resolve\".\n- a big number: how many page entries this week, labelled \"pages this week\".\n- a form to add a page.\n- for each page:\n  - a group; a tap opens the page for editing; a swipe removes the page, with undo:\n    - text: the service of the page.\n    - text: the minutes of the page, \"min\".\n    - text: the at of the page.\n    - text: the fix of the page.\n",
+  "screenshot": "/tmp/molde-eval/eval-novel/shots/e4ecf4a4c72d.png"
+ }
+]
