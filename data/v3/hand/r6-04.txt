@@ -1,0 +1,481 @@
+@rich domain=r6_utility_compare topic=utility bills month comparison style=detailed
+electricity, gas, water and internet bills, month by month. i add each bill with its type and amount, browse months with arrows, see for each type whether it went up or down against last month, and a bar chart of the last six months
+needs: add a bill with type and amount | month arrows to browse | each type compared with last month in colour | total of the month | bar chart of six months
+---
+app "Utility bills" bolt slate
+table util kind pick Electric|Gas|Water|Internet = Electric, amount money
+state m date = today
+topbar "Utility bills", util, "Add bill"
+monthnav m
+statcard sum(util.amount month of m), "total for" monthname(m)
+section "Against last month"
+  each options util.kind as k
+    row gap 2
+      text k grow
+      sum(util.amount month of m where kind = k) bold
+      sum(util.amount month of m where kind = k) - sum(util.amount month of addmonths(m, -1) where kind = k) color if(sum(util.amount month of m where kind = k) > sum(util.amount month of addmonths(m, -1) where kind = k), bad, good)
+section "Six months"
+  bars 0..5, sum(util.amount month of addmonths(m, it - 5)), month(addmonths(m, it - 5))
+===
+@rich domain=r6_subscriptions topic=home subscriptions renewal dates style=multi_feature
+netflix, internet, cloud storage, the school app, the gym: all renew on different dates and some are yearly. add each with cost, monthly or yearly and the renewal date. what do they cost me per month in total, which renew within a week, remind three days before
+needs: add a subscription with cost, billing period and renewal date | total cost per month | renewing within a week highlighted | reminder three days before renewal | list sorted by renewal date
+---
+app "Subscriptions" tag purple
+table sub name text, cost money, every pick Monthly|Yearly = Monthly, renews date
+remind "A subscription renews soon" at sub.renews - 3d at 9:00
+topbar "Subscriptions", sub, "Add subscription"
+statcard sum(sub, if(it.every = Monthly, it.cost, it.cost / 12)), "a month in subscriptions"
+"Renewing within 7 days:" count(sub where renews >= today and renews < today + 7) head
+each sub sort renews as s empty "No subscriptions yet. Add the first one."
+  row card gap 2 tap edit s swipe remove s fill if(s.renews - today < 7, soft, surface)
+    stack grow gap 0
+      s.name bold
+      s.every "· renews" s.renews faint
+    s.cost bold
+===
+@rich domain=r6_id_expiry topic=family documents expiry style=detailed
+passports, cnics, driving licences, car registration and the kids' b-forms all expire at random times. list each document with the owner and the expiry date, red when under two months, chips to show one person only, and remind me thirty days before it expires
+needs: add a document with owner and expiry date | red when under two months to expiry | chips to filter by owner | reminder thirty days before | count of documents expiring soon
+---
+app "Documents" shield ink
+table doc name text, owner pick Dad|Mum|Sara|Ali|Car = Dad, expires date
+state f pick All|Dad|Mum|Sara|Ali|Car = All
+remind "A document expires in 30 days" at doc.expires - 30d at 9:00
+topbar "Documents", doc, "Add document"
+statcard count(doc where expires - today < 60), "documents expire within 60 days", count(doc)
+choice f
+each doc where f = All or owner = f sort expires as d empty "No documents here yet."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.owner faint
+    d.expires bold color if(d.expires < today, bad, if(d.expires - today < 60, warn, ink))
+===
+@rich domain=r6_vehicle_dues topic=vehicle tax and insurance dues style=multi_feature
+we have a car and two bikes and the token tax, insurance and fitness all fall due at different times. add each vehicle, then each due with a date, tick when paid, overdue in red, and a count of what is unpaid for each vehicle
+needs: add a vehicle | add a due such as token tax or insurance with date | tick when paid | overdue in red | unpaid count for each vehicle
+---
+app "Vehicle dues" car orange
+table vehicle name text
+table dues vehicle ref vehicle, what pick Token_tax|Insurance|Fitness|Route_permit = Token_tax, due date, paid bool
+topbar "Vehicle dues", dues, "Add due"
+each vehicle sort name as v empty "No vehicles yet. Add the car below."
+  stack card gap 1
+    row gap 2
+      text v.name head grow
+      count(v.dues, it.paid = no) "unpaid" faint
+    each v.dues sort due as d
+      row gap 2 tap edit d swipe remove d
+        toggle d.paid
+        stack grow gap 0
+          d.what bold
+          d.due faint color if(d.paid = no and d.due < today, bad, muted)
+form vehicle, "Add vehicle"
+===
+@rich domain=r6_weekly_car_checks topic=weekly car checklist style=custom_ui
+every sunday i should check tyre pressure, oil, lights, washer water and wipe the interior, and i never do all five. tick each one this week, the ticks reset on monday by themselves, and show the last six weeks as how many of five i did
+needs: tick each of five checks for this week | ticks reset every week | checks done this week | last six weeks as boxes | a message when all five are done
+---
+app "Car checks" car teal
+table check what pick Tyres|Oil|Lights|Washer|Interior = Tyres
+statcard count(check week), "of 5 checks done this week", 5
+if count(check week) = 5
+  "All five done. The car is ready." head color good
+each options check.what as w
+  row card gap 2
+    toggle check week where what = w
+    text w grow
+section "Last 6 weeks"
+  grid 6 gap 1
+    each 0..5 as n
+      stack gap 0 align center
+        text count(check week of (today - 7 * (5 - n))) small bold
+        box height 14 radius 4 fill accent opacity clamp(count(check week of (today - 7 * (5 - n))) / 5, 0.15, 1)
+===
+@rich domain=r6_key_register topic=spare keys who has them style=multi_feature
+spare keys of the house, car, gate and locker are with relatives, the maid, neighbours. write which key, who holds it and since when, tick when it came back, and show the ones out for more than a month. search by holder name
+needs: add a key with holder and date | tick when returned | keys out more than a month in red | search by holder | count of keys still out
+---
+app "Key register" key grey
+table key name text, kind pick House|Car|Gate|Locker = House, holder text, since date = today, back bool
+state q text = ""
+topbar "Key register", key, "Add key"
+statcard count(key where back = no), "keys are out of the house", count(key)
+field q "Search by holder"
+each key where back = no and has(holder, q) sort since as k empty "No keys out. Everything is home."
+  row card gap 2 tap edit k swipe remove k
+    toggle k.back
+    stack grow gap 0
+      k.name k.kind bold
+      k.holder "since" k.since faint color if(today - k.since > 30, bad, muted)
+===
+@rich domain=r6_emergency_contacts topic=household emergency numbers style=short
+emergency numbers of the house in one place, doctor, plumber, electrician, school, neighbour, with search
+needs: add a contact with role and phone number | search by name | contacts grouped by role | note field for details
+---
+app "House contacts" phone red
+table contact name text, role pick Doctor|Plumber|Electrician|School|Neighbour|Relative = Doctor, phone text, note text?
+state q text = ""
+topbar "House contacts", contact, "Add contact"
+field q "Search by name"
+each options contact.role as r
+  if count(contact where role = r and has(name, q)) > 0
+    section r, count(contact where role = r)
+      each contact where role = r and has(name, q) sort name as c
+        row gap 2 tap edit c swipe remove c
+          stack grow gap 0
+            c.name bold
+            c.note faint
+          c.phone bold
+===
+@rich domain=r6_trusted_workers topic=plumber electrician rating list style=detailed
+a notebook of workers we have used: plumber, electrician, carpenter, painter, ac technician. name, trade, usual rate and star rating out of five. chips by trade so i can find the electrician fast, and the average rating for each trade
+needs: add a worker with trade, rate and rating | chips to filter by trade | tap stars to change a rating | average rating for each trade | list of workers
+---
+app "Trusted workers" tool blue
+table worker name text, trade pick Plumber|Electrician|Carpenter|Painter|AC_tech|Mason = Plumber, rate money?, rating num 1..5 = 3
+state f pick All|Plumber|Electrician|Carpenter|Painter|AC_tech|Mason = All
+topbar "Trusted workers", worker, "Add worker"
+scroll gap 1
+  each options worker.trade as t
+    stack card gap 0 align center width 28
+      round(avg(worker.rating where trade = t) * 10) / 10 big
+      text t tiny color muted
+choice f
+each worker where f = All or trade = f sort rating desc as w empty "No workers in this trade yet."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.name bold
+      w.trade w.rate faint
+    each 1..5 as n
+      button n fill if(w.rating >= n, warn, soft) tap set w.rating = n
+===
+@rich domain=r6_renovation_budget topic=home renovation by room style=multi_feature
+renovating the ground floor. each job has a room, an estimate, the real cost once paid and a status of planned, doing or done. show estimates against my total budget, the real spending so far and which room is eating the money
+needs: add a job with room, estimate and status | enter the actual cost | total budget setting | estimates and actual spending against budget | spending per room
+---
+app "Renovation" tool yellow
+table work what text, room pick Kitchen|Bathroom|Bedroom|Lounge|Outside = Kitchen, estimate money, actual money?, status pick Planned|Doing|Done = Planned
+setting budget money = 500000 "Total budget"
+topbar "Renovation", work, "Add job"
+goal sum(work.estimate), budget, if(sum(work.estimate) > budget, "estimates are over budget", "of the budget estimated")
+statcard sum(work.actual), "paid so far"
+section "Estimate by room"
+  share work by room, sum(it.estimate), it.key
+each work sort status as w empty "No jobs yet. Add the first one."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.what bold
+      w.room "·" w.status faint
+    stack gap 0 align end
+      w.estimate bold
+      w.actual faint color if(w.actual > w.estimate, bad, muted)
+===
+@rich domain=r6_furniture_wishlist topic=furniture buying needs and wants style=custom_ui
+setting up the new flat. furniture list with the room, price, shop and whether it is a need or a want. need things first, a budget bar, chips to show only needs or only wants, and a tick when bought
+needs: add a piece with room, price, shop and need or want | chips for need or want | tick when bought | budget bar for what is left to buy | total spent on bought pieces
+---
+app "Furniture" home plum
+table piece name text, room pick Living|Bedroom|Kids|Kitchen|Dining = Living, price money, shop text?, priority pick Need|Want = Need, bought bool
+setting budget money = 250000 "Furniture budget"
+state f pick All|Need|Want = All
+topbar "Furniture", piece, "Add piece"
+row gap 2
+  statcard sum(piece.price where bought = yes), "spent so far"
+  statcard sum(piece.price where bought = no), "still to buy"
+goal sum(piece.price), budget, "of the budget in the list"
+choice f
+each piece where f = All or priority = f sort priority as p empty "Nothing here. Add the sofa first."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.bought
+    stack grow gap 0
+      p.name bold
+      p.room p.shop faint
+    p.priority faint color if(p.priority = Need, accent, muted)
+    p.price
+===
+@rich domain=r6_seasonal_home_jobs topic=seasonal house maintenance calendar style=multi_feature
+jobs for the house through the year: ac service in march, water tank in april, roof waterproofing before monsoon, heater check in october. give each a month number, show this month's jobs and next month's, tick them when done this year
+needs: add a job with month number | this month's jobs | next month's jobs | tick done this year | count of jobs left this month
+---
+app "House year" home mint
+table job what text, mo num 1..12
+table finished job ref job
+topbar "House year", job, "Add job"
+statcard count(job where mo = month(today)) - count(job, it.mo = month(today) and count(it.finished year) > 0), "jobs left this month"
+section "This month", monthname(today)
+  each job where mo = month(today) as j empty "Nothing due this month."
+    row gap 2 tap edit j swipe remove j
+      toggle j.finished year
+      j.what grow
+section "Next month", monthname(addmonths(today, 1))
+  each job where mo = month(addmonths(today, 1)) as j empty "Nothing due next month."
+    row gap 2 tap edit j swipe remove j
+      j.what grow
+===
+@rich domain=r6_pest_control topic=pest control rounds style=custom_ui
+pest control every three months for termites and cockroaches, less often for the rest. one card for each kind with days since the last treatment, red when over ninety days, and a tap when the man did it today. note the room too
+needs: card for each pest kind | days since the last treatment | red when over ninety days | tap when treated today | log with room note
+---
+app "Pest control" shield green
+table treat kind pick Termite|Cockroach|Mosquito|Rats = Cockroach, room text?
+topbar "Pest control", treat, "Log treatment"
+each options treat.kind as k
+  stack card gap 1
+    row gap 2 align center
+      text k head grow
+      if count(treat where kind = k) = 0
+        "never treated" faint
+      else
+        since(treat where kind = k) "days ago" bold color if(due(treat where kind = k, 90), bad, good)
+    button "Treated today" fill if(due(treat where kind = k, 90), accent, soft) tap add treat kind = k
+list treat top 6, "No treatments logged yet."
+===
+@rich domain=r6_bin_days topic=bin collection days style=multi_feature
+our area has trash on mondays and thursdays, recycling on wednesdays and garden waste every other friday and i always forget to put the bins out. add pickups with the day, show tomorrow's pickups at the top, and remind me at eight in the evening only when something is collected tomorrow
+needs: add a pickup with type and weekday | tomorrow's pickups at the top | week laid out by weekday | reminder at 8 pm only when there is a pickup tomorrow | edit or remove a pickup
+---
+app "Bin days" cloud green
+table pickup what pick Trash|Recycling|Garden|Bulk = Trash, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon
+remind "Put the bins out tonight" at 20:00 if count(pickup where day = dayname(today + 1)) > 0
+topbar "Bin days", pickup, "Add pickup"
+section "Tomorrow", dayname(today + 1)
+  each pickup where day = dayname(today + 1) as p empty "No pickup tomorrow."
+    text p.what bold
+each options pickup.day as d
+  row card gap 2 fill if(d = dayname(today), soft, surface)
+    text d bold width 8
+    each pickup where day = d as p
+      text p.what grow tap edit p swipe remove p
+===
+@rich domain=r6_lent_things topic=things lent to neighbours style=short
+my drill, ladder and big pots are all in other people's houses. who has what and since when
+needs: add a thing with who has it and date | tick when it comes back | days out for each | things out more than two weeks in red | search by name
+---
+app "Lent things" box orange
+table lend thing text, who text, since date = today, back bool
+state q text = ""
+topbar "Lent things", lend, "Lend something"
+statcard count(lend where back = no), "things are out"
+field q "Search"
+each lend where back = no and (has(thing, q) or has(who, q)) sort since as l empty "Everything is home."
+  row card gap 2 tap edit l swipe remove l
+    toggle l.back
+    stack grow gap 0
+      l.thing bold
+      l.who faint
+    (today - l.since) "days" color if(today - l.since > 14, bad, muted)
+===
+@rich domain=r6_giving_log topic=sadaqah and zakat giving style=detailed
+i give sadaqah through the year, zakat in ramadan, fitrana at eid and sometimes to family. log each gift with type and amount, set aside my zakat amount and see how much of it is already given, and a split of what i gave this year by type
+needs: log a gift with type, amount and receiver | zakat amount setting with progress | total given this year | split by type | giving per month chart
+---
+app "Giving" heart mint
+table gift kind pick Sadaqah|Zakat|Fitrana|Family|Masjid = Sadaqah, amount money, to_whom text?
+setting zakat money = 100000 "Zakat due this year"
+topbar "Giving", gift, "Log a gift"
+goal sum(gift.amount year where kind = Zakat), zakat, "of zakat given"
+statcard sum(gift.amount year), "given this year in all"
+section "By type", "this year"
+  share gift year by kind, sum(it.amount), it.key
+section "Per month", "last 6 months"
+  bars 0..5, sum(gift.amount month of addmonths(today, it - 5)), month(addmonths(today, it - 5))
+list gift top 6, "No gifts logged yet."
+===
+@rich domain=r6_jummah_prep topic=friday jummah preparation style=custom_ui
+friday routine for me and the boys: ghusl, trim nails, clean clothes, attar, surah kahf, leave early. ticks reset each week, and show the last eight fridays as boxes filled by how many I did, so we keep the habit
+needs: add a preparation step | tick each step this week | steps done this week | last eight weeks as boxes | message when all steps are done
+---
+app "Jummah prep" mosque teal
+table prep item text
+table did prep ref prep
+let n = count(prep)
+topbar "Jummah prep", prep, "Add step"
+if n > 0 and count(prep, count(it.did week) > 0) = n
+  "Ready for Jummah" big color good
+else
+  count(prep, count(it.did week) > 0) "of" n "steps done" big
+each prep as p empty "No steps yet. Add ghusl, nails, attar."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.did week
+    text p.item grow
+section "Last 8 weeks"
+  grid 8 gap 1
+    each 0..7 as k
+      box height 24 radius 6 fill accent opacity clamp(count(did week of (today - 7 * (7 - k))) / max(n, 1), 0.15, 1)
+===
+@rich domain=r6_roza_tracker topic=ramadan fasts and make up days style=detailed
+ramadan fasting record for me. buttons for kept, missed, sick or travelling today, a grid of the last 30 days coloured by what happened, and a counter of fasts i still owe, going down when i log a make up fast
+needs: buttons for kept, missed, sick or travelling today | grid of last 30 days coloured by status | fasts still owed | log a make up fast | count of fasts kept
+---
+app "Roza" moon plum dark
+table fast kind pick Kept|Missed|Sick|Travel = Kept
+table makeup
+let owed = count(fast where kind != Kept) - count(makeup)
+statcard owed, "fasts still owed", 30
+row gap 1
+  each options fast.kind as k
+    button k grow fill if(k = Kept, good, soft) tap add fast kind = k
+section "Last 30 days", "kept:" count(fast where kind = Kept)
+  grid 10 gap 1
+    each days last 30 days as d
+      box height 22 radius 5 fill if(count(fast on d where kind = Kept) > 0, good, if(count(fast on d) > 0, warn, soft))
+button "I fasted a make up day" tap add makeup
+===
+@rich domain=r6_qaza_prayers topic=qaza prayers to make up style=detailed
+i am making up old prayers. for each of fajr, dhuhr, asr, maghrib, isha and witr i put how many i owe, then tap each time i pray one as qaza. show how many are left for each and in total
+needs: add how many prayers owed for each prayer | tap when one qaza prayer is made up | prayers left for each prayer | total left | prayers made up this week
+---
+app "Qaza prayers" mosque slate
+table qaza prayer pick Fajr|Dhuhr|Asr|Maghrib|Isha|Witr = Fajr, kind pick Owed|Prayed = Owed, qty num 1..9999 = 1
+let left(p text) = sum(qaza.qty where prayer = p and kind = Owed) - sum(qaza.qty where prayer = p and kind = Prayed)
+topbar "Qaza prayers", qaza, "Add or log"
+statcard sum(qaza.qty where kind = Owed) - sum(qaza.qty where kind = Prayed), "qaza prayers left in all"
+"Made up this week:" sum(qaza.qty week where kind = Prayed) faint
+each options qaza.prayer as p
+  row card gap 2
+    stack grow gap 0
+      text p bold
+      left(p) "left" faint
+    button "Made up one" fill accent tap add qaza prayer = p, kind = Prayed, qty = 1
+===
+@rich domain=r6_khatam_grid topic=thirty juz khatam planner style=custom_ui
+planning to finish the quran by the end of ramadan. thirty boxes for the thirty juz, tap one when read and it fills. set the date i want to finish by, and tell me how many juz a day i need from today to make it
+needs: thirty boxes for the juz to tap | set the finish date | juz still left | juz per day needed to finish on time | progress count
+---
+app "Khatam" book green
+table juz part num 1..30
+setting finish date = today "Finish by"
+let left = 30 - count(juz)
+statcard count(juz), "of 30 juz read", 30
+row gap 2
+  statcard left, "juz left"
+  statcard round(left * 10 / max(finish - today, 1)) / 10, "juz a day needed"
+grid 6 gap 1
+  each 1..30 as n
+    box height 40 radius 8 fill if(count(juz where part = n) > 0, accent, soft) tap toggle juz all where part = n
+      text n small bold align center color if(count(juz where part = n) > 0, bg, ink)
+if left = 0
+  "Khatam complete" head color good
+===
+@rich domain=r6_hajj_fund topic=umrah savings and packing style=multi_feature
+saving for umrah next year. one tab where i add what i put aside toward the goal with a progress ring, and another tab with the packing list, ihram, medicines, documents, with a tick for each. shows how much is still needed
+needs: add savings with amount and note | goal setting with progress ring | how much is still needed | tab with packing list | tick packed items
+---
+app "Umrah fund" plane blue
+table put amount money, note text?
+table packed item text, got bool
+setting goal money = 600000 "Umrah budget"
+screen money "Savings" coin
+  topbar "Savings", put, "Add savings"
+  statcard sum(put.amount), "saved of" goal, goal
+  "Still needed:" max(goal - sum(put.amount), 0) head
+  list put top 8, "Nothing put aside yet."
+screen pack "Packing" bag
+  topbar "Packing", packed, "Add item"
+  goal count(packed where got = yes), max(count(packed), 1), "items packed"
+  each packed sort got as p empty "Add ihram, medicines, documents."
+    row card gap 2 tap edit p swipe remove p
+      toggle p.got
+      text p.item grow
+===
+@rich domain=r6_wedding_costs topic=family wedding function budget style=detailed
+my sister's wedding functions: dholki, mehndi, nikkah, barat, walima. each cost has the vendor quote and what we paid so far. show what is still owed in total, per function, tap a button when a quote is paid in full, and a split of quotes by function
+needs: add a cost with function, vendor, quote and paid so far | still owed in total | owed per function | tap to mark a quote paid in full | split of quotes by function
+---
+app "Wedding costs" gift pink
+table cost fn pick Dholki|Mehndi|Nikkah|Barat|Walima|Other = Mehndi, what text, quote money, paid money = 0
+topbar "Wedding costs", cost, "Add cost"
+row gap 2
+  statcard sum(cost.quote) - sum(cost.paid), "still owed"
+  statcard sum(cost.quote), "total quotes"
+section "Split of quotes"
+  share cost by fn, sum(it.quote), it.key
+each options cost.fn as f
+  if count(cost where fn = f) > 0
+    section f, "owed" sum(cost.quote where fn = f) - sum(cost.paid where fn = f)
+      each cost where fn = f as c
+        row gap 2 tap edit c swipe remove c
+          stack grow gap 0
+            c.what bold
+            "paid" c.paid "of" c.quote faint
+          if c.paid < c.quote
+            button "Paid in full" tap set c.paid = c.quote
+===
+@rich domain=r6_new_baby_gifts topic=new baby gifts and thank you notes style=multi_feature
+after the baby came people brought gifts and cash and i never know whom i have thanked. write who, what they brought and any cash, tick thanked after the call or card, show the ones still waiting first and the total cash received
+needs: add a gift with giver, item and cash amount | tick thanked | people still to thank first | total cash received | count still to thank
+---
+app "Baby gifts" gift yellow
+table present giver text, item text?, cash money?, thanked bool
+topbar "Baby gifts", present, "Add gift"
+row gap 2
+  statcard count(present where thanked = no), "still to thank"
+  statcard sum(present.cash), "cash received"
+each present sort thanked as p empty "No gifts yet. Add the first visitor."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.thanked
+    stack grow gap 0
+      p.giver bold
+      p.item faint
+    p.cash faint
+===
+@rich domain=r6_overnight_guests topic=overnight guests and rooms style=custom_ui
+relatives come to stay and rooms get double booked. each stay has the guest, room, arrival date and leaving date. show who sleeps here tonight by room, warn when two people are in the same room, and a strip of this week with how many guests per night
+needs: add a stay with guest, room and dates | who is here tonight by room | warning when a room has two guests | guests per night this week | edit or remove a stay
+---
+app "Guest rooms" bed ocean
+table stay guest text, room pick Guest_room|Kids_room|Sofa = Guest_room, arrive date = today, leave date
+topbar "Guest rooms", stay, "Add stay"
+section "Tonight", "guests:" count(stay where arrive <= today and leave > today)
+  each options stay.room as r
+    row gap 2
+      text r bold width 12
+      each stay where room = r and arrive <= today and leave > today as s
+        text s.guest grow tap edit s swipe remove s
+      if count(stay where room = r and arrive <= today and leave > today) > 1
+        "double booked" color bad
+section "This week", "guests per night"
+  daybars week, count(stay where arrive <= it and leave > it)
+===
+@rich domain=r6_school_run_rota topic=school drop and pickup rota style=multi_feature
+dad, mum, uncle and the van share the school run. for each weekday there is a drop and a pickup and who does it. show tonight's pickup first, the whole week as cards, and how many runs each person does
+needs: add a run with weekday, drop or pickup and who | today's pickup first | week laid out by day | runs per person | edit or remove a run
+---
+app "School run" bus yellow
+table run day pick Mon|Tue|Wed|Thu|Fri = Mon, leg pick Drop|Pick_up = Drop, who pick Mum|Dad|Uncle|Van = Mum
+topbar "School run", run, "Add run"
+stack card gap 0
+  text "Picks up the kids today" faint
+  last(run.who where day = dayname(today) and leg = Pick_up) huge
+each options run.day as d
+  stack card gap 1 fill if(d = dayname(today), soft, surface)
+    text d bold
+    each run where day = d sort leg as r empty "No runs set."
+      row gap 2 tap edit r swipe remove r
+        r.leg grow
+        r.who bold
+section "Runs per person"
+  share run by who, count(it), it.key
+===
+@rich domain=r6_grandparent_calls topic=calls and visits to grandparents style=detailed
+the kids' four grandparents live in different cities and i want to be sure we are in touch with each. buttons to log a call, video call or visit for each one, days since last contact in red after a week, and a reminder in the evening if nobody was contacted today
+needs: log a call, video or visit for each grandparent | days since last contact | red after a week without contact | reminder at 6 pm when nobody was contacted | minutes of contact this week
+---
+app "Grandparents" phone pink
+table contact who pick Nani|Nana|Dadi|Dada = Nani, kind pick Call|Video|Visit = Call, mins num 1..300 = 10
+remind "Have you called a grandparent today?" at 18:00 if count(contact today) = 0
+topbar "Grandparents", contact, "Log contact"
+statcard sum(contact.mins week), "minutes with grandparents this week"
+each options contact.who as w
+  stack card gap 1
+    row gap 2 align center
+      text w head grow
+      if count(contact where who = w) = 0
+        "not yet" faint
+      else
+        since(contact where who = w) "days ago" bold color if(due(contact where who = w, 7), bad, good)
+    row gap 1
+      each options contact.kind as k
+        button k grow tap add contact who = w, kind = k

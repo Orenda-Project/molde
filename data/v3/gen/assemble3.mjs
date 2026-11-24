@@ -9,6 +9,10 @@ const D = new URL('../', import.meta.url).pathname;
 const rd = f => readFileSync(f, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
 const outs = (kind) => { const m = new Map(); for (const f of readdirSync(D + 'items').filter(f => f.startsWith(`out-${kind}-`))) for (const o of rd(D + 'items/' + f)) m.set(o.id, o); return m; };
 const cand = []; const info = {};
+// judge verdicts: hand records whose program misses a checklist item are dropped
+const judgeMissing = new Set(); const judgeStats = {};
+for (const f of readdirSync(D + 'judge').filter(f => /^out-J\d/.test(f))) { let t = 0, ok = 0, rq = 0; for (const o of rd(D + 'judge/' + f)) { t++; if (!o.missing || !o.missing.length) ok++; else judgeMissing.add(o.id); if (o.request_ok) rq++; } judgeStats[f] = { n: t, target_ok: ok, request_ok: rq }; }
+info.judge = judgeStats; info.judge_dropped = judgeMissing.size;
 const hid = o => 'h' + sha(o.program).slice(0, 12);
 // ---- hand records
 const { out: hand, fails } = readHand3(D + 'hand/'); info.hand_fail = fails.length;
@@ -17,6 +21,7 @@ const handBy = new Map(); const rich = [];
 for (const o of hand) { handBy.set(hid(o), o); }
 for (const o of hand) {
   if (o.kind === 'long') continue;
+  if (judgeMissing.has(o.id)) continue;
   const tag = o.id.split('-')[0]; const fam = tag.replace(/#.*/, '')[0];
   let request = o.request, source = 'hand3:' + tag, ctx = {};
   if (o.from) { const a = named.get(o.from); if (!a) continue; request = a.request; source = 'v3:named-ask-build'; ctx = { relabeled_from_ask: true, ask_id: o.from }; }
@@ -41,6 +46,10 @@ info.change_mode_new_app = nc;
 const X = outs('x'); let nx = 0;
 for (const e of rd(D + 'work/longedits-raw.jsonl')) { const x = X.get(e.id); if (x && x.request) { cand.push({ task: 'edit', request: x.request, before: e.before, program: e.after, source: 'v3:long-edit:' + e.kind, style: 'long_edit', domain: e.base, long: true, op: e.kind, keep_others: e.kept_others, keep_all: e.kept_all, tokens_before: e.tokens_before }); nx++; } }
 info.long_edits = nx;
+// ---- small edits (colour word on the app line, title, setting with `set`) on short programs
+let nse = 0;
+if (existsSync(D + 'work/smalledits-raw.jsonl')) for (const e of rd(D + 'work/smalledits-raw.jsonl')) { const x = X.get(e.id); if (x && x.request) { cand.push({ task: 'edit', request: x.request, before: e.before, program: e.after, source: 'v3:small-edit:' + e.kind, style: 'small_edit', domain: e.base, op: e.kind, small: true }); nse++; } }
+info.small_edits = nse;
 // ---- v2 rows (relabeled asks removed)
 const v2 = rd(D + '../data-v2/v2.jsonl'); const namedIds = new Set(named.keys()); let v2kept = 0, v2relabeled = 0;
 for (const r of v2) {

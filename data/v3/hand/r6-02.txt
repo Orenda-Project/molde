@@ -1,0 +1,505 @@
+@rich domain=r6_bike_care topic=bicycle rides and chain care style=multi_feature
+my son and i ride every evening. log each ride in km, show this week's km against a goal, and remind us that the chain needs lube every 200 km. one tap when we lubed it, and one when we pumped the tyres
+needs: log a ride with km | this week's km against a weekly goal | km since the chain was lubed with a warning | one-tap lubed the chain and pumped tyres buttons | rides per day chart
+---
+app "Bike care" bike ink
+table ride km num 0.1..300 unit "km"
+table care what pick Chain_lube|Tyre_air = Chain_lube, at_km num 0..
+setting goal num = 40 "Weekly goal (km)"
+let total = sum(ride.km)
+let since_lube = total - last(care.at_km where what = Chain_lube)
+topbar "Bike care", ride, "Log ride"
+statcard sum(ride.km week), "km this week of" goal, goal
+section "Chain", "since the last lube"
+  since_lube "km" big color if(since_lube >= 200, bad, ink)
+  if since_lube >= 200
+    "Time to lube the chain." faint color bad
+  row gap 1
+    button "Lubed the chain" tap add care what = Chain_lube, at_km = total
+    button "Pumped the tyres" tap add care what = Tyre_air, at_km = total
+section "Km per day", "last 7 days"
+  goalbars last 7 days, sum(ride.km on it), goal / 7
+===
+@rich domain=r6_fuel_mileage topic=car fuel fills and mileage style=detailed
+every time i fill petrol i want to write litres, price paid and the odometer. then tell me how many km per litre we get, what we spent on fuel this month and per km, and a chart of fuel spend for the last six months
+needs: add a fill with litres, cost and odometer | km per litre | fuel spent this month | cost per km | bar chart of fuel spend for six months
+---
+app "Fuel log" car yellow
+table fill litres num 1..150 unit "L", cost money, odo num 0..
+let km = max(fill.odo) - min(fill.odo)
+let used = sum(fill.litres) - first(fill.litres)
+topbar "Fuel log", fill, "Add fill"
+row gap 2
+  statcard round(km * 10 / max(used, 1)) / 10, "km per litre"
+  statcard sum(fill.cost month), "fuel spent this month"
+"Cost per km:" round(sum(fill.cost) * 10 / max(km, 1)) / 10 faint
+section "Last 6 months", "fuel spend"
+  bars 0..5, sum(fill.cost month of addmonths(today, it - 5)), month(addmonths(today, it - 5))
+list fill top 8, "No fills yet. Add the first one next time you are at the pump."
+===
+@rich domain=r6_envelope_budget topic=family envelope budget style=custom_ui
+we budget in envelopes: groceries, school, utilities, fun. each has a monthly limit. add envelopes, add spendings against one, and show a bar per envelope that turns red when we pass its limit. also what is left overall
+needs: add an envelope with monthly limit | add a spending against an envelope | bar per envelope turning red over the limit | total left this month | list of spendings
+---
+app "Envelopes" wallet plum
+table envelope name text, limit money
+table spend envelope ref envelope, amount money, note text?
+let spent = sum(spend.amount month)
+topbar "Envelopes", spend, "Add spending"
+statcard sum(envelope.limit) - spent, "left this month of" sum(envelope.limit), sum(envelope.limit)
+each envelope sort name as e empty "No envelopes yet. Add groceries, school and utilities below."
+  stack card gap 1 tap edit e
+    row
+      text e.name bold grow
+      sum(e.spend.amount month) "of" e.limit faint color if(sum(e.spend.amount month) > e.limit, bad, muted)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(e.spend.amount month) / max(e.limit, 1), 0, 1), 4 fill if(sum(e.spend.amount month) > e.limit, bad, accent) radius 2
+form envelope, "Add envelope"
+list spend top 8, "No spendings yet."
+===
+@rich domain=r6_gift_ideas topic=gift ideas by person style=multi_feature
+gifts for eid and birthdays keep costing more than i plan. ideas per person with the price and the occasion, tick when bought, and a total of what i still need to buy against my gift budget
+needs: add a gift idea with person, price and occasion | tick when bought | gift budget setting | total still to buy against the budget | gifts grouped by person
+---
+app "Gift ideas" gift pink
+table gift person text, idea text, price money, occasion pick Eid|Birthday|Wedding|Other = Eid, bought bool
+setting budget money = 20000 "Gift budget"
+let todo = sum(gift.price where bought = no)
+topbar "Gift ideas", gift, "Add idea"
+goal todo, budget, if(todo > budget, "over budget", "still to buy")
+each gift by person as g empty "No ideas yet. Add what you would like to give each person."
+  stack card gap 1
+    row
+      text g.key head grow
+      sum(g.price) faint
+    each g as x
+      row gap 2 tap edit x swipe remove x
+        toggle x.bought
+        x.idea grow
+        x.occasion faint
+===
+@rich domain=r6_family_birthdays topic=birthdays with days left style=detailed
+family birthdays: name and date of birth. i want them sorted by who is next, with how many days to go and the age they are turning, and a nudge on the morning of the day. my memory is awful
+needs: add a person with date of birth | sorted by next birthday | days left to each birthday | age they are turning | reminder on the morning of a birthday
+---
+app "Birthdays" gift orange
+table person name text, born date
+let nextbd(p person) = if(addmonths(p.born, 12 * (year(today) - year(p.born))) < today, addmonths(p.born, 12 * (year(today) - year(p.born) + 1)), addmonths(p.born, 12 * (year(today) - year(p.born))))
+remind "A birthday today in the family" at 8:00 if count(person where monthday(born) = monthday(today) and month(born) = month(today)) > 0
+topbar "Birthdays", person, "Add birthday"
+each person sort nextbd(it) as p empty "No birthdays yet. Add the people you never want to forget."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      "turns" year(nextbd(p)) - year(p.born) faint
+    stack gap 0 align end
+      nextbd(p) - today big color if(nextbd(p) - today < 8, warn, ink)
+      "days" faint
+===
+@rich domain=r6_eid_prep topic=eid preparations and budget style=multi_feature
+eid is coming and the list is in my head: new clothes for the kids, gifts, meat, sweets, house cleaning. put each job with who it is for and the cost, tick it, set a total budget, show days left to eid and a bar of spending by group
+needs: add a job with group and cost | tick when done | eid date setting with days left | budget bar | spending by group
+---
+app "Eid prep" moon green
+table prep what text, who pick Kids|Gifts|Food|House|Other = Kids, cost money, done bool
+setting eid_day date = today "Eid date"
+setting budget money = 60000 "Eid budget"
+topbar "Eid prep", prep, "Add job"
+row gap 2
+  statcard eid_day - today, "days to Eid"
+  statcard count(prep where done = no), "jobs left"
+goal sum(prep.cost), budget, "planned cost"
+section "By group"
+  share prep by who, sum(it.cost), it.key
+each prep where done = no sort who as p empty "Everything is done. Eid Mubarak."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.done
+    stack grow gap 0
+      p.what bold
+      p.who faint
+    p.cost
+===
+@rich domain=r6_iftar_menu topic=ramadan iftar menu planner style=custom_ui
+ramadan menu for the week. for each day i write the iftar dish and who cooks it, mum, dad, nani or ordered, and a tick when the shopping for it is done. show the week as cards with today highlighted
+needs: add a menu entry with date, dish and cook | tick when shopping is done | week of cards with today highlighted | count of days still without shopping done | tap to edit
+---
+app "Iftar menu" moon teal dark
+table menu day date, dish text, cook pick Mum|Dad|Nani|Order = Mum, shopped bool
+topbar "Iftar menu", menu, "Plan a day"
+"Days without shopping done:" count(menu where shopped = no and day >= today) head
+each days week as d
+  stack card gap 1 fill if(d = today, accent, surface) opacity if(d < today, 0.6, 1)
+    text dayname(d) monthday(d) bold
+    each menu where day = d as m empty "Nothing planned yet."
+      row gap 2 tap edit m swipe remove m
+        toggle m.shopped
+        stack grow gap 0
+          m.dish bold
+          m.cook faint
+===
+@rich domain=r6_guest_rsvp topic=house party guest list style=detailed
+having 25 people for my daughter's engagement at home. guests with how many in their party, whether they said yes, no or maybe, and any food issue. show the head count coming against how many chairs we have, and chips to filter by answer
+needs: add a guest with party size, answer and food note | head count coming against chairs | chips to filter by answer | counts for each answer | list of guests
+---
+app "Guest list" users red
+table guest name text, party num 1..20 = 1, rsvp pick Invited|Yes|No|Maybe = Invited, diet pick None|Vegetarian|No_beef|Allergy = None
+setting chairs num = 30 "Chairs we have"
+state f pick All|Invited|Yes|No|Maybe = All
+topbar "Guest list", guest, "Add guest"
+goal sum(guest.party where rsvp = Yes), chairs, "people coming (chairs)"
+row gap 1
+  each options guest.rsvp as r
+    stack grow card gap 0 align center
+      count(guest where rsvp = r) big
+      text r tiny color muted
+choice f
+each guest where f = All or rsvp = f sort name as g empty "No guests in this answer yet."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.name bold
+      "party of" g.party "·" g.diet faint
+    g.rsvp faint color if(g.rsvp = Yes, good, if(g.rsvp = No, bad, muted))
+===
+@rich domain=r6_dinner_party_menu topic=dinner party menu and shopping style=custom_ui
+hosting dinner on friday. one tab for the menu, with dish, course and how many it serves, and one tab for the shopping list where i tick what i bought. show how many people the dishes serve against how many are coming
+needs: add a dish with course and servings | add a shopping item for a dish | tick items when bought | servings against guests coming | tabs for menu and shopping
+---
+app "Dinner party" food slate
+table dish name text, course pick Starter|Main|Side|Dessert = Main, serves num 1..60 = 6
+table buy item text, qty text?, dish ref dish, got bool
+setting coming num = 10 "Guests coming"
+screen menu "Menu" food
+  topbar "Menu", dish, "Add dish"
+  goal sum(dish.serves), coming, "servings for guests"
+  each options dish.course as c
+    each dish where course = c as d
+      row card gap 2 tap edit d swipe remove d
+        stack grow gap 0
+          d.name bold
+          d.course faint
+        d.serves "servings" faint
+screen shop "Shopping" cart
+  topbar "Shopping", buy, "Add item"
+  goal count(buy where got = yes), max(count(buy), 1), "items bought"
+  each buy sort got as b empty "Nothing to buy yet. Add items for each dish."
+    row card gap 2 tap edit b swipe remove b
+      toggle b.got
+      stack grow gap 0
+        b.item bold
+        b.qty b.dish.name faint
+===
+@rich domain=r6_household_salah topic=household daily prayer grid style=custom_ui
+tracking five daily prayers for the whole house. rows for dad, mum, sara and ali, five boxes for fajr to isha that i tap when prayed. today only, and a weekly total for each person under it
+needs: grid of members by five prayers | tap a box to mark prayed today | weekly total per person | count of prayers done today | members and prayers as options
+---
+app "House salah" mosque green
+table prayed who pick Dad|Mum|Sara|Ali = Dad, prayer pick Fajr|Dhuhr|Asr|Maghrib|Isha = Fajr
+statcard count(prayed today), "prayers done today by the family", 20
+each options prayed.who as m
+  stack card gap 1
+    row
+      text m bold grow
+      count(prayed week where who = m) "this week" faint
+    grid 5 gap 1
+      each options prayed.prayer as p
+        stack align center gap 0 tap toggle prayed where who = m and prayer = p
+          text p tiny color muted
+          box height 24 radius 6 fill if(count(prayed today where who = m and prayer = p) > 0, accent, soft)
+"Tap a box when the prayer is done. Tap again to undo." faint
+===
+@rich domain=r6_quran_pages topic=family quran pages and khatam style=multi_feature
+this ramadan each of us is reading the quran. log the pages read with who read them, show the family total against 604 pages for one khatam, pages per person and pages read each day this week
+needs: log pages read with person | family total against 604 pages | pages per person | pages per day chart | khatams completed
+---
+app "Quran pages" book mint
+table read who pick Dad|Mum|Sara|Ali = Dad, pages num 1..100 = 5
+let total = sum(read.pages)
+topbar "Quran pages", read, "Log pages"
+goal total % 604, 604, "pages of this khatam"
+"Khatams completed:" floor(total / 604) head
+section "Per person"
+  share read by who, sum(it.pages), it.key
+section "Pages per day", "last 7 days"
+  daybars last 7 days, sum(read.pages on it)
+list read top 6, "No pages logged yet."
+===
+@rich domain=r6_surah_memorise topic=kids surah memorization style=detailed
+my two kids are memorising short surahs. for each surah i write the name, the number of ayahs, and which child it is for. one tap adds an ayah learned, bar for progress, and a tick when we revised it today
+needs: add a surah with child and number of ayahs | plus one ayah learned button | progress bar for each surah | revised today tick | count of surahs complete
+---
+app "Surah memory" beads purple
+table surah child pick Ali|Sara = Ali, name text, ayahs num 1..286, learned num 0..286 = 0
+table revised surah ref surah
+topbar "Surah memory", surah, "Add surah"
+statcard count(surah where learned >= ayahs), "surahs fully memorised of" count(surah), count(surah)
+each surah sort child as s empty "No surahs yet. Add the first one with its ayah count."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 2
+      stack grow gap 0
+        s.name bold
+        s.child "·" s.learned "of" s.ayahs "ayahs" faint
+      toggle s.revised
+      button "+1" tap set s.learned = s.learned + 1
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(s.learned / s.ayahs, 0, 1), 3 fill accent radius 1
+===
+@rich domain=r6_home_inventory topic=home inventory by room style=detailed
+for the insurance we need a list of what is in the house. item, which room, how many, and what it is worth. search box by name, total value, and a bar for value in each room
+needs: add an item with room, quantity and value | search by name | total value of the house | value per room bars | list of items
+---
+app "Home inventory" box ocean
+table thing name text, room pick Kitchen|Living|Bedroom|Kids|Study|Store = Living, qty num 1..500 = 1, value money
+state q text = ""
+topbar "Home inventory", thing, "Add item"
+statcard sum(thing, it.qty * it.value), "total value across" count(thing) "lines"
+section "Value by room"
+  share thing by room, sum(it, it.qty * it.value), it.key
+field q "Search items"
+each thing where has(name, q) sort name as t empty "Nothing matches. Add the item or change the search."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.room "·" t.qty faint
+    t.qty * t.value
+===
+@rich domain=r6_pantry_stock topic=pantry stock and low alerts style=multi_feature
+kitchen pantry: rice, flour, oil, lentils, sugar. each has how many i have and a minimum. plus and minus buttons when i use or buy, red when at or below the minimum, and a short list of what to buy this week
+needs: add a pantry item with quantity, unit and minimum | plus and minus buttons | red when at or below minimum | what to buy list | count of items running low
+---
+app "Pantry" food orange
+table stock item text, qty num 0..500 = 1, minimum num 0..100 = 1, unit pick Kg|Pack|Litre|Piece = Pack
+let low = count(stock where qty <= minimum)
+topbar "Pantry", stock, "Add item"
+statcard low, "items running low of" count(stock), count(stock)
+each stock sort item as s empty "The pantry list is empty. Add the staples."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.item bold
+      s.qty s.unit "· min" s.minimum faint color if(s.qty <= s.minimum, bad, muted)
+    button "-" tap set s.qty = s.qty - 1
+    button "+" tap set s.qty = s.qty + 1
+section "To buy this week"
+  each stock where qty <= minimum sort item as s empty "Nothing to buy."
+    s.item "(" s.unit ")"
+===
+@rich domain=r6_aisle_grocery topic=grocery list by aisle style=custom_ui
+shopping list sorted by aisle so i do not walk the supermarket twice. every item has an aisle, tick as it goes in the trolley, bar for how much is done and a button to clear what i bought
+needs: add an item with aisle | tick when in the trolley | items grouped by aisle | progress bar of the list | clear bought items button
+---
+app "Grocery aisles" cart yellow
+table item name text, aisle pick Veg|Dairy|Meat|Dry_goods|Household|Bakery = Veg, got bool
+topbar "Grocery aisles", item, "Add item"
+goal count(item where got = yes), max(count(item), 1), "in the trolley"
+each options item.aisle as a
+  if count(item where aisle = a) > 0
+    stack card gap 1
+      text a head
+      each item where aisle = a sort got as i
+        row gap 2 swipe remove i
+          toggle i.got
+          text i.name grow color if(i.got, muted, ink)
+button "Clear what I bought" tap remove all item where got = yes
+===
+@rich domain=r6_laundry_stages topic=laundry basket stages style=custom_ui
+laundry in this house gets stuck at drying. every load has a type and a stage: dirty, washing, drying, folded. tap the button on a load to move it forward, show how many are in each stage and how many loads we washed this week
+needs: add a load with type | button to move a load to the next stage | count of loads in each stage | loads washed this week | list of loads still in progress
+---
+app "Laundry" cloud blue
+table load kind pick Whites|Colours|Towels|Bedding|Delicates = Colours, stage pick Dirty|Washing|Drying|Folded = Dirty
+topbar "Laundry", load, "Add load"
+row gap 1
+  each options load.stage as s
+    stack grow card gap 0 align center
+      count(load where stage = s) big
+      text s tiny color muted
+"Loads washed this week:" count(load week where stage != Dirty) faint
+each load where stage != Folded sort at as l empty "No loads waiting. The baskets are clear."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.kind bold
+      l.stage faint
+    if l.stage = Dirty
+      button "Wash" fill accent tap set l.stage = Washing
+    if l.stage = Washing
+      button "Hang" fill accent tap set l.stage = Drying
+    if l.stage = Drying
+      button "Folded" fill good tap set l.stage = Folded
+===
+@rich domain=r6_tailor_pickups topic=tailor orders pickup dates style=detailed
+eid suits at the tailor, a dupatta at the dyer, school uniform alteration. note what it is, whose it is, the date it will be ready and the fee. show overdue pickups in red, tick collected, and the total fee still to pay
+needs: add an order with whose it is, ready date and fee | overdue pickups in red | tick when collected | total fee still to pay | count of orders waiting
+---
+app "Tailor orders" tag purple
+table order what text, owner text, ready date, fee money, collected bool
+topbar "Tailor orders", order, "Add order"
+row gap 2
+  statcard count(order where collected = no), "orders waiting"
+  statcard sum(order.fee where collected = no), "fee still to pay"
+each order where collected = no sort ready as o empty "Nothing at the tailor. Add the next order."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.collected
+    stack grow gap 0
+      o.what bold
+      o.owner "· ready" o.ready faint color if(o.ready < today, bad, muted)
+    o.fee
+===
+@rich domain=r6_pet_vaccines topic=pet vaccines and vet visits style=multi_feature
+two cats and a dog and i can never remember their shots. each pet gets vaccine records with the date given and when the next one is due. show who is overdue in red and remind me a week before
+needs: add a pet | add a vaccine with date given and next due date | overdue pets in red | reminder a week before the next due date | latest vaccine for each pet
+---
+app "Pet shots" paw pink
+table pet name text, kind pick Cat|Dog|Rabbit|Bird = Cat
+table shot pet ref pet, vaccine text, given date = today, next_due date
+remind "A pet vaccine is due next week" at shot.next_due - 7d at 9:00
+topbar "Pet shots", shot, "Add vaccine"
+"Pets with a shot overdue:" count(pet, count(it.shot) > 0 and last(it.shot.next_due) < today) head
+each pet sort name as p empty "No pets yet. Add a pet below."
+  stack card gap 1
+    row gap 2
+      text p.name head grow
+      p.kind faint
+    each p.shot sort given desc top 3 as s
+      row gap 2 tap edit s swipe remove s
+        s.vaccine grow
+        "next" s.next_due faint color if(s.next_due < today, bad, muted)
+form pet, "Add pet"
+===
+@rich domain=r6_dog_walks topic=dog walks and play minutes style=multi_feature
+the vet said our lab needs an hour of exercise a day. each time we walk or play i add minutes. show today against 60 minutes, a bar for each of the last 7 days with the goal line, the streak of days we made it, and a calendar of the month
+needs: log minutes with walk, run or play | today's minutes against 60 | seven day bars with a goal line | streak of days | month calendar grid
+---
+app "Dog walks" paw teal
+table walk mins num 5..240 unit "min", kind pick Walk|Run|Play = Walk
+setting goal num = 60 "Minutes a day"
+topbar "Dog walks", walk, "Add exercise"
+statcard sum(walk.mins today), "minutes today of" goal, goal
+section "Last 7 days", "days with the goal met:" count(days last 7 days, sum(walk.mins on it) >= goal)
+  goalbars last 7 days, sum(walk.mins on it), goal
+section "This month"
+  daygrid month, sum(walk.mins on it), goal
+list walk today, "No walk yet today. Grab the lead."
+===
+@rich domain=r6_pet_food_days topic=pet food bag days left style=short
+how many days of cat food are left in the bag
+needs: log each meal in grams | log a new bag in kg | days of food left | average grams per day
+---
+app "Cat food" paw grey
+table meal grams num 5..500 unit "g"
+table bag kg num 0.5..30 unit "kg" = 5
+let left = sum(bag.kg) * 1000 - sum(meal.grams)
+let per_day = sum(meal.grams last 7 days) / 7
+topbar "Cat food", bag, "New bag"
+quick meal, grams, [40, 60, 80]
+statcard floor(left / max(per_day, 1)), "days of food left"
+"Average" round(per_day) "g a day over the last week" faint
+daybars last 7 days, sum(meal.grams on it)
+===
+@rich domain=r6_homework_per_kid topic=homework per child style=detailed
+three kids, homework everywhere. each child has a name, then homework with subject, what it is and the due date. tick when done, show late ones in red and count how many are overdue for each child
+needs: add a child | add homework with subject and due date | tick when done | overdue count for each child | late homework in red
+---
+app "Homework" school blue
+table kid name text
+table hw kid ref kid, subject pick Maths|English|Urdu|Science|Islamiat|Other = Maths, what text, due date, done bool
+topbar "Homework", hw, "Add homework"
+each kid sort name as k empty "No children yet. Add a name below."
+  stack card gap 1
+    row gap 2
+      text k.name head grow
+      count(k.hw, it.done = no and it.due < today) "overdue" bold color if(count(k.hw, it.done = no and it.due < today) > 0, bad, muted)
+    each k.hw sort due as h empty "No homework. Lucky."
+      row gap 2 tap edit h swipe remove h
+        toggle h.done
+        stack grow gap 0
+          h.subject h.what bold
+          h.due faint color if(h.done = no and h.due < today, bad, muted)
+form kid, "Add child"
+===
+@rich domain=r6_lunchbox_plan topic=school lunchbox week plan style=custom_ui
+school lunchbox plan monday to friday so i stop packing biscuits. for each day the main thing and a fruit, and tomorrow's lunch shown at the top so i prep the night before. tick packed when it is in the bag
+needs: add a lunch with weekday, main and fruit | tomorrow's lunch shown at the top | tick packed | week laid out by day | count of days still unplanned
+---
+app "Lunchbox" bag mint dark
+table lunch day pick Mon|Tue|Wed|Thu|Fri = Mon, main text, fruit text?, packed bool
+topbar "Lunchbox", lunch, "Plan a day"
+section "Tomorrow", dayname(today + 1)
+  each lunch where day = dayname(today + 1) as l empty "Nothing planned for tomorrow yet."
+    row gap 2
+      toggle l.packed
+      stack grow gap 0
+        l.main head
+        l.fruit faint
+"Days still unplanned:" count(options lunch.day, count(lunch where day = it) = 0) faint
+each options lunch.day as d
+  row card gap 2 fill if(d = dayname(today), soft, surface)
+    text d bold width 10
+    stack grow gap 0
+      each lunch where day = d as l
+        row gap 1 tap edit l swipe remove l
+          l.main grow
+          l.fruit faint
+===
+@rich domain=r6_screen_time topic=kids screen time limits style=multi_feature
+our two kids get 90 minutes of screen a day. i log minutes with what it was, tv, tablet, phone or games, and see each child's total today against the limit, going red when over. chart of the week for both
+needs: log minutes with child and kind | limit setting in minutes | each child's total against the limit | red when over the limit | chart of the last 7 days
+---
+app "Screen time" phone red
+table screen who pick Ali|Sara = Ali, mins num 5..300 unit "min", what pick TV|Tablet|Phone|Games = TV
+setting limit num = 90 "Daily limit (min)"
+topbar "Screen time", screen, "Log screen time"
+row gap 2
+  each options screen.who as w
+    stack grow card gap 1
+      text w bold
+      sum(screen.mins today where who = w) "of" limit "min" color if(sum(screen.mins today where who = w) > limit, bad, ink)
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(screen.mins today where who = w) / limit, 0, 1), 4 fill if(sum(screen.mins today where who = w) > limit, bad, accent) radius 2
+section "Both kids", "last 7 days"
+  goalbars last 7 days, sum(screen.mins on it), limit * 2
+list screen today, "No screen time logged today."
+===
+@rich domain=r6_bedtime_routine topic=kids bedtime routine checklist style=detailed
+bedtime is a battle. steps like bath, brush teeth, pyjamas, story and lights out. tick each one tonight and the checklist starts fresh tomorrow. show the last seven nights as dots for when all of them got done, plus a reminder at half past seven
+needs: add a routine step | tick each step tonight | steps done tonight count | last seven nights as dots | reminder at 7:30
+---
+app "Bedtime" moon ink dark
+table step name text
+table did step ref step
+let left = count(step, count(it.did today) = 0)
+remind "Bedtime routine starts now" at 19:30
+topbar "Bedtime", step, "Add step"
+if left = 0 and count(step) > 0
+  "All done. Sleep well." head color good
+else
+  left "steps left tonight" head
+each step as s empty "No steps yet. Add bath, teeth, pyjamas, story."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.did
+    text s.name grow
+row gap 1
+  each days last 7 days as d
+    stack grow gap 0 align center
+      text dayname(d) tiny color muted
+      box height 10 width 24 radius 5 fill if(count(step) > 0 and count(step, count(it.did on d) = 0) = 0, accent, soft)
+===
+@rich domain=r6_sibling_turns topic=sibling turn taking style=custom_ui
+ali and sara fight over who picks the movie, the game or the front seat. choose what it is, tap who picked, and the app says whose turn is next because the other one picked less. history underneath
+needs: choose movie, game or front seat | buttons for who picked | shows whose turn is next | counts of picks for each child | history of picks
+---
+app "Whose turn" smile orange
+table pick who pick Ali|Sara, what pick Movie|Game|Front_seat = Movie
+state w pick Movie|Game|Front_seat = Movie
+let ali = count(pick where who = Ali and what = w)
+let sara = count(pick where who = Sara and what = w)
+choice w
+stack card gap 1 align center
+  text "Next to pick" faint
+  if(ali <= sara, "Ali", "Sara") huge
+  "Ali" ali "· Sara" sara faint
+row gap 1
+  button "Ali picked" grow tap add pick who = Ali, what = w
+  button "Sara picked" grow tap add pick who = Sara, what = w
+list pick top 10, "Nobody has picked yet."

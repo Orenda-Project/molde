@@ -1,0 +1,488 @@
+@rich domain=d3_onboarding_funnel topic=onboarding_funnel_steps style=custom_ui
+funnel for our signup flow: I type the steps in order (landing, signup, verify email, first project) and the number of people who reached each one. draw each step as a bar relative to the first and tell me the percent that survive to the end
+needs: add a step with its order and number of users | bar for each step relative to the first | percent of users kept at each step | overall conversion from first to last step
+---
+app "Funnel" chart green
+table step name text, ord num 1..12 "Order", users num 0..
+let top = max(step.users)
+let first_step = first(step.users where ord = min(step.ord))
+topbar "Onboarding funnel", step, "Add step"
+statcard round(last(step.users where ord = max(step.ord)) * 100 / max(first_step, 1)), "% make it from first step to last", 100
+each step sort ord as s empty "No steps yet. Add the screens people pass through, in order."
+  stack gap 0
+    row gap 1
+      s.ord s.name bold grow
+      s.users "·" round(s.users * 100 / max(top, 1)) "%" faint
+    draw 100, 6
+      rect 0, 0, 100, 6 fill soft radius 3
+      rect 0, 0, 100 * s.users / max(top, 1), 6 fill accent radius 3
+===
+@rich domain=d3_nps_pulse topic=nps_score_log style=multi_feature
+I send a one-tap NPS survey in our app and want to key in the answers as they come: buttons 0 to 10 plus an optional comment. show the NPS number (promoters minus detractors), and how many promoters, passives and detractors
+needs: tap a score from 0 to 10 | NPS number from promoters and detractors | counts of promoters, passives and detractors | colour split bar | list of recent answers
+---
+app "NPS" smile pink
+table vote score num 0..10, comment text?
+let pro = count(vote where score >= 9)
+let det = count(vote where score <= 6)
+let pas = count(vote) - pro - det
+let nps = round((pro - det) * 100 / max(count(vote), 1))
+statcard nps, "NPS from" plural(count(vote), "answer")
+"Tap the score you were just given" faint
+grid 6 gap 1
+  each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    button it fill if(it >= 9, good, if(it >= 7, soft, warn)) tap add vote score = it
+row gap 2
+  stat pro, "promoters"
+  stat pas, "passives"
+  stat det, "detractors"
+draw 100, 6
+  rect 0, 0, 100, 6 fill soft radius 3
+  rect 0, 0, 100 * pro / max(count(vote), 1), 6 fill good radius 3
+  rect 100 - 100 * det / max(count(vote), 1), 0, 100 * det / max(count(vote), 1), 6 fill bad radius 3
+list vote top 8, "No answers yet. Tap a score above when one comes in."
+===
+@rich domain=d3_beta_feedback topic=beta_tester_feedback_inbox style=detailed
+beta testers send feedback by whatsapp and I lose it. inbox: tester name, build number, kind bug idea or praise, what they said, and a tick when I have dealt with it. filter by kind and show how many are still waiting
+needs: add feedback with tester, build, kind and message | filter by kind | tick when dealt with | count still waiting | which build gets most feedback
+---
+app "Beta feedback" users orange dark
+table fb tester text, build text, kind pick Bug|Idea|Praise = Bug, msg long "What they said", handled bool
+state k pick All|Bug|Idea|Praise = All
+topbar "Beta feedback", fb, "Add feedback"
+statcard count(fb where handled = no), "waiting of" count(fb), count(fb)
+section "Feedback per build"
+  share fb by build, count(it), it.key
+choice k
+each fb where (k = All or kind = k) and handled = no as f empty "Inbox is clear. Paste the next message when one arrives."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.tester "· build" f.build bold
+      f.msg faint
+      f.kind faint
+    toggle f.handled
+===
+@rich domain=d3_release_notes_drafts topic=release_notes_by_version style=custom_ui
+draft release notes line by line: which version, a type (new, improved, fixed) and the sentence. group them by version so I can paste each group into the store listing, and tick lines I have reviewed
+needs: add a note line with version, type and sentence | grouped by version | tick reviewed | count of reviewed lines per version | filter out lines already shipped
+---
+app "Release notes" note yellow
+table line ver text "Version", kind pick New|Improved|Fixed = New, words text, reviewed bool
+state only_open bool = yes
+topbar "Release notes", line, "Add line"
+row gap 1 align center
+  toggle only_open
+  "Hide lines already reviewed" faint
+each line where only_open = no or reviewed = no by ver as g empty "No note lines yet. Add what changed, one sentence each."
+  section g.key, "reviewed" count(line where ver = g.key and reviewed = yes) "of" count(line where ver = g.key)
+    each g as l
+      row gap 2 swipe remove l tap edit l
+        toggle l.reviewed
+        stack grow gap 0
+          l.words
+          l.kind faint
+===
+@rich domain=d3_handoff_checklist topic=design_handoff_checklist style=multi_feature
+before design goes to dev each screen needs specs, assets, all states, final copy and tokens. let me add screens and tap those five chips per screen to mark them ready, with a progress bar per screen and how many screens are fully ready
+needs: add a screen | five chips to mark specs, assets, states, copy and tokens ready | progress bar per screen | count of fully ready screens
+---
+app "Handoff" pencil ink dark
+table screen name text
+table ready screen ref screen, part pick Specs|Assets|States|Copy|Tokens
+let full = count(screen, count(it.ready) = 5)
+topbar "Design handoff", screen, "Add screen"
+statcard full, "of" count(screen) "screens ready for dev", count(screen)
+each screen sort name as s empty "No screens yet. Add the first screen you are about to hand over."
+  stack card gap 1 swipe remove s
+    row gap 1
+      s.name bold grow
+      count(s.ready) "of 5" faint
+    scroll gap 1
+      each options ready.part as p
+        button p fill if(count(s.ready where part = p) > 0, accent, soft) tap toggle s.ready all where part = p
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * count(s.ready) / 5, 4 fill accent radius 2
+===
+@rich domain=d3_rice_scoring topic=rice_product_idea_scores style=detailed
+product ideas scored with RICE: reach per quarter, impact 1 to 3, confidence in percent and effort in person weeks. score is reach times impact times confidence over effort. rank the ideas and draw bars for the top five
+needs: add an idea with reach, impact, confidence and effort | RICE score computed per idea | ranked list best first | bar chart of top five | count of ideas
+---
+app "RICE" scale purple
+table idea name text, reach num 0.., impact num 1..3 = 2, conf num 10..100 = 80 "Confidence %", effort num 1..100 = 2 "Effort (weeks)"
+let score(i idea) = round(i.reach * i.impact * i.conf / 100 / i.effort)
+topbar "RICE scoring", idea, "Add idea"
+statcard count(idea), "ideas scored"
+section "Best five", "RICE score"
+  bars idea sort round(it.reach * it.impact * it.conf / 100 / it.effort) desc top 5, round(it.reach * it.impact * it.conf / 100 / it.effort), it.name
+each idea sort round(reach * impact * conf / 100 / effort) desc as i empty "No ideas yet. Add one with its reach and effort to see the score."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      "reach" i.reach "· impact" i.impact "·" i.conf "% · effort" i.effort faint
+    score(i) big
+===
+@rich domain=d3_store_review_replies topic=app_store_review_replies style=multi_feature
+log the app store reviews I need to answer: star rating, what they said, a topic (bug, praise, request, pricing) and whether I replied. show the average rating, how many of each star, and the ones still unanswered first
+needs: add a review with stars, text and topic | average star rating | count per star rating | mark as replied | unanswered reviews listed first
+---
+app "Store reviews" star red
+table review stars num 1..5 = 5, words long, topic pick Bug|Praise|Request|Pricing = Praise, replied bool
+topbar "Store reviews", review, "Add review"
+row gap 2
+  statcard round(avg(review.stars) * 10) / 10, "average stars"
+  statcard count(review where replied = no), "to reply to"
+section "Stars", "how many of each"
+  bars 1..5, count(review where stars = it), it
+each review sort replied as r empty "No reviews yet. Paste the ones you want to answer."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 1
+      r.stars "stars ·" r.topic bold grow
+      toggle r.replied
+    r.words faint
+===
+@rich domain=d3_demo_stakeholder_feedback topic=sprint_demo_stakeholder_feedback style=short
+what stakeholders said at the sprint demo: who, the point, their mood, and a tick when I turned it into a task
+needs: add a point with who, comment and mood | mood breakdown | tick when turned into a task | count not yet actioned
+---
+app "Demo feedback" users slate
+table fb who text, point long, mood pick Happy|Neutral|Worried = Neutral, tasked bool
+topbar "Demo feedback", fb, "Add point"
+count(fb where tasked = no) "points still to turn into tasks" head
+section "Mood in the room"
+  share fb by mood, count(it), it.key
+each fb sort tasked as f empty "Nothing yet. Add what people say at the next demo."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.tasked
+    stack grow gap 0
+      f.who "·" f.mood bold
+      f.point faint
+===
+@rich domain=d3_device_test_matrix topic=device_os_test_matrix style=custom_ui
+device matrix for QA: phones down the side, OS versions across, each cell shows the latest result Pass or Fail from what I log. record a result with device, OS and result, and show how many cells have failed
+needs: log a result with device, OS and pass or fail | matrix of devices by OS with colours | count of failing cells | list of latest results
+---
+app "Device matrix" phone teal
+table run device text, os pick A12|A13|A14|iOS16|iOS17 = A14 "OS", result pick Pass|Fail = Pass
+topbar "Device matrix", run, "Log result"
+statcard count(run where result = Fail), "failing results of" count(run)
+each run by device as g empty "No results yet. Log the first device you tested."
+  stack card gap 1
+    g.key bold
+    row gap 1
+      each options run.os as o
+        stack grow gap 0 align center radius 6 pad 1 fill if(last(run.result where device = g.key and os = o) = Fail, bad, if(last(run.result where device = g.key and os = o) = Pass, good, soft))
+          o tiny
+          last(run.result where device = g.key and os = o) tiny
+list run top 6, "Nothing logged yet."
+===
+@rich domain=d3_exploratory_timebox topic=exploratory_session_timebox style=detailed
+I do exploratory testing in time boxes. set the box length in settings (default 45 minutes), type the charter, start the timer, and when it ends it saves a session. I add how many bugs I found after. show sessions and bugs found per day this week
+needs: set the time box length | type the charter | countdown timer that saves a session when done | enter bugs found | bugs found per day chart
+---
+app "Test sessions" timer blue
+table session charter text?, bugs num 0.. = 0 "Bugs found"
+setting box dur = 45m "Time box"
+state charter text = ""
+field charter "Charter: what are you exploring?"
+timer box, "Session", add session charter = charter then notify "Time box over. Write down what you found."
+section "This week", "sessions:" count(session week)
+  daybars last 7 days, sum(session.bugs on it)
+list session today, "No sessions today. Type a charter and press Start."
+===
+@rich domain=d3_flaky_tests topic=flaky_test_list style=multi_feature
+flaky tests list: test name, suite, a button I press every time it fails randomly, and a quarantine tick. show the flakiest in the last 14 days at the top and how many are quarantined
+needs: add a test with name and suite | button to count a flaky failure | quarantine tick | flakiest tests first over the last 14 days | count quarantined
+---
+app "Flaky tests" bolt red
+table flake name text, suite text?, parked bool "Quarantined"
+table hit flake ref flake
+topbar "Flaky tests", flake, "Add test"
+statcard count(flake where parked = yes), "quarantined of" count(flake), count(flake)
+each flake sort count(it.hit last 14 days) desc as f empty "No flaky tests listed. Add the one that failed on CI for no reason."
+  row card gap 2 tap edit f swipe remove f fill if(f.parked, soft, surface)
+    stack grow gap 0
+      f.name bold
+      f.suite "·" count(f.hit last 14 days) "failures in 14 days" faint
+    toggle f.parked
+    button "Failed" tap add hit flake = f
+===
+@rich domain=d3_bug_bash_scores topic=bug_bash_leaderboard style=custom_ui
+bug bash tonight with the whole team. add the people, then tap Minor 1, Major 3 or Critical 5 next to a name each time they find a bug. leaderboard sorted by points with bars, and a total of bugs found
+needs: add a participant | buttons for minor, major and critical bugs worth 1, 3 and 5 points | leaderboard sorted by points | bar for each person | total bugs found
+---
+app "Bug bash" trophy orange
+table person name text
+table bug person ref person, pts num 1..5
+topbar "Bug bash", person, "Add person"
+statcard count(bug), "bugs found," sum(bug.pts) "points in all"
+each person sort sum(it.bug.pts) desc as p empty "No players yet. Add everyone who is joining the bash."
+  stack card gap 1 swipe remove p
+    row gap 1
+      "#" index + 1 p.name bold grow
+      sum(p.bug.pts) "pts" big
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * sum(p.bug.pts) / max(sum(bug.pts), 1), 4 fill accent radius 2
+    row gap 1
+      button "Minor 1" tap add bug person = p, pts = 1
+      button "Major 3" tap add bug person = p, pts = 3
+      button "Critical 5" fill bad tap add bug person = p, pts = 5
+===
+@rich domain=d3_regression_builds topic=regression_pass_per_build style=detailed
+for every build I run the regression suite and write down how many tests passed, failed and were skipped. show the pass rate per build as a line, the latest rate big, and warn me if it dropped under 95 percent
+needs: log a build with passed, failed and skipped | pass rate per build | line chart of pass rate | warning under 95 percent | latest build result
+---
+app "Regression" check green
+table build ver text "Build", passed num 0.., failed num 0.., skipped num 0.. = 0
+let rate(b build) = round(b.passed * 1000 / max(b.passed + b.failed, 1)) / 10
+topbar "Regression runs", build, "Log build"
+if count(build) > 0
+  statcard rate(last(build)), "% pass rate on build" last(build.ver)
+  if rate(last(build)) < 95
+    "Below 95 percent. Hold the release." bold color bad
+section "Pass rate by build", "oldest to newest"
+  trend build sort at, rate(it)
+each build sort at desc top 8 as b empty "No builds yet. Log the numbers after the next regression run."
+  row card gap 2 tap edit b swipe remove b
+    b.ver bold grow
+    b.passed "pass ·" b.failed "fail ·" b.skipped "skip" faint
+    rate(b) "%" bold color if(rate(b) < 95, bad, good)
+===
+@rich domain=d3_test_env_booking topic=test_environment_booking style=multi_feature
+we fight over the QA and staging servers. book an environment (dev, QA, staging, perf) for a day with my name and hours, and show the next 7 days with who has what, so double bookings are clear
+needs: book an environment with name, day and hours | next 7 days overview | warn about double booking of same environment on same day | remove a booking
+---
+app "Env booking" box grey
+table slot env pick Dev|QA|Staging|Perf = QA, who text, day date = today, hours num 1..8 = 2
+topbar "Environment booking", slot, "Book"
+each 0..6 as n
+  section dayname(today + n), if(count(slot where day = today + n) > 1, "busy day", "")
+    each options slot.env as e
+      if count(slot where day = today + n and env = e) > 0
+        row gap 1
+          e bold grow
+          if count(slot where day = today + n and env = e) > 1
+            "Double booked" color bad bold
+          each slot where day = today + n and env = e as s
+            button s.who s.hours "h" tap remove s
+===
+@rich domain=d3_browser_compat topic=browser_compat_grid style=custom_ui
+browser compatibility check for each page of our site. add pages and tap a browser chip (Chrome, Firefox, Safari, Edge) to mark it broken, it turns red. show how many pages are clean everywhere and which browser has the most breakage
+needs: add a page | tap a browser chip to mark it broken | red when broken | count of pages clean in all browsers | breakage count per browser
+---
+app "Browser check" cloud slate
+table page name text
+table broken page ref page, browser pick Chrome|Firefox|Safari|Edge
+let clean = count(page, count(it.broken) = 0)
+topbar "Browser check", page, "Add page"
+statcard clean, "of" count(page) "pages clean in every browser", count(page)
+section "Broken per browser"
+  share options broken.browser, count(broken where browser = it), it
+each page sort name as p empty "No pages yet. Add the pages you want to check."
+  stack card gap 1 swipe remove p
+    p.name bold
+    row gap 1
+      each options broken.browser as b
+        button b fill if(count(p.broken where browser = b) > 0, bad, soft) grow tap toggle p.broken all where browser = b
+===
+@rich domain=d3_test_accounts topic=test_account_inventory style=short
+inventory of our test accounts: username, role admin editor or viewer, which environment, and a locked tick. no passwords here, just a reminder
+needs: add an account with username, role and environment | filter by environment | locked tick | count of locked accounts
+---
+app "Test accounts" user mint
+table acct name text "Username", role pick Admin|Editor|Viewer = Viewer, env pick QA|Staging = QA, locked bool
+state e pick All|QA|Staging = All
+topbar "Test accounts", acct, "Add account"
+count(acct where locked = yes) "locked of" count(acct) "accounts" head
+"Never store passwords here. Use the team vault." faint
+choice e
+each acct where e = All or env = e sort name as a empty "No accounts for this environment yet."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.name bold
+      a.role "·" a.env faint
+    toggle a.locked
+===
+@rich domain=d3_perf_test_runs topic=performance_test_p95 style=detailed
+load test runs: scenario name, number of virtual users, p95 latency in ms and error count. I set the latency budget in settings. line chart of p95 per run, how many runs blew the budget, and the latest run big
+needs: log a run with scenario, users, p95 and errors | set the latency budget | line chart of p95 per run | count of runs over budget | latest run
+---
+app "Load tests" bolt ocean
+table perf scenario text, users num 1.., p95 num 0.. unit "ms", errors num 0.. = 0
+setting budget num = 800 "Latency budget (ms)"
+topbar "Load tests", perf, "Log run"
+if count(perf) > 0
+  statcard last(perf.p95), "ms p95 on the latest run (" last(perf.scenario) ")", budget
+statcard count(perf where p95 > budget), "runs over the" budget "ms budget"
+section "p95 per run", "oldest to newest"
+  trend perf sort at, it.p95
+each perf sort at desc top 8 as p empty "No runs yet. Log one after your next load test."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.scenario bold
+      p.users "users ·" p.errors "errors" faint
+    p.p95 "ms" bold color if(p.p95 > budget, bad, good)
+===
+@rich domain=d3_deploy_smoke_checks topic=smoke_test_after_deploy style=multi_feature
+after every deploy I click through the smoke test: login, checkout, search and API health. one row per deploy with four ticks, the row turns green when all four pass. show how many deploys were clean
+needs: add a deploy with a version label | four ticks for login, checkout, search and API | row turns green when all four pass | count of clean deploys
+---
+app "Smoke tests" check yellow
+table smoke ver text "Deploy", login bool, checkout bool, search bool, api bool "API health"
+let all4(s smoke) = s.login and s.checkout and s.search and s.api
+topbar "Smoke tests", smoke, "New deploy"
+statcard count(smoke, it.login and it.checkout and it.search and it.api), "of" count(smoke) "deploys passed everything", count(smoke)
+each smoke sort at desc as s empty "No deploys yet. Add one right after you ship."
+  stack card gap 1 swipe remove s fill if(all4(s), good, soft)
+    s.ver bold
+    row gap 2
+      row gap 1
+        toggle s.login
+        "login" small
+      row gap 1
+        toggle s.checkout
+        "checkout" small
+      row gap 1
+        toggle s.search
+        "search" small
+      row gap 1
+        toggle s.api
+        "API" small
+===
+@rich domain=d3_bug_repro_notes topic=bug_reproduction_notes style=detailed
+notes to reproduce bugs: title, steps, what I expected, what happened, and how often it reproduces (always, sometimes, once). search through them and filter by how reproducible they are
+needs: add a bug with title, steps, expected and actual | how often it reproduces | filter by frequency | search | count of notes
+---
+app "Repro notes" pen grey
+table repro title text, steps long, expected text, actual text, often pick Always|Sometimes|Once = Always
+state f pick All|Always|Sometimes|Once = All
+state q text = ""
+topbar "Repro notes", repro, "Add bug"
+count(repro) "bugs written up," count(repro where often = Always) "always reproduce" head
+choice f
+field q "Search title or steps"
+each repro where (f = All or often = f) and (has(title, q) or has(steps, q)) sort title as r empty "No notes match. Write up the next bug while it is fresh."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 1
+      r.title bold grow
+      r.often faint
+    r.steps faint
+    "Expected:" r.expected "· Got:" r.actual small
+===
+@rich domain=d3_defect_escape_rate topic=defect_escape_by_month style=custom_ui
+where do our bugs get caught: dev, QA or production? log each defect with where it was found. show a 6 month chart of production escapes and the share caught before release this quarter
+needs: log a defect with title and where found | chart of production escapes for the last 6 months | share caught before release | breakdown by where found
+---
+app "Escapes" shield plum
+table defect title text, found pick Dev|QA|Production = QA
+let early = count(defect month where found != Production)
+topbar "Defect escapes", defect, "Log defect"
+statcard round(early * 100 / max(count(defect month), 1)), "% of this month's defects caught before release", 100
+section "Escaped to production", "last 6 months"
+  plot 0..6, 0..max(count(defect where found = Production), 1) axes
+    each 0..5 as n
+      rect n + 0.15, 0, 0.7, count(defect month of addmonths(today, n - 5) where found = Production) fill bad radius 2
+      tick n + 0.5, month(addmonths(today, n - 5))
+section "Where found", "all time"
+  share defect by found, count(it), it.key
+===
+@rich domain=d3_uat_signoff topic=uat_client_signoff style=multi_feature
+client is testing our features (UAT) and I need to track each one: feature name, status pending / approved / changes asked, and buttons to set it when the client replies. progress of approved features and a list of what is blocked on changes
+needs: add a feature with name and status | buttons to set approved or changes asked | progress of approved features | list of features with changes asked
+---
+app "UAT sign-off" flag teal
+table feat name text, status pick Pending|Approved|Changes_asked = Pending, reply long?
+topbar "UAT sign-off", feat, "Add feature"
+goal count(feat where status = Approved), count(feat), "features approved by the client"
+if count(feat where status = Changes_asked) > 0
+  section "Waiting on us", "changes asked"
+    each feat where status = Changes_asked as f
+      stack gap 0
+        f.name bold
+        f.reply faint
+each feat where status = Pending as f empty "Nothing is waiting for the client. All features have a reply."
+  row card gap 2 tap edit f swipe remove f
+    f.name bold grow
+    button "Approved" tap set f.status = Approved
+    button "Changes" tap set f.status = Changes_asked
+===
+@rich domain=d3_module_coverage topic=test_coverage_by_module style=detailed
+unit test coverage per module. I type the module name and its percent, set the target (default 80) and see every module as a bar with a line at the target. count how many are under target and the average coverage
+needs: add a module with coverage percent | set target coverage | bar per module with target line | count of modules under target | average coverage
+---
+app "Coverage" chart ink dark
+table module name text, cov num 0..100 unit "%"
+setting target num = 80 "Target coverage (%)"
+topbar "Test coverage", module, "Add module"
+row gap 2
+  statcard count(module where cov < target), "modules under" target "%"
+  statcard round(avg(module.cov)), "% average coverage", 100
+each module sort cov as m empty "No modules yet. Add each package with its latest coverage."
+  stack gap 0 tap edit m swipe remove m
+    row gap 1
+      m.name bold grow
+      m.cov "%" bold color if(m.cov < target, bad, good)
+    draw 100, 6
+      rect 0, 0, 100, 6 fill soft radius 3
+      rect 0, 0, m.cov, 6 fill if(m.cov < target, warn, accent) radius 3
+      line target, 0, target, 6 stroke ink thick 1
+===
+@rich domain=d3_runbook_steps topic=runbook_steps_checklist style=custom_ui
+runbook for a database failover. steps in order with who does it, and a tick for each. show progress, a button that starts a fresh run (clears all ticks and stores the start time) and how long the run has been going
+needs: add a step with order and owner | tick steps as done | progress of steps done | button to start a fresh run that clears ticks | time since the run started
+---
+app "Runbook" list orange
+table step title text, ord num 1..50 "Order", owner text?, done bool
+state started when = now
+topbar "Runbook", step, "Add step"
+goal count(step where done = yes), count(step), "steps done"
+row gap 2 align center
+  stack grow gap 0
+    "Run started" started faint
+    text now - started big
+  button "Start fresh run" tap set all step.done = no then set started = now
+each step sort ord as s empty "No steps yet. Add the first thing to do when the failover starts."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    stack grow gap 0
+      s.ord s.title bold
+      s.owner faint
+===
+@rich domain=d3_shift_handover topic=ops_shift_handover_notes style=multi_feature
+shift handover notes for our ops team. each note has an area (incidents, deploys, tickets, watch), the text and who wrote it, and the next person ticks it when they have read it. group by day, and show how many notes are not yet acknowledged
+needs: add a note with area, text and author | next person ticks acknowledged | grouped by day | count of unacknowledged notes | filter by area
+---
+app "Handover" users blue
+table note area pick Incidents|Deploys|Tickets|Watch = Incidents, words long, from text, read bool "Acknowledged"
+state a pick All|Incidents|Deploys|Tickets|Watch = All
+topbar "Shift handover", note, "Add note"
+statcard count(note where read = no), "notes not acknowledged yet"
+choice a
+each note where a = All or area = a by day as g empty "No notes. Write what the next shift needs to know."
+  text g.key bold faint
+  each g as n
+    row card gap 2 tap edit n swipe remove n
+      toggle n.read
+      stack grow gap 0
+        n.area "· from" n.from bold
+        n.words
+===
+@rich domain=d3_vendor_renewals topic=vendor_licence_renewals_cost style=detailed
+all our vendors and licences with the cost, whether it renews monthly or yearly, and the renewal date. work out what we pay per year, show who is biggest, sort by renewal date, and remind me two weeks before each renews
+needs: add a vendor with cost, cycle and renewal date | yearly total cost | spend per vendor comparison | sorted by renewal date | reminder two weeks before renewal
+---
+app "Renewals" tag yellow
+table vendor name text, cost money, cycle pick Monthly|Yearly = Yearly, renews date
+let yearly(v vendor) = if(v.cycle = Monthly, v.cost * 12, v.cost)
+topbar "Vendor renewals", vendor, "Add vendor"
+remind "A licence renews in two weeks" at vendor.renews - 14d at 9:00
+statcard sum(vendor, yearly(it)), "paid to vendors per year"
+section "Biggest first", "per year"
+  bars vendor sort yearly(it) desc top 6, yearly(it), it.name
+each vendor sort renews as v empty "No vendors yet. Add every tool and licence you pay for."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.name bold
+      "renews" v.renews "·" v.cycle faint
+    yearly(v) bold

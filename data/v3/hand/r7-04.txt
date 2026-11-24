@@ -1,0 +1,515 @@
+@rich domain=r7_aquarium_two_tabs topic=aquarium chores and water tests style=custom_ui
+i have a planted tank and two tabs would help me: one for chores like water change and filter rinse with how often each is due and a done button, and one for water tests where i log ph, ammonia and temperature and see the ph over time
+needs: add a chore with days between | chores due today with a done button | log a water test with ph, ammonia and temperature | line of ph over time | tabs for chores and tests
+---
+app "Fish tank" fish teal dark
+table chore name text, every num 1..60 = 7 "Every (days)"
+table cdone chore ref chore
+table test ph num 4..10 = 7, ammonia pick Zero|Low|High = Zero, temp num 15..35 = 25 unit "C"
+screen chores "Chores" check
+  topbar "Tank chores", chore, "Add chore"
+  statcard count(chore, due(it.cdone, it.every)), "chores due today", count(chore)
+  each chore sort name as c empty "No chores yet. Add water change or filter rinse."
+    row card gap 2 tap edit c swipe remove c
+      stack grow gap 0
+        c.name bold
+        "Every" c.every "days," if(count(c.cdone) = 0, "never done", join(since(c.cdone), " days ago")) faint
+      if due(c.cdone, c.every)
+        button "Done" fill accent tap add cdone chore = c
+      else
+        "Fine" color good
+screen tests "Water tests" drop
+  topbar "Water tests", test, "Log test"
+  section "pH over time", "latest" last(test.ph)
+    trend test sort at, it.ph
+  each test sort at desc top 6 as t empty "No tests yet. Dip a strip and log it."
+    row gap 2
+      t.ph "pH" bold
+      t.ammonia "ammonia" faint grow
+      t.temp "C" faint
+===
+@rich domain=r7_seed_sowing_dates topic=seed sowing and sprout dates style=detailed
+seed starting season. each tray has the crop, the day i sowed it and the days it usually takes to sprout. show the expected sprout date, how many days left or overdue, a tick when sprouted, a reminder a week after sowing, and how many trays have sprouted
+needs: add a tray with crop, sow date and days to sprout | expected sprout date | days left or overdue | tick when sprouted | reminder a week after sowing
+---
+app "Seed trays" plant green
+table seed crop text, sown date, days num 1..60 = 7 "Days to sprout", sprouted bool
+remind "Check your seed trays for sprouts" at seed.sown + 7d at 9:00
+topbar "Seed trays", seed, "Sow seeds"
+statcard count(seed where sprouted = yes), "of" count(seed) "trays sprouted", count(seed)
+each seed sort sown desc as s empty "No trays yet. Sow your first seeds."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.sprouted
+    stack grow gap 0
+      s.crop bold
+      if s.sprouted
+        "Sprouted" color good
+      else
+        "Expect sprouts" s.sown + s.days faint
+    if s.sprouted = no
+      if s.sown + s.days - today >= 0
+        s.sown + s.days - today "days left" faint
+      else
+        max(today - s.sown - s.days, 0) "days overdue" color bad
+===
+@rich domain=r7_hive_inspections topic=beehive inspections and honey style=multi_feature
+two hives in the back garden. each inspection i log the hive, if i saw the queen, brood pattern good, patchy or poor and kilos of honey taken. show days since each hive was inspected and flag it after 10 days, plus honey this year
+needs: add a hive | log an inspection with queen seen, brood and honey | days since each hive was inspected | flag after 10 days | honey kilos this year
+---
+app "Beekeeping" star yellow
+table hive name text
+table inspection hive ref hive, queen bool, brood pick Good|Patchy|Poor = Good, honey num 0..60 = 0 unit "kg"
+topbar "Hives", hive, "Add hive"
+statcard sum(inspection.honey year), "kg of honey this year"
+each hive sort name as h empty "No hives yet. Add the first one."
+  stack card gap 1 tap edit h swipe remove h
+    row gap 2
+      h.name bold grow
+      count(h.inspection) "inspections" faint
+    if count(h.inspection) = 0
+      "Never inspected" faint
+    else
+      "Last inspected" since(h.inspection) "days ago, brood" last(h.inspection.brood) color if(due(h.inspection, 10), bad, muted)
+form inspection, "Log inspection"
+===
+@rich domain=r7_coffee_brew_ratio topic=coffee brews with ratio and rating style=detailed
+home coffee. each brew i note the method like v60, aeropress, french press or espresso, grams of coffee, ml of water, brew seconds and a rating out of 5. show the ratio for each brew, my best rated method and average rating per method
+needs: log a brew with method, dose, water, time and rating | brew ratio for each cup | average rating per method | brews this week | list of brews
+---
+app "Coffee log" coffee orange
+table brew method pick V60|Aeropress|French_press|Espresso = V60, dose num 5..60 = 15 unit "g", water num 50..1000 = 250 unit "ml", secs num 10..600 = 180 unit "s", rating num 1..5 = 3
+topbar "Coffee log", brew, "Log brew"
+statcard count(brew week), "brews this week"
+section "Average rating", "per method"
+  share brew by method, round(avg(it.rating) * 10) / 10, it.key
+each brew sort at desc top 8 as b empty "No brews yet. Weigh your beans and write it down."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.method bold
+      b.dose "g to" b.water "ml, 1 :" fixed(b.water / b.dose, 1) faint
+    b.rating "of 5" bold
+===
+@rich domain=r7_tea_tasting_notes topic=tea tasting notes and favourites style=multi_feature
+tasting notes for teas i try. name, kind like black, green, oolong, white or herbal, steeping minutes, a score out of 10 and a note. chips to filter by kind and a short list of my top three favourites
+needs: add a tea with kind, steeping time, score and note | chips to filter by kind | top three favourites | average score | list of notes
+---
+app "Tea notes" cup green
+table tea name text, kind pick Black|Green|Oolong|White|Herbal = Black, steep num 1..15 = 3 unit "min", score num 1..10 = 7, note long?
+state f pick All|Black|Green|Oolong|White|Herbal = All
+topbar "Tea notes", tea, "Add tea"
+section "Top three", "highest scores"
+  each tea sort score desc top 3 as t empty "Taste a few teas first."
+    row gap 2
+      t.name bold grow
+      t.score "of 10" faint
+choice f
+each tea where f = All or kind = f sort at desc as t empty "No teas here. Add one or pick another kind."
+  stack card gap 0 tap edit t swipe remove t
+    row gap 2
+      t.name bold grow
+      t.score bold
+    t.kind "·" t.steep "min" faint
+    t.note small
+===
+@rich domain=r7_scent_wardrobe topic=fragrance collection and wears style=custom_ui
+my perfume wardrobe. each bottle has the house, a best season and millilitres left. a button for wore this today, so i can see which ones i never reach for, and a warning when a bottle is under 10 ml
+needs: add a bottle with house, season and millilitres left | wore this today button | wears per bottle | warning under 10 ml | least worn first
+---
+app "Scent wardrobe" drop pink
+table scent name text, house text?, season pick Spring|Summer|Autumn|Winter|Any = Any, left num 0..200 = 50 unit "ml"
+table wear scent ref scent
+topbar "Scent wardrobe", scent, "Add bottle"
+statcard count(wear month), "wears this month"
+each scent sort count(it.wear) as s empty "No bottles yet. Add your favourite one."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 2
+      stack grow gap 0
+        s.name bold
+        s.house "·" s.season faint
+      button "Wore today" fill if(count(s.wear today) > 0, good, soft) tap toggle s.wear
+    row gap 2
+      "Worn" count(s.wear) "times" faint grow
+      if s.left < 10
+        s.left "ml left" color bad bold
+      else
+        s.left "ml left" faint
+===
+@rich domain=r7_vinyl_shelf_spins topic=vinyl records and plays style=multi_feature
+my vinyl shelf. title, artist, year and condition mint, good or fair. a button each time i play a record, a search box, the three records i spin most and how many records i own
+needs: add a record with artist, year and condition | button for each time i play it | search records | three most played | count of records
+---
+app "Vinyl shelf" music plum dark
+table record title text, artist text, year num 1930..2100, cond pick Mint|Good|Fair = Good
+table spin record ref record
+state q text = ""
+topbar "Vinyl shelf", record, "Add record"
+statcard count(record), "records on the shelf"
+section "Most played", "spins"
+  each record sort count(it.spin) desc top 3 as r empty "Play something first."
+    row gap 2
+      r.title bold grow
+      count(r.spin) faint
+field q "Search artist or title"
+each record where has(title, q) or has(artist, q) sort artist as r empty "No records match."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.title bold
+      r.artist r.year r.cond faint
+    button "Spin" tap add spin record = r
+===
+@rich domain=r7_lego_sets_pieces topic=lego sets build progress style=custom_ui
+building big lego sets over weeks. each set has a name and its piece count. i add 100 or 500 pieces after a session and want a bar for how far along it is, the total pieces placed across all sets and a note when a set is finished
+needs: add a set with piece count | buttons to add 100 or 500 pieces | bar of pieces placed | total pieces placed | finished label on a complete set
+---
+app "Brick builds" box red
+table setb name text, pieces num 10..20000 = 1000, placed num 0..20000 = 0
+topbar "Brick builds", setb, "Add set"
+statcard sum(setb.placed), "pieces placed in all", sum(setb.pieces)
+each setb sort name as s empty "No sets yet. Add the box on your desk."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 2
+      s.name bold grow
+      if s.placed >= s.pieces
+        "Finished" color good bold
+      else
+        s.placed "of" s.pieces faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(s.placed / s.pieces, 0, 1), 3 fill accent radius 1
+    row gap 1
+      button "+100" grow tap set s.placed = min(s.placed + 100, s.pieces)
+      button "+500" grow tap set s.placed = min(s.placed + 500, s.pieces)
+===
+@rich domain=r7_origami_clean_rate topic=origami models and clean fold rate style=detailed
+origami practice. each model has a difficulty easy, medium or hard. after each attempt i tap clean or messy. show how many attempts and clean ones per model, my clean rate overall, and put harder models in orange
+needs: add a model with difficulty | tap clean or messy after each attempt | attempts and clean count per model | overall clean rate | harder models highlighted
+---
+app "Paper folds" paw pink
+table fold model text, level pick Easy|Medium|Hard = Easy
+table attempt fold ref fold, clean bool
+topbar "Paper folds", fold, "Add model"
+statcard round(count(attempt where clean = yes) * 100 / max(count(attempt), 1)), "% of attempts came out clean", 100
+each fold sort level as f empty "No models yet. Add a crane to start."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.model bold color if(f.level = Hard, warn, ink)
+      f.level "·" count(f.attempt) "attempts," count(f.attempt where clean = yes) "clean" faint
+    button "Clean" fill accent tap add attempt fold = f, clean = yes
+    button "Messy" tap add attempt fold = f, clean = no
+===
+@rich domain=r7_game_shelf_dust topic=board game shelf and what gathers dust style=multi_feature
+a shelf of board games i own. when we play one i tap played. show which games have never been played and which have not been played in 90 days, so i can pick one, plus plays this year
+needs: add a game | tap played | games never played | games not played in 90 days | plays this year
+---
+app "Game shelf" board slate
+table game name text, players text?
+table played game ref game
+topbar "Game shelf", game, "Add game"
+row gap 2
+  statcard count(played year), "plays this year"
+  statcard count(game, count(it.played) = 0), "never played"
+section "Dusty", "not played in 90 days"
+  "Games to pick from:" count(game, due(it.played, 90)) faint
+  each game sort name as g
+    if due(g.played, 90)
+      row gap 2
+        g.name bold grow
+        if count(g.played) = 0
+          "never" faint
+        else
+          since(g.played) "days" faint
+each game sort name as g empty "No games yet."
+  row card gap 2 tap edit g swipe remove g
+    g.name bold grow
+    count(g.played) "plays" faint
+    button "Played" tap add played game = g
+===
+@rich domain=r7_achievement_rings topic=game achievements with progress rings style=custom_ui
+i like finishing games to 100 percent. each game has the number of achievements and how many i have unlocked, with a plus one button. show a ring for each game, an overall percent and which games are complete
+needs: add a game with achievements total | plus one unlocked button | ring per game | overall percent unlocked | complete games count
+---
+app "Achievements" trophy grey dark
+table game name text, total num 1..2000 = 50, earned num 0..2000 = 0 "Unlocked"
+let all = sum(game.total)
+topbar "Achievements", game, "Add game"
+statcard round(sum(game.earned) * 100 / max(all, 1)), "% of all achievements unlocked", 100
+"Complete games:" count(game, it.earned >= it.total) faint
+each game sort name as g empty "No games yet. Add the one you are grinding."
+  row card gap 2 tap edit g swipe remove g
+    draw width 56
+      circle 42 stroke soft thick 10
+      arc 42, 0, 360 * clamp(g.earned / g.total, 0, 1) stroke if(g.earned >= g.total, good, accent) thick 10
+    stack grow gap 0
+      g.name bold
+      g.earned "of" g.total faint
+    button "+1" tap set g.earned = min(g.earned + 1, g.total)
+===
+@rich domain=r7_wordle_guess_bars topic=daily word game guess distribution style=multi_feature
+i play the daily word game and want to log how many tries it took, 7 meaning i failed. show a bar chart of how many times i solved it in 1 to 6 tries and failed, my current streak of days played, best streak and win rate
+needs: log tries for today's game | bar chart of tries from 1 to 7 | streak of days played | best streak | win rate
+---
+app "Word game" grid yellow
+table wordle tries num 1..7 = 4 "Tries (7 = failed)"
+topbar "Word game", wordle, "Log today"
+row gap 2
+  statcard streak(wordle), "day streak"
+  statcard best(wordle), "best streak"
+statcard round(count(wordle where tries < 7) * 100 / max(count(wordle), 1)), "% solved", 100
+section "Tries", "number of games"
+  bars [1, 2, 3, 4, 5, 6, 7], count(wordle where tries = it), it
+list wordle top 5, "No games logged. Play today's and log it."
+===
+@rich domain=r7_jigsaw_sittings topic=jigsaw puzzle sittings and finish estimate style=detailed
+doing a 2000 piece jigsaw on the dining table over many evenings. each sitting i log how many pieces went in. show total placed, a bar toward the full count, my average per sitting and a guess of how many more sittings it needs
+needs: add a puzzle with piece count | log a sitting with pieces placed | bar toward the full count | average pieces per sitting | estimated sittings left
+---
+app "Jigsaw" grid blue
+table jigsaw name text, pieces num 100..5000 = 1000
+table sitting jigsaw ref jigsaw, placed num 1..1000
+topbar "Jigsaw", jigsaw, "New puzzle"
+each jigsaw sort name as j empty "No puzzle on the table yet. Add one with its piece count."
+  stack card gap 1 tap edit j swipe remove j
+    j.name head
+    goal sum(j.sitting.placed), j.pieces, "pieces placed"
+    if count(j.sitting) > 0
+      "Average" round(sum(j.sitting.placed) / count(j.sitting)) "pieces a sitting, about" round(max(j.pieces - sum(j.sitting.placed), 0) / max(sum(j.sitting.placed) / count(j.sitting), 1)) "sittings left" faint
+form sitting, "Log sitting"
+===
+@rich domain=r7_cycling_routes_pace topic=cycling rides and route pace style=multi_feature
+weekend rides on my road bike. route name, kilometers and average speed. a monthly distance goal with a bar, a line of my average speed over the last ten rides, and which route i ride the most
+needs: log a ride with route, km and average speed | monthly distance goal with bar | line of speed over the last 10 rides | km per route | list of rides
+---
+app "Ride log" bike ocean
+table ride route text, km num 1..400 = 20, speed num 5..60 = 22 unit "km/h"
+setting monthly num = 200 "Monthly km target"
+topbar "Ride log", ride, "Log ride"
+goal sum(ride.km month), monthly, "km this month", "km"
+section "Speed", "last 10 rides"
+  trend ride sort at desc top 10, it.speed
+section "Routes", "total km"
+  share ride by route, sum(it.km), it.key
+list ride top 5, "No rides yet. Log the first one."
+===
+@rich domain=r7_camping_pack_weight topic=camping pack list with weight limit style=detailed
+packing for a camping trip: shelter, sleep, cook, clothes and tools. each item has a weight in grams and a tick when packed. i set my pack weight limit, see the weight of what is packed with a bar and a warning if over, and a button to untick everything for the next trip
+needs: add an item with category and weight | tick when packed | set pack weight limit | bar of packed weight with warning if over | button to untick everything
+---
+app "Pack list" fire ocean
+table gear name text, cat pick Shelter|Sleep|Cook|Clothes|Tools = Shelter, grams num 1..20000 = 200, packed bool
+setting limit num = 10000 "Weight limit (g)"
+let carried = sum(gear.grams where packed = yes)
+topbar "Pack list", gear, "Add item"
+goal carried, limit, if(carried > limit, "over the limit", "grams packed"), "g"
+statcard count(gear where packed = yes), "of" count(gear) "items packed", count(gear)
+each options gear.cat as c
+  if count(gear where cat = c) > 0
+    section c, "packed" count(gear where cat = c and packed = yes) "of" count(gear where cat = c)
+      each gear where cat = c sort name as g
+        row gap 2 tap edit g swipe remove g
+          toggle g.packed
+          g.name grow
+          g.grams "g" faint
+button "Untick everything" tap set all gear.packed = no
+===
+@rich domain=r7_parks_checklist topic=national parks visited checklist style=custom_ui
+i want to visit every national park in my country. add a park with its region, a tick when i have been, the date i went and whether i got the passport stamp. show how many i have visited, stamps collected and parks per region
+needs: add a park with region | tick when visited | stamp collected tick | visited count | parks per region
+---
+app "Park checklist" tree mint
+table park name text, region text, been bool, stamp bool, when_been date?
+topbar "Park checklist", park, "Add park"
+row gap 2
+  statcard count(park where been = yes), "of" count(park) "parks visited", count(park)
+  statcard count(park where stamp = yes), "stamps collected"
+section "By region", "parks visited of total"
+  each park by region as g
+    row gap 2
+      g.key bold grow
+      count(g) "parks" faint
+each park sort been as p empty "No parks yet. Add the first one on your list."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.been
+    stack grow gap 0
+      p.name bold
+      p.region p.when_been faint
+    toggle p.stamp
+===
+@rich domain=r7_countries_been_planned topic=countries visited and planned trips style=multi_feature
+countries i have been to and countries i plan to go. each trip has the country, continent, the year and days spent, with a status been or planned. chips to switch between them, count of different countries i have been to and days travelled this year
+needs: add a trip with country, continent, year and days | status been or planned | chips to switch between been and planned | number of different countries visited | days travelled this year
+---
+app "Passport" plane ocean
+table trip country text, continent pick Asia|Europe|Africa|Americas|Oceania = Asia, year num 1990..2100, days num 1..365 = 7, status pick Been|Planned = Been
+state tab pick Been|Planned = Been
+topbar "Passport", trip, "Add trip"
+row gap 2
+  statcard count(trip where status = Been by country, yes), "countries visited"
+  statcard sum(trip.days where status = Been and year = year(today)), "days travelled this year"
+choice tab
+each trip where status = tab sort year desc as t empty "No trips here yet. Add one."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.country bold
+      t.continent faint
+    t.year faint
+section "By continent", "trips"
+  share trip where status = Been by continent, count(it), it.key
+===
+@rich domain=r7_skill_hours_goal topic=hours toward mastering a skill style=custom_ui
+i am putting hours into three skills: coding, drawing and spanish. each has an hours goal. one tap buttons to add 30 minutes or an hour per skill, a bar toward the goal and the total hours across everything
+needs: add a skill with an hours goal | buttons to add 30 minutes or an hour | bar toward the goal for each skill | total hours across skills | hours this week
+---
+app "Skill hours" hourglass ink
+table skill name text, goal num 1..10000 = 100 "Hours goal"
+table practice skill ref skill, mins num 1..600
+topbar "Skill hours", skill, "Add skill"
+row gap 2
+  statcard round(sum(practice.mins) / 6) / 10, "hours in all"
+  statcard round(sum(practice.mins week) / 6) / 10, "hours this week"
+each skill sort name as s empty "No skills yet. Add one with the hours you want to reach."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 2
+      s.name bold grow
+      round(sum(s.practice.mins) / 60) "of" s.goal "h" faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(sum(s.practice.mins) / 60 / s.goal, 0, 1), 3 fill accent radius 1
+    row gap 1
+      button "+30 min" grow tap add practice skill = s, mins = 30
+      button "+1 hour" grow tap add practice skill = s, mins = 60
+===
+@rich domain=r7_film_rolls_pipeline topic=film photography roll pipeline style=detailed
+i shoot film. every roll has a name or label, the film stock, and where it is: loaded, shot, developed or scanned. a next step button on each roll, a count of rolls in each stage and how many frames i have shot in total
+needs: add a roll with film stock and frame count | next step button | count of rolls in each stage | total frames shot | list of rolls by stage
+---
+app "Film rolls" eye grey dark
+table roll label text, stock text, frames num 12..36 = 36, stage pick Loaded|Shot|Developed|Scanned = Loaded
+topbar "Film rolls", roll, "Add roll"
+grid 4 gap 1
+  each options roll.stage as s
+    stack card gap 0 align center
+      count(roll where stage = s) big
+      s tiny
+statcard sum(roll.frames where stage != Loaded), "frames shot in total"
+each roll sort stage as r empty "No rolls yet. Load the first one."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.label bold
+      r.stock r.frames "frames" faint
+    if r.stage = Loaded
+      button "Shot" tap set r.stage = Shot
+    if r.stage = Shot
+      button "Developed" tap set r.stage = Developed
+    if r.stage = Developed
+      button "Scanned" tap set r.stage = Scanned
+    if r.stage = Scanned
+      "Done" color good bold
+===
+@rich domain=r7_garden_diary_kinds topic=garden diary entries by kind style=multi_feature
+a garden diary for fun. entries like planted, watered, fed, pruned, pest or harvest with the plant name and a note. chips to filter by kind, a heat map of the last 8 weeks so i can see how active i was, and entries by day
+needs: add an entry with kind, plant and note | chips to filter by kind | heat map of last 8 weeks | count of entries this month | entries grouped by day
+---
+app "Garden diary" plant mint
+table entry kind pick Planted|Watered|Fed|Pruned|Pest|Harvest = Watered, plant text, note text?
+state f pick All|Planted|Watered|Fed|Pruned|Pest|Harvest = All
+topbar "Garden diary", entry, "Add entry"
+statcard count(entry month), "entries this month"
+section "Last 8 weeks", "darker means busier"
+  heat last 56 days, count(entry on it), 4
+scroll gap 1
+  choice f
+list entry where f = All or kind = f by day, "Nothing here. Write down what you did in the garden."
+===
+@rich domain=r7_kombucha_batches topic=kombucha batches and ready countdown style=detailed
+brewing kombucha in jars. each batch has a name, the day i started and how many days it ferments. show the day it will be ready and the days left, a tick when bottled, a reminder on the ready day and the number of batches still fermenting
+needs: add a batch with start date and ferment days | ready date and days left | tick when bottled | reminder on the ready day | batches still fermenting
+---
+app "Kombucha" cup yellow
+table batch name text, started date, days num 5..60 = 10, bottled bool
+remind "A kombucha batch is ready to taste" at batch.started + 10d at 9:00
+topbar "Kombucha", batch, "Start batch"
+statcard count(batch where bottled = no), "batches still fermenting"
+each batch sort started desc as b empty "No batches yet. Start your first jar."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.bottled
+    stack grow gap 0
+      b.name bold
+      "Ready on" b.started + b.days faint
+    if b.bottled
+      "Bottled" color good
+    else
+      if b.started + b.days > today
+        b.started + b.days - today "days left" faint
+      else
+        "Ready now" color warn bold
+===
+@rich domain=r7_streak_freezes topic=language streak with freezes style=custom_ui
+like the language apps, i want a daily lesson streak with two freezes a month. i tick the lesson each day with minutes. a freeze button covers a missed day, shows freezes left, my streak, best streak and a grid of last six weeks
+needs: log a lesson with minutes | freeze button that covers yesterday | freezes left | streak and best streak | grid of last six weeks
+---
+app "Lesson streak" flame orange
+table lesson mins num 1..240 = 15
+setting freezes num = 2 "Freezes left"
+topbar "Lesson streak", lesson, "Log lesson"
+row gap 2
+  statcard streak(lesson), "day streak"
+  statcard best(lesson), "best streak"
+row gap 2 align center
+  "Freezes left:" freezes head grow
+  if freezes > 0 and count(lesson yesterday) = 0
+    button "Freeze yesterday" tap add lesson mins = 1, at = now - 1d then set freezes = freezes - 1
+section "Last 6 weeks"
+  daygrid last 42 days, count(lesson on it), 1
+===
+@rich domain=r7_book_club_meetings topic=book club meetings and reminders style=detailed
+our book club meets every few weeks. each meeting has the book, the date, who hosts and a rating after we discuss. show the next meeting with days to go, remind me the day before, and the past meetings with their ratings
+needs: add a meeting with book, date and host | next meeting with days to go | reminder the day before | rating after discussing | past meetings list
+---
+app "Book club" book pink
+table meeting book text, day date, host text?, rating num? 1..5
+remind "Book club tomorrow. Have you finished the book?" at meeting.day - 1d at 18:00
+topbar "Book club", meeting, "Add meeting"
+section "Next meeting"
+  each meeting where day >= today sort day top 1 as m empty "Nothing planned. Pick the next book."
+    m.book head
+    "In" m.day - today "days, hosted by" m.host faint
+section "Past meetings", "rated out of 5"
+  each meeting where day < today sort day desc as m empty "No past meetings yet."
+    row card gap 2 tap edit m swipe remove m
+      m.book bold grow
+      m.rating bold
+===
+@rich domain=r7_workshop_budget_bars topic=workshop projects with budget bars style=multi_feature
+woodworking projects in the garage. each has a budget, what i have spent so far and hours spent, with a status plan, building or finished. the bar should turn warning colour when spent goes over the budget. total spent and hours overall
+needs: add a project with budget and status | spent so far and hours | budget bar that warns when over | total spent across projects | total hours
+---
+app "Workshop" tool slate
+table wproject name text, status pick Plan|Building|Finished = Plan, budget money, spent money = 0, hours num 0..1000 = 0
+topbar "Workshop", wproject, "New project"
+row gap 2
+  statcard sum(wproject.spent), "spent in all"
+  statcard sum(wproject.hours), "hours in the shop"
+each wproject sort status as p empty "No projects yet. Sketch the first one."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.name bold grow
+      p.status faint
+    goal p.spent, p.budget, "spent of the budget"
+    p.hours "hours" faint
+===
+@rich domain=r7_ham_radio_contacts topic=ham radio contacts and countries style=custom_ui
+ham radio logbook. callsign, band, country and a signal report. count contacts this month, how many different countries i have worked, contacts per band and the latest ones
+needs: log a contact with callsign, band, country and report | contacts this month | different countries worked | contacts per band | latest contacts
+---
+app "Radio log" phone ink
+table contact call text, band pick Band_20m|Band_40m|Band_80m|Band_2m = Band_20m, country text, report num 1..59 = 59
+topbar "Radio log", contact, "Log contact"
+row gap 2
+  statcard count(contact month), "contacts this month"
+  statcard count(contact by country, yes), "countries worked"
+section "Per band"
+  share contact by band, count(it), it.key
+each contact sort at desc top 8 as c empty "No contacts yet. Call CQ and log the first one."
+  row card gap 2 tap edit c swipe remove c
+    c.call bold grow
+    c.country c.band faint

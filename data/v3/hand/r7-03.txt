@@ -1,0 +1,458 @@
+@rich domain=r7_habit_time_slots topic=habits grouped by morning afternoon evening style=custom_ui
+i do better when habits are tied to a time of day. put each habit in morning, afternoon or evening, tick them today, and for each part of the day show how many are done out of how many. a streak for each habit too
+needs: add a habit with a time of day | tick a habit today | done out of total for each part of the day | streak per habit | habits grouped by time of day
+---
+app "Day parts" clock ink
+table habit name text, slot pick Morning|Afternoon|Evening = Morning
+table check habit ref habit
+topbar "Day parts", habit, "Add habit"
+statcard count(check today), "of" count(habit) "habits done today", count(habit)
+each options habit.slot as s
+  section s, "done" count(check today where habit.slot = s) "of" count(habit where slot = s)
+    each habit where slot = s sort name as h empty "Nothing in this part of the day yet."
+      row gap 2 tap edit h swipe remove h
+        stack grow gap 0
+          h.name bold
+          "Streak" streak(h.check) "days" faint
+        toggle h.check
+===
+@rich domain=r7_habit_weekday_plan topic=habits on weekdays or weekends only style=multi_feature
+some habits are only for weekdays, like the gym bag, and some only for weekends, like calling mum. each habit has a plan: daily, weekdays or weekends. show only what applies today with a tick, and put the rest in a quiet list. tell me how many of today's are done
+needs: add a habit with a plan of daily, weekdays or weekends | show only habits that apply today | tick a habit today | how many of today's are done | quiet list of habits off today
+---
+app "Day plan" calendar blue
+table habit name text, plan pick Daily|Weekdays|Weekends = Daily
+table check habit ref habit
+let todays = count(habit where plan = Daily or (plan = Weekdays and weekday(today) <= 5) or (plan = Weekends and weekday(today) >= 6))
+topbar "Day plan", habit, "Add habit"
+statcard count(check today), "of" todays "done today", todays
+each habit where plan = Daily or (plan = Weekdays and weekday(today) <= 5) or (plan = Weekends and weekday(today) >= 6) sort name as h empty "Nothing planned for today. Enjoy the day off."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.name bold
+      h.plan faint
+    toggle h.check
+section "Off today"
+  each habit where (plan = Weekdays and weekday(today) > 5) or (plan = Weekends and weekday(today) < 6) as h empty "Everything is on today."
+    h.name faint
+===
+@rich domain=r7_monday_thursday_fasts topic=sunnah monday and thursday fasting style=detailed
+trying to keep the monday and thursday fasts. tap when i fasted that day, show the last eight weeks but only the mondays and thursdays as boxes, how many fasts this month, and remind me the evening before
+needs: tap when fasted today | boxes for mondays and thursdays of the last 8 weeks | fasts this month | reminder the evening before | streak of fasts
+---
+app "Mon and Thu fasts" moon teal
+table fast
+remind "Tomorrow is a fasting day. Intend tonight." at 20:00 on sun wed
+statcard count(fast month), "fasts this month", 8
+button if(count(fast today) > 0, "Fasted today", "I fasted today") fill if(count(fast today) > 0, good, accent) tap toggle fast today
+section "Last 8 weeks", "mondays and thursdays only"
+  grid 4 gap 1
+    each days last 56 days
+      if weekday(it) = 1 or weekday(it) = 4
+        stack gap 0 align center
+          dayname(it) monthday(it) tiny color muted
+          box height 24 radius 6 fill if(count(fast on it) > 0, accent, soft)
+"Fasts in a row:" streak(fast) "days, best" best(fast) faint
+===
+@rich domain=r7_surah_memorising topic=surah memorisation and revision due style=multi_feature
+memorising short surahs with my teacher. each surah has its number of ayahs and how many i know. a plus one ayah button, a progress bar, a button when i revised it today and a warning if i have not revised in a week. count of surahs complete
+needs: add a surah with number of ayahs | plus one ayah button | progress bar per surah | revised today button | warning when not revised for a week
+---
+app "Hifz" book ocean
+table surah name text, ayahs num 1..286 = 7, learned num 0..286 = 0
+table revised surah ref surah
+topbar "Hifz", surah, "Add surah"
+statcard count(surah, it.learned >= it.ayahs), "of" count(surah) "surahs memorised", count(surah)
+each surah sort name as s empty "No surahs yet. Add the one you are learning now."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 2
+      s.name bold grow
+      s.learned "of" s.ayahs "ayahs" faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(s.learned / s.ayahs, 0, 1), 3 fill accent radius 1
+    row gap 1 align center
+      if s.learned > 0 and due(s.revised, 7)
+        "Revise this week" color bad grow
+      else
+        "Revision up to date" faint grow
+      button "+1 ayah" tap set s.learned = min(s.learned + 1, s.ayahs)
+      button "Revised" tap add revised surah = s
+===
+@rich domain=r7_dua_notebook topic=dua notebook by occasion style=custom_ui
+my own dua notebook. title, the occasion like morning, evening, travel, food or sleep, the words as i write them and a tick when i have memorised it. chips for the occasion and a count of how many are memorised
+needs: add a dua with title, occasion and words | chips to filter by occasion | tick when memorised | count memorised | tap to read and edit
+---
+app "Dua notebook" heart purple
+table dua title text, occasion pick Morning|Evening|Travel|Food|Sleep|Other = Morning, words long, learned bool
+state f pick All|Morning|Evening|Travel|Food|Sleep|Other = All
+topbar "Dua notebook", dua, "Add dua"
+statcard count(dua where learned = yes), "of" count(dua) "duas memorised", count(dua)
+scroll gap 1
+  choice f
+each dua where f = All or occasion = f sort title as d empty "No duas here yet. Add one you want to learn."
+  stack card gap 1 tap edit d swipe remove d
+    row gap 2
+      d.title bold grow
+      d.occasion faint
+      toggle d.learned
+    d.words small
+===
+@rich domain=r7_sadaqah_giving topic=charity giving by cause style=multi_feature
+i want to give regularly, not only in ramadan. each gift has an amount and who it went to like mosque, family, orphans or food bank. quick buttons for 100, 500 and 1000, my monthly giving target with a bar, and where my giving went this year
+needs: log a gift with amount and cause | quick buttons for 100, 500 and 1000 | monthly giving target with bar | giving per cause this year | list of recent gifts
+---
+app "Sadaqah" heart mint
+table gift amount money, cause pick Mosque|Family|Orphans|Food_bank|Other = Orphans
+setting monthly money = 5000 "Monthly giving target"
+topbar "Sadaqah", gift, "Other amount"
+goal sum(gift.amount month), monthly, "given this month"
+quick gift, amount, [100, 500, 1000]
+section "This year", "by cause"
+  share gift year by cause, sum(it.amount), it.key
+list gift top 6, "No gifts logged yet. Even a small one counts."
+===
+@rich domain=r7_umrah_prep_checklist topic=umrah trip checklist and countdown style=detailed
+we leave for umrah in a few weeks. checklist grouped as documents, packing, money, health and spiritual, a tick on each item, a bar for each group and the number of days left before departure
+needs: add an item with a group | tick each item | bar per group | departure date | days left before departure
+---
+app "Umrah prep" plane grey
+table item what text, grp pick Documents|Packing|Money|Health|Spiritual = Documents, done bool
+setting depart date = today "Departure date"
+topbar "Umrah prep", item, "Add item"
+row gap 2
+  statcard max(depart - today, 0), "days to go"
+  statcard count(item where done = yes), "of" count(item) "items done", count(item)
+each options item.grp as g
+  if count(item where grp = g) > 0
+    section g, "done" count(item where grp = g and done = yes) "of" count(item where grp = g)
+      each item where grp = g sort done as i
+        row gap 2 tap edit i swipe remove i
+          toggle i.done
+          i.what grow color if(i.done, muted, ink)
+===
+@rich domain=r7_istighfar_wird topic=daily istighfar wird with quick counts style=short
+daily wird of istighfar, target 1000, add in chunks
+needs: add 10, 33 or 100 at a time | progress toward 1000 today | streak of days | chart of the last week
+---
+app "Wird" beads orange
+table wird n num 1..1000
+quick wird, n, [10, 33, 100]
+goal sum(wird.n today), 1000, "istighfar today"
+"Streak" streak(wird) "days" faint
+daybars last 7 days, sum(wird.n on it)
+===
+@rich domain=r7_hadith_to_habit topic=hadith notes turned into actions style=multi_feature
+when i read a hadith i write the source, a topic like character, prayer, family or knowledge, and what i will do about it. each one moves from to try to trying to habit. show how many are habits now and let me filter by topic
+needs: add a note with source, topic and takeaway | move a note from to try to trying to habit | chips to filter by topic | count of notes that became habits | list of takeaways
+---
+app "Hadith to habit" note slate
+table note source text, topic pick Character|Prayer|Family|Knowledge|Charity = Character, takeaway long, stage pick To_try|Trying|Habit = To_try
+state f pick All|Character|Prayer|Family|Knowledge|Charity = All
+topbar "Hadith to habit", note, "Add note"
+statcard count(note where stage = Habit), "of" count(note) "have become habits", count(note)
+choice f
+each note where f = All or topic = f sort at desc as n empty "No notes here. Add one hadith and one small action."
+  stack card gap 1 tap edit n swipe remove n
+    row gap 2
+      n.source bold grow
+      n.stage faint color if(n.stage = Habit, good, muted)
+    n.takeaway small
+    row gap 1
+      each options note.stage as s
+        button s fill if(n.stage = s, accent, soft) tap set n.stage = s
+===
+@rich domain=r7_salah_quality_log topic=prayer quality on time late or missed style=detailed
+i do not just want to know if i prayed but how: in jamaah, on time, late or missed. log each prayer with how it went, show this month's split, a chart of prayers done per day this week against five, and how many i have missed in total
+needs: log a prayer with how it went | split of jamaah, on time, late, missed this month | chart of prayers per day this week with line at 5 | total missed | list of recent prayers
+---
+app "Prayer quality" mosque red
+table salah which pick Fajr|Dhuhr|Asr|Maghrib|Isha = Fajr, how pick Jamaah|On_time|Late|Missed = On_time
+topbar "Prayer quality", salah, "Log prayer"
+row gap 1
+  each options salah.how as h
+    stack grow card gap 0 align center
+      count(salah month where how = h) big color if(h = Missed, bad, ink)
+      h tiny
+section "This week", "prayers done each day"
+  goalbars week, count(salah on it where how != Missed), 5
+statcard count(salah where how = Missed), "missed prayers in all"
+list salah top 8, "Nothing logged yet. Log the last prayer you prayed."
+===
+@rich domain=r7_iftar_menu_plan topic=iftar menu plan by ramadan day style=custom_ui
+planning iftar for the whole month. i set the first day of ramadan, add dishes with the day number i will cook them and the cost, tick when cooked, and the home screen shows today's iftar and what is left to spend on dishes not yet cooked
+needs: set the first day of ramadan | add a dish with day and cost | tick when cooked | today's iftar dishes | cost of dishes not yet cooked
+---
+app "Iftar plan" food orange
+table dish name text, day num 1..30, cost money?, cooked bool
+setting first date = today "First day of Ramadan"
+let dayno = today - first + 1
+topbar "Iftar plan", dish, "Add dish"
+row gap 2
+  statcard dayno, "Ramadan day today", 30
+  statcard sum(dish.cost where cooked = no), "still to spend"
+section "Today's iftar", "day" dayno
+  each dish where day = dayno as d empty "Nothing planned for today. Add a dish for this day."
+    row gap 2
+      toggle d.cooked
+      d.name bold grow
+      d.cost faint
+section "The whole month"
+  each dish sort day as d empty "No dishes planned yet."
+    row gap 2 tap edit d swipe remove d
+      "Day" d.day bold
+      d.name grow color if(d.cooked, muted, ink)
+===
+@rich domain=r7_juz_grid topic=thirty juz tick grid for ramadan style=custom_ui
+i want to finish the quran in ramadan, one juz a day. show thirty boxes for the thirty juz in a grid, tap a box when done, count of juz finished, and how many days are left to eid so i know if i am on pace
+needs: thirty boxes for the juz | tap a box when done | juz finished count | set the eid date | days left to eid
+---
+app "Juz grid" book green dark
+table juz part num 1..30
+setting eid date = today "Eid date"
+statcard count(juz), "of 30 juz finished", 30
+"Days left to eid:" max(eid - today, 0) head
+if count(juz) < 30 and max(eid - today, 0) > 0
+  "You need" round((30 - count(juz)) * 10 / max(eid - today, 1)) / 10 "juz a day to finish" faint
+grid 6 gap 1
+  each 1..30
+    box ratio 1 radius 8 fill if(count(juz where part = it) > 0, accent, soft) tap toggle juz all where part = it
+      it small bold align center color if(count(juz where part = it) > 0, bg, ink)
+===
+@rich domain=r7_asma_flashcards topic=names of allah flashcards style=custom_ui
+learning the names of allah. i add a name and its meaning, then a card screen: it shows a name picked at random, i tap to reveal the meaning, then tap next. mark the ones i know and see how many are known
+needs: add a name with meaning | random name card | tap to reveal the meaning | mark a name as known | count known
+---
+app "Asma ul Husna" star plum
+table asma name text, meaning text, known bool
+state cur text = ""
+state shown bool = no
+topbar "Names", asma, "Add name"
+statcard count(asma where known = yes), "of" count(asma) "names known", count(asma)
+section "Flashcard"
+  if len(cur) = 0
+    "Tap Next to draw a name." faint align center
+  else
+    cur huge align center
+    if shown
+      last(asma.meaning where name = cur) head align center
+    else
+      button "Show meaning" align center tap set shown = yes
+  row gap 1
+    button "Next name" fill accent grow tap set cur = random(asma).name then set shown = no
+    button "I know it" grow tap set all asma.known = yes where name = cur
+each asma sort name as a empty "No names yet. Add the first one with its meaning."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.known
+    a.name bold grow
+    a.meaning faint
+===
+@rich domain=r7_dream_journal topic=dream journal with kinds and search style=multi_feature
+i keep a dream journal by my bed. a title, the kind like good, strange, nightmare or lucid, and the story. search it by a word, count dreams per kind this month, and show how many days in the last two weeks i wrote one down
+needs: add a dream with title, kind and story | search by word | count per kind this month | days written in the last 14 | dreams by day
+---
+app "Dream journal" cloud ink dark
+table dream title text, kind pick Good|Strange|Nightmare|Lucid = Strange, story long
+state q text = ""
+topbar "Dream journal", dream, "Write dream"
+row gap 1
+  each options dream.kind as k
+    stack grow card gap 0 align center
+      count(dream month where kind = k) big
+      k tiny
+"Remembered on" count(days last 14 days, count(dream on it) > 0) "of the last 14 days" faint
+field q "Search dreams"
+list dream where has(story, q) or has(title, q) by day, "No dreams found. Write one down before you forget."
+===
+@rich domain=r7_pen_pal_letters topic=pen pals and letters sent received style=detailed
+i still write letters to five pen pals in different countries. log each letter as sent or received with a short note. for each pen pal show how many days since the last letter, flag the ones i have not written to in 30 days, and total letters sent this year
+needs: add a pen pal with country | log a letter sent or received | days since the last letter | flag pen pals waiting over 30 days | letters sent this year
+---
+app "Pen pals" note pink
+table pal name text, country text?
+table letter pal ref pal, dir pick Sent|Received = Sent, note text?
+topbar "Pen pals", pal, "Add pen pal"
+statcard count(letter year where dir = Sent), "letters sent this year"
+each pal sort name as p empty "No pen pals yet. Add the first one."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.name bold grow
+      p.country faint
+    if count(p.letter) = 0
+      "No letters yet" faint
+    else
+      "Last letter" since(p.letter) "days ago" color if(since(p.letter) > 30, bad, muted)
+    row gap 1
+      button "Sent one" grow tap add letter pal = p, dir = Sent
+      button "Received one" grow tap add letter pal = p, dir = Received
+===
+@rich domain=r7_goal_quarter_sliders topic=yearly goals by quarter with percent sliders style=custom_ui
+my goals for the year split by quarter, q1 to q4. each has a slider for percent complete, so i can drag it as i go. each quarter should show its average progress and the whole year at the top
+needs: add a goal with a quarter | slider for percent complete | average progress per quarter | whole year progress | goals grouped by quarter
+---
+app "Year plan" target blue
+table goal title text, quarter pick Q1|Q2|Q3|Q4 = Q1, pct num 0..100 = 0
+topbar "Year plan", goal, "Add goal"
+goal round(avg(goal.pct)), 100, "% of the year's goals done", "%"
+each options goal.quarter as q
+  section q, "average" round(avg(goal.pct where quarter = q)) "%"
+    each goal where quarter = q sort title as g empty "No goals in this quarter."
+      stack gap 0 tap edit g swipe remove g
+        row
+          g.title bold grow
+          g.pct "%" faint
+        slider g.pct 0..100
+===
+@rich domain=r7_hundred_day_grid topic=hundred day challenge grid style=detailed
+100 day challenge. i set the start date, then a 10 by 10 grid of boxes, one per day. tap a day's box to mark it. boxes of days that have not come yet stay grey, show which day number i am on and how many days i marked
+needs: set the start date | ten by ten grid of boxes | tap a box to mark the day | day number i am on | count of marked days
+---
+app "100 days" flag teal
+table mark
+setting start date = today "Start date"
+let dayno = today - start + 1
+statcard count(mark), "days marked out of" max(min(dayno, 100), 0), 100
+"Today is day" dayno faint
+grid 10 gap 1
+  each 1..100
+    let dd = start + it - 1
+    box ratio 1 radius 4 fill if(count(mark on dd) > 0, accent, soft) opacity if(it > dayno, 0.4, 1) tap toggle mark on dd
+===
+@rich domain=r7_no_spend_month topic=no spend days and money saved style=multi_feature
+no spend challenge. every day i tap if i spent nothing. i type what i usually spend in a day, and it shows how many no-spend days this month and the money that probably saved. a grid of the last 5 weeks too
+needs: tap when no money was spent today | set the usual daily spend | no-spend days this month | estimated money saved | grid of the last 5 weeks
+---
+app "No spend" coin green
+table nospend
+setting usual money = 1500 "Usual daily spend"
+topbar "No spend", nospend, "Mark a day"
+button if(count(nospend today) > 0, "Spent nothing today", "I spent nothing today") fill if(count(nospend today) > 0, good, accent) tap toggle nospend today
+row gap 2
+  statcard count(nospend month), "no-spend days this month"
+  statcard count(nospend month) * usual, "probably saved"
+section "Last 5 weeks"
+  daygrid last 35 days, count(nospend on it), 1
+===
+@rich domain=r7_daily_pages_minimum topic=reading pages with a daily minimum style=multi_feature
+read at least 10 pages a day. log pages read, set the minimum, show a grid of eight weeks coloured by how close each day got to the minimum, days this month i hit it, and the pages per day for the last week
+needs: log pages read | set the daily minimum | grid of 8 weeks | days i hit the minimum this month | pages per day this week
+---
+app "Ten pages" book yellow
+table read pages num 1..500, book text?
+setting least num = 10 "Daily minimum (pages)"
+topbar "Ten pages", read, "Log pages"
+statcard count(days month, sum(read.pages on it) >= least), "days hit the minimum this month", monthday(today)
+section "Last 8 weeks", "darker means closer to the minimum"
+  daygrid last 56 days, sum(read.pages on it), least
+section "This week", "pages per day"
+  goalbars last 7 days, sum(read.pages on it), least
+===
+@rich domain=r7_podcast_commute_queue topic=podcast queue that fits my commute style=custom_ui
+podcast queue. episodes with the show, title and minutes. a slider for how long my commute is today and a list that shows only the episodes that fit, plus total minutes waiting in the queue and a button to mark one as listened
+needs: add an episode with show and minutes | slider for commute minutes | list of episodes that fit | total minutes in the queue | mark as listened
+---
+app "Commute queue" music ink
+table episode show text, title text, mins num 1..400 = 30, heard bool
+state commute num = 30
+topbar "Commute queue", episode, "Add episode"
+statcard sum(episode.mins where heard = no), "minutes waiting in the queue"
+"My commute today:" commute "minutes" head
+slider commute 5..120
+each episode where heard = no and mins <= commute sort mins desc as e empty "Nothing fits. Stretch the slider or add a shorter episode."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.title bold
+      e.show faint
+    e.mins "min" faint
+    button "Heard" tap set e.heard = yes
+===
+@rich domain=r7_library_loan_due topic=library loans with due dates style=detailed
+library books i have on loan. title, the date they are due and a tick when returned. overdue ones in red, a reminder two days before due, number of books out and how many are overdue
+needs: add a loan with title and due date | tick when returned | overdue in red | reminder two days before due | books out and overdue count
+---
+app "Library loans" book grey
+table loan title text, due date, returned bool
+let late = count(loan where returned = no and due < today)
+remind "A library book is due in two days" at loan.due - 2d at 9:00
+topbar "Library loans", loan, "Add loan"
+row gap 2
+  statcard count(loan where returned = no), "books out"
+  statcard late, "overdue"
+each loan where returned = no sort due as l empty "No books out. Go and borrow something."
+  row card gap 2 tap edit l swipe remove l
+    toggle l.returned
+    stack grow gap 0
+      l.title bold
+      "Due" l.due faint color if(l.due < today, bad, muted)
+section "Returned", count(loan where returned = yes)
+  list loan where returned = yes, "Nothing returned yet."
+===
+@rich domain=r7_calligraphy_scripts topic=calligraphy practice by script style=multi_feature
+practicing urdu and arabic calligraphy. each session: which script like naskh, nastaliq, thuluth or kufic, pages written and a quality score out of 5. show pages per script, average quality per script and a chart of pages over the last two weeks
+needs: log a session with script, pages and quality | pages per script | average quality per script | chart of pages for 14 days | sessions list
+---
+app "Calligraphy" pen purple
+table practice script pick Naskh|Nastaliq|Thuluth|Kufic = Nastaliq, pages num 1..60 = 2, quality num 1..5 = 3
+topbar "Calligraphy", practice, "Log session"
+section "Pages per script", "all time"
+  share practice by script, sum(it.pages), it.key
+section "Average quality", "out of 5"
+  each options practice.script as s
+    row gap 2
+      s grow
+      round(avg(practice.quality where script = s) * 10) / 10 bold
+section "Last 14 days", "pages written"
+  daybars last 14 days, sum(practice.pages on it)
+list practice top 5, "No sessions yet. Write your first page."
+===
+@rich domain=r7_bird_life_list topic=birdwatching life list style=detailed
+birdwatching. each time i see a bird i log the species, where and how many. i want a life list of every different species with how many times i saw it, the number of species so far, and what i saw this month
+needs: log a sighting with species, place and count | life list of species with times seen | number of species so far | sightings this month | latest sightings
+---
+app "Bird list" paw green
+table sighting bird text, place text?, seen num 1..999 = 1
+topbar "Bird list", sighting, "Log sighting"
+row gap 2
+  statcard count(sighting by bird, yes), "species on my life list"
+  statcard count(sighting month), "sightings this month"
+section "Life list", "times seen"
+  each sighting by bird sort bird as g empty "No birds yet. Log the first one you spot."
+    row gap 2
+      g.key bold grow
+      count(g) "times" faint
+section "Latest"
+  list sighting top 5, "Nothing logged."
+===
+@rich domain=r7_stargazing_targets topic=stargazing nights and targets to see style=multi_feature
+stargazing with my telescope. a list of targets i want to see like saturn, orion nebula or pleiades with a tick when i have seen them, and a log of nights: sky clear, partly or cloudy, seeing 1 to 5 and minutes outside. clear nights this month and targets seen so far
+needs: list of targets with a tick when seen | log a night with sky, seeing and minutes | clear nights this month | targets seen so far | minutes outside this month
+---
+app "Stargazing" moon ink dark
+table target name text, seen bool
+table night sky pick Clear|Partly|Cloudy = Clear, seeing num 1..5 = 3, mins num 5..600 = 60
+topbar "Targets", target, "Add target"
+row gap 2
+  statcard count(target where seen = yes), "of" count(target) "targets seen", count(target)
+  statcard count(night month where sky = Clear), "clear nights this month"
+each target sort seen as t empty "No targets yet. Add the first thing you want to find."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.seen
+    t.name bold grow color if(t.seen, muted, ink)
+section "Nights out", "minutes this month:" sum(night.mins month)
+  form night, "Log night"
+===
+@rich domain=r7_tahajjud_wake_times topic=tahajjud nights and wake time line style=detailed
+tahajjud log. each night i pray i write the time i woke and how many rakaat. i want a line of wake times over the last month, nights prayed this month, my streak, and a reminder at 3:30 on the nights i plan to wake up
+needs: log a night with wake time and rakaat | line of wake times for a month | nights prayed this month | streak | reminder at 3:30
+---
+app "Tahajjud" moon blue
+table tahajjud wake time, rakaat num 2..20 = 2
+remind "Tahajjud time" at 3:30
+topbar "Tahajjud", tahajjud, "Log night"
+row gap 2
+  statcard count(tahajjud month), "nights this month"
+  statcard streak(tahajjud), "night streak"
+section "Wake time", "minutes after midnight, last 30 days"
+  trend tahajjud last 30 days sort at, hour(it.wake) * 60 + minute(it.wake)
+"Average rakaat:" round(avg(tahajjud.rakaat) * 10) / 10 faint
+list tahajjud top 5, "No nights logged yet."

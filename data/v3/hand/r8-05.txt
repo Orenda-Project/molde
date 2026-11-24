@@ -1,0 +1,203 @@
+@rich domain=r8_trousseau_list topic=bride_trousseau_shopping style=multi_feature
+shopping for my daughter's jahez over the next few months. each item with a category (clothes, jewellery, kitchen, bedroom), the price and a tick once bought. show the budget used and what each category costs
+needs: add an item with category and price | tick an item as bought | spent so far against budget | cost per category | items still to buy
+---
+app "Trousseau" gift pink
+table piece name text, cat pick Clothes|Jewellery|Kitchen|Bedroom = Clothes, price money, bought bool
+setting budget money = 900000 "Total budget"
+topbar "Items", piece, "Add item"
+goal sum(piece.price where bought = yes), budget, "spent of the budget"
+statcard count(piece where bought = no), "items still to buy"
+section "Cost per category", "planned"
+  share options piece.cat, sum(piece.price where cat = it), it
+each piece sort bought as p empty "No items yet. Add the first one."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.bought
+    p.name grow bold color if(p.bought, muted, ink)
+    p.price
+===
+@rich domain=r8_taxi_service topic=taxi_service_due_log style=detailed
+I drive a taxi and the engine oil must be changed every 5000 km. I enter the odometer each time I note it, and when I did a service. show km since last service, km left until the next one and turn red when I pass the limit
+needs: log an odometer reading | log a service done at a reading | km since last service | km left until next service | turns red when overdue
+---
+app "Taxi Service" car grey
+table reading km num 0..900000
+table service km num 0..900000, what text = "Oil change"
+setting every num = 5000 "Service every (km)"
+let since = max(reading.km) - max(service.km)
+topbar "Odometer", reading, "Log reading"
+statcard since, "km since last service"
+"Next service in" every - since "km" head color if(since > every, bad, ink)
+if since > every
+  "Service is overdue" bold color bad
+section "Services done"
+  list service, "No services yet. Log the last one."
+form service, "Log service"
+===
+@rich domain=r8_photo_shoots topic=wedding_photographer_bookings style=detailed
+wedding photographer. each shoot has the client, shoot date, package price, advance received, and a tick when the album is delivered. I need upcoming shoots with days left, the balance I will collect and the albums still owed
+needs: add a shoot with client, date, price and advance | upcoming shoots with days left | balance to collect | tick album delivered | albums still owed
+---
+app "Shoots" eye purple
+table shoot client text, on_date date, price money, advance money = 0, album bool
+topbar "Shoots", shoot, "Add shoot"
+row gap 2
+  statcard sum(shoot.price) - sum(shoot.advance), "balance to collect"
+  statcard count(shoot where album = no and on_date < today), "albums still owed"
+each shoot where on_date >= today sort on_date as s empty "No upcoming shoots."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.client bold
+      s.on_date faint
+    stack gap 0 align end
+      plural(s.on_date - today, "day") bold
+      s.price - s.advance "due" faint
+section "Past shoots"
+  each shoot where on_date < today sort on_date desc as s empty "None yet."
+    row gap 2
+      toggle s.album
+      s.client grow
+      "album" faint
+===
+@rich domain=r8_airport_pickups topic=airport_pickup_schedule style=multi_feature
+we run an airport pickup service. each pickup has passenger, flight time, driver and fare, and a status of waiting, on the way or done. show todays pickups in time order, fares collected today and pickups still open
+needs: add a pickup with passenger, time, driver and fare | status of waiting, on the way or done | today's pickups in time order | fares collected today | pickups still open
+---
+app "Pickups" plane blue
+table pickup name text, due time, driver pick Imran|Waqas|Zahid = Imran, fare money, state pick Waiting|On_the_way|Done = Waiting
+topbar "Pickups", pickup, "Add pickup"
+row gap 2
+  statcard sum(pickup.fare today where state = Done), "fares collected today"
+  statcard count(pickup today where state != Done), "pickups still open"
+each pickup today sort due as p empty "No pickups today. Add the first one."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.due bold
+      p.name grow
+      p.fare faint
+    row gap 1
+      p.driver faint grow
+      each options pickup.state
+        button it fill if(p.state = it, accent, soft) tap set p.state = it
+===
+@rich domain=r8_cleaning_rota topic=mosque_cleaning_rota style=short
+who cleans the mosque each week, tick when done
+needs: add a week with volunteer name | tick when the cleaning is done | count of weeks missed | remove an entry
+---
+app "Cleaning Rota" leaf green
+table clean week date, who text, done bool
+topbar "Rota", clean, "Add week"
+statcard count(clean where done = no and week < today), "weeks missed"
+each clean sort week as c empty "No weeks planned yet."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.done
+    stack grow gap 0
+      c.who bold
+      c.week faint color if(c.done = no and c.week < today, bad, muted)
+===
+@rich domain=r8_household_visits topic=ngo_household_visit_log style=custom_ui
+our NGO visits poor households once a month. each household has a name and area, a button logs a visit today, and I need to see which households were not visited for 30 days and how many visits we made this month
+needs: add a household with area | button to log a visit today | days since last visit | households overdue after 30 days | visits this month
+---
+app "Household Visits" home teal
+table house name text, area text
+table visit house ref house, note text?
+topbar "Households", house, "Add household"
+row gap 2
+  statcard count(visit month), "visits this month"
+  statcard count(house, due(it.visit, 30)), "overdue households"
+each house sort name as h empty "No households yet. Add the first one."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.name bold
+      h.area faint
+      if due(h.visit, 30)
+        "Not visited for 30 days" color bad
+      else
+        since(h.visit) "days ago" faint
+    button "Visited" tap add visit house = h
+===
+@rich domain=r8_schoolrun_grid topic=school_run_driver_week style=custom_ui
+four mums share the school run. a week grid with Monday to Friday and morning and afternoon cells, tap a name chip then a cell to put that mum on, tap a filled cell to clear it, and count how many runs each has
+needs: name chips to pick a driver | grid Monday to Friday with morning and afternoon | tap a cell to assign | tap a filled cell to clear | runs per driver
+---
+app "School Run" bus yellow
+table run mum text, day pick Mon|Tue|Wed|Thu|Fri, part pick Morning|Afternoon
+state pick pick Amna|Bushra|Cara|Dilnoza = Amna
+choice pick
+each options run.day as d
+  row gap 1
+    d bold width 40
+    each options run.part as p
+      if count(run where day = d and part = p) > 0
+        box grow radius 6 pad 1 fill accent tap remove last(run where day = d and part = p)
+          last(run.mum where day = d and part = p) small color white
+      else
+        box grow radius 6 pad 1 fill soft tap add run mum = pick, day = d, part = p
+          p tiny
+section "Runs each"
+  each options pick as m
+    row gap 2
+      m grow
+      count(run where mum = m) faint
+===
+@rich domain=r8_lunch_orders topic=office_lunch_orders style=multi_feature
+I collect the lunch order at the office every day. people write their name, what they ordered and the price, I tick who has paid me, and I need the total for today, the cash I have collected and who still owes
+needs: add an order with name, dish and price | tick who has paid | total for today | cash collected and still owed | list of unpaid people
+---
+app "Lunch Orders" food orange
+table meal who text, dish text, price money, paid bool
+topbar "Lunch", meal, "Add order"
+row gap 2
+  statcard sum(meal.price today), "ordered today"
+  statcard sum(meal.price today where paid = yes), "collected"
+"Still owed" sum(meal.price today where paid = no) bold color warn
+each meal today sort paid as m empty "No orders yet today."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.paid
+    stack grow gap 0
+      m.who bold
+      m.dish faint
+    m.price
+===
+@rich domain=r8_bus_seats topic=ziarat_bus_seat_map style=custom_ui
+I take groups for ziarat tours in a 20 seat coaster. show the seats as a grid, tap a free seat to book it for the name I typed at the top, booked seats are coloured with the name, and show seats left and money collected at 1500 a seat
+needs: type the passenger name | grid of 20 seats | tap a free seat to book it | booked seats coloured with name | seats left and money collected
+---
+app "Coaster Seats" seat red
+table book seat num 1..20, who text
+state name text = ""
+setting price money = 1500 "Price per seat"
+field name "Passenger name"
+row gap 2
+  statcard 20 - count(book), "seats left", 20
+  statcard count(book) * price, "collected"
+grid 4 gap 1
+  each 1..20 as n
+    if count(book where seat = n) > 0
+      stack radius 8 pad 1 gap 0 fill accent tap remove last(book where seat = n)
+        n bold color white
+        last(book.who where seat = n) tiny color white
+    else
+      stack radius 8 pad 1 gap 0 fill soft tap add book seat = n, who = name
+        n bold
+        "free" tiny faint
+===
+@rich domain=r8_petty_cash topic=committee_petty_cash style=detailed
+treasurer of the market committee keeps a petty cash tin. I write each cash in and cash out with a reason, always see the balance in the tin, spending this month grouped by reason and an alert when the balance drops under 5000
+needs: add cash in with reason | add cash out with reason | balance in the tin | spending this month by reason | alert when balance is under 5000
+---
+app "Petty Cash" wallet slate dark
+table inflow reason text, amount money
+table outflow reason pick Tea|Repairs|Stationery|Transport|Other = Tea, amount money
+setting low money = 5000 "Low balance alert"
+let bal = sum(inflow.amount) - sum(outflow.amount)
+topbar "Cash in", inflow, "Add cash in"
+statcard bal, "in the tin"
+if bal < low
+  "Low balance, ask for a top up" bold color bad
+section "Spend this month", monthname(today)
+  share options outflow.reason, sum(outflow.amount month where reason = it), it
+section "Cash out"
+  form outflow, "Add cash out"
+list outflow by day, "No cash out yet."

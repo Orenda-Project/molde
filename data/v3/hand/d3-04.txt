@@ -1,0 +1,490 @@
+@rich domain=d3_maintainer_hours topic=maintainer_time_log style=multi_feature
+I maintain a project in the evenings and it is eating my life. log hours by kind (issues, review, code, docs, admin), set a weekly cap in hours, and show a bar chart for the last 14 days, what kind takes most of my time, and a nudge if I am over the cap
+needs: log hours with kind | set a weekly hour cap | bar chart of the last 14 days | share of time by kind | warning when over the weekly cap
+---
+app "Maintainer hours" clock ink dark
+table hrs kind pick Issues|Review|Code|Docs|Admin = Issues, h num 0..12 = 1 unit "h"
+setting cap num = 8 "Weekly cap (hours)"
+topbar "Maintainer hours", hrs, "Log hours"
+goal sum(hrs.h week), cap, "hours this week"
+if sum(hrs.h week) > cap
+  "Over your cap. The project will survive a quiet evening." bold color warn
+section "Last 14 days", "hours per day"
+  daybars last 14 days, sum(hrs.h on it)
+section "Where the time goes", "this month"
+  share hrs month by kind, sum(it.h), it.key
+===
+@rich domain=d3_external_prs topic=external_pr_replies style=short
+pull requests from outsiders I haven't answered yet: title, author, when it opened, replied tick. red when waiting over a week
+needs: add a PR with title, author and date | replied tick | red when waiting over a week | count waiting
+---
+app "Outside PRs" users orange
+table pr title text, author text, opened date = today, replied bool
+topbar "Outside PRs", pr, "Add PR"
+count(pr where replied = no) "waiting for a reply," count(pr where replied = no and today - opened > 7) "over a week" head
+each pr where replied = no sort opened as p empty "Everyone has had a reply. Well done."
+  row card gap 2 tap edit p swipe remove p fill if(today - p.opened > 7, bad, soft)
+    stack grow gap 0
+      p.title bold
+      "by" p.author "·" plural(today - p.opened, "day") "waiting" faint
+    toggle p.replied
+===
+@rich domain=d3_team_lunch_rota topic=team_lunch_rota style=custom_ui
+team lunch rota on Fridays: whoever has organised the fewest lunches is next. add the team members, press a button when someone organises, and show whose turn it is in big text plus how many times each person has done it
+needs: add a team member | button when someone organises lunch | whose turn is next | number of lunches organised per person | bar for each person
+---
+app "Lunch rota" food green
+table mate name text
+table lunch mate ref mate
+let next_up = nth(mate sort count(it.lunch), 1)
+topbar "Lunch rota", mate, "Add member"
+if count(mate) > 0
+  section "Next up"
+    next_up.name huge
+    "has organised" count(next_up.lunch) "lunches so far" faint
+each mate sort count(it.lunch) as m empty "No members yet. Add everyone who joins the Friday lunch."
+  row card gap 2 swipe remove m tap edit m
+    stack grow gap 0
+      m.name bold
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * count(m.lunch) / max(count(lunch), 1), 4 fill accent radius 2
+    count(m.lunch) big
+    button "Organised" tap add lunch mate = m
+===
+@rich domain=d3_standing_agenda topic=standing_meeting_agenda style=detailed
+agenda for our weekly team sync. topics with an owner and minutes, a tick when we covered it, and the meeting length in settings (30 minutes). warn when the topics add up to more than the meeting, and a button to clear the covered ones for next week
+needs: add a topic with owner and minutes | tick covered | set meeting length | warning when topics exceed the length | button to clear covered topics
+---
+app "Weekly sync" list slate
+table topic name text, owner text?, mins num 1..60 = 5, covered bool
+setting len num = 30 "Meeting length (min)"
+topbar "Weekly sync", topic, "Add topic"
+goal sum(topic.mins where covered = no), len, "minutes of topics still to cover"
+if sum(topic.mins) > len
+  "Too much for the meeting:" sum(topic.mins) - len "minutes over. Cut a topic." bold color warn
+each topic sort covered as t empty "No topics yet. Add what the team needs to talk about."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.covered
+    stack grow gap 0
+      t.name bold
+      t.owner faint
+    t.mins "min" faint
+button "Clear covered topics" tap remove all topic where covered = yes
+===
+@rich domain=d3_kudos_wall topic=team_kudos_wall style=multi_feature
+a kudos wall for our team: who it is for, who sent it and why. set a goal for how many kudos we give per week, show progress and a small chart of kudos per day, and the people who received the most this month
+needs: add a kudos with receiver, sender and reason | weekly kudos goal | progress this week | chart per day | received most this month
+---
+app "Kudos" heart pink
+table kudo to text, from text?, why text
+setting goal num = 5 "Kudos per week"
+topbar "Kudos wall", kudo, "Give kudos"
+goal count(kudo week), goal, "kudos given this week"
+section "Last 7 days"
+  daybars last 7 days, count(kudo on it)
+section "Most appreciated", "this month"
+  share kudo month by to, count(it), it.key
+each kudo sort at desc top 8 as k empty "No kudos yet. Say thanks to somebody who helped."
+  stack card gap 0 tap edit k swipe remove k
+    k.to bold
+    k.why
+    "from" k.from faint
+===
+@rich domain=d3_timeoff_calendar topic=team_time_off_calendar style=custom_ui
+shared time-off calendar for the team: person, first day, last day and type (leave, sick, holiday). month grid where a day is darker when more people are away, arrows to change month, and who is out today
+needs: add time off with person, first day, last day and type | month grid darker with more people away | arrows to change month | list of who is out today
+---
+app "Time off" calendar teal
+table off who text, from date = today "First day", to date = today "Last day", kind pick Leave|Sick|Holiday = Leave
+state m date = today
+topbar "Time off", off, "Add time off"
+monthnav m
+grid 7 gap 1
+  each ["M", "T", "W", "T", "F", "S", "S"] as w
+    text w tiny color muted align center
+  each 1..weekday(m - monthday(m) + 1) - 1 as n
+    box
+  each days month of m as d
+    box height 32 radius 6 fill if(count(off where from <= d and to >= d) > 0, accent, soft) opacity if(count(off where from <= d and to >= d) > 0, clamp(count(off where from <= d and to >= d) / 4, 0.4, 1), 1)
+      text monthday(d) small align center
+section "Out today", count(off where from <= today and to >= today)
+  each off where from <= today and to >= today as o empty "Everybody is in today."
+    row gap 2
+      o.who bold grow
+      o.kind "until" o.to faint
+===
+@rich domain=d3_hours_overlap topic=distributed_team_hours_overlap style=detailed
+our team is spread across time zones. list each person with their UTC offset and their working hours start and end in local time. show a 24 hour strip in UTC where everyone is working at once, so we find a meeting slot, with a count of how many teammates are listed
+needs: add a teammate with UTC offset and local working hours | 24 hour strip of hours when everyone overlaps | count of teammates | working hours bar per person in UTC
+---
+app "Hours overlap" clock purple dark
+table mate name text, tz num "UTC offset", from_h num 0..23 = 9 "Starts at", to_h num 1..24 = 17 "Ends at"
+let on(m mate, h num) = (h + m.tz) % 24 >= m.from_h and (h + m.tz) % 24 < m.to_h
+topbar "Hours overlap", mate, "Add teammate"
+statcard count(mate), "teammates in the strip"
+section "Everyone working", "UTC hours"
+  grid 12 gap 1
+    each 0..23 as h
+      stack gap 0 align center
+        text h tiny color muted
+        box height 24 radius 4 fill if(count(mate where (h + tz) % 24 >= from_h and (h + tz) % 24 < to_h) = count(mate) and count(mate) > 0, good, soft)
+each mate sort name as m empty "No teammates yet. Add each person with their UTC offset."
+  stack gap 0 tap edit m swipe remove m
+    m.name "UTC" m.tz bold
+    draw 24, 3
+      each 0..23 as h
+        rect h, 0, 1, 3 fill if(on(m, h), accent, soft)
+===
+@rich domain=d3_team_dates topic=birthdays_and_work_anniversaries style=multi_feature
+team birthdays and work anniversaries so I stop forgetting: name, the date, and whether it is a birthday or a work anniversary. show what is coming up next in days, flag the ones in the next 30 days, and how many are due this month
+needs: add a person with date and type | days until the next birthday or anniversary | highlight within 30 days | sorted by what is coming next | count this month
+---
+app "Team dates" gift orange
+table person name text, day date "Date", kind pick Birthday|Work_anniversary = Birthday
+let nextdate(d date) = if(addmonths(d, 12 * (year(today) - year(d))) >= today, addmonths(d, 12 * (year(today) - year(d))), addmonths(d, 12 * (year(today) - year(d) + 1)))
+topbar "Team dates", person, "Add date"
+statcard count(person, nextdate(it.day) - today <= 30), "coming up in the next 30 days"
+each person sort nextdate(day) as p empty "No dates yet. Add the first birthday or anniversary."
+  row card gap 2 tap edit p swipe remove p fill if(nextdate(p.day) - today <= 30, accent, soft)
+    stack grow gap 0
+      p.name bold
+      p.kind "·" nextdate(p.day) faint
+    nextdate(p.day) - today "days" bold
+===
+@rich domain=d3_snack_fund topic=team_snack_fund_balance style=short
+the team snack kitty: money people put in, and what we spend on snacks. show the balance, warn when it is low, list of both
+needs: add money put in | add a snack purchase | balance | warning when balance is low
+---
+app "Snack fund" cup yellow
+table paid_in who text, amount money
+table bought item text, cost money
+setting low money = 20 "Warn below"
+let bal = sum(paid_in.amount) - sum(bought.cost)
+statcard bal, if(bal < low, "left in the kitty. Time to top up", "left in the kitty")
+if bal < low
+  "Kitty is low." bold color warn
+topbar "Money in", paid_in, "Add money"
+form bought, "Add purchase"
+section "Latest purchases"
+  list bought top 5, "No snacks bought yet."
+===
+@rich domain=d3_desk_booking topic=hot_desk_booking style=multi_feature
+hot desks at the office. add the desks, book a desk for a day with my name, and show each desk with who has it today and a strip of the next 5 days so I can see what is free
+needs: add a desk | book a desk with name and day | who has each desk today | next 5 days strip | count of free desks today
+---
+app "Desk booking" seat blue
+table desk label text
+table book desk ref desk, who text, day date = today
+topbar "Hot desks", desk, "Add desk"
+statcard count(desk) - count(book where day = today), "desks free today of" count(desk), count(desk)
+form book, "Book desk"
+each desk sort label as d empty "No desks yet. Add the desks you can book."
+  stack card gap 1 swipe remove d
+    row gap 1
+      d.label bold grow
+      if count(d.book where day = today) > 0
+        last(d.book.who where day = today) faint
+      else
+        "Free today" faint color good
+    row gap 1
+      each 0..4 as n
+        stack grow gap 0 align center radius 6 pad 1 fill if(count(d.book where day = today + n) > 0, bad, soft)
+          dayname(today + n) tiny
+===
+@rich domain=d3_pairing_log topic=pair_programming_log style=custom_ui
+we try to pair at least once a week but forget who with whom. log a pairing with two names and what they worked on, show sessions per person this month, and pick any person to see their recent pairings
+needs: log a pairing with two names and the topic | sessions per person this month | pick a person to see their pairings | count of pairings this week
+---
+app "Pairing" users mint
+table pairing a text "Person", b text "Partner", topic text?
+state who text = ""
+topbar "Pairing log", pairing, "Log pairing"
+statcard count(pairing week), "pairing sessions this week"
+section "Sessions per person", "this month"
+  share pairing month by a, count(it), it.key
+field who "Show pairings for (name)"
+each pairing where has(a, who) or has(b, who) sort at desc top 8 as p empty "No pairings match. Log the first one after you pair."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.a "+" p.b bold
+      p.topic faint
+    p.at faint
+===
+@rich domain=d3_team_mood_pulse topic=weekly_team_mood_pulse style=detailed
+anonymous mood pulse for the team. on Fridays people tap 1 to 5 on my phone and I see the average for each of the last 8 weeks as bars, this week's average big, and how many answered
+needs: tap a mood from 1 to 5 | average for this week | bar chart of the last 8 weeks | number of answers | list of answers this week
+---
+app "Team pulse" smile mint dark
+table pulse score num 1..5
+topbar "Team pulse", pulse, "Add answer"
+"How was the week? Tap one." faint
+row gap 1
+  each [1, 2, 3, 4, 5]
+    button it fill if(it >= 4, good, if(it = 3, soft, warn)) grow tap add pulse score = it
+statcard round(avg(pulse.score week) * 10) / 10, "average this week from" plural(count(pulse week), "answer"), 5
+section "Last 8 weeks", "average mood"
+  plot 0..8, 0..5 axes
+    each 0..7 as n
+      rect n + 0.15, 0, 0.7, avg(pulse.score week of (today - 7 * (7 - n))) fill accent radius 2
+      tick n + 0.5, 8 - n
+===
+@rich domain=d3_event_rsvp topic=team_event_rsvp style=multi_feature
+team outing and event RSVPs: add an event with a date, then people type their name and tap Yes, Maybe or No. show counts for each answer per event and how many days to go
+needs: add an event with name and date | type a name and tap Yes, Maybe or No | counts per answer for each event | days to go | upcoming events sorted by date
+---
+app "RSVPs" gift purple
+table evt name text, day date
+table rsvp evt ref evt, who text, going pick Yes|Maybe|No = Yes
+state me text = ""
+topbar "Team events", evt, "Add event"
+field me "Your name"
+each evt where day >= today sort day as e empty "No events coming up. Plan something fun."
+  stack card gap 1 swipe remove e
+    row gap 1
+      e.name bold grow
+      e.day "·" e.day - today "days to go" faint
+    row gap 2
+      each options rsvp.going as g
+        stack gap 0 align center grow
+          count(e.rsvp where going = g) big
+          g tiny faint
+    if len(me) > 0
+      row gap 1
+        each options rsvp.going as g
+          button g grow tap add rsvp evt = e, who = me, going = g
+===
+@rich domain=d3_tech_talks topic=tech_talk_schedule style=short
+schedule for our Friday tech talks: title, speaker, date, and a tick when the slides are ready. show the next one big
+needs: add a talk with title, speaker and date | slides ready tick | next talk shown big | count of upcoming talks
+---
+app "Tech talks" school ink
+table talk title text, speaker text, day date, slides bool "Slides ready"
+topbar "Tech talks", talk, "Add talk"
+if count(talk where day >= today) > 0
+  section "Next talk", "in" first(talk.day where day >= today) - today "days"
+    first(talk.title where day >= today) huge
+    "by" first(talk.speaker where day >= today) faint
+each talk where day >= today sort day as t empty "No talks booked. Ask someone to share what they learned."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.title bold
+      t.speaker "·" t.day faint
+    toggle t.slides
+===
+@rich domain=d3_team_trip_plan topic=team_onsite_travel_plan style=detailed
+we are flying people to the onsite. add each trip: person, city, first and last day and the cost. show the total cost against the trip budget in settings, the number of days away in total and the cost per person
+needs: add a trip with person, city, dates and cost | set the trip budget | total cost against budget | total days away | cost per person
+---
+app "Onsite trips" plane teal
+table trip who text, city text, from date = today, to date = today, cost money
+setting budget money = 8000 "Trip budget"
+topbar "Onsite travel", trip, "Add trip"
+goal sum(trip.cost), budget, if(sum(trip.cost) > budget, "over the trip budget", "booked so far")
+statcard sum(trip, it.to - it.from + 1), "days away across" count(trip) "trips"
+section "Cost per person"
+  share trip by who, sum(it.cost), it.key
+each trip sort from as t empty "No trips yet. Add the first booking."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.who "to" t.city bold
+      t.from "→" t.to faint
+    t.cost bold
+===
+@rich domain=d3_demo_lineup topic=demo_day_lineup_times style=custom_ui
+lineup for demo day. each slot has a running order number, presenter, title and minutes. I set the start time (14:00) and the app works out the start time of every slot and when the last one ends, with the total minutes
+needs: add a slot with order, presenter, title and minutes | set the start time | start time worked out for each slot | end time of the last slot | total minutes
+---
+app "Demo day" flag red
+table demo ord num 1..30 "Order", who text, title text, mins num 1..60 = 10
+setting start time = 14:00 "Starts at"
+let clock(t num) = join(floor(t / 60), ":", floor(t % 60 / 10), t % 10)
+let from_min = hour(start) * 60 + minute(start)
+topbar "Demo day", demo, "Add slot"
+statcard sum(demo.mins), "minutes in total, ending at" clock(from_min + sum(demo.mins))
+each demo sort ord as d empty "No slots yet. Add the first presenter."
+  row card gap 2 tap edit d swipe remove d
+    text clock(from_min + sum(demo, if(it.ord < d.ord, it.mins, 0))) bold
+    stack grow gap 0
+      d.who bold
+      d.title faint
+    d.mins "min" faint
+===
+@rich domain=d3_coding_practice topic=coding_practice_problem_log style=multi_feature
+I practise algorithm problems every day for interviews. log each problem with a title, topic (arrays, strings, graphs, dp, trees, sql), level easy medium hard and minutes it took. weekly goal of problems, grid of the last 6 weeks and a topic breakdown
+needs: log a problem with title, topic, level and minutes | weekly problem goal | grid of the last 6 weeks | breakdown by topic | streak of days
+---
+app "Practice" brain blue
+table prob title text, topic pick Arrays|Strings|Graphs|DP|Trees|SQL = Arrays, level pick Easy|Medium|Hard = Medium, mins num 1..300 = 30
+setting goal num = 5 "Problems per week"
+topbar "Coding practice", prob, "Log problem"
+goal count(prob week), goal, "problems this week"
+statcard streak(prob), "days in a row, best" best(prob)
+section "Last 6 weeks"
+  daygrid last 42 days, count(prob on it), 3
+section "By topic"
+  share prob by topic, count(it), it.key
+===
+@rich domain=d3_skills_ladder topic=programming_skills_ladder style=custom_ui
+my programming skills ladder. list the skills I want to learn (git, sql, testing, docker...) and set each to none, basics, comfortable or strong with a tap. show three little step bars per skill, and tell me which skill to work on next
+needs: add a skill | tap to move a skill up a level | three step bars per skill | skill to work on next | count of strong skills
+---
+app "Skills" bolt plum
+table skill name text, lvl pick None|Basics|Comfortable|Strong = None "Level"
+let rank(s skill) = if(s.lvl = Strong, 3, if(s.lvl = Comfortable, 2, if(s.lvl = Basics, 1, 0)))
+topbar "Skills ladder", skill, "Add skill"
+statcard count(skill where lvl = Strong), "strong skills of" count(skill), count(skill)
+if count(skill where lvl = None) > 0
+  "Work on next:" first(skill.name where lvl = None) bold
+each skill sort rank(it) as s empty "No skills yet. Add the first thing you want to learn."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.lvl faint
+    row gap 1
+      each 1..3 as n
+        box width 14 height 14 radius 3 fill if(rank(s) >= n, accent, soft)
+    if s.lvl != Strong
+      button "Level up" tap set s.lvl = if(s.lvl = None, Basics, if(s.lvl = Basics, Comfortable, Strong))
+===
+@rich domain=d3_commit_streak topic=daily_commit_streak style=detailed
+I'm trying to commit code every single day. one button I tap after I commit, with the repo name if I want. show my current streak and my best, a grid of the last 10 weeks, and remind me at 6pm if I haven't committed yet
+needs: button to log a commit | current streak and best streak | grid of the last 10 weeks | reminder at 18:00 if nothing committed today | commits this week
+---
+app "Commit streak" flame orange
+table commit repo text?
+topbar "Commit streak", commit, "Log with repo"
+remind "No commit yet today. Even a tiny one counts." at 18:00 if count(commit today) = 0
+row gap 2
+  statcard streak(commit), "day streak"
+  statcard best(commit), "best streak"
+button "I committed today" fill accent tap add commit
+"Commits this week:" count(commit week) faint
+section "Last 10 weeks", "darker means more commits"
+  daygrid last 70 days, count(commit on it), 4
+===
+@rich domain=d3_portfolio_ideas topic=portfolio_project_ideas_picker style=multi_feature
+list of portfolio project ideas with the stack, how long it takes (weekend, week, month), how cool I think it is from 1 to 5 and status idea, building or shipped. a button that picks a random idea for me when I can't decide
+needs: add an idea with stack, size, coolness and status | button that picks a random idea | filter by status | count shipped | list sorted by coolness
+---
+app "Project ideas" star mint dark
+table idea title text, tech text?, size pick Weekend|Week|Month = Weekend, cool num 1..5 = 3, status pick Idea|Building|Shipped = Idea
+state show pick All|Idea|Building|Shipped = All
+state chosen text = ""
+topbar "Project ideas", idea, "Add idea"
+statcard count(idea where status = Shipped), "shipped out of" count(idea), count(idea)
+row gap 2 align center
+  button "Pick one for me" fill accent tap set chosen = random(idea where status = Idea).title
+  text chosen bold grow
+choice show
+each idea where show = All or status = show sort cool desc as i empty "No ideas here yet. Write down the next thing you want to build."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.title bold
+      i.tech "·" i.size "· cool" i.cool faint
+    i.status faint
+===
+@rich domain=d3_freelance_blocks topic=freelance_billable_blocks style=custom_ui
+I bill freelance dev work in time blocks. pick the client, start a 30 or 60 minute timer, and when it ends the block is saved for that client. I set my hourly rate and see hours and money per client this month
+needs: pick the client | start a 30 or 60 minute timer that saves the block | set the hourly rate | hours and money per client this month | total earned this month
+---
+app "Billable blocks" timer blue
+table client name text
+table block client ref client, mins num 15..120
+setting rate money = 40 "Hourly rate"
+state cl text = ""
+topbar "Billable blocks", client, "Add client"
+statcard sum(block.mins month) * rate / 60, "earned this month from" round(sum(block.mins month) / 6) / 10 "hours"
+row gap 1
+  each client sort name as c
+    button c.name fill if(cl = c.name, accent, soft) tap set cl = c.name
+if len(cl) > 0
+  timer 30m, join("30 minutes for ", cl), add block client = first(client where name = cl), mins = 30 then notify "Block done and saved"
+  timer 60m, join("60 minutes for ", cl), add block client = first(client where name = cl), mins = 60 then notify "Block done and saved"
+else
+  "Pick a client to start a block." faint
+each client sort name as c
+  row card gap 2 swipe remove c
+    c.name bold grow
+    round(sum(c.block.mins month) / 6) / 10 "h" faint
+    sum(c.block.mins month) * rate / 60 bold
+===
+@rich domain=d3_snippet_library topic=code_snippet_library style=short
+my code snippets: title, language (js, python, sql, bash, css), the code and a search. filter by language
+needs: add a snippet with title, language and code | filter by language | search | count of snippets
+---
+app "Snippets" pen slate
+table snip title text, lang pick JS|Python|SQL|Bash|CSS|Other = JS, code long
+state l pick All|JS|Python|SQL|Bash|CSS|Other = All
+state q text = ""
+topbar "Snippets", snip, "Add snippet"
+count(snip) "snippets saved" head
+choice l
+field q "Search snippets"
+each snip where (l = All or lang = l) and (has(title, q) or has(code, q)) sort title as s empty "No snippets match. Save the one you keep googling."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 1
+      s.title bold grow
+      s.lang faint
+    s.code faint
+===
+@rich domain=d3_assignment_deadlines topic=bootcamp_assignment_deadlines style=detailed
+bootcamp assignments with due dates: name, course, due date, how much it counts in percent, a done tick. sort by due, red when late, remind me at 9 in the morning on the due day, and show how many are due in the next 7 days
+needs: add an assignment with course, due date and weight | done tick | sorted by due date and red when late | reminder at 9:00 on the due day | count due in the next 7 days
+---
+app "Assignments" school pink
+table asg name text, course text?, due date, weight num 1..100 = 10 "Counts (%)", done bool
+topbar "Assignments", asg, "Add assignment"
+remind "An assignment is due today" at asg.due at 9:00
+statcard count(asg where done = no and due >= today and due <= today + 7), "due in the next 7 days and" count(asg where done = no and due < today) "late"
+each asg where done = no sort due as a empty "No assignments left. Add the next one when it is announced."
+  row card gap 2 tap edit a swipe remove a fill if(a.due < today, bad, soft)
+    toggle a.done
+    stack grow gap 0
+      a.name bold
+      a.course "· due" a.due "· counts" a.weight "%" faint
+===
+@rich domain=d3_interview_question_bank topic=interview_prep_question_bank style=multi_feature
+interview prep question bank: question, topic (js, system design, behavioural, sql), and my confidence 1 to 5. buttons to say I got it right or wrong that move the confidence, and one card that shows the weakest question to practise next
+needs: add a question with topic and confidence | got it right and got it wrong buttons that change confidence | weakest question shown to practise | breakdown by topic | average confidence
+---
+app "Interview prep" brain purple
+table qn text text "Question", topic pick JS|System_design|Behavioural|SQL = JS, conf num 1..5 = 3
+let weakest = nth(qn sort conf, 1)
+topbar "Interview prep", qn, "Add question"
+statcard round(avg(qn.conf) * 10) / 10, "average confidence out of 5", 5
+if count(qn) > 0
+  section "Practise this next", "confidence" weakest.conf
+    weakest.text bold
+    row gap 1
+      button "Got it" tap set weakest.conf = weakest.conf + 1
+      button "Missed it" tap set weakest.conf = weakest.conf - 1
+section "By topic"
+  share qn by topic, count(it), it.key
+list qn sort conf top 8, "No questions yet. Add the ones you were asked last time."
+===
+@rich domain=d3_mock_interview_scores topic=mock_interview_score_radar style=custom_ui
+after every mock interview I score myself 1 to 5 on communication, technical depth and problem solving. draw a triangle chart of my averages so I see what is weak, and a line of the overall score over time
+needs: log a mock with communication, technical and problem solving scores | triangle chart of averages | line of overall score over time | count of mocks
+---
+app "Mock interviews" target red
+table mock role text?, comm num 1..5 = 3 "Communication", tech num 1..5 = 3 "Technical depth", solve num 1..5 = 3 "Problem solving"
+topbar "Mock interviews", mock, "Log mock"
+statcard count(mock), "mock interviews done"
+section "Where I am strong", "averages out of 5"
+  draw 100, 100 height 220
+    poly stroke soft thick 1
+      pt 50, 6
+      pt 50 + 44 * sin(120), 50 - 44 * cos(120)
+      pt 50 + 44 * sin(240), 50 - 44 * cos(240)
+      pt 50, 6
+    poly stroke accent thick 2
+      pt 50, 50 - 44 * avg(mock.comm) / 5
+      pt 50 + 44 * sin(120) * avg(mock.tech) / 5, 50 - 44 * cos(120) * avg(mock.tech) / 5
+      pt 50 + 44 * sin(240) * avg(mock.solve) / 5, 50 - 44 * cos(240) * avg(mock.solve) / 5
+      pt 50, 50 - 44 * avg(mock.comm) / 5
+    label 50, 2, "Comm" round(avg(mock.comm) * 10) / 10 tiny
+    label 90, 78, "Tech" round(avg(mock.tech) * 10) / 10 tiny
+    label 10, 78, "Solve" round(avg(mock.solve) * 10) / 10 tiny
+section "Overall score over time"
+  trend mock sort at, (it.comm + it.tech + it.solve) / 3

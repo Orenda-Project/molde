@@ -1,0 +1,186 @@
+@rich domain=r7_book_year_pace topic=yearly book count and monthly pace style=detailed
+my goal is 24 books this year. each time i finish one i log the title, pages and a rating. show how many books against the target, whether i am ahead or behind the pace for this month, books per month as bars and the average rating
+needs: log a finished book with title, pages and rating | books against the yearly target | ahead or behind pace message | books per month bars | average rating
+---
+app "Book year" book purple
+table finished title text, pages num 1..3000 = 250, rating num 1..5 = 4
+setting yearly num = 24 "Books this year"
+let should = round(yearly * month(today) / 12)
+topbar "Book year", finished, "Log book"
+statcard count(finished year), "of" yearly "books this year", yearly
+if count(finished year) >= should
+  "Ahead of pace by" count(finished year) - should head color good
+else
+  "Behind pace by" should - count(finished year) head color warn
+section "Per month", "average rating" round(avg(finished.rating) * 10) / 10
+  share finished year by month, count(it), it.key
+list finished top 5, "No books finished yet this year."
+===
+@rich domain=r7_family_game_points topic=family game night scoreboard style=custom_ui
+we keep score all month on family game nights. pick whose turn it is to get points, big buttons for 1, 2 and 5 points, a leaderboard of this month, and who is in the lead
+needs: pick a player | buttons for 1, 2 and 5 points | monthly leaderboard | who is in the lead | total points this month
+---
+app "Family score" users grey dark
+table point who pick Amir|Sara|Mama|Baba = Amir, n num 1..50
+state p pick Amir|Sara|Mama|Baba = Amir
+let top = max(max(sum(point.n month where who = Amir), sum(point.n month where who = Sara)), max(sum(point.n month where who = Mama), sum(point.n month where who = Baba)))
+statcard sum(point.n month), "points this month"
+choice p
+row gap 1
+  each [1, 2, 5] as v
+    button "+" v fill accent grow tap add point who = p, n = v
+section "Leaderboard", "this month"
+  each options point.who as w
+    let tot = sum(point.n month where who = w)
+    row gap 2 radius 8 pad 1 fill if(tot = top and top > 0, accent, soft)
+      w bold grow
+      if tot = top and top > 0
+        "In the lead" small
+      tot bold
+button "Undo last" tap remove last(point)
+===
+@rich domain=r7_weekend_project_hours topic=weekend project list and free hours style=multi_feature
+a list of things to do around the house on weekends. each has how many hours it takes and a status idea, this weekend or done. i set how many free hours i have, and it shows hours planned against that, with chips to filter
+needs: add a project with hours and status | set free hours | hours planned against free hours | chips to filter by status | mark as done
+---
+app "Weekend list" tool plum
+table proj name text, hrs num 1..24 = 2, status pick Idea|This_weekend|Done = Idea
+setting free num = 8 "Free hours this weekend"
+state f pick All|Idea|This_weekend|Done = All
+topbar "Weekend list", proj, "Add project"
+goal sum(proj.hrs where status = This_weekend), free, "hours planned", "h"
+choice f
+each proj where f = All or status = f sort status as p empty "No projects here. Add a job you keep postponing."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold color if(p.status = Done, muted, ink)
+      p.hrs "h" faint
+    if p.status = Idea
+      button "This weekend" tap set p.status = This_weekend
+    if p.status = This_weekend
+      button "Done" fill accent tap set p.status = Done
+===
+@rich domain=r7_meal_prep_portions topic=sunday meal prep portions left style=detailed
+i cook on sunday for the week. each batch has the dish, how many portions i made and the day. a button every time i eat a portion, portions left for each dish, a warning when only one is left and total portions eaten this week
+needs: add a batch with dish and portions | button when i eat a portion | portions left per dish | warning when one is left | portions eaten this week
+---
+app "Meal prep" food plum
+table prep dish text, portions num 1..20 = 5
+table ate prep ref prep
+topbar "Meal prep", prep, "Add batch"
+statcard count(ate week), "portions eaten this week"
+each prep sort at desc as p empty "No batches yet. Cook something big on Sunday."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.dish bold
+      p.portions - count(p.ate) "portions left of" p.portions faint color if(p.portions - count(p.ate) = 1, warn, muted)
+    if p.portions - count(p.ate) > 0
+      button "Ate one" tap add ate prep = p
+    else
+      "All eaten" color good
+===
+@rich domain=r7_phone_free_evenings topic=phone-free evenings four times a week style=multi_feature
+my target is four phone-free evenings a week, not every night. tap the button when tonight was phone free, show dots for the last seven days, how many this week against four, and remind me at 8pm to put the phone down
+needs: tap when tonight was phone free | dots for the last 7 days | this week against four | reminder at 8pm | longest streak
+---
+app "Phone free" phone ink dark
+table offline
+remind "Put the phone down for the evening" at 20:00
+button if(count(offline today) > 0, "Tonight is phone free", "Tonight was phone free") fill if(count(offline today) > 0, good, accent) tap toggle offline today
+goal count(offline week), 4, "phone-free evenings this week"
+weekdots count(offline on it) > 0
+section "Last 8 weeks", "best streak" best(offline) "evenings"
+  daygrid last 56 days, count(offline on it), 1
+===
+@rich domain=r7_yarn_stash topic=yarn stash by weight and metres style=multi_feature
+my yarn stash has gotten out of hand. each skein has the colour, brand, weight from lace to bulky and metres left. chips to filter by weight, a search box, total metres in the stash and a warning on skeins with under 100 metres
+needs: add a skein with colour, brand, weight and metres | chips to filter by weight | search by colour or brand | total metres in the stash | warning under 100 metres
+---
+app "Yarn stash" pencil red
+table yarn colour text, brand text?, weight pick Lace|Fingering|DK|Worsted|Bulky = DK, metres num 0..5000 = 200 unit "m"
+state f pick All|Lace|Fingering|DK|Worsted|Bulky = All
+state q text = ""
+topbar "Yarn stash", yarn, "Add yarn"
+statcard sum(yarn.metres), "metres in the stash", count(yarn) * 200
+choice f
+field q "Search colour or brand"
+each yarn where (f = All or weight = f) and (has(colour, q) or has(brand, q)) sort colour as y empty "No yarn matches. Try another weight or word."
+  row card gap 2 tap edit y swipe remove y
+    stack grow gap 0
+      y.colour bold
+      y.brand y.weight faint
+    y.metres "m" bold color if(y.metres < 100, bad, ink)
+===
+@rich domain=r7_magic_deck_winrate topic=card game decks and win rate style=detailed
+i play a card game with three decks. after each duel i log which deck i used and if i won or lost. show the win rate per deck with a bar, the record as wins and losses, my last ten duels as dots and which deck is best
+needs: log a duel with deck and result | win rate per deck with bar | record of wins and losses | last ten duels as dots | best deck
+---
+app "Deck record" cards blue
+table duel deck pick Red_burn|Blue_control|Green_stompy = Red_burn, result pick Win|Loss = Win, opp text?
+topbar "Deck record", duel, "Log duel"
+row gap 1
+  each duel sort at desc top 10 as d
+    box grow height 12 radius 6 fill if(d.result = Win, good, bad)
+each options duel.deck as k
+  stack card gap 1
+    row gap 2
+      k bold grow
+      count(duel where deck = k and result = Win) "W" count(duel where deck = k and result = Loss) "L" faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * count(duel where deck = k and result = Win) / max(count(duel where deck = k), 1), 3 fill accent radius 1
+statcard count(duel where result = Win), "wins of" count(duel) "duels", count(duel)
+===
+@rich domain=r7_speech_rehearsals topic=talk rehearsals against time limit style=custom_ui
+preparing a toastmasters speech. each talk has a title and a target length in minutes. every rehearsal i log the length in minutes and how confident i felt from 1 to 5. show the last run against the target and a line of confidence over my rehearsals
+needs: add a talk with target minutes | log a rehearsal with length and confidence | last run against the target | line of confidence over rehearsals | count of rehearsals
+---
+app "Speech practice" pen slate
+table talk title text, target num 1..60 = 7 "Target minutes"
+table rehearsal talk ref talk, mins num 1..90, sure num 1..5 = 3 "Confidence"
+topbar "Speech practice", talk, "New talk"
+each talk sort title as t empty "No talks yet. Add the speech you are working on."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 2
+      t.title bold grow
+      count(t.rehearsal) "rehearsals" faint
+    if count(t.rehearsal) > 0
+      "Last run" last(t.rehearsal.mins) "min against" t.target "target" color if(last(t.rehearsal.mins) > t.target, warn, good)
+    section "Confidence"
+      trend t.rehearsal sort at, it.sure
+form rehearsal, "Log rehearsal"
+===
+@rich domain=r7_poem_a_day topic=poems written per month and kinds style=multi_feature
+trying to write one poem a day in april. each poem has a title, the kind like haiku, free verse, ghazal or sonnet and how many lines. a goal of 30 poems this month with a bar, a grid of the last five weeks and count by kind
+needs: add a poem with title, kind and lines | goal of 30 poems with bar | grid of last 5 weeks | count by kind | streak of days
+---
+app "Poem a day" pen yellow
+table poem title text, kind pick Haiku|Free_verse|Ghazal|Sonnet = Haiku, lines num 1..100 = 3
+topbar "Poem a day", poem, "Add poem"
+goal count(poem month), 30, "poems this month"
+row gap 2
+  statcard streak(poem), "day streak"
+  statcard sum(poem.lines month), "lines this month"
+section "Last 5 weeks"
+  daygrid last 35 days, count(poem on it), 1
+section "By kind"
+  share poem by kind, count(it), it.key
+===
+@rich domain=r7_hobby_budget_caps topic=hobby spending against monthly caps style=detailed
+my hobbies cost money: photography, yarn, models. each hobby has a monthly cap and i log what i spend on it. show a bar per hobby for this month that warns when over its cap, the total spent on hobbies this month and the biggest spender
+needs: add a hobby with a monthly cap | log spending on a hobby | bar per hobby against its cap | total spent this month | biggest spender
+---
+app "Hobby budget" wallet mint
+table hobby name text, cap money
+table outlay hobby ref hobby, amount money, what text?
+topbar "Hobbies", hobby, "Add hobby"
+row gap 2
+  statcard sum(outlay.amount month), "spent on hobbies this month"
+  statcard count(outlay month), "purchases this month"
+each hobby sort name as h empty "No hobbies yet. Add one with its monthly cap."
+  stack card gap 1 tap edit h swipe remove h
+    h.name bold
+    goal sum(h.outlay.amount month), h.cap, if(sum(h.outlay.amount month) > h.cap, "over the cap", "spent this month")
+    if sum(h.outlay.amount month) > 0 and sum(h.outlay.amount month) = max(hobby, sum(it.outlay.amount month))
+      "Biggest spender this month" small bold
+form outlay, "Log spending"

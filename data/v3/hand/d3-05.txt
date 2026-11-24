@@ -1,0 +1,200 @@
+@rich domain=d3_sideproject_timeboxes topic=side_project_weekly_minutes style=multi_feature
+I have three side projects and one free evening a week, so I need to see where the minutes really go. add projects, tap +30 or +60 minutes after a session, set a weekly minutes goal and see bars per project this week and total against the goal
+needs: add a project | tap plus 30 or plus 60 minutes | set weekly minutes goal | bar per project this week | total against goal
+---
+app "Side projects" bolt yellow
+table proj name text
+table session proj ref proj, mins num 5..240
+setting goal num = 240 "Weekly minutes"
+topbar "Side projects", proj, "Add project"
+goal sum(session.mins week), goal, "minutes this week", "min"
+section "This week", "minutes per project"
+  bars proj sort sum(it.session.mins week) desc, sum(it.session.mins week), it.name
+each proj sort name as p empty "No projects yet. Add the ones you want time for."
+  row card gap 2 swipe remove p tap edit p
+    p.name bold grow
+    button "+30" tap add session proj = p, mins = 30
+    button "+60" tap add session proj = p, mins = 60
+===
+@rich domain=d3_shortcut_trainer topic=keyboard_shortcut_practice style=custom_ui
+shortcuts I want to burn into my fingers: the keys, what it does and which tool (VS Code, terminal, browser, vim). a tick when I know it, a button that picks one random shortcut to try today, filter by tool and progress per tool
+needs: add a shortcut with keys, description and tool | tick when known | button to pick a random shortcut to try | filter by tool | progress of known shortcuts
+---
+app "Shortcuts" key teal dark
+table sc combo text "Keys", does text, tool pick VS_Code|Terminal|Browser|Vim = VS_Code, known bool
+state t pick All|VS_Code|Terminal|Browser|Vim = All
+state try text = ""
+topbar "Shortcuts", sc, "Add shortcut"
+goal count(sc where known = yes), count(sc), "shortcuts known"
+row gap 2 align center
+  button "Try one today" fill accent tap set try = random(sc where known = no).combo
+  text try huge grow
+choice t
+each sc where t = All or tool = t sort known as s empty "No shortcuts here. Add the one you keep reaching for the mouse instead of."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.known
+    stack grow gap 0
+      s.combo bold
+      s.does "·" s.tool faint
+===
+@rich domain=d3_command_flashcards topic=git_docker_command_flashcards style=detailed
+flashcards for terminal commands I forget: the command on the front and what it does on the back. show one card at a time, a button to reveal the answer, one to go to the next card, and show which card number I am on out of the total
+needs: add a card with command and what it does | one card at a time | button to reveal the answer | button for the next card | card number out of total
+---
+app "Command cards" fire slate
+table cmd name text "Command", what long "What it does"
+state i num = 1
+state open bool = no
+let cur = nth(cmd sort name, i)
+topbar "Command cards", cmd, "Add card"
+if count(cmd) = 0
+  "No cards yet. Add the first command you keep forgetting." faint
+else
+  "Card" i "of" count(cmd) faint
+  stack card gap 2 middle
+    cur.name huge
+    if open
+      cur.what
+    else
+      button "Show answer" tap set open = yes
+  button "Next card" fill accent tap set i = i % count(cmd) + 1 then set open = no
+===
+@rich domain=d3_env_var_matrix topic=env_variable_checklist_matrix style=custom_ui
+env variable checklist for deploys. list each variable name (never the value) and tap Dev, Staging or Prod chips to show where it is already set, red where it is missing. count how many are missing in each environment
+needs: add a variable name | tap Dev, Staging or Prod to mark it set | red where missing | missing count per environment | remove a variable
+---
+app "Env vars" tool purple
+table evar name text
+table isset evar ref evar, env pick Dev|Staging|Prod
+topbar "Env variables", evar, "Add variable"
+row gap 2
+  each options isset.env as e
+    stack grow gap 0 align center radius 10 pad 1 fill soft
+      count(evar) - count(isset where env = e) big color if(count(evar) - count(isset where env = e) > 0, bad, good)
+      e tiny faint
+each evar sort name as v empty "No variables yet. List the ones your app reads at start."
+  stack card gap 1 swipe remove v
+    v.name bold
+    row gap 1
+      each options isset.env as e
+        button e grow fill if(count(v.isset where env = e) > 0, good, bad) tap toggle v.isset all where env = e
+===
+@rich domain=d3_cfp_tracker topic=conference_cfp_tracker style=detailed
+I submit talks to conferences. list the conference, the CFP deadline and status (idea, submitted, accepted, rejected). remind me 3 days before each deadline, show how many are accepted of those submitted, and sort by deadline
+needs: add a conference with CFP deadline and status | reminder 3 days before the deadline | sorted by deadline | accepted of submitted count | buttons to change status
+---
+app "CFP tracker" flag pink
+table cfp conf text, deadline date, status pick Idea|Submitted|Accepted|Rejected = Idea
+topbar "CFP tracker", cfp, "Add conference"
+remind "A talk proposal is due in 3 days" at cfp.deadline - 3d at 9:00
+statcard count(cfp where status = Accepted), "accepted of" count(cfp where status = Submitted or status = Accepted or status = Rejected) "submitted"
+each cfp sort deadline as c empty "No conferences yet. Add the next call for papers you see."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 1
+      c.conf bold grow
+      c.status faint
+    c.deadline "·" if(c.deadline >= today, join(c.deadline - today, " days left"), "deadline passed") faint
+    if c.status = Idea
+      button "Submitted" tap set c.status = Submitted
+    if c.status = Submitted
+      row gap 1
+        button "Accepted" tap set c.status = Accepted
+        button "Rejected" tap set c.status = Rejected
+===
+@rich domain=d3_tool_trial_scores topic=dev_tool_trial_evaluation style=multi_feature
+I'm trialling a few dev tools and need to compare them fairly. each tool gets a score from 1 to 5 for ease, speed and price, a trial end date, and a keep or drop call. show the total score as a bar and rank them, and remind me the day before a trial ends
+needs: add a tool with ease, speed and price scores and trial end date | total score as a bar | ranked best first | keep or drop call | reminder the day before the trial ends
+---
+app "Tool trials" tool plum
+table tool name text, ease num 1..5 = 3, speed num 1..5 = 3, price num 1..5 = 3 "Price (5 = cheap)", ends date, call pick Undecided|Keep|Drop = Undecided
+topbar "Tool trials", tool, "Add tool"
+remind "A tool trial ends tomorrow" at tool.ends - 1d at 9:00
+each tool sort ease + speed + price desc as t empty "No tools yet. Add the first thing you are trying out."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 1
+      "#" index + 1 t.name bold grow
+      t.ease + t.speed + t.price "/ 15" bold
+    draw 100, 5
+      rect 0, 0, 100, 5 fill soft radius 2
+      rect 0, 0, 100 * (t.ease + t.speed + t.price) / 15, 5 fill accent radius 2
+    row gap 1
+      "trial ends" t.ends t.call faint grow
+      button "Keep" tap set t.call = Keep
+      button "Drop" tap set t.call = Drop
+===
+@rich domain=d3_okr_quarter topic=quarterly_okr_key_results style=custom_ui
+OKRs for the quarter. objectives with key results, each key result has a target number and the current value. tap plus one on a key result, see a progress bar per key result and the average progress per objective, and how many key results are complete
+needs: add an objective | add a key result with target and current value | tap plus one on a key result | progress bar per key result | average progress per objective
+---
+app "OKRs" target ocean
+table obj name text
+table kr obj ref obj, name text, target num 1.., now_val num 0.. = 0 "Current"
+let prog(k kr) = clamp(k.now_val / k.target, 0, 1)
+topbar "Quarter OKRs", obj, "Add objective"
+statcard count(kr where now_val >= target), "of" count(kr) "key results complete", count(kr)
+form kr, "Add key result"
+each obj sort name as o empty "No objectives yet. Add one, then give it key results."
+  section o.name, "average" round(sum(o.kr, prog(it)) * 100 / max(count(o.kr), 1)) "%"
+    each o.kr as k empty "No key results under this objective yet."
+      stack gap 1 tap edit k swipe remove k
+        row gap 1
+          k.name grow
+          k.now_val "/" k.target faint
+          button "+1" tap set k.now_val = k.now_val + 1
+        draw 100, 4
+          rect 0, 0, 100, 4 fill soft radius 2
+          rect 0, 0, 100 * prog(k), 4 fill if(prog(k) >= 1, good, accent) radius 2
+===
+@rich domain=d3_pr_size_habit topic=pull_request_size_habit style=short
+trying to keep my pull requests small. log each PR with lines changed and review minutes, warn if over 400 lines, and show the average size
+needs: log a PR with lines changed and review minutes | warning over 400 lines | average size | line chart of sizes
+---
+app "PR size" scale green
+table pr title text?, lines num 1.., review num 0.. = 0 "Review minutes"
+topbar "PR size", pr, "Log PR"
+statcard round(avg(pr.lines)), "lines on average," count(pr where lines > 400) "over 400"
+section "Size of each PR", "oldest to newest"
+  trend pr sort at, it.lines
+each pr sort at desc top 8 as p empty "No PRs logged yet. Log the next one you open."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.title bold
+      p.review "min review" faint
+    p.lines "lines" bold color if(p.lines > 400, bad, ink)
+===
+@rich domain=d3_retainer_hours topic=client_retainer_hours_left style=detailed
+my clients pay me a monthly retainer in hours. add each client with the hours they bought, log hours worked for them, and show a round ring per client with the hours left this month, red if I went over, plus the total hours I worked this month
+needs: add a client with retainer hours | log hours worked for a client | ring per client showing hours left | red when over retainer | total hours worked this month
+---
+app "Retainers" clock blue
+table client name text, bought num 1..300 "Hours per month"
+table work client ref client, hrs num 0.5..24 = 1
+topbar "Retainers", client, "Add client"
+statcard sum(work.hrs month), "hours worked this month for" plural(count(client), "client")
+form work, "Log hours"
+grid 2 gap 2
+  each client sort name as c empty "No clients yet. Add the first retainer."
+    stack card gap 1 align center swipe remove c
+      draw width 80
+        circle 42 stroke soft thick 10
+        arc 42, 0, 360 * clamp(sum(c.work.hrs month) / c.bought, 0, 1) stroke if(sum(c.work.hrs month) > c.bought, bad, accent) thick 10
+        label 50, 50, round((c.bought - sum(c.work.hrs month)) * 10) / 10 bold
+      c.name bold
+      "of" c.bought "h left" faint
+===
+@rich domain=d3_repo_stars_log topic=github_stars_growth_log style=multi_feature
+weekly snapshot of the GitHub stars on my project. type the star count each week, see the line of growth, how many stars I gained since the last entry, and how far I am from my milestone (1000 by default)
+needs: log the star count | line chart of growth | stars gained since last entry | milestone setting | progress to milestone
+---
+app "Repo stars" star purple
+table snap stars num 0..
+setting milestone num = 1000 "Milestone"
+let gained = last(snap.stars) - nth(snap sort at desc, 2).stars
+topbar "Repo stars", snap, "Log stars"
+if count(snap) > 0
+  goal last(snap.stars), milestone, "stars so far"
+if count(snap) > 1
+  statcard gained, "stars since the previous entry"
+section "Growth", "oldest to newest"
+  trend snap sort at, it.stars
+list snap top 6, "No snapshots yet. Type today's star count to start the line."

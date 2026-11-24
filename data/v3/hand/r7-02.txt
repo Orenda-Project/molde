@@ -1,0 +1,500 @@
+@rich domain=r7_cooking_experiments topic=kitchen experiments and ratings style=multi_feature
+sunday is my day to try weird recipes. i log the dish, what i tweaked this time, a rating out of 5 and whether i would cook it again yes maybe or no. chips to see only the ones i would cook again, the average rating and how many dishes this month
+needs: log a dish with tweak, rating and cook-again answer | five dots showing the rating | chips to filter by cook again | average rating | dishes this month
+---
+app "Kitchen lab" food ocean
+table dish name text, tweak long, rating num 1..5 = 3, again pick Yes|Maybe|No = Maybe
+state f pick All|Yes|Maybe|No = All
+topbar "Kitchen lab", dish, "Log dish"
+row gap 2
+  statcard round(avg(dish.rating) * 10) / 10, "average rating of 5", 5
+  statcard count(dish month), "dishes this month"
+choice f
+each dish where f = All or again = f sort at desc as d empty "No dishes here. Cook something odd and log it."
+  stack card gap 1 tap edit d swipe remove d
+    row gap 2
+      d.name bold grow
+      d.again faint
+    row gap 1
+      each 1..5 as n
+        box width 14 height 14 radius 7 fill if(n <= d.rating, warn, soft)
+    d.tweak small
+===
+@rich domain=r7_sourdough_bakes topic=sourdough hydration and rise log style=detailed
+sourdough diary. each bake i note flour grams, water grams, hours of rise and a score from 1 to 5. i want hydration worked out as a percent for every bake, my average hydration, and a line of my scores over the last two months
+needs: log a bake with flour, water, rise hours and score | hydration percent for each bake | average hydration | line of scores over 60 days | count of bakes
+---
+app "Sourdough" bread orange
+table bake flour num 50..2000 unit "g", water num 50..2000 unit "g", rise num 1..48 = 6 unit "h", score num 1..5 = 3
+let hyd = round(sum(bake, it.water * 100 / it.flour) / max(count(bake), 1))
+topbar "Sourdough", bake, "Log bake"
+row gap 2
+  statcard hyd, "% average hydration"
+  statcard count(bake), "loaves baked"
+section "Scores", "last 60 days"
+  trend bake last 60 days sort at, it.score
+each bake sort at desc as b empty "No bakes yet. Weigh the flour and water for the first loaf."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      round(b.water * 100 / b.flour) "% hydration" bold
+      b.flour "g flour," b.rise "h rise" faint
+    b.score "of 5" bold
+===
+@rich domain=r7_movie_night_queue topic=movie watchlist with surprise pick style=custom_ui
+movie night list for me and my wife. films we want to see and ones we watched, with the genre and a score once watched. chips to switch between want and watched, and a button that picks a random film from the want list when we cannot decide
+needs: add a film with genre | switch between want and watched | score for watched films | mark a film as watched | random pick from the want list
+---
+app "Movie night" cards slate
+table movie title text, genre pick Drama|Comedy|Thriller|Sci_fi|Animation|Doc = Drama, status pick Want|Watched = Want, score num? 1..10
+state tab pick Want|Watched = Want
+state tonight text = ""
+topbar "Movie night", movie, "Add film"
+row gap 1
+  each options movie.status as s
+    button s count(movie where status = s) fill if(tab = s, ink, surface) grow tap set tab = s
+if tab = Want
+  button "Pick one for tonight" fill accent tap set tonight = random(movie where status = Want).title
+  if len(tonight) > 0
+    tonight head
+each movie where status = tab sort title as m empty "Nothing here yet. Add a film we keep talking about."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.title bold
+      m.genre "·" m.score faint
+    if m.status = Want
+      button "Watched" tap set m.status = Watched
+===
+@rich domain=r7_series_episode_counter topic=series season and episode counters style=multi_feature
+i follow like ten series at once and lose track of where i am. each show has the season, the episode i am on and how many episodes in the season. buttons for next episode and next season, a bar for the season and a count of shows i am caught up on
+needs: add a show with season and episodes in season | next episode button | next season button | bar for the season progress | count of shows finished this season
+---
+app "Where was I" list ink
+table show title text, season num 1..40 = 1, ep num 0..200 = 0 "Episode now", eps num 1..200 = 10 "Episodes in season"
+topbar "Where was I", show, "Add show"
+statcard count(show, it.ep >= it.eps), "of" count(show) "shows finished this season", count(show)
+each show sort title as s empty "No shows yet. Add the one you watched last night."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 2
+      s.title bold grow
+      "S" s.season "E" s.ep faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(s.ep / s.eps, 0, 1), 3 fill accent radius 1
+    row gap 1
+      button "Next episode" grow tap set s.ep = min(s.ep + 1, s.eps)
+      button "Next season" tap set s.season = s.season + 1 then set s.ep = 0
+===
+@rich domain=r7_anime_airing_week topic=weekly airing anime and episodes behind style=custom_ui
+airing anime schedule. each show has the weekday it airs, how many episodes have aired and how many i have seen. show how far behind i am overall, the shows grouped by airing day, and a plus one button after i watch an episode
+needs: add a show with airing day | episodes aired and seen | plus one watched button | how many episodes behind in total | shows grouped by weekday
+---
+app "Airing" star plum
+table anime title text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, aired num 0..500 = 0, seen num 0..500 = 0
+let behind = sum(anime, max(it.aired - it.seen, 0))
+topbar "Airing", anime, "Add anime"
+statcard behind, "episodes behind in total"
+each options anime.day as d
+  if count(anime where day = d) > 0
+    section d, plural(count(anime where day = d), "show")
+      each anime where day = d sort title as a
+        row gap 2 tap edit a swipe remove a
+          stack grow gap 0
+            a.title bold
+            a.seen "of" a.aired "watched" faint color if(a.seen < a.aired, warn, muted)
+          button "+1" tap set a.seen = min(a.seen + 1, a.aired)
+===
+@rich domain=r7_game_backlog_hours topic=video game backlog with hours style=detailed
+my steam and ps5 backlog is out of control. games with platform, a status backlog, playing, finished or dropped, hours played and a score when finished. show a count for each status, total hours and a plus one hour button on the ones i am playing
+needs: add a game with platform and status | count for each status | hours played with plus one hour button | total hours | chips to filter by status
+---
+app "Backlog" game red dark
+table game title text, platform pick PC|PS5|Switch|Phone = PC, status pick Backlog|Playing|Finished|Dropped = Backlog, hours num 0..2000 = 0 unit "h"
+state f pick All|Backlog|Playing|Finished|Dropped = All
+topbar "Backlog", game, "Add game"
+grid 4 gap 1
+  each options game.status as s
+    stack card gap 0 align center
+      count(game where status = s) big
+      s tiny
+"Total hours played:" sum(game.hours) head
+choice f
+each game where f = All or status = f sort title as g empty "No games here. Add one from the pile."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.title bold
+      g.platform "·" g.hours "h" faint
+    if g.status = Playing
+      button "+1 h" tap set g.hours = g.hours + 1
+    if g.status = Backlog
+      button "Start" tap set g.status = Playing
+===
+@rich domain=r7_arcade_high_scores topic=high scores per game with records style=multi_feature
+my brothers and i fight over high scores on tetris, snake and pinball. log each play with the game and the points, show the best score for each game, a big message when my last play was a new record and a line of the last twenty scores
+needs: log a play with game and points | best score per game | new record message | line of the last 20 scores | number of plays per game
+---
+app "High scores" trophy yellow
+table play game pick Tetris|Snake|Pinball|Other = Tetris, points num 0..
+state g pick Tetris|Snake|Pinball|Other = Tetris
+let best = max(play.points where game = g)
+topbar "High scores", play, "Log play"
+choice g
+if count(play where game = g) > 0 and last(play.points where game = g) >= best
+  stack card fill good gap 0
+    "New record!" head
+    "Best " g "score is" best small
+else
+  "Best " g "score:" best head
+section "Last 20 plays", g
+  trend play where game = g sort at desc top 20, it.points
+section "Plays and best", "per game"
+  each options play.game as x
+    row gap 2
+      x grow
+      count(play where game = x) "plays" faint
+      max(play.points where game = x) bold
+===
+@rich domain=r7_chess_games_record topic=chess results and rating line style=multi_feature
+chess games log. result win draw or loss, white or black, the opening if i know it, and my rating after the game. i want win rate for white and for black, the last ten results as colored dots, and a line of my rating
+needs: log a game with result, colour, opening and rating | win rate as white and black | last ten results as dots | rating line chart | totals of wins draws and losses
+---
+app "Chess record" board grey
+table match result pick Win|Draw|Loss = Win, side pick White|Black = White, opening text?, rating num 100..3500 = 1200 "My rating after"
+let rate(c text) = round(count(match where side = c and result = Win) * 100 / max(count(match where side = c), 1))
+topbar "Chess record", match, "Log game"
+row gap 2
+  statcard rate("White"), "% wins as white", 100
+  statcard rate("Black"), "% wins as black", 100
+row gap 1
+  each options match.result as r
+    stack grow card gap 0 align center
+      count(match where result = r) big
+      r faint
+row gap 1
+  each match sort at desc top 10 as m
+    box grow height 12 radius 6 fill if(m.result = Win, good, if(m.result = Loss, bad, soft))
+section "Rating", "last 30 games"
+  trend match sort at desc top 30, it.rating
+===
+@rich domain=r7_board_game_nights topic=board game nights and winners style=detailed
+friday board game nights. the game we played, how many players, who won and how long it took in minutes. who wins the most, which games we play the most, and how many nights this month
+needs: log a night with game, players, winner and minutes | who wins the most | most played games | nights this month | average length of a night
+---
+app "Game nights" dice green
+table night game text, players num 2..10 = 4, winner text, mins num 10..600 = 60
+topbar "Game nights", night, "Log night"
+row gap 2
+  statcard count(night month), "nights this month"
+  statcard round(avg(night.mins)), "minutes on average"
+section "Who wins most"
+  share night by winner, count(it), it.key
+section "Most played"
+  share night by game, count(it), it.key
+list night top 6, "No nights logged. Log the first one after the dice stop rolling."
+===
+@rich domain=r7_puzzle_solve_times topic=sudoku and crossword solve times style=custom_ui
+sudoku, crossword and kakuro each morning with coffee. i log how long each took in minutes and seconds, pick a puzzle with chips to see its best time, its average and a line of my last results
+needs: log a solve with puzzle and time taken | chips to pick a puzzle | best time for the puzzle | average time for the puzzle | line of my last results
+---
+app "Puzzle times" grid blue
+table solve puzzle pick Sudoku|Crossword|Kakuro|Wordle = Sudoku, took dur
+state p pick Sudoku|Crossword|Kakuro|Wordle = Sudoku
+topbar "Puzzle times", solve, "Log solve"
+choice p
+row gap 2
+  stack grow card gap 0
+    min(solve.took where puzzle = p) big
+    "best time" faint
+  stack grow card gap 0
+    avg(solve.took where puzzle = p) big
+    "average" faint
+section "Last results", plural(count(solve where puzzle = p), "solve")
+  trend solve where puzzle = p sort at desc top 20, it.took / 1s
+list solve where puzzle = p top 5, "No solves for this puzzle yet."
+===
+@rich domain=r7_cube_solve_pb topic=speedcubing solves and personal best style=multi_feature
+speedcubing. log every solve in seconds for 3x3, 2x2 or pyraminx. i want my personal best for the kind, a banner when today has a new best, how many solves under 30 seconds and a chart of the average per day this week
+needs: log a solve in seconds by kind | personal best per kind | banner for a new best today | solves under 30 seconds | average per day this week
+---
+app "Cube timer" dice teal
+table cube secs num 1..900 unit "s", kind pick Three_by_three|Two_by_two|Pyraminx = Three_by_three
+state k pick Three_by_three|Two_by_two|Pyraminx = Three_by_three
+let pb = min(cube.secs where kind = k)
+topbar "Cube timer", cube, "Add solve"
+choice k
+row gap 2
+  statcard pb, "seconds personal best"
+  statcard count(cube where kind = k and secs < 30), "solves under 30 s"
+if count(cube today where kind = k) > 0 and min(cube.secs today where kind = k) <= pb
+  "New best today!" head color good
+section "Average per day", "this week, seconds"
+  daybars week, round(avg(cube.secs on it where kind = k))
+list cube where kind = k top 8, "No solves yet. Scramble and go."
+===
+@rich domain=r7_crochet_row_counter topic=crochet rows with tap counter style=custom_ui
+crochet blankets take forever. each project has the number of rows in the pattern. i tap a big plus button every row i finish and a minus if i tap by mistake. show rows done against the pattern, a bar, and how many rows i did today
+needs: add a project with pattern rows | tap plus for each row | minus for a mistake | bar of rows done | rows done today
+---
+app "Rows" pencil pink
+table project name text, total num 1..2000 = 100 "Pattern rows"
+table rowdone project ref project
+topbar "Rows", project, "New project"
+statcard count(rowdone today), "rows crocheted today"
+each project sort name as p empty "No projects yet. Add your blanket with its row count."
+  stack card gap 2 tap edit p swipe remove p
+    row gap 2 align center
+      stack grow gap 0
+        p.name head
+        "Row" count(p.rowdone) "of" p.total faint
+      button "-" tap remove last(p.rowdone)
+      button "+1 row" fill accent tap add rowdone project = p
+    goal count(p.rowdone), p.total, "rows done"
+===
+@rich domain=r7_knit_increase_rounds topic=knitting row counter with increase rounds style=detailed
+knitting a sweater. one big tap area adds a row. i set the total rows of the pattern and that i increase every 6 rows. it should say which row i am on, tell me when this row is an increase row and how many rows until the next increase
+needs: big tap to add a row | set total rows | set increase every number of rows | message when this row is an increase row | rows until next increase
+---
+app "Sweater rows" pen purple
+table rowlog
+setting total num = 120 "Rows in pattern"
+setting every num = 6 "Increase every (rows)"
+let n = count(rowlog)
+draw width 300 tap add rowlog
+  circle 44 stroke soft thick 7
+  arc 44, 0, 360 * clamp(n / total, 0, 1) stroke accent thick 7
+  label 50, 42, n huge
+  label 50, 68, "of" total "rows" color muted
+if n > 0 and n % every = 0
+  "Increase on this row" head color warn align center
+else
+  "Next increase in" every - n % every "rows" head align center
+"Tap the circle after each row" faint align center
+button "Undo last row" tap remove last(rowlog)
+===
+@rich domain=r7_sewing_project_stages topic=sewing projects by stage style=multi_feature
+sewing projects: dresses, curtains, bags. each is at a stage idea, cut, sewing, finishing or done, with fabric cost and hours spent. buttons on each to move it to a stage and a total of what i spent on fabric
+needs: add a project with fabric cost and hours | buttons to set the stage | count per stage | total fabric spent | hours spent per project
+---
+app "Sewing room" tag mint
+table piece name text, stage pick Idea|Cut|Sewing|Finishing|Done = Idea, fabric money = 0, hours num 0..500 = 0
+topbar "Sewing room", piece, "New project"
+row gap 2
+  statcard sum(piece.fabric), "spent on fabric"
+  statcard count(piece where stage = Done), "of" count(piece) "finished", count(piece)
+each piece sort name as p empty "No projects yet. Add the first thing you want to sew."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.name bold grow
+      p.hours "h" faint
+    scroll gap 1
+      each options piece.stage as s
+        button s fill if(p.stage = s, accent, soft) tap set p.stage = s
+===
+@rich domain=r7_fishing_catch_log topic=fishing catches and best bait style=detailed
+fishing log from the lake. species, weight in kilos, length, the spot and what bait worked: worm, fly, lure or bread. show my biggest fish, total kilos this year, which bait catches the most and a list of recent catches
+needs: log a catch with species, weight, length, spot and bait | biggest fish | total kilos this year | catches per bait | recent catches list
+---
+app "Catch log" fish teal
+table catch species text, kg num 0.01..100 = 1 unit "kg", cm num? 1..300, spot text?, bait pick Worm|Fly|Lure|Bread = Worm
+topbar "Catch log", catch, "Log catch"
+row gap 2
+  statcard max(catch.kg), "kg biggest fish"
+  statcard sum(catch.kg year), "kg caught this year"
+section "Best bait", "number of catches"
+  share catch by bait, count(it), it.key
+each catch sort at desc top 8 as c empty "No fish yet. Log the first one."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.species bold
+      c.spot c.bait faint
+    c.kg "kg" bold
+===
+@rich domain=r7_hiking_km_year topic=hiking distance and climb for the year style=multi_feature
+hiking log. trail name, kilometers, metres climbed and how long it took. i want to hit 500 km this year so show progress, total climb, my longest hike, and the kilometers per month
+needs: log a hike with trail, km, climb and time | progress toward 500 km | total climb in metres | longest hike | km per month
+---
+app "Trail log" map green
+table hike trail text, km num 0.1..200 = 5, climb num 0..5000 = 0 unit "m", took dur
+setting yearly num = 500 "Yearly km target"
+topbar "Trail log", hike, "Log hike"
+statcard sum(hike.km year), "of" yearly "km this year", yearly
+row gap 2
+  statcard sum(hike.climb year), "metres climbed"
+  statcard max(hike.km), "km longest hike"
+section "Km per month", "this year"
+  share hike year by month, sum(it.km), it.key
+list hike top 6, "No hikes yet. Lace up and log the first trail."
+===
+@rich domain=r7_bucket_list_kinds topic=bucket list by kind style=custom_ui
+my bucket list with things like travel, learn, adventure, create and give. each has a target date if i have one and a tick when done. show how many are done in each kind and a bar for the whole list
+needs: add an item with kind and target date | tick when done | done count per kind | bar for the whole list | undone items first
+---
+app "Bucket list" flag yellow
+table dream what text, kind pick Travel|Learn|Adventure|Create|Give = Travel, by date?, done bool
+topbar "Bucket list", dream, "Add dream"
+goal count(dream where done = yes), max(count(dream), 1), "dreams done"
+grid 2 gap 1
+  each options dream.kind as k
+    stack card gap 0
+      k bold
+      count(dream where kind = k and done = yes) "of" count(dream where kind = k) "done" faint
+each dream sort done as d empty "Nothing here yet. Write the first thing you want to do before you die."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.done
+    stack grow gap 0
+      d.what bold color if(d.done, muted, ink)
+      d.kind "·" d.by faint
+===
+@rich domain=r7_wish_list_afford topic=wish list with what i can afford style=detailed
+wish list for things i want to buy: item, price, how much i want it like must, want or maybe, and a tick when bought. i type how much i have saved and it shows what i can afford right now, the total of everything still wanted and what i already bought
+needs: add an item with price and priority | tick when bought | type amount saved | items affordable right now | total still wanted
+---
+app "Wish list" tag red
+table wish item text, price money, priority pick Must|Want|Maybe = Want, bought bool
+setting saved money = 0 "Saved so far"
+topbar "Wish list", wish, "Add wish"
+row gap 2
+  statcard sum(wish.price where bought = no), "still wanted in total"
+  statcard sum(wish.price where bought = yes), "already bought"
+section "You can afford now", "with" saved "saved"
+  each wish where bought = no and price <= saved sort price desc as w empty "Nothing yet. Save a bit more or lower the price."
+    row gap 2
+      w.item bold grow
+      w.price
+each wish where bought = no sort priority as w empty "The list is empty. Add something you want."
+  row card gap 2 tap edit w swipe remove w
+    toggle w.bought
+    stack grow gap 0
+      w.item bold
+      w.priority faint
+    w.price
+===
+@rich domain=r7_gift_ideas_people topic=gift ideas per person and birthdays style=multi_feature
+i always forget gifts. people with their birthday, and for each person ideas with a price and a tick when i bought it. remind me a week before a birthday and show how much i have spent on gifts bought
+needs: add a person with birthday | add gift ideas for a person | tick when bought | reminder a week before a birthday | total spent on bought gifts
+---
+app "Gift ideas" gift ocean
+table person name text, birthday date?
+table gift person ref person, idea text, price money?, bought bool
+remind "A birthday is coming up. Check the gift list." at person.birthday - 7d at 9:00
+topbar "People", person, "Add person"
+statcard sum(gift.price where bought = yes), "spent on gifts already"
+each person sort name as p empty "No people yet. Add someone and their birthday."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.name bold grow
+      p.birthday faint
+    each p.gift as g empty "No ideas yet. Add one below."
+      row gap 2
+        toggle g.bought
+        g.idea grow color if(g.bought, muted, ink)
+        g.price faint
+form gift, "Save idea"
+===
+@rich domain=r7_screen_time_limit topic=screen time against a daily limit style=custom_ui
+digital detox. every time i check my phone usage i log minutes and which kind like social, video, news or games. i set a daily limit and want to see this week's bars turn red on days i went over, and how many days i stayed under
+needs: log minutes with app kind | set a daily limit | week bars red when over the limit | days under the limit | minutes by kind today
+---
+app "Screen detox" phone slate dark
+table screen minutes num 1..1440 = 30, kind pick Social|Video|News|Games|Other = Social
+setting limit num = 120 "Daily limit (minutes)"
+topbar "Screen detox", screen, "Log minutes"
+statcard sum(screen.minutes today), "minutes today of" limit, limit
+section "This week", "under the limit on" count(days last 7 days, sum(screen.minutes on it) <= limit) "of 7 days"
+  plot 0..7, 0..max(limit, max(days last 7 days, sum(screen.minutes on it))) axes
+    line 0, limit, 7, limit stroke ink thick 1
+    each days last 7 days
+      rect index + 0.15, 0, 0.7, sum(screen.minutes on it) fill if(sum(screen.minutes on it) > limit, bad, good) radius 3
+      tick index + 0.5, dayname(it)
+section "Today by kind"
+  share screen today by kind, sum(it.minutes), it.key
+===
+@rich domain=r7_morning_routine_steps topic=morning routine checklist style=detailed
+my morning routine: water, stretch, shower, journal, plan the day, each with the minutes it takes. tick them as i go, show the minutes of the whole routine, a message when all are done and a reminder at 6:30
+needs: add a step with minutes | tick steps today | total minutes of the routine | message when all steps are done | reminder at 6:30
+---
+app "Morning routine" sun yellow
+table step name text, mins num 1..90 = 5
+table did step ref step
+let left = count(step) - count(did today)
+remind "Start your morning routine" at 6:30 if count(did today) = 0
+topbar "Morning routine", step, "Add step"
+if left = 0 and count(step) > 0
+  stack card fill good gap 0
+    "Routine complete" head
+    "Nice start. Everything is ticked." small
+else
+  plural(left, "step") "left" head
+"The whole routine takes" sum(step.mins) "minutes" faint
+each step sort at as s empty "No steps yet. Add the first thing you do after waking."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.did
+    s.name bold grow
+    s.mins "min" faint
+"Days you finished all steps, last 14:" count(days last 14 days, count(did on it) = count(step) and count(step) > 0) faint
+===
+@rich domain=r7_evening_winddown topic=evening wind down checklist and bedtime style=custom_ui
+evening wind down so i stop scrolling in bed. five things: phone away, tidy up, brush teeth, read ten pages, lights out. tap each when done, set my bedtime, remind me 45 minutes before and show a grid of the last four weeks
+needs: five wind-down items to tap | set bedtime | reminder before bedtime | count of items done tonight | grid of last 4 weeks
+---
+app "Wind down" moon purple
+table wind item text
+setting bedtime time = 22:30 "Bedtime"
+remind "Start winding down" at 21:45
+statcard count(wind today), "of 5 done tonight", 5
+"Bedtime is at" bedtime faint
+each ["Phone away", "Tidy up", "Brush teeth", "Read ten pages", "Lights out"] as t
+  row gap 2 radius 10 pad 1 fill if(count(wind today where item = t) > 0, accent, soft) tap toggle wind today where item = t
+    t bold grow
+    if(count(wind today where item = t) > 0, "Done", "")
+section "Last 4 weeks", "items done each night"
+  daygrid last 28 days, count(wind on it), 5
+===
+@rich domain=r7_days_since_slip topic=days since last slip per habit style=multi_feature
+trying to quit sugar, soda and late-night snacks. i set the day i started and for each thing it shows how many days since my last slip, with a button when i slip. show the best clean stretch overall too
+needs: set the start date | days since last slip per thing | button when i slip | count of slips this month | list of slips
+---
+app "Clean days" shield orange
+table slip thing pick Sugar|Soda|Snacks = Sugar, note text?
+setting started date = today "Day I started"
+topbar "Clean days", slip, "Log slip"
+each options slip.thing as t
+  row card gap 2
+    stack grow gap 0
+      t bold
+      "Slips this month:" count(slip month where thing = t) faint
+    if(count(slip where thing = t) = 0, today - started, since(slip where thing = t)) big
+    "days" faint
+    button "I slipped" tap add slip thing = t
+statcard count(slip month), "slips this month in all"
+list slip top 6, "No slips so far. Keep going."
+===
+@rich domain=r7_meditation_sits topic=meditation sits and heat map style=custom_ui
+meditation log. one tap for 5, 10 or 20 minutes after i sit, a streak, total hours so far, the last eight weeks as a heat map and which kind of sitting i do most, breath, body scan, walking or silent
+needs: quick tap for 5, 10 or 20 minutes | pick the kind of sitting | streak | total hours | heat map of last 8 weeks
+---
+app "Sits" smile teal
+table sit mins num 1..180 = 10, style pick Breath|Body_scan|Walking|Silent = Breath
+state s pick Breath|Body_scan|Walking|Silent = Breath
+row gap 2
+  statcard streak(sit), "day streak"
+  statcard round(sum(sit.mins) / 6) / 10, "hours in all"
+choice s
+row gap 1
+  each [5, 10, 20] as m
+    button m "min" fill accent grow tap add sit mins = m, style = s
+section "Last 8 weeks", "darker means longer"
+  heat last 56 days, sum(sit.mins on it), 30
+section "Most used style"
+  share sit by style, count(it), it.key
+===
+@rich domain=r7_cold_shower_calendar topic=cold shower days on a calendar style=short
+cold shower challenge this month
+needs: tap a day on a month calendar | days done this month | month arrows | longest streak
+---
+app "Cold showers" drop blue
+table cold
+state m date = today
+monthnav m
+statcard count(cold month of m), "cold showers this month", 20
+calendar cold, m
+"Longest streak" best(cold) "days, now" streak(cold) faint

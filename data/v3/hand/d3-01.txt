@@ -1,0 +1,483 @@
+@rich domain=d3_experiment_log topic=experiment_hypothesis_log style=detailed
+we run too many product experiments and nobody remembers why. log each one with a name, the hypothesis, the metric we watch and the lift we saw, mark Running / Won / Lost, and show a bar chart of lift for the winners. also tell me how many are still running
+needs: log an experiment with name, hypothesis, metric and lift | mark a running test as won or lost | filter by status | bar chart of lift for won tests | count of running tests
+---
+app "Experiments" brain ocean dark
+table exp name text, hypothesis long, metric text = "conversion", status pick Running|Won|Lost|Inconclusive = Running, lift num = 0 unit "%", started date = today
+state show pick All|Running|Won|Lost|Inconclusive = All
+let decided = count(exp where status != Running)
+topbar "Experiment log", exp, "Log experiment"
+statcard count(exp where status = Running), "running now"
+statcard count(exp where status = Won), "won out of" decided "decided", decided
+section "Lift of the winners", "% on the watched metric"
+  bars exp where status = Won sort lift desc top 6, it.lift, it.name
+choice show
+each exp where show = All or status = show sort started desc as e empty "No experiments yet. Write down the first hypothesis before you ship it."
+  stack card gap 1 tap edit e swipe remove e
+    row gap 1
+      e.name bold grow
+      e.status faint
+    e.hypothesis faint
+    e.metric "·" e.lift "% lift ·" plural(today - e.started, "day") "old" faint
+    if e.status = Running
+      row gap 1
+        button "Won" tap set e.status = Won
+        button "Lost" tap set e.status = Lost
+===
+@rich domain=d3_dashboard_metric_checks topic=dashboard_metric_sanity_checks style=multi_feature
+every morning I eyeball the dashboard to see if the numbers look sane. let me list each metric with the range I expect, log today's reading, flag anything out of range in red, and show a little trend line for the last two weeks
+needs: add a metric with expected low and high | log a reading for a metric | red flag when out of range | count of metrics out of range | trend line of the last 14 days per metric
+---
+app "Metric checks" chart slate
+table metric name text, low num = 0, high num = 100, unit text?
+table reading metric ref metric, value num
+let off = count(metric, last(it.reading.value) < it.low or last(it.reading.value) > it.high)
+topbar "Metric checks", metric, "Add metric"
+statcard off, "of" count(metric) "metrics out of range", count(metric)
+form reading, "Log reading"
+each metric sort name as m empty "No metrics yet. Add the numbers your dashboard shows and the range you expect."
+  stack card gap 1 swipe remove m
+    row gap 1
+      m.name bold grow
+      last(m.reading.value) m.unit big color if(last(m.reading.value) < m.low or last(m.reading.value) > m.high, bad, good)
+    "Expected" m.low "to" m.high faint
+    trend m.reading last 14 days sort at, it.value
+===
+@rich domain=d3_data_quality_issues topic=data_quality_issue_list style=custom_ui
+data quality problems keep slipping through. log each one with dataset, kind of problem (nulls, duplicates, schema drift, late, wrong values), how many rows are hit and how bad it is. tick when fixed, and show which problem kind is the most common among the open ones
+needs: log an issue with dataset, problem kind, rows affected and severity | tick when fixed | total rows affected by open issues | chart of open issues by problem kind | high severity count
+---
+app "Data quality" shield mint
+table issue dataset text, problem pick Nulls|Duplicates|Schema_drift|Late|Wrong_values = Nulls, rows num 0.. = 0 "Rows affected", severity pick Low|Medium|High = Medium, fixed bool
+topbar "Data quality", issue, "Log issue"
+row gap 2
+  statcard count(issue where fixed = no), "open issues"
+  statcard sum(issue.rows where fixed = no), "rows affected"
+if count(issue where fixed = no and severity = High) > 0
+  count(issue where fixed = no and severity = High) "high severity still open" bold color bad
+section "Open by problem", "most common first"
+  share issue where fixed = no by problem, count(it), it.key
+each issue where fixed = no sort if(severity = High, 0, if(severity = Medium, 1, 2)) as i empty "Nothing open. Either the data is clean or nobody has looked yet."
+  row card gap 2 tap edit i swipe remove i fill if(i.severity = High, bad, soft)
+    stack grow gap 0
+      i.dataset bold
+      i.problem "·" i.rows "rows ·" i.severity faint
+    toggle i.fixed
+===
+@rich domain=d3_dataset_inventory topic=dataset_refresh_inventory style=detailed
+inventory of the datasets our team uses: name, owner, where it comes from, how often it should refresh in days and when it last loaded. show red when a dataset is older than its refresh period, a button to mark it refreshed today, and count how many are stale
+needs: add a dataset with owner, source and refresh period | last loaded date per dataset | stale highlighted when older than refresh period | button to mark refreshed today | count of stale datasets
+---
+app "Datasets" box teal
+table dataset name text, owner text, source text?, every num 1..365 = 1 "Refresh every (days)", loaded date = today "Last loaded"
+let late(d dataset) = today - d.loaded > d.every
+let stale = count(dataset, today - it.loaded > it.every)
+topbar "Dataset inventory", dataset, "Add dataset"
+statcard stale, "of" count(dataset) "datasets are stale", count(dataset)
+each dataset sort (today - loaded) - every desc as d empty "No datasets yet. Add the tables your team depends on."
+  row card gap 2 tap edit d swipe remove d fill if(late(d), bad, soft)
+    stack grow gap 0
+      d.name bold
+      d.owner "·" d.source faint
+      "Loaded" d.loaded "·" plural(today - d.loaded, "day") "ago, every" d.every faint
+    button "Refreshed" tap set d.loaded = today
+===
+@rich domain=d3_model_training_runs topic=model_training_run_costs style=multi_feature
+tracking my model training runs: name of the run, accuracy, hours on the GPU and what it cost. line chart of accuracy over the runs, show the best one so far and how much I have spent against my compute budget
+needs: log a run with name, accuracy, hours and cost | line chart of accuracy across runs | best accuracy so far | total spend against compute budget | cost per run in list
+---
+app "Training runs" bolt plum dark
+table run name text, acc num 0..100 unit "%", hours num 0.. = 1, cost money
+setting budget money = 300 "Compute budget"
+let spent = sum(run.cost)
+topbar "Training runs", run, "Log run"
+statcard max(run.acc), "% best accuracy so far"
+goal spent, budget, if(spent > budget, "over the compute budget", "spent on compute")
+section "Accuracy by run", "oldest to newest"
+  trend run sort at, it.acc
+each run sort at desc top 10 as r empty "No runs yet. Log the first one after it finishes."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.name bold
+      r.hours "h on GPU" faint
+    r.acc "%" bold
+    r.cost faint
+===
+@rich domain=d3_notebook_todos topic=notebook_todo_list style=short
+todo list for my jupyter notebooks, grouped by notebook, tick when done
+needs: add a task with notebook and kind | tick a task done | grouped by notebook | count of tasks left
+---
+app "Notebook TODOs" pencil plum
+table todo notebook text, task text, kind pick Clean|Plot|Model|Write_up = Clean, done bool
+topbar "Notebook TODOs", todo, "Add task"
+plural(count(todo where done = no), "task") "left across" count(todo by notebook, yes) "notebooks" head
+each todo where done = no by notebook as g empty "Nothing left in any notebook. Nice."
+  section g.key
+    each g as t
+      row gap 2
+        toggle t.done
+        stack grow gap 0
+          t.task bold
+          t.kind faint
+===
+@rich domain=d3_slow_query_log topic=slow_query_log style=custom_ui
+slow query log: sql name or short description, how many ms it takes, which table it hits, tick when optimised. I set the limit in ms and it shows how many are over. bar chart of the five slowest
+needs: add a slow query with name, milliseconds and table | set the limit in ms | count over the limit | bar chart of the five slowest | tick when optimised
+---
+app "Slow queries" timer red
+table query name text, ms num 1.. unit "ms", tbl text?, fixed bool
+setting limit num = 500 "Limit (ms)"
+let over = count(query where ms > limit and fixed = no)
+topbar "Slow queries", query, "Add query"
+statcard over, "queries over" limit "ms still unfixed"
+section "Five slowest", "milliseconds"
+  bars query where fixed = no sort ms desc top 5, it.ms, it.name
+each query sort ms desc as q empty "No slow queries logged. Add the ones that show up in your profiler."
+  row card gap 2 tap edit q swipe remove q
+    toggle q.fixed
+    stack grow gap 0
+      q.name bold
+      q.tbl faint
+    q.ms "ms" bold color if(q.ms > limit and q.fixed = no, bad, muted)
+===
+@rich domain=d3_pipeline_run_log topic=etl_pipeline_run_log style=multi_feature
+I want to log our nightly pipeline runs: which job (ingest, transform or export), how many minutes, how many rows, and whether it failed. chart of total minutes per day for the last week and a filter for one job
+needs: log a run with job, minutes, rows and failed flag | filter by job | chart of minutes per day for last 7 days | count of failed runs this week | total rows moved
+---
+app "Pipeline runs" grid grey dark
+table run job pick Ingest|Transform|Export = Ingest, mins num 0.. = 10 unit "min", rows num 0.. = 0, failed bool
+state job_filter pick All|Ingest|Transform|Export = All
+topbar "Pipeline runs", run, "Log run"
+row gap 2
+  statcard count(run week where failed = yes), "failed runs this week"
+  statcard sum(run.rows week), "rows moved this week"
+section "Minutes per day"
+  daybars last 7 days, sum(run.mins on it where job_filter = All or job = job_filter)
+choice job_filter
+list run where job_filter = All or job = job_filter top 15, "No runs logged for this job yet."
+===
+@rich domain=d3_metric_glossary topic=metric_definition_glossary style=short
+a glossary of our metric definitions so people stop arguing: name, definition, who owns it. search box on top
+needs: add a term with definition and owner | search by name or definition | count of terms with no owner | list sorted alphabetically
+---
+app "Metric glossary" book pink
+table term name text, meaning long, owner text?
+state q text = ""
+topbar "Glossary", term, "Add term"
+count(term) "terms," count(term where owner = "") "with no owner yet" head
+field q "Search the glossary"
+each term where has(name, q) or has(meaning, q) sort name as t empty "No terms match. Add the definition people keep asking about."
+  stack card gap 1 tap edit t swipe remove t
+    t.name bold
+    t.meaning
+    "Owner:" t.owner faint
+===
+@rich domain=d3_labeling_progress topic=data_labeling_progress style=detailed
+we are labelling images in batches. each batch has a total count, and each day I add how many I finished with quick buttons for 25 or 100. progress bar per batch, a chart of labels per day this week, and the overall percent done
+needs: add a batch with name and total | quick buttons to add 25 or 100 labelled | progress bar per batch | chart of labels per day | overall percent done
+---
+app "Labelling" eye orange
+table batch name text, total num 1..100000
+table done batch ref batch, n num 1..1000
+let all_done = sum(done.n)
+topbar "Labelling", batch, "Add batch"
+statcard round(all_done * 100 / max(sum(batch.total), 1)), "% of all batches labelled", 100
+section "Labels per day", "this week"
+  daybars last 7 days, sum(done.n on it)
+each batch sort name as b empty "No batches yet. Add one with the number of items to label."
+  stack card gap 1 swipe remove b
+    row gap 1
+      b.name bold grow
+      sum(b.done.n) "of" b.total faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(b.done.n) / b.total, 0, 1), 4 fill accent radius 2
+    row gap 1
+      button "+25" tap add done batch = b, n = 25
+      button "+100" tap add done batch = b, n = 100
+===
+@rich domain=d3_pipeline_failures_heat topic=pipeline_failure_heatmap style=custom_ui
+heat map of the days our data pipelines failed over the last 4 weeks so we can see bad patches. log each failure with the job and a cause like schema, timeout, source down or bad data, and show how often each cause happens
+needs: log a failure with job, cause and minutes to fix | heat map of the last 28 days | count per cause | failures this week against last week
+---
+app "Pipeline failures" fire red dark
+table failure job text, cause pick Schema|Timeout|Source_down|Bad_data|Other = Other, fix_min num 0.. unit "min"
+topbar "Failures", failure, "Log failure"
+statcard count(failure week), "failures this week," count(failure prev week) "last week"
+section "Last 28 days", "darker means more failures"
+  daygrid last 28 days, count(failure on it), 3
+section "Causes", "all time"
+  share failure by cause, count(it), it.key
+list failure top 8, "No failures logged. Long may it last."
+===
+@rich domain=d3_kpi_weekly_review topic=kpi_weekly_review_targets style=multi_feature
+weekly KPI review: I list each KPI with its target and unit, then every week I enter the new value. show each KPI as a bar against its target, green once reached, and tell me how many are on target
+needs: add a KPI with target and unit | enter this week's value | bar against target per KPI | count of KPIs on target
+---
+app "KPI review" target teal
+table kpi name text, target num 1.., unit text?
+table week_value kpi ref kpi, value num
+let hit = count(kpi, last(it.week_value.value) >= it.target)
+topbar "KPI review", kpi, "Add KPI"
+statcard hit, "of" count(kpi) "KPIs on target", count(kpi)
+form week_value, "Save this week"
+each kpi sort name as k empty "No KPIs yet. Add the few numbers you review every week."
+  stack card gap 1 tap edit k swipe remove k
+    goal last(k.week_value.value), k.target, k.name, k.unit
+===
+@rich domain=d3_hyperparam_sweep topic=hyperparameter_sweep_scatter style=custom_ui
+hyperparameter sweep notes: learning rate, tree depth and the loss I got. draw each trial as a dot with depth across and loss up so I see where the sweet spot is, and show the best trial
+needs: log a trial with learning rate, depth and loss | scatter of depth against loss | best trial with lowest loss | number of trials
+---
+app "Sweep" dice ink
+table trial lr num 0.. = 0.01 "Learning rate", depth num 1..20 = 6, loss num 0.. = 1
+let best = min(trial.loss)
+topbar "Hyperparameter sweep", trial, "Log trial"
+statcard best, "lowest loss in" plural(count(trial), "trial")
+section "Depth across, loss up", "best is the lowest dot"
+  plot 0..20, 0..max(max(trial.loss), 1) axes gridlines
+    each trial
+      rect it.depth - 0.25, it.loss - max(max(trial.loss), 1) / 60, 0.5, max(max(trial.loss), 1) / 30 fill if(it.loss = best, good, accent) radius 2
+each trial sort loss top 5 as t empty "No trials yet. Log the first run to see it on the chart."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      "lr" t.lr "· depth" t.depth bold
+    t.loss big
+===
+@rich domain=d3_data_access_requests topic=data_access_request_queue style=detailed
+people ask me for access to datasets all day. keep a queue: who asked, which dataset, when, and status asked / approved / denied. highlight the ones waiting more than 3 days, buttons to approve or deny, and a breakdown by status
+needs: add a request with who, dataset and date | approve or deny buttons | highlight requests waiting over 3 days | breakdown by status | count waiting
+---
+app "Access requests" key green
+table req who text, dataset text, status pick Asked|Approved|Denied = Asked, asked date = today
+topbar "Access requests", req, "Add request"
+statcard count(req where status = Asked), "waiting," count(req where status = Asked and today - asked > 3) "over 3 days"
+section "By status"
+  share req by status, count(it), it.key
+each req where status = Asked sort asked as r empty "Nobody is waiting on you. Inbox zero for access."
+  row card gap 2 fill if(today - r.asked > 3, warn, soft) tap edit r swipe remove r
+    stack grow gap 0
+      r.who bold
+      r.dataset "·" plural(today - r.asked, "day") "waiting" faint
+    button "Approve" tap set r.status = Approved
+    button "Deny" tap set r.status = Denied
+===
+@rich domain=d3_design_review_feedback topic=design_review_feedback_list style=multi_feature
+collecting feedback from design reviews on our screens. each comment has the screen, what kind (layout, copy, colour, flow), how strong it is (nit, should, must) and a resolved tick. filter by strength and show how many musts are still open
+needs: add feedback with screen, comment, kind and strength | tick resolved | filter by strength | count of musts still open | breakdown by kind
+---
+app "Design review" pen pink
+table fb screen text, comment long, kind pick Layout|Copy|Color|Flow = Layout, strength pick Nit|Should|Must = Should, resolved bool
+state s pick All|Nit|Should|Must = All
+topbar "Design review", fb, "Add feedback"
+statcard count(fb where strength = Must and resolved = no), "musts still open of" count(fb where strength = Must), count(fb where strength = Must)
+section "Feedback by kind"
+  share fb by kind, count(it), it.key
+choice s
+each fb where s = All or strength = s sort resolved as f empty "No feedback yet. Add the first comment from the review."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.resolved
+    stack grow gap 0
+      f.screen bold
+      f.comment faint
+      f.kind "·" f.strength faint color if(f.strength = Must and f.resolved = no, bad, muted)
+===
+@rich domain=d3_ui_bug_triage topic=ui_bug_triage_grid style=custom_ui
+UI bug triage for our app: bug title, screen, priority P1 to P4, platform iOS Android or Web. filter by platform, a row of four coloured boxes with the count per priority, and a button to mark a bug fixed
+needs: add a bug with title, screen, priority and platform | filter by platform | four boxes with count per priority | mark a bug fixed
+---
+app "UI bugs" tool orange
+table bug title text, screen text?, pri pick P1|P2|P3|P4 = P3 "Priority", platform pick iOS|Android|Web = Android, fixed bool
+state plat pick All|iOS|Android|Web = All
+topbar "UI bug triage", bug, "Add bug"
+choice plat
+grid 4 gap 1
+  each options bug.pri as p
+    stack radius 10 pad 1 gap 0 align center fill if(p = P1, bad, if(p = P2, warn, soft))
+      count(bug where pri = p and fixed = no and (plat = All or platform = plat)) big
+      p faint
+each bug where fixed = no and (plat = All or platform = plat) sort pri as b empty "No open UI bugs here. Pick another platform or add one."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.pri "·" b.platform "·" b.screen faint
+    button "Fixed" tap set b.fixed = yes
+===
+@rich domain=d3_interview_notes_tags topic=user_interview_notes_tags style=detailed
+I do user interviews and want to save the good quotes with a participant code, a tag (pain, delight, need, confusion), and be able to search them and filter by tag. also show which tag comes up most so I know the theme
+needs: add a note with participant code, quote and tag | filter by tag | search quotes | chart of notes per tag | count of notes
+---
+app "Interview notes" user purple
+table note who text "Participant", quote long, tag pick Pain|Delight|Need|Confusion = Pain
+state t pick All|Pain|Delight|Need|Confusion = All
+state q text = ""
+topbar "Interview notes", note, "Add quote"
+statcard count(note), "quotes from" count(note by who, yes) "participants"
+section "What comes up", "notes per tag"
+  share note by tag, count(it), it.key
+choice t
+field q "Search quotes"
+each note where (t = All or tag = t) and has(quote, q) as n empty "No quotes match. Add one after your next interview."
+  stack card gap 1 tap edit n swipe remove n
+    n.quote
+    n.who "·" n.tag faint
+===
+@rich domain=d3_feature_votes topic=feature_request_vote_tally style=short
+tally for feature requests, tap plus one every time a customer asks for it
+needs: add a request | tap plus one to add a vote | ranked by votes | bar chart of the top five
+---
+app "Feature votes" star yellow
+table req title text, votes num 0.. = 0, status pick Open|Planned|Shipped = Open
+topbar "Feature votes", req, "Add request"
+section "Top five", "votes"
+  bars req where status != Shipped sort votes desc top 5, it.votes, it.title
+each req sort votes desc as r empty "No requests yet. Add what customers keep asking for."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.title bold
+      r.status faint
+    r.votes big
+    button "+1" tap set r.votes = r.votes + 1
+===
+@rich domain=d3_ab_test_tracker topic=ab_test_conversion_tracker style=detailed
+tracker for A/B tests. each test has visitors and conversions for variant A and for B. compute the conversion rate of each, show who is ahead and by how much, and list the tests so I can compare
+needs: add a test with visitors and conversions for A and B | conversion rate of A and B | which variant is ahead and by how much | bar for each rate | count of tests
+---
+app "A/B tests" scale blue
+table test name text, a_users num 1.., a_conv num 0.., b_users num 1.., b_conv num 0..
+let rate(c num, u num) = round(c * 1000 / u) / 10
+topbar "A/B tests", test, "Add test"
+count(test) "tests tracked" head
+each test sort at desc as t empty "No tests yet. Add the visitor and conversion counts for A and B."
+  stack card gap 1 tap edit t swipe remove t
+    t.name bold
+    row gap 2
+      stack grow gap 0
+        "A" rate(t.a_conv, t.a_users) "%" big
+        draw 100, 4
+          rect 0, 0, 100, 4 fill soft radius 2
+          rect 0, 0, min(rate(t.a_conv, t.a_users), 100), 4 fill muted radius 2
+      stack grow gap 0
+        "B" rate(t.b_conv, t.b_users) "%" big
+        draw 100, 4
+          rect 0, 0, 100, 4 fill soft radius 2
+          rect 0, 0, min(rate(t.b_conv, t.b_users), 100), 4 fill accent radius 2
+    if rate(t.b_conv, t.b_users) > rate(t.a_conv, t.a_users)
+      "B is ahead by" round((rate(t.b_conv, t.b_users) - rate(t.a_conv, t.a_users)) * 10) / 10 "points" bold color good
+    else
+      "A is ahead or level, gap" round((rate(t.a_conv, t.a_users) - rate(t.b_conv, t.b_users)) * 10) / 10 "points" bold
+===
+@rich domain=d3_store_launch_checklist topic=app_store_launch_checklist style=multi_feature
+launch checklist for our app store release. items grouped by build, listing, legal and marketing, each with a tick. set the launch date in settings and show how many days are left and how many items are done
+needs: add a checklist item with area | tick items done | grouped by area | days left until launch date | progress of items done
+---
+app "Store launch" flag mint
+table item name text, area pick Build|Listing|Legal|Marketing = Build, done bool
+setting launch date = today "Launch date"
+topbar "Store launch", item, "Add item"
+row gap 2
+  statcard launch - today, "days until launch"
+  statcard count(item where done = yes), "of" count(item) "items done", count(item)
+each options item.area as a
+  section a, "done" count(item where area = a and done = yes) "of" count(item where area = a)
+    each item where area = a sort done as i empty "Nothing here yet."
+      row gap 2
+        toggle i.done
+        i.name grow
+===
+@rich domain=d3_component_inventory topic=ui_component_inventory style=custom_ui
+inventory of our design system components: name, how many screens use it, and the stage it is at (planned, designed, built, documented). tap a button to push it to the next stage and show how many sit in each stage
+needs: add a component with name and screens using it | stage for each component | button to move to the next stage | count per stage | most used components
+---
+app "Components" grid plum
+table comp name text, uses num 0.. = 0 "Screens using it", stage pick Planned|Designed|Built|Documented = Planned
+topbar "Components", comp, "Add component"
+grid 4 gap 1
+  each options comp.stage as s
+    stack radius 10 pad 1 gap 0 align center fill soft
+      count(comp where stage = s) big
+      s tiny faint
+section "Most used", "screens"
+  bars comp sort uses desc top 5, it.uses, it.name
+each comp sort name as c empty "No components yet. List the buttons, inputs and cards you have."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.stage "·" c.uses "screens" faint
+    if c.stage = Planned
+      button "Design" tap set c.stage = Designed
+    if c.stage = Designed
+      button "Build" tap set c.stage = Built
+    if c.stage = Built
+      button "Document" tap set c.stage = Documented
+===
+@rich domain=d3_a11y_findings topic=accessibility_audit_findings style=detailed
+accessibility audit findings: screen, which rule (contrast, labels, focus, touch size, motion), level A AA or AAA, and a fixed tick. progress bar of how many are fixed and a breakdown by rule so I know what to teach the team
+needs: add a finding with screen, rule and level | tick fixed | progress bar of fixed findings | breakdown by rule | list of open findings
+---
+app "A11y audit" eye teal
+table finding screen text, rule pick Contrast|Labels|Focus|Touch_size|Motion = Contrast, level pick A|AA|AAA = AA, fixed bool
+topbar "Accessibility audit", finding, "Add finding"
+goal count(finding where fixed = yes), count(finding), "findings fixed"
+section "Which rules fail most"
+  share finding by rule, count(it), it.key
+each finding where fixed = no sort level as f empty "No open findings. Add what the audit turns up."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.fixed
+    stack grow gap 0
+      f.screen bold
+      f.rule "· level" f.level faint
+===
+@rich domain=d3_usability_task_success topic=usability_test_task_success style=multi_feature
+running usability tests. for each attempt I note the task, the participant code, whether they completed it and how many seconds it took. show a success rate per task and the average time, plus how many attempts so far
+needs: log an attempt with task, participant, success and seconds | success rate per task | average time | attempts count
+---
+app "Usability tests" users grey
+table attempt task text, who text "Participant", ok bool "Completed", secs num 0.. unit "s"
+topbar "Usability tests", attempt, "Log attempt"
+row gap 2
+  statcard count(attempt), "attempts"
+  statcard round(avg(attempt.secs)), "s average time"
+each attempt by task as g empty "No attempts yet. Log the first participant after the session."
+  stack card gap 1
+    row gap 1
+      g.key bold grow
+      round(count(attempt where task = g.key and ok = yes) * 100 / max(count(attempt where task = g.key), 1)) "% success" bold
+    goal count(attempt where task = g.key and ok = yes), count(attempt where task = g.key), "completed"
+list attempt top 6, "No attempts yet."
+===
+@rich domain=d3_microcopy_review topic=microcopy_review_board style=short
+list of UI texts to review: where it appears, current wording, proposed wording, and status open or agreed. search box and a count of open ones
+needs: add a text with place, current and proposed wording | status open or agreed | search | count of open items
+---
+app "Microcopy" note ocean
+table line place text, now_text text "Current", better text "Proposed", status pick Open|Agreed|Shipped = Open
+state q text = ""
+topbar "Microcopy review", line, "Add text"
+count(line where status = Open) "texts waiting for a decision" head
+field q "Search texts"
+each line where has(place, q) or has(now_text, q) or has(better, q) as l empty "No texts here. Add a button label or an error message to review."
+  stack card gap 1 tap edit l swipe remove l
+    l.place faint
+    l.now_text "→" l.better bold
+    row gap 1
+      l.status faint grow
+      if l.status = Open
+        button "Agree" tap set l.status = Agreed
+===
+@rich domain=d3_icon_request_queue topic=icon_request_queue_due style=detailed
+people keep asking me for new icons. queue with icon name, size S M or L, who asked, due date. sort by due date, red when overdue, tick when delivered, and remind me the day before something is due
+needs: add a request with icon name, size, requester and due date | sorted by due date | overdue in red | tick delivered | reminder the day before the due date
+---
+app "Icon queue" star red
+table icon name text, size pick S|M|L = M, who text?, due date, sent bool
+let late = count(icon where sent = no and due < today)
+topbar "Icon requests", icon, "Add request"
+statcard count(icon where sent = no), "icons to draw," late "overdue"
+remind "An icon is due tomorrow" at icon.due - 1d at 9:00
+each icon where sent = no sort due as i empty "No icons waiting. Anything new from the product team goes here."
+  row card gap 2 tap edit i swipe remove i fill if(i.due < today, bad, soft)
+    toggle i.sent
+    stack grow gap 0
+      i.name bold
+      i.size "· for" i.who "· due" i.due faint

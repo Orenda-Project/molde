@@ -1,0 +1,500 @@
+@rich domain=r6_baby_feeds topic=newborn feed log style=detailed
+newborn feeds every couple of hours and i lose track at night. i want to log each feed with the ml and whether it was bottle, breast or formula, see how much she took today against 600 ml, how long since the last feed, and a chart for the week
+needs: log a feed with amount, type and note | total ml today against a daily target | time since the last feed | bar chart of the last 7 days with target line | list of today's feeds
+---
+app "Baby feeds" baby ocean
+table feed ml num 10..300 unit "ml", kind pick Bottle|Breast|Formula = Bottle, note text?
+setting target num = 600 "Daily target (ml)"
+topbar "Baby feeds", feed, "Log feed"
+statcard sum(feed.ml today), "ml fed today of" target, target
+row card gap 2 align center
+  (now - last(feed.at)) big
+  "since the last feed" faint
+section "Last 7 days", "goal line at" target "ml"
+  goalbars last 7 days, sum(feed.ml on it), target
+each feed today sort at desc as f empty "No feeds yet today. Tap Log feed after the next one."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.ml "ml" bold
+      f.kind f.note faint
+    f.at faint
+===
+@rich domain=r6_baby_sleep topic=baby naps and night sleep style=multi_feature
+need to know how many hours the baby sleeps. naps and night sleep, how long each one lasted, whether he woke up cranky, and hours per day for the last week. lowercase tired mom here
+needs: log a sleep with length and nap or night | hours slept today card | hours per day chart for 7 days | how many sleeps ended cranky this week | list of recent sleeps
+---
+app "Baby sleep" moon plum dark
+table sleep slept dur, kind pick Nap|Night = Nap, cranky bool
+topbar "Baby sleep", sleep, "Log sleep"
+row gap 2
+  statcard round(sum(sleep.slept today) / 6m) / 10, "hours slept today", 14
+  statcard count(sleep today where kind = Nap), "naps today"
+section "Hours per day", "last 7 days"
+  daybars last 7 days, sum(sleep.slept on it) / 1h
+"Cranky after" count(sleep week where cranky = yes) "of" count(sleep week) "sleeps this week" faint
+each sleep sort at desc top 10 as s empty "No sleeps yet. Log the first nap when she wakes up."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.slept bold
+      s.kind faint
+    if s.cranky
+      "cranky" color warn
+===
+@rich domain=r6_diaper_stock topic=diapers and stock left style=custom_ui
+diaper counter for the nursery: big buttons for wet, dirty or both so i can tap with one hand, plus a count of diapers left in the box that drops by itself, and a warning when we are nearly out. when a new pack comes i add it
+needs: one-tap buttons for wet, dirty and both | diapers left in the box | warning when stock is low | add a new pack of diapers | changes per day chart
+---
+app "Diapers" baby mint
+table change kind pick Wet|Dirty|Both = Wet
+table pack qty num 1..300 = 48
+let left = sum(pack.qty) - count(change)
+topbar "Diapers", pack, "New pack"
+statcard left, "diapers left in the box"
+if left < 12
+  "Running low. Time to buy a pack." bold color warn
+row gap 1
+  each options change.kind as k
+    button k fill accent grow tap add change kind = k
+section "Today", plural(count(change today), "change")
+  bars change today by kind, count(it), it.key
+section "Per day", "last 7 days"
+  daybars last 7 days, count(change on it)
+===
+@rich domain=r6_baby_growth topic=baby weight and length style=detailed
+pediatrician told us to keep weight and length at every checkup. i want to add kg and cm with a note from the visit, see the latest numbers, how much she gained since the first visit and a line chart of the weight
+needs: add a checkup with kg, cm and a note | latest weight and length cards | kg gained since the first visit | line chart of weight | list of checkups
+---
+app "Baby growth" scale teal
+table measure kg num 1..30 unit "kg", cm num 30..130 unit "cm", visit text?
+topbar "Baby growth", measure, "Add checkup"
+row gap 2
+  statcard last(measure.kg), "kg now"
+  statcard last(measure.cm), "cm tall"
+section "Weight", "gained" last(measure.kg) - first(measure.kg) "kg since the first visit"
+  trend measure sort at, it.kg
+section "Length"
+  trend measure sort at, it.cm
+list measure, "No checkups yet. Add the birth weight first."
+===
+@rich domain=r6_teething_map topic=teething chart style=custom_ui
+my son is teething and the nursery nurse asked which teeth have come. six boxes for the top and bottom front teeth, tap one when it comes through and it fills in with the date. count how many are out and mark if he was fussy
+needs: tap a tooth box when it comes through | date shown on each tooth | count of teeth through | fussy mark on a tooth | list of teeth with dates
+---
+app "Teething" tooth pink
+table tooth spot pick Top_left|Top_middle|Top_right|Bottom_left|Bottom_middle|Bottom_right, came date = today, fussy bool
+statcard count(tooth), "of 6 teeth are through", 6
+"Tap a box when the tooth comes through" faint
+grid 3 gap 1
+  each options tooth.spot as o
+    box radius 12 pad 2 fill if(count(tooth where spot = o) > 0, accent, soft) tap toggle tooth all where spot = o
+      text o small bold
+      last(tooth.came where spot = o) tiny
+section "Fussy days", count(tooth where fussy = yes)
+  list tooth sort came desc, "No teeth yet. Tap a box above when the first one shows."
+===
+@rich domain=r6_potty_stars topic=potty training stars style=custom_ui
+potty training our two year old. a button for when he uses the potty and one for accidents, five stars row that fills up today, a calendar grid of the last four weeks showing the good days, and the best streak so we can celebrate
+needs: button for used the potty and for accident | five stars filling up today | grid of the last 28 days | streak of potty days | list of today's tries
+---
+app "Potty stars" star yellow
+table potty result pick Potty|Accident|Pull_up = Potty
+let wins = count(potty today where result = Potty)
+row gap 1
+  button "Used the potty" fill good grow tap add potty result = Potty
+  button "Accident" grow tap add potty result = Accident
+row gap 1 align center
+  each 1..5 as n
+    icon star color if(n <= wins, warn, soft)
+  "stars today" faint
+statcard count(potty where result = Potty), "potty successes in all"
+section "Last 4 weeks", "streak" streak(potty where result = Potty) "days"
+  daygrid last 28 days, count(potty on it where result = Potty), 4
+list potty today, "Nothing yet today. Tap the green button when he goes."
+===
+@rich domain=r6_toddler_milestones topic=toddler milestones by area style=multi_feature
+list of things our 18 month old should be doing soon, grouped by talking, walking, eating, playing and feelings. tick them when she does it and put the date. show progress for each group
+needs: add a milestone with area and description | tick it when she does it and keep the date | progress count for each area | list of what is still to come | list of what is already done
+---
+app "Toddler steps" smile orange
+table step area pick Talking|Walking|Eating|Playing|Feelings = Talking, what text, done bool, when_done date?
+topbar "Toddler steps", step, "Add milestone"
+section "Progress by area"
+  each options step.area as a
+    stack gap 0
+      row
+        text a grow
+        count(step where area = a and done = yes) "of" count(step where area = a) faint
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * count(step where area = a and done = yes) / max(count(step where area = a), 1), 3 fill accent radius 1
+section "Coming up"
+  each step where done = no sort area as s empty "Nothing waiting. Add the next thing to watch for."
+    row gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.what bold
+        s.area faint
+      button "She did it" tap set s.done = yes then set s.when_done = today
+section "Done", count(step where done = yes)
+  each step where done = yes sort when_done desc as s empty "Nothing ticked yet."
+    row gap 2
+      s.what grow
+      s.when_done faint
+===
+@rich domain=r6_chore_stars topic=kids chores and stars style=detailed
+three kids, chores with a number of stars each, and every night they tick what they did. i want to see stars earned this week for each child so the youngest stops saying it is unfair. also let me add a new child and a new chore
+needs: add a child | add a chore for a child with stars | tick each chore done today | stars earned this week per child | list of chores under each child
+---
+app "Chore stars" star orange
+table kid name text
+table chore kid ref kid, task text, stars num 1..5 = 1
+table did chore ref chore
+topbar "Chore stars", chore, "Add chore"
+each kid sort name as k empty "No children yet. Add the first name below."
+  stack card gap 2
+    row gap 2
+      text k.name head grow
+      sum(k.chore, it.stars * count(it.did week)) "stars this week" bold
+    each k.chore as c empty "No chores yet."
+      row gap 2 swipe remove c
+        toggle c.did
+        c.task grow
+        c.stars "stars" faint
+form kid, "Add child"
+===
+@rich domain=r6_pocket_money topic=pocket money balances style=multi_feature
+pocket money for my kids. each one has a balance. i add what i gave them and what they spent with a note, and the app shows who has how much, plus a short list of the latest entries
+needs: add a child | add money given or spent with a note | balance card for each child | spent this month | latest entries list
+---
+app "Pocket money" coin green
+table kid name text
+table entry kid ref kid, amount money, kind pick Given|Spent = Given, note text?
+let bal(k kid) = sum(entry.amount where kid = k and kind = Given) - sum(entry.amount where kid = k and kind = Spent)
+topbar "Pocket money", entry, "Add entry"
+each kid sort name as k empty "No children yet. Add a name below, then give the first allowance."
+  statcard bal(k), "saved by" k.name
+"Spent this month" sum(entry.amount month where kind = Spent) head
+list entry top 10, "No entries yet."
+form kid, "Add child"
+===
+@rich domain=r6_money_jars topic=save spend give jars style=custom_ui
+teaching my daughter three jars: save, spend and give. draw three jars that fill by how much is inside, let me put money in or take it out with a note, and show how much came in over the last week
+needs: three jars drawn and filled by balance | put money in or take money out with a note | balance of each jar | money in over the last 7 days | list of moves
+---
+app "Money jars" coin teal
+table coin jar pick Save|Spend|Give = Save, amount money, kind pick In|Out = In, note text?
+let bal(j text) = sum(coin.amount where jar = j and kind = In) - sum(coin.amount where jar = j and kind = Out)
+let all_in = sum(coin.amount where kind = In) - sum(coin.amount where kind = Out)
+topbar "Money jars", coin, "Put in or take out"
+row gap 1
+  each options coin.jar as j
+    stack grow card gap 1 align center
+      draw 40, 60 width 50
+        rect 8, 8, 24, 48 radius 6 fill soft
+        rect 8, 56 - 48 * clamp(bal(j) / max(all_in, 1), 0, 1), 24, 48 * clamp(bal(j) / max(all_in, 1), 0, 1) fill if(j = Give, warn, accent) radius 6
+      text j bold
+      bal(j) big
+section "Money in", "last 7 days"
+  daybars last 7 days, sum(coin.amount on it where kind = In)
+list coin top 8, "Empty jars. Put in the first coins."
+===
+@rich domain=r6_family_week_plan topic=family week by member style=multi_feature
+shared family week: who is doing what on which day. dad, mum, sara, ali or all of us, with a time. chips on top so i can see only mum's plans, and a box for today
+needs: add a plan with what, who, day and time | chips to show one family member | today's plans card | plans laid out by weekday | tap a plan to edit it
+---
+app "Family week" calendar blue
+table plan what text, who pick All|Dad|Mum|Sara|Ali = All, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, at_time time
+state show pick All|Dad|Mum|Sara|Ali = All
+topbar "Family week", plan, "Add plan"
+choice show
+section "Today", dayname(today)
+  each plan where day = dayname(today) and (show = All or who = show or who = All) sort at_time as p empty "Nothing planned for today."
+    row gap 2 tap edit p
+      p.at_time bold
+      p.what grow
+      p.who faint
+scroll gap 1
+  each options plan.day as d
+    stack card gap 1 width 40
+      text d bold
+      each plan where day = d and (show = All or who = show or who = All) sort at_time as p
+        stack gap 0 tap edit p swipe remove p
+          p.what small
+          p.at_time p.who tiny color muted
+===
+@rich domain=r6_family_shared_todo topic=shared family to do style=custom_ui
+one list for the whole house with tabs. first tab is what is open with the name of who is on it, second tab is what is done. mark overdue things red and tell me how many each person still has
+needs: add a task with who and due date | tab for open tasks and tab for done | overdue tasks shown in red | open count for each person | tick a task done
+---
+app "House list" list slate
+table job what text, who pick Dad|Mum|Sara|Ali|Anyone = Anyone, due date?, done bool
+screen open "Open" list
+  topbar "House list", job, "Add task"
+  row gap 1
+    each options job.who as w
+      stack grow card gap 0 align center
+        count(job where who = w and done = no) big
+        text w tiny color muted
+  each job where done = no sort due as j empty "Nothing open. Enjoy it while it lasts."
+    row card gap 2 tap edit j swipe remove j
+      toggle j.done
+      stack grow gap 0
+        j.what bold
+        j.who "·" j.due faint color if(j.due < today, bad, muted)
+screen finished "Done" check
+  "Finished" count(job where done = yes) head
+  each job where done = yes sort at desc as j empty "Nothing is done yet."
+    row card gap 2
+      toggle j.done
+      text j.what grow
+      j.who faint
+===
+@rich domain=r6_grandma_pills topic=grandparents medicine with refills style=detailed
+my grandmother and grandfather take several pills a day and the strips run out without us noticing. list each medicine with the person, time and how many pills are left, tap took it to subtract one and log it, red when under seven left, reminder at the time
+needs: add a medicine with person, time and pills left | tap took it to log and subtract a pill | red warning when under seven pills left | reminder at the medicine time | doses taken today count
+---
+app "Grandparents" pill purple
+table med person pick Nani|Nana = Nani, name text, time time, left num 0..500 = 30
+table taken med ref med
+remind "Medicine time" at med.time
+topbar "Grandparents", med, "Add medicine"
+statcard count(taken today), "doses taken today of" count(med), count(med)
+each med sort time as m empty "No medicines yet. Add each one with the time and the pills in the strip."
+  row card gap 2 tap edit m
+    stack grow gap 0
+      m.name bold
+      m.person "at" m.time faint
+      m.left "pills left" color if(m.left < 7, bad, muted)
+    if count(m.taken today) > 0
+      "Taken" color good
+    else
+      button "Took it" fill accent tap add taken med = m then set m.left = m.left - 1
+===
+@rich domain=r6_bp_readings topic=grandfather blood pressure and sugar style=detailed
+daily blood pressure and sugar for my father. top number, bottom number and sugar if we checked it. show the last reading big and red if it is high, a chart over the month, and how many high readings this month
+needs: add a reading with top, bottom and optional sugar | latest reading card turning red when high | line chart of the top number | count of high readings this month | list of readings
+---
+app "BP and sugar" heart red
+table reading sys num 60..260 unit "mmHg", dia num 30..160 unit "mmHg", sugar num? 20..600 unit "mg/dl"
+let high = last(reading.sys) >= 140 or last(reading.dia) >= 90
+topbar "BP and sugar", reading, "Add reading"
+row card gap 3 align center
+  stack grow gap 0
+    last(reading.sys) "/" last(reading.dia) huge color if(high, bad, good)
+    if(high, "High, rest and check again", "In a good range") faint
+  stack gap 0 align end
+    last(reading.sugar) bold
+    "sugar" faint
+section "This month", "high readings:" count(reading month where sys >= 140 or dia >= 90)
+  trend reading month sort at, it.sys
+list reading top 10, "No readings yet. Add the first one after breakfast."
+===
+@rich domain=r6_cleaning_rota topic=weekly cleaning rota style=custom_ui
+rota for house cleaning so my wife and the kids stop arguing. each job has a room, a day of the week and who does it. show today's jobs with a tick, and the whole week laid out day by day underneath
+needs: add a job with room, weekday and person | today's jobs with a tick box | whole week laid out by weekday | jobs done today count | tap a job to edit it
+---
+app "Cleaning rota" home mint
+table job room text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, who pick Mum|Dad|Sara|Ali = Mum
+table cleaned job ref job
+topbar "Cleaning rota", job, "Add job"
+statcard count(cleaned today), "of" count(job where day = dayname(today)) "jobs done today", count(job where day = dayname(today))
+each job where day = dayname(today) as j empty "No jobs today. Rest."
+  row card gap 2
+    toggle j.cleaned
+    stack grow gap 0
+      j.room bold
+      j.who faint
+scroll gap 1
+  each options job.day as d
+    stack card gap 1 width 36 fill if(d = dayname(today), soft, surface)
+      text d bold
+      each job where day = d sort room as j
+        stack gap 0 tap edit j swipe remove j
+          j.room small
+          j.who tiny color muted
+===
+@rich domain=r6_house_repairs topic=home repairs and costs style=detailed
+leaking tap, broken fan, roof seepage... things keep piling up in the house. log each repair with the place, status reported or booked or fixed, and cost. let me move the status along with a tap, and show what i spent this year
+needs: add a repair with place, status and cost | button to move the status forward | open repairs count | total spent this year | list of repairs by place
+---
+app "House repairs" tool orange
+table repair what text, place pick Kitchen|Bathroom|Roof|Electric|Plumbing|Other = Other, status pick Reported|Booked|Fixed = Reported, cost money?
+topbar "House repairs", repair, "Log repair"
+row gap 2
+  statcard count(repair where status != Fixed), "repairs still open"
+  statcard sum(repair.cost year), "spent this year"
+each repair where status != Fixed sort at as r empty "Nothing broken right now."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.what bold
+      r.place "·" r.status faint
+    if r.status = Reported
+      button "Booked" tap set r.status = Booked
+    else
+      button "Fixed" fill good tap set r.status = Fixed
+section "Fixed", count(repair where status = Fixed)
+  list repair where status = Fixed, "Nothing fixed yet."
+===
+@rich domain=r6_electric_meter topic=electricity meter and bill style=multi_feature
+every month i read the electricity meter and then wait for the bill. enter the reading, set the price per unit, and tell me roughly what this month will cost and how many units we used. chart of readings too
+needs: add a meter reading | set the price per unit | units used this month | estimated bill this month | line chart of readings
+---
+app "Meter reading" bolt yellow
+table reading units num 0.. unit "units"
+setting rate money = 42 "Price per unit"
+let used = max(reading.units month) - min(reading.units month)
+topbar "Meter reading", reading, "Add reading"
+row gap 2
+  statcard used, "units used this month"
+  statcard used * rate, "estimated bill"
+section "Meter over time", "last reading" last(reading.units)
+  trend reading sort at, it.units
+list reading top 8, "No readings yet. Read the meter on the 1st and add it here."
+===
+@rich domain=r6_bills_due topic=utility bills due dates style=multi_feature
+gas water internet and phone bills all land on different days and i pay late. enter bill, amount and due date, show overdue in red, the total still unpaid and tap paid when done. remind me two days before
+needs: add a bill with type, amount and due date | overdue bills in red | total still unpaid | tap to mark paid | reminder two days before due
+---
+app "Bills due" cart red
+table bill kind pick Electric|Gas|Water|Internet|Phone|Other = Electric, amount money, due date, paid bool
+remind "A bill is due soon" at bill.due - 2d at 9:00
+let owed = sum(bill.amount where paid = no)
+topbar "Bills due", bill, "Add bill"
+statcard owed, "still unpaid," count(bill where paid = no and due < today) "overdue"
+each bill where paid = no sort due as b empty "All bills are paid."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.kind bold
+      b.due faint color if(b.due < today, bad, muted)
+    b.amount bold
+    button "Paid" tap set b.paid = yes
+section "Paid this month", sum(bill.amount month where paid = yes)
+  list bill where paid = yes, "Nothing paid yet."
+===
+@rich domain=r6_rent_tenant topic=monthly rent paid check style=custom_ui
+tenant here. rent is due on the 5th every month and my landlord says i am late sometimes. i log each payment with a note, set the rent amount, and see the last six months as boxes, green when paid in full
+needs: log a rent payment with amount and note | setting for the monthly rent | last six months boxes green when paid | paid this month or not message | list of payments
+---
+app "Rent" home blue
+table rent amount money, note text?
+setting monthly money = 30000 "Monthly rent"
+let paid_now = sum(rent.amount month)
+topbar "Rent", rent, "Log payment"
+if paid_now >= monthly
+  "This month is paid" head color good
+else
+  "Still to pay" monthly - paid_now head color bad
+grid 6 gap 1
+  each 0..5 as n
+    stack gap 0 align center
+      text monthname(addmonths(today, 0 - 5 + n)) tiny color muted
+      box height 30 radius 6 fill if(sum(rent.amount month of addmonths(today, 0 - 5 + n)) >= monthly, good, soft)
+list rent top 12, "No payments logged yet."
+===
+@rich domain=r6_landlord_notes topic=landlord promises and issues style=detailed
+i keep forgetting what the landlord promised. notes about repairs, rent talks, deposit and house rules, with a date by which he promised to act. show the ones past their date in red and let me tick them off when he finally does it
+needs: add a note with topic and text | promised by date | overdue promises in red | tick when it is done | filter chips by topic
+---
+app "Landlord notes" note grey
+table talk topic pick Repair|Rent|Deposit|Rules|Other = Repair, what long, promised date?, done bool
+state f pick All|Repair|Rent|Deposit|Rules|Other = All
+let late = count(talk where done = no and promised < today)
+topbar "Landlord notes", talk, "Add note"
+"Promises he has missed:" late head color if(late > 0, bad, ink)
+choice f
+each talk where (f = All or topic = f) sort done as t empty "No notes in this topic yet."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    stack grow gap 0
+      t.what bold
+      t.topic "· promised" t.promised faint color if(t.done = no and t.promised < today, bad, muted)
+===
+@rich domain=r6_moving_boxes topic=packing boxes by room style=custom_ui
+moving next month. every box gets a number, a room it belongs to, what is inside and a fragile tick. when we arrive i tick unpacked. chips by room so the movers know where to put it, and a bar for how much is unpacked
+needs: add a box with room, contents and fragile flag | filter chips by room | tick when unpacked | progress of boxes unpacked | count of fragile boxes
+---
+app "Moving boxes" box orange
+table crate room pick Kitchen|Bedroom|Living|Kids|Bath|Garage = Kitchen, inside text, fragile bool, unpacked bool
+state r pick All|Kitchen|Bedroom|Living|Kids|Bath|Garage = All
+topbar "Moving boxes", crate, "Add box"
+goal count(crate where unpacked = yes), max(count(crate), 1), "boxes unpacked"
+"Fragile boxes:" count(crate where fragile = yes) faint
+scroll gap 1
+  each options crate.room as o
+    button o fill if(r = o, accent, soft) tap set r = if(r = o, All, o)
+each crate where r = All or room = r sort room as c empty "No boxes here yet. Add the first one as you tape it."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.unpacked
+    stack grow gap 0
+      c.inside bold
+      c.room faint
+    if c.fragile
+      "fragile" color bad
+===
+@rich domain=r6_moving_countdown topic=moving day countdown style=multi_feature
+move date is set and i am panicking. put in the date, show days left, and a checklist of things like cancel gas, change address, book movers with a due date each. tick them, and show how many are still undone
+needs: setting for the moving date | days left until the move | add a task with due date | tick tasks done | overdue tasks in red
+---
+app "Moving day" car teal dark
+table errand what text, due date, done bool
+setting move_day date = today "Moving day"
+topbar "Moving day", errand, "Add task"
+statcard move_day - today, "days until we move", 30
+goal count(errand where done = yes), max(count(errand), 1), "tasks done"
+each errand sort due as e empty "No tasks yet. Add cancel gas, change address, book movers."
+  row card gap 2 tap edit e swipe remove e
+    toggle e.done
+    stack grow gap 0
+      e.what bold
+      e.due faint color if(e.done = no and e.due < today, bad, muted)
+===
+@rich domain=r6_warranty_box topic=appliance warranty expiry style=detailed
+a shoebox of receipts is how we keep warranties and it is a mess. log the thing, shop, purchase date and years of warranty. show how many days are left, red when under two months, and put the soonest expiring first
+needs: add an item with shop, purchase date and warranty years | days left on each warranty | red when less than 60 days left | soonest expiring first | count of warranties expiring soon
+---
+app "Warranties" shield slate
+table gear name text, shop text?, bought date, years num 1..10 = 1
+let soon = count(gear where bought + years * 365 - today < 60 and bought + years * 365 >= today)
+topbar "Warranties", gear, "Add item"
+statcard soon, "warranties end within 60 days", count(gear)
+each gear sort bought + years * 365 as g empty "No items yet. Add the fridge, the TV, the phone."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.name bold
+      g.shop faint
+    if g.bought + g.years * 365 < today
+      "expired" faint
+    else
+      g.bought + g.years * 365 - today "days left" bold color if(g.bought + g.years * 365 - today < 60, bad, good)
+===
+@rich domain=r6_appliance_service topic=appliance service schedule style=multi_feature
+ac filters, water filter, geyser, washing machine drum... each needs cleaning every so many days. i add the appliance with the days between services, tap serviced today and it shows overdue in red until the next one
+needs: add an appliance with days between services | tap serviced today | overdue appliances in red | days since last service | count of appliances overdue
+---
+app "Appliance care" tool green
+table appliance name text, every num 7..730 = 90 unit "days"
+table service appliance ref appliance
+let overdue = count(appliance, due(it.service, it.every))
+topbar "Appliance care", appliance, "Add appliance"
+statcard overdue, "appliances need service", count(appliance)
+each appliance sort name as a empty "No appliances yet. Add the AC and the water filter."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.name bold
+      "every" a.every "days · last done" since(a.service) "days ago" faint color if(due(a.service, a.every), bad, muted)
+    button "Serviced today" fill if(due(a.service, a.every), accent, soft) tap add service appliance = a
+===
+@rich domain=r6_car_service_km topic=car service by kilometres style=detailed
+the family car should get an oil change every 5000 km but we only remember when it makes noise. enter the odometer, log each service with km, what was done and cost, and show how many km until the next oil change
+needs: setting for the current odometer | log a service with km, type and cost | km left until next oil change | total spent on service this year | list of services
+---
+app "Car service" car grey
+table service km num 0.., what pick Oil|Tyres|Brakes|Battery|Other = Oil, cost money
+setting odo num = 0 "Odometer now (km)"
+setting gap_km num = 5000 "Oil change every (km)"
+let next = last(service.km where what = Oil) + gap_km - odo
+topbar "Car service", service, "Log service"
+statcard next, "km until the next oil change", gap_km
+if next < 500
+  "Oil change is close. Book it." bold color warn
+statcard sum(service.cost year), "spent on the car this year"
+list service sort km desc, "No services logged yet. Add the last oil change."

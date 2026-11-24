@@ -1,0 +1,201 @@
+@rich domain=r6_hospital_bag topic=hospital bag for the delivery style=detailed
+due in three weeks and my hospital bag is half packed in my head. checklist with three parts, for mum, for baby and papers, tick each when it is in the bag, show how many are packed in each part, and count the days to my due date
+needs: add an item with the part it belongs to | tick when packed | packed count for each part | due date setting with days left | count of items still missing
+---
+app "Hospital bag" baby ink dark
+table thing item text, part pick Mum|Baby|Papers = Mum, packed bool
+setting due_day date = today "Due date"
+topbar "Hospital bag", thing, "Add item"
+row gap 2
+  statcard due_day - today, "days to the due date"
+  statcard count(thing where packed = no), "items still missing"
+row gap 1
+  each options thing.part as p
+    stack grow card gap 0 align center
+      count(thing where part = p and packed = yes) "/" count(thing where part = p) big
+      text p tiny color muted
+each thing sort packed as t empty "The bag list is empty. Add the first thing."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.packed
+    stack grow gap 0
+      t.item bold
+      t.part faint
+===
+@rich domain=r6_summer_holiday_plan topic=summer holiday day plan and budget style=multi_feature
+two weeks of summer break with the kids in murree and islamabad. add what we do each day with the cost, show the next seven days as cards with that day's cost, the total against the holiday budget and how much is left for each planned day still to come
+needs: add a plan with date, what and cost | next seven days as cards | cost for each day | total against the holiday budget | budget left per planned day to come
+---
+app "Summer plan" sun ocean
+table plan day date, what text, cost money?
+setting budget money = 80000 "Holiday budget"
+topbar "Summer plan", plan, "Add plan"
+goal sum(plan.cost), budget, if(sum(plan.cost) > budget, "over the budget", "of the budget planned")
+statcard round((budget - sum(plan.cost where day < today)) / max(count(plan where day >= today), 1)), "left to spend per plan still to come"
+scroll gap 1
+  each 0..6 as n
+    stack card gap 1 width 40 fill if(n = 0, soft, surface)
+      text dayname(today + n) monthday(today + n) bold
+      each plan where day = today + n as p
+        stack gap 0 tap edit p swipe remove p
+          p.what small
+          p.cost tiny color muted
+      sum(plan.cost where day = today + n) faint
+===
+@rich domain=r6_roadtrip_packing topic=road trip packing per person style=multi_feature
+packing for the road trip to lahore for four people. each person has items. tick when packed, a bar for each person, chips to show one person, and a button to reset all ticks for the next trip
+needs: add an item for a person | tick when packed | progress bar for each person | chips to show one person | reset button for the next trip
+---
+app "Trip packing" bag plum
+table item name text, who pick Dad|Mum|Sara|Ali = Dad, packed bool
+state f pick All|Dad|Mum|Sara|Ali = All
+topbar "Trip packing", item, "Add item"
+each options item.who as w
+  stack gap 0
+    row
+      text w grow
+      count(item where who = w and packed = yes) "of" count(item where who = w) faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * count(item where who = w and packed = yes) / max(count(item where who = w), 1), 3 fill accent radius 1
+choice f
+each item where f = All or who = f sort packed as i empty "Nothing to pack here yet."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.packed
+    text i.name grow
+    i.who faint
+button "Reset for the next trip" tap set all item.packed = no
+===
+@rich domain=r6_parent_care_split topic=siblings sharing parents expenses style=detailed
+three of us siblings pay for our parents' medicine, groceries and bills, whoever is nearby. log who paid what and why, split the total equally between the three, and show who is ahead and who owes how much so we can settle
+needs: log a payment with sibling, amount and reason | total spent on parents | equal share for each sibling | who owes or is owed | list of payments
+---
+app "Parent care" users slate
+table paid who pick Ali|Sara|Zain = Ali, amount money, why text
+let share = sum(paid.amount) / 3
+topbar "Parent care", paid, "Log payment"
+row gap 2
+  statcard sum(paid.amount), "spent on parents"
+  statcard round(share), "each share"
+each options paid.who as w
+  row card gap 2 align center
+    stack grow gap 0
+      text w bold
+      "paid" sum(paid.amount where who = w) faint
+    if sum(paid.amount where who = w) >= share
+      "is owed" round(sum(paid.amount where who = w) - share) bold color good
+    else
+      "owes" round(share - sum(paid.amount where who = w)) bold color bad
+list paid top 8, "No payments yet."
+===
+@rich domain=r6_home_solar_units topic=rooftop solar units made and used style=multi_feature
+solar panels went on the roof and the net metering bill is a mystery. every evening i write units made and units used. show the week's bars against a target, the units we exported this month and what it saved at the unit price
+needs: add a day with units made and units used | bars of units made against a target for 7 days | units exported this month | money saved at the unit price | list of days
+---
+app "Solar units" sun yellow
+table day_log made num 0..100 unit "units", used num 0..200 unit "units"
+setting target num = 18 "Units a day we want"
+setting price money = 45 "Price per unit"
+topbar "Solar units", day_log, "Add today"
+row gap 2
+  statcard sum(day_log.made month) - sum(day_log.used month), "units exported this month"
+  statcard (sum(day_log.made month) - sum(day_log.used month)) * price, "saved at the unit price"
+section "Units made", "target" target "a day"
+  goalbars last 7 days, sum(day_log.made on it), target
+list day_log top 7, "No days yet. Add the evening reading."
+===
+@rich domain=r6_dinner_cook_rota topic=weekly dinner menu and who cooks style=custom_ui
+tonight's dinner is always a fight. plan dinner for each day of the week with the dish and who cooks, mum, dad, sara, ali or ordering in. show tonight's dish big and how many nights each person cooks this week
+needs: add a dinner with weekday, dish and cook | tonight's dish and cook shown big | week laid out by day | nights each person cooks | edit or remove a dinner
+---
+app "Dinner rota" food grey
+table dinner day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, dish text, cook pick Mum|Dad|Sara|Ali|Order_in = Mum
+topbar "Dinner rota", dinner, "Plan dinner"
+stack card gap 0
+  text "Tonight" faint
+  last(dinner.dish where day = dayname(today)) huge
+  last(dinner.cook where day = dayname(today)) "cooks" faint
+each options dinner.day as d
+  row card gap 2 fill if(d = dayname(today), soft, surface)
+    text d bold width 8
+    each dinner where day = d as x
+      row gap 2 grow tap edit x swipe remove x
+        x.dish grow
+        x.cook faint
+section "Nights cooking"
+  share dinner by cook, count(it), it.key
+===
+@rich domain=r6_tooth_fairy topic=lost teeth and tooth fairy coins style=short
+three kids losing teeth and the tooth fairy needs a record of who got what
+needs: log a lost tooth with child and coin | teeth lost per child | total coins given | teeth lost per month | list of teeth with dates
+---
+app "Tooth fairy" tooth pink
+table lost kid pick Ali|Sara|Zain = Ali, coin money, note text?
+topbar "Tooth fairy", lost, "A tooth fell out"
+row gap 1
+  each options lost.kid as k
+    stack grow card gap 0 align center
+      count(lost where kid = k) big
+      text k tiny color muted
+statcard sum(lost.coin), "paid by the tooth fairy"
+section "Teeth per month"
+  bars 0..5, count(lost month of addmonths(today, it - 5)), month(addmonths(today, it - 5))
+list lost top 8, "No teeth lost yet. Wiggly ones are coming."
+===
+@rich domain=r6_kids_party_plan topic=kids birthday party planning style=detailed
+daughter's seventh birthday party at home. things to buy or book like cake, balloons, return gifts, with quantity and price, tick when bought, set the party date and how many kids are coming, and tell me the cost per child and the days left
+needs: add an item with quantity and price | tick when bought | party date setting with days left | number of children setting | total cost and cost per child
+---
+app "Party plan" gift orange
+table stuff what text, qty num 1..200 = 1, price money, bought bool
+setting party date = today "Party date"
+setting kids num = 15 "Children coming"
+topbar "Party plan", stuff, "Add item"
+row gap 2
+  statcard party - today, "days to the party"
+  statcard sum(stuff, it.qty * it.price), "total cost"
+"Cost per child:" round(sum(stuff, it.qty * it.price) / max(kids, 1)) head
+goal count(stuff where bought = yes), max(count(stuff), 1), "things bought"
+each stuff sort bought as s empty "Nothing on the list. Start with the cake."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.bought
+    stack grow gap 0
+      s.what bold
+      "x" s.qty faint
+    s.qty * s.price
+===
+@rich domain=r6_pet_costs topic=pet expenses by animal style=multi_feature
+cat food, dog vet visits, grooming, toys. i want to know what each pet costs me. log an expense for either one, see a split by type, the month against my pet budget and a six month bar chart
+needs: log an expense with pet, type and amount | split by type | this month against the pet budget | six month bar chart | total per pet
+---
+app "Pet costs" paw red
+table petcost pet pick Cat|Dog = Cat, kind pick Food|Vet|Grooming|Toys|Other = Food, amount money
+setting budget money = 15000 "Monthly pet budget"
+topbar "Pet costs", petcost, "Add expense"
+goal sum(petcost.amount month), budget, if(sum(petcost.amount month) > budget, "over the pet budget", "spent this month")
+row gap 2
+  each options petcost.pet as p
+    stack grow card gap 0 align center
+      sum(petcost.amount where pet = p) big
+      text p tiny color muted
+section "By type", "all time"
+  share petcost by kind, sum(it.amount), it.key
+section "Last 6 months"
+  bars 0..5, sum(petcost.amount month of addmonths(today, it - 5)), month(addmonths(today, it - 5))
+===
+@rich domain=r6_leftover_fridge topic=fridge leftovers and food waste style=custom_ui
+too much food gets thrown out. note each leftover with the day it was cooked and the eat by day, show what has to be eaten today or tomorrow in red at the top, tap eaten or binned, and count what we binned this month
+needs: add a leftover with cooked and eat by dates | eat soon items in red at the top | tap eaten or binned | binned count this month | list of what is in the fridge
+---
+app "Fridge" food slate dark
+table leftover dish text, cooked date = today, eat_by date, status pick Fridge|Eaten|Binned = Fridge
+topbar "Fridge", leftover, "Add leftover"
+row gap 2
+  statcard count(leftover where status = Fridge), "dishes in the fridge"
+  statcard count(leftover month where status = Binned), "binned this month"
+each leftover where status = Fridge sort eat_by as l empty "The fridge is clear. Nothing to eat up."
+  row card gap 2 tap edit l swipe remove l fill if(l.eat_by <= today + 1, soft, surface)
+    stack grow gap 0
+      l.dish bold
+      "eat by" l.eat_by faint color if(l.eat_by <= today + 1, bad, muted)
+    button "Eaten" tap set l.status = Eaten
+    button "Binned" tap set l.status = Binned

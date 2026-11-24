@@ -1,0 +1,496 @@
+@rich domain=r7_weekly_target_habits topic=habits with weekly targets style=detailed
+my coach says consistency means 3 times a week, not every single day. i keep a few habits like stretching, reading and guitar and each has its own weekly target. let me tick a habit when i do it today, show how many times this week against the target, little dots for the last seven days and how many times last week for comparison
+needs: add a habit with a weekly target | tick a habit done today | times this week against the target | dots for the last 7 days | last week for comparison
+---
+app "Weekly habits" check ocean
+table habit name text, target num 1..7 = 3 "Times per week"
+table check habit ref habit
+let hit = count(habit, count(it.check week) >= it.target)
+topbar "Weekly habits", habit, "Add habit"
+statcard hit, "of" count(habit) "habits on target this week", count(habit)
+each habit sort name as h empty "No habits yet. Add one and give it a weekly target like 3."
+  stack card gap 2 tap edit h swipe remove h
+    row gap 2
+      stack grow gap 0
+        h.name bold
+        count(h.check week) "of" h.target "this week" faint color if(count(h.check week) >= h.target, good, muted)
+      toggle h.check
+    weekdots count(h.check on it) > 0
+    "Last week:" count(h.check prev week) "of" h.target faint
+===
+@rich domain=r7_never_miss_twice topic=never miss twice rule style=multi_feature
+the rule i live by is never miss twice. habits where i tap done for today, and if i skipped yesterday and still have not done it today the card should turn red and nag me. also the longest streak for each habit and how many habits are at risk right now
+needs: add a habit | tap done for today | red warning when missed yesterday and not done today | longest streak per habit | count of habits at risk
+---
+app "Never twice" flame mint
+table habit name text
+table check habit ref habit
+let risk = count(habit, count(it.check today) = 0 and count(it.check yesterday) = 0)
+topbar "Never twice", habit, "New habit"
+statcard risk, "habits missed two days running", count(habit)
+each habit sort name as h empty "No habits yet. Start with one that takes two minutes."
+  row card gap 2 tap edit h swipe remove h fill if(count(h.check today) = 0 and count(h.check yesterday) = 0, bad, surface)
+    stack grow gap 0
+      h.name bold
+      if count(h.check today) > 0
+        "Done today. Streak" streak(h.check) faint
+      else
+        if count(h.check yesterday) = 0
+          "Missed yesterday too. Do it now." small bold
+        else
+          "Not yet today. Yesterday counts, today matters." faint
+      "Longest streak" best(h.check) "days" tiny
+    toggle h.check
+===
+@rich domain=r7_five_prayers_week topic=five daily prayers log style=custom_ui
+i want to see my five prayers for today as five rows i can tap when i have prayed, a count of how many done of 5, a grid of the last six weeks so i can see the gaps, and which prayer i miss most this month
+needs: five rows for today's prayers | tap a row when prayed | count of prayers done today | grid of last 6 weeks | which prayer is missed most this month
+---
+app "Five prayers" mosque slate
+table salah which pick Fajr|Dhuhr|Asr|Maghrib|Isha = Fajr
+let n = count(salah today)
+statcard n, "of 5 prayers today", 5
+section "Today", "tap when you have prayed"
+  each options salah.which as p
+    row gap 2 radius 10 pad 1 fill if(count(salah today where which = p) > 0, accent, soft) tap toggle salah today where which = p
+      p bold grow
+      if(count(salah today where which = p) > 0, "Prayed", "Not yet")
+section "Last 6 weeks", "prayers per day"
+  daygrid last 42 days, count(salah on it), 5
+section "This month", "prayed per prayer"
+  each options salah.which as p
+    row gap 1
+      p grow
+      count(salah month where which = p) "of" monthday(today) bold
+===
+@rich domain=r7_quran_khatam_pages topic=quran pages and khatam pace style=detailed
+reading quran after fajr, i want to log how many pages i read each time, set my pages per day, see progress toward 604 pages for the khatam, a chart of the last week against my daily target and how many days until i finish at this pace
+needs: log pages read with surah | set pages per day | progress toward 604 pages | chart of last 7 days with target line | days left at this pace
+---
+app "Quran khatam" book green
+table reading pages num 1..604, surah text?
+setting daily num = 5 "Pages per day"
+let total = sum(reading.pages)
+topbar "Quran", reading, "Log pages"
+statcard total, "of 604 pages read", 604
+section "Last 7 days", "target" daily "pages a day"
+  goalbars last 7 days, sum(reading.pages on it), daily
+"At this pace the khatam is in" round((604 - total) / max(daily, 1)) "days" bold
+"Reading streak" streak(reading) "days, best" best(reading) faint
+list reading top 8, "No pages logged yet. Add what you read after fajr."
+===
+@rich domain=r7_dhikr_three_counters topic=daily dhikr counters with targets style=custom_ui
+three dhikr i do daily, subhanallah, alhamdulillah and astaghfirullah. a big tap button for each that adds one, plus a ten button, each with its own bar toward 100 for today, and the total of the week
+needs: tap button for each dhikr | plus ten button | progress bar toward 100 each | today total | total for the week
+---
+app "Dhikr" beads teal
+table zikr phrase pick Subhanallah|Alhamdulillah|Astaghfirullah = Subhanallah
+let all = count(zikr today)
+statcard all, "dhikr today across all three", 300
+each options zikr.phrase as p
+  stack card gap 1
+    row gap 2 align center
+      stack grow gap 0
+        p head
+        count(zikr today where phrase = p) "of 100" faint
+      button "+1" fill accent tap add zikr phrase = p
+      button "+10" tap add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p then add zikr phrase = p
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(count(zikr today where phrase = p) / 100, 0, 1), 4 fill accent radius 2
+section "This week", "all phrases"
+  daybars week, count(zikr on it)
+===
+@rich domain=r7_ramadan_fast_days topic=ramadan fasting days and taraweeh style=multi_feature
+ramadan tracker. each day i log if i fasted, missed or was excused, whether i prayed taraweeh and a short note. show how many days fasted out of 30, a grid of the month, and how many taraweeh nights
+needs: log a day as fasted, missed or excused | taraweeh tick | days fasted out of 30 | grid of the month | taraweeh nights count
+---
+app "Ramadan" moon purple dark
+table fast kept pick Fasted|Missed|Excused = Fasted, taraweeh bool, note text?
+topbar "Ramadan", fast, "Log today"
+row gap 2
+  statcard count(fast where kept = Fasted), "of 30 days fasted", 30
+  statcard count(fast where taraweeh = yes), "taraweeh nights"
+section "The month", "darker means fasted"
+  daygrid last 30 days, count(fast on it where kept = Fasted)
+row gap 1
+  each options fast.kept as k
+    stack grow card gap 0 align center
+      count(fast where kept = k) big
+      k faint
+list fast by day, "No days logged yet. Log today after iftar."
+===
+@rich domain=r7_qaza_fasts_owed topic=make-up fasts still owed style=detailed
+i missed some fasts in past ramadans for different reasons and need to make them up. each reason has a number of days owed. when i fast a make-up day i tap a button and it counts down. show total still owed and the ones already made up
+needs: add a reason with days owed | tap to log a made-up fast | days still owed per reason | total still owed | total made up
+---
+app "Qaza fasts" calendar orange
+table owed reason text, days num 1..30
+table made owed ref owed
+let left = sum(owed.days) - count(made)
+topbar "Qaza fasts", owed, "Add reason"
+row gap 2
+  statcard left, "days still owed"
+  statcard count(made), "days made up", sum(owed.days)
+each owed as o empty "Nothing owed. Add a reason with the number of missed days."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.reason bold
+      count(o.made) "of" o.days "made up" faint
+    if count(o.made) < o.days
+      button "Fasted today" tap add made owed = o
+    else
+      "Cleared" color good bold
+===
+@rich domain=r7_three_good_things topic=nightly gratitude with feeling style=multi_feature
+every night three good things from the day, and i pick a feeling like calm, happy, tired or heavy. show my streak, the dots for the past two weeks, how many nights each feeling happened, and let me look back by day
+needs: add three good things with a feeling | streak of nights written | dots for the last 14 days | count of each feeling | entries grouped by day
+---
+app "Three good things" heart pink
+table thanks first text, second text?, third text?, feeling pick Calm|Happy|Tired|Heavy = Calm
+topbar "Three good things", thanks, "Write tonight"
+statcard streak(thanks), "nights in a row, best" best(thanks)
+row gap 1
+  each days last 14 days
+    box grow height 10 radius 5 fill if(count(thanks on it) > 0, accent, soft)
+section "How the nights felt", "all time"
+  row gap 1
+    each options thanks.feeling as f
+      stack grow card gap 0 align center
+        count(thanks where feeling = f) big
+        f faint
+list thanks by day, "Nothing written yet. Three small things are enough."
+===
+@rich domain=r7_morning_pages_words topic=morning pages word count style=detailed
+morning pages: i write by hand then type a line summary and my word count, aiming for 750 words. i want to see this week's words per day against the 750 line, my total words, the streak and a line of the last month
+needs: log a page with word count and text | daily words chart with a 750 goal line | total words written | writing streak | line chart of the last month
+---
+app "Morning pages" pen yellow
+table page words num 0.. = 750 unit "words", gist long
+setting target num = 750 "Daily words"
+topbar "Morning pages", page, "Add page"
+row gap 2
+  statcard sum(page.words), "words in all"
+  statcard streak(page), "day streak"
+section "This week", "goal" target "words"
+  goalbars last 7 days, sum(page.words on it), target
+section "Last 30 days", "words per page"
+  trend page last 30 days sort at, it.words
+list page top 5, "No pages yet. Write three pages before the phone."
+===
+@rich domain=r7_goals_milestones topic=goals broken into milestones style=custom_ui
+i set a few goals for the year, like run a 10k or learn to swim, and break each into milestones i can tick off. every goal should show a progress bar from its ticked milestones and when it is due, and i want to add milestones to a goal quickly
+needs: add a goal with a due date | add milestones to a goal | tick milestones done | progress bar per goal | goals due date shown
+---
+app "Year goals" target blue
+table goal title text, due date?
+table step goal ref goal, what text, done bool
+let all = count(step)
+topbar "Year goals", goal, "New goal"
+goal count(step where done = yes), max(all, 1), "milestones done overall"
+each goal sort due as g empty "No goals yet. Add one and break it into steps."
+  stack card gap 2 tap edit g swipe remove g
+    row gap 2
+      g.title head grow
+      g.due faint
+    goal count(g.step where done = yes), max(count(g.step), 1), "steps done"
+    each g.step as s empty "No milestones yet. Add the first below."
+      row gap 2
+        toggle s.done
+        s.what grow color if(s.done, muted, ink)
+form step, "Add milestone"
+===
+@rich domain=r7_book_page_progress topic=books with page progress and rating style=multi_feature
+a reading tracker where each book has total pages and the page i am on, buttons to add 10 pages, a rating out of 5 when i finish, and how many books finished this year against my target of 24
+needs: add a book with total pages | plus 10 pages button | progress bar per book | rating out of 5 | books finished this year against target
+---
+app "Page by page" book grey
+table book title text, pages num 1..3000 = 300, read num 0..3000 = 0 "Page now", rating num 0..5 = 0 "Rating (0 = none)"
+setting yearly num = 24 "Books this year"
+let finished = count(book where read >= pages)
+topbar "Page by page", book, "Add book"
+statcard finished, "books finished of" yearly "this year", yearly
+each book sort read desc as b empty "No books yet. Add the one on your bedside table."
+  stack card gap 1 tap edit b swipe remove b
+    row gap 2
+      b.title bold grow
+      if b.read >= b.pages
+        round(b.rating) "of 5" color good bold
+      else
+        button "+10" tap set b.read = b.read + 10
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(b.read / b.pages, 0, 1), 3 fill accent radius 1
+    "Page" b.read "of" b.pages faint
+===
+@rich domain=r7_quote_notebook topic=book notes and quotes search style=detailed
+i underline lines in books and forget them. i want a list of my books, then a place to save a quote with the book, page number and a thought, and a search box so i can find a quote by a word. show how many quotes per book too
+needs: add a book | save a quote with book and page | search quotes by word | number of quotes per book | quotes newest first
+---
+app "Quote notebook" note ink
+table book title text, author text?
+table quote book ref book, page num? 1..2000, line long
+state q text = ""
+topbar "Books", book, "Add book"
+each book sort title as b empty "No books yet. Add a book, then save lines from it."
+  row gap 2 tap edit b
+    b.title bold grow
+    count(b.quote) "quotes" faint
+form quote, "Save quote"
+field q "Search quotes"
+each quote where has(line, q) sort at desc as x empty "No quotes match. Try another word."
+  stack card gap 0 tap edit x swipe remove x
+    x.line
+    x.book.title "p." x.page faint
+===
+@rich domain=r7_vocab_levels topic=vocabulary words by level style=custom_ui
+learning french. words with the meaning, and a level new, learning or known. chips on top to show only one level, a button on each word to move it up a level, and a count of known words
+needs: add a word with meaning | level of new, learning or known | chips to filter by level | button to move a word up | count of known words
+---
+app "Mes mots" pen red
+table word term text, meaning text, level pick New|Learning|Known = New
+state f pick All|New|Learning|Known = All
+topbar "Mes mots", word, "Add word"
+statcard count(word where level = Known), "words known of" count(word), count(word)
+choice f
+each word where f = All or level = f sort term as w empty "No words here. Add one or pick another chip."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.term bold
+      w.meaning faint
+    if w.level = New
+      button "Learning" tap set w.level = Learning
+    if w.level = Learning
+      button "Known" fill accent tap set w.level = Known
+    if w.level = Known
+      "Known" color good bold
+===
+@rich domain=r7_language_minutes_skills topic=daily language minutes by skill style=multi_feature
+spanish practice minutes every day, split by listening, speaking, reading and writing. quick buttons for 10, 20 and 30 minutes, a daily goal i can change, a chart of the week with a goal line and which skill i neglect
+needs: quick buttons for 10 20 30 minutes | pick a skill | change daily goal | chart of the week with goal line | minutes per skill this week
+---
+app "Spanish minutes" school orange
+table study minutes num 1..300 = 20, skill pick Listening|Speaking|Reading|Writing = Listening
+setting daily num = 30 "Daily minutes"
+state s pick Listening|Speaking|Reading|Writing = Listening
+let today_min = sum(study.minutes today)
+statcard today_min, "minutes of" daily "today", daily
+"Skill for the next block" faint
+choice s
+row gap 1
+  each [10, 20, 30] as m
+    button m "min" grow tap add study minutes = m, skill = s
+section "This week", "streak" streak(study) "days"
+  goalbars last 7 days, sum(study.minutes on it), daily
+section "By skill", "this week"
+  share study week by skill, sum(it.minutes), it.key
+===
+@rich domain=r7_guitar_practice_timer topic=guitar practice sessions and timer style=custom_ui
+guitar practice. a 15 minute timer that logs the session when it ends, a list of what i worked on like chords, scales or songs with the piece name, and minutes this week against 120
+needs: 15 minute timer that logs the session | what i worked on | piece name | minutes this week against 120 | list of sessions
+---
+app "Guitar" music teal dark
+table practice mins num 1..240 = 15, focus pick Chords|Scales|Songs|Theory = Songs, piece text?
+setting weekly num = 120 "Weekly minutes"
+timer 15m, "Practice block", add practice mins = 15 then notify "Block done. Log what you played below."
+statcard sum(practice.mins week), "minutes this week of" weekly, weekly
+section "Log a session", "if you did not use the timer"
+  form practice, "Save session"
+section "Recent"
+  list practice top 8, "No sessions yet. Start the timer and play."
+===
+@rich domain=r7_piano_pieces_tempo topic=piano pieces and tempo targets style=detailed
+piano pieces i am learning. each has a stage, reading, hands apart, hands together, up to tempo or memorised, and a current metronome speed and a target speed. a button adds 5 bpm and a bar shows how close to target. filter by stage
+needs: add a piece with stage and target tempo | button to add 5 bpm | bar toward target tempo | filter by stage | count of memorised pieces
+---
+app "Piano pieces" music plum
+table piece title text, stage pick Reading|Hands_apart|Hands_together|Up_to_tempo|Memorised = Reading, bpm num 40..220 = 60 "Tempo now", aim num 40..220 = 100 "Target tempo"
+state f pick All|Reading|Hands_apart|Hands_together|Up_to_tempo|Memorised = All
+topbar "Piano pieces", piece, "Add piece"
+statcard count(piece where stage = Memorised), "of" count(piece) "pieces memorised", count(piece)
+scroll gap 1
+  choice f
+each piece where f = All or stage = f sort title as p empty "No pieces at this stage yet."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.title bold grow
+      p.stage faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(p.bpm / p.aim, 0, 1), 3 fill accent radius 1
+    row gap 2
+      p.bpm "of" p.aim "bpm" faint grow
+      button "+5 bpm" tap set p.bpm = p.bpm + 5
+===
+@rich domain=r7_sketch_a_day topic=daily sketch grid and photos style=multi_feature
+trying to draw something every day this year. log a sketch with what it was, the medium like pencil, ink or watercolour, minutes spent and a photo of the page if i want. show a grid of the last 12 weeks and my streak
+needs: log a sketch with subject, medium, minutes and photo | grid of last 12 weeks | drawing streak | sketches this month | latest sketches with photo
+---
+app "Sketch a day" pencil plum
+table sketch subject text, medium pick Pencil|Ink|Watercolour|Digital = Pencil, mins num 1..300 = 20, photo image?
+topbar "Sketch a day", sketch, "Log sketch"
+row gap 2
+  statcard streak(sketch), "day streak"
+  statcard count(sketch month), "sketches this month"
+section "Last 12 weeks", "each box is a day"
+  daygrid last 84 days, count(sketch on it), 1
+each sketch top 4 as s empty "No sketches yet. Even a five minute doodle counts."
+  row card gap 2 tap edit s swipe remove s
+    image s.photo width 20
+    stack grow gap 0
+      s.subject bold
+      s.medium "·" s.mins "min" faint
+===
+@rich domain=r7_photo_shoot_log topic=photo shoots and keeper rate style=detailed
+photography log. after each outing i note the place, what kind of shots like landscape, portrait, street, macro or night, the iso i used mostly, how many frames i took and how many i kept. show my keeper rate and which kind gives me the most keepers
+needs: log a shoot with place, kind, ISO, frames and keepers | keeper rate | keepers per kind of shot | list of shoots | total frames taken
+---
+app "Shoot log" eye grey
+table shoot place text, kind pick Landscape|Portrait|Street|Macro|Night = Street, iso num 50..12800 = 200 "Main ISO", frames num 1..5000, keepers num 0..5000
+let rate = round(sum(shoot.keepers) * 100 / max(sum(shoot.frames), 1))
+topbar "Shoot log", shoot, "Log outing"
+row gap 2
+  statcard rate, "% of frames kept", 100
+  statcard sum(shoot.frames), "frames taken in all"
+section "Keepers by kind", "tap a shoot below to edit"
+  share shoot by kind, sum(it.keepers), it.key
+list shoot top 10, "No outings yet. Log the first one after your walk."
+===
+@rich domain=r7_novel_projects_words topic=writing projects with word goals style=detailed
+i am writing a novel and two short stories at once. each project has a target word count and every writing session adds words. show a progress bar for each project, words written today and a chart of this week
+needs: add a project with target words | log a writing session with words | progress bar per project | words written today | chart of the week
+---
+app "Writing desk" pen blue
+table project title text, target num 500..500000 = 50000 "Target words"
+table session project ref project, words num 1..20000
+topbar "Writing desk", project, "New project"
+statcard sum(session.words today), "words written today"
+each project sort title as p empty "No projects yet. Name the first thing you are writing."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.title bold grow
+      round(sum(p.session.words) * 100 / p.target) "%" faint
+    goal sum(p.session.words), p.target, "words of the target"
+section "Words this week"
+  daybars week, sum(session.words on it)
+form session, "Log session"
+===
+@rich domain=r7_nano_month_pace topic=november novel pace line style=custom_ui
+doing the november 50000 word challenge. i add the words i wrote each day. i want to know if i am ahead or behind where i should be today, a line showing my total through the month, and how many words per day i still need for the rest of the month
+needs: add words written for a day | ahead or behind today's pace | line of the total through the month | words per day needed from now | total of 50000
+---
+app "November novel" pen red
+table day words num 1..30000
+setting total_goal num = 50000 "Month goal"
+let total = sum(day.words month)
+let should = round(total_goal * monthday(today) / 30)
+let need = round((total_goal - total) / max(30 - monthday(today) + 1, 1))
+topbar "November novel", day, "Add words"
+statcard total, "of" total_goal "words", total_goal
+if total >= should
+  "Ahead of pace by" total - should "words" head color good
+else
+  "Behind pace by" should - total "words" head color bad
+"You need" max(need, 0) "words a day from today" faint
+section "Total through the month", "diagonal is the pace"
+  draw 100, 50
+    line 0, 50, 100, 0 stroke edge
+    poly stroke accent thick 2
+      each days month
+        pt 100 * monthday(it) / 30, 50 - 50 * clamp(sum(day.words month where at <= it) / total_goal, 0, 1)
+===
+@rich domain=r7_plant_watering_due topic=house plants watering schedule style=multi_feature
+my houseplants all need water at different gaps, the fern every 3 days, the cactus every 3 weeks. each plant has a spot like window, shelf or balcony. show which are due today, let me tap watered, and how long since the last time
+needs: add a plant with days between watering and spot | which plants are due today | tap watered | days since last watered | count of plants due
+---
+app "Plant care" plant mint
+table plant name text, every num 1..60 = 7 "Water every (days)", spot pick Window|Shelf|Balcony|Office = Window
+table watered plant ref plant
+let thirsty = count(plant, due(it.watered, it.every))
+topbar "Plant care", plant, "Add plant"
+statcard thirsty, "plants need water today", count(plant)
+each plant sort name as p empty "No plants yet. Add the first one with how often it needs water."
+  row card gap 2 tap edit p swipe remove p fill if(due(p.watered, p.every), soft, surface)
+    stack grow gap 0
+      p.name bold
+      p.spot "·" if(count(p.watered) = 0, "never watered", join(since(p.watered), " days ago")) faint
+    if due(p.watered, p.every)
+      button "Watered" fill accent tap add watered plant = p
+    else
+      "Fine for now" color good
+===
+@rich domain=r7_allotment_harvest topic=allotment harvest weights style=detailed
+small allotment. every time i pick something i log the crop, the kilos and which bed. show the total kilos this season, kilos per crop so i know what pays off, and a chart of the last month
+needs: log a harvest with crop, kilos and bed | total kilos this year | kilos per crop | chart of the last 30 days | list of harvests
+---
+app "Allotment" leaf ocean
+table harvest crop pick Tomato|Beans|Potato|Courgette|Herbs|Other = Tomato, kg num 0.1..100 = 1 unit "kg", bed pick A|B|C = A
+topbar "Allotment", harvest, "Log harvest"
+statcard sum(harvest.kg year), "kg picked this year"
+section "Kilos per crop", "this year"
+  share harvest year by crop, sum(it.kg), it.key
+section "Last 30 days", "kg picked each day"
+  daybars last 30 days, sum(harvest.kg on it)
+list harvest top 8, "Nothing picked yet. Log the first basket."
+===
+@rich domain=r7_coin_cabinet topic=coin collection with values style=multi_feature
+coin collection from my grandfather. country, year, denomination, a grade like poor, fine, very fine or uncirculated, and what it is worth if i know. search by country, show the number of coins and the total value, and which countries i have most of
+needs: add a coin with country, year, denomination, grade and value | search by country | number of coins | total value | coins per country
+---
+app "Coin cabinet" coin yellow
+table coin country text, year num 1500..2100, denom text, grade pick Poor|Fine|Very_fine|Uncirculated = Fine, value money?
+state q text = ""
+topbar "Coin cabinet", coin, "Add coin"
+row gap 2
+  statcard count(coin), "coins"
+  statcard sum(coin.value), "total value"
+section "Most coins from", "by country"
+  share coin by country, count(it), it.key
+field q "Search by country"
+each coin where has(country, q) sort year as c empty "No coins match. Add one or change the search."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.country c.denom bold
+      c.year "·" c.grade faint
+    c.value
+===
+@rich domain=r7_stamp_album topic=stamp album by theme style=custom_ui
+stamp album with pages by theme: birds, trains, royalty, space, flowers. each stamp has the country, year, theme and whether it is mint or used. show a card per theme with how many stamps and how many are mint
+needs: add a stamp with country, year, theme and mint flag | a card per theme with count | mint count per theme | total stamps | list of stamps
+---
+app "Stamp album" tag purple
+table stamp country text, year num 1800..2100, theme pick Birds|Trains|Royalty|Space|Flowers = Birds, mint bool
+topbar "Stamp album", stamp, "Add stamp"
+statcard count(stamp), "stamps in the album", 500
+grid 2 gap 1
+  each options stamp.theme as t
+    stack card gap 0
+      t bold
+      count(stamp where theme = t) big
+      count(stamp where theme = t and mint = yes) "mint" faint
+list stamp top 10, "The album is empty. Add the first stamp."
+===
+@rich domain=r7_card_binder_copies topic=trading card binder copies style=multi_feature
+trading card binder. each card has its name, set, rarity and how many copies i own, with plus and minus buttons, a flag for cards i still want, chips to filter by rarity and the number of cards for each rarity
+needs: add a card with set and rarity | plus and minus copies | still-wanted flag | chips to filter by rarity | count per rarity
+---
+app "Card binder" cards pink
+table card name text, cardset text?, rarity pick Common|Rare|Epic|Legendary = Common, copies num 0..99 = 1, wanted bool
+state f pick All|Common|Rare|Epic|Legendary = All
+topbar "Card binder", card, "Add card"
+row gap 1
+  each options card.rarity as r
+    stack grow card gap 0 align center
+      count(card where rarity = r) big
+      r tiny
+choice f
+each card where f = All or rarity = f sort name as c empty "No cards here. Add one or pick another rarity."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.cardset faint
+    if c.wanted
+      "Wanted" color warn
+    button "-" tap set c.copies = c.copies - 1
+    c.copies bold
+    button "+" tap set c.copies = c.copies + 1

@@ -1,0 +1,540 @@
+@rich domain=r8_wedding_guests topic=wedding_guest_list style=detailed
+my sister's wedding has 3 sides of relatives and everyone keeps calling to ask if they are invited. I need a guest list where I add the name, side of the family, how many seats and whether they said yes, no or still pending, then see how many seats are confirmed against the hall capacity and filter by reply
+needs: add a guest with name, side, seats and reply | shows confirmed seats against hall capacity | shows how many replies are still pending | filter the list by reply | seats per side chart
+---
+app "Wedding Guests" users pink
+table guest name text, side pick Bride|Groom|Friends = Bride, seats num 1..12 = 1, rsvp pick Pending|Yes|No = Pending
+setting hall num = 350 "Hall capacity"
+state f text = ""
+let coming = sum(guest.seats where rsvp = Yes)
+topbar "Guests", guest, "Add guest"
+row gap 2
+  statcard coming, "seats confirmed of" hall, hall
+  statcard count(guest where rsvp = Pending), "still to reply"
+row gap 1
+  button "All" fill if(f = "", accent, soft) tap set f = ""
+  each options guest.rsvp
+    button it fill if(f = it, accent, soft) tap set f = it
+each guest where f = "" or rsvp = f sort name as g empty "No guests yet. Add the first family."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.name bold
+      g.side g.seats "seats" faint
+    g.rsvp bold color if(g.rsvp = Yes, good, if(g.rsvp = No, bad, muted))
+section "Seats by side", "all replies"
+  share guest by side, sum(it.seats), it.key
+===
+@rich domain=r8_wedding_vendors topic=wedding_vendor_payments style=multi_feature
+Keep each wedding vendor (hall, caterer, photographer, decor) with the quote we agreed and every part payment we give them, so I can see what is still owed per vendor. Also show a bar of total paid against all quotes and how many days are left till the wedding
+needs: add a vendor with service and agreed quote | record a part payment against a vendor | shows what is still owed per vendor | shows total paid against all quotes | days left until the wedding
+---
+app "Wedding Vendors" gift plum
+table vendor name text, service pick Hall|Catering|Photo|Decor|Mehndi|Cards|Other = Hall, quote money
+table payment vendor ref vendor, amount money
+setting wedding date = 2027-02-12 "Wedding day"
+let quoted = sum(vendor.quote)
+let paid = sum(payment.amount)
+topbar "Vendors", vendor, "Add vendor"
+row gap 2
+  statcard wedding - today, "days to the wedding"
+  statcard quoted - paid, "still owed to vendors"
+goal paid, quoted, "paid of all quotes"
+each vendor sort service as v empty "No vendors yet. Add the hall first, it is the biggest."
+  stack card gap 1 tap edit v swipe remove v
+    row
+      v.name bold grow
+      v.service faint
+    row gap 2
+      "Quote" v.quote
+      "Paid" sum(v.payment.amount)
+      "Due" v.quote - sum(v.payment.amount) bold color if(v.quote > sum(v.payment.amount), bad, good)
+    row gap 1
+      button "Paid 10000" tap add payment vendor = v, amount = 10000
+      button "Paid 50000" tap add payment vendor = v, amount = 50000
+===
+@rich domain=r8_engagement_tasks topic=engagement_function_tasks style=custom_ui
+planning my brother's engagement in 3 weeks. list of jobs with who is doing it (me, mama, bhabi) and a due date, tick when done, and a count of days left. show late ones in red, and I want a bar showing how many jobs are done
+needs: add a job with owner and due date | tick a job as done | shows days left until the function | progress bar of jobs done | late jobs highlighted
+---
+app "Engagement Jobs" list orange
+table job title text, owner pick Me|Mama|Bhabi|Uncle = Me, due date, done bool
+setting func date = 2026-12-20 "Function date"
+let total = count(job)
+let finished = count(job where done = yes)
+topbar "Engagement", job, "Add job"
+statcard func - today, "days left" , 21
+goal finished, max(total, 1), "jobs done"
+each job where done = no sort due as j empty "Nothing pending. Add the jobs you still have to do."
+  row card gap 2 tap edit j swipe remove j
+    toggle j.done
+    stack grow gap 0
+      j.title bold
+      j.owner "· due" j.due faint color if(j.due < today, bad, muted)
+section "Finished", finished
+  each job where done = yes as j empty "Nothing finished yet."
+    row gap 2
+      toggle j.done
+      j.title faint
+===
+@rich domain=r8_kids_birthday topic=kids_birthday_party style=detailed
+my daughter turns 6 next month and I want one place for the party: kids invited with a yes or no and a parent phone, the gift each child brought, and the cake and decoration costs against my budget
+needs: add an invited child with parent phone and reply | add party costs with item and amount | shows spend against party budget | shows how many kids are coming | list of gifts received
+---
+app "Birthday Party" gift pink
+table kid name text, phone text?, coming bool, gift text?
+table cost item text, amount money
+setting budget money = 25000 "Party budget"
+let spent = sum(cost.amount)
+screen kids "Kids" users
+  topbar "Invited kids", kid, "Add child"
+  statcard count(kid where coming = yes), "kids coming out of" count(kid), count(kid)
+  each kid sort name as k empty "No kids yet. Add the first friend."
+    row card gap 2 tap edit k swipe remove k
+      toggle k.coming
+      stack grow gap 0
+        k.name bold
+        k.phone faint
+      if k.gift != ""
+        icon gift
+screen money "Costs" wallet
+  topbar "Party costs", cost, "Add cost"
+  goal spent, budget, if(spent > budget, "over budget", "spent so far")
+  list cost, "No costs yet. Add the cake first."
+screen gifts "Gifts" gift
+  each kid where gift != "" as k empty "No gifts yet. Fill the gift on a child's card."
+    row card
+      k.name bold grow
+      k.gift
+===
+@rich domain=r8_surprise_party topic=surprise_party_countdown style=multi_feature
+surprise party for my husband on his birthday, need to split the jobs between his friends: who is bringing what, a date it must be ready by, and a countdown so I don't panic, plus how many jobs each person still has open. also remind me the day before
+needs: add a job with owner and ready-by date | countdown days until the party | tick a job when done | shows open jobs per owner | reminder the day before the party
+---
+app "Surprise Party" star purple dark
+table task what text, who pick Me|Sara|Bilal|Hira|Omar = Me, ready date, done bool
+setting party date = 2026-12-05 "Party day"
+let left = party - today
+topbar "Surprise party", task, "Add job"
+statcard left, "days to go", 30
+remind "Surprise party is tomorrow, check every job" at 9:00 if left = 1
+section "Who has what", "open:" count(task where done = no)
+  each options task.who as w
+    row gap 2
+      w grow
+      count(task where who = w and done = no) "open of" count(task where who = w) faint
+each task where done = no sort ready as t empty "Every job is done. Go enjoy the party."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    stack grow gap 0
+      t.what bold
+      t.who "· ready by" t.ready faint color if(t.ready < today, bad, muted)
+===
+@rich domain=r8_trip_itinerary topic=day_by_day_itinerary style=detailed
+going to Dubai with the family for a week. want to add each place we will visit with the date, a time and how much it costs, see them grouped day by day, and see the total planned spending plus how many days are left before we fly
+needs: add a stop with date, time, place and cost | stops grouped by date | total planned spending | days left until the trip starts | remove a stop by swipe
+---
+app "Trip Plan" plane teal
+table stop plan date, time time, place text, cost money = 0
+setting start date = 2026-12-26 "Trip starts"
+topbar "Itinerary", stop, "Add stop"
+row gap 2
+  statcard start - today, "days to go"
+  statcard sum(stop.cost), "planned spending"
+each stop by plan as g empty "No stops yet. Add the first place you want to see."
+  stack card gap 1
+    row
+      g.key bold grow
+      sum(g.cost) faint
+    each g sort time as s
+      row gap 2 tap edit s swipe remove s
+        s.time faint
+        s.place grow
+        s.cost
+===
+@rich domain=r8_packing_people topic=family_packing_list style=multi_feature
+packing for 5 people is chaos. let me add things by person (me, wife, kids), tick them as they go into the bag, and show how many are packed out of the total
+needs: add an item for a person | tick an item as packed | items grouped under each person | shows packed out of total
+---
+app "Packing" bag mint
+table item name text, who pick Me|Wife|Kids = Me, packed bool
+topbar "Packing list", item, "Add item"
+statcard count(item where packed = yes), "of" count(item) "packed", count(item)
+each options item.who as w
+  section w, "packed" count(item where who = w and packed = yes) "of" count(item where who = w)
+    each item where who = w sort name as i empty "Nothing for this person yet."
+      row gap 2 tap edit i swipe remove i
+        toggle i.packed
+        i.name grow
+===
+@rich domain=r8_hotel_bookings topic=hotel_bookings_countdown style=detailed
+I travel for work and have many hotel bookings. save hotel, city, check in date, nights and rate per night, whether I already paid, show the total cost, what is still unpaid and how many days until the next check in
+needs: add a booking with hotel, city, check-in, nights and rate | shows days until the next check-in | shows total cost of all bookings | shows the unpaid amount | tick a booking as paid
+---
+app "Hotels" bed slate
+table booking hotel text, city text, checkin date, nights num 1..60 = 1, rate money, paid bool
+let next = min(booking, if(it.checkin >= today, it.checkin - today, 999))
+topbar "Hotel bookings", booking, "Add booking"
+row gap 2
+  statcard next, "days to next check-in"
+  statcard sum(booking, it.rate * it.nights), "total cost"
+statcard sum(booking where paid = no, it.rate * it.nights), "still to pay"
+each booking sort checkin as b empty "No bookings yet. Add your next stay."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.hotel bold
+      b.city "·" b.checkin "·" plural(b.nights, "night") faint color if(b.checkin < today, muted, ink)
+    stack gap 0 align end
+      b.rate * b.nights bold
+      toggle b.paid
+===
+@rich domain=r8_flight_tickets topic=flight_ticket_tracker style=multi_feature
+tickets keep getting lost in my email. a place for each flight with route, date, airline, booking code and price, a status of booked, checked in or flown, and a reminder the day before to do online check in
+needs: add a flight with route, date, airline, code and price | status chips booked checked in flown | reminder the day before the flight | days until each flight | total spent on tickets
+---
+app "Flights" plane blue
+table ticket route text, flies date, airline text, pnr text, price money, status pick Booked|Checked_in|Flown = Booked
+remind "Online check-in opens, flight is tomorrow" at ticket.flies - 1d at 9:00
+topbar "Flights", ticket, "Add flight"
+statcard sum(ticket.price), "spent on tickets"
+each ticket sort flies as t empty "No flights yet. Add your first ticket."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 2
+      t.route bold grow
+      if(t.flies >= today, plural(t.flies - today, "day"), "gone") faint
+    t.airline "·" t.pnr "·" t.price faint
+    row gap 1
+      each options ticket.status
+        button it fill if(t.status = it, accent, soft) tap set t.status = it
+===
+@rich domain=r8_roadtrip_fuel topic=road_trip_fuel_cost style=detailed
+we are four friends driving Lahore to Karachi in my car. after every fuel stop I want to enter the leg name, km driven, litres filled and price per litre, then see the total fuel cost, the cost per km and what each friend should chip in
+needs: add a fuel stop with leg, km, litres and price per litre | total fuel cost | cost per km | each person's share | bar chart of cost per leg
+---
+app "Road Trip Fuel" car orange
+table leg name text, km num 1.., litres num 1.., price money
+setting people num = 4 "Friends in the car"
+let cost = sum(leg, it.litres * it.price)
+topbar "Fuel stops", leg, "Add fuel stop"
+row gap 2
+  statcard cost, "total fuel cost"
+  statcard round(cost / max(people, 1)), "each friend pays"
+"Cost per km" round(cost / max(sum(leg.km), 1)) "·" sum(leg.km) "km driven" faint
+section "Cost per leg"
+  bars leg sort at, it.litres * it.price, it.name
+list leg, "No fuel stops yet. Add the first one after filling the tank."
+===
+@rich domain=r8_trip_split topic=friends_trip_split style=custom_ui
+who paid for what on our trip with 5 friends. add the friends, add every expense and who paid it, and then tell me for each person if they should pay or receive money compared with an equal share
+needs: add a friend | add an expense with who paid | total spent and equal share | each friend's balance to pay or receive | list of expenses
+---
+app "Trip Split" users green
+table friend name text
+table expense what text, paidby ref friend, amount money
+let total = sum(expense.amount)
+let share = total / max(count(friend), 1)
+topbar "Trip expenses", expense, "Add expense"
+row gap 2
+  statcard total, "spent together"
+  statcard round(share), "equal share each"
+each friend as f empty "Add your friends below to see who owes what."
+  row card gap 2
+    f.name bold grow
+    stack gap 0 align end
+      round(sum(f.expense.amount) - share) bold color if(sum(f.expense.amount) >= share, good, bad)
+      if(sum(f.expense.amount) >= share, "gets back", "owes") faint
+form friend, "Add friend"
+section "Expenses", count(expense)
+  list expense, "No expenses yet."
+===
+@rich domain=r8_umrah_prep topic=umrah_preparation_plan style=multi_feature
+We fly for Umrah in a few weeks. Need a checklist (passport, vaccine, ihram, bookings) to tick off with the countdown to departure, and a budget part where I note what I paid and see what is left from my total
+needs: checklist of tasks to tick | days until departure | add a payment with item and amount | shows money left from the total budget | progress of the checklist
+---
+app "Umrah Plan" mosque green dark
+table step title text, done bool
+table paid item text, amount money
+setting depart date = 2027-01-15 "Departure"
+setting budget money = 600000 "Total budget"
+screen list "Checklist" check
+  topbar "Before we fly", step, "Add task"
+  row gap 2
+    statcard depart - today, "days to go"
+    statcard count(step where done = yes), "of" count(step) "done", count(step)
+  each step sort done as s empty "No tasks yet. Add passport, vaccine and ihram first."
+    row card gap 2 tap edit s swipe remove s
+      toggle s.done
+      s.title grow
+screen money "Budget" wallet
+  topbar "Payments", paid, "Add payment"
+  goal sum(paid.amount), budget, "paid of the budget"
+  statcard budget - sum(paid.amount), "left to spend"
+  list paid, "Nothing paid yet."
+===
+@rich domain=r8_camping_gear topic=camping_gear_weights style=detailed
+camping with the boys this weekend. list the gear, who is carrying it, how heavy it is in kg, and tick when packed. I want to see the total weight each person carries so nobody gets stuck with the tent and the stove
+needs: add gear with owner and weight in kg | tick gear as packed | total weight carried by each person | packed out of total | share bars by person
+---
+app "Camping Gear" tree yellow
+table gear name text, carrier pick Ali|Zain|Hamza|Me = Me, kg num 0.1..40 = 1 unit "kg", packed bool
+topbar "Camping gear", gear, "Add gear"
+statcard count(gear where packed = yes), "of" count(gear) "items packed", count(gear)
+section "Weight per person", "total" sum(gear.kg) "kg"
+  share options gear.carrier, sum(gear where carrier = it, it.kg), it
+each gear sort carrier as g empty "No gear yet. Add the tent first."
+  row card gap 2 tap edit g swipe remove g
+    toggle g.packed
+    stack grow gap 0
+      g.name bold
+      g.carrier faint
+    g.kg "kg"
+===
+@rich domain=r8_visa_documents topic=visa_document_checklist style=custom_ui
+applying for a Schengen visa and I get lost in the papers. each document with a status of missing, ready or submitted, an expiry date where it has one, and the days until my embassy appointment. warn me if the passport expires soon
+needs: add a document with status and expiry | change a document's status by tapping chips | days until the appointment | warning when something expires within 6 months | count of documents ready
+---
+app "Visa Papers" key grey
+table doc name text, status pick Missing|Ready|Submitted = Missing, expires date?
+setting appt date = 2026-12-18 "Embassy appointment"
+let soon = count(doc where expires < today + 180)
+topbar "Visa papers", doc, "Add document"
+row gap 2
+  statcard appt - today, "days to appointment"
+  statcard count(doc where status != Missing), "of" count(doc) "ready or sent", count(doc)
+if soon > 0
+  plural(soon, "document") "expire within 6 months" bold color bad
+each doc sort name as d empty "No documents yet. Start with the passport."
+  stack card gap 1 tap edit d swipe remove d
+    row
+      d.name bold grow
+      d.expires faint color if(d.expires < today + 180, bad, muted)
+    row gap 1
+      each options doc.status
+        button it fill if(d.status = it, accent, soft) tap set d.status = it
+===
+@rich domain=r8_hiking_log topic=hiking_trail_log style=multi_feature
+I hike in the northern areas every month. log the trail name, distance in km and the climb in metres, show how many km I did this month against my goal and the longest hike so far, and a chart of distance per hike
+needs: add a hike with trail, distance and climb | km this month against a goal | longest hike so far | total climb | bar chart of distance per hike
+---
+app "Hiking" tree teal
+table hike trail text, km num 0.1..100 = 5 unit "km", climb num 0..5000 = 300 unit "m"
+setting goal num = 60 "Monthly km goal"
+topbar "Hikes", hike, "Log hike"
+goal sum(hike.km month), goal, "km this month", "km"
+row gap 2
+  statcard max(hike.km), "km, longest hike"
+  statcard sum(hike.climb), "m climbed in all"
+section "Distance per hike", "last 8"
+  bars hike top 8, it.km, it.trail
+list hike, "No hikes yet. Log your first trail."
+===
+@rich domain=r8_club_fixtures topic=cricket_club_fixtures style=detailed
+I captain a mohalla cricket club. need a fixtures list: opponent, match date, home or away, and after the game I tap won, lost or draw. show how many days to the next match and our record so far
+needs: add a match with opponent, date and venue | tap to set won, lost or draw | days until the next match | shows wins out of matches played | past results list
+---
+app "Club Fixtures" ball ocean
+table match opp text, match_day date, venue pick Home|Away = Home, result pick Upcoming|Won|Lost|Draw = Upcoming
+let next = min(match, if(it.match_day >= today and it.result = Upcoming, it.match_day - today, 999))
+topbar "Fixtures", match, "Add match"
+row gap 2
+  statcard next, "days to next match"
+  statcard count(match where result = Won), "wins from" count(match where result != Upcoming) "played"
+each match where result = Upcoming sort match_day as m empty "No fixtures yet. Add the next match."
+  stack card gap 1 tap edit m swipe remove m
+    row
+      "vs" m.opp bold grow
+      m.venue faint
+    m.match_day faint
+    row gap 1
+      button "Won" fill good tap set m.result = Won
+      button "Lost" fill bad tap set m.result = Lost
+      button "Draw" tap set m.result = Draw
+section "Results"
+  each match where result != Upcoming sort match_day desc as m empty "No results yet."
+    row gap 2
+      "vs" m.opp grow
+      m.result bold color if(m.result = Won, good, if(m.result = Lost, bad, muted))
+===
+@rich domain=r8_football_squad topic=football_squad_stats style=multi_feature
+Our Sunday football team: I want to add players with their position, tap plus goal or plus assist on a player after each match, and see a top scorers chart. also the total goals the team scored this season
+needs: add a player with position | plus goal and plus assist buttons per player | top scorers chart | total goals by the team | assists count on the player card
+---
+app "Squad Stats" ball green
+table player name text, pos pick GK|DEF|MID|FWD = MID
+table stat player ref player, goals num 0..10 = 0, assists num 0..10 = 0
+topbar "Squad", player, "Add player"
+statcard sum(stat.goals), "goals scored by the team"
+section "Top scorers", "season"
+  share player sort sum(it.stat.goals) desc top 5, sum(it.stat.goals), it.name
+each player sort name as p empty "No players yet. Add your first player."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.pos "·" sum(p.stat.goals) "goals" sum(p.stat.assists) "assists" faint
+    button "+ Goal" tap add stat player = p, goals = 1
+    button "+ Assist" tap add stat player = p, assists = 1
+===
+@rich domain=r8_cup_bracket topic=knockout_cup_bracket style=custom_ui
+we run a small knockout cup for the street: two semi finals then a final. I type team names and scores for each game, and the winner goes in bold. show the champion at the top when the final is played
+needs: add a game with round, two teams and scores | semi finals shown on the left and final on the right | winner highlighted in bold | champion shown after the final | remove a game
+---
+app "Cup Bracket" trophy red dark
+table game round pick Semi|Final = Semi, a text, b text, sa num 0..99 = 0, sb num 0..99 = 0
+let done = count(game where round = Final) > 0
+topbar "Cup", game, "Add game"
+if done
+  if(last(game.sa where round = Final) > last(game.sb where round = Final), last(game.a where round = Final), last(game.b where round = Final)) "are the champions" huge
+row gap 2
+  stack grow gap 1
+    "Semi finals" head
+    each game where round = Semi as g empty "Add the two semi finals."
+      stack card gap 0 tap edit g swipe remove g
+        row
+          g.a bold grow color if(g.sa > g.sb, accent, ink)
+          g.sa
+        row
+          g.b bold grow color if(g.sb > g.sa, accent, ink)
+          g.sb
+  stack grow gap 1
+    "Final" head
+    each game where round = Final as g empty "Waiting for the semi finals."
+      stack card gap 0 tap edit g swipe remove g
+        row
+          g.a grow
+          g.sa bold
+        row
+          g.b grow
+          g.sb bold
+===
+@rich domain=r8_league_table topic=mohalla_league_table style=detailed
+Running a 6 team futsal league. I add the teams and then each result as goals for and goals against, and want an automatic table sorted by points with 3 for a win and 1 for a draw, plus goal difference and games played
+needs: add a team | add a result for a team with goals for and against | table sorted by points | games played and goal difference | 3 points for a win and 1 for a draw
+---
+app "League Table" board blue
+table team name text
+table result team ref team, gf num 0..30, ga num 0..30
+let pts(t team) = sum(t.result, if(it.gf > it.ga, 3, if(it.gf = it.ga, 1, 0)))
+topbar "Add result", result, "Add result"
+section "Table", "3 for a win, 1 for a draw"
+  each team sort pts(it) desc as t empty "No teams yet. Add the teams below."
+    row gap 2
+      t.name bold grow
+      count(t.result) "P" faint
+      sum(t.result.gf) - sum(t.result.ga) "GD" faint
+      pts(t) "pts" bold
+form team, "Add team"
+===
+@rich domain=r8_plank_challenge topic=thirty_day_plank_challenge style=multi_feature
+Me and my cousins are doing a 30 day plank challenge at home. a button to log todays plank (2, 3 or 5 minutes), a grid of the last 30 days showing what we did, the streak, and the best streak
+needs: one tap buttons to log todays plank | grid of the last 30 days | current streak | best streak | days done out of 30
+---
+app "Plank Challenge" dumbbell red
+table session mins num 1..60 = 2 unit "min"
+quick session, mins, [2, 3, 5]
+row gap 2
+  statcard streak(session), "day streak"
+  statcard best(session), "best streak"
+statcard count(days last 30 days, count(session on it) > 0), "of 30 days done", 30
+section "Last 30 days", "total" sum(session.mins last 30 days) "min"
+  daygrid last 30 days, count(session on it)
+weekdots count(session on it) > 0
+list session today by day, "Nothing logged today. Tap a button above after your plank."
+===
+@rich domain=r8_sports_day_houses topic=school_sports_day_points style=detailed
+sports day at school: four houses (Tariq, Babar, Jinnah, Iqbal) compete. after each event I enter the event name, the winning house and the points, and the app should show each house's total with bars so I can announce the leader at the end
+needs: add an event result with house and points | total points per house | bars comparing houses | leading house shown | list of event results
+---
+app "Sports Day" trophy yellow
+table result event text, house pick Tariq|Babar|Jinnah|Iqbal = Tariq, points num 1..20 = 5
+let pts(h text) = sum(result.points where house = h)
+let lead = max(options result.house, pts(it))
+topbar "Sports day", result, "Add result"
+statcard sum(result.points), "points given in" count(result) "events"
+section "House points"
+  share options result.house, pts(it), it
+section "Leader"
+  each options result.house as h
+    if pts(h) = lead and lead > 0
+      h "leads with" lead "points" head
+list result, "No events yet. Add the first result."
+===
+@rich domain=r8_club_dues topic=sports_club_monthly_dues style=multi_feature
+badminton club collects 1500 a month from each member. I record every payment against the member, and want to see who is behind this year, how much is collected and how much is still outstanding
+needs: add a member | record a payment for a member | amount each member still owes this year | total collected and total outstanding | members behind highlighted
+---
+app "Club Dues" users mint
+table member name text
+table pay member ref member, amount money
+setting fee money = 1500 "Monthly fee"
+let due = fee * month(today) * count(member)
+topbar "Members", member, "Add member"
+row gap 2
+  statcard sum(pay.amount year), "collected this year"
+  statcard due - sum(pay.amount year), "still outstanding"
+each member sort name as m empty "No members yet. Add your first member."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.name bold
+      "Owes" fee * month(today) - sum(m.pay.amount year) faint color if(fee * month(today) > sum(m.pay.amount year), bad, good)
+    button "Paid fee" tap add pay member = m, amount = fee
+===
+@rich domain=r8_court_slots topic=badminton_court_slots style=custom_ui
+shared badminton court in our building. I want a weekly grid with days down the side and hours 6 to 9 pm across, tap a free cell to book it in the name I typed at the top, and booked cells show the name
+needs: type who is booking | grid of days by evening hours | tap a free cell to book it | booked cell shows the name | remove a booking by tapping it
+---
+app "Court Slots" game teal
+table booking day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, hour num 18..21, who text
+state me text = ""
+"Booking as" head
+field me "Your name"
+each options booking.day as d
+  row gap 1
+    d bold width 40
+    each 18..21 as h
+      if count(booking where day = d and hour = h) > 0
+        box grow radius 6 pad 1 fill accent tap remove last(booking where day = d and hour = h)
+          last(booking.who where day = d and hour = h) small color white
+      else
+        box grow radius 6 pad 1 fill soft tap add booking day = d, hour = h, who = me
+          h "h" tiny
+===
+@rich domain=r8_running_club topic=running_club_leaderboard style=multi_feature
+Sunday running club has 12 people. Add the runners, tap a button to add their km after a run, show a leaderboard for this month, and how far the club ran together toward the monthly target
+needs: add a runner | one tap buttons to add km for a runner | monthly leaderboard | club total against monthly target | per runner km this month
+---
+app "Run Club" run orange
+table runner name text
+table run runner ref runner, km num 0.5..60 = 5
+setting target num = 300 "Club km target"
+topbar "Runners", runner, "Add runner"
+goal sum(run.km month), target, "club km this month", "km"
+section "Leaderboard", monthname(today)
+  share runner sort sum(it.run.km month) desc top 5, sum(it.run.km month), it.name
+each runner sort name as r empty "No runners yet. Add the first member."
+  row card gap 2 tap edit r swipe remove r
+    r.name bold grow
+    sum(r.run.km month) "km" faint
+    button "+5 km" tap add run runner = r, km = 5
+    button "+10 km" tap add run runner = r, km = 10
+===
+@rich domain=r8_kit_lending topic=club_kit_lending style=detailed
+our hockey club lends out sticks, balls and bibs. I add each kit item with how many we own, write who took it, and mark when it is returned. need to see how many of each are still in the cupboard and who has not returned theirs
+needs: add a kit item with quantity owned | record who borrowed a kit item | mark a loan as returned | how many of each item are left in the cupboard | list of loans not yet returned
+---
+app "Kit Cupboard" box ink
+table kit name text, qty num 1..500
+table loan kit ref kit, player text, returned bool
+state who text = ""
+topbar "Kit", kit, "Add kit"
+field who "Who is borrowing"
+statcard count(loan where returned = no), "items out right now"
+each kit sort name as k empty "No kit yet. Add what the club owns."
+  row card gap 2 tap edit k swipe remove k
+    k.name bold grow
+    k.qty - count(k.loan where returned = no) "left of" k.qty faint
+    button "Lend" tap add loan kit = k, player = who
+section "Not returned yet"
+  each loan where returned = no as l empty "Everything is back in the cupboard."
+    row gap 2
+      toggle l.returned
+      l.kit.name grow
+      l.player faint

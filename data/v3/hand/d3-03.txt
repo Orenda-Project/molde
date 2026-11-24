@@ -1,0 +1,485 @@
+@rich domain=d3_domain_hosting_accounts topic=domain_and_hosting_accounts style=detailed
+domains and hosting accounts for our clients are all over the place. list each domain with registrar, hosting provider, yearly cost and expiry date, a tick if auto renew is on, red when it expires within 30 days, and remind me 30 days before
+needs: add a domain with registrar, hosting, cost and expiry date | auto renew tick | red when expiring within 30 days | yearly cost total | reminder 30 days before expiry
+---
+app "Domains" cloud blue
+table dom name text, registrar text, host text?, cost money, expires date, auto bool "Auto renew"
+topbar "Domains and hosting", dom, "Add domain"
+remind "A domain expires in 30 days" at dom.expires - 30d at 9:00
+row gap 2
+  statcard count(dom where expires - today <= 30), "expire within 30 days"
+  statcard sum(dom.cost), "per year in total"
+each dom sort expires as d empty "No domains yet. Add each one with its registrar and expiry date."
+  row card gap 2 tap edit d swipe remove d fill if(d.expires - today <= 30, bad, soft)
+    stack grow gap 0
+      d.name bold
+      d.registrar "·" d.host faint
+      "expires" d.expires "(" d.expires - today "days)" faint
+    stack gap 0 align end
+      d.cost bold
+      toggle d.auto
+===
+@rich domain=d3_cloud_cost_log topic=cloud_cost_monthly_goal style=multi_feature
+daily cloud cost log: date is automatic, service (compute, storage, network, database, other) and the amount. I set my monthly budget and the app shows spend per day for the last 7 days with a line at budget divided by 30, plus month total against the goal
+needs: log a cost with service and amount | set the monthly budget | spend per day with budget line | month total against budget | breakdown by service
+---
+app "Cloud costs" cloud mint
+table bill svc pick Compute|Storage|Network|Database|Other = Compute, amount money
+setting budget money = 1500 "Monthly budget"
+topbar "Cloud costs", bill, "Log cost"
+goal sum(bill.amount month), budget, if(sum(bill.amount month) > budget, "over this month's budget", "spent this month")
+section "Last 7 days", "line is budget / 30"
+  goalbars last 7 days, sum(bill.amount on it), budget / 30
+section "By service", "this month"
+  share bill month by svc, sum(it.amount), it.key
+===
+@rich domain=d3_backup_verification topic=backup_restore_verification_log style=custom_ui
+we say we have backups but never test restoring them. list our systems, and every time I do a test restore I tap Verified OK or Failed. show days since the last good restore for each, red if over 30 days, and how many systems are overdue
+needs: add a system | tap Verified OK or Failed after a test restore | days since last good restore | red when over 30 days | count of overdue systems
+---
+app "Backup checks" shield green
+table sys name text
+table restore sys ref sys, ok bool
+let overdue = count(sys, due(it.restore where ok = yes, 30))
+topbar "Backup checks", sys, "Add system"
+statcard overdue, "of" count(sys) "systems without a good restore in 30 days", count(sys)
+each sys sort name as s empty "No systems yet. Add each database or server that is backed up."
+  stack card gap 1 swipe remove s fill if(due(s.restore where ok = yes, 30), bad, soft)
+    row gap 1
+      s.name bold grow
+      if count(s.restore where ok = yes) > 0
+        since(s.restore where ok = yes) "days since a good restore" faint
+      else
+        "Never restored" bold
+    row gap 1
+      button "Verified OK" tap add restore sys = s, ok = yes
+      button "Failed" fill bad tap add restore sys = s, ok = no
+===
+@rich domain=d3_patch_windows topic=weekly_patch_window_plan style=detailed
+patch windows for our servers. each host gets a weekday and an hour for patching, plus the date it was last patched. show today's windows at the top, the week as a grid by weekday, and a button to mark a host patched today
+needs: add a host with weekday, hour and last patched date | today's windows at the top | week grid by weekday | button to mark patched today | count of hosts not patched in 30 days
+---
+app "Patch windows" tool slate
+table host name text, wd pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Sat "Weekday", at_time time = 2:00 "Hour", patched date = today "Last patched"
+topbar "Patch windows", host, "Add host"
+statcard count(host where wd = dayname(today)), "windows today and" count(host where today - patched > 30) "hosts over 30 days unpatched"
+each host where wd = dayname(today) sort at_time as h
+  row card gap 2 fill accent
+    h.at_time h.name bold grow
+    button "Patched" tap set h.patched = today
+grid 7 gap 1
+  each options host.wd as d
+    stack gap 1
+      d bold align center small
+      each host where wd = d sort at_time as h empty "-"
+        stack radius 6 pad 1 gap 0 fill soft tap edit h
+          h.name tiny bold
+          h.at_time tiny
+===
+@rich domain=d3_alert_noise topic=alert_noise_log style=multi_feature
+our pager alerts are mostly noise. list the alerts by name, tap Fired every time one goes off and then Useful or Noise. rank the noisiest, show alerts per day for the week, and flag ones that fired 5 times with nothing useful
+needs: add an alert by name | tap fired and mark useful or noise | alerts per day chart | noisiest ranking | flag alerts fired 5 times with nothing useful
+---
+app "Alert noise" bell red
+table alert name text
+table fire alert ref alert, useful bool
+topbar "Alert noise", alert, "Add alert"
+statcard count(fire week), "alerts fired this week," count(fire week where useful = no) "were noise"
+section "Fired per day"
+  daybars last 7 days, count(fire on it)
+each alert sort count(it.fire where useful = no) desc as a empty "No alerts listed. Add the ones that wake you up."
+  stack card gap 1 swipe remove a
+    row gap 1
+      a.name bold grow
+      count(a.fire) "fired ·" count(a.fire where useful = no) "noise" faint
+    if count(a.fire) >= 5 and count(a.fire where useful = yes) = 0
+      "Candidate to mute or fix" bold color bad
+    row gap 1
+      button "Useful" tap add fire alert = a, useful = yes
+      button "Noise" tap add fire alert = a, useful = no
+===
+@rich domain=d3_canned_replies topic=support_canned_replies style=short
+my team's canned replies: title, the text, and a counter I tap every time I use one. search box
+needs: add a reply with title and text | tap to count a use | search | most used on top
+---
+app "Canned replies" note mint
+table macro title text, body long, uses num 0.. = 0
+state q text = ""
+topbar "Canned replies", macro, "Add reply"
+field q "Search replies"
+each macro where has(title, q) or has(body, q) sort uses desc as m empty "No replies yet. Save the answer you keep typing."
+  stack card gap 1 tap edit m swipe remove m
+    row gap 1
+      m.title bold grow
+      m.uses "uses" faint
+    m.body faint
+    button "I used it" tap set m.uses = m.uses + 1
+===
+@rich domain=d3_disk_usage_servers topic=server_disk_usage_gauges style=custom_ui
+disk usage per server in percent. I type the number when I check it and I want a round gauge for each server that turns orange over 75 and red over 90. show how many servers are in the red and the fullest one
+needs: add a server with disk usage percent | round gauge per server | orange over 75 and red over 90 | count of servers over 90 | fullest server
+---
+app "Disk usage" box orange
+table srv name text, used num 0..100 unit "%"
+topbar "Disk usage", srv, "Add server"
+statcard count(srv where used > 90), "servers over 90%. Fullest is at" max(srv.used) "%"
+grid 2 gap 2
+  each srv sort used desc as s empty "No servers yet. Add one with its current disk usage."
+    stack card gap 1 align center tap edit s swipe remove s
+      draw width 80
+        circle 42 stroke soft thick 10
+        arc 42, 0, 360 * s.used / 100 stroke if(s.used > 90, bad, if(s.used > 75, warn, good)) thick 10
+        label 50, 50, s.used "%" bold
+      s.name bold
+===
+@rich domain=d3_access_review topic=quarterly_access_review style=detailed
+every quarter we review who has access to what. list person, system and my decision keep, remove or unsure, then a tick once the review is done. show progress, a share of decisions, and a list of removals still to do
+needs: add an access line with person, system and decision | tick when reviewed | progress of reviewed lines | breakdown by decision | list of removals still to do
+---
+app "Access review" key ink
+table acc who text, sys text, call pick Keep|Remove|Unsure = Unsure "Decision", reviewed bool, removed bool
+topbar "Access review", acc, "Add access"
+goal count(acc where reviewed = yes), count(acc), "access lines reviewed"
+section "Decisions"
+  share acc by call, count(it), it.key
+section "Removals to do", count(acc where call = Remove and removed = no)
+  each acc where call = Remove and removed = no as a empty "No removals waiting."
+    row gap 2
+      a.who "from" a.sys bold grow
+      button "Removed" tap set a.removed = yes
+each acc where reviewed = no sort sys as a empty "Every line has been reviewed."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.reviewed
+    stack grow gap 0
+      a.who bold
+      a.sys "·" a.call faint
+===
+@rich domain=d3_hardware_loans topic=device_loan_register style=multi_feature
+we lend test phones and laptops around the team and they never come back. register: the item, who has it, the date it went out. a Returned button, red when out more than 14 days, and a count of what is still out
+needs: lend an item with who and date | returned button | red when out over 14 days | count still out | list of all items out sorted by oldest
+---
+app "Loans" phone pink
+table loan item text, who text, out date = today "Taken on", back bool
+topbar "Device loans", loan, "Lend item"
+statcard count(loan where back = no), "items still out and" count(loan where back = no and today - out > 14) "over 14 days"
+each loan where back = no sort out as l empty "Everything is back on the shelf."
+  row card gap 2 tap edit l swipe remove l fill if(today - l.out > 14, bad, soft)
+    stack grow gap 0
+      l.item bold
+      l.who "· since" l.out "(" today - l.out "days)" faint
+    button "Returned" tap set l.back = yes
+===
+@rich domain=d3_change_requests topic=change_request_log style=detailed
+change request log for our releases: title, risk low medium or high, planned date, and status draft, approved, done or rolled back. show counts per status, flag high risk changes planned in the next 7 days, and buttons to approve or complete
+needs: add a change with title, risk, date and status | count per status | flag high risk changes in the next 7 days | approve and complete buttons | list sorted by planned date
+---
+app "Changes" list teal
+table cr title text, risk pick Low|Medium|High = Medium, planned date = today, status pick Draft|Approved|Done|Rolled_back = Draft
+topbar "Change requests", cr, "Add change"
+grid 4 gap 1
+  each options cr.status as s
+    stack radius 10 pad 1 gap 0 align center fill soft
+      count(cr where status = s) big
+      s tiny faint
+if count(cr where risk = High and status != Done and planned >= today and planned <= today + 7) > 0
+  count(cr where risk = High and status != Done and planned >= today and planned <= today + 7) "high risk changes in the next 7 days" bold color bad
+each cr sort planned as c empty "No changes yet. Log the next thing you plan to ship."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.title bold
+      c.planned "·" c.risk "·" c.status faint color if(c.risk = High and c.status != Done, bad, muted)
+    if c.status = Draft
+      button "Approve" tap set c.status = Approved
+    if c.status = Approved
+      button "Done" tap set c.status = Done
+===
+@rich domain=d3_dr_drills topic=disaster_recovery_drills style=custom_ui
+disaster recovery drills: name of the drill, target recovery time in minutes and the time it really took. pass when actual is within target. bars to compare target and actual for each drill and a count of passes
+needs: log a drill with name, target minutes and actual minutes | pass or fail per drill | bars comparing target and actual | count of passed drills
+---
+app "DR drills" shield yellow
+table drill name text, target num 1.. unit "min", actual num 1.. unit "min"
+topbar "DR drills", drill, "Log drill"
+statcard count(drill where actual <= target), "of" count(drill) "drills met their target", count(drill)
+each drill sort at desc as d empty "No drills yet. Run one and write down how long recovery took."
+  stack card gap 1 tap edit d swipe remove d
+    row gap 1
+      d.name bold grow
+      if(d.actual <= d.target, "Passed", "Missed") bold color if(d.actual <= d.target, good, bad)
+    draw 100, 10
+      rect 0, 0, 100 * d.target / max(d.target, d.actual), 4 fill muted radius 2
+      rect 0, 6, 100 * d.actual / max(d.target, d.actual), 4 fill if(d.actual <= d.target, good, bad) radius 2
+    "Target" d.target "min · took" d.actual "min" faint
+===
+@rich domain=d3_ci_minutes_budget topic=ci_minutes_budget_projection style=multi_feature
+we have a plan with a fixed number of CI minutes a month. log builds by repo with minutes used, and tell me how much of the plan is gone, which repo burns the most, and where we end up by the end of the month at this pace
+needs: log a build with repo and minutes | set the plan minutes | progress of minutes used this month | projection for end of month | minutes by repo
+---
+app "CI minutes" timer orange
+table build repo text, mins num 1..600
+setting plan num = 3000 "Plan minutes per month"
+let used = sum(build.mins month)
+let pace = round(used * monthdays(today) / monthday(today))
+topbar "CI minutes", build, "Log build"
+goal used, plan, if(used > plan, "minutes over the plan", "minutes used this month")
+"At this pace you end the month on" pace "minutes" bold color if(pace > plan, bad, good)
+section "Minutes by repo", "this month"
+  share build month by repo, sum(it.mins), it.key
+daybars last 7 days, sum(build.mins on it)
+===
+@rich domain=d3_monitoring_daily_checks topic=daily_monitoring_checks_tabs style=custom_ui
+every morning I check the same dashboards: error rate, queue depth, payments, cron jobs. let me list them, tick each off for today, and have a second tab with a grid of the last 5 weeks to see which days I skipped
+needs: add a check to the daily list | tick a check done today | tab with history grid of the last 5 weeks | all clear message when everything is ticked | streak of days with everything checked
+---
+app "Daily checks" eye mint
+table chk name text
+table seen chk ref chk
+let all_ok = count(chk) > 0 and count(chk, count(it.seen today) > 0) = count(chk)
+screen tod "Today" check
+  topbar "Daily checks", chk, "Add check"
+  if all_ok
+    "All clear. Everything has been looked at today." head color good
+  else
+    count(chk, count(it.seen today) = 0) "checks left today" head
+  each chk sort name as c empty "No checks yet. Add the dashboards you look at every morning."
+    row card gap 2 tap edit c swipe remove c
+      toggle c.seen
+      c.name bold grow
+screen hist "History" calendar
+  section "Last 5 weeks", "darker means more checks done"
+    daygrid last 35 days, count(seen on it), max(count(chk), 1)
+  "Checks ticked this week:" count(seen week) faint
+===
+@rich domain=d3_saas_seats topic=saas_seat_waste style=detailed
+we pay for SaaS seats nobody uses. list each tool with seats bought, seats actually used and price per seat per month. show the money wasted on empty seats, rank the worst tools, and a total
+needs: add a tool with seats bought, seats used and price | wasted money per tool | total waste per month | bar chart of waste by tool | worst tools first
+---
+app "Seat waste" users red
+table tool name text, seats num 1.., used num 0.., price money
+let waste(t tool) = max(t.seats - t.used, 0) * t.price
+topbar "SaaS seats", tool, "Add tool"
+statcard sum(tool, max(it.seats - it.used, 0) * it.price), "wasted per month on empty seats"
+section "Waste by tool", "per month"
+  bars tool sort max(it.seats - it.used, 0) * it.price desc top 6, max(it.seats - it.used, 0) * it.price, it.name
+each tool sort max(seats - used, 0) * price desc as t empty "No tools yet. Add each subscription with its seat counts."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.used "of" t.seats "seats in use" faint
+    waste(t) bold color if(waste(t) > 0, warn, good)
+===
+@rich domain=d3_maintenance_calendar topic=maintenance_window_calendar style=custom_ui
+shared month calendar of our planned maintenance windows. arrows to change month, days with a window are coloured, tap the list under it to edit. add a window with title, date and hours of downtime, and show the total downtime planned this month
+needs: add a maintenance window with title, date and downtime hours | month calendar with coloured days | arrows to change month | total planned downtime in the month
+---
+app "Maintenance" calendar slate dark
+table maint title text, day date = today, hours num 1..24 = 2 "Downtime (hours)"
+state m date = today
+topbar "Maintenance windows", maint, "Add window"
+monthnav m
+statcard sum(maint.hours where month(day) = month(m) and year(day) = year(m)), "hours of downtime planned in" monthname(m)
+grid 7 gap 1
+  each ["M", "T", "W", "T", "F", "S", "S"] as w
+    text w tiny color muted align center
+  each 1..weekday(m - monthday(m) + 1) - 1 as n
+    box
+  each days month of m as d
+    box height 32 radius 6 fill if(count(maint where day = d) > 0, accent, soft)
+      text monthday(d) small align center color if(count(maint where day = d) > 0, bg, ink)
+each maint where month(day) = month(m) and year(day) = year(m) sort day as w empty "No windows this month. Add one when you plan a downtime."
+  row card gap 2 tap edit w swipe remove w
+    w.day bold
+    w.title grow
+    w.hours "h" faint
+===
+@rich domain=d3_customer_escalations topic=customer_escalation_board style=multi_feature
+customer escalations that reached engineering: customer, the issue, the level L1 L2 or L3, an owner and the day it opened. a button to raise the level, a close button, age in days, and the oldest open one highlighted
+needs: add an escalation with customer, issue, level and owner | raise level button | close button | age in days | oldest open highlighted
+---
+app "Escalations" flag ocean
+table esc customer text, issue long, lvl pick L1|L2|L3 = L2 "Level", owner text?, opened date = today, closed bool
+topbar "Escalations", esc, "Add escalation"
+statcard count(esc where closed = no), "open escalations. Oldest is" max(esc, if(it.closed, 0, today - it.opened)) "days old"
+each esc where closed = no sort opened as e empty "No open escalations. Quiet is good."
+  stack card gap 1 tap edit e swipe remove e fill if(today - e.opened = max(esc, if(it.closed, 0, today - it.opened)), warn, surface)
+    row gap 1
+      e.customer bold grow
+      e.lvl bold
+    e.issue faint
+    e.owner "· open" plural(today - e.opened, "day") faint
+    row gap 1
+      if e.lvl != L3
+        button "Raise" tap set e.lvl = L3
+      button "Close" tap set e.closed = yes
+===
+@rich domain=d3_kb_article_requests topic=knowledge_base_article_requests style=short
+people ask for help articles we don't have. list the topics wanted, a button when someone asks again, status wanted writing published
+needs: add a topic wanted | button to count another ask | status wanted, writing or published | ranked by number of asks
+---
+app "Help articles" book yellow
+table topic title text, status pick Wanted|Writing|Published = Wanted
+table ask topic ref topic
+topbar "Help articles", topic, "Add topic"
+count(topic where status = Published) "of" count(topic) "articles published" head
+each topic where status != Published sort count(it.ask) desc as t empty "No topics waiting. Add one when a customer asks twice."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.title bold
+      count(t.ask) "asks ·" t.status faint
+    button "Asked again" tap add ask topic = t
+===
+@rich domain=d3_oss_issue_triage topic=open_source_issue_triage style=detailed
+I maintain a small open source library. let me list the issues I need to triage: number, title, label (bug, feature, question, docs), priority and a triaged tick. filter by label, show how many urgent ones are untriaged, and a bar per label
+needs: add an issue with number, title, label and priority | filter by label | triaged tick | count urgent untriaged | bar per label
+---
+app "Issue triage" tag ink
+table issue num text "Number", title text, label pick Bug|Feature|Question|Docs = Bug, prio pick Low|Normal|Urgent = Normal, triaged bool
+state l pick All|Bug|Feature|Question|Docs = All
+topbar "Issue triage", issue, "Add issue"
+statcard count(issue where triaged = no), "to triage and" count(issue where triaged = no and prio = Urgent) "urgent"
+section "Open by label"
+  share issue where triaged = no by label, count(it), it.key
+choice l
+each issue where triaged = no and (l = All or label = l) sort prio desc as i empty "Nothing to triage here. Add an issue or switch the label."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.triaged
+    stack grow gap 0
+      "#" i.num i.title bold
+      i.label "·" i.prio faint color if(i.prio = Urgent, bad, muted)
+===
+@rich domain=d3_oss_release_prep topic=open_source_release_prep style=custom_ui
+getting ready for v2.0 of our package. tasks by kind (code, docs, packaging, announce) with ticks, a progress bar for each kind, the version number I can edit, and the release date with days left
+needs: add a task with kind | tick tasks done | progress bar per kind | edit the version number | release date with days left
+---
+app "Release prep" package blue
+table todo name text, kind pick Code|Docs|Packaging|Announce = Code, done bool
+setting ver text = "2.0.0" "Version"
+setting due date = today "Release date"
+topbar "Release prep", todo, "Add task"
+join("v", ver) huge
+text due - today "days to go on" due faint
+each options todo.kind as k
+  stack card gap 1
+    row gap 1
+      k bold grow
+      count(todo where kind = k and done = yes) "of" count(todo where kind = k) faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * count(todo where kind = k and done = yes) / max(count(todo where kind = k), 1), 4 fill accent radius 2
+    each todo where kind = k sort done as t
+      row gap 2 tap edit t swipe remove t
+        toggle t.done
+        t.name grow
+===
+@rich domain=d3_oss_shoutouts topic=contributor_shoutouts_log style=multi_feature
+I want to thank contributors every release. log a shout-out with their handle, what they did (code, docs, review, triage, design) and show how many thanks each person got this year, plus a ready thank you line for each
+needs: log a shout-out with handle and what they did | thanks per contributor this year | thank you line for each shout-out | breakdown by kind of help | count of contributors
+---
+app "Shout-outs" heart pink
+table thanks who text "GitHub handle", what text, kind pick Code|Docs|Review|Triage|Design = Code
+topbar "Contributor shout-outs", thanks, "Add shout-out"
+statcard count(thanks by who, yes), "contributors thanked in" plural(count(thanks year), "shout-out")
+section "Thanks per person", "this year"
+  share thanks year by who, count(it), it.key
+section "Kinds of help"
+  share thanks by kind, count(it), it.key
+each thanks sort at desc top 10 as t empty "No shout-outs yet. Thank the first person who helped."
+  stack card gap 0 swipe remove t tap edit t
+    "Thanks @" t.who "for" t.what bold
+    t.kind faint
+===
+@rich domain=d3_good_first_issues topic=good_first_issue_board style=detailed
+a board of good first issues for newcomers: title, area (docs, tests, core, ui), and status open, claimed or done. a person types their name and taps Claim. show open ones first and how many are still unclaimed
+needs: add an issue with title and area | type a name and tap Claim | status open, claimed or done | open ones listed first | count of unclaimed issues
+---
+app "First issues" smile green
+table gfi title text, area pick Docs|Tests|Core|UI = Docs, who text?, status pick Open|Claimed|Done = Open
+state me text = ""
+topbar "Good first issues", gfi, "Add issue"
+statcard count(gfi where status = Open), "unclaimed of" count(gfi)
+field me "Your name"
+each gfi sort status as g empty "No issues yet. Add something small and well explained."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.title bold
+      g.area "·" g.status g.who faint
+    if g.status = Open and len(me) > 0
+      button "Claim" tap set g.who = me then set g.status = Claimed
+    if g.status = Claimed
+      button "Done" tap set g.status = Done
+===
+@rich domain=d3_oss_sponsors topic=sponsor_donations_monthly style=custom_ui
+sponsor donations for my open source project: sponsor name, amount, and I set a monthly goal. bar chart of the last 6 months of donations, the goal reached this month, and a thank you list of the latest sponsors
+needs: add a sponsor with name and amount | set the monthly goal | bar chart of the last 6 months | progress against goal this month | list of latest sponsors
+---
+app "Sponsors" coin yellow
+table gift who text, amount money
+setting goal money = 200 "Monthly goal"
+topbar "Sponsors", gift, "Add donation"
+goal sum(gift.amount month), goal, "received this month"
+section "Last 6 months"
+  plot 0..6, 0..max(goal, max(sum(gift.amount month), 1)) axes
+    line 0, goal, 6, goal stroke ink thick 1
+    each 0..5 as n
+      rect n + 0.15, 0, 0.7, sum(gift.amount month of addmonths(today, n - 5)) fill accent radius 2
+      tick n + 0.5, month(addmonths(today, n - 5))
+list gift top 8, "No donations yet. Thank the first sponsor here."
+===
+@rich domain=d3_docs_gaps topic=documentation_gap_tracker style=multi_feature
+people keep saying our docs are missing things. track the gaps: page name, kind (missing, outdated, unclear, typo), and a button I tap each time somebody reports it again. search, sort by most reported and a tick when fixed
+needs: add a gap with page and kind | tap to count another report | search | most reported first | tick fixed
+---
+app "Docs gaps" book teal dark
+table gap page text, kind pick Missing|Outdated|Unclear|Typo = Unclear, reports num 1.. = 1, fixed bool
+state q text = ""
+topbar "Docs gaps", gap, "Add gap"
+count(gap where fixed = no) "gaps open," sum(gap.reports where fixed = no) "reports in total" head
+field q "Search pages"
+each gap where fixed = no and (has(page, q) or has(kind, q)) sort reports desc as g empty "No gaps match. Add the page people complain about."
+  row card gap 2 tap edit g swipe remove g
+    toggle g.fixed
+    stack grow gap 0
+      g.page bold
+      g.kind "·" g.reports "reports" faint
+    button "+1" tap set g.reports = g.reports + 1
+===
+@rich domain=d3_translation_progress topic=translation_progress_languages style=detailed
+translations for our open source app: each language with the number of strings in total and how many are translated. buttons to add 10 strings at a time, a bar per language sorted by percent done, and overall completion
+needs: add a language with total strings and translated strings | buttons to add 10 translated strings | bar per language sorted by percent | overall completion | list of languages fully done
+---
+app "Translations" map plum
+table lang name text, total num 1.., done num 0.. = 0 "Translated"
+let pct(l lang) = round(l.done * 100 / max(l.total, 1))
+topbar "Translations", lang, "Add language"
+statcard round(sum(lang.done) * 100 / max(sum(lang.total), 1)), "% of all strings translated", 100
+each lang sort round(it.done * 100 / max(it.total, 1)) desc as l empty "No languages yet. Add the first one with its string count."
+  stack card gap 1 swipe remove l tap edit l
+    row gap 1
+      l.name bold grow
+      pct(l) "%" bold
+    draw 100, 5
+      rect 0, 0, 100, 5 fill soft radius 2
+      rect 0, 0, 100 * clamp(l.done / l.total, 0, 1), 5 fill if(pct(l) >= 100, good, accent) radius 2
+    button "+10 strings" tap set l.done = min(l.done + 10, l.total)
+"Fully translated:" count(lang where done >= total) faint
+===
+@rich domain=d3_cve_advisories topic=security_advisory_tracker style=custom_ui
+security advisories for our dependencies: CVE id, package, severity low medium high critical, the date it was reported, status open or patched. highlight open ones older than 30 days, filter by severity and show open counts per severity
+needs: add an advisory with CVE id, package, severity and date | status open or patched | highlight open ones older than 30 days | filter by severity | open count per severity
+---
+app "Advisories" shield red dark
+table cve code text "CVE", pkg text, sev pick Low|Medium|High|Critical = Medium, reported date = today, status pick Open|Patched|Wontfix = Open
+state s pick All|Low|Medium|High|Critical = All
+topbar "Advisories", cve, "Add advisory"
+grid 4 gap 1
+  each options cve.sev as v
+    stack radius 10 pad 1 gap 0 align center fill if(v = Critical, bad, soft)
+      count(cve where sev = v and status = Open) big
+      v tiny faint
+choice s
+each cve where status = Open and (s = All or sev = s) sort reported as c empty "No open advisories here. Keep dependencies updated."
+  row card gap 2 tap edit c swipe remove c fill if(today - c.reported > 30, warn, soft)
+    stack grow gap 0
+      c.code c.pkg bold
+      c.sev "· open" plural(today - c.reported, "day") faint
+    button "Patched" tap set c.status = Patched

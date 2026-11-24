@@ -1,0 +1,518 @@
+@rich domain=r6_school_fees topic=school fees per child style=detailed
+three kids in three schools and the fee dates are all over the place. add each child, then each term fee with amount and due date, tick when paid, show what is overdue and how much each child still owes. remind me three days before
+needs: add a child | add a fee with term, amount and due date | tick when paid | total unpaid and overdue count | reminder three days before the due date
+---
+app "School fees" school blue
+table kid name text
+table fee kid ref kid, term text, amount money, due date, paid bool
+remind "A school fee is due soon" at fee.due - 3d at 9:00
+topbar "School fees", fee, "Add fee"
+statcard sum(fee.amount where paid = no), "unpaid," count(fee where paid = no and due < today) "overdue"
+each kid sort name as k empty "No children yet. Add a name below, then the first fee."
+  stack card gap 1
+    row gap 2
+      text k.name head grow
+      sum(k.fee.amount where paid = no) "still due" faint
+    each k.fee sort due as f
+      row gap 2 tap edit f swipe remove f
+        toggle f.paid
+        stack grow gap 0
+          f.term bold
+          f.due faint color if(f.paid = no and f.due < today, bad, muted)
+        f.amount
+form kid, "Add child"
+===
+@rich domain=r6_term_supplies topic=term start school supplies style=multi_feature
+start of term shopping: notebooks, uniforms, shoes, geometry box for both kids. item, which child, quantity and estimated price. tick when bought, show planned total against my budget and how much each child costs
+needs: add a supply with child, quantity and price | tick when bought | term budget setting | planned total against the budget | cost per child
+---
+app "Term supplies" pencil yellow
+table supply item text, kid pick Ali|Sara|Both = Both, qty num 1..50 = 1, price money, got bool
+setting budget money = 12000 "Term budget"
+let planned = sum(supply, it.qty * it.price)
+topbar "Term supplies", supply, "Add item"
+goal planned, budget, if(planned > budget, "over the budget", "planned so far")
+section "Cost per child"
+  share supply by kid, sum(it, it.qty * it.price), it.key
+each supply sort got as s empty "No items yet. Start with notebooks and shoes."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.got
+    stack grow gap 0
+      s.item bold
+      s.kid "· x" s.qty faint
+    s.qty * s.price
+===
+@rich domain=r6_kids_activities topic=after school activities by day style=custom_ui
+swimming, tuition, football, art class: each kid has something almost every afternoon. add the activity with child, weekday, time and monthly fee. chips for the day so i can see who needs a ride when, starting on today, and the total monthly fees
+needs: add an activity with child, weekday, time and fee | chips to pick a weekday | activities of the chosen day by time | total monthly fees | count of activities each child has
+---
+app "Activities" ball green
+table activity what text, kid pick Ali|Sara = Ali, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, at_time time, fee money?
+state d pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon
+topbar "Activities", activity, "Add activity"
+row gap 2
+  statcard sum(activity.fee), "in monthly fees"
+  statcard count(activity), "activities a week"
+choice d
+section "Plans for" d, "activities:" count(activity where day = d)
+  each activity where day = d sort at_time as a empty "Nothing on this day. Free afternoon."
+    row gap 2 tap edit a swipe remove a
+      a.at_time bold
+      stack grow gap 0
+        a.what bold
+        a.kid faint
+      a.fee faint
+row gap 1
+  each options activity.kid as k
+    stack grow card gap 0 align center
+      count(activity where kid = k) big
+      text k tiny color muted
+===
+@rich domain=r6_tuition_payments topic=home tutor fees by month style=multi_feature
+two home tutors and one academy. each has a monthly fee. tick paid for this month, show how much tuition is still unpaid this month and how many tutors i paid in each of the last six months
+needs: add a tutor with subject and monthly fee | tick paid for this month | tuition still unpaid this month | tutors paid per month chart | list of tutors
+---
+app "Tuition" pencil ocean
+table tutor name text, subject text, fee money
+table paid tutor ref tutor
+topbar "Tuition", tutor, "Add tutor"
+statcard sum(tutor, it.fee * if(count(it.paid month) > 0, 0, 1)), "tuition still unpaid this month"
+each tutor sort name as t empty "No tutors yet. Add the first with the monthly fee."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.paid month
+    stack grow gap 0
+      t.name bold
+      t.subject faint
+    t.fee
+section "Tutors paid", "last 6 months"
+  bars 0..5, count(paid month of addmonths(today, it - 5)), month(addmonths(today, it - 5))
+===
+@rich domain=r6_house_help_pay topic=domestic helper attendance and salary style=detailed
+our house help comes every day except when she does not. mark present, half day or absent for today, show the month as coloured boxes, note advances she took, and work out what to pay her this month after cuts for absent days
+needs: buttons for present, half day and absent | month grid coloured by status | add an advance with amount and note | salary setting | pay due this month after cuts and advances
+---
+app "House help" user pink
+table visit status pick Present|Absent|Half = Present
+table advance amount money, note text?
+setting salary money = 15000 "Monthly pay"
+let rate = salary / 26
+let cut = rate * count(visit month where status = Absent) + rate / 2 * count(visit month where status = Half)
+topbar "House help", advance, "Add advance"
+statcard round(salary - cut - sum(advance.amount month)), "to pay this month", salary
+row gap 1
+  each options visit.status as s
+    button s grow fill accent tap add visit status = s
+section "This month", "absent days:" count(visit month where status = Absent)
+  grid 7 gap 1
+    each days month as d
+      box height 28 radius 6 fill if(count(visit on d where status = Absent) > 0, bad, if(count(visit on d where status = Half) > 0, warn, if(count(visit on d) > 0, good, soft))) tap toggle visit on d where status = Absent
+        text monthday(d) tiny align center
+list advance top 5, "No advances this month."
+===
+@rich domain=r6_milk_delivery topic=milkman delivery calendar style=multi_feature
+the milkman never agrees with my count. calendar of the month where i tap the days he came, 1 litre by default and one tap buttons for one and a half or two litres, the price per litre, and the bill for the month so far
+needs: month calendar to tap delivery days | one-tap buttons for litres | price per litre setting | milk bill so far this month | days he missed this month
+---
+app "Milkman" milk mint
+table milk litres num 0.25..10 = 1 unit "L"
+setting rate money = 220 "Price per litre"
+statcard sum(milk.litres month) * rate, "milk bill this month"
+row gap 2
+  statcard sum(milk.litres month), "litres this month"
+  statcard monthday(today) - count(days month, count(milk on it) > 0), "days he did not come"
+quick milk, litres, [1, 1.5, 2]
+section "Deliveries", monthname(today)
+  calendar milk
+daybars last 7 days, sum(milk.litres on it)
+===
+@rich domain=r6_water_cans topic=water can delivery and balance style=custom_ui
+filtered water cans come in the morning and the guy takes the empties. i tap when one is delivered and when one empty goes back, enter what i paid him, and see cans with us, and how much i owe at the price per can
+needs: tap delivered and tap empty returned | cans still with us | price per can setting | amount owed after payments | add a payment
+---
+app "Water cans" drop blue
+table can kind pick Delivered|Returned = Delivered, qty num 1..20 = 1
+table pay amount money
+setting price money = 150 "Price per can"
+let got = sum(can.qty where kind = Delivered)
+topbar "Water cans", pay, "Pay him"
+row gap 2
+  statcard got - sum(can.qty where kind = Returned), "cans with us"
+  statcard got * price - sum(pay.amount), "we owe"
+row gap 1
+  button "Can delivered" grow fill accent tap add can kind = Delivered
+  button "Empty returned" grow tap add can kind = Returned
+section "Delivered per day", "last 7 days"
+  daybars last 7 days, sum(can.qty on it where kind = Delivered)
+list pay top 5, "No payments yet."
+===
+@rich domain=r6_gas_cylinder topic=gas cylinder refill rhythm style=short
+how long does a gas cylinder last in our kitchen
+needs: log a refill with price | average days one cylinder lasts | days since last refill | estimated days left | price trend
+---
+app "Gas cylinder" fire orange
+table refill cost money, kg num 5..50 = 11.8 unit "kg"
+topbar "Gas cylinder", refill, "Log refill"
+statcard round(gap(refill)), "days a cylinder lasts on average"
+statcard since(refill), "days since the last refill"
+"About" max(round(gap(refill)) - since(refill), 0) "days left" head color if(round(gap(refill)) - since(refill) < 5, warn, ink)
+section "Price per refill"
+  trend refill sort at, it.cost
+===
+@rich domain=r6_power_cuts topic=load shedding outage hours style=detailed
+we lose power for hours every day and i want proof for the complaint. log how long each cut lasted with the cause, show total hours this week, the worst day in the last month and a grid of the last four weeks where darker means more hours without power
+needs: log a cut with length and cause | total hours without power this week | worst day in the last month | grid of last 28 days darker for more hours | list of recent cuts
+---
+app "Power cuts" bolt grey dark
+table cut lasted dur, cause pick Load_shedding|Fault|Planned|Storm = Load_shedding
+topbar "Power cuts", cut, "Log a cut"
+row gap 2
+  statcard round(sum(cut.lasted week) / 6m) / 10, "hours without power this week"
+  statcard round(max(days last 28 days, sum(cut.lasted on it)) / 6m) / 10, "hours on the worst day"
+section "Last 4 weeks", "darker is longer"
+  daygrid last 28 days, sum(cut.lasted on it) / 1h, 8
+list cut top 8, "No cuts logged. Good news, or you forgot."
+===
+@rich domain=r6_plant_watering topic=house plants watering days style=multi_feature
+fourteen plants on the balcony and roof and i water them all or none. each plant has how often it needs water, a tap when watered, and a list of which ones are thirsty today versus fine for now with days until the next watering
+needs: add a plant with spot and watering interval | tap watered | thirsty today list | days until next watering for the rest | count of thirsty plants
+---
+app "Plants" plant green
+table plant name text, spot pick Balcony|Living|Kitchen|Roof = Living, every num 1..30 = 4 unit "days"
+table water plant ref plant
+topbar "Plants", plant, "Add plant"
+statcard count(plant, due(it.water, it.every)), "plants are thirsty of" count(plant), count(plant)
+section "Thirsty today"
+  each plant sort name as p
+    if due(p.water, p.every)
+      row gap 2 tap edit p
+        stack grow gap 0
+          p.name bold
+          p.spot faint
+        button "Watered" fill accent tap add water plant = p
+section "Fine for now"
+  each plant sort name as p empty "No plants yet. Add the first one."
+    if not due(p.water, p.every)
+      row gap 2 tap edit p swipe remove p
+        p.name grow
+        "in" p.every - since(p.water) "days" faint
+===
+@rich domain=r6_kitchen_garden topic=kitchen garden sowing and harvest style=multi_feature
+small vegetable patch behind the house. write what i sowed and when, how many days it takes, and the app tells me when it is ready. log each harvest in kg and show which crop gave the most
+needs: add a crop with sowing date and days to harvest | days until each crop is ready | log a harvest in kg | harvest per crop comparison | total harvested this month
+---
+app "Kitchen garden" leaf green
+table crop name text, sown date = today, days num 10..200 = 60 unit "days"
+table harvest crop ref crop, kg num 0.1..50 = 0.5 unit "kg"
+topbar "Kitchen garden", crop, "Sow a crop"
+statcard sum(harvest.kg month), "kg harvested this month"
+each crop sort sown + days as c empty "Nothing sown yet. Add the first crop."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      if c.sown + c.days <= today
+        "Ready to pick" faint color good
+      else
+        "Ready in" c.sown + c.days - today "days" faint
+    sum(c.harvest.kg) "kg" faint
+    button "+0.5 kg" tap add harvest crop = c, kg = 0.5
+section "Harvest by crop"
+  share harvest by crop.name, sum(it.kg), it.key
+===
+@rich domain=r6_bc_committee topic=monthly committee bc turns style=detailed
+we run a family bc committee. everyone puts in the same amount each month and one member takes the whole pot, in turn. list members with their turn number, tick who paid this month, show the pot, and tell me whose turn it is this month
+needs: add a member with turn number | monthly instalment setting | tick who paid this month | pot size and how many paid | whose turn it is this month
+---
+app "Committee" users purple
+table member name text, turn num 1..40
+table pay member ref member
+setting monthly money = 5000 "Monthly instalment"
+setting round_no num = 1 "This month is turn no."
+let winner = nth(member where turn = round_no, 1).name
+topbar "Committee", member, "Add member"
+row gap 2
+  statcard monthly * count(member), "pot this month"
+  statcard count(member, count(it.pay month) > 0), "paid of" count(member), count(member)
+section "This month's turn"
+  winner head
+each member sort turn as m empty "No members yet. Add each person with a turn number."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.pay month
+    stack grow gap 0
+      m.name bold
+      "turn" m.turn faint
+    if m.turn = round_no
+      "takes the pot" color good
+===
+@rich domain=r6_doctor_visits topic=family doctor visits and follow ups style=multi_feature
+who saw which doctor and when is the follow up. visits for dad, mum, the kids and nani with doctor, reason, cost and a follow up date. remind me the day before, show upcoming follow ups first, and how much each person cost us in medical bills this year
+needs: add a visit with person, doctor, reason and cost | follow up date with a reminder the day before | upcoming follow ups list | medical cost per person this year | total spent this year
+---
+app "Doctor visits" heart teal
+table visit who pick Dad|Mum|Sara|Ali|Nani = Dad, doctor text, reason text, cost money, follow date?
+remind "Doctor follow up tomorrow" at visit.follow - 1d at 9:00
+topbar "Doctor visits", visit, "Add visit"
+statcard sum(visit.cost year), "spent on doctors this year"
+section "Follow ups coming"
+  each visit where follow >= today sort follow as v empty "No follow ups booked."
+    row gap 2 tap edit v
+      stack grow gap 0
+        v.who v.doctor bold
+        v.reason faint
+      v.follow bold
+section "Cost per person", "this year"
+  share visit year by who, sum(it.cost), it.key
+list visit top 6, "No visits yet."
+===
+@rich domain=r6_baby_vaccine_card topic=infant vaccination schedule style=detailed
+card for our baby's vaccines. each has a name, where it will be given and the date it is due. tick it when given. show the next one coming with days left, anything overdue in red, and remind two days before each due date
+needs: add a vaccine with place and due date | tick when given | next vaccine and days left | overdue vaccines in red | reminder two days before
+---
+app "Vaccine card" shield mint
+table vacc name text, place pick Clinic|Hospital|Home_visit = Clinic, due date, done bool
+remind "Baby vaccine due soon" at vacc.due - 2d at 9:00
+let next = nth(vacc where done = no and due >= today sort due, 1).due
+topbar "Vaccine card", vacc, "Add vaccine"
+row gap 2
+  statcard next - today, "days to the next vaccine"
+  statcard count(vacc where done = no and due < today), "overdue"
+each vacc sort due as v empty "No vaccines yet. Add the first from the card."
+  row card gap 2 tap edit v swipe remove v
+    toggle v.done
+    stack grow gap 0
+      v.name bold
+      v.place "·" v.due faint color if(v.done = no and v.due < today, bad, muted)
+===
+@rich domain=r6_fever_log topic=child fever and dose log style=custom_ui
+my daughter has a fever tonight and the doctor said paracetamol only every six hours. log temperature with whether i gave paracetamol or ibuprofen, show how long since the last paracetamol, go red when the temperature is 38 or above, and a line of the last three days
+needs: log a temperature with medicine given | time since last paracetamol | warning when 6 hours not passed | red when 38 or above | temperature line for 3 days
+---
+app "Fever log" heart red
+table temp c num 35..42 unit "C", dose pick None|Paracetamol|Ibuprofen = None
+let since_dose = now - last(temp.at where dose = Paracetamol)
+topbar "Fever log", temp, "Log temperature"
+row card gap 3 align center
+  stack grow gap 0
+    last(temp.c) "C" huge color if(last(temp.c) >= 38, bad, good)
+    "latest reading" faint
+  stack gap 0 align end
+    since_dose bold
+    "since paracetamol" faint
+if since_dose / 1h < 6
+  "Less than 6 hours since the last paracetamol. Wait." bold color warn
+section "Last 3 days"
+  trend temp last 3 days sort at, it.c
+list temp top 6, "No readings yet."
+===
+@rich domain=r6_kick_counter topic=pregnancy kick counter style=custom_ui
+doctor asked me to count baby's kicks every day. one big round button to tap at each kick, today's count against 10, a notice when i reach ten, and bars for the last week
+needs: big round tap button for each kick | today's count against ten | notice when ten kicks are counted | bars for last 7 days | time of the first and last kick today
+---
+app "Kick counter" heart pink
+table kick
+let n = count(kick today)
+draw 100, 100 width 220 tap add kick
+  circle 50, 50, 46 fill accent
+  circle 50, 50, 38 fill surface
+  label 50, 44, n huge
+  label 50, 66, "kicks today" tiny
+statcard n, "of 10 kicks counted", 10
+if n > 0
+  "First" first(kick.at today) "· last" last(kick.at today) faint
+when n >= 10 notify "Ten kicks counted today"
+section "Last 7 days"
+  daybars last 7 days, count(kick on it)
+button "Undo last kick" tap remove last(kick today)
+===
+@rich domain=r6_baby_solids topic=baby first foods and reactions style=multi_feature
+introducing solids to my 7 month old one new food at a time. write the food, how she reacted, none or rash or vomit or gas, and whether she liked it. i want the number of foods tried, anything with a reaction shown on its own and a quick split by reaction
+needs: add a food with reaction and liked flag | number of foods tried | foods with a reaction listed separately | split by reaction | foods tried this week
+---
+app "First foods" apple orange
+table food name text, reaction pick None|Rash|Vomit|Gas|Dislike = None, liked bool
+topbar "First foods", food, "Add food"
+row gap 2
+  statcard count(food), "foods tried"
+  statcard count(food week), "new this week"
+section "Watch list", "foods with a reaction"
+  each food where reaction != None sort at desc as f empty "No reactions so far. Keep going slowly."
+    row gap 2 tap edit f swipe remove f
+      f.name bold grow
+      f.reaction color bad
+section "By reaction"
+  share food by reaction, count(it), it.key
+list food where reaction = None, "Nothing here yet."
+===
+@rich domain=r6_first_words topic=toddler first words style=short
+writing down my son's first words before i forget them
+needs: add a word with language and date | number of words so far | words per month | language split | list grouped by month
+---
+app "First words" smile yellow
+table word text text, lang pick English|Urdu|Punjabi|Pashto|Other = Urdu, said date = today
+topbar "First words", word, "Add word"
+statcard count(word), "words so far", 50
+section "Per month"
+  bars word by month, count(it), it.key
+section "Languages"
+  share word by lang, count(it), it.key
+each word by month as g empty "No words yet. The first one is coming."
+  text g.key bold
+  each g as w
+    row gap 2 tap edit w swipe remove w
+      w.text grow
+      w.said faint
+===
+@rich domain=r6_school_events topic=school events and permission slips style=detailed
+school sends so many notices. i add the event with its date, whether it needs a permission slip, whether i signed it, and any money to send. show the ones this week, unsigned slips in red, and remind me the evening before
+needs: add an event with date, slip needed and signed flags and money | events this week list | unsigned slips in red | reminder the evening before | count of slips still unsigned
+---
+app "School events" school purple
+table event what text, held date, slip bool, signed bool, money money?
+remind "A school event is tomorrow" at event.held - 1d at 18:00
+let unsigned = count(event where slip = yes and signed = no and held >= today)
+topbar "School events", event, "Add event"
+statcard unsigned, "slips still to sign"
+section "Next 7 days"
+  each event where held >= today and held < today + 7 sort held as e empty "Nothing at school this week."
+    row gap 2 tap edit e
+      stack grow gap 0
+        e.what bold
+        e.held faint
+      if e.slip
+        toggle e.signed
+      e.money faint
+each event where held >= today + 7 sort held as e
+  row card gap 2 tap edit e swipe remove e
+    e.what grow
+    e.held faint color if(e.slip and e.signed = no, bad, muted)
+===
+@rich domain=r6_movie_night topic=family movie night picks style=custom_ui
+friday is movie night. a wish list where each of us adds films, a line showing what is next, and after watching we give it stars. average rating at the top and who picked what
+needs: add a film with who picked it | what is next to watch | give stars to a watched film | average rating | films watched count
+---
+app "Movie night" star purple dark
+table film name text, picker pick Ali|Sara|Dad|Mum = Dad, stars num 0..5 = 0, watched bool
+let next = nth(film where watched = no sort at, 1).name
+topbar "Movie night", film, "Add film"
+row gap 2
+  statcard count(film where watched = yes), "films watched"
+  statcard round(avg(film.stars where watched = yes and stars > 0) * 10) / 10, "average stars"
+section "Up next"
+  next head
+each film where watched = no sort at as f empty "The wish list is empty. Add a film."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      f.picker faint
+    button "Watched" tap set f.watched = yes
+section "Rate what we watched"
+  each film where watched = yes sort at desc as f empty "No film watched yet."
+    row gap 1
+      text f.name grow
+      each 1..5 as n
+        button n fill if(f.stars >= n, warn, soft) tap set f.stars = n
+===
+@rich domain=r6_weekend_outings topic=weekend outing ideas style=multi_feature
+weekend ideas for the family: park, mall, relatives, food street or a trip. each with an estimated cost. chips by type, a surprise me button that picks something not done yet, and a tick once we have gone
+needs: add an idea with place, type and cost | chips filter by type | surprise me button | tick once done | total cost of ideas not done
+---
+app "Weekend plans" map teal
+table idea place text, kind pick Park|Mall|Relatives|Food|Trip = Park, cost money, done bool
+state f pick All|Park|Mall|Relatives|Food|Trip = All
+state chosen text = ""
+topbar "Weekend plans", idea, "Add idea"
+statcard sum(idea.cost where done = no), "to spend on the ideas still open"
+button "Surprise me" fill accent tap set chosen = random(idea where done = no).place
+if chosen != ""
+  stack card gap 0
+    text "This weekend" faint
+    text chosen huge
+choice f
+each idea where (f = All or kind = f) and done = no sort kind as i empty "No ideas here. Add somewhere you want to go."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.done
+    stack grow gap 0
+      i.place bold
+      i.kind faint
+    i.cost
+===
+@rich domain=r6_chore_pie topic=chore share pie chart style=custom_ui
+three cousins sharing my house this month and chores are uneven. tap a name every time somebody finishes a chore and show a pie chart of who did how much this week, with the counts next to it
+needs: tap a name when a chore is finished | pie chart of chores this week | count next to each name | total chores this week | list of latest chores
+---
+app "Chore pie" chart green
+table did who pick Ali|Sara|Zain, task text?
+let a = count(did week where who = Ali)
+let b = count(did week where who = Sara)
+let c = count(did week where who = Zain)
+let t = a + b + c
+row gap 1
+  each options did.who as w
+    button w grow fill accent tap add did who = w
+row gap 3 align center
+  draw 100, 100 width 150
+    circle 50, 50, 38 stroke soft thick 18
+    arc 50, 50, 38, 0, 360 * a / max(t, 1) stroke accent thick 18
+    arc 50, 50, 38, 360 * a / max(t, 1), 360 * (a + b) / max(t, 1) stroke warn thick 18
+    arc 50, 50, 38, 360 * (a + b) / max(t, 1), 360 * t / max(t, 1) stroke good thick 18
+    label 50, 50, t huge
+  stack grow gap 1
+    "Ali" a bold color accent
+    "Sara" b bold color warn
+    "Zain" c bold color good
+list did top 6, "No chores yet this week."
+===
+@rich domain=r6_eidi_collection topic=eidi money per child style=detailed
+after eid the kids come home with envelopes. note who gave how much to which child, show what each child collected, who the biggest givers were this year, and what half of the total would be if we move it into their savings
+needs: add eidi with child, giver and amount | total collected for each child | biggest givers this year | half of the total for savings | list of envelopes
+---
+app "Eidi" gift yellow
+table eidi child pick Ali|Sara|Zain = Ali, giver text, amount money
+topbar "Eidi", eidi, "Add envelope"
+row gap 2
+  each options eidi.child as c
+    stack grow card gap 0 align center
+      sum(eidi.amount year where child = c) big
+      text c faint
+statcard sum(eidi.amount year) / 2, "to move into savings (half of" sum(eidi.amount year) ")"
+section "Biggest givers"
+  share eidi year by giver, sum(it.amount), it.key
+list eidi top 10, "No eidi yet. Add the first envelope."
+===
+@rich domain=r6_family_loans topic=money lent and borrowed with relatives style=detailed
+money goes between me, my brothers and cousins and nobody remembers. person, amount, lent or borrowed, a promised return date, and a tick when it came back. net amount at the top, overdue ones in red
+needs: add a loan with person, amount, lent or borrowed and return date | tick when returned | net amount people owe me | overdue in red | list grouped by person
+---
+app "Family loans" money slate
+table loan person text, amount money, kind pick Lent|Borrowed = Lent, due date?, returned bool
+let net = sum(loan.amount where kind = Lent and returned = no) - sum(loan.amount where kind = Borrowed and returned = no)
+topbar "Family loans", loan, "Add loan"
+statcard net, if(net >= 0, "owed to me net", "I owe net")
+"Overdue:" count(loan where returned = no and due < today) head color if(count(loan where returned = no and due < today) > 0, bad, ink)
+each loan where returned = no by person as g empty "Nothing is out. All settled."
+  stack card gap 1
+    row
+      text g.key head grow
+      sum(g.amount) faint
+    each g as l
+      row gap 2 tap edit l swipe remove l
+        toggle l.returned
+        stack grow gap 0
+          l.kind l.amount bold
+          l.due faint color if(l.due < today, bad, muted)
+===
+@rich domain=r6_door_heights topic=kids heights on the door style=custom_ui
+we pencil the kids' heights on the door frame on birthdays and then lose track. add each child, add a height in cm with the date, show how tall they are now, how much they grew since the first mark and a little line of growth for each
+needs: add a child | add a height in cm | current height for each child | growth since the first mark | growth line for each child
+---
+app "Door marks" tree pink
+table kid name text
+table height kid ref kid, cm num 40..210 unit "cm"
+topbar "Door marks", height, "Add height"
+each kid sort name as k empty "No children yet. Add a name below."
+  stack card gap 1
+    row gap 2 align center
+      text k.name head grow
+      last(k.height.cm) "cm" big
+    "Grown" last(k.height.cm) - first(k.height.cm) "cm since the first mark" faint
+    trend k.height sort at, it.cm
+form kid, "Add child"

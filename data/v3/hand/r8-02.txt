@@ -1,0 +1,535 @@
+@rich domain=r8_mosque_donations topic=mosque_donation_register style=detailed
+I look after the mosque donation box books. each donation needs the donor name, amount and what it is for (building, zakat, sadaqah, iftar), then I want to see how much of the building fund target we reached, the split by purpose this month and a chart of the last 7 days
+needs: add a donation with donor, amount and purpose | building fund progress against target | split by purpose this month | bar chart of the last 7 days | donations grouped by day
+---
+app "Mosque Fund" mosque green
+table donation donor text, amount money, purpose pick Building|Zakat|Sadaqah|Iftar|Other = Building
+setting target money = 2000000 "Building fund target"
+topbar "Donations", donation, "Add donation"
+statcard sum(donation.amount where purpose = Building), "raised of" target, target
+section "By purpose", monthname(today)
+  share options donation.purpose, sum(donation.amount month where purpose = it), it
+section "Last 7 days"
+  daybars last 7 days, sum(donation.amount on it)
+list donation by day, "No donations yet. Add the first one."
+===
+@rich domain=r8_jumma_rota topic=friday_khutbah_rota style=multi_feature
+need a rota for who gives the Friday khutbah and on what topic. tell me how many days to the next one, mark each as done after it is given, and remind me the evening before
+needs: add a Friday with speaker and topic | days until the next khutbah | mark a khutbah as done | reminder the evening before | list of delivered khutbahs
+---
+app "Jumma Rota" mosque ink
+table slot friday date, speaker text, topic text?, done bool
+let next = min(slot, if(it.friday >= today and it.done = no, it.friday - today, 999))
+remind "Khutbah is tomorrow" at slot.friday - 1d at 18:00
+topbar "Khutbah rota", slot, "Add Friday"
+statcard next, "days to the next khutbah"
+each slot where done = no sort friday as s empty "No Fridays planned. Add the next speaker."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.speaker bold
+      s.friday s.topic faint
+    button "Done" tap set s.done = yes
+section "Delivered", count(slot where done = yes)
+  each slot where done = yes sort friday desc top 5 as s empty "Nothing delivered yet."
+    row gap 2
+      s.friday faint
+      s.speaker grow
+===
+@rich domain=r8_church_giving topic=church_tithe_register style=detailed
+church treasurer here. members list, then each gift with member, amount and kind (tithe, offering, building fund). show what we received this month against the monthly goal, a split by kind, and each member's total for the year
+needs: add a member | record a gift with member, amount and kind | monthly giving against goal | split by kind this month | each member's total this year
+---
+app "Church Giving" heart plum
+table member name text
+table gift member ref member, amount money, kind pick Tithe|Offering|Building = Tithe
+setting goal money = 150000 "Monthly goal"
+topbar "Record gift", gift, "Record gift"
+goal sum(gift.amount month), goal, "received this month"
+section "By kind", monthname(today)
+  share options gift.kind, sum(gift.amount month where kind = it), it
+section "Members", "this year"
+  each member sort name as m empty "No members yet. Add them below."
+    row gap 2
+      m.name grow
+      sum(m.gift.amount year) bold
+form member, "Add member"
+===
+@rich domain=r8_festival_spend topic=temple_festival_budget style=custom_ui
+Diwali mela committee. teams are food, decor, stage, lights and prasad. every expense goes under a team. show total spend against the budget and a bar for each team so we see who is overspending. tapping a team should show only its expenses
+needs: add an expense with team, item and amount | total spend against budget | bar per team | tap a team to filter expenses | remove an expense
+---
+app "Festival Budget" star orange
+table spend team pick Food|Decor|Stage|Lights|Prasad = Food, item text, amount money
+setting budget money = 400000 "Total budget"
+state pick text = ""
+topbar "Mela spending", spend, "Add expense"
+goal sum(spend.amount), budget, if(sum(spend.amount) > budget, "over budget", "spent so far")
+section "Tap a team to filter"
+  each options spend.team as t
+    stack tap set pick = if(pick = t, "", t)
+      row
+        t grow bold color if(pick = t, accent, ink)
+        sum(spend.amount where team = t) bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * sum(spend.amount where team = t) / max(sum(spend.amount), 1), 3 fill accent radius 1
+each spend where pick = "" or team = pick as s empty "No expenses yet."
+  row card gap 2 tap edit s swipe remove s
+    s.item grow
+    s.team faint
+    s.amount bold
+===
+@rich domain=r8_eid_packs topic=eid_pack_distribution style=multi_feature
+our group sends Eid food packs to needy families in 3 areas. add each family with area and pack size, tick when delivered, show how many are delivered out of the total, and how much money we collected for it
+needs: add a family with area and pack size | tick a family as delivered | delivered out of total | add a collection amount | total collected
+---
+app "Eid Packs" gift mint
+table family name text, area pick North|Central|South = North, pack pick Small|Large = Small, sent bool
+table fund donor text, amount money
+topbar "Families", family, "Add family"
+row gap 2
+  statcard count(family where sent = yes), "of" count(family) "packs delivered", count(family)
+  statcard sum(fund.amount), "collected"
+each options family.area as a
+  section a, "delivered" count(family where area = a and sent = yes) "of" count(family where area = a)
+    each family where area = a sort name as f empty "No family in this area yet."
+      row gap 2 tap edit f swipe remove f
+        toggle f.sent
+        f.name grow
+        f.pack faint
+form fund, "Add collection"
+===
+@rich domain=r8_ngo_volunteers topic=ngo_volunteer_hours style=detailed
+NGO coordinator: keep the volunteers, and after each shift log who worked, the hours and the activity (teaching, cleanup, food, admin). I need a leaderboard of hours this month and the total hours given by the whole team
+needs: add a volunteer | log a shift with volunteer, hours and activity | leaderboard of hours this month | total team hours | hours split by activity
+---
+app "Volunteers" heart teal
+table person name text
+table shift person ref person, hours num 0.5..12 = 2 unit "h", activity pick Teaching|Cleanup|Food|Admin = Teaching
+topbar "Log shift", shift, "Log shift"
+row gap 2
+  statcard sum(shift.hours), "hours given in all"
+  statcard sum(shift.hours month), "hours this month"
+section "Leaderboard", monthname(today)
+  share person sort sum(it.shift.hours month) desc top 5, sum(it.shift.hours month), it.name
+section "By activity"
+  share options shift.activity, sum(shift.hours where activity = it), it
+form person, "Add volunteer"
+===
+@rich domain=r8_society_maintenance topic=flat_maintenance_fees style=multi_feature
+society secretary. I need to see which flats paid this month's maintenance fee and which are pending. add flats with owner name, mark payment on a tap, show how much collected and how much pending, and keep a list of pending flats on top
+needs: add a flat with owner | tap to record this month's payment | collected and pending amount | pending flats on top | monthly fee setting
+---
+app "Society Fees" home slate
+table flat door text, owner text
+table fee flat ref flat, amount money
+setting monthly money = 3000 "Monthly fee"
+let paidn = count(flat, count(it.fee month) > 0)
+topbar "Flats", flat, "Add flat"
+row gap 2
+  statcard sum(fee.amount month), "collected this month"
+  statcard (count(flat) - paidn) * monthly, "pending"
+goal paidn, max(count(flat), 1), "flats paid"
+section "Flats this month", "tap a pending flat to mark it paid"
+  each flat sort door as f empty "No flats yet. Add the first one."
+    if count(f.fee month) = 0
+      row gap 2 tap add fee flat = f, amount = monthly
+        f.door bold
+        f.owner grow
+        "Pending" color bad
+    else
+      row gap 2
+        f.door bold faint
+        f.owner grow faint
+        sum(f.fee.amount month) "paid" color good
+===
+@rich domain=r8_complaints_board topic=neighbourhood_complaints_board style=custom_ui
+our street committee gets complaints about water, streetlights, garbage and roads. log each with the block, status open, in progress or fixed, filter by status, and show how many days old each open complaint is
+needs: add a complaint with category and block | status chips on each complaint | filter by status | days old for open complaints | count of open complaints
+---
+app "Complaints" bell red
+table issue title text, kind pick Water|Lights|Garbage|Roads = Water, block pick A|B|C|D = A, status pick Open|In_progress|Fixed = Open
+state show text = ""
+topbar "Street issues", issue, "Add complaint"
+statcard count(issue where status != Fixed), "complaints still open"
+row gap 1
+  button "All" fill if(show = "", accent, soft) tap set show = ""
+  each options issue.status
+    button it fill if(show = it, accent, soft) tap set show = it
+each issue where show = "" or status = show sort at as i empty "No complaints yet. Add the first one."
+  stack card gap 1 tap edit i swipe remove i
+    row
+      i.title bold grow
+      if i.status != Fixed
+        plural(today - i.at, "day") "old" faint color bad
+    i.kind "· block" i.block faint
+    row gap 1
+      each options issue.status
+        button it fill if(i.status = it, accent, soft) tap set i.status = it
+===
+@rich domain=r8_fundraising_drive topic=fundraising_pledges_drive style=detailed
+we are raising money for a school roof. record each pledge with the donor, the pledged amount and the part received so far, show total pledged against target, total received and how many days remain to the deadline
+needs: add a pledge with donor, pledged and received | total pledged against target | total received | days left to deadline | amount still to collect from pledges
+---
+app "Roof Fund" heart pink
+table pledge donor text, pledged money, received money = 0
+setting target money = 1000000 "Fundraising target"
+setting deadline date = 2026-12-31 "Deadline"
+topbar "Pledges", pledge, "Add pledge"
+statcard sum(pledge.pledged), "pledged of" target, target
+row gap 2
+  statcard sum(pledge.received), "received"
+  statcard deadline - today, "days left"
+"Still to collect from donors" sum(pledge.pledged) - sum(pledge.received) bold
+each pledge sort pledged desc as p empty "No pledges yet. Add the first donor."
+  row card gap 2 tap edit p swipe remove p
+    p.donor bold grow
+    stack gap 0 align end
+      p.received "of" p.pledged
+      if p.received >= p.pledged
+        "complete" faint color good
+      else
+        "due" p.pledged - p.received faint color warn
+===
+@rich domain=r8_ration_monthly topic=monthly_ration_visits style=multi_feature
+every month we give a ration bag to widow families. a list of families, a tick next to each that got their bag this month, how many are still waiting, and the number of bags we gave in the last 6 months
+needs: add a family | tick a family as served this month | families still waiting | bags given per day chart | families sorted by name
+---
+app "Ration Bags" bag yellow
+table family name text, members num 1..20 = 3
+table bag family ref family
+topbar "Families", family, "Add family"
+row gap 2
+  statcard count(family, count(it.bag month) > 0), "served this month"
+  statcard count(family, count(it.bag month) = 0), "still waiting"
+section "Bags given", "last 7 days"
+  daybars last 7 days, count(bag on it)
+each family sort name as f empty "No families yet. Add the first family."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.bag month
+    stack grow gap 0
+      f.name bold
+      f.members "people" faint
+===
+@rich domain=r8_blood_donors topic=blood_donor_register style=custom_ui
+local blood donor group. save each donor with blood group and phone, log donation dates, and show who is eligible again after 90 days. I want to filter by blood group when a patient needs O negative at night
+needs: add a donor with blood group and phone | log a donation for a donor | shows who is eligible again after 90 days | filter donors by blood group | days since last donation
+---
+app "Blood Donors" drop red dark
+table donor name text, phone text, grp pick A_pos|A_neg|B_pos|B_neg|O_pos|O_neg|AB_pos|AB_neg = O_pos
+table gave donor ref donor
+state g text = ""
+topbar "Donors", donor, "Add donor"
+statcard count(donor, due(it.gave, 90)), "donors can give now", count(donor)
+scroll
+  button "All" fill if(g = "", accent, soft) tap set g = ""
+  each options donor.grp
+    button it fill if(g = it, accent, soft) tap set g = it
+each donor where g = "" or grp = g sort name as d empty "No donors for this group yet."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.grp d.phone faint
+      since(d.gave) "days since last gift" faint
+    if due(d.gave, 90)
+      button "Gave today" tap add gave donor = d
+    else
+      "Wait" faint color warn
+===
+@rich domain=r8_qurbani_shares topic=qurbani_cow_shares style=detailed
+we organise group qurbani. each cow has 7 shares. add the animals with price, then add each person who takes a share and tick when they paid their share. show how many shares are still open per cow and how much money is collected
+needs: add an animal with price | add a person to an animal's shares | tick a share as paid | open shares per animal out of 7 | total money collected
+---
+app "Qurbani Shares" paw green
+table cow tag text, price money
+table share cow ref cow, person text, paid bool
+topbar "Animals", cow, "Add animal"
+statcard sum(share, if(it.paid, it.cow.price / 7, 0)), "collected from shares"
+each cow sort tag as c empty "No animals yet. Add the first cow."
+  stack card gap 1
+    row
+      c.tag bold grow tap edit c
+      7 - count(c.share) "shares open" faint
+    each c.share as s
+      row gap 2 swipe remove s
+        toggle s.paid
+        s.person grow
+        round(c.price / 7) faint
+form share, "Add a share holder"
+===
+@rich domain=r8_office_roster topic=weekly_office_duty_roster style=custom_ui
+small office of 6 people. I need a weekly duty roster: tap a person's name chip, then tap a day and shift cell to put them on duty, tap again to clear it. show Monday to Friday with morning and evening cells and a count of shifts each person has
+needs: pick a person with chips | grid of days with morning and evening cells | tap a cell to assign the picked person | tap an assigned cell to clear it | shifts per person
+---
+app "Office Roster" calendar slate
+table duty who text, day pick Mon|Tue|Wed|Thu|Fri, shift pick Morning|Evening
+state pick pick Asad|Bina|Chand|Dania|Eman|Farhan = Asad
+choice pick
+each options duty.day as d
+  row gap 1
+    d bold width 40
+    each options duty.shift as sh
+      if count(duty where day = d and shift = sh) > 0
+        box grow radius 6 pad 1 fill accent tap remove last(duty where day = d and shift = sh)
+          last(duty.who where day = d and shift = sh) small color white
+      else
+        box grow radius 6 pad 1 fill soft tap add duty who = pick, day = d, shift = sh
+          sh tiny
+section "Shifts this week"
+  each options pick as p
+    row gap 2
+      p grow
+      count(duty where who = p) faint
+===
+@rich domain=r8_leave_tracker topic=staff_leave_balance style=detailed
+HR for a 10 person shop. each employee has 21 days a year. add the employees, record each leave with the days and type (annual, sick, casual), and show for every person the days used and days left, with anyone who used up their leave in red
+needs: add an employee | record a leave with days and type | days used and days left per employee | person with no days left in red | total leave days taken
+---
+app "Leave Tracker" calendar blue
+table staff name text
+table leave staff ref staff, days num 0.5..30 = 1, kind pick Annual|Sick|Casual = Annual
+setting allowance num = 21 "Days per year"
+topbar "Record leave", leave, "Add leave"
+statcard sum(leave.days year), "leave days taken this year"
+each staff sort name as s empty "No staff yet. Add the first employee below."
+  stack card gap 1
+    row
+      s.name bold grow
+      allowance - sum(s.leave.days year) "left" bold color if(sum(s.leave.days year) >= allowance, bad, good)
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(sum(s.leave.days year) / allowance, 0, 1), 3 fill accent radius 1
+    sum(s.leave.days year) "of" allowance "days used" faint
+form staff, "Add employee"
+===
+@rich domain=r8_freelance_invoices topic=freelancer_clients_invoices style=multi_feature
+freelance designer here. I want my clients, and for each invoice the amount, the date I sent it and a tick when paid. show what each client still owes me, total outstanding, and put invoices older than 30 days unpaid in red
+needs: add a client | add an invoice with amount and date | tick an invoice as paid | amount each client still owes | unpaid invoices older than 30 days in red
+---
+app "Invoices" money ink
+table client name text
+table invoice client ref client, amount money, sent date = today, paid bool
+topbar "New invoice", invoice, "Add invoice"
+row gap 2
+  statcard sum(invoice.amount where paid = no), "outstanding"
+  statcard sum(invoice.amount month where paid = yes), "paid this month"
+each client sort name as c empty "No clients yet. Add one below."
+  stack card gap 1
+    row
+      c.name bold grow
+      sum(c.invoice.amount where paid = no) bold color if(sum(c.invoice.amount where paid = no) > 0, warn, good)
+    each c.invoice where paid = no sort sent as i
+      row gap 2 tap edit i swipe remove i
+        toggle i.paid
+        i.amount grow
+        i.sent faint color if(today - i.sent > 30, bad, muted)
+form client, "Add client"
+===
+@rich domain=r8_shift_pay topic=shift_hours_and_pay style=detailed
+I work shifts at a petrol pump. enter the start and end time of each shift, I earn 450 an hour, and overtime past 48 hours a week should be paid at 1.5 times. show hours and pay for this week with a chart of hours per day
+needs: add a shift with start and end time | hours worked this week | pay this week with overtime after 48 hours | bar chart of hours per day | hourly rate setting
+---
+app "Shift Pay" clock orange
+table shift start time, finish time
+setting rate money = 450 "Pay per hour"
+let hrs = sum(shift, (it.finish - it.start) / 1h)
+let wk = sum(shift week, (it.finish - it.start) / 1h)
+topbar "Shifts", shift, "Add shift"
+row gap 2
+  statcard round(wk), "hours this week"
+  statcard round(min(wk, 48) * rate + max(wk - 48, 0) * rate * 1.5), "pay this week"
+if wk > 48
+  "Overtime:" round(wk - 48) "hours at 1.5 times" faint color warn
+section "Hours per day"
+  daybars last 7 days, sum(shift on it, (it.finish - it.start) / 1h)
+list shift by day, "No shifts yet. Add your first one."
+===
+@rich domain=r8_job_pipeline topic=job_search_pipeline style=custom_ui
+job hunting as a fresh grad and losing track. every application with company, role, date applied and a stage chip (applied, screening, interview, offer, rejected). show a count per stage and remind me to follow up
+needs: add an application with company, role and date | stage chips on each application | count per stage | follow-up reminder every morning | total applications sent
+---
+app "Job Hunt" bag purple
+table app company text, role text, applied date = today, stage pick Applied|Screening|Interview|Offer|Rejected = Applied
+remind "Follow up on applications waiting more than a week" at 9:00 if count(app where stage = Applied and applied < today - 7) > 0
+topbar "Applications", app, "Add application"
+statcard count(app), "applications sent"
+row gap 1
+  each options app.stage as s
+    stack grow gap 0 align center
+      count(app where stage = s) big
+      s tiny faint
+each app sort applied desc as a empty "No applications yet. Add the first one."
+  stack card gap 1 tap edit a swipe remove a
+    row
+      a.company bold grow
+      a.applied faint
+    a.role faint
+    scroll
+      each options app.stage
+        button it fill if(a.stage = it, accent, soft) tap set a.stage = it
+===
+@rich domain=r8_team_board topic=small_team_task_board style=custom_ui
+team of five developers. a tiny board with three columns: to do, doing and done. add a task with owner, move it right with a button, and show how many tasks each column has plus open tasks per person
+needs: add a task with owner | three columns to do, doing, done | button to move a task along | count per column | open tasks per person
+---
+app "Team Board" grid teal
+table task title text, owner pick Ali|Sana|Umar|Zoya|Hamid = Ali, stage pick Todo|Doing|Done = Todo
+topbar "Board", task, "Add task"
+each options task.stage as st
+  section st, count(task where stage = st)
+    each task where stage = st as t empty "Empty."
+      row gap 2 tap edit t swipe remove t
+        stack grow gap 0
+          t.title bold
+          t.owner faint
+        if t.stage = Todo
+          button "Start" tap set t.stage = Doing
+        if t.stage = Doing
+          button "Done" fill good tap set t.stage = Done
+section "Open per person"
+  share options task.owner, count(task where owner = it and stage != Done), it
+===
+@rich domain=r8_interview_prep topic=interview_preparation_plan style=multi_feature
+interview on Monday for a data analyst job. I need a list of questions I must practise, tick the ones I rehearsed, a timer for answering in 2 minutes, and the days left until the interview
+needs: add a question to practise | tick a question as rehearsed | two minute answer timer | days until the interview | rehearsed out of total
+---
+app "Interview Prep" book grey
+table question text text, topic pick Technical|Behavioural|Company = Technical, ready bool
+setting day date = 2026-12-01 "Interview day"
+topbar "Questions", question, "Add question"
+row gap 2
+  statcard day - today, "days to interview"
+  statcard count(question where ready = yes), "of" count(question) "rehearsed", count(question)
+timer 2m, "Answer in 2 minutes"
+each question sort ready as q empty "No questions yet. Add what they might ask."
+  row card gap 2 tap edit q swipe remove q
+    toggle q.ready
+    stack grow gap 0
+      q.text bold
+      q.topic faint
+===
+@rich domain=r8_conference_agenda topic=conference_my_agenda style=detailed
+going to a 2 day tech conference. add the sessions with title, day, room and start time, tick the ones I want to attend, and show my own agenda sorted by time. warn me when two picked sessions start at the same time on the same day
+needs: add a session with title, day, room and time | tick sessions to attend | my agenda sorted by time | warning for clashes at the same start time | count of picked sessions
+---
+app "Conference" users blue
+table talk title text, day pick Day1|Day2 = Day1, room pick Hall_A|Hall_B|Hall_C = Hall_A, start time, going bool
+let clash = count(talk, it.going and count(talk where going = yes and day = it.day and start = it.start) > 1)
+topbar "Sessions", talk, "Add session"
+statcard count(talk where going = yes), "sessions picked"
+if clash > 0
+  "Clash: two picked sessions start together" bold color bad
+each options talk.day as d
+  section d, "my picks:" count(talk where day = d and going = yes)
+    each talk where day = d sort start as t empty "No sessions yet."
+      row gap 2 tap edit t swipe remove t
+        toggle t.going
+        t.start faint
+        stack grow gap 0
+          t.title bold color if(t.going, accent, ink)
+          t.room faint
+===
+@rich domain=r8_meetup_rsvps topic=community_meetup_rsvps style=multi_feature
+we hold a monthly dev meetup. create each event with date and seats, add people who RSVP, and show seats left for every event with a warning when it is full. who is coming should show under each event
+needs: add an event with date and seats | add an RSVP for an event | seats left per event | full warning | list of people under each event
+---
+app "Meetups" users mint
+table event name text, held date, seats num 1..500 = 40
+table rsvp event ref event, person text
+topbar "Events", event, "Add event"
+each event sort held as e empty "No events yet. Add your first meetup."
+  stack card gap 1 tap edit e swipe remove e
+    row
+      e.name bold grow
+      e.held faint
+    row gap 2
+      e.seats - count(e.rsvp) "seats left of" e.seats faint
+      if count(e.rsvp) >= e.seats
+        "FULL" bold color bad
+    each e.rsvp as r
+      row gap 1 swipe remove r
+        icon user
+        r.person
+form rsvp, "Add RSVP"
+===
+@rich domain=r8_car_pool topic=office_car_pool_costs style=detailed
+four of us share a car to the office and take turns driving. log each day who drove, the fuel cost that day, and show how much each person has paid, what each owes as an equal share, and who should pay whom
+needs: add a ride with driver and fuel cost | total fuel cost | equal share per person | what each person paid so far | balance per person
+---
+app "Car Pool" car yellow
+table mate name text
+table ride driver ref mate, fuel money
+let share = sum(ride.fuel) / max(count(mate), 1)
+topbar "Rides", ride, "Add ride"
+row gap 2
+  statcard sum(ride.fuel), "fuel so far"
+  statcard round(share), "equal share each"
+each mate sort name as m empty "Add the people in your pool below."
+  row card gap 2
+    stack grow gap 0
+      m.name bold
+      "paid" sum(m.ride.fuel) "in" plural(count(m.ride), "ride") faint
+    stack gap 0 align end
+      round(abs(sum(m.ride.fuel) - share)) bold color if(sum(m.ride.fuel) >= share, good, bad)
+      if sum(m.ride.fuel) >= share
+        "to receive" faint
+      else
+        "to pay" faint
+form mate, "Add person"
+===
+@rich domain=r8_cod_deliveries topic=cash_on_delivery_runs style=multi_feature
+I deliver parcels for an online shop on a bike. list each parcel with customer, area and the cash to collect, mark it delivered or returned, and tell me at the end of the day how much cash I should hand over
+needs: add a parcel with customer, area and cash on delivery | mark delivered or returned | cash to hand over today | parcels left to deliver | parcels grouped by area
+---
+app "Deliveries" package orange
+table parcel customer text, area text, cod money, status pick Pending|Delivered|Returned = Pending
+topbar "Parcels", parcel, "Add parcel"
+row gap 2
+  statcard sum(parcel.cod where status = Delivered), "cash to hand over"
+  statcard count(parcel where status = Pending), "parcels left"
+each parcel where status = Pending by area as g empty "All parcels are done. Nice work."
+  section g.key, sum(g.cod)
+    each g as p
+      row gap 1 tap edit p swipe remove p
+        stack grow gap 0
+          p.customer bold
+          p.cod faint
+        button "Delivered" fill good tap set p.status = Delivered
+        button "Return" tap set p.status = Returned
+===
+@rich domain=r8_tour_bookings topic=tour_guide_bookings style=detailed
+I am a tour guide in Hunza. save each group booking with group name, date, number of people, the tour (Attabad, Baltit Fort, Khunjerab) and price per person, a deposit received, and show income this month and what the groups still owe me
+needs: add a booking with group, date, people, tour, price and deposit | income expected this month | balance still owed by groups | upcoming bookings sorted by date | days until each booking
+---
+app "Tour Bookings" map teal
+table trip group text, going date, people num 1..60 = 4, tour pick Attabad|Baltit|Khunjerab = Attabad, price money, deposit money = 0
+let total = sum(trip, it.people * it.price)
+topbar "Bookings", trip, "Add booking"
+row gap 2
+  statcard sum(trip month, it.people * it.price), "income this month"
+  statcard total - sum(trip.deposit), "still owed by groups"
+each trip where going >= today sort going as t empty "No upcoming tours. Add the next booking."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.group bold
+      t.tour "·" plural(t.people, "person") faint
+    stack gap 0 align end
+      t.going bold
+      plural(t.going - today, "day") faint
+===
+@rich domain=r8_van_hire topic=van_hire_bookings style=short
+van hire bookings with fare and advance, show balance due
+needs: add a booking with vehicle, date, route and fare | advance received | balance due per booking | total balance due
+---
+app "Van Hire" bus slate
+table hire route text, vehicle pick Van|Coaster|Bus = Van, going date, fare money, advance money = 0
+topbar "Bookings", hire, "Add booking"
+statcard sum(hire.fare) - sum(hire.advance), "balance due from customers"
+each hire sort going as h empty "No bookings yet. Add the first trip."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.route bold
+      h.vehicle h.going faint
+    stack gap 0 align end
+      h.fare - h.advance bold color if(h.fare > h.advance, bad, good)
+      "advance" h.advance faint
