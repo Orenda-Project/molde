@@ -86,24 +86,24 @@ A shape with `tap` is hit when the tap lands inside its shape (for `arc` with a 
 
 ## Themes
 
-`app.theme` is one of `ocean mint slate ink plum` (tuned themes) or an accent colour `red orange yellow green teal blue purple pink grey`. An accent theme uses the default neutrals and only sets `accent`. Reference shades for `accent`, with text drawn on it white in light mode and `#111318` in dark mode (contrast checked by `tests/spec.test.mjs`, at least 4.5:1):
+`app.theme` is one of `ocean mint slate ink plum` (tuned themes) or an accent colour `red orange yellow green teal blue purple pink grey`. An accent theme uses the default neutrals and only sets `accent`. Shades for `accent` (the five tuned themes are the web renderer's own; the tuned themes also set their own neutrals), with text drawn on it white in light mode and the last column's colour in dark mode (contrast checked by `tests/spec.test.mjs`, at least 4.5:1):
 
-| theme | light accent | dark accent |
-|---|---|---|
-| ocean | #0B6E99 | #7CC8EE |
-| mint | #0F7B5F | #7EDCC0 |
-| slate | #475569 | #B6C2D3 |
-| ink | #1F2937 | #D1D5DB |
-| plum | #7B2D6B | #E6A4D6 |
-| red | #C62828 | #FF8A80 |
-| orange | #B3471B | #FFB074 |
-| yellow | #8A6100 | #FFD54F |
-| green | #2E7D32 | #7FD68A |
-| teal | #00796B | #5FD4C4 |
-| blue | #1E5FD0 | #8AB4FF |
-| purple | #6D3FC9 | #C3A6FF |
-| pink | #C2185B | #FF8FBF |
-| grey | #5F6368 | #BDC1C6 |
+| theme | light accent | dark accent | text on dark accent |
+|---|---|---|---|
+| ocean | #1A5CA8 | #74AFEF | #061829 |
+| mint | #0B6E51 | #5CC6A0 | #062219 |
+| slate | #2E5470 | #8DB8D6 | #0A1823 |
+| ink | #3A3F9A | #A5ABF2 | #12143A |
+| plum | #763A8C | #C99BE0 | #1F0D29 |
+| red | #C62828 | #FF8A80 | #111318 |
+| orange | #B3471B | #FFB074 | #111318 |
+| yellow | #8A6100 | #FFD54F | #111318 |
+| green | #2E7D32 | #7FD68A | #111318 |
+| teal | #00796B | #5FD4C4 | #111318 |
+| blue | #1E5FD0 | #8AB4FF | #111318 |
+| purple | #6D3FC9 | #C3A6FF | #111318 |
+| pink | #C2185B | #FF8FBF | #111318 |
+| grey | #5F6368 | #BDC1C6 | #111318 |
 
 ### What a renderer needs for round 13
 

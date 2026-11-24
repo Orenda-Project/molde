@@ -3,7 +3,7 @@ table habit name text
 table check habit ref habit
 let n = count(habit)
 let done = count(check today)
-topbar "Habits", habit, "Add habit"
+topbar habit, "Add habit"
 statcard done, "of" n "done today", n
 each habit as h empty "No habits yet. Add one small thing you can do even on a busy day."
   stack card gap 2 tap edit h swipe remove h

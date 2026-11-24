@@ -1,7 +1,7 @@
 app "Reading" book plum
 table book title text, author text?, status pick Want|Reading|Done = Want, finished date?
 state tab text = Reading
-topbar "Reading", book, "Add book"
+topbar book, "Add book"
 count(book where status = Done and finished >= addmonths(today, -12)) "books finished in the last year" head
 row gap 1
   each options book.status

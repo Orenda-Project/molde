@@ -1,7 +1,7 @@
 app "Journal" book plum
 table entry mood num 1..5, note long
 state q text = ""
-topbar "Journal", entry, "Write"
+topbar entry, "Write"
 if(count(entry today) > 0, "You wrote today", "Nothing written today yet") head
 streak(entry) "days in a row," count(days last 14 days, count(entry on it) > 0) "of the last 14 days" faint
 section "Mood, last 30 days", "this week" round(avg(entry.mood week) * 10) / 10 "of 5"

@@ -392,7 +392,7 @@ Written in MoldeScript in `lang/std/*.mo`; read those files to see exactly what 
 | `share SOURCE, value, key` | labelled bars comparing items: `share spend month by category, sum(it.amount), it.key` |
 | `list SOURCE [, empty text]` | rows (tap to edit, swipe to remove); the empty text shows when there are none (default "Nothing here yet. Add one to see it here.") |
 | `list SOURCE by day [, empty text]` | the same rows grouped by day, newest day first (the source may not use `sort` or `top`) |
-| `topbar title, TABLE [, button text]` | the app bar: the title and an add button (default "Add") that opens a form for the table below the bar; Save adds the row and closes it |
+| `topbar TABLE [, button text]` | the app bar (beside the app's name): an add button (default "Add") that opens a form for the table below the bar; Save adds the row and closes it |
 | `statcard value [, caption, target]` | a card with a big number and a caption; with a target above 0, a progress ring of value/target beside it |
 | `section title [, note]` | a card with a heading row (title, and a faint note on the right) around its indented lines |
 | `goalbars WINDOW, value, target` | a bar per day with day-name labels and a goal line at the target; bars that reach it are `accent`, others `muted` (`it` = the day) |

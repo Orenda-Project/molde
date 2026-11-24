@@ -3,7 +3,7 @@ table spend what text, amount money, category pick Groceries|Bills|Transport|Eat
 setting budget money = 80000 "Monthly budget"
 state m date = today
 let spent = sum(spend.amount month of m)
-topbar "Budget", spend, "Add spending"
+topbar spend, "Add spending"
 monthnav m
 goal spent, budget, if(spent > budget, "over budget", "spent this month")
 section "By category", monthname(m)

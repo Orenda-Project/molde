@@ -3,7 +3,7 @@ table student name text
 table absent student ref student
 state d date = today
 let away = count(absent on d)
-topbar "Attendance", student, "Add student"
+topbar student, "Add student"
 monthnav d
 statcard count(student) - away, "of" count(student) "present", count(student)
 grid 3 gap 1
