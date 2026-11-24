@@ -11,7 +11,7 @@ The first real renderer for MoldeScript. `lang/eval.mjs` runs a program and hand
 | `icons.mjs` | the 84 MoldeScript icon names (one Lucide icon each; a few names share one) plus runtime chrome, as Lucide line icons (ISC licence) |
 | `demo/` | the demo page: `index.html` (development), `main.mjs`, `demo.css`, `catalog.mjs` (15 programs), `seed.mjs` (deterministic history), `requests.mjs` (scripted chat requests), `programs/` (richer water, habits, budget, workouts and journal programs) |
 | `build.mjs` | writes `dist/molde-demo.html`: one file, all JS, CSS and program sources inlined |
-| `tests/check.mjs` | Playwright machine checks and interaction tests on the built file (208 checks) |
+| `tests/check.mjs` | Playwright machine checks and interaction tests on the built file (218 checks) |
 | `shots/` | every demo program at 412x915, light and dark, app only |
 
 ## Run and build
@@ -62,7 +62,7 @@ None of these names an app, a table or a field; each reads only node types and s
 
 Direction: personal tools on a cheap phone; calm, exact, a little warm. Surfaces stay neutral; colour goes into what the program draws. Spacing on a 4 px scale (`gap`/`pad` 0 to 6 = 0, 8, 12, 16, 24, 32, 48 px), one type scale in rem (14, 16, 18, 22, 32, 44 px at 100%; weights 400 to 600), nested radii (cards 16, controls 10), a visible focus ring, targets of at least 44 px, no text under 14 px, text contrast of at least 4.5:1 in all five themes, light and dark. No gradients, glows, emoji or brown.
 
-## Checks (tests/check.mjs, 208 plus any added since; the last run is in the PR)
+## Checks (tests/check.mjs, 218)
 
 - every program at 360x640, 412x915, 600x960, 800x1280 and 1440x900, light and dark (and with the chat sheet open): no console output or network request, no overflow, targets of at least 44 px, text of at least 14 px, contrast of at least 4.5:1;
 - 200% system text at 360 px (no overflow, no letter-per-line, numbers whole, drawing labels inside their drawings) and 300 px wide;

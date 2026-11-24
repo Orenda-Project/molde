@@ -263,7 +263,7 @@ class Renderer {
     switch (n.t) {
       case 'stack': case 'row': case 'grid': case 'box': case 'scroll': case 'screen': el = h('div'); break;
       case 'text': el = h('p'); break;
-      case 'button': el = h('button', null, { type: 'button' }); break;
+      case 'button': case 'more': el = h('button', null, { type: 'button' }); break;
       case 'icon': el = h('span'); break;
       case 'image': el = h('img', null, { alt: '' }); break;
       case 'space': el = h('div', 'mo-space', { 'aria-hidden': 'true' }); break;
@@ -305,6 +305,7 @@ class Renderer {
         case 'scroll': cls.push('mo-scroll'); break;
         case 'text': cls.push('mo-text'); break;
         case 'button': cls.push('mo-btn'); break;
+        case 'more': cls.push('mo-btn', 'mo-more'); break;
         case 'icon': cls.push('mo-icon'); break;
         case 'image': cls.push('mo-image'); break;
         case 'form': cls.push('mo-stack', 'mo-form'); break;
@@ -380,6 +381,7 @@ class Renderer {
         } else { el.textContent = partsText(n); el.removeAttribute('aria-label'); }
         break;
       }
+      case 'more': el.textContent = `Show ${fin(n.count) ? group(Math.min(n.count, 200)) + ' ' : ''}more`; if (fin(n.count)) el.setAttribute('aria-label', `Show ${Math.min(n.count, 200)} more of ${n.count}`); break;   // the rest of a long list (UITREE round 11)
       case 'icon': el.innerHTML = iconSvg(n.name, null); break;
       case 'image': if (typeof n.src === 'string' && /^data:image\//.test(n.src)) el.src = n.src; else el.removeAttribute('src'); break;
       case 'space': el.style.height = sc(fin(n.size) ? n.size : 2); break;
@@ -1120,7 +1122,7 @@ export const bridge = {
     if (p[1] === 'set') {
       const s = this.settingsList(app).find(x => x.name === p[2]);
       if (!s) return;
-      app.pushUndo();
+      if (app.pushUndo) app.pushUndo();
       let val = coerce(s.type, v);
       if (s.range && typeof val === 'number') { if (val < s.range.lo) val = s.range.lo; if (s.range.hi !== null && val > s.range.hi) val = s.range.hi; }
       app.data.settings[this.S(app, s.name)] = val;
@@ -1133,7 +1135,7 @@ export const bridge = {
       let val = coerce(f.type, v);
       if (val === null && field === 'at') return;
       if (f.range && typeof val === 'number') { if (val < f.range.lo) val = f.range.lo; if (f.range.hi !== null && val > f.range.hi) val = f.range.hi; }
-      app.pushUndo();
+      if (app.pushUndo) app.pushUndo();
       row[field === 'at' ? 'at' : this.F(app, table, field)] = val;
       app.runWhen && app.runWhen();
     }
@@ -1143,8 +1145,9 @@ export const bridge = {
     const { table, id } = sh.target;
     const row = this.rowOf(app, table, id);
     if (!row) return;
-    app.pushUndo();
-    row.deleted = true;
+    // one undo step through the evaluator's own journal (its caches see the change)
+    if (app.step && app.w) app.step(() => app.w(row, 'deleted', true));
+    else { if (app.pushUndo) app.pushUndo(); row.deleted = true; }
     app.log.push({ kind: 'removed', table, id, at: app.clock });
   },
   // "Removed Petrol, Rs 5,740": the row's words first, then its amounts, in the runtime's formats

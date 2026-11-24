@@ -764,6 +764,15 @@ await scenario('form: a refused save says why at the form and marks each needed 
   expect(await page.$('.mo-app input[aria-invalid="true"]'), 'needed field not marked');
 });
 
+await scenario('long lists: 200 items, then a "Show more" button that pages', 'ex=water&view=app', async page => {
+  await page.evaluate(() => window.__molde.mountSource('app "Long" list ocean\neach 1..450\n  text "Item" it\n'));
+  const n0 = await page.$$eval('.mo-screen .mo-text', e => e.length);
+  expect(n0 === 200, `${n0} items before paging`);
+  await page.click('.mo-more');
+  const n1 = await page.$$eval('.mo-screen .mo-text', e => e.length);
+  expect(n1 === 400, `${n1} items after one page`);
+});
+
 // text boxes that overprint each other
 function overlaps() {
   const leaf = [...document.querySelectorAll('.mo-app .mo-text, .mo-app .mo-btn, .mo-app .mo-chip, .mo-app .mo-lbl, .mo-app .mo-plot-x span, .mo-app .mo-plot-y span, .mo-app .mo-title')].filter(e => e.getClientRects().length && e.textContent.trim() && !e.closest('.mo-sr'));
