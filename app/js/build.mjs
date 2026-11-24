@@ -24,6 +24,15 @@ export function readFileSync(p) { if (String(p).endsWith('moldescript.gbnf')) re
     }));
   },
 };
+// The decoder branch (phase-2-decode) predates the newest grammar: `call-stmt` now says `later-arg` for the
+// arguments after the first. The patched copy of linegram.mjs (vendor/, never committed) follows the grammar.
+{
+  const f = join(V, 'decode/linegram.mjs');
+  let t = readFileSync(f, 'utf8');
+  const oldS = `rep('call-stmt', 'ident (sp arg ("," sp arg)*)?', 'callbody');`;
+  const newS = `rep('call-stmt', S.get('call-stmt').includes('later-arg') ? 'ident (sp arg ("," sp later-arg)*)?' : 'ident (sp arg ("," sp arg)*)?', 'callbody');`;
+  if (t.includes(oldS)) { t = t.replace(oldS, newS); writeFileSync(f, t); }
+}
 const r = await build({
   entryPoints: [join(HERE, 'src/entry.mjs')],
   bundle: true, format: 'iife', target: ['chrome80'], platform: 'browser',
