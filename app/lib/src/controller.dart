@@ -43,7 +43,11 @@ class MoldeController extends ChangeNotifier {
   final Map<String, List<ChatMsg>> chats = {};
   bool busy = false;
   bool newAppMode = false;
-  String modelStatus = 'Model not loaded yet';
+  String get modelStatus {
+    final m = llm.model;
+    if (m != null) return 'Model ready: ${m.path.split('/').last} (${(m.sizeBytes / 1048576).round()} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s)';
+    return llm.loadError ?? 'Loading the model…';
+  }
   Map<String, dynamic>? lastStats;
   String? lastStatsRequest;
   String arm = 'E';
@@ -83,7 +87,6 @@ class MoldeController extends ChangeNotifier {
   }
 
   Future<void> loadModel() async {
-    modelStatus = 'Loading the model…';
     notifyListeners();
     String? err;
     try {
@@ -92,7 +95,7 @@ class MoldeController extends ChangeNotifier {
       err = 'The model could not be loaded: $e';
     }
     final m = llm.model;
-    modelStatus = err == null && m != null ? 'Model ready: ${m.path.split('/').last} (${(m.sizeBytes / 1048576).round()} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s)' : err ?? 'No model';
+    if (err == null && m == null) llm.loadError = 'No model';
     notifyListeners();
   }
 

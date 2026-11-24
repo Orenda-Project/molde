@@ -1,6 +1,18 @@
 # Molde app (Android, phase 4)
 
-An offline phone app where a tiny on-device model turns a typed request into a small app that appears at once and keeps its data. Package `com.oyekamal.molde`, app name Molde. No `INTERNET` permission in the release manifest (Flutter adds one to debug builds only, for its tooling; the WebView refuses every address except the bundled page).
+An offline phone app where a tiny on-device model turns a typed request into a small app that appears at once and keeps its data. Package `com.oyekamal.molde`, app name Molde. The release manifest now has the `INTERNET` permission, used only by the model downloader and the catalogue fetch (see Network and privacy). The WebView refuses every address except the bundled page.
+
+## Network and privacy
+
+The only network use is in `lib/src/catalogue.dart` (fetch `models.json` from `huggingface.co/oyekamal/molde-tiny`, falling back to the copy bundled as `assets/models.json`) and `lib/src/downloader.dart` (the model file). Both send a plain GET: no user id, no app names, no program text, no data. Nothing about the user's apps, requests or data is ever sent. The WebView that shows the user's app is locked to the bundled page: navigation to anything but `file:///android_asset/` is refused (`allowNavigation` in `lib/src/web.dart`, tested), and the page's Content-Security-Policy is `default-src 'none'`, so it cannot fetch or load anything from the network either. The text users read is in Settings > Privacy (`kPrivacy` in `lib/src/ui_models.dart`): "Molde works offline. Your apps and everything you enter stay on this phone and are never sent anywhere. The only things this app downloads are the list of available models and the model file you choose, from Hugging Face. Nothing about you, your requests or your data is sent with those downloads. The screen that shows your app is locked to the page inside this app and cannot open other addresses."
+
+## Getting the model (in the app)
+
+First run with no model shows a setup screen: what the model is, its size, that Molde works offline after the download, a Wi-Fi hint on mobile data, the Gemma licence line with the link (as text too), and the buttons Download (recommended) and Other models. "Try the example apps first" skips it (the example apps need no model).
+
+The downloader (pure Dart, `dart:io`, no new heavy dependency; only `crypto` for sha256) keeps running when the app goes to the background or the screen is off because `DownloadService` is a foreground service (type dataSync) with a progress notification and a partial wake lock. It follows redirects by hand so the `Range` header survives every hop, writes to `<name>.gguf.part` and resumes with `Range: bytes=<size>-`, retries with backoff (1, 2, 4, 8, 15, 30 s), supports pause, resume and cancel, checks free space first (size plus 10%) and says so in plain words, verifies the sha256 and deletes the file on a mismatch (nothing is loaded), then renames atomically to `<files>/models/<name>.gguf`. The choice is recorded in `<files>/molde/settings.json`. A model pushed by hand (`adb push`, see below) keeps working and shows as "Added by hand". Settings (gear in the chat sheet header) > Model shows the active model (name, size, source), the catalogue with Download / Use / Delete, and "A newer model is available" when the catalogue recommends another one.
+
+Catalogue format (`models.json`): `version`, `models[]` with `id`, `name`, `file`, `url` (https only), `bytes`, `sha256`, `recommended`, `note`, and `licence`. Entries that are not https or have no valid sha256 are ignored.
 
 ## What is where
 
