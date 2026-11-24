@@ -85,8 +85,8 @@ def heart(logpath, pattern, maxsec, proc):
     return open(logpath).read() if os.path.exists(logpath) else ""
 '''
 if a.session:
-    M1, M2 = map(int, a.session.split(":"))
-    for ci, mins in enumerate((M1, M2)):
+    mins_list = [int(x) for x in a.session.split(":") if int(x) > 0]
+    for ci, mins in enumerate(mins_list):
         nm = "36_train.py" if ci == 0 else "36b_train.py"
         cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
         (d / nm).write_text(HEART + f'''
