@@ -17,6 +17,9 @@ export function programs() {
   const out = [];
   const add = d => { if (existsSync(d)) for (const f of readdirSync(d).filter(f => f.endsWith('.mo')).sort()) out.push(readFileSync(join(d, f), 'utf8')); };
   add(join(LANG, 'examples'));
+  add(join(LANG, 'examples', 'demo15'));
+  add(join(LANG, 'examples', 'lessons'));
+  for (const d of readdirSync(join(LANG, 'examples', 'lesson-edits'))) add(join(LANG, 'examples', 'lesson-edits', d));
   for (const d of readdirSync(join(LANG, 'examples', 'edits'))) add(join(LANG, 'examples', 'edits', d));
   add(join(LANG, 'corpus'));
   return out;

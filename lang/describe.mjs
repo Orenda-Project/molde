@@ -183,7 +183,10 @@ export function action(a) {
 
 function argWords(text) {
   const r = parseArg(text);
-  if (!r) return text;
+  if (!r) { // a text value of several parts: "ml of" goal "today"
+    const t = check('app "x"\ntext ' + text + '\n').ast.body?.[0];
+    return t && t.kind === 'text' ? t.parts.map(p => p.k === 'str' ? p.v : ex(p)).join(' ') : text;
+  }
   if (r.kind === 'expr') return ex(r.ast);
   if (r.kind === 'window') return win(r.ast).trim() || 'all time';
   if (r.kind === 'source') return source(r.ast).replace(/^each /, '');
@@ -253,15 +256,16 @@ export function describe(src) {
   if (p.header.kind === 'ask') return `Question for you: "${p.header.question}" Answers: ${p.header.options.map(o => `"${o}"`).join(', ')}.`;
   const out = [];
   const h = p.header;
-  out.push(`${h.name}${h.theme ? `, in the ${h.theme} colours` : ''}.`);
-  const tables = p.body.filter(s => s.kind === 'table');
+  out.push(`${h.name}${h.theme ? `, in the ${h.theme} colours` : ''}${h.mode ? `, always in ${h.mode} mode` : ''}${h.size ? `, with ${h.size} text` : ''}.`);
+  if (p.body.some(s => s.via === 'lesson')) out.push('Shows a given lesson (its title, sections, questions, terms and objectives, which the app cannot change) and keeps the learner\'s answers, notes and the parts read.');
+  const tables = p.body.filter(s => s.kind === 'table' && s.via !== 'lesson');
   if (tables.length) {
     out.push('Keeps:');
     for (const t of tables) out.push(`- ${t.label ? `"${t.label}"` : nice(t.name)}: ${t.fields.length ? t.fields.map(fieldWords).join('; ') : 'just the time of each entry'}. Every entry also keeps when it was added.`);
   }
   const settings = p.body.filter(s => s.kind === 'setting');
   if (settings.length) out.push(`You can change: ${settings.map(fieldWords).join('; ')}.`);
-  const lets = p.body.filter(s => s.kind === 'let' && !s.params);
+  const lets = p.body.filter(s => s.kind === 'let' && !s.params && s.via !== 'lesson');
   if (lets.length) { out.push('Works out:'); for (const l of lets) out.push(`- ${nice(l.name)} is ${ex(l.e)}.`); }
   const states = p.body.filter(s => s.kind === 'state');
   if (states.length) out.push(`Remembers while you use it: ${states.map(s => `${nice(s.name)}${s.draft ? `, a new ${nice(s.draft)} being filled in` : s.init ? `, starting at ${ex(s.init)}` : ''}`).join('; ')}.`);

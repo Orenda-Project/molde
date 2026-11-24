@@ -14,7 +14,7 @@ const GR = loadGrammar();
 const altNames = r => (GR.map.get(r).items || [GR.map.get(r)]).map(n => n.name);
 // statements other than a component call, and the words that start them
 export const NONCALL = [...altNames('leaf-stmt').filter(n => n !== 'itext-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')]; // and not a text line
-export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
+export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'lesson', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
 import { lex, join, LexError } from './lex.mjs';
 
 export const MAX_DEPTH = 8;
@@ -58,7 +58,7 @@ export function splitLines(src) {
   return { lines: out, errors };
 }
 
-const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum'];
+const THEMES = ['ocean', 'mint', 'slate', 'ink', 'plum', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'grey'];
 const WINDOW_RE = /\b(today|yesterday|week|month|year|prev \w+|last \d+ \w+|on \w+)\)?$/;
 
 // Is the line a valid text line once "text " is put in front? (a line that starts with a bare name)
@@ -251,8 +251,11 @@ const BUILD = {
   'app-stmt': n => {
     const o = { kind: 'app', name: str(child(n, 'string')), icon: child(n, 'ident') ? id(child(n, 'ident')) : null, theme: null };
     if (child(n, 'theme')) o.theme = lits(child(n, 'theme'))[0];
+    o.mode = child(n, 'mode') ? lits(child(n, 'mode'))[0] : null;
+    o.size = child(n, 'size') ? lits(child(n, 'size'))[0] : null;
     return o;
   },
+  'lesson-stmt': () => ({ kind: 'lesson' }),
   'ask-stmt': n => {
     const s = children(n, 'string').map(str);
     return { kind: 'ask', question: s[0], options: s.slice(1) };
@@ -267,7 +270,7 @@ const BUILD = {
   },
   'let-stmt': n => ({ kind: 'let', name: id(child(n, 'ident')), params: children(n, 'param').length ? children(n, 'param').map(paramOf) : null, e: expr(child(n, 'expr')) }),
   'def-stmt': (n, src) => ({ kind: 'def', name: id(child(n, 'ident')), params: children(n, 'param').map(p => ({ ...paramOf(p), dflt: child(p, 'arg') ? src.slice(child(p, 'arg').s, child(p, 'arg').e) : null })) }),
-  'call-stmt': (n, src) => ({ kind: 'call', name: id(child(n, 'ident')), args: children(n, 'arg').map(a => src.slice(a.s, a.e)) }),
+  'call-stmt': (n, src) => ({ kind: 'call', name: id(child(n, 'ident')), args: [...children(n, 'arg'), ...children(n, 'later-arg')].sort((a, b) => a.s - b.s).map(a => src.slice(a.s, a.e)) }),
   'slot-stmt': () => ({ kind: 'slot' }),
   'screen-stmt': n => {
     const ids = children(n, 'ident');
@@ -293,7 +296,7 @@ const BUILD = {
   },
   'every-stmt': n => ({ kind: 'every', every: durSec(child(n, 'dur').v), cond: child(n, 'expr') ? expr(child(n, 'expr')) : null, actions: actions(child(n, 'actions')) }),
   'when-stmt': n => ({ kind: 'when', cond: expr(child(n, 'expr')), actions: actions(child(n, 'actions')) }),
-  'each-stmt': n => ({ kind: 'each', source: source(child(n, 'source')), as: child(n, 'ident') ? id(child(n, 'ident')) : null, empty: child(n, 'string') ? str(child(n, 'string')) : null }),
+  'each-stmt': n => ({ kind: 'each', source: source(child(n, 'source')), as: child(n, 'ident') ? id(child(n, 'ident')) : null, empty: child(n, 'string') ? str(child(n, 'string')) : child(n, 'path') ? path(child(n, 'path')) : null }),
   'plot-stmt': n => { const r = children(n, 'range').map(x => children(x, 'sum-expr').map(expr)); return { kind: 'plot', x: r[0], y: r[1], mods: mods(n) }; },
   'tick-stmt': n => ({ kind: 'tick', axis: lits(n).includes('ytick') ? 'y' : 'x', x: expr(child(n, 'expr')), parts: tparts(child(n, 'tparts')) }),
   'if-stmt': n => ({ kind: 'if', cond: expr(child(n, 'expr')) }),
@@ -393,7 +396,7 @@ function mods(n) {
     if (child(m, 'size')) return { m: 'size', v: lits(child(m, 'size'))[0] }; // tiny, small, large, huge
     const l = lits(m)[0];
     const o = { m: l };
-    if (l === 'alt') o.v = str(child(m, 'string'));
+    if (l === 'alt') { if (child(m, 'string')) o.v = str(child(m, 'string')); else o.e = expr(child(m, 'expr')); } // a text, or a value that holds one (a lesson picture's description)
     else if (l === 'bar') o.v = true;
     else if (l === 'align') o.v = lits(child(m, 'align'))[0];
     else if (['pad', 'gap', 'span'].includes(l)) o.v = +child(m, 'number').v;

@@ -4,8 +4,10 @@
 // After expansion only level-1 statements remain; the checker then checks them.
 // Browser-safe: the std library text comes from sources.gen.mjs (written by gen-gbnf.mjs).
 import { parse, MoError, asTextLine } from './parse.mjs';
+import { parseText } from './engine.mjs';
 import { lex, join as joinToks } from './lex.mjs';
 import { STD_SOURCES } from './sources.gen.mjs';
+import { LESSON_TABLES, CONTENT_TABLES } from './lesson.mjs';
 export const VALUE_KINDS = new Set(['num', 'money', 'text', 'bool', 'date', 'time', 'dur', 'color', 'icon']);
 
 // Re-create a def's body as text lines relative to the def.
@@ -108,7 +110,9 @@ function expandCall(call, defs, errors, stack) {
     if ((p.kind === 'table' || p.kind === 'name') && toks.length === 1 && failedNames.has(toks[0].v)) return null; // its declaring line failed; reported there
     if ((p.kind === 'table' || p.kind === 'name') && !(toks.length === 1 && toks[0].t === 'word')) return err('E_KIND', `"${call.name}" expects a ${p.kind === 'table' ? 'table' : 'name'} for ${p.name}, got "${a}".`, 'pass a single name.');
     if (usedDefault) toks = toks.flatMap(t => (t.t === 'word' && subst.has(t.v)) ? subst.get(t.v) : [t]); // a default may use earlier parameters
-    if (VALUE_KINDS.has(p.kind) && toks.length > 1) toks = [{ t: 'p', v: '(' }, ...toks, { t: 'p', v: ')' }];
+    // a text made of several parts ("of" goal "today") goes in as parts: it fits where the def shows text
+    const parts = p.kind === 'text' && toks.length > 1 && !parseText(joinToks(toks), ['expr']).tree;
+    if (VALUE_KINDS.has(p.kind) && toks.length > 1 && !parts) toks = [{ t: 'p', v: '(' }, ...toks, { t: 'p', v: ')' }];
     subst.set(p.name, toks);
   }
   const n = ++counter;
@@ -197,7 +201,17 @@ export function expandProgram(prog) {
   failedNames = prog.failed || new Map();
   const defs = new Map(stdDefs());
   const errors = [];
+  prog.body = prog.body.flatMap(s => s.kind === 'lesson' ? lessonStmts(s) : [s]); // a top-level lesson line: its tables, as if written there
   prog.body = expandList(prog.body, defs, errors);
   prog.body = expandFormulas(prog.body, new Map(), errors);
   return { defs, errors, renamed };
+}
+
+// the statements a `lesson` line stands for (lesson.mjs), on the lesson line; content tables are read-only
+let lessonCache = null;
+function lessonStmts(st) {
+  lessonCache ||= parse('app "x"\n' + LESSON_TABLES + '\n').body;
+  const out = JSON.parse(JSON.stringify(lessonCache));
+  for (const s of out) { s.line = st.line; s.via = 'lesson'; if (s.kind === 'table' && CONTENT_TABLES.includes(s.name)) s.content = true; }
+  return out;
 }

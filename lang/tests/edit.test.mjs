@@ -682,3 +682,64 @@ test('lockstep fuzz: 150 chains (reload, undo, twin and tick checks)', async () 
   assert.equal(r.violations.length, 0, JSON.stringify(r.violations.slice(0, 2)));
   assert.ok(r.programs >= 30 && r.twinChecks > 50 && r.tickChecks > 50);
 });
+
+// ---- round 12: identity matching on the statements as written ----
+const shownT = a => a.findAll(n => n.t === 'text').map(n => n.text);
+test('round 12 S1: timers keep their instances when swapped, inserted above, deleted or rotated (28-pomodoro)', () => {
+  const src = readFileSync(new URL('../examples/28-pomodoro.mo', import.meta.url), 'utf8');
+  const a = load(src);
+  a.dispatch(a.findAll(n => n.t === 'button' && n.text === 'Start')[1].id, 'tap'); // the Break timer
+  a.tick(60000);
+  const L = src.split('\n'), i = L.findIndex(l => l.startsWith('timer work')), j = L.findIndex(l => l.startsWith('timer 5m'));
+  [L[i], L[j]] = [L[j], L[i]];
+  assert.notEqual(a.applyEdit(L.join('\n')).verdict, 'refused');
+  a.tick(5 * 60000);
+  assert.equal(a.rows('session').length, 0, 'the Break timer ended; Focus never ran, so no session');
+  assert.equal(a.log.filter(l => l.text === 'Take a short break').length, 0);
+  const t = load('app "T"\ntimer 2m, "A"\n'); t.dispatch(t.find(n => n.text === 'Start').id, 'tap'); t.tick(30000);
+  for (const next of ['app "T"\ntimer 9m, "Z"\ntimer 2m, "A"\n', 'app "T"\ntimer 2m, "A"\ntimer 9m, "Z"\n', 'app "T"\ntimer 2m, "A"\n']) { t.applyEdit(next); t.tick(10000); }
+  assert.ok(shownT(t).includes('1:00'), JSON.stringify(shownT(t)));
+});
+
+test('round 12 S1: form drafts follow their form when forms are duplicated, added above or swapped', () => {
+  const P = forms => `app "F"\ntable a x text?\ntable b y text?\n${forms}`;
+  const a = load(P('form a\nform b\n'));
+  const fb = () => a.findAll(n => n.t === 'form').find(f => f.table === 'b');
+  a.dispatch(fb().fields[0].id, 'change', 'typed');
+  for (const f of ['form a\nform a\nform b\n', 'form b\nform a\n', '"Top"\nform b\nform a\n']) { a.applyEdit(P(f)); assert.equal(fb().fields[0].value, 'typed', f); }
+});
+
+test('round 12 S2: each blocks: swapped ones keep their states; sort, where, top and a table rename keep the id', () => {
+  const P = (one, two, t = 's') => `app "E"\ntable ${t} n num\n${one}\n${two}\n`;
+  const A = 'each s\n  state x num = 0\n  "x" x\n  button "x" tap set x = x + 1', B = 'each s\n  state y num = 0\n  "y" y\n  button "y" tap set y = y + 5';
+  const a = load(P(A, B)); a.addRow('s', { n: 1 });
+  a.dispatch(a.find(n => n.text === 'x' && n.t === 'button').id, 'tap'); a.dispatch(a.find(n => n.text === 'y' && n.t === 'button').id, 'tap');
+  const want = s => ['x 1', 'y 5'].every(t => s.includes(t));
+  a.applyEdit(P(B, A)); assert.ok(want(shownT(a)), JSON.stringify(shownT(a)));
+  a.applyEdit(P(B.replace('each s', 'each s sort n desc'), A.replace('each s', 'each s where n > 0 top 5'))); assert.ok(want(shownT(a)), JSON.stringify(shownT(a)));
+  a.applyEdit(P(B.replace('each s', 'each s2 sort n desc'), A.replace('each s', 'each s2 where n > 0 top 5'), 's2 was s')); assert.ok(want(shownT(a)), JSON.stringify(shownT(a)));
+});
+
+test('round 12 S2/S3: a when keeps its id when its condition or action is reworded; a changed condition is re-armed without firing', () => {
+  const P = (cond, act) => `app "W"\ntable t n num\ntable log x num\nbutton "b" tap add t n = 1\nwhen ${cond} ${act}\n"logs" count(log)\n`;
+  const a = load(P('count(t) >= 2', 'add log x = 1'));
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap'); a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  assert.equal(a.rows('log').length, 1);
+  a.applyEdit(P('count(t) >= 2', 'add log x = 2')); a.tick(1000);
+  assert.equal(a.rows('log').length, 1, 'a reworded action keeps the edge and does not fire');
+  a.applyEdit(P('count(t) >= 3', 'add log x = 2')); a.tick(1000);
+  assert.equal(a.rows('log').length, 1, 'the new condition is false now: no firing');
+  a.dispatch(a.find(n => n.t === 'button').id, 'tap');
+  assert.equal(a.rows('log').length, 2, 'it fires when the new condition becomes true');
+  a.applyEdit(P('count(t) >= 3', 'add log x = 2') + 'when count(t) >= 1 add log x = 9\n'); a.tick(1000);
+  assert.equal(a.rows('log').length, 2, 'a new when that is already true does not fire because of the edit');
+});
+
+test('round 12 S2/S5: catch-up settles whens like live; tick rejects non-numbers', () => {
+  const P = 'app "B"\nstate n num = 0\nstate best num = 0\nevery 1s set n = n + 1\nwhen n > best set best = n\n"n" n\n"best" best\n';
+  const a = load(P), b = load(P);
+  a.tick(10000); for (let i = 0; i < 10; i++) b.tick(1000);
+  assert.deepEqual(shownT(a), shownT(b)); assert.deepEqual(shownT(a), ['n 10', 'best 10']);
+  const c = load(a.source, { data: a.snapshot(), now: a.clock + 60000 }); assert.deepEqual(shownT(c), ['n 70', 'best 70']);
+  const k = c.clock; for (const v of [NaN, Infinity, -5, '10', null, {}, 1e20]) assert.equal(c.tick(v), false); assert.equal(c.clock, k);
+});

@@ -29,7 +29,7 @@ Line by line: the app is called Water with the `drop` icon and the `ocean` theme
 ## 2. Program shape
 
 - **One statement per line.** Lines are read top to bottom; what is drawn appears in that order.
-- **Line 1** is `app "Name" [icon] [theme]`, or the program is a single `ask` line (section 13).
+- **Line 1** is `app "Name" [icon] [theme] [dark|light] [small|large|huge]`, or the program is a single `ask` line (section 13).
 - **Indentation** (two spaces per level) puts lines inside a block: `stack`, `row`, `grid`, `box`, `scroll`, `each`, `if`, `else`, `draw`, `poly`, `screen`, `def`, and component calls. Other lines cannot have children. Depth limit: 8.
 - **Declare before use.** A name (table, field, setting, state, let, screen, component) can only be used on a later line. Tables, settings, states, lets and screens share one set of names.
 - **Prefix-valid.** Because of the two rules above, a program cut after any line is still a valid program.
@@ -117,6 +117,18 @@ let NAME(value kind, ...) = formula                 # a formula with values, use
 ```
 
 `TYPE` is any field type, including `pick A|B` (`state view pick Grid|List = Grid`) and `date` (`setting start date = today`). Settings and state persist on the phone. A setting's `= default` only fills it when nothing is stored; a value the user saved always wins. An edit that must change the saved value says so with `set` at the end of the line (`setting target num = 100 set`); the change is listed and undoable. `state` and `let` inside a block belong to that block (inside `each`, one per item). Kinds for `let` values: `num money text bool date time dur`. A `let` with values is filled in where it is used, like writing the formula out: `let win(m text) = count(...)` then `win(X)`.
+
+### 4.3 A lesson
+
+A `lesson` line (top level, usually line 2) gives the app a lesson written elsewhere (LESSON.md): read-only tables `lessoninfo section block question option term objective`, the formula `lesson` (its title, subject, audience, minutes and summary: `lesson.title`), and the learner's tables `answer note seen`, which are stored and kept like any table. Changing the lesson's tables is `E_READONLY`. Without a `lesson` line, `lesson` and these names are ordinary names.
+
+```
+app "Water cycle" drop blue
+lesson
+text lesson.title head
+reader
+quiz "Check yourself"
+```
 
 ## 5. Formulas
 
@@ -268,7 +280,7 @@ each SOURCE [as NAME]
 | `[250, 500, 1000]` | the listed values |
 | `1..9`, `1..n` | whole numbers (at most 1000) |
 
-`each SOURCE ... empty "No entries yet"` shows that text when there are no items.
+`each SOURCE ... empty "No entries yet"` shows that text when there are no items. The empty text may also be a name that holds text (a `text` parameter of a component, a state or a let): `each src as r empty none`.
 
 Inside the block, `it` is the item and `index` its position from 0. **`as NAME` names the item and leaves `it` alone**, so an inner `each` (or a chart's own loop) can still reach the outer item: `each habit as h` then `daybars last 7 days, count(h.check on it)`.
 
@@ -297,16 +309,26 @@ else
 | `card` | a raised surface |
 | `ratio N`, `middle`, `full` | keep width / height at N (`ratio 1` makes square cells); centre the block in the free space; take the full screen height |
 | `tap ACTION`, `swipe ACTION` | what a tap or a sideways swipe does |
-| `alt "words"` | what a screen reader says for this line (a drawing, an icon, a chart); text lines and buttons already say their text |
+| `alt "words"` or `alt VALUE` | what a screen reader says for this line (a drawing, an icon, a chart, a lesson picture: `image it.pic alt it.title`); text lines and buttons already say their text |
 | `bar` | on a `row`: the app bar (the title and the main action), drawn at the top by the phone |
 
 ### 8.2 Colours
 
 Theme roles `accent ink muted soft good warn bad bg surface edge`; named colours `red orange yellow green teal blue purple pink grey black white`; and `hue(N)` for any hue from 0 to 360. The theme picks the exact shade of every colour for light and dark mode and keeps text readable. A colour can be a formula: `fill if(it.qty <= it.low, warn, soft)`. Raw colour codes are not part of v0.
 
-### 8.3 Themes
+### 8.3 Themes, accent colours and dark mode
 
-`ocean mint slate ink plum`, the third word of `app`. Locale numbers, currency, dates and dark mode come from the runtime.
+The third word of `app` picks the theme: one of the five tuned themes `ocean mint slate ink plum`, or a plain accent colour `red orange yellow green teal blue purple pink grey`. Making an app red is one word on line 1:
+
+```
+app "Water" drop red
+```
+
+An accent theme keeps the neutral roles (`ink muted soft bg surface edge good warn bad`) of the default theme and changes only `accent`. Every theme gives text on `accent` a contrast of at least 4.5:1 in light and in dark mode (shades in UITREE.md, Themes).
+
+A last word `small`, `large` or `huge` sets the text size of the whole app (`app "Lesson" book blue large`); without it the phone's size is used.
+
+The fourth word, `dark` or `light`, fixes the mode for this app and wins over the phone setting: `app "Focus" timer ink dark`. Without it the phone setting decides. The mode needs a theme word before it (`app "Focus" timer ocean dark`). Locale numbers, currency and dates come from the runtime.
 
 ### 8.4 Icons
 
@@ -355,7 +377,7 @@ remind "Text" every 2h [from 9:00 to 21:00] [if condition]
 NAME value, value, ...
 ```
 
-Values are matched to the component's parameters in order; trailing ones with defaults can be left out. A component line can have indented children if the component has a `slot`.
+Values are matched to the component's parameters in order; trailing ones with defaults can be left out. A `text` value can have several parts when it starts with quoted text: `statcard total, "saved of" goal, goal` (the same joining rules as a `text` line). A value that starts with a formula is one formula, so put the words first. A component line can have indented children if the component has a `slot`.
 
 ### 10.2 Defining one
 
@@ -382,13 +404,31 @@ Written in MoldeScript in `lang/std/*.mo`; read those files to see exactly what 
 | `trend SOURCE, value` | a line through the items (`it` = the item) |
 | `heat WINDOW, value [, peak]` | a 7-column heat map of the days (`it` = the day); darker as value nears peak |
 | `share SOURCE, value, key` | labelled bars comparing items: `share spend month by category, sum(it.amount), it.key` |
-| `list SOURCE` | rows (tap to edit, swipe to remove), with an empty message |
-| `list SOURCE by day` | the same rows grouped by day, newest day first (the source may not use `sort` or `top`) |
+| `list SOURCE [, empty text]` | rows (tap to edit, swipe to remove); the empty text shows when there are none (default "Nothing here yet. Add one to see it here.") |
+| `list SOURCE by day [, empty text]` | the same rows grouped by day, newest day first (the source may not use `sort` or `top`) |
+| `topbar TABLE [, button text, save text]` | the app bar (beside the app's name): an add button (default "Add") that opens a form for the table below the bar; the save button (default "Save") adds the row and closes it |
+| `statcard value [, caption, target]` | a card with a big number and a caption; with a target above 0, a progress ring of value/target beside it |
+| `section title [, note]` | a card with a heading row (title, and a faint note on the right) around its indented lines |
+| `goalbars WINDOW, value, target [, reached text, not-yet text]` | a bar per day with day-name labels and a goal line at the target; bars that reach it are `accent`, others `muted` (`it` = the day); with a reached text, a legend under the chart (not-yet default "Not yet") |
+| `daygrid WINDOW, value [, peak]` | a habit grid: one cell per day with the day of the month, filled as value nears peak (`it` = the day) |
+| `weekdots value` | the last 7 days as day names over dots, filled where value is yes (`it` = the day) |
 | `form TABLE [, button text]` | inputs for every field and a save button; keeps the last values |
 | `quick TABLE, field, [values]` | one-tap buttons that add a row with that field set |
 | `timer DURATION [, caption, actions when done]` | a countdown with start, pause and reset; default end action `notify "Time is up"` |
 | `calendar SOURCE [, date]` | a month grid; days with rows are filled; tap a day to add or remove its row |
 | `monthnav NAME` | back/forward arrows for a date state, used with `month of NAME` windows |
+
+### 11.1 Lesson components (lang/std/lesson.mo; need a `lesson` line)
+
+| Use | Shows |
+|---|---|
+| `blocks` | inside `each section`: the section's paragraphs, items, steps, examples, terms and pictures |
+| `reader` | every section as a card; indented lines go into each card |
+| `stepper` | one section at a time with progress, Back and Next; Next marks it in `seen` |
+| `flashcards` | the terms one at a time; tap to turn the card |
+| `quiz [caption]` | the questions one at a time, with feedback and a score at the end; answers go in `answer` |
+| `reveal hidden [, label]` | a button that shows `hidden` under it until tapped again |
+| `notes [caption]` | inside `each section`: the learner's notes on it and a box to add one |
 
 ## 12. What the runtime gives every app for free
 
