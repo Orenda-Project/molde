@@ -1,6 +1,7 @@
 # The UI tree (renderer contract)
 
 Changes (newest first):
+- 2026-11-24 (round 13): **new property** `app.mode` (`dark`/`light`/null; wins over the phone setting). `app.theme` may now be an accent colour (`red orange yellow green teal blue purple pink grey`); shades in Themes below. No new node types. Nothing was removed.
 - 2026-11-24 (round 11): **new node `more`** (`count`, `tap`): an `each` shows its first 200 items and then a `more` node; tapping it shows the next 200 (view state, not saved; a renderer may also page on scroll). Trees are shared while nothing changes: treat them as read-only (`load(src, {freezeTree: true})` freezes them). `snapshot()` also has `every` (how far each `every` is into its period).
 - 2026-11-24 (round 10): `tree()` returns the same object while nothing changed (render cache); a renderer should not mutate it. `load(src, {data, now})` uses `now`; `restore` keeps the clock. `tick(ms)` catches up fires within a time budget (about 150 ms) and logs `{kind: 'skipped'}` for the rest; the std timer is timestamp-based (its Start/Pause buttons are two buttons now, one shown at a time). Node ids are unchanged; state inside an `each` no longer depends on them.
 - 2026-11-24 (round 9): `form` fields carry `name` (the field's current name); a refused Add sets `form.error` ("Fill in name first.") and `error: 'needed'` on each missing field. `dispatch(id, 'change', v)` ignores values that are not of the input's kind. `snapshot()` has `when` (conditions already true).
@@ -54,7 +55,7 @@ Every node has `id` (stable across renders: built from the statement position an
 
 | `t` | Properties | Draw it as |
 |---|---|---|
-| `app` | `name`, `icon`, `theme`, `screens` (`[{id, name, label, icon}]`, empty for one screen), `screen` (current), `children` | the app; with screens, a tab bar (tap a tab with `dispatch(screens[i].id, 'tap')`) |
+| `app` | `name`, `icon`, `theme`, `mode` (`dark`, `light` or null: null follows the phone, otherwise it wins over the phone setting), `screens` (`[{id, name, label, icon}]`, empty for one screen), `screen` (current), `children` | the app; with screens, a tab bar (tap a tab with `dispatch(screens[i].id, 'tap')`) |
 | `screen` | `name`, `label`, `children` | the current tab's content |
 | `stack`, `row`, `box`, `scroll` | `children` | children top to bottom; side by side (wrap on small screens); one plain area; a sideways-scrolling row |
 | `grid` | `cols`, `children` | children in `cols` columns |
@@ -82,6 +83,32 @@ Every node has `id` (stable across renders: built from the statement position an
 | `error` | `text`, `line` | only if the evaluator hit a bug on that line; show it small |
 
 A shape with `tap` is hit when the tap lands inside its shape (for `arc` with a stroke: within the stroke width; for `line` and `poly`: within 12 points). A `draw` with `tap` is hit anywhere on the canvas. If shapes overlap, the last one drawn wins.
+
+## Themes
+
+`app.theme` is one of `ocean mint slate ink plum` (tuned themes) or an accent colour `red orange yellow green teal blue purple pink grey`. An accent theme uses the default neutrals and only sets `accent`. Reference shades for `accent`, with text drawn on it white in light mode and `#111318` in dark mode (contrast checked by `tests/spec.test.mjs`, at least 4.5:1):
+
+| theme | light accent | dark accent |
+|---|---|---|
+| ocean | #0B6E99 | #7CC8EE |
+| mint | #0F7B5F | #7EDCC0 |
+| slate | #475569 | #B6C2D3 |
+| ink | #1F2937 | #D1D5DB |
+| plum | #7B2D6B | #E6A4D6 |
+| red | #C62828 | #FF8A80 |
+| orange | #B3471B | #FFB074 |
+| yellow | #8A6100 | #FFD54F |
+| green | #2E7D32 | #7FD68A |
+| teal | #00796B | #5FD4C4 |
+| blue | #1E5FD0 | #8AB4FF |
+| purple | #6D3FC9 | #C3A6FF |
+| pink | #C2185B | #FF8FBF |
+| grey | #5F6368 | #BDC1C6 |
+
+### What a renderer needs for round 13
+
+- The accent table above, and `app.mode` honoured over the phone's dark setting.
+- Nothing else: the new standard components (`topbar statcard section goalbars daygrid weekdots`, and the empty text of `list`/`log`) expand to node types already in this file. Over the 15 demos and the new components the tree uses only `app row stack box grid scroll text button input draw circle arc plot rect line label poly`: the stat ring is a `draw` with a `circle` and an `arc`, the goal line is a `line` in a `plot` with x `ticks` labelled by day name, dots and grid cells are filled `box` nodes, and the add form is `input` nodes. An empty `each` gives a `text` node with `empty: true`.
 
 ## Text formatting (done by the evaluator)
 
