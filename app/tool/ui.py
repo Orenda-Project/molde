@@ -12,7 +12,7 @@
 import os, subprocess, sys, time, re
 import xml.etree.ElementTree as ET
 ADB = os.path.expanduser('~/Android/Sdk/platform-tools/adb')
-SHOTS = os.environ.get('SHOTS', '/tmp/molde-app/shots')
+SHOTS = os.environ.get('SHOTS', '/tmp/molde-app-scratch/shots-raw')
 
 def adb(*a, **k):
     return subprocess.run([ADB, *a], capture_output=True, **k)

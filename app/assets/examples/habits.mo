@@ -5,7 +5,7 @@ state adding bool = no
 state sel date = today
 let n = count(habit)
 let done = count(check today)
-row
+row bar
   button if(adding, "Close", "Add habit") fill if(adding, soft, accent) tap set adding = not adding
 if adding
   form habit, "Save habit"

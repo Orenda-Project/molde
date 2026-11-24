@@ -6,7 +6,7 @@ state d new med
 let n = count(med)
 let took = count(med, count(it.taken today) > 0)
 remind "Time for your medicine" at med.time
-row
+row bar
   button if(adding, "Close", "Add medicine") fill if(adding, soft, accent) tap set adding = not adding
 if adding
   stack card gap 3

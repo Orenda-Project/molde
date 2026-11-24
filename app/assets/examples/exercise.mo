@@ -8,7 +8,7 @@ let before = sum(lift prev week where weekday(at) <= weekday(today), it.kg * it.
 let trained = count(days week, count(lift on it) > 0)
 let hi = max(lift.kg last 35 days where exercise = ex)
 let lo = min(lift.kg last 35 days where exercise = ex)
-row
+row bar
   button if(adding, "Close", "Log exercise") fill if(adding, soft, accent) tap set adding = not adding
 if adding
   stack card gap 3

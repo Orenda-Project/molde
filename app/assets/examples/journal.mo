@@ -4,15 +4,15 @@ state d new entry
 state q text = ""
 state writing bool = no
 let wrote = count(days last 14 days, count(entry on it) > 0)
-row gap 2 align center
-  stack grow gap 0
-    if count(entry today) > 0
-      "You wrote today" head
-    else
-      "Nothing written today yet" head
-    if streak(entry) > 0
-      plural(streak(entry), "day") "in a row," wrote "of the last 14 days" faint
+row bar
   button if(writing, "Close", "Write") fill if(writing, soft, accent) tap set writing = not writing
+stack gap 0
+  if count(entry today) > 0
+    "You wrote today" head
+  else
+    "Nothing written today yet" head
+  if streak(entry) > 0
+    plural(streak(entry), "day") "in a row," wrote "of the last 14 days" faint
 if writing
   stack card gap 3
     "How are you feeling?" head
@@ -40,9 +40,12 @@ stack card gap 3
           pt 30 - (now - it.at) / 1d, it.mood
       each entry last 30 days
         circle 30 - (now - it.at) / 1d, it.mood, 1 fill accent
+      ytick 5, "Great"
+      ytick 3, "Okay"
+      ytick 1, "Rough"
       tick 1, today - 29
       tick 29, "Today"
-    "Mood from 1 (rough) to 5 (great). Last week averaged" round(avg(entry.mood prev week) * 10) / 10 faint
+    "Last week averaged" round(avg(entry.mood prev week) * 10) / 10 "of 5" faint
 "Recent" head
 field q "Search entries"
 if q != "" and count(entry where has(note, q)) = 0

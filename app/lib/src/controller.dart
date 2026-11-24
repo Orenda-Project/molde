@@ -295,7 +295,14 @@ class MoldeController extends ChangeNotifier {
 
   String _fmtSecs(Object? s) => '${(s is num ? s : 0).toStringAsFixed(1)} s';
   String _bullets(List<String> xs) => xs.take(8).map((e) => '• $e').join('\n') + (xs.length > 8 ? '\n• and ${xs.length - 8} more' : '');
-  String _plain(String t) => t.split('\n').take(6).join('\n');
+  String _plain(String t) {
+    final out = <String>[];
+    for (final l in t.split('\n')) {
+      if (l.startsWith('Shows:')) break;
+      out.add(l);
+    }
+    return out.take(6).join('\n');
+  }
 
   /// The newest change message that has not been undone (it carries the Undo button).
   ChatMsg? get undoable {

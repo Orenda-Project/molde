@@ -70,6 +70,18 @@ cd app/js && node --test tests/        # generation loop with a fake model: 8 te
 
 Emulator checks (the steps and results are in the PR description): `app/tool/ui.py` drives the app with `adb shell input` and uiautomator.
 
+## Binding spike (why our own JNI layer)
+
+The three things the decode loop needs, checked first:
+
+| Need | `llama_flutter_android` 0.2.6 (what offline-teacher-coach uses) | `molde_jni.cpp` (this app) |
+|---|---|---|
+| GBNF grammar that changes on every call | No. `generate` takes only sampling parameters (temperature, top-p/k, min-p, penalties, mirostat, seed); `jni_wrapper.cpp` never calls `llama_sampler_init_grammar` | Yes. Verified on the emulator: every program the model wrote passed the checker's name and syntax rules; grammar build is about 40 ms per line |
+| Stop strings (stop at the newline) | No. It stops at end-of-generation, `maxTokens` or `stop()` | Yes. Stops at the first newline; the newline token is not evaluated |
+| Prompt caching (reuse the cache for the common prefix) | Keeps one running context (`g_n_past`, `clearContext`) but cannot roll back to a common prefix, and the prompt is a plain string | Yes. Verified: after the first call each line evaluates 1 prompt token and reuses the rest (`prompt_eval=1 cached=224` in logcat tag `molde-llm`). A re-tokenisation that diverges rolls the cache back to the common prefix |
+
+Also: the plugin ships arm64 only as used in the coach (its note says "no model runs" on the x86_64 emulator). Our layer builds llama.cpp b12144 for both ABIs, adds a cancel flag that is also checked every 32 prompt tokens, and passes the real turn-marker ids (2, 105, 106; the GGUF reads `<start_of_turn>` as plain text, decode REPORT finding 3).
+
 ## Known limits
 
-See the final report in the PR: speed in the emulator, memory on a 3 to 4 GB phone, renderer and evaluator being on different language rounds.
+See the final report in the PR: speed in the emulator, memory on a 3 to 4 GB phone, renderer and evaluator being on different language rounds, local notifications for `remind` lines not wired (the renderer shows them as toasts only).

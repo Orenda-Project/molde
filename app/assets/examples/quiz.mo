@@ -4,7 +4,7 @@ table answer item ref item, chose pick A|B|C
 state adding bool = no
 let score = count(answer, it.chose = it.item.right)
 let todo = count(item, count(it.answer) = 0)
-row
+row bar
   button if(adding, "Close", "Add question") tap set adding = not adding
 if adding
   form item, "Save question"

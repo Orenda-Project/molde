@@ -9,7 +9,7 @@ let spent = sum(spend.amount month of m)
 let now_month = monthname(m) = monthname(today)
 let day = if(now_month, monthday(today), monthdays(m))
 let left = budget - spent
-row align center gap 1
+row align center gap 1 bar
   button "<" tap set m = addmonths(m, -1)
   monthname(m) bold grow align center
   if now_month

@@ -31,7 +31,7 @@ stack card gap 2
   row
     "Last 6 months" head grow
     sum(deposit.amount month) "this month" faint
-  plot 0..6, 0..max([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))) axes gridlines
+  plot 0..6, 0..max(1000, max([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it)))) axes gridlines
     each [5, 4, 3, 2, 1, 0]
       rect index + 0.15, 0, 0.7, sum(deposit.amount month of addmonths(today, 0 - it)) fill if(it = 0, accent, muted) radius 3
       tick index + 0.5, monthname(addmonths(today, 0 - it))

@@ -84,15 +84,20 @@ bool build_tokens(const std::string & prompt, std::vector<llama_token> & out) {
   return true;
 }
 
-bool eval_tokens(const std::vector<llama_token> & toks, size_t from) {
+// Evaluates toks[from..] in chunks of 32 and records each chunk in g_cached, so a Cancel is seen within a chunk
+// (a whole prompt is one long uninterruptible call otherwise) and the cache always matches what was decoded.
+// Returns 0 = done, 1 = decode error, 2 = cancelled.
+int eval_tokens(const std::vector<llama_token> & toks, size_t from) {
   size_t i = from;
   while (i < toks.size()) {
-    size_t n = std::min((size_t) g_n_batch, toks.size() - i);
+    if (g_cancel) return 2;
+    size_t n = std::min((size_t) 32, toks.size() - i);
     llama_batch b = llama_batch_get_one(const_cast<llama_token *>(toks.data() + i), (int32_t) n);
-    if (llama_decode(g_ctx, b) != 0) return false;
+    if (llama_decode(g_ctx, b) != 0) return 1;
+    g_cached.insert(g_cached.end(), toks.begin() + i, toks.begin() + i + n);
     i += n;
   }
-  return true;
+  return 0;
 }
 }  // namespace
 
@@ -160,8 +165,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_oyekamal_molde_NativeLlm_nativeComplete(JN
     if (!llama_memory_seq_rm(mem, 0, (llama_pos) common, -1)) { llama_memory_clear(mem, true); common = 0; }
     g_cached.resize(common);
   }
-  if (!eval_tokens(toks, common)) { g_cached.clear(); llama_memory_clear(mem, true); return tobytes(env, result("error", "", (int) toks.size(), 0, 0, 0, 0, "decode failed (prompt)")); }
-  g_cached = toks;
+  int rc = eval_tokens(toks, common);
+  if (rc == 2) return tobytes(env, result("cancel", "", (int) (g_cached.size() - common), (int) common, 0, ms_since(t0), 0));
+  if (rc != 0) { g_cached.clear(); llama_memory_clear(mem, true); return tobytes(env, result("error", "", (int) toks.size(), 0, 0, 0, 0, "decode failed (prompt)")); }
   int n_prompt_eval = (int) (toks.size() - common);
   double ms_p = ms_since(t0);
 
