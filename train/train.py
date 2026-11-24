@@ -26,7 +26,7 @@ from common import encode_example, read_jsonl  # noqa: E402
 DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False, token_mode="full",
                 epochs=3, max_steps=0, lr=5e-5, min_lr_ratio=0.1, warmup_steps=10, weight_decay=0.0, batch_size=8,
                 grad_accum=1, max_len=1536, precision="auto", grad_checkpointing=False, eval_every=20, save_every=50,
-                max_minutes=0, seed=1234, pause_at_epoch=0, lora=False, lora_r=64, lora_alpha=128, lora_dropout=0.0, base_dtype="fp32", ckpt_mode="full", restart_warmup=20, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
+                max_minutes=0, seed=1234, pause_at_epoch=0, init_weights="", start_step=0, lora=False, lora_r=64, lora_alpha=128, lora_dropout=0.0, base_dtype="fp32", ckpt_mode="full", restart_warmup=20, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
 
 
 def load_cfg(argv):
@@ -108,6 +108,10 @@ def main():
         ntrain = sum(p.numel() for p in model.parameters() if p.requires_grad)
         log(event="lora", trainable=ntrain, total=sum(p.numel() for p in model.parameters()))
     inner = model.get_base_model() if cfg["lora"] else model
+    if cfg["init_weights"] and not resuming:   # start from saved weights (e.g. a per-epoch bf16 file from Drive); optimizer state is fresh
+        from safetensors.torch import load_file
+        miss = model.load_state_dict({k: v.to(BD) for k, v in load_file(cfg["init_weights"]).items()}, strict=False)
+        log(event="init_weights", file=cfg["init_weights"], missing=len(miss.missing_keys), unexpected=len(miss.unexpected_keys))
     model.to(dev)
     if cfg["grad_checkpointing"]:
         inner.gradient_checkpointing_enable(); inner.config.use_cache = False
@@ -143,7 +147,8 @@ def main():
             return cfg["lr"] * (s + 1) / cfg["warmup_steps"]
         p = (s - cfg["warmup_steps"]) / max(1, total - cfg["warmup_steps"])
         return cfg["lr"] * (cfg["min_lr_ratio"] + (1 - cfg["min_lr_ratio"]) * 0.5 * (1 + math.cos(math.pi * min(1, p))))
-    step = 0; resume_step = -10**9
+    step = cfg["start_step"] if (cfg["init_weights"] and not (ck / "state.json").exists()) else 0
+    resume_step = step if step else -10**9
     if (ck / "state.json").exists():
         for nm in ("best.json", "orig_vocab.txt"):
             if (ck / "extra" / nm).exists() and not (out / nm).exists(): shutil.copy(ck / "extra" / nm, out / nm)

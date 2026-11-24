@@ -158,7 +158,7 @@ EP_A, EP_B = (map(int, a.epoch_range.split(":")) if a.epoch_range else (0, 0))
 SESSION_END = bool(a.epoch_range) and a.total_epochs and EP_B < a.total_epochs
 if "train" in stages and a.epoch_range:
     for e in range(EP_A, EP_B + 1):
-        cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets} pause_at_epoch={e} > {RUN}.train.log 2>&1 &"
+        cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} pause_at_epoch={e} > {RUN}.train.log 2>&1 &"
         (d / f"36{e:02d}_train.py").write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
 subprocess.Popen({cmd!r}, shell=True)
