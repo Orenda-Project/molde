@@ -64,6 +64,15 @@ def tap(s, miny=0):
     os.environ['MINY'] = '0'
     if n is None: return False
     x, y = ui.center(n); adb('shell', 'input', 'tap', str(x), str(y)); return True
+def tap_btn(label):
+    """Tap a chat button with exactly this label (not text that merely contains it, not the mode chips at the bottom)."""
+    for n in ui.nodes():
+        for k in ('text', 'content-desc'):
+            if (n.get(k) or '').strip() == label:
+                x, y = ui.center(n)
+                if 1000 <= y < 2050:
+                    adb('shell', 'input', 'tap', str(x), str(y)); return True
+    return False
 def close_chat():
     if chat_open(): tap('Close chat'); time.sleep(2)
 def apps_view():
@@ -149,10 +158,10 @@ def flows():
     send('make me a budget app'); time.sleep(3)
     two = has('Change Water') and has('New app')
     save('F2 new-app wording in Change mode asks with two buttons (no silent change)', two and not busy(), f'buttons={two}')
-    tap('Change Water', miny=1000); stop_now()
+    tap_btn('Change Water'); stop_now()
     save('F3 "Change Water" keeps Change mode and no app is lost', (mode_label() or '').startswith('Changing Water') and len(app_titles()) == n0, f'mode={mode_label()} apps={len(app_titles())}')
     chat_view(); send('a habit tracker'); time.sleep(3)
-    tap('New app', miny=1000); stop_now()
+    tap_btn('New app'); stop_now()
     save('F4 "New app" button switches to New app mode, Water kept', mode_label() == 'New app' and len(app_titles()) == n0, f'mode={mode_label()}')
     chat_view(); set_mode('new'); send('todo')
     done = wait_idle(480) and has('Made ')
