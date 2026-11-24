@@ -106,8 +106,10 @@ def main():
                     t2 = ""
                 p = pathlib.Path("/tmp") / f"molde-lt-{x['id']}-rep.mo"; p.write_text(t2)
                 x["repaired_ok"] = subprocess.run(["node", str(pathlib.Path(a.lang) / "mo.mjs"), "check", str(p)], capture_output=True).returncode == 0
+        try: peak_rss = int([l for l in open(f"/proc/{srv.pid}/status") if l.startswith("VmHWM")][0].split()[1]) // 1024
+        except Exception: peak_rss = None
         speeds = [x["tok_s"] for x in rows if x["tok_s"]]
-        summary = {"file": os.path.basename(a.gguf), "size_mb": size, "load_s": round(load_s, 1), "n": len(rows),
+        summary = {"peak_rss_mb": peak_rss, "file": os.path.basename(a.gguf), "size_mb": size, "load_s": round(load_s, 1), "n": len(rows),
                    "mean_tok_s": round(sum(speeds) / len(speeds), 1) if speeds else None, "threads": os.environ.get("THREADS", "6"),
                    "checker_ok": sum(x["check_ok"] for x in rows), "all_nonempty": all(x["program"].strip() for x in rows), "rows": rows}
         print(json.dumps({k: v for k, v in summary.items() if k != "rows"}))
@@ -135,7 +137,7 @@ def main():
             m = {"by_kind": by_kind, "load_avg": os.getloadavg()[0], "file": os.path.basename(a.gguf), "grammar": not a.nogrammar, "n": len(sd), "checker_pass_raw": mean("pass_raw"), "checker_pass_formatted": mean("pass_fmt"),
                  "exact_match": mean("exact"), "intent_score": mean("score", lambda v: v or 0), "intent_auto": mean("intent_auto"),
                  "median_gen_tokens": statistics.median(x["gen_tokens"] for x in rows if x["gen_tokens"]), "mean_tok_s": summary["mean_tok_s"],
-                 "checker_pass_after_repair": round(sum(x["repaired_ok"] for x in rows) / len(rows), 3), "median_secs_per_app": round(statistics.median(x["secs"] for x in rows), 1),
+                 "checker_pass_after_repair": round(sum(x["repaired_ok"] for x in rows) / len(rows), 3), "peak_rss_mb": peak_rss, "load_s": round(load_s, 1), "median_secs_per_app": round(statistics.median(x["secs"] for x in rows), 1),
                  "size_mb": size, "threads": os.environ.get("THREADS", "6")}
             print(json.dumps(m))
             if a.metrics:

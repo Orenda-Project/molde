@@ -10,7 +10,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
 ap.add_argument("gguf"); ap.add_argument("--data", default=str(HERE / "data/out-r2")); ap.add_argument("--refs", default="test_refs.jsonl")
 ap.add_argument("--arm", default="E"); ap.add_argument("--out", required=True); ap.add_argument("--decode-dir", default="/tmp/molde-dec/decode")
-ap.add_argument("--route", default="text"); ap.add_argument("--limit", type=int, default=0)
+ap.add_argument("--route", default="text"); ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--limit", type=int, default=0)
 a = ap.parse_args()
 binp = os.path.expanduser(os.environ.get("LLAMA_BIN", "~/llama.cpp-b12144/llama-b12144"))
 with socket.socket() as k:
@@ -31,8 +31,10 @@ try:
     out = pathlib.Path(a.out).with_suffix("")
     out.mkdir(parents=True, exist_ok=True)
     cmd = ["node", f"{a.decode_dir}/run.mjs", "--arm", a.arm, "--set", "real", "--out", str(out), "--tag", "run"] + (["--limit", str(a.limit)] if a.limit else [])
-    r = subprocess.run(cmd, env={**env, "PORT": port, "MOLDE_REFS": str(tmp), "PROMPT": a.route}, capture_output=True, text=True)
+    r = subprocess.run(cmd, env={**env, "PORT": port, "MOLDE_REFS": str(tmp), "PROMPT": a.route, "CHAT_KWARGS": a.chat_kwargs}, capture_output=True, text=True)
     if r.returncode != 0: sys.exit("run.mjs failed: " + r.stderr[-800:])
+    try: peak_rss = int([l for l in open(f"/proc/{srv.pid}/status") if l.startswith("VmHWM")][0].split()[1]) // 1024
+    except Exception: peak_rss = None
 finally:
     srv.terminate()
 summ = json.load(open(out / "run.summary.json"))
@@ -45,7 +47,7 @@ for x, ref in zip(scored, refs):
 by_kind = {k: {"n": v["n"], "checker_pass": round(v["pass"] / v["n"], 3), "intent_score": round(v["intent"] / v["n"], 3), "output_is_ask": round(v["asked"] / v["n"], 3)} for k, v in kinds.items()}
 m = {"decoder": "line-stepped arm " + a.arm, "file": os.path.basename(a.gguf), "n": summ["n"], "checker_pass_raw": summ["pass"], "intent_score": summ["intent_score"], "intent_auto": summ["intent_auto"],
      "median_gen_tokens": summ["median_gen_tokens"], "mean_tok_s": summ["median_tok_s"], "median_secs_per_app": summ["median_s_per_app"], "calls_per_app": summ["mean_calls"],
-     "by_kind": by_kind, "load_avg_start_end": [summ["loadavg_start"], summ["loadavg_end"]], "first_errors": summ["errors_first"], "size_mb": os.path.getsize(a.gguf) // (1 << 20), "route": a.route}
+     "by_kind": by_kind, "load_avg_start_end": [summ["loadavg_start"], summ["loadavg_end"]], "first_errors": summ["errors_first"], "peak_rss_mb": peak_rss, "size_mb": os.path.getsize(a.gguf) // (1 << 20), "route": a.route}
 json.dump(m, open(a.out, "w"), indent=1)
 json.dump([{"id": g["id"], "task": g["task"], "request": g["request"], "output": g["output"], "ref": g["ref"], "pass": s["pass_raw"], "score": s.get("score"), "err": s.get("err_first")} for g, s in zip(gen, scored)], open(pathlib.Path(a.out).with_suffix(".rows.json"), "w"), indent=1)
 print(json.dumps({k: v for k, v in m.items() if k != "by_kind"}))
