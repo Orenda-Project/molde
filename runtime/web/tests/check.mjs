@@ -521,7 +521,7 @@ await scenario('S1: Done closes on the first real mouse click after typing a val
   const b = await (await page.$('.mo-sheet [data-ui="sheet-done"]')).boundingBox();
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
-  await page.waitForSelector('.mo-app :text("of 2500 ml today")');
+  await page.waitForSelector('.mo-app :text("of 2,500 ml today")');
 });
 
 await scenario('S1: Tab then Enter closes the sheet and keeps the value', 'ex=water&view=app', async page => {
@@ -532,7 +532,7 @@ await scenario('S1: Tab then Enter closes the sheet and keeps the value', 'ex=wa
   expect(await page.evaluate(() => document.activeElement.textContent) === 'Done', 'Tab did not reach Done');
   await page.keyboard.press('Enter');
   await page.waitForSelector('.mo-sheet', { state: 'detached', timeout: 1500 });
-  await page.waitForSelector('.mo-app :text("of 3000 ml today")');
+  await page.waitForSelector('.mo-app :text("of 3,000 ml today")');
 });
 
 await scenario('S1: a row editor closes on the first click too', 'ex=budget&view=app', async page => {
@@ -718,7 +718,7 @@ await scenario('S2: Enter saves a sheet; Tab stays inside it', 'ex=water&view=ap
   await inp.focus();
   await page.keyboard.press('Enter');
   await page.waitForSelector('.mo-sheet', { state: 'detached' });
-  await page.waitForSelector('.mo-app :text("of 2200 ml today")');
+  await page.waitForSelector('.mo-app :text("of 2,200 ml today")');
 });
 
 await scenario('app bar: only the row the program marks `bar` sits beside the title', 'ex=budget&view=app', async page => {
@@ -749,14 +749,15 @@ await scenario('typed parts: numbers and money in the locale, years never groupe
       return nodes.map(n => norm(join(n.parts.map(fmt)))).filter(t => t && !dom.includes(t)).slice(0, 3);
     });
     for (const m of miss) bad.push(`${c.id}: "${m}" not shown as formatted`);
-    if (/\b(19|20)\d\d\b/.test('') || /\b2,0\d\d\b/.test(await page.$eval('.mo-app', e => e.innerText))) bad.push(`${c.id}: a year got a separator`);
+    const yearsOk = await page.evaluate(() => { const dom = document.querySelector('.mo-app').innerText; return window.__molde.app.findAll(n => n.parts && n.parts.some(p => p.t === 'year')).every(n => n.parts.filter(p => p.t === 'year').every(p => dom.includes(String(p.v)))); });
+    if (!yearsOk) bad.push(`${c.id}: a year got a separator`);
   }
   expect(!bad.length, bad.slice(0, 6).join(' | '));
 });
 
-await scenario('form: a refused save says why at the form and marks each needed field', 'ex=todo&view=app', async page => {
-  await page.click('button.mo-btn:has-text("Add task")');
-  await page.click('button.mo-btn:has-text("Save task")');
+await scenario('form: a refused save says why at the form and marks each needed field', 'ex=habits&view=app', async page => {
+  await page.click('button.mo-btn:has-text("Add habit")');
+  await page.click('button.mo-btn:has-text("Save habit")');
   await page.waitForSelector('.mo-form-err[role="alert"], .mo-card .mo-err');
   const msg = await page.$$eval('.mo-app .mo-err', e => e.map(x => x.textContent));
   expect(msg.some(t => /Needed/.test(t)), `no per-field message: ${JSON.stringify(msg)}`);

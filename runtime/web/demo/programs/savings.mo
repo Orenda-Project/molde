@@ -5,6 +5,7 @@ state adding bool = no
 state d new deposit
 let total = sum(deposit.amount)
 let p = clamp(total / goal, 0, 1)
+let mon(d date) = if(month(d) = 1, "Jan", if(month(d) = 2, "Feb", if(month(d) = 3, "Mar", if(month(d) = 4, "Apr", if(month(d) = 5, "May", if(month(d) = 6, "Jun", if(month(d) = 7, "Jul", if(month(d) = 8, "Aug", if(month(d) = 9, "Sep", if(month(d) = 10, "Oct", if(month(d) = 11, "Nov", "Dec")))))))))))
 row gap 4 align center
   draw 40, 120 width 72
     rect 14, 6, 12, 92 fill soft radius 6
@@ -34,7 +35,7 @@ stack card gap 2
   plot 0..6, 0..max(1000, max([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it)))) axes gridlines
     each [5, 4, 3, 2, 1, 0]
       rect index + 0.15, 0, 0.7, sum(deposit.amount month of addmonths(today, 0 - it)) fill if(it = 0, accent, muted) radius 3
-      tick index + 0.5, monthname(addmonths(today, 0 - it))
+      tick index + 0.5, mon(addmonths(today, 0 - it))
   "Rupees saved each month; this month in colour" faint
 "Deposits" head
 each deposit sort at desc top 12 as r empty "Nothing saved yet. Tap + 1,000 to make the first deposit."

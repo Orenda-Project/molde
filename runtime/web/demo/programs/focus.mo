@@ -9,8 +9,8 @@ when going and left <= 0s set going = no then add session task = task, mins = wo
 draw width 260
   circle 44 stroke soft thick 6
   arc 44, 0, 360 * (1 - left / work) stroke accent thick 6
-  label 50, 46, left huge
-  label 50, 64, if(going, "focusing", "ready") color muted
+  label 50, 40, left huge
+  label 50, 68, if(going, "focusing", "ready") color muted
 row gap 1 align center
   button if(going, "Pause", "Start") fill accent width 140 tap set going = not going
   button "Reset" width 120 tap set going = no then set left = work
