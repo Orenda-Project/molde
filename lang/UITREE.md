@@ -1,6 +1,7 @@
 # The UI tree (renderer contract)
 
 Changes (newest first):
+- 2026-11-24 (round 14): **new property** `app.size` (`small`, `large`, `huge` or null): scale the whole app's text. Lesson apps (LESSON.md) show lesson pictures as `image` nodes whose `src` is the lesson's picture ref (resolve it from the lesson bundle) and whose `a11y` is the picture's description. No new node types; nothing removed.
 - 2026-11-24 (round 13): **new property** `app.mode` (`dark`/`light`/null; wins over the phone setting). `app.theme` may now be an accent colour (`red orange yellow green teal blue purple pink grey`); shades in Themes below. No new node types. Nothing was removed.
 - 2026-11-24 (round 11): **new node `more`** (`count`, `tap`): an `each` shows its first 200 items and then a `more` node; tapping it shows the next 200 (view state, not saved; a renderer may also page on scroll). Trees are shared while nothing changes: treat them as read-only (`load(src, {freezeTree: true})` freezes them). `snapshot()` also has `every` (how far each `every` is into its period).
 - 2026-11-24 (round 10): `tree()` returns the same object while nothing changed (render cache); a renderer should not mutate it. `load(src, {data, now})` uses `now`; `restore` keeps the clock. `tick(ms)` catches up fires within a time budget (about 150 ms) and logs `{kind: 'skipped'}` for the rest; the std timer is timestamp-based (its Start/Pause buttons are two buttons now, one shown at a time). Node ids are unchanged; state inside an `each` no longer depends on them.
@@ -55,7 +56,7 @@ Every node has `id` (stable across renders: built from the statement position an
 
 | `t` | Properties | Draw it as |
 |---|---|---|
-| `app` | `name`, `icon`, `theme`, `mode` (`dark`, `light` or null: null follows the phone, otherwise it wins over the phone setting), `screens` (`[{id, name, label, icon}]`, empty for one screen), `screen` (current), `children` | the app; with screens, a tab bar (tap a tab with `dispatch(screens[i].id, 'tap')`) |
+| `app` | `name`, `icon`, `theme`, `size` (`small`, `large`, `huge` or null: the whole app's text size), `mode` (`dark`, `light` or null: null follows the phone, otherwise it wins over the phone setting), `screens` (`[{id, name, label, icon}]`, empty for one screen), `screen` (current), `children` | the app; with screens, a tab bar (tap a tab with `dispatch(screens[i].id, 'tap')`) |
 | `screen` | `name`, `label`, `children` | the current tab's content |
 | `stack`, `row`, `box`, `scroll` | `children` | children top to bottom; side by side (wrap on small screens); one plain area; a sideways-scrolling row |
 | `grid` | `cols`, `children` | children in `cols` columns |

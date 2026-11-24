@@ -10,9 +10,11 @@ import { load } from '../eval.mjs';
 globalThis.MOLDE_FREEZE_TREE = true;
 const LANG = new URL('..', import.meta.url).pathname;
 // programs with buttons, inputs, refs, timers, when and every rules (at least 30)
+const LESSON = JSON.parse(readFileSync(LANG + 'lessons/g6-science-water-cycle.json', 'utf8'));
 export function lockstepPrograms() {
   const ex = readdirSync(LANG + 'examples').filter(f => f.endsWith('.mo')).map(f => readFileSync(LANG + 'examples/' + f, 'utf8'))
-    .concat(readdirSync(LANG + 'examples/demo15').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'examples/demo15/' + f, 'utf8')));
+    .concat(readdirSync(LANG + 'examples/demo15').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'examples/demo15/' + f, 'utf8')))
+    .concat(readdirSync(LANG + 'examples/lessons').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'examples/lessons/' + f, 'utf8')));
   const co = readdirSync(LANG + 'corpus').filter(f => f.endsWith('.mo')).sort().map(f => readFileSync(LANG + 'corpus/' + f, 'utf8'));
   const stateful = co.filter(s => /\bevery \d|\bwhen |\bafter \d|ref |timer /.test(s));
   // small programs that put the stateful statements next to each other (when that adds rows, every
@@ -40,7 +42,8 @@ export function runLockstep(chains = 1000, seed = 1, steps = 14) {
   for (let c = 0; c < chains; c++) {
     stats.chains++;
     const src0 = c % 3 === 1 ? progs[0] : c % 3 === 2 ? progs[1 + c % 6] : progs[c % progs.length]; // a third of the chains on the program with two timers, two forms, two eaches
-    let a = load(src0, { now: '2026-11-23T10:00:00Z' });
+    // a lesson program gets a lesson; its twins load from the snapshot alone (the content rows travel in it)
+    let a = load(src0, { now: '2026-11-23T10:00:00Z', lesson: /^lesson$/m.test(src0) ? LESSON : undefined });
     let heading = 0; // headings inserted by edits
     for (let st = 0; st < steps; st++) {
       stats.steps++;
