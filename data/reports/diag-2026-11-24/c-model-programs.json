@@ -1,0 +1,324 @@
+[
+ {
+  "id": "attendance",
+  "request": "attendance register for my class, I mark who is absent each day and see how many came",
+  "ok": true,
+  "program": "app \"Attendance\" users ocean\ntable student name text\ntable absent student ref student\nstate d date = today\nrow align center\n  button \"<\" tap set d = d - 1\n  dayname(d) monthday(d) monthname(d) head grow align center\n  button \">\" tap set d = d + 1\ncount(student) - count(absent on d) \"of\" count(student) \"present\" big\ngrid 4 gap 1\n  each student sort name as s\n    stack radius 8 pad 1 fill if(count(s.absent on d) > 0, bad, good) tap toggle s.absent on d\n      s.name bold align center color bg\n      if(count(s.absent on d) > 0, \"Absent\", \"Present\") tiny align center color bg\n\"Tap a name to mark absent. Everyone starts present.\" faint\neach student sort name as s\n  row\n    s.name grow\n    count(s.absent month of d) \"days absent this month\" faint\nform student, \"Add student\"\n",
+  "errors": [],
+  "stats": {
+   "seconds": 41.16,
+   "tokens": 240,
+   "tokPerSec": 9.8,
+   "calls": 21,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 20,
+   "promptTokens": 410,
+   "cachedTokens": 3412,
+   "grammarMs": 470,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "budget",
+  "request": "monthly budget, I add expenses with a category and see how much of my budget is left this month",
+  "ok": true,
+  "program": "app \"Budget\" wallet slate\ntable spend what text, amount money, category pick Food|Bills|Travel|Fun|Health\nstate m date = today\nlet spent = sum(spend.amount month of m)\nsetting budget money = 80000 \"Monthly budget\"\nmonthnav m\nif(spent > budget, \"Over budget by\", \"Left to spend\") abs(budget - spent) big\ngoal spent, budget, \"spent\"\nform spend\nlist spend month of m by day\n",
+  "errors": [],
+  "stats": {
+   "seconds": 10.63,
+   "tokens": 108,
+   "tokPerSec": 16.6,
+   "calls": 11,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 10,
+   "promptTokens": 230,
+   "cachedTokens": 1200,
+   "grammarMs": 173,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "cricket",
+  "request": "cricket scorer: tap the runs for each ball, count wides and wickets, show the score and overs",
+  "ok": false,
+  "program": "app \"Scorer\" ball ocean\ntable ball runs num 0..6, wide bool, out bool\nlet r = sum(ball.runs all)\nlet w = count(ball where wide = yes)\njoin(r, \"/\", w) big\n\"Overs\" floor(count(ball) / 6) \".\" count(ball) % 6 faint\nrow gap 1\n  each [0, 1, 2, 3, 4, 6]\n    button it tap add ball runs = it\nrow gap 1\n  button \"Wide\" tap add ball wide = yes\n  button \"Out\" fill bad tap add ball out = yes\nif r >= 36\n  \"Target reached\" color good\nbutton \"Undo\" tap remove last(ball)\n",
+  "errors": [
+   "line 11: E_REQUIRED: add ball must set runs (it is required and has no default). Fix: add runs = ..., or mark the field optional with ? or give it = a default.",
+   "line 12: E_REQUIRED: add ball must set runs (it is required and has no default). Fix: add runs = ..., or mark the field optional with ? or give it = a default."
+  ],
+  "stats": {
+   "seconds": 26.72,
+   "tokens": 250,
+   "tokPerSec": 15.8,
+   "calls": 22,
+   "resamples": 8,
+   "fallbacks": 2,
+   "lines": 15,
+   "promptTokens": 349,
+   "cachedTokens": 3429,
+   "grammarMs": 192,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "exercise",
+  "request": "gym log: exercise, weight, sets and reps, and show my progress for each exercise",
+  "ok": true,
+  "program": "app \"Gym log\" dumbbell ink\ntable lift exercise text, kg num 0..500, sets num 1..10 = 3, reps num 1..50\neach lift by exercise as g\n  row card\n    g.key bold grow\n    \"best\" max(g.kg) \"kg\" faint\n    \"total reps\" sum(g.reps) faint\nform lift\nlist lift by day\n",
+  "errors": [],
+  "stats": {
+   "seconds": 18.34,
+   "tokens": 99,
+   "tokPerSec": 8.2,
+   "calls": 10,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 9,
+   "promptTokens": 214,
+   "cachedTokens": 1060,
+   "grammarMs": 142,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "focus",
+  "request": "pomodoro focus timer, 25 minutes, and keep a log of my focus sessions",
+  "ok": true,
+  "program": "app \"Focus\" timer ink\ntable session task text?\nsetting work dur = 25m \"Focus length\"\ntimer work, \"Focus\", add session then notify \"Take a short break\"\ntimer 5m, \"Break\"\ncount(session today) \"focus sessions today\" head\ndaybars last 7 days, count(session on it)\nlist session today\n",
+  "errors": [],
+  "stats": {
+   "seconds": 15.14,
+   "tokens": 81,
+   "tokPerSec": 13.7,
+   "calls": 9,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 8,
+   "promptTokens": 191,
+   "cachedTokens": 808,
+   "grammarMs": 116,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "habits",
+  "request": "habit tracker where I tick my habits every day and see my streaks",
+  "ok": true,
+  "program": "app \"Habits\" check mint\ntable habit name text\ntable check habit ref habit\nlet n = count(habit)\ncount(check today) \"of\" n \"done today\" head\nif n = 0\n  \"Nothing to track yet. Add one.\" faint\neach habit\n  row card gap 2 tap edit it swipe remove it\n    stack grow\n      it.name bold\n      streak(it.check) \"day streak,\" round(count(it.check last 30 days) * 100 / 30) \"% in 30 days\" faint\n    toggle it.check\nrow gap 2\n  stat round(count(check week) * 100 / (n * weekday(today))), \"% this week\"\n  stat round(count(check last 30 days) * 100 / (n * 30)), \"% in 30 days\"\n  stat max(habit, streak(it.check)), \"best streak\"\nheat last 70 days, count(check on it), n\nform habit\n",
+  "errors": [],
+  "stats": {
+   "seconds": 18.71,
+   "tokens": 234,
+   "tokPerSec": 21.7,
+   "calls": 20,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 19,
+   "promptTokens": 394,
+   "cachedTokens": 2888,
+   "grammarMs": 298,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "journal",
+  "request": "daily journal with my mood and a note, and I can search old entries",
+  "ok": true,
+  "program": "app \"Journal\" book plum\ntable entry mood num 1..5, note long\nstate d new entry\n\"How are you feeling?\" head\nrow gap 1\n  each [\"Awful\", \"Low\", \"Okay\", \"Good\", \"Great\"]\n    stack grow align center tap set d.mood = index + 1\n      draw width 44\n        circle 50, 50, 46 fill if(d.mood = index + 1, accent, soft)\n        rect 30, 74 - 12 * index, 40, 8 + 12 * index fill bg radius 3\n      it tiny\nfield d.note \"What is on your mind?\"\nbutton \"Save entry\" tap save d\nrow gap 2\n  stat streak(entry), if(count(entry today) > 0, \"day streak, including today\", \"day streak; write today to keep it\")\n  stat count(days last 14 days, count(entry on it) > 0), \"of 14 days written\"\nrow gap 1\n  each days last 14 days\n    box grow height 10 radius 5 fill if(count(entry on it) > 0, accent, soft)\n\"Mood this week\" round(avg(entry.mood week)) \"vs\" round(avg(entry.mood prev week)) \"last week\" faint\ntrend entry last 30 days sort at, it.mood\nstate q text = \"\"\nfield q \"Search entries\"\nif q != \"\" and count(entry where has(note, q)) = 0\n  \"Nothing found. Try a shorter word.\" faint\nlist entry where has(note, q) by day\n\"Saved on this device only.\" faint\n",
+  "errors": [],
+  "stats": {
+   "seconds": 26.32,
+   "tokens": 392,
+   "tokPerSec": 23.4,
+   "calls": 28,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 27,
+   "promptTokens": 594,
+   "cachedTokens": 6548,
+   "grammarMs": 542,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "medicine",
+  "request": "my medicines with dose and time, remind me and let me mark each one taken",
+  "ok": true,
+  "program": "app \"Medicines\" pill plum\ntable med name text, dose text?, time time\ntable taken med ref med\nremind \"Time for your medicines\" at med.time\ncount(taken today) \"of\" count(med) \"taken today\" head\neach med sort time\n  row card gap 2 tap edit it swipe remove it\n    stack grow\n      it.name bold\n      it.time it.dose faint\n    toggle it.taken\nform med, \"Add medicine\"\n",
+  "errors": [],
+  "stats": {
+   "seconds": 9.73,
+   "tokens": 107,
+   "tokPerSec": 22.5,
+   "calls": 13,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 12,
+   "promptTokens": 236,
+   "cachedTokens": 1402,
+   "grammarMs": 169,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "quiz",
+  "request": "a quiz: I add questions with three choices and the right answer, then answer them and see my score",
+  "ok": true,
+  "program": "app \"Quiz\" star plum\ntable item question text, a text, b text, c text, right pick A|B|C\ntable answer item ref item, chose pick A|B|C\nlet score = count(answer, it.chose = it.item.right)\nscore \"of\" count(answer) \"right\" big\neach item as x\n  if count(x.answer) = 0\n    stack card gap 1\n      x.question head\n      button x.a tap add answer item = x, chose = A\n      button x.b tap add answer item = x, chose = B\n      button x.c tap add answer item = x, chose = C\neach answer as r\n  row\n    r.item.question grow\n    if(r.chose = r.item.right, \"Right\", \"Wrong\") color if(r.chose = r.item.right, good, bad)\nform item, \"Add question\"\n",
+  "errors": [],
+  "stats": {
+   "seconds": 14.22,
+   "tokens": 216,
+   "tokPerSec": 24.3,
+   "calls": 18,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 17,
+   "promptTokens": 374,
+   "cachedTokens": 2871,
+   "grammarMs": 337,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "reading",
+  "request": "reading list: books I want to read, am reading and have finished",
+  "ok": true,
+  "program": "app \"Reading\" book plum\ntable book title text, author text?, status pick Want|Reading|Done = Want, finished date?\nstate tab text = Reading\nrow gap 1\n  each options book.status\n    button it fill if(tab = it, accent, soft) tap set tab = it\neach book where status = tab sort title as b\n  row card tap edit b swipe remove b\n    stack grow\n      b.title bold\n      b.author faint\n    if b.status = Reading\n      button \"Finished\" tap set b.status = Done then set b.finished = today\nform book\n",
+  "errors": [],
+  "stats": {
+   "seconds": 8.5,
+   "tokens": 137,
+   "tokPerSec": 28,
+   "calls": 15,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 14,
+   "promptTokens": 273,
+   "cachedTokens": 1800,
+   "grammarMs": 183,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "savings",
+  "request": "savings goal: I add deposits and see how close I am to my goal",
+  "ok": true,
+  "program": "app \"Savings\" coin mint\ntable deposit amount money, note text?\nsetting goal money = 100000 \"Savings goal\"\nlet total = sum(deposit.amount)\nlet p = clamp(total / goal, 0, 1)\nrow gap 3\n  draw 40, 120 width 60\n    rect 14, 6, 12, 92 fill soft radius 6\n    rect 14, 98 - 92 * p, 12, 92 * p fill accent radius 6\n    circle 20, 106, 12 fill accent\n  stack grow\n    total big\n    round(p * 100) \"% of\" goal faint tap edit goal\n    \"This month\" sum(deposit.amount month) faint\nquick deposit, amount, [500, 1000, 5000]\nform deposit\nlist deposit by day\n",
+  "errors": [],
+  "stats": {
+   "seconds": 17.96,
+   "tokens": 222,
+   "tokPerSec": 18.4,
+   "calls": 18,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 17,
+   "promptTokens": 374,
+   "cachedTokens": 2848,
+   "grammarMs": 176,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "tasbeeh",
+  "request": "tasbeeh counter for SubhanAllah, Alhamdulillah and Allahu Akbar, 33 each",
+  "ok": true,
+  "program": "app \"Tasbeeh\" beads mint\ntable zikr phrase pick SubhanAllah|Alhamdulillah|AllahuAkbar = SubhanAllah\nsetting target num = 33 \"Count to\"\nstate ph text = SubhanAllah\nlet n = count(zikr today where phrase = ph)\nrow gap 1\n  each options zikr.phrase\n    button it fill if(ph = it, accent, soft) tap set ph = it\ndraw width 240 tap add zikr phrase = ph\n  circle 44 stroke soft thick 8\n  arc 44, 0, 360 * (n % target) / target stroke accent thick 8\n  label 50, 46, n % target big\n  label 50, 64, \"Round\" floor(n / target) + 1 faint\nwhen n > 0 and n % target = 0 notify \"Round complete\"\n\"Tap the circle to count.\" count(zikr today) \"today in all.\" faint\n",
+  "errors": [],
+  "stats": {
+   "seconds": 20.7,
+   "tokens": 229,
+   "tokPerSec": 16.4,
+   "calls": 16,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 15,
+   "promptTokens": 375,
+   "cachedTokens": 2385,
+   "grammarMs": 113,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "tictactoe",
+  "request": "tic tac toe game for two players",
+  "ok": false,
+  "program": "app \"Daily Tic tac toe\" board ink\ntable move game num, cell num 1..9, mark pick X|O\nsetting cur num = 1 \"Game\"\nlet n = count(move where game = cur)\nlet turn = if(n % 2 = 0, \"X\", \"O\")\nlet win(m text) = count([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = mark and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0\nlet xw = win(\"X\")\nlet ow = win(\"O\")\nif xw or ow\n  if(xw, \"X\", \"O\") \"wins!\" big\nelse\n  if(n = 9, \"Draw\", turn) if(n = 9, \"\", \"to play\") big\ngrid 3 gap 1\n  each 1..9 as c\n    if count(move where game = cur and cell = c) = 0 and not xw and not ow\n      box height 80 radius 8 fill soft tap add move game = cur, cell = c, mark = turn\n    else\n      box height 80 radius 8 fill surface\n        last(move.mark where game = cur and cell = c) big align center\nbutton \"New game\" tap set cur = cur + 1\n",
+  "errors": [
+   "line 6: E_SELF_COMPARE: \"mark = mark\" compares the field mark of move with itself. Fix: compare the field with a value or a state.",
+   "line 7: E_SELF_COMPARE: \"mark = mark\" compares the field mark of move with itself. Fix: compare the field with a value or a state.",
+   "line 8: E_SELF_COMPARE: \"mark = mark\" compares the field mark of move with itself. Fix: compare the field with a value or a state."
+  ],
+  "stats": {
+   "seconds": 165.77,
+   "tokens": 720,
+   "tokPerSec": 5.7,
+   "calls": 30,
+   "resamples": 12,
+   "fallbacks": 3,
+   "lines": 20,
+   "promptTokens": 557,
+   "cachedTokens": 6534,
+   "grammarMs": 572,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "todo",
+  "request": "to do list with due dates, home and work tags, and show which tasks are late",
+  "ok": true,
+  "program": "app \"To do\" list slate\ntable task title text, due date?, done bool, tag pick Home|Work|Other = Home\nlet late = count(task where done = no and due < today)\ncount(task where done = no) \"open,\" late \"late\" head color if(late > 0, warn, ink)\neach task where done = no sort due as t\n  row card gap 2 tap edit t swipe remove t\n    toggle t.done\n    stack grow\n      t.title bold\n      t.tag t.due small color if(t.due < today, bad, muted)\nremind \"You have tasks due today\" at 8:00 if count(task where done = no and due = today) > 0\nform task\n\"Done\" faint\nlist task where done = yes\n",
+  "errors": [],
+  "stats": {
+   "seconds": 72.94,
+   "tokens": 183,
+   "tokPerSec": 4.4,
+   "calls": 15,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 14,
+   "promptTokens": 323,
+   "cachedTokens": 2228,
+   "grammarMs": 567,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ },
+ {
+  "id": "water",
+  "request": "water tracker with a daily goal of 2 litres",
+  "ok": true,
+  "program": "app \"Water\" drop ocean\ntable drink ml num 1..5000 unit \"ml\"\nsetting goal num = 2000 \"Daily goal (ml)\"\ngoal sum(drink.ml today), goal, \"today\", \"ml\"\nquick drink, ml, [250, 500]\n\"Days goal met this week:\" count(days last 7 days, sum(drink.ml on it) >= goal) faint\ndaybars last 7 days, sum(drink.ml on it)\nlist drink\n",
+  "errors": [],
+  "stats": {
+   "seconds": 47.33,
+   "tokens": 120,
+   "tokPerSec": 4.4,
+   "calls": 9,
+   "resamples": 0,
+   "fallbacks": 0,
+   "lines": 8,
+   "promptTokens": 222,
+   "cachedTokens": 878,
+   "grammarMs": 195,
+   "grammarFailures": 0,
+   "arm": "E"
+  }
+ }
+]

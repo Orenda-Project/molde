@@ -1,0 +1,1003 @@
+[
+ {
+  "request": "todo",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do for your shopping?",
+   "options": [
+    "Save many items",
+    "Group items",
+    "Make lists"
+   ]
+  },
+  "program1": "ask \"What do you want to do for your shopping?\" \"Save many items\" \"Group items\" \"Make lists\"\n",
+  "answer": "Save many items",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to do with savings?",
+   "options": [
+    "Track deposits",
+    "Reach a goal",
+    "Both"
+   ]
+  },
+  "program2": "ask \"What do you want to do with savings?\" \"Track deposits\" \"Reach a goal\" \"Both\"\n",
+  "combined": "build",
+  "program3": "app \"Tudo\" list ink\ntable task title text, done bool\ncount(task where done = no) \"open\" head\neach task where done = no as t\n  row card gap 2 tap edit t swipe remove t\n    toggle t.done\n    t.title grow\nform task\n\"Done\" faint\nlist task where done = yes\n"
+ },
+ {
+  "request": "track water",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program1": "ask \"What do you want to track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "answer": "Water",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What should I help you track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program2": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "combined": "ask",
+  "program3": "ask \"What should I track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n"
+ },
+ {
+  "request": "habit tracker",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Habits\" check ocean\ntable habit name text\ntable check habit ref habit\nlet n = count(habit)\nlet done = count(check today)\nrow gap 2\n  goal done, n, \"done today\"\n  stack grow\n    if(done = n and n > 0, \"All done today\", \"Keep going\") head\n    \"Best streak\" max(habit, streak(it.check)) \"days\" faint\nif n = 0\n  \"Start with one small thing you can do on a busy day.\" faint\neach habit as h\n  stack card gap 1 tap edit h swipe remove h\n    row gap 2\n      h.name bold grow\n      streak(h.check) \"days\" faint\n      toggle h.check\n    row gap 1\n      each days last 7 days\n        stack grow align center tap toggle h.check on it\n          dayname(it) tiny color muted\n          box height 10 radius 5 fill if(count(h.check on it) > 0, accent, soft)\nremind \"Check your habits\" at 20:00\nform habit\n"
+ },
+ {
+  "request": "budget",
+  "first": "ask",
+  "ask": {
+   "question": "Do you want a monthly budget or a daily one?",
+   "options": [
+    "Monthly",
+    "Daily",
+    "Per trip"
+   ]
+  },
+  "program1": "ask \"Do you want a monthly budget or a daily one?\" \"Monthly\" \"Daily\" \"Per trip\"\n",
+  "answer": "Monthly",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want a monthly budget or a daily one?",
+   "options": [
+    "Monthly",
+    "Daily",
+    "Per trip"
+   ]
+  },
+  "program2": "ask \"Do you want a monthly budget or a daily one?\" \"Monthly\" \"Daily\" \"Per trip\"\n",
+  "combined": "ask",
+  "program3": "ask \"Do you want a monthly budget or a daily one?\" \"Monthly\" \"Daily\" \"Per trip\"\n"
+ },
+ {
+  "request": "expenses",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to track about expenses?",
+   "options": [
+    "Receipts",
+    "Expense notes",
+    "Meeting notes",
+    "All of them"
+   ]
+  },
+  "program1": "ask \"What do you want to track about expenses?\" \"Receipts\" \"Expense notes\" \"Meeting notes\" \"All of them\"\n",
+  "answer": "Receipts",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to do with receipts?",
+   "options": [
+    "A list",
+    "A savings tip",
+    "A habit"
+   ]
+  },
+  "program2": "ask \"What do you want to do with receipts?\" \"A list\" \"A savings tip\" \"A habit\"\n",
+  "combined": "build",
+  "program3": "app \"Receipts\" wallet slate\ntable receipt shop text, total money, pic image?\n\"This month\" sum(receipt.total month) big\ndaybars last 7 days, sum(receipt.total on it)\nform receipt, \"Add receipt\"\nlist receipt\n"
+ },
+ {
+  "request": "notes",
+  "first": "ask",
+  "ask": {
+   "question": "What kind of notes?",
+   "options": [
+    "A diary",
+    "Ideas",
+    "Lists",
+    "Things to remember"
+   ]
+  },
+  "program1": "ask \"What kind of notes?\" \"A diary\" \"Ideas\" \"Lists\" \"Things to remember\"\n",
+  "answer": "A diary",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want a text diary or a quick mood log?",
+   "options": [
+    "Write entries",
+    "Quick mood log",
+    "Both"
+   ]
+  },
+  "program2": "ask \"Do you want a text diary or a quick mood log?\" \"Write entries\" \"Quick mood log\" \"Both\"\n",
+  "combined": "ask",
+  "program3": "ask \"Do you want a text diary or a quick mood log?\" \"Write entries\" \"Quick mood log\" \"Both\"\n"
+ },
+ {
+  "request": "workout log",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Workout log\" dumbbell mint\ntable set exercise text, sets num 1..20, reps num 1..100, kg num 0..500\nform set\nlist set\n"
+ },
+ {
+  "request": "savings",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do with savings?",
+   "options": [
+    "Track deposits",
+    "Reach a goal",
+    "Both"
+   ]
+  },
+  "program1": "ask \"What do you want to do with savings?\" \"Track deposits\" \"Reach a goal\" \"Both\"\n",
+  "answer": "Track deposits",
+  "appFlow": "build",
+  "appFlowAsk": null,
+  "program2": "app \"Savings\" coin mint\ntable deposit amount money 10..1000000\nform deposit\nlist deposit\n",
+  "combined": "build",
+  "program3": "app \"Savings\" coin mint\ntable deposit amount money 10..1000000\nform deposit\nlist deposit\n"
+ },
+ {
+  "request": "reminders",
+  "first": "ask",
+  "ask": {
+   "question": "What should we remind you about?",
+   "options": [
+    "Medicines",
+    "Bills",
+    "Birthdays",
+    "Daily habits"
+   ]
+  },
+  "program1": "ask \"What should we remind you about?\" \"Medicines\" \"Bills\" \"Birthdays\" \"Daily habits\"\n",
+  "answer": "Medicines",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you take as medicine?",
+   "options": [
+    "Medicines",
+    "Supplements",
+    "Blood pressure or sugar",
+    "Exercise"
+   ]
+  },
+  "program2": "ask \"What do you take as medicine?\" \"Medicines\" \"Supplements\" \"Blood pressure or sugar\" \"Exercise\"\n",
+  "combined": "ask",
+  "program3": "ask \"What should we remind you about?\" \"Medicines\" \"Bills\" \"Birthdays\" \"Daily habits\"\n"
+ },
+ {
+  "request": "counter",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to count?",
+   "options": [
+    "Repetitions",
+    "Visitors",
+    "Days since something",
+    "Prayers or zikr"
+   ]
+  },
+  "program1": "ask \"What do you want to count?\" \"Repetitions\" \"Visitors\" \"Days since something\" \"Prayers or zikr\"\n",
+  "answer": "Repetitions",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to log?",
+   "options": [
+    "Workouts",
+    "Meals",
+    "Expenses",
+    "Mood"
+   ]
+  },
+  "program2": "ask \"What do you want to log?\" \"Workouts\" \"Meals\" \"Expenses\" \"Mood\"\n",
+  "combined": "ask",
+  "program3": "ask \"What do you want to count?\" \"Repetitions\" \"Visitors\" \"Days since something\" \"Prayers or zikr\"\n"
+ },
+ {
+  "request": "tasbeeh",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to track in Ramadan?",
+   "options": [
+    "Fasts",
+    "Quran pages",
+    "Prayers",
+    "Charity"
+   ]
+  },
+  "program1": "ask \"What do you want to track in Ramadan?\" \"Fasts\" \"Quran pages\" \"Prayers\" \"Charity\"\n",
+  "answer": "Fasts",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to track fasts?",
+   "options": [
+    "Fasts",
+    "Quran pages",
+    "Prayers",
+    "Charity"
+   ]
+  },
+  "program2": "ask \"What do you want to track fasts?\" \"Fasts\" \"Quran pages\" \"Prayers\" \"Charity\"\n",
+  "combined": "build",
+  "program3": "app \"Fasts\" moon mint\ntable fast\nremind \"What do you want to track in Ramadan?\" at 8:00\nbutton if(count(fast today) > 0, \"Fasted today\", \"I fasted today\") tap toggle fast\nstat streak(fast), \"days in a row\"\ncalendar fast\n"
+ },
+ {
+  "request": "attendance",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to check in?",
+   "options": [
+    "My health",
+    "My money",
+    "My tasks"
+   ]
+  },
+  "program1": "ask \"What do you want to check in?\" \"My health\" \"My money\" \"My tasks\"\n",
+  "answer": "My health",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What about your health?",
+   "options": [
+    "Medicines",
+    "Blood pressure or sugar",
+    "Exercise",
+    "Weight"
+   ]
+  },
+  "program2": "ask \"What about your health?\" \"Medicines\" \"Blood pressure or sugar\" \"Exercise\" \"Weight\"\n",
+  "combined": "ask",
+  "program3": "ask \"What should I help you track?\" \"Weight\" \"Food and calories\" \"Exercise\" \"All of them\"\n"
+ },
+ {
+  "request": "quiz",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do for your quiz?",
+   "options": [
+    "Exam marks",
+    "stack",
+    "Door count",
+    "Count"
+   ]
+  },
+  "program1": "ask \"What do you want to do for your quiz?\" \"Exam marks\" \"stack\" \"Door count\" \"Count\"\n",
+  "answer": "Exam marks",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to do for your exam?",
+   "options": [
+    "A timetable",
+    "Track hours",
+    "Exam marks",
+    "Flashcards"
+   ]
+  },
+  "program2": "ask \"What do you want to do for your exam?\" \"A timetable\" \"Track hours\" \"Exam marks\" \"Flashcards\"\n",
+  "combined": "build",
+  "program3": "app \"Exam marks\" pen ocean\ntable exam subject text, score num 0.., outof num 1.. = 100\n\"Overall\" round(sum(exam.score) * 100 / max(sum(exam.outof), 1)) \"%\" big\ntrend exam, it.score * 100 / it.outof\neach exam sort at desc top 8 as e\n  row gap 2\n    e.subject grow\n    e.score \"/\" e.outof bold\nform exam, \"Add result\"\n"
+ },
+ {
+  "request": "journal",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to write in your journal?",
+   "options": [
+    "My body",
+    "My mind",
+    "My journal",
+    "A diary"
+   ]
+  },
+  "program1": "ask \"What do you want to write in your journal?\" \"My body\" \"My mind\" \"My journal\" \"A diary\"\n",
+  "answer": "My body",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What should I track?",
+   "options": [
+    "Weight",
+    "Food and calories",
+    "Exercise",
+    "All of them"
+   ]
+  },
+  "program2": "ask \"What should I track?\" \"Weight\" \"Food and calories\" \"Exercise\" \"All of them\"\n",
+  "combined": "ask",
+  "program3": "ask \"What journal?\" \"Daily health\" \"My habits\" \"My money\" \"My tasks\"\n"
+ },
+ {
+  "request": "medicine",
+  "first": "ask",
+  "ask": {
+   "question": "What about your health?",
+   "options": [
+    "Medicines",
+    "Blood pressure or sugar",
+    "Exercise",
+    "Weight"
+   ]
+  },
+  "program1": "ask \"What about your health?\" \"Medicines\" \"Blood pressure or sugar\" \"Exercise\" \"Weight\"\n",
+  "answer": "Medicines",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you take as medicine?",
+   "options": [
+    "Medicines",
+    "Supplements",
+    "Blood pressure or sugar",
+    "Exercise"
+   ]
+  },
+  "program2": "ask \"What do you take as medicine?\" \"Medicines\" \"Supplements\" \"Blood pressure or sugar\" \"Exercise\"\n",
+  "combined": "ask",
+  "program3": "ask \"What medicines do you take?\" \"Daily medicines\" \"Blood medicines\" \"My medicines\" \"Weight and diet\"\n"
+ },
+ {
+  "request": "water",
+  "first": "ask",
+  "ask": {
+   "question": "What should I help you track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program1": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "answer": "Water",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What should I help you track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program2": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "combined": "ask",
+  "program3": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n"
+ },
+ {
+  "request": "to do list",
+  "first": "ask",
+  "ask": {
+   "question": "How do you want to handle tasks?",
+   "options": [
+    "A simple to do list",
+    "A list with due dates",
+    "A list with priorities"
+   ]
+  },
+  "program1": "ask \"How do you want to handle tasks?\" \"A simple to do list\" \"A list with due dates\" \"A list with priorities\"\n",
+  "answer": "A simple to do list",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to track?",
+   "options": [
+    "Health",
+    "Habits",
+    "Money",
+    "Time"
+   ]
+  },
+  "program2": "ask \"What do you want to track?\" \"Health\" \"Habits\" \"Money\" \"Time\"\n",
+  "combined": "build",
+  "program3": "app \"To do\" list ink\ntable task title text, due date?, done bool, tag pick Home|Work|Other = Home\nlet late = count(task where done = no and due < today)\ncount(task where done = no) \"open,\" late \"late\" head color if(late > 0, warn, ink)\neach task where done = no sort due as t\n  row card gap 2 tap edit t swipe remove t\n    toggle t.done\n    stack grow\n      t.title bold\n      t.tag t.due small color if(t.due < today, bad, muted)\nremind \"You have tasks due today\" at 8:00 if count(task where done = no and due = today) > 0\nform task\n\"Done\" faint\nlist task where done = yes\n"
+ },
+ {
+  "request": "gym",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do at the gym?",
+   "options": [
+    "Log my workouts",
+    "Track my weight",
+    "A rest timer"
+   ]
+  },
+  "program1": "ask \"What do you want to do at the gym?\" \"Log my workouts\" \"Track my weight\" \"A rest timer\"\n",
+  "answer": "Log my workouts",
+  "appFlow": "build",
+  "appFlowAsk": null,
+  "program2": "app \"Workout log\" dumbbell mint\ntable set exercise text, sets num 1..20, reps num 1..100, kg num 0..500\nform set\nlist set\n",
+  "combined": "build",
+  "program3": "app \"Gym log\" dumbbell ink\ntable sets exercise text, sets num 1..20 = 3, reps num 1.., kg num 0.. = 0\ncount(sets today) \"exercises today\" head\nform sets\nlist sets by day\n"
+ },
+ {
+  "request": "shopping list",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Shopping List\" cart ocean\ntable buy name text, got bool\neach buy where got = no sort at desc\n  row card\n    it.name grow\n    toggle it.got\nform buy, \"Add item\"\n"
+ },
+ {
+  "request": "study planner",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Study\" school ocean\ntable subject name text\ntable lesson subject ref subject, day pick Mon|Tue|Wed|Thu|Fri|Sat = Mon, start time, mins num 15..180 = 45\ntable studied subject ref subject, mins num 1..\ntable flash word text, meaning text\nsetting work dur = 25m \"Focus length\"\nstate i num = 0\nstate flipped bool = no\nstate sub ref subject\nscreen plan \"Timetable\" calendar\n  each options lesson.day as dd\n    stack gap 1\n      dd bold\n      each lesson where day = dd sort start as l\n        row card tap edit l swipe remove l\n          l.start l.subject.name grow\n          l.mins \"min\"\n  form lesson, \"Add lesson\"\n  form subject, \"Add subject\"\nscreen focus \"Focus\" timer\n  choice sub\n  timer work, \"Focus\", add studied subject = sub, mins = 25 then notify \"Break time\"\n  sum(studied.mins today) \"min studied today\" head\nscreen cards \"Cards\" cards\n  each flash sort at as c\n    if index = i\n      stack card gap 2 pad 4 align center tap set flipped = not flipped\n        if flipped\n          c.meaning big\n        else\n          c.word big\n  row gap 1\n    button \"Previous\" tap set i = clamp(i - 1, 0, count(flash) - 1) then set flipped = no\n    button \"Next\" tap set i = clamp(i + 1, 0, count(flash) - 1) then set flipped = no\n  form flash, \"Add card\"\nscreen progress \"Progress\" chart\n  daybars last 7 days, sum(studied.mins on it)\n  share subject, sum(it.studied.mins week), it.name\n"
+ },
+ {
+  "request": "track my water",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program1": "ask \"What do you want to track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "answer": "Water",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What should I help you track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program2": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "combined": "build",
+  "program3": "app \"Water\" drop ocean\ntable drink ml num 1..5000 unit \"ml\"\nform drink\nlist drink\n"
+ },
+ {
+  "request": "keep my expenses",
+  "first": "ask",
+  "ask": {
+   "question": "Do you want to track spending or set a budget?",
+   "options": [
+    "Track spending",
+    "Set a budget",
+    "Both"
+   ]
+  },
+  "program1": "ask \"Do you want to track spending or set a budget?\" \"Track spending\" \"Set a budget\" \"Both\"\n",
+  "answer": "Track spending",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want to track spending or set a budget?",
+   "options": [
+    "Track spending",
+    "Set a budget",
+    "Both"
+   ]
+  },
+  "program2": "ask \"Do you want to track spending or set a budget?\" \"Track spending\" \"Set a budget\" \"Both\"\n",
+  "combined": "build",
+  "program3": "app \"Receipt\" wallet slate\ntable spend amount money, category pick Food|Bills|Travel|Fun|Other = Food\n\"This month\" sum(spend.amount month) big\nshare spend month by category, sum(it.amount), it.key\nform spend, \"Add receipt\"\nlist spend by day\n"
+ },
+ {
+  "request": "i want to save money",
+  "first": "ask",
+  "ask": {
+   "question": "Do you want to track money you spend or money you save?",
+   "options": [
+    "Money I spend",
+    "Money I save",
+    "Both"
+   ]
+  },
+  "program1": "ask \"Do you want to track money you spend or money you save?\" \"Money I spend\" \"Money I save\" \"Both\"\n",
+  "answer": "Money I spend",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want to track spending or set a budget?",
+   "options": [
+    "Track spending",
+    "Set a budget",
+    "Both"
+   ]
+  },
+  "program2": "ask \"Do you want to track spending or set a budget?\" \"Track spending\" \"Set a budget\" \"Both\"\n",
+  "combined": "build",
+  "program3": "app \"Savings\" coin mint\ntable deposit amount money 10..1000000\nform deposit\nlist deposit\n"
+ },
+ {
+  "request": "help me drink more water",
+  "first": "ask",
+  "ask": {
+   "question": "What should I help you track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program1": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "answer": "Water",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What should I help you track?",
+   "options": [
+    "Water",
+    "Exercise",
+    "Food",
+    "Sleep"
+   ]
+  },
+  "program2": "ask \"What should I help you track?\" \"Water\" \"Exercise\" \"Food\" \"Sleep\"\n",
+  "combined": "build",
+  "program3": "app \"Water\" drop ocean\ntable drink ml num 1..5000 unit \"ml\"\nsetting goal num = 2000 \"Daily goal (ml)\"\ngoal sum(drink.ml today), goal, \"today\", \"ml\"\nquick drink, ml, [250, 500]\n\"Days goal met this week:\" count(days last 7 days, sum(drink.ml on it) >= goal) faint\ndaybars last 7 days, sum(drink.ml on it)\nlist drink\n"
+ },
+ {
+  "request": "my daily habits",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Habits\" check ocean\ntable habit name text\ntable check habit ref habit\nlet n = count(habit)\nlet done = count(check today)\nrow gap 2\n  goal done, n, \"done today\"\n  stack grow\n    if(done = n and n > 0, \"All done today\", \"Keep going\") head\n    \"Best streak\" max(habit, streak(it.check)) \"days\" faint\nif n = 0\n  \"Start with one small thing you can do on a busy day.\" faint\neach habit as h\n  stack card gap 1 tap edit h swipe remove h\n    row gap 2\n      h.name bold grow\n      streak(h.check) \"days\" faint\n      toggle h.check\n    row gap 1\n      each days last 7 days\n        stack grow align center tap toggle h.check on it\n          dayname(it) tiny color muted\n          box height 10 radius 5 fill if(count(h.check on it) > 0, accent, soft)\nremind \"Check your habits\" at 20:00\nform habit\n"
+ },
+ {
+  "request": "track spending",
+  "first": "ask",
+  "ask": {
+   "question": "Do you want to track spending or set a budget?",
+   "options": [
+    "Track spending",
+    "Set a budget",
+    "Both"
+   ]
+  },
+  "program1": "ask \"Do you want to track spending or set a budget?\" \"Track spending\" \"Set a budget\" \"Both\"\n",
+  "answer": "Track spending",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want to track spending or set a budget?",
+   "options": [
+    "Track spending",
+    "Set a budget",
+    "Both"
+   ]
+  },
+  "program2": "ask \"Do you want to track spending or set a budget?\" \"Track spending\" \"Set a budget\" \"Both\"\n",
+  "combined": "build",
+  "program3": "app \"Spending\" wallet slate\ntable spend what text, amount money, category pick Food|Bills|Travel|Fun|Health|Other = Other\n\"Spent this month\" sum(spend.amount month) big\nshare spend month by category, sum(it.amount), it.key\nform spend\nlist spend by day\n\"Connecting to a bank is not possible here; add spending by hand.\" faint\n"
+ },
+ {
+  "request": "make a todo app",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Tudo\" list ink\ntable task title text, done bool\ncount(task where done = no) \"open\" head\neach task where done = no as t\n  row card gap 2 tap edit t swipe remove t\n    toggle t.done\n    t.title grow\nform task\n\"Done\" faint\nlist task where done = yes\n"
+ },
+ {
+  "request": "app for my shop",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to manage in your shop?",
+   "options": [
+    "Stock",
+    "Daily sales",
+    "Customer credit",
+    "Supplier orders"
+   ]
+  },
+  "program1": "ask \"What do you want to manage in your shop?\" \"Stock\" \"Daily sales\" \"Customer credit\" \"Supplier orders\"\n",
+  "answer": "Stock",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you keep in your inventory?",
+   "options": [
+    "Shop items",
+    "Home supplies",
+    "Tools",
+    "Food"
+   ]
+  },
+  "program2": "ask \"What do you keep in your inventory?\" \"Shop items\" \"Home supplies\" \"Tools\" \"Food\"\n",
+  "combined": "ask",
+  "program3": "ask \"What do you want to manage in your shop?\" \"Stock\" \"Daily sales\" \"Customer credit\" \"Supplier orders\"\n"
+ },
+ {
+  "request": "something for my kids",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do for your kids?",
+   "options": [
+    "Chores and rewards",
+    "Pocket money",
+    "Study time",
+    "Reading"
+   ]
+  },
+  "program1": "ask \"What do you want to do for your kids?\" \"Chores and rewards\" \"Pocket money\" \"Study time\" \"Reading\"\n",
+  "answer": "Chores and rewards",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to do with rewards?",
+   "options": [
+    "A chain",
+    "A never-fall score",
+    "A coinfall gym"
+   ]
+  },
+  "program2": "ask \"What do you want to do with rewards?\" \"A chain\" \"A never-fall score\" \"A coinfall gym\"\n",
+  "combined": "ask",
+  "program3": "ask \"What do you want to do for your kids?\" \"Chores and rewards\" \"Pocket money\" \"Study time\" \"Reading\"\n"
+ },
+ {
+  "request": "help me study",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do for your study?",
+   "options": [
+    "A timetable",
+    "Track hours",
+    "Exam marks",
+    "Flashcards"
+   ]
+  },
+  "program1": "ask \"What do you want to do for your study?\" \"A timetable\" \"Track hours\" \"Exam marks\" \"Flashcards\"\n",
+  "answer": "A timetable",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you need for school?",
+   "options": [
+    "Homework list",
+    "Exam marks",
+    "Study timetable",
+    "Reading log"
+   ]
+  },
+  "program2": "ask \"What do you need for school?\" \"Homework list\" \"Exam marks\" \"Study timetable\" \"Reading log\"\n",
+  "combined": "build",
+  "program3": "app \"Study\" school mint\ntable subject name text\ntable lesson subject ref subject, day pick Mon|Tue|Wed|Thu|Fri|Sat = Mon, start time, mins num 15..180 = 45\ntable studied subject ref subject, mins num 1..\ntable flash word text, meaning text\nsetting work dur = 25m \"Focus length\"\nstate i num = 0\nstate flipped bool = no\nstate sub ref subject\nscreen plan \"Timetable\" calendar\n  each options lesson.day as dd\n    stack gap 1\n      dd bold\n      each lesson where day = dd sort start as l\n        row card tap edit l swipe remove l\n          l.start l.subject.name grow\n          l.mins \"min\"\n  form lesson, \"Add lesson\"\n  form subject, \"Add subject\"\nscreen focus \"Focus\" timer\n  choice sub\n  timer work, \"Focus\", add studied subject = sub, mins = 25 then notify \"Break time\"\n  sum(studied.mins today) \"min studied today\" head\nscreen cards \"Cards\" cards\n  each flash sort at as c\n    if index = i\n      stack card gap 2 pad 4 align center tap set flipped = not flipped\n        if flipped\n          c.meaning big\n        else\n          c.word big\n  row gap 1\n    button \"Previous\" tap set i = clamp(i - 1, 0, count(flash) - 1) then set flipped = no\n    button \"Next\" tap set i = clamp(i + 1, 0, count(flash) - 1) then set flipped = no\n  form flash, \"Add card\"\nscreen progress \"Progress\" chart\n  daybars last 7 days, sum(studied.mins on it)\n  share subject, sum(it.studied.mins week), it.name\n"
+ },
+ {
+  "request": "water tracker with a daily goal",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Water\" drop ocean\ntable drink ml num 1..5000 unit \"ml\"\nsetting goal num = 2000 \"Daily goal (ml)\"\ngoal sum(drink.ml today), goal, \"today\", \"ml\"\nquick drink, ml, [250, 500]\n\"Days goal met this week:\" count(days last 7 days, sum(drink.ml on it) >= goal) faint\ndaybars last 7 days, sum(drink.ml on it)\nlist drink\n"
+ },
+ {
+  "request": "a habit tracker for reading and prayer",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Habits\" check ocean\ntable habit name text\ntable check habit ref habit\nlet n = count(habit)\nlet done = count(check today)\nrow gap 2\n  goal done, n, \"done today\"\n  stack grow\n    if(done = n and n > 0, \"All done today\", \"Keep going\") head\n    \"Best streak\" max(habit, streak(it.check)) \"days\" faint\nif n = 0\n  \"Start with one small thing you can do on a busy day.\" faint\neach habit as h\n  stack card gap 1 tap edit h swipe remove h\n    row gap 2\n      h.name bold grow\n      streak(h.check) \"days\" faint\n      toggle h.check\n    row gap 1\n      each days last 7 days\n        stack grow align center tap toggle h.check on it\n          dayname(it) tiny color muted\n          box height 10 radius 5 fill if(count(h.check on it) > 0, accent, soft)\nremind \"Check your habits\" at 20:00\nform habit\n"
+ },
+ {
+  "request": "expense tracker with categories",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Pocket money\" coin ink\ntable pocket what text, amount money, category pick Snacks|Games|Books|Gifts|Other\nstate m date = today\nlet spent = sum(pocket.amount month of m)\nmonthnav m\n\"Spent\" spent big\nform pocket\nshare pocket month of m by category, sum(it.amount), it.key\nlist pocket month of m by day\n"
+ },
+ {
+  "request": "list of books i want to read",
+  "first": "ask",
+  "ask": {
+   "question": "What kind of book?",
+   "options": [
+    "A book list",
+    "A diary",
+    "A story",
+    "Something else"
+   ]
+  },
+  "program1": "ask \"What kind of book?\" \"A book list\" \"A diary\" \"A story\" \"Something else\"\n",
+  "answer": "A book list",
+  "appFlow": "build",
+  "appFlowAsk": null,
+  "program2": "app \"Book list\" book ink\ntable book title text, author text?, pages num 1..3000, rating num 1..5, finished bool\nform book\nlist book\n",
+  "combined": "build",
+  "program3": "app \"Reading\" book plum\ntable book title text, author text?, status pick Want|Reading|Done = Want, finished date?\nstate tab text = Reading\nrow gap 1\n  each options book.status\n    button it fill if(tab = it, accent, soft) tap set tab = it\neach book where status = tab sort title as b\n  row card tap edit b swipe remove b\n    stack grow\n      b.title bold\n      b.author faint\n    if b.status = Reading\n      button \"Finished\" tap set b.status = Done then set b.finished = today\nform book\n"
+ },
+ {
+  "request": "count my pushups every day",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Pushups\" dumbbell ink\ntable set reps num 1..500\nstat sum(set.reps today), \"today\"\nbutton \"+1 rep\" tap add set reps = 1\nbutton \"Undo\" tap remove last(set)\n\"Sets today\" sum(set.reps today) big\ndaybars last 7 days, sum(set.reps on it)\n"
+ },
+ {
+  "request": "track my baby's feeds and diapers",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Baby\" baby plum\ntable feed ml num 10..400 unit \"ml\"\ntable diaper kind pick Wet|Dirty = Wet\ncount(feed today) \"feeds today\" big\nsum(feed.ml today) \"ml\" faint\nrow gap 1\n  each options diaper.kind\n    button it grow tap add diaper kind = it\ndaybars last 7 days, sum(feed.ml on it)\n"
+ },
+ {
+  "request": "rent tracker for my 3 tenants",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Rent\" home slate\ntable tenant name text, unit text, rent money\ntable paid tenant ref tenant, amount money\nlet expected = sum(tenant.rent)\nlet got = sum(paid.amount month)\ngoal got, expected, \"collected this month\"\neach tenant sort name as t\n  let ok = count(t.paid month) > 0\n  row card gap 2\n    stack grow\n      t.name bold\n      t.unit \"due\" t.rent faint\n    if ok\n      \"Paid\" color good bold\n    else\n      button \"Got rent\" tap add paid tenant = t, amount = t.rent\nform tenant, \"Add tenant\"\n"
+ },
+ {
+  "request": "log my blood pressure morning and evening",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Blood pressure\" pill ocean\ntable reading high num 50..250, low num 30..150, pulse num? 30..220\nform reading\nlist reading\n"
+ },
+ {
+  "request": "a timer for studying 25 minutes",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Study Timer\" timer ocean\ntimer 25m, \"Study\", notify \"Study session done\"\n"
+ },
+ {
+  "request": "daily mood journal",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Journal\" book plum\ntable entry mood num 1..5, note long\nstate d new entry\nrow gap 1\n  each [\"awful\", \"low\", \"okay\", \"good\", \"great\"]\n    button it fill if(d.mood = index + 1, accent, soft) tap set d.mood = index + 1\nfield d.note \"What is on your mind?\"\nbutton \"Save entry\" tap save d\nstreak(entry) \"day streak,\" count(entry last 7 days) \"entries in 7 days\" head\nheat last 7 days, count(entry on it)\n\"Mood, last 30 days. Average\" round(avg(entry.mood last 30 days)) faint\ntrend entry last 30 days sort at, it.mood\nstate q text = \"\"\nfield q \"Search entries\"\nlist entry where has(note, q) by day\n"
+ },
+ {
+  "request": "i want to keep track of how much milk i buy each day and the monthly bill",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Milk\" milk mint\ntable buy amount money, shop text?\ntable delivery litres num 0..20 = 1\nlet litres = sum(buy.amount month) / max(sum(delivery.litres month), 1)\nlitres \"litres\" huge big\n\"Bill\" litres * sum(delivery.litres month) \"this month\" faint\nquick buy, amount, [100, 200, 500]\nform delivery\nlist delivery by day\n"
+ },
+ {
+  "request": "make an app where i add my students and mark who is absent",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Attendance\" users slate\ntable student name text\ntable absent student ref student\nstate d date = today\nrow align center\n  button \"<\" tap set d = d - 1\n  dayname(d) monthday(d) monthname(d) head grow align center\n  button \">\" tap set d = d + 1\ncount(student) - count(absent on d) \"of\" count(student) \"present\" big\ngrid 4 gap 1\n  each student sort name as s\n    stack radius 8 pad 1 fill if(count(s.absent on d) > 0, bad, good) tap toggle s.absent on d\n      s.name bold align center color bg\n      if(count(s.absent on d) > 0, \"Absent\", \"Present\") tiny align center color bg\n\"Tap a name to mark absent. Everyone starts present.\" faint\neach student sort name as s\n  row\n    s.name grow\n    count(s.absent month of d) \"days absent this month\" faint\nform student, \"Add student\"\n"
+ },
+ {
+  "request": "track my car petrol and mileage every time i fill up",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Mileage\" car slate\ntable fill litres num 1..200, odo num 0.., price money\n\"Average\" round(avg(fill.odo last 30 days)) \"km per litre\" big\ntrend fill, it.odo\nform fill, \"Add fill-up\"\nlist fill\n"
+ },
+ {
+  "request": "i need to remember my medicines, 3 times a day",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Medicine\" pill ink\ntable med name text, dose text?\ntable taken med ref med\nremind \"Time to take your medicine\" at 3:00, 8:00\ncount(taken today) \"of\" 3 \"doses taken today\" head\neach med sort name as m\n  row card gap 2 tap edit m swipe remove m\n    stack grow\n      m.name bold\n      m.dose faint\n    toggle m.taken\nform med, \"Add medicine\"\n"
+ },
+ {
+  "request": "keep score for our cricket match ball by ball",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"ball\" ball ocean\ntable ball runs num 0..6 = 0, wide bool, out bool\nsetting overs num = 20\nlet legal = count(ball today where wide = no)\nlet runs = sum(ball.runs today) + count(ball today where wide = yes)\nlet wkts = count(ball today where out = yes)\nruns \"/\" wkts big\n\"Overs\" floor(legal / 6) + legal % 6 / 10 \"of\" overs \". Run rate\" round(runs * 6 / legal) faint\nrow gap 1\n  each [0, 1, 2, 3, 4, 6]\n    button it tap add ball runs = it\nrow gap 1\n  button \"Wide\" tap add ball wide = yes\n  button \"Out\" fill bad tap add ball out = yes\n  button \"Undo\" tap remove last(ball today)\nrow gap 1\n  each ball today sort at desc top 6\n    draw width 36\n      circle 50, 50, 46 fill if(it.out, bad, if(it.runs >= 4, good, soft))\n      if it.out\n        label 50, 50, \"W\" bold\n      else\n        label 50, 50, it.runs bold\n"
+ },
+ {
+  "request": "a simple to do list with due dates and priority",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Laundry\" cloud ocean\ntable wash kind pick Whites|Colours|Delicates|Bedding|Towels = Whites, due date, done bool, priority pick Low|Normal|High = Normal\ncount(wash where done = no) \"loads to wash\" head\neach wash where done = no sort due as w\n  row card gap 1\n    w.kind bold grow\n    w.due faint\n    toggle w.done\nstat since(wash), \"days since the last entry\"\nform wash\nlist wash by day\n"
+ },
+ {
+  "request": "budget for the month of 50000 with food bills and transport",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"5000\" bolt mint\ntable spend what text, amount money, category pick Food|Bills|Travel|Fun|Health|Other = Other\nlet spent = sum(spend.amount month)\nsetting budget money = 50000 \"Monthly budget\"\nif(spent > budget, \"Over budget by\", \"Left to spend\") abs(budget - spent) big\ngoal spent, budget, \"spent\"\nform spend\nlist spend month by day\n"
+ },
+ {
+  "request": "track my weight every week and show a chart",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Daily steps and weight\" scale plum\ntable body kg num 20..300, waist num 40..200 unit \"cm\"\nstat last(body.kg), \"latest\"\nform body\ntrend body last 90 days sort at, it.kg\nlist body\n"
+ },
+ {
+  "request": "quran reading tracker, pages per day",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Quran\" book ocean\ntable recite pages num 1..100 unit \"pages\"\nform recite\ndaybars last 7 days, sum(recite.pages on it)\nlist recite\n"
+ },
+ {
+  "request": "sleep tracker, what time i sleep and wake up",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Sleep Clock\" bed plum\nsetting bed time = 23:00 \"Bedtime\"\nsetting wake time = 7:00 \"Wake-up time\"\nlet a = 360 * (((bed - 0:00) / 1h) % 12) / 12\nlet b = 360 * (((wake - 0:00) / 1h) % 12) / 12\ndraw width 220\n  circle 50, 50, 46 stroke edge thick 1\n  arc 50, 50, 38, a, if(b > a, b, b + 360) stroke accent thick 6\n  label 50, 8, \"12\" tiny\n  label 92, 52, \"3\" tiny\n  label 50, 96, \"6\" tiny\n  label 8, 52, \"9\" tiny\n  label 50, 50, ((wake - bed) / 1h + 24) % 24 big\n\"Bedtime\" bed \"Wake-up\" wake head\n"
+ },
+ {
+  "request": "plz make expnse tracker",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Expansion\" users mint\ntable word term text, amount num 1..500 = 100\n\"English words\" count(word) big\n\"Expansions today\" count(word today) faint\nbutton \"Start over\" tap remove all word\nform word, \"Add word\"\n"
+ },
+ {
+  "request": "watr tracker",
+  "first": "build",
+  "ask": null,
+  "program1": "app \"Wedding\" gift ink\ntable guest name text, side pick Bride|Groom = Bride, rsvp pick Waiting|Yes|No = Waiting, seat num 0.. = 0 \"Table number\"\ntable gift guest ref guest, item text\ntable thanks guest ref guest, sent bool\nscreen guests \"Guests\" users\n  count(guest where rsvp = Yes) \"coming,\" count(guest where rsvp = Waiting) \"waiting\" head\n  each guest sort name as g\n    row card tap edit g swipe remove g\n      g.name bold grow\n      g.rsvp color if(g.rsvp = Yes, good, if(g.rsvp = No, bad, muted))\n  form guest, \"Add guest\"\nscreen tables \"Seating\" seat\n  grid 2 gap 1\n    each 1..10 as n\n      stack card gap 0\n        \"Table\" n bold\n        count(guest where seat = n) \"guests\" faint\n        each guest where seat = n as g\n          g.name small\nscreen gifts \"Gifts\" gift\n  list gift\n  form gift, \"Add gift\"\nscreen notes \"Thank you\" note\n  each guest where rsvp = Yes as g\n    row card\n      toggle g.thanks\n      g.name grow\n  form thanks, \"Add thank-you note\"\n"
+ },
+ {
+  "request": "hbit app",
+  "first": "ask",
+  "ask": {
+   "question": "What about money?",
+   "options": [
+    "What I spend",
+    "What I owe or am owed",
+    "Savings goal",
+    "A budget"
+   ]
+  },
+  "program1": "ask \"What about money?\" \"What I spend\" \"What I owe or am owed\" \"Savings goal\" \"A budget\"\n",
+  "answer": "What I spend",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want to see where money goes or set a limit?",
+   "options": [
+    "See where it goes",
+    "Set a limit",
+    "Both"
+   ]
+  },
+  "program2": "ask \"Do you want to see where money goes or set a limit?\" \"See where it goes\" \"Set a limit\" \"Both\"\n",
+  "combined": "build",
+  "program3": "app \"Hobby spending\" pencil ocean\ntable hobby_cost what text, amount money\nlet spent = sum(hobby_cost.amount month)\n\"Spent\" spent big\nform hobby_cost\ndaybars last 7 days, sum(hobby_cost.amount on it)\nlist hobby_cost month by day\nremind \"Add today's expenses\" at 12:00, 18:00\n"
+ },
+ {
+  "request": "my shop udhaar list who owes me money",
+  "first": "fail",
+  "ask": null,
+  "program1": "app \"Udhaar\" wallet slate\ntable person name text\ntable ache person ref person, amount money, what text?\ntable payache refache money, amount money\neach person as p\n  let bal = sum(p.ache.amount) - sum(p.name..\"], 0) to max(bal, 0) as n = 0) where sum(p.ache.amount) = n and count(p.ache) = 0 = n.name.bal = 0. n.name head grow color if(bal < n.name, bad, ink) tap edit p fill if(bal < n.name, bad, surface) tap edit n.ask \" + amount % payache % person, not last(p.ache) = p.name or p.at = today - 30)\nform person, \"Add person\"\nform ache, \"Add ache\"\nform payache, \"Add payment\"\n"
+ },
+ {
+  "request": "fitness",
+  "first": "ask",
+  "ask": {
+   "question": "What kind of fitness do you do?",
+   "options": [
+    "Gym workouts",
+    "Running or walking",
+    "Home exercises",
+    "Weight and diet"
+   ]
+  },
+  "program1": "ask \"What kind of fitness do you do?\" \"Gym workouts\" \"Running or walking\" \"Home exercises\" \"Weight and diet\"\n",
+  "answer": "Gym workouts",
+  "appFlow": "build",
+  "appFlowAsk": null,
+  "program2": "app \"Gym workouts\" dumbbell ink\ntable workout kind pick Run|Gym|Yoga|Swim|Cycle, mins num 5..240 = 30\ncount(workout today) \"today\" head\nform workout\nlist workout by day\n",
+  "combined": "build",
+  "program3": "app \"Gym workouts\" dumbbell ocean\ntable workout kind pick Run|Gym|Yoga|Swim|Cycle, mins num 5..240 = 30\n\"Streak\" streak(workout) \"days\" big\n\"Best\" best(workout) \"days\" faint\nquick workout, kind, [Run, Gym, Yoga, Swim]\nheat last 70 days, count(workout on it), 4\nlist workout by day\n"
+ },
+ {
+  "request": "money",
+  "first": "ask",
+  "ask": {
+   "question": "Do you want to see where money goes or set a limit?",
+   "options": [
+    "See where it goes",
+    "Set a limit",
+    "Both"
+   ]
+  },
+  "program1": "ask \"Do you want to see where money goes or set a limit?\" \"See where it goes\" \"Set a limit\" \"Both\"\n",
+  "answer": "See where it goes",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "Do you want to see where it goes or set a limit?",
+   "options": [
+    "See where it goes",
+    "Set a limit",
+    "Both"
+   ]
+  },
+  "program2": "ask \"Do you want to see where it goes or set a limit?\" \"See where it goes\" \"Set a limit\" \"Both\"\n",
+  "combined": "ask",
+  "program3": "ask \"Do you want to see where money goes or set a limit?\" \"See where it goes\" \"Set a limit\" \"Both\"\n"
+ },
+ {
+  "request": "health",
+  "first": "ask",
+  "ask": {
+   "question": "What about your health?",
+   "options": [
+    "Medicines",
+    "Blood pressure or sugar",
+    "Exercise",
+    "Weight"
+   ]
+  },
+  "program1": "ask \"What about your health?\" \"Medicines\" \"Blood pressure or sugar\" \"Exercise\" \"Weight\"\n",
+  "answer": "Medicines",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you take as medicine?",
+   "options": [
+    "Medicines",
+    "Supplements",
+    "Blood pressure or sugar",
+    "Exercise"
+   ]
+  },
+  "program2": "ask \"What do you take as medicine?\" \"Medicines\" \"Supplements\" \"Blood pressure or sugar\" \"Exercise\"\n",
+  "combined": "ask",
+  "program3": "ask \"What about medicines?\" \"Medicines\" \"Daily medicines\" \"A doctor's visit\" \"A patient's medicine\"\n"
+ },
+ {
+  "request": "school",
+  "first": "ask",
+  "ask": {
+   "question": "What do you need for school?",
+   "options": [
+    "Homework list",
+    "Exam marks",
+    "Study timetable",
+    "Reading log"
+   ]
+  },
+  "program1": "ask \"What do you need for school?\" \"Homework list\" \"Exam marks\" \"Study timetable\" \"Reading log\"\n",
+  "answer": "Homework list",
+  "appFlow": "build",
+  "appFlowAsk": null,
+  "program2": "app \"Homework\" school slate\ntable hw child text, subject text, what text, done bool\neach hw where done = no sort at desc\n  row card tap edit it\n    stack grow\n      it.child it.subject bold\n      it.what faint\n    toggle it.done\nform hw, \"Add homework\"\n",
+  "combined": "build",
+  "program3": "app \"Homework\" school slate\ntable hw child text, subject text, what text, done bool\neach hw where done = no sort at desc\n  row card tap edit it\n    stack grow\n      it.child it.subject bold\n      it.what faint\n    toggle it.done\nform hw, \"Add homework\"\n"
+ },
+ {
+  "request": "kids",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do for your kids?",
+   "options": [
+    "Chores and rewards",
+    "Pocket money",
+    "Study time",
+    "Reading"
+   ]
+  },
+  "program1": "ask \"What do you want to do for your kids?\" \"Chores and rewards\" \"Pocket money\" \"Study time\" \"Reading\"\n",
+  "answer": "Chores and rewards",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "What do you want to do with rewards?",
+   "options": [
+    "A chain",
+    "A never-fall score",
+    "A coinfall gym"
+   ]
+  },
+  "program2": "ask \"What do you want to do with rewards?\" \"A chain\" \"A never-fall score\" \"A coinfall gym\"\n",
+  "combined": "build",
+  "program3": "app \"Chore rope\" board mint\ntable kid name text\ntable chore what text, kid ref kid, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun\neach options chore.day as dd\n  dd bold\n  each chore where day = dd as c\n    row card gap 2 tap edit c swipe remove c\n      c.what grow\n      c.kid.name faint\nform kid, \"Add kid\"\nform chore, \"Add reward\"\n"
+ },
+ {
+  "request": "work",
+  "first": "ask",
+  "ask": {
+   "question": "What do you want to do at work?",
+   "options": [
+    "A task list",
+    "A focus timer",
+    "A habit tracker"
+   ]
+  },
+  "program1": "ask \"What do you want to do at work?\" \"A task list\" \"A focus timer\" \"A habit tracker\"\n",
+  "answer": "A task list",
+  "appFlow": "ask",
+  "appFlowAsk": {
+   "question": "How do you want to handle tasks?",
+   "options": [
+    "A simple to do list",
+    "A list with due dates",
+    "A list with priorities"
+   ]
+  },
+  "program2": "ask \"How do you want to handle tasks?\" \"A simple to do list\" \"A list with due dates\" \"A list with priorities\"\n",
+  "combined": "ask",
+  "program3": "ask \"How do you want to handle tasks?\" \"A simple to do list\" \"A list with due dates\" \"A list with priorities\"\n"
+ }
+]
