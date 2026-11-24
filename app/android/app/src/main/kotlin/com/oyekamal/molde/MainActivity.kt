@@ -1,6 +1,12 @@
 package com.oyekamal.molde
 
+import android.content.Context
+import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Handler
+import android.os.StatFs
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -36,6 +42,35 @@ class MainActivity : FlutterActivity() {
                 "cores" to Runtime.getRuntime().availableProcessors(),
                 "externalFiles" to (getExternalFilesDir(null)?.absolutePath ?: ""),
             ))
+            "dlNotify" -> {
+                val i = Intent(this, DownloadService::class.java)
+                    .putExtra("title", call.argument<String>("title") ?: "Molde")
+                    .putExtra("text", call.argument<String>("text") ?: "")
+                    .putExtra("pct", call.argument<Number>("pct")?.toInt() ?: -1)
+                try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i); result.success(true) }
+                catch (e: Throwable) { result.success(false) }
+            }
+            "dlStop" -> { stopService(Intent(this, DownloadService::class.java)); result.success(null) }
+            "freeSpace" -> {
+                val path = call.argument<String>("path") ?: filesDir.absolutePath
+                try { val f = java.io.File(path); f.mkdirs(); result.success(StatFs(f.absolutePath).availableBytes) }
+                catch (e: Throwable) { result.success(StatFs(filesDir.absolutePath).availableBytes) }
+            }
+            "networkType" -> {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+                result.success(when {
+                    caps == null -> "none"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "wifi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+                    else -> "other"
+                })
+            }
+            "requestNotifications" -> {
+                if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 77)
+                result.success(null)
+            }
             "cancel" -> { llm?.nativeCancel(); result.success(null) }
             "load" -> {
                 val path = call.argument<String>("path")!!
