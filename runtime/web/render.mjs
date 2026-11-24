@@ -112,6 +112,7 @@ class Renderer {
     this.lastTree = t;
     this.shell.setAttribute('data-theme', t.theme || 'mint');
     this.shell.setAttribute('data-mode', t.mode || this.opts.mode || 'light');
+    if (t.size) this.shell.setAttribute('data-size', t.size); else this.shell.removeAttribute('data-size'); // the program's text size (app line)
     this.renderHead(t);
     if (this.app.prog && this.app.prog.header && this.app.prog.header.kind === 'ask') this.renderAsk(this.app.prog.header);
     else if (!this.app.ok && this.app.errors && this.app.errors.length) {
