@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'bridge.dart';
+import 'rules.dart';
+export 'rules.dart';
 import 'llm.dart';
 import 'store.dart';
 
@@ -21,90 +23,6 @@ class PendingAsk {
   final List<String> options;
 }
 
-/// Words that do not name a thing (generic, no app vocabulary).
-const Set<String> kFiller = {'a', 'an', 'the', 'my', 'me', 'make', 'build', 'create', 'new', 'app', 'apps', 'please', 'simple', 'some', 'for', 'of', 'and', 'with', 'to', 'i', 'want', 'need', 'can', 'you', 'do', 'it', 'this', 'that', 'something', 'anything', 'stuff', 'thing', 'things', 'tool', 'give', 'get', 'help', 'is', 'be', 'have', 'like', 'just', 'one', 'on', 'in', 'up'};
-
-List<String> _words(String t) => RegExp(r'[a-z0-9]+').allMatches(t.toLowerCase()).map((m) => m.group(0)!).toList();
-
-/// A request of 1 to 3 words that names a thing builds at once (the model may not ask about it).
-bool namesAThing(String request) {
-  final w = _words(request);
-  return w.isNotEmpty && w.length <= 3 && w.any((x) => !kFiller.contains(x));
-}
-
-/// Names the current app uses: its title and the words of its table, field, setting and state lines.
-Set<String> appNames(String source) {
-  final out = <String>{};
-  final title = RegExp(r'^app "([^"]*)"', multiLine: true).firstMatch(source)?.group(1);
-  if (title != null) out.addAll(_words(title));
-  for (final l in source.split('\n')) {
-    final t = l.trim();
-    if (RegExp(r'^(table|setting|state|let)\b').hasMatch(t)) out.addAll(_words(t.split('"').first));
-  }
-  const skip = {'table', 'setting', 'state', 'let', 'num', 'text', 'date', 'time', 'bool', 'pick', 'money', 'long', 'unit', 'ref', 'set', 'when', 'dur', 'image', 'the', 'and'};
-  return out.where((w) => w.length >= 3 && !skip.contains(w)).toSet();
-}
-
-/// "a habit tracker", "make me a budget app", "build a timer": reads like a new app and names nothing of the current one.
-bool looksLikeNewApp(String request, String currentSource) {
-  final r = request.trim().toLowerCase();
-  final start = RegExp(r'^(please\s+)?(a|an|make me|make|build|create|i want|i need|give me|new|another)\b');
-  final kind = RegExp(r'\b(app|tracker|list|log|counter|timer|planner|diary|journal|calculator|scoreboard|checklist|notebook)\b');
-  if (!start.hasMatch(r) || !kind.hasMatch(r)) return false;
-  final names = appNames(currentSource);
-  return !_words(r).any(names.contains);
-}
-
-/// "change the goal to 3000", "set budget to 90000": a direct edit of one setting's default, no model needed.
-/// Matches a setting whose name or label holds every word of the target; only plain numbers. Returns the new
-/// program text, or null when the request is not of that shape or names no setting of the app.
-String? settingEditProgram(String request, String source) {
-  final m = RegExp(r'^\s*(?:please\s+)?(?:change|set|make|update|put)\s+(?:the\s+|my\s+)?(.+?)\s+(?:to|=|as|at)\s+(-?[0-9][0-9,]*(?:\.[0-9]+)?)\s*$', caseSensitive: false).firstMatch(request);
-  if (m == null) return null;
-  final target = _words(m.group(1)!).where((w) => !kFiller.contains(w)).toList();
-  if (target.isEmpty) return null;
-  final value = m.group(2)!.replaceAll(',', '');
-  final lines = source.split('\n');
-  for (var i = 0; i < lines.length; i++) {
-    final sm = RegExp(r'^(\s*setting\s+)(\w+)(\s+(?:num|money)\b[^=\n]*=\s*)(-?[0-9][0-9.]*)(.*)$').firstMatch(lines[i]);
-    if (sm == null) continue;
-    final words = {..._words(sm.group(2)!), ..._words(lines[i].split('"').length > 1 ? lines[i].split('"')[1] : '')};
-    if (target.every(words.contains)) {
-      if (sm.group(4) == value) return source; // already that value
-      lines[i] = '${sm.group(1)}${sm.group(2)}${sm.group(3)}$value${sm.group(5)}';
-      return lines.join('\n');
-    }
-  }
-  return null;
-}
-
-final RegExp kRemovalWords = RegExp(r'\b(remove|delete|drop|hide|without|get rid)\b', caseSensitive: false);
-
-List<String> programLines(String src) => src.split('\n').map((l) => l.trimRight()).where((l) => l.trim().isNotEmpty).toList();
-
-/// Lines of the old program that are missing from the new one (counted, so a repeated line counts each time).
-List<String> removedLines(String oldSrc, String newSrc) {
-  final have = <String, int>{};
-  for (final l in programLines(newSrc)) { have[l] = (have[l] ?? 0) + 1; }
-  final out = <String>[];
-  for (final l in programLines(oldSrc)) {
-    final n = have[l] ?? 0;
-    if (n > 0) { have[l] = n - 1; } else { out.add(l); }
-  }
-  return out;
-}
-
-/// The line of the program that fits the request best (for "This app already does that").
-String? relevantLine(String request, String source) {
-  final rw = _words(request).where((w) => !kFiller.contains(w) && w.length > 2).toSet();
-  String? best; var score = 0;
-  for (final l in programLines(source)) {
-    final n = _words(l).where(rw.contains).length;
-    if (n > score) { score = n; best = l.trim(); }
-  }
-  return best;
-}
-
 /// One bubble in the chat sheet.
 class ChatMsg {
   ChatMsg(this.who, this.text, {this.code, this.buttons = const [], this.kind = 'text'});
@@ -115,6 +33,10 @@ class ChatMsg {
   String kind; // text | change | progress
   bool undone = false;
   bool live = false;
+  bool disabled = false; // its buttons were used, or the question is no longer open
+
+  Map<String, dynamic> toJson() => {'who': who, 'text': text, if (code != null) 'code': code, 'kind': kind == 'progress' ? 'text' : kind, 'undone': undone};
+  static ChatMsg fromJson(Map<String, dynamic> j) => ChatMsg('${j['who']}', '${j['text']}', code: j['code'] as String?, kind: '${j['kind'] ?? 'text'}')..undone = j['undone'] == true;
 }
 
 /// All app logic outside the widgets: which apps exist, the create / change / undo flows, the model, the developer menu actions.
@@ -140,15 +62,29 @@ class MoldeController extends ChangeNotifier {
     return llm.loadError ?? 'Loading the model…';
   }
   Map<String, dynamic>? lastStats;
+  final List<Map<String, dynamic>> genHistory = []; // last generations: request, kind, program lines, seconds
   String? lastStatsRequest;
   String arm = 'E';
   bool booted = false;
   Future<void> _saves = Future.value();
 
-  List<ChatMsg> get chat => chats.putIfAbsent(current?.id ?? '', () => []);
+  List<ChatMsg> get chat => chats.putIfAbsent(current?.id ?? '', () => (current?.chat ?? []).map(ChatMsg.fromJson).toList());
+
+  /// Buttons of earlier messages stop working once answered or when the app changes.
+  void _disableButtons() { for (final m in chat) { if (m.buttons.isNotEmpty) m.disabled = true; } }
+
+  void _persistChat() {
+    final r = current;
+    if (r == null) return;
+    final keep = chat.where((m) => !m.live && m.kind != 'progress').toList();
+    final tail = keep.length > 40 ? keep.sublist(keep.length - 40) : keep;
+    r.chat = tail.map((m) => m.toJson()).toList();
+    _saves = _saves.then((_) => store.save(r, touch: false)).catchError((Object e) { debugPrint('save failed: $e'); });
+  }
 
   void _say(String who, String text, {String? code, List<ChatBtn> buttons = const [], String kind = 'text'}) {
     chat.add(ChatMsg(who, text, code: code, buttons: buttons, kind: kind));
+    _persistChat();
     notifyListeners();
   }
 
@@ -159,7 +95,7 @@ class MoldeController extends ChangeNotifier {
     bridge.onProgress = (p) {
       final m = _liveMsg;
       if (m != null) {
-        m.text = 'Writing the app… ${p['lines']} lines';
+        m.text = '${_longNote}Writing the app… ${p['lines']} lines';
         m.code = '${p['program']}';
         notifyListeners();
       }
@@ -212,6 +148,7 @@ class MoldeController extends ChangeNotifier {
   // ---------- apps ----------
   Future<void> openApp(AppRecord r, {bool remember = true, bool keepMode = false}) async {
     pendingAsk = null;
+    _disableButtons();
     if (current != null && current!.id != r.id) {
       try { await bridge.rpc('flush'); } catch (_) {}
       await settleSaves();
@@ -275,6 +212,7 @@ class MoldeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void refresh() => notifyListeners();
   void startNewApp() { newAppMode = true; pendingAsk = null; notifyListeners(); }
   void changeCurrent() { newAppMode = false; pendingAsk = null; notifyListeners(); }
 
@@ -289,6 +227,7 @@ class MoldeController extends ChangeNotifier {
   }
 
   ChatMsg? _liveMsg;
+  String _longNote = '';
 
   Future<void> cancel() async {
     if (!busy) return;
@@ -302,30 +241,38 @@ class MoldeController extends ChangeNotifier {
     if (pendingAsk != null) { await answerAsk(request); return; }
     final kind = (current == null || newAppMode) ? 'create' : 'edit';
     _say('you', request);
-    if (kind == 'edit' && looksLikeNewApp(request, current!.source)) {
-      final name = current!.name;
-      _say('bot', 'That sounds like a new app. Do you want a new app, or a change to $name?', buttons: [
-        ChatBtn('New app', () async { startNewApp(); await _run('create', request); }, primary: true),
-        ChatBtn('Change $name', () async { changeCurrent(); await _run('edit', request); }),
-      ]);
-      return;
-    }
     if (kind == 'edit') {
-      final direct = settingEditProgram(request, current!.source);
-      if (direct != null) { await _direct(request, direct); return; }
+      // exact edits of line 1 (colour, dark/light, text size, title) and of one setting value: no model, instant
+      final src = current!.source;
+      final de = appLineEdit(request, src);
+      if (de != null) { await _direct(request, de.program, label: de.label, unchanged: de.unchanged); return; }
+      final se = settingEditProgram(request, src);
+      if (se != null) { await _direct(request, se, unchanged: se == src); return; }
+      if (looksLikeNewApp(request, src)) {
+        final name = current!.name;
+        _say('bot', 'That sounds like a new app. Do you want a new app, or a change to $name?', buttons: [
+          ChatBtn('New app', () async { startNewApp(); await _run('create', request); }, primary: true),
+          ChatBtn('Change $name', () async { changeCurrent(); await _run('edit', request); }),
+        ]);
+        return;
+      }
     }
     await _run(kind, request);
   }
 
-  /// A change worked out by the app itself (a setting value): the same checks and messages as a model change.
-  Future<void> _direct(String request, String program) async {
+  /// A change worked out by the app itself (line 1 or a setting value): the same checks and messages as a model change.
+  Future<void> _direct(String request, String program, {String? label, bool unchanged = false}) async {
     if (busy) return;
+    final live = ChatMsg('bot', 'Changing the app…', kind: 'progress');
+    chat.add(live);
+    if (unchanged) {
+      _finishLive(live, label != null ? 'It already is that way: $label.' : 'That setting already has this value. Your app is unchanged.');
+      return;
+    }
     busy = true;
     notifyListeners();
-    final live = ChatMsg('bot', 'Changing the setting…', kind: 'progress');
-    chat.add(live);
     try {
-      await _afterGenerate(live, 'edit', request, {'ok': true, 'program': program, 'stats': {'seconds': 0}});
+      await _afterGenerate(live, 'edit', request, {'ok': true, 'program': program, 'stats': {'seconds': 0}}, doneLabel: label ?? '', direct: true);
     } catch (e) {
       _finishLive(live, 'Something went wrong: $e. Your app is unchanged.');
     } finally {
@@ -339,6 +286,7 @@ class MoldeController extends ChangeNotifier {
     final p = pendingAsk;
     if (p == null || busy) return;
     pendingAsk = null;
+    _disableButtons();
     _say('you', answer);
     await _run(p.kind, p.request, ask: {'question': p.question, 'answer': answer}, allowAsk: false);
   }
@@ -356,10 +304,11 @@ class MoldeController extends ChangeNotifier {
     try {
       final err = await llm.ensureLoaded(modelDirs);
       if (err != null) { _finishLive(live, err); return; }  // plain reason: no model installed, or it failed to load
-      live.text = 'Writing the app…';
-      notifyListeners();
       final m = llm.model!;
       final oldLines = kind == 'edit' ? programLines(current!.source).length : 0;
+      _longNote = oldLines > 30 ? 'This app is long, changes can take a few minutes.\n' : '';
+      live.text = '${_longNote}Writing the app…';
+      notifyListeners();
       final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': request, 'current': kind == 'edit' ? current!.source : '',
         'system': m.system, 'arm': m.arm ?? arm,
@@ -368,6 +317,8 @@ class MoldeController extends ChangeNotifier {
       final stats = res['stats'] is Map ? Map<String, dynamic>.from(res['stats'] as Map) : null;
       if (stats != null) {
         lastStats = stats; lastStatsRequest = request;
+        genHistory.add({'request': request, 'kind': kind, 'lines': oldLines, 'seconds': stats['seconds'], 'ok': res['ok'] == true});
+        if (genHistory.length > 8) genHistory.removeAt(0);
         unawaited(AppStore.writeAtomic(File('${store.root.path}/last_stats.json'), jsonEncode({'v': 1, 'request': request, 'stats': stats})).catchError((Object _) {}));
       }
       await _afterGenerate(live, kind, request, res);
@@ -382,6 +333,7 @@ class MoldeController extends ChangeNotifier {
 
   void _finishLive(ChatMsg live, String text, {List<ChatBtn> buttons = const [], String kind = 'text'}) {
     live.text = text; live.code = null; live.live = false; live.buttons = buttons; live.kind = kind;
+    _persistChat();
     notifyListeners();
   }
 
@@ -391,7 +343,7 @@ class MoldeController extends ChangeNotifier {
     return e;
   }
 
-  Future<void> _afterGenerate(ChatMsg live, String kind, String request, Map<String, dynamic> res) async {
+  Future<void> _afterGenerate(ChatMsg live, String kind, String request, Map<String, dynamic> res, {String? doneLabel, bool direct = false}) async {
     final secs = (res['stats']?['seconds'] ?? 0);
     if (res['cancelled'] == true) { _finishLive(live, 'Stopped. Nothing changed.'); return; }
     if (res['timedOut'] == true) { _finishLive(live, 'That took too long, so I stopped. ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Try a shorter request.'); return; }
@@ -409,18 +361,18 @@ class MoldeController extends ChangeNotifier {
       _finishLive(live, 'I could not build that: the program the model wrote did not pass the checks ($why). ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Try saying it another way.');
       return;
     }
-    final program = '${res['program']}';
+    var program = '${res['program']}';
     if (kind == 'create') {
+      final better = betterTitle(program, request);
+      if (better != null) program = withTitle(program, better);
       final r = await _newRecord(program, 'create', request: request);
-      final d = await bridge.rpc<Map>('describe', {'source': program});
       // the request and the answer belong to the new app's chat
       final here = chat;
       final moved = here.length >= 2 ? here.sublist(here.length - 2) : List<ChatMsg>.of(here);
       here.removeRange(here.length - moved.length, here.length);
-      final keepNew = newAppMode;
-      await openApp(r, keepMode: keepNew);
+      await openApp(r); // after a create the mode is "Change <new app>"
       chat.addAll(moved);
-      _finishLive(live, 'Made ${r.name} in ${_fmtSecs(secs)}. It is open now and keeps what you enter.\n${_plain('${d['text']}')}');
+      _finishLive(live, '${plainSummary(program)} It is open now and keeps what you enter.');
       return;
     }
     // change: ask the data rules first
@@ -437,19 +389,19 @@ class MoldeController extends ChangeNotifier {
     // a change that drops more than a fifth of the program is not applied unless the request asked to remove something
     final gone = removedLines(current!.source, program);
     final total = programLines(current!.source).length;
-    if (total > 0 && gone.length > total * 0.2 && !kRemovalWords.hasMatch(request)) {
+    if (!direct && total > 0 && gone.length > total * 0.2 && !kRemovalWords.hasMatch(request)) {
       final pct = (gone.length * 100 / total).round();
       _finishLive(live, 'I did not apply this change: it would have removed ${gone.length} of $total lines of your app ($pct%), and you did not ask to remove anything. It would have removed:\n${_bullets(gone.map((l) => l.trim()).toList())}\nYour app is unchanged.', buttons: [
         ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
       ]);
       return;
     }
-    if (changes.isEmpty && verdict != 'restore') {
-      final line = relevantLine(request, current!.source);
-      _finishLive(live, 'This app already does that.${line == null ? '' : ' The line that does it:'}');
-      if (line != null) live.code = line;
+    // the model handed the program back unchanged (or changed nothing that matters): never claim a change
+    if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore'))) {
+      _finishLive(live, "I couldn't make that change yet. Your app is unchanged.");
       return;
     }
+    final oldSrc = current!.source;
     Future<void> apply() async {
       final a = Map<String, dynamic>.from(await bridge.rpc<Map>('applyEdit', {'source': program}));
       if (a['verdict'] == 'refused') {
@@ -459,7 +411,14 @@ class MoldeController extends ChangeNotifier {
       current!.log('edit', request: request, summary: changes.take(3).join('; '));
       final headline = sets.isEmpty ? '' : '${sets.join('\n')}\n';
       final rest = changes.where((c) => !sets.contains(c)).toList();
-      _finishLive(live, '${sets.isEmpty ? 'Changed' : 'Done'} in ${_fmtSecs(secs)}:\n$headline${rest.isEmpty ? '' : _bullets(rest)}\nEverything you entered is kept.', kind: 'change');
+      final unmet = direct ? <String>[] : unmetClaims(request, oldSrc, program);
+      if (doneLabel != null && doneLabel.isNotEmpty) {
+        _finishLive(live, 'Done: $doneLabel', kind: 'change');
+      } else if (unmet.isNotEmpty) {
+        _finishLive(live, "I changed something, but not what you asked: ${unmet.join(' and ')} did not happen. What changed:\n${rest.isEmpty && sets.isEmpty ? '• (a small edit)' : '$headline${_bullets(rest)}'}\nYou can Undo it.", kind: 'change');
+      } else {
+        _finishLive(live, '${sets.isEmpty ? 'Changed' : 'Done'} in ${_fmtSecs(secs)}:\n$headline${rest.isEmpty ? '' : _bullets(rest)}\nEverything you entered is kept.', kind: 'change');
+      }
       await settleSaves();
     }
     if (verdict == 'warn' || warnings.isNotEmpty) {
@@ -474,14 +433,6 @@ class MoldeController extends ChangeNotifier {
 
   String _fmtSecs(Object? s) => '${(s is num ? s : 0).toStringAsFixed(1)} s';
   String _bullets(List<String> xs) => xs.take(8).map((e) => '• $e').join('\n') + (xs.length > 8 ? '\n• and ${xs.length - 8} more' : '');
-  String _plain(String t) {
-    final out = <String>[];
-    for (final l in t.split('\n')) {
-      if (l.startsWith('Shows:')) break;
-      out.add(l);
-    }
-    return out.take(6).join('\n');
-  }
 
   /// The newest change message that has not been undone (it carries the Undo button).
   ChatMsg? get undoable {

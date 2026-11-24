@@ -41,16 +41,16 @@ class _ShellPageState extends State<ShellPage> {
   void _changed() {
     if (!mounted) return;
     setState(() {});
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (scroll.hasClients) scroll.animateTo(scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
-    });
+    void toEnd() { if (scroll.hasClients) scroll.jumpTo(scroll.position.maxScrollExtent); }
+    // after layout, and once more when the last bubble (buttons, code block) has its final height
+    WidgetsBinding.instance.addPostFrameCallback((_) { toEnd(); Future<void>.delayed(const Duration(milliseconds: 120), toEnd); });
   }
 
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
-    final panelH = (mq.size.height * 0.62).clamp(280.0, 640.0);
+    final panelH = (mq.size.height * 0.45).clamp(260.0, 520.0);
     return PopScope(
       canPop: !open,
       onPopInvokedWithResult: (didPop, _) {
@@ -237,7 +237,7 @@ class _Chat extends StatelessWidget {
               )
             : ListView.builder(
                 controller: scroll,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                 itemCount: msgs.length,
                 itemBuilder: (_, i) => _Bubble(c: c, m: msgs[i], canUndo: identical(msgs[i], undoable) && !c.busy),
               ),
@@ -326,7 +326,9 @@ class _Bubble extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Wrap(spacing: 8, runSpacing: 4, children: [
                 for (final b in m.buttons)
-                  b.primary ? FilledButton(onPressed: b.onTap, child: Text(b.label)) : OutlinedButton(onPressed: b.onTap, child: Text(b.label)),
+                  b.primary
+                      ? FilledButton(onPressed: m.disabled ? null : () { m.disabled = true; c.refresh(); b.onTap(); }, child: Text(b.label))
+                      : OutlinedButton(onPressed: m.disabled ? null : () { m.disabled = true; c.refresh(); b.onTap(); }, child: Text(b.label)),
               ]),
             ),
         ]),
@@ -454,6 +456,9 @@ class _DevMenuState extends State<_DevMenu> {
           'Lines: ${s['lines']}   Prompt tokens: ${s['promptTokens']} (cached ${s['cachedTokens']})\n'
           'Grammar build: ${s['grammarMs']} ms   Decoder arm: ${s['arm']}',
           key: const Key('dev-stats'), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+        const SizedBox(height: 12),
+        Text('Recent generations (seconds)', style: Theme.of(context).textTheme.titleSmall),
+        Text(c.genHistory.isEmpty ? 'None yet.' : c.genHistory.reversed.map((g) => '${g['seconds']} s  ${g['kind']}  ${g['lines']} lines  ${g['ok'] == true ? 'ok' : 'failed'}  "${g['request']}"').join('\n'), key: const Key('dev-history'), style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
         const SizedBox(height: 12),
         Text('Model', style: Theme.of(context).textTheme.titleSmall),
         Text(m == null ? c.modelStatus : '${m.path}\n${(m.sizeBytes / 1048576).toStringAsFixed(0)} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),

@@ -34,6 +34,8 @@ const water = 'app "Water" drop ocean\ntable drink ml num\nform drink\n';
 void main() {
   roundThree();
   roundThreeFlows();
+  roundFour();
+  roundFourFlows();
   late Directory tmp;
   late WebBridge bridge;
   late ScriptedPage page;
@@ -106,7 +108,7 @@ void main() {
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['adds field note to drink'], 'warnings': [], 'refused': []};
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': ['adds field note to drink'], 'warnings': [], 'refused': []};
     page.handlers['undoEdit'] = (a) => {'verdict': 'restore', 'changes': ['back'], 'warnings': []};
-    await c.send('add a note');
+    await c.send('tidy it up');
     expect(page.calls, containsAllInOrder(['evaluate', 'applyEdit']));
     final m = c.chat.last;
     expect(m.text, contains('adds field note to drink'));
@@ -132,7 +134,7 @@ void main() {
 
   test('warn: shows the warning and asks; Apply it applies, Leave it does not', () async {
     await seed();
-    page.handlers['generate'] = (a) => {'ok': true, 'program': water, 'errors': [], 'stats': {}};
+    page.handlers['generate'] = (a) => {'ok': true, 'program': '$water# x\n', 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'warn', 'changes': ['hides field kind'], 'warnings': ['values in kind stay stored but are hidden.'], 'refused': []};
     page.handlers['applyEdit'] = (a) => {'verdict': 'warn', 'changes': ['hides field kind'], 'warnings': [], 'refused': []};
     await c.send('drop kind');
@@ -153,8 +155,8 @@ void main() {
     await seed();
     page.handlers['generate'] = (a) => {'ok': true, 'program': water, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
-    await c.send('same');
-    expect(c.chat.last.text, contains('already does that'));
+    await c.send('add same');
+    expect(c.chat.last.text, contains("couldn't make that change yet"));
     expect(page.calls, isNot(contains('applyEdit')));
   });
 
@@ -162,7 +164,7 @@ void main() {
     await seed();
     Future<String> run(Map<String, dynamic> res) async {
       page.handlers['generate'] = (a) => res;
-      await c.send('x');
+      await c.send('add x');
       return c.chat.last.text;
     }
     expect(await run({'ok': false, 'cancelled': true, 'program': '', 'errors': [], 'stats': {}}), 'Stopped. Nothing changed.');
@@ -234,6 +236,12 @@ void roundThree() {
       expect(looksLikeNewApp('a water log', waterFull), isFalse); // names the app
       expect(looksLikeNewApp('change the goal to 3000', waterFull), isFalse);
       expect(looksLikeNewApp('make it green', waterFull), isFalse);
+      expect(looksLikeNewApp('sleep tracker', waterFull), isTrue);
+      expect(looksLikeNewApp('kharcha', waterFull), isTrue);
+      expect(looksLikeNewApp('gym log', waterFull), isTrue);
+      for (final v in ['change the title', 'rename it to X', 'add a note', 'remove the streak', 'delete the chart', 'hide the form', 'show the totals', 'set goal 5', 'move the chart up', 'bigger', 'smaller text']) {
+        expect(looksLikeNewApp(v, waterFull), isFalse, reason: v);
+      }
       expect(looksLikeNewApp('add a note to each drink', waterFull), isFalse);
     });
     test('settingEditProgram: a number change of a named setting is edited directly', () {
@@ -310,16 +318,14 @@ void roundThreeFlows() {
     expect(seen.map((a) => a['allowAsk']), [false, false, false]);
   });
 
-  test('New app stays selected after a create when the user chose it; the header says which mode', () async {
+  test('after a create the mode is Change <new app>', () async {
     c.startNewApp();
     expect(c.modeLabel, 'New app');
     page.handlers['generate'] = (a) => {'ok': true, 'program': 'app "Todo" drop ocean\n', 'errors': [], 'stats': {}};
     await c.send('todo');
-    expect(c.newAppMode, isTrue);
-    expect(c.modeLabel, 'New app');
-    expect(c.apps.length, 2);
-    c.changeCurrent();
+    expect(c.newAppMode, isFalse);
     expect(c.modeLabel, 'Changing Todo');
+    expect(c.apps.length, 2);
   });
 
   test('Change mode + a new-app request: asks with two buttons, never silently changes', () async {
@@ -373,7 +379,7 @@ void roundThreeFlows() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': cut, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['removes from the screen: trend'], 'warnings': [], 'refused': []};
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
-    await c.send('make it green');
+    await c.send('tidy it up');
     expect(page.calls, isNot(contains('applyEdit')));
     expect(c.chat.last.text, contains('would have removed'));
     expect(c.chat.last.text, contains('trend drink'));
@@ -382,20 +388,21 @@ void roundThreeFlows() {
     expect(page.calls, contains('applyEdit'));
   });
 
-  test('truly empty diff: "This app already does that" with the relevant line', () async {
+  test('model echo (nothing changed): never "already does that", says it could not', () async {
     c.changeCurrent();
     page.handlers['generate'] = (a) => {'ok': true, 'program': waterFull, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': [], 'settings': []};
     await c.send('add a goal');
-    expect(c.chat.last.text, contains('This app already does that'));
-    expect(c.chat.last.code, contains('setting goal'));
+    expect(c.chat.last.text, contains("I couldn't make that change yet"));
+    expect(c.chat.last.text, contains('Your app is unchanged'));
+    expect(c.chat.last.text, isNot(contains('already does that')));
   });
 
   test('edits get a line budget of at least the current length plus room', () async {
     c.changeCurrent();
     final seen = <Map<String, dynamic>>[];
     page.handlers['generate'] = (a) { seen.add(a); return {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}}; };
-    await c.send('make it green');
+    await c.send('tidy it up');
     expect(seen.single['maxLines'], greaterThanOrEqualTo(70));
     expect(seen.single['maxLines'], greaterThanOrEqualTo(programLines(waterFull).length));
   });
@@ -412,5 +419,160 @@ void roundThreeFlows() {
     expect(c.current!.snapshot, isNull);
     expect(cleared, isTrue);
     expect(page.calls, contains('flush'));
+  });
+}
+
+void roundFour() {
+  const hdr = 'app "Water" drop ocean\ntable drink ml num, note text\n';
+  group('round 4 rules', () {
+    test('appLineEdit: colours, dark/light, size, title; anything else goes to the model', () {
+      expect(appLineEdit('make it green', hdr)!.program.startsWith('app "Water" drop green\n'), isTrue);
+      expect(appLineEdit('make it green', hdr)!.label, 'green');
+      expect(appLineEdit('purple', hdr)!.program, startsWith('app "Water" drop purple\n'));
+      expect(appLineEdit('change the colour to pink', hdr)!.program, startsWith('app "Water" drop pink\n'));
+      expect(appLineEdit('make it dark', hdr)!.program, startsWith('app "Water" drop ocean dark\n'));
+      expect(appLineEdit('dark mode', 'app "X" star\n')!.program, startsWith('app "X" star mint dark\n'));
+      expect(appLineEdit('light mode', 'app "X" star ink dark\n')!.program, startsWith('app "X" star ink light\n'));
+      expect(appLineEdit('bigger text', hdr)!.program, startsWith('app "Water" drop ocean large\n'));
+      expect(appLineEdit('make it bigger', 'app "X" star ink large\n')!.program, startsWith('app "X" star ink huge\n'));
+      expect(appLineEdit('smaller text', hdr)!.program, startsWith('app "Water" drop ocean small\n'));
+      expect(appLineEdit('change the title to My Spending', hdr)!.program, startsWith('app "My Spending" drop ocean\n'));
+      expect(appLineEdit('rename it to Gym', hdr)!.label, 'title is now Gym');
+      expect(appLineEdit('make it green', 'app "W" drop green\n')!.unchanged, isTrue);
+      expect(appLineEdit('add a note field', hdr), isNull);
+      expect(appLineEdit('make the chart green and add a note', hdr), isNull);
+      expect(appLineEdit('remove the streak', hdr), isNull);
+      // the rest of the program is untouched
+      expect(appLineEdit('make it red', hdr)!.program.split('\n').skip(1).join('\n'), hdr.split('\n').skip(1).join('\n'));
+    });
+    test('unmetClaims: what was asked but is not in the new program', () {
+      const o = 'app "Water" drop ocean\ntable drink ml num\ntrend drink, it.ml\nstat count(drink) "streak"\n';
+      expect(unmetClaims('make it green', o, o), contains('the green theme'));
+      expect(unmetClaims('make it green', o, o.replaceFirst('ocean', 'green')), isEmpty);
+      expect(unmetClaims('dark mode', o, o), contains('dark mode'));
+      expect(unmetClaims('change the title to Spend', o, o), contains('the new title'));
+      expect(unmetClaims('add a note field', o, o), contains('the note'));
+      expect(unmetClaims('add a note field', o, o.replaceFirst('ml num', 'ml num, note text')), isEmpty);
+      expect(unmetClaims('remove the streak', o, o), contains('removing the streak'));
+      expect(unmetClaims('remove the streak', o, o.replaceFirst('stat count(drink) "streak"\n', '')), isEmpty);
+      expect(unmetClaims('add a chart', o, o), contains('a chart'));
+      expect(unmetClaims('remove the chart', o, o), contains('removing the chart'));
+      expect(unmetClaims('remove the chart', o, o.replaceFirst('trend drink, it.ml\n', '')), isEmpty);
+    });
+    test('betterTitle replaces a question or a sentence by the request noun', () {
+      expect(betterTitle('app "What do you want to track?" star ink\n', 'sleep tracker'), 'Sleep tracker');
+      expect(betterTitle('app "Savings" star ink\n', 'savings'), isNull);
+      expect(withTitle('app "What?" star ink\n', 'Savings'), 'app "Savings" star ink\n');
+    });
+    test('plainSummary is one plain sentence', () {
+      final s = plainSummary('app "Savings" star ink\ntable income amount money, note text\nstat sum(income.amount) "Total"\ntrend income, it.amount\n');
+      expect(s, startsWith('Made Savings: add income entries with amount and note'));
+      expect(s, contains('your totals'));
+      expect(s, contains('a chart'));
+      expect(s, isNot(contains('Keeps')));
+      expect(s.split('\n').length, 1);
+    });
+  });
+}
+
+void roundFourFlows() {
+  late Directory tmp; late WebBridge bridge; late ScriptedPage page; late MoldeController c;
+  const waterHdr = 'app "Water" drop ocean\ntable drink ml num\nsetting goal num = 2000 "Daily goal"\n"Today" head\nform drink\ntrend drink, it.ml\n';
+  setUp(() async {
+    tmp = Directory.systemTemp.createTempSync('molde_r4_');
+    final holder = _Holder();
+    bridge = WebBridge(holder); page = ScriptedPage(bridge); holder.inner = page;
+    bridge.onRaw(jsonEncode({'t': 'ready'}));
+    final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1);
+    c = MoldeController(store: AppStore(Directory('${tmp.path}/molde')), bridge: bridge, llm: llm, modelDirs: [tmp], readAsset: (p) async => waterHdr);
+    page.handlers['open'] = (a) => {'ok': true};
+    page.handlers['describe'] = (a) => {'text': ''};
+    await c.store.save(AppRecord(id: 'w', name: 'Water', source: waterHdr));
+    await c.init();
+    c.changeCurrent();
+  });
+  tearDown(() => tmp.deleteSync(recursive: true));
+  Map<String, dynamic> okEval(List<String> ch) => {'verdict': 'safe', 'changes': ch, 'warnings': [], 'refused': [], 'settings': []};
+
+  test('"make it green" is done at once, without the model, and says "Done: green"', () async {
+    page.handlers['generate'] = (a) => throw StateError('no model');
+    page.handlers['evaluate'] = (a) { expect(a['source'], startsWith('app "Water" drop green\n')); return okEval(['changes the theme to green']); };
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('make it green');
+    expect(c.chat.last.text, 'Done: green');
+    expect(page.calls, isNot(contains('generate')));
+    expect(c.undoable, isNotNull);
+  });
+
+  test('"change the title to My Spending" right after a create works on the new app', () async {
+    c.startNewApp();
+    page.handlers['generate'] = (a) => {'ok': true, 'program': 'app "Savings" star ink\ntable income amount money\n', 'errors': [], 'stats': {}};
+    await c.send('savings');
+    expect(c.modeLabel, 'Changing Savings');
+    page.handlers['evaluate'] = (a) { expect(a['source'], startsWith('app "My Spending" star ink\n')); return okEval(['renames the app']); };
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('change the title to My Spending');
+    expect(c.chat.last.text, 'Done: title is now My Spending');
+  });
+
+  test('model returns the program unchanged: "I couldn\'t make that change yet", never "already does that"', () async {
+    page.handlers['generate'] = (a) => {'ok': true, 'program': waterHdr, 'errors': [], 'stats': {'seconds': 3}};
+    page.handlers['evaluate'] = (a) => okEval([]);
+    await c.send('add a note field');
+    expect(c.chat.last.text, "I couldn't make that change yet. Your app is unchanged.");
+    expect(page.calls, isNot(contains('applyEdit')));
+  });
+
+  test('an applied change that lacks the asked part does not say "Changed"', () async {
+    page.handlers['generate'] = (a) => {'ok': true, 'program': waterHdr.replaceFirst('"Today" head', '"Today now" head'), 'errors': [], 'stats': {'seconds': 3}};
+    page.handlers['evaluate'] = (a) => okEval(['adds: "Today now" head']);
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('add a note field');
+    final t = c.chat.last.text;
+    expect(t, isNot(startsWith('Changed')));
+    expect(t, contains('not what you asked'));
+    expect(t, contains('the note'));
+    expect(t, contains('Today now'));
+  });
+
+  test('bare noun in Change mode asks the two-button question; "add ..." never does', () async {
+    page.handlers['generate'] = (a) => {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}};
+    await c.send('sleep tracker');
+    expect(c.chat.last.buttons.map((b) => b.label), ['New app', 'Change Water']);
+    await c.send('add a sleep field');
+    expect(c.chat.last.text, isNot(contains('sounds like a new app')));
+  });
+
+  test('buttons of an answered ask or clarifier are disabled; chat is kept per app and survives a restart', () async {
+    page.handlers['generate'] = (a) => {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}};
+    await c.send('sleep tracker');
+    final m = c.chat.last;
+    expect(m.disabled, isFalse);
+    await c.openApp(c.current!); // the app "changes": old buttons stop working
+    expect(m.disabled, isTrue);
+    await c.settleSaves();
+    final again = MoldeController(store: c.store, bridge: bridge, llm: c.llm, modelDirs: [tmp], readAsset: (p) async => waterHdr);
+    await again.init();
+    expect(again.chat.any((x) => x.text.contains('sounds like a new app')), isTrue);
+    expect(again.chat.every((x) => x.buttons.isEmpty), isTrue);
+  });
+
+  test('a long app (over 30 lines) says up front that changes take minutes; a model title that is a question is replaced', () async {
+    final long = waterHdr + List.generate(30, (i) => '"line $i" faint').join('\n') + '\n';
+    await c.store.save(AppRecord(id: 'l', name: 'Water', source: long));
+    await c.init();
+    final l = c.apps.firstWhere((a) => a.id == 'l');
+    await c.openApp(l);
+    c.changeCurrent();
+    String? seenText;
+    page.handlers['generate'] = (a) { seenText = c.chat.last.text; return {'ok': false, 'program': '', 'errors': ['x'], 'stats': {'seconds': 1}}; };
+    await c.send('tidy it up');
+    expect(seenText, contains('This app is long, changes can take a few minutes'));
+    expect(c.genHistory.single['lines'], greaterThan(30));
+    c.startNewApp();
+    page.handlers['generate'] = (a) => {'ok': true, 'program': 'app "What do you want to track?" star ink\ntable s x num\n', 'errors': [], 'stats': {}};
+    await c.send('sleep tracker');
+    expect(c.current!.name, 'Sleep tracker');
+    expect(c.chat.last.text, startsWith('Made Sleep tracker: add s entries'));
   });
 }

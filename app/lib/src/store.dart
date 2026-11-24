@@ -16,7 +16,9 @@ class AppRecord {
     int? updatedAt,
     this.sample = false,
     this.exampleId,
-  })  : undo = undo ?? [],
+    List<Map<String, dynamic>>? chat,
+  })  : chat = chat ?? [],
+        undo = undo ?? [],
         history = history ?? [],
         createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch,
         updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
@@ -31,6 +33,7 @@ class AppRecord {
   int updatedAt;
   bool sample; // an example app still holding its sample data (one tap clears it)
   String? exampleId;
+  List<Map<String, dynamic>> chat; // the last chat messages of this app (text only, no buttons)
 
   static const int format = 1;
 
@@ -46,6 +49,7 @@ class AppRecord {
         'updatedAt': updatedAt,
         'sample': sample,
         'exampleId': exampleId,
+        'chat': chat,
       };
 
   static AppRecord? fromJson(Object? j) {
@@ -65,6 +69,7 @@ class AppRecord {
       updatedAt: j['updatedAt'] is int ? j['updatedAt'] as int : null,
       sample: j['sample'] == true,
       exampleId: j['exampleId'] is String ? j['exampleId'] as String : null,
+      chat: j['chat'] is List ? (j['chat'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : [],
     );
   }
 
@@ -126,8 +131,8 @@ class AppStore {
     return null;
   }
 
-  Future<void> save(AppRecord r) {
-    r.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  Future<void> save(AppRecord r, {bool touch = true}) {
+    if (touch) r.updatedAt = DateTime.now().millisecondsSinceEpoch;
     final text = jsonEncode(r.toJson());
     return _serial(r.id, () => writeAtomic(_file(r.id), text));
   }
