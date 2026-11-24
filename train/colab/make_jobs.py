@@ -28,6 +28,9 @@ ap.add_argument("--epoch-range", default="", help="A:B  train epochs A..B in one
 ap.add_argument("--total-epochs", type=int, default=0)
 ap.add_argument("--epoch-save", default="bf16", help="bf16 | none (per-epoch Drive save of the weights)")
 ap.add_argument("--session", default="", help="M1:M2  one session of two train chunks (M1 and M2 minutes, each pauses with a checkpoint); the session ends with a dummy-aware pack of ckpt and final and ONE Drive save (no eval/export on Colab)")
+ap.add_argument("--save-between", action="store_true", help="session mode: after EACH train chunk pack the checkpoint (ckpt-parts parts) and save it to Drive folder runs/<name>/<ckpt-tag>-<k>")
+ap.add_argument("--resume-folder", default="", help="Drive folder (relative to MyDrive) holding ckpt.tar.partNN to resume from; default runs/<name>/")
+ap.add_argument("--ckpt-tag", default="ckpt")
 ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--gguf-parts", type=int, default=1, help="parts per f16 GGUF when it exceeds 900 MB")
 a = ap.parse_args()
 d = pathlib.Path(a.jobs); d.mkdir(parents=True, exist_ok=True)
@@ -50,7 +53,7 @@ fetch.update(dict(kv.split("=", 1) for kv in a.extra_fetch))
 (d / "31_fetch_inputs.drivefetch.json").write_text(json.dumps(fetch))
 (d / "32_unpack.py").write_text('import subprocess\nr = subprocess.run("mkdir -p /content/molde && tar xzf /content/molde_inputs.tgz -C /content/molde && ls /content/molde /content/molde/train", shell=True, capture_output=True, text=True)\nprint(r.stdout, r.stderr[-500:])\nassert r.returncode == 0\n')
 if a.resume_parts:
-    (d / "34_fetch_ckpt.drivefetch.json").write_text(json.dumps({f"molde-train/runs/{N}/ckpt.tar.part{i:02d}": f"{RUN}/ckpt.tar.part{i:02d}" for i in range(a.resume_parts)} | {f"molde-train/runs/{N}/ckpt.tar.SHA256SUMS": f"{RUN}/ckpt.tar.SHA256SUMS"}))
+    (d / "34_fetch_ckpt.drivefetch.json").write_text(json.dumps({f"{a.resume_folder or 'molde-train/runs/' + N}/ckpt.tar.part{i:02d}": f"{RUN}/ckpt.tar.part{i:02d}" for i in range(a.resume_parts)} | {f"{a.resume_folder or 'molde-train/runs/' + N}/ckpt.tar.SHA256SUMS": f"{RUN}/ckpt.tar.SHA256SUMS"}))
     (d / "35_unpack_ckpt.py").write_text(f'import subprocess\nr = subprocess.run("python3 {ROOT}/train/colab/pack.py unpack {RUN}/ckpt {RUN}/ckpt", shell=True, capture_output=True, text=True)\nprint(r.stdout, r.stderr[-500:])\nassert r.returncode == 0\n')
 cfg = shlex.quote(a.config)
 (d / "33_smoke.py").write_text(f'''
@@ -84,6 +87,37 @@ def heart(logpath, pattern, maxsec, proc):
             print("hb", int(time.time() - t0), txt.strip().splitlines()[-1][:160] if txt.strip() else "(no output yet)", flush=True); last = time.time()
     return open(logpath).read() if os.path.exists(logpath) else ""
 '''
+if a.session and a.save_between:
+    mins_list = [int(x) for x in a.session.split(":") if int(x) > 0]
+    for ci, mins in enumerate(mins_list):
+        k = f"{(ci + 1) * 10}"
+        cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
+        (d / f"36{k}_train.py").write_text(HEART + f'''
+os.makedirs("{RUN}", exist_ok=True)
+subprocess.Popen({cmd!r}, shell=True)
+log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
+print(log[-1200:])
+assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
+assert ("SFT_DONE" in log) or ("PAUSE" in log), "train did not finish in the job time"
+print("TRAIN_END", "SFT_DONE" in log)
+''')
+        (d / f"36{k}b_pack.py").write_text(f'''
+import os, subprocess
+R = "{RUN}"
+def run(c):
+    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-200:], r.stderr[-300:]); assert r.returncode == 0, c
+for f in ("ckpt.tar.part%02d" % i for i in range({a.ckpt_parts})): 
+    if os.path.exists(R + "/" + f): os.remove(R + "/" + f)
+run("python3 {ROOT}/train/colab/pack.py pack " + R + "/ckpt " + R + "/ckpt")
+for i in range({a.ckpt_parts}):
+    p = "%s/ckpt.tar.part%02d" % (R, i)
+    if not os.path.exists(p): open(p, "w").write("NOFILE")
+run("cp {RUN}.train.log " + R + "/train.stdout.log; cp " + R + "/log.jsonl " + R + "/log.{k}.jsonl")
+''')
+        fol = f"{DR}/{a.ckpt_tag}-{ci + 1}"
+        sv = {f"{RUN}/ckpt.tar.SHA256SUMS": fol, f"{RUN}/log.{k}.jsonl": fol, f"{RUN}/train.stdout.log": fol} | {f"{RUN}/ckpt.tar.part{i:02d}": fol for i in range(a.ckpt_parts)}
+        (d / f"36{k}c_save.drivesave.json").write_text(json.dumps(sv))
+    print("between-save session jobs written", sorted(p.name for p in d.iterdir())); raise SystemExit(0)
 if a.session:
     mins_list = [int(x) for x in a.session.split(":") if int(x) > 0]
     for ci, mins in enumerate(mins_list):
