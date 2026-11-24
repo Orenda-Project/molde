@@ -75,12 +75,19 @@ def tap_btn(label):
     return False
 def close_chat():
     if chat_open(): tap('Close chat'); time.sleep(2)
+def toggle_apps():
+    """Tap the sheet header (title row): the mode badge when chatting, 'Your apps' in the list. Position-independent."""
+    for key in ('Mode: ', 'Your apps'):
+        n = ui.find(key)
+        if n is not None:
+            x, y = ui.center(n); adb('shell', 'input', 'tap', str(x), str(y)); time.sleep(2); return True
+    return False
 def apps_view():
     open_chat()
-    if not has('Your apps'): ui.adb('shell', 'input', 'tap', '100', '922'); time.sleep(2)
+    if not has('Your apps'): toggle_apps()
 def chat_view():
     open_chat()
-    if has('Your apps'): ui.adb('shell', 'input', 'tap', '100', '922'); time.sleep(2)
+    if has('Your apps'): toggle_apps()
 def mode_label():
     chat_view()
     for t in texts():
