@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'controller.dart';
 import 'store.dart';
+import 'models.dart';
+import 'ui_models.dart';
 
 /// The whole screen is the user's app; one chat button sits bottom-right and opens the chat sheet.
 class ShellPage extends StatefulWidget {
-  const ShellPage({super.key, required this.c, required this.web});
+  const ShellPage({super.key, required this.c, required this.web, required this.mm});
   final MoldeController c;
+  final ModelManager mm;
   final WebViewController web;
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -25,11 +28,13 @@ class _ShellPageState extends State<ShellPage> {
   void initState() {
     super.initState();
     c.addListener(_changed);
+    widget.mm.addListener(_changed);
   }
 
   @override
   void dispose() {
     c.removeListener(_changed);
+    widget.mm.removeListener(_changed);
     super.dispose();
   }
 
@@ -58,6 +63,8 @@ class _ShellPageState extends State<ShellPage> {
       body: Stack(children: [
         Positioned.fill(child: Padding(padding: EdgeInsets.only(top: mq.padding.top), child: WebViewWidget(controller: widget.web))),
         if (c.booted && c.current == null && !c.busy) Positioned.fill(child: _Empty(c: c, onChat: () => setState(() { open = true; }))),
+        if (widget.mm.ready && !widget.mm.hasModel && c.apps.isEmpty && !widget.mm.setupDismissed && !open)
+          Positioned.fill(child: ModelSetupScreen(mm: widget.mm, onExamples: () => setState(() => widget.mm.setupDismissed = true))),
         if (!open)
           Positioned(
             right: 16,
@@ -82,7 +89,7 @@ class _ShellPageState extends State<ShellPage> {
               child: SizedBox(
                 height: mq.viewInsets.bottom > 0 ? (mq.size.height - mq.viewInsets.bottom - mq.padding.top - 24).clamp(220.0, panelH) : panelH + mq.padding.bottom,
                 child: _Sheet(
-                  c: c, scroll: scroll, input: input, showApps: showApps,
+                  c: c, mm: widget.mm, scroll: scroll, input: input, showApps: showApps,
                   onClose: () { FocusManager.instance.primaryFocus?.unfocus(); setState(() => open = false); },
                   onToggleApps: () => setState(() => showApps = !showApps),
                   onPickedApp: () => setState(() => showApps = false),
@@ -126,7 +133,8 @@ class _Empty extends StatelessWidget {
 }
 
 class _Sheet extends StatelessWidget {
-  const _Sheet({required this.c, required this.scroll, required this.input, required this.showApps, required this.onClose, required this.onToggleApps, required this.onPickedApp});
+  final ModelManager mm;
+  const _Sheet({required this.c, required this.mm, required this.scroll, required this.input, required this.showApps, required this.onClose, required this.onToggleApps, required this.onPickedApp});
   final MoldeController c;
   final ScrollController scroll;
   final TextEditingController input;
@@ -160,6 +168,7 @@ class _Sheet extends StatelessWidget {
                 ),
               ),
             ),
+            IconButton(key: const Key('settings-open'), tooltip: 'Settings', onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsPage(mm: mm))), icon: const Icon(Icons.settings_outlined)),
             IconButton(key: const Key('chat-close'), tooltip: 'Close chat', onPressed: onClose, icon: const Icon(Icons.close)),
           ]),
         ),

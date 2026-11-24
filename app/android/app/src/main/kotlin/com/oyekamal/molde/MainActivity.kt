@@ -71,6 +71,10 @@ class MainActivity : FlutterActivity() {
                     requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 77)
                 result.success(null)
             }
+            "openUrl" -> {
+                try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(call.argument<String>("url") ?: "")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); result.success(true) }
+                catch (e: Throwable) { result.success(false) }
+            }
             "cancel" -> { llm?.nativeCancel(); result.success(null) }
             "load" -> {
                 val path = call.argument<String>("path")!!

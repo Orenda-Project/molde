@@ -177,7 +177,7 @@ void main() {
     final c2 = MoldeController(store: c.store, bridge: bridge, llm: bare, modelDirs: [tmp], readAsset: (p) async => water);
     await c2.init();
     await c2.send('anything');
-    expect(c2.chat.last.text, contains('No model file is installed'));
+    expect(c2.chat.last.text, contains('No model is installed'));
     expect(c2.busy, isFalse);
   });
 

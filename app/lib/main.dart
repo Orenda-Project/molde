@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'src/controller.dart';
+import 'src/catalogue.dart';
 import 'src/llm.dart';
+import 'src/models.dart';
+import 'src/platform.dart';
 import 'src/store.dart';
 import 'src/ui.dart';
 import 'src/web.dart';
@@ -31,12 +34,22 @@ Future<void> main() async {
     readAsset: rootBundle.loadString,
     backupDir: ext == null ? null : Directory('${ext.path}/backups'),
   );
-  runApp(MoldeApp(c: c, web: web));
+  final platform = Platform();
+  final mm = ModelManager(
+    llm: llm,
+    settingsFile: File('${docs.path}/molde/settings.json'),
+    modelsDir: Directory('${docs.path}/models'),
+    handDirs: dirs,
+    platform: platform,
+    loadCatalogue: () => Catalogue.load(bundled: () => rootBundle.loadString('assets/models.json')),
+  );
+  runApp(MoldeApp(c: c, web: web, mm: mm));
 }
 
 class MoldeApp extends StatefulWidget {
-  const MoldeApp({super.key, required this.c, required this.web});
+  const MoldeApp({super.key, required this.c, required this.web, required this.mm});
   final MoldeController c;
+  final ModelManager mm;
   final WebHost web;
   @override
   State<MoldeApp> createState() => _MoldeAppState();
@@ -53,6 +66,7 @@ class _MoldeAppState extends State<MoldeApp> with WidgetsBindingObserver {
   Future<void> _start() async {
     await widget.web.load();
     await widget.web.bridge.ready.timeout(const Duration(seconds: 20), onTimeout: () {});
+    await widget.mm.init();
     await widget.c.init();
   }
 
@@ -82,7 +96,7 @@ class _MoldeAppState extends State<MoldeApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: seed), useMaterial3: true),
       darkTheme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark), useMaterial3: true),
-      home: ShellPage(c: widget.c, web: widget.web.controller),
+      home: ShellPage(c: widget.c, web: widget.web.controller, mm: widget.mm),
     );
   }
 }

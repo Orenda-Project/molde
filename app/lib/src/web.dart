@@ -4,6 +4,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'bridge.dart';
 
+/// The WebView may only show the page bundled in the app. Everything else (the network, other files) is refused.
+bool allowNavigation(String url) => url.startsWith('file:///android_asset/');
+
 /// The WebView that holds the user's app. Loads the bundled page only; every other address is refused.
 class WebHost implements JsTransport {
   WebHost() {
@@ -12,7 +15,7 @@ class WebHost implements JsTransport {
       ..setBackgroundColor(const Color(0x00000000))
       ..addJavaScriptChannel('MoldeHost', onMessageReceived: (m) => bridge.onRaw(m.message))
       ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (r) => r.url.startsWith('file:///android_asset/') ? NavigationDecision.navigate : NavigationDecision.prevent,
+        onNavigationRequest: (r) => allowNavigation(r.url) ? NavigationDecision.navigate : NavigationDecision.prevent,
         onWebResourceError: (e) => bridge.onRaw('{"t":"log","msg":"web error: ${e.description.replaceAll('"', "'")}"}'),
       ));
     final p = controller.platform;

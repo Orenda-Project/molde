@@ -20,6 +20,8 @@ class LlmService {
   final MethodChannel _ch;
 
   ModelInfo? model;
+  /// The model chosen in Settings (or just downloaded); tried before the hand-placed ones.
+  File? preferred;
   String? loadError;
   Map<String, dynamic>? platform;
   Future<void>? _loading;
@@ -90,9 +92,9 @@ class LlmService {
 
   Future<void> _load(List<Directory> dirs, File? bundled) async {
     loadError = null;
-    final f = bundled ?? await locate(dirs);
+    final f = bundled ?? ((preferred != null && await preferred!.exists()) ? preferred : await locate(dirs));
     if (f == null) {
-      loadError = 'No model file is installed. Copy a .gguf into ${dirs.first.path}/models/ (see the README).';
+      loadError = 'No model is installed yet. Open the chat, tap the app name, then Settings > Model to download one (or copy a .gguf into ${dirs.first.path}/models/).';
       return;
     }
     final p = await info();
