@@ -101,13 +101,17 @@ def send(text):
     ui.adb('shell', 'input', 'tap', '480', '2310'); time.sleep(1)
     ui.adb('shell', 'input', 'text', text.replace(' ', '%s')); time.sleep(1)
     tap('Send'); time.sleep(1)
-def busy(): return has('Stop')
+def busy(): return any(t == 'Stop' for t in texts())
 def wait_idle(secs=420):
     time.sleep(4)
     return wait_for(lambda: not busy(), secs, 6)
 def stop_now():
     time.sleep(10)
-    if busy(): tap('Stop'); wait_idle(90)
+    if busy():
+        for n in ui.nodes():
+            if (n.get('content-desc') or n.get('text') or '').strip() == 'Stop':
+                x, y = ui.center(n); adb('shell', 'input', 'tap', str(x), str(y)); break
+        wait_idle(90)
 def last_bot():
     ts = texts()
     return ts[-1] if ts else ''
