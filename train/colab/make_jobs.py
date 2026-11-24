@@ -27,6 +27,7 @@ ap.add_argument("--save-f16", action="store_true")
 ap.add_argument("--epoch-range", default="", help="A:B  train epochs A..B in one-epoch chunks (pause_at_epoch), save bf16 weights to Drive after each; when B < total epochs the session ends with a full checkpoint save (--ckpt-parts) instead of final/eval/export")
 ap.add_argument("--total-epochs", type=int, default=0)
 ap.add_argument("--epoch-save", default="bf16", help="bf16 | none (per-epoch Drive save of the weights)")
+ap.add_argument("--session", default="", help="M1:M2  one session of two train chunks (M1 and M2 minutes, each pauses with a checkpoint); the session ends with a dummy-aware pack of ckpt and final and ONE Drive save (no eval/export on Colab)")
 ap.add_argument("--chat-kwargs", default="{}"); ap.add_argument("--gguf-parts", type=int, default=1, help="parts per f16 GGUF when it exceeds 900 MB")
 a = ap.parse_args()
 d = pathlib.Path(a.jobs); d.mkdir(parents=True, exist_ok=True)
@@ -39,7 +40,7 @@ import os, subprocess
 os.makedirs("/content/molde", exist_ok=True); os.makedirs("/content/run", exist_ok=True)
 cmd = ("(node -v 2>/dev/null | grep -q v20 || (wget -q https://nodejs.org/dist/v20.19.3/node-v20.19.3-linux-x64.tar.xz -O /tmp/node.txz && "
        "tar xJf /tmp/node.txz -C /usr/local --strip-components=1)); node -v; "
-       "pip uninstall -y torchao 2>&1 | tail -1; pip install -q 'transformers==5.15.1' accelerate pyyaml gguf sentencepiece 2>&1 | tail -2; "
+       "pip uninstall -y torchao 2>&1 | tail -1; pip install -q 'transformers==5.15.1' accelerate pyyaml gguf sentencepiece peft 2>&1 | tail -2; "
        "nvidia-smi --query-gpu=name,memory.total --format=csv")
 r = subprocess.run(cmd, shell=True, capture_output=True, text=True); print(r.stdout, r.stderr[-800:])
 assert r.returncode == 0, "setup failed"
@@ -83,6 +84,42 @@ def heart(logpath, pattern, maxsec, proc):
             print("hb", int(time.time() - t0), txt.strip().splitlines()[-1][:160] if txt.strip() else "(no output yet)", flush=True); last = time.time()
     return open(logpath).read() if os.path.exists(logpath) else ""
 '''
+if a.session:
+    M1, M2 = map(int, a.session.split(":"))
+    for ci, mins in enumerate((M1, M2)):
+        nm = "36_train.py" if ci == 0 else "36b_train.py"
+        cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
+        (d / nm).write_text(HEART + f'''
+os.makedirs("{RUN}", exist_ok=True)
+subprocess.Popen({cmd!r}, shell=True)
+log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
+print(log[-1200:])
+assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
+assert ("SFT_DONE" in log) or ("PAUSE" in log), "train did not finish in the job time"
+print("TRAIN_END", "SFT_DONE" in log)
+''')
+    pk = f"""
+import os, subprocess
+R = "{RUN}"
+def run(c):
+    r = subprocess.run(c, shell=True, capture_output=True, text=True); print(c, r.stdout[-200:], r.stderr[-300:]); assert r.returncode == 0, c
+os.makedirs(R + "/gguf", exist_ok=True)
+def dummy(prefix, n):
+    for i in range(n):
+        p = "%s.tar.part%02d" % (prefix, i)
+        if not os.path.exists(p): open(p, "w").write("NOFILE")
+    if not os.path.exists(prefix + ".tar.SHA256SUMS"): open(prefix + ".tar.SHA256SUMS", "w").write("NOFILE")
+if os.path.isdir(R + "/final"): run("python3 {ROOT}/train/colab/pack.py pack " + R + "/final " + R + "/final")
+if os.path.isdir(R + "/ckpt"): run("python3 {ROOT}/train/colab/pack.py pack " + R + "/ckpt " + R + "/ckpt")
+dummy(R + "/final", {a.final_parts}); dummy(R + "/ckpt", {a.ckpt_parts})
+run("cp {RUN}.train.log " + R + "/train.stdout.log")
+print(subprocess.run("ls -la " + R, shell=True, capture_output=True, text=True).stdout)
+"""
+    (d / "37_pack.py").write_text(pk)
+    sv = {f"{RUN}/log.jsonl": DR, f"{RUN}/train.stdout.log": DR, f"{RUN}/final.tar.SHA256SUMS": DR, f"{RUN}/ckpt.tar.SHA256SUMS": DR}
+    sv |= {f"{RUN}/final.tar.part{i:02d}": DR for i in range(a.final_parts)} | {f"{RUN}/ckpt.tar.part{i:02d}": DR for i in range(a.ckpt_parts)}
+    (d / "37_save.drivesave.json").write_text(json.dumps(sv))
+    print("session jobs written", sorted(p.name for p in d.iterdir())); raise SystemExit(0)
 EP_A, EP_B = (map(int, a.epoch_range.split(":")) if a.epoch_range else (0, 0))
 SESSION_END = bool(a.epoch_range) and a.total_epochs and EP_B < a.total_epochs
 if "train" in stages and a.epoch_range:

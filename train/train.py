@@ -26,7 +26,7 @@ from common import encode_example, read_jsonl  # noqa: E402
 DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False, token_mode="full",
                 epochs=3, max_steps=0, lr=5e-5, min_lr_ratio=0.1, warmup_steps=10, weight_decay=0.0, batch_size=8,
                 grad_accum=1, max_len=1536, precision="auto", grad_checkpointing=False, eval_every=20, save_every=50,
-                max_minutes=0, seed=1234, pause_at_epoch=0, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
+                max_minutes=0, seed=1234, pause_at_epoch=0, lora=False, lora_r=64, lora_alpha=128, lora_dropout=0.0, base_dtype="fp32", ckpt_mode="full", restart_warmup=20, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
 
 
 def load_cfg(argv):
@@ -76,7 +76,13 @@ def main():
     ck = out / "ckpt"
     src = str(ck / "model") if (ck / "state.json").exists() else cfg["model"]
     tok = AutoTokenizer.from_pretrained(src if (ck / "state.json").exists() else (cfg["tokenizer"] or cfg["model"]))
-    model = AutoModelForCausalLM.from_pretrained(src, torch_dtype=torch.float32)
+    BD = {"fp32": torch.float32, "bf16": torch.bfloat16}[cfg["base_dtype"]]
+    resuming = (ck / "state.json").exists()
+    if cfg["lora"] and resuming:   # adapter checkpoint: base model from the hub, tokenizer (with added tokens) from the checkpoint
+        model = AutoModelForCausalLM.from_pretrained(cfg["model"], torch_dtype=BD)
+        model.resize_token_embeddings(len(tok), pad_to_multiple_of=8)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(src, torch_dtype=BD)
     nparams = sum(p.numel() for p in model.parameters())
     if cfg["add_molde_tokens"] and not (ck / "state.json").exists():
         sys.path.insert(0, str(pathlib.Path(__file__).parent / "tokens"))
@@ -84,9 +90,28 @@ def main():
         orig_vocab = len(tok); (out / "orig_vocab.txt").write_text(str(orig_vocab))
         new, _ = add_molde_tokens(tok, model, cfg["lang"], cfg["token_mode"])
         log(event="added_tokens", n=len(new), vocab=len(tok))
+    if cfg["lora"]:
+        from peft import LoraConfig, get_peft_model, PeftModel
+        if resuming:
+            model = PeftModel.from_pretrained(model, str(ck / "model"), is_trainable=True)
+        else:
+            kw = {}
+            if cfg["add_molde_tokens"]:
+                kw["trainable_token_indices"] = {"embed_tokens": [tok.convert_tokens_to_ids(x) for x in new]}
+            try:
+                lc = LoraConfig(r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"], target_modules="all-linear", task_type="CAUSAL_LM", **kw)
+                model = get_peft_model(model, lc)
+            except Exception as e:   # older peft or tied-embedding trouble: keep the new keyword rows frozen at their mean initialisation
+                log(event="lora_trainable_tokens_failed", err=str(e)[:200])
+                lc = LoraConfig(r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"], target_modules="all-linear", task_type="CAUSAL_LM")
+                model = get_peft_model(model, lc)
+        ntrain = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        log(event="lora", trainable=ntrain, total=sum(p.numel() for p in model.parameters()))
+    inner = model.get_base_model() if cfg["lora"] else model
     model.to(dev)
     if cfg["grad_checkpointing"]:
-        model.gradient_checkpointing_enable(); model.config.use_cache = False
+        inner.gradient_checkpointing_enable(); inner.config.use_cache = False
+        if cfg["lora"]: inner.enable_input_require_grads()
     prec = cfg["precision"]
     if prec == "auto":
         cc = torch.cuda.get_device_capability()[0] if dev == "cuda" else 0
@@ -108,30 +133,37 @@ def main():
         truncated=trunc, max_len_seen=max(len(r[0]) for r in train), steps_per_epoch=spe, total_steps=total,
         gpu=torch.cuda.get_device_name(0) if dev == "cuda" else None)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"], betas=(0.9, 0.95))
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=cfg["lr"], weight_decay=cfg["weight_decay"], betas=(0.9, 0.95))
     def lr_at(s):
+        if s - resume_step < cfg["restart_warmup"]:
+            return lr_base(s) * (s - resume_step + 1) / cfg["restart_warmup"]
+        return lr_base(s)
+    def lr_base(s):
         if s < cfg["warmup_steps"]:
             return cfg["lr"] * (s + 1) / cfg["warmup_steps"]
         p = (s - cfg["warmup_steps"]) / max(1, total - cfg["warmup_steps"])
         return cfg["lr"] * (cfg["min_lr_ratio"] + (1 - cfg["min_lr_ratio"]) * 0.5 * (1 + math.cos(math.pi * min(1, p))))
-    step = 0
+    step = 0; resume_step = -10**9
     if (ck / "state.json").exists():
         for nm in ("best.json", "orig_vocab.txt"):
             if (ck / "extra" / nm).exists() and not (out / nm).exists(): shutil.copy(ck / "extra" / nm, out / nm)
         if (ck / "extra" / "best").exists() and not (out / "best").exists(): shutil.copytree(ck / "extra" / "best", out / "best")
         st = json.load(open(ck / "state.json")); step = st["step"]
-        opt.load_state_dict(torch.load(ck / "opt.pt", map_location=dev))
-        log(event="resumed", step=step)
+        if (ck / "opt.pt").exists():
+            opt.load_state_dict(torch.load(ck / "opt.pt", map_location=dev)); resume_step = -10**9
+        else:
+            resume_step = step   # weights-only checkpoint: Adam restarts, so warm the learning rate up again
+        log(event="resumed", step=step, optimizer_state=(ck / "opt.pt").exists())
 
     def fwd(x, y, m):
         """summed CE over assistant tokens; logits only at those positions (Gemma's 262k vocab would OOM a T4 otherwise)."""
         ctx = torch.autocast("cuda", dtype=amp_dtype) if amp_dtype and dev == "cuda" else torch.autocast("cpu", enabled=False)
         tgt = y[:, 1:]; sel = tgt != -100
-        base = getattr(model, "model", None)
+        base = getattr(inner, "model", None)
         with ctx:
-            if base is not None and model.get_output_embeddings() is not None:
+            if base is not None and inner.get_output_embeddings() is not None:
                 hs = base(input_ids=x, attention_mask=m).last_hidden_state[:, :-1][sel]
-                head = model.get_output_embeddings()
+                head = inner.get_output_embeddings()
                 loss = 0.0
                 for i in range(0, hs.size(0), 1024):
                     part = lambda h: head(h).float()
@@ -178,7 +210,8 @@ def main():
     def save_ckpt():
         tmp = out / "ckpt_tmp"; tmp.mkdir(exist_ok=True)
         model.save_pretrained(tmp / "model", safe_serialization=True); tok.save_pretrained(tmp / "model")
-        torch.save(opt.state_dict(), tmp / "opt.pt"); json.dump({"step": step}, open(tmp / "state.json", "w"))
+        if cfg["ckpt_mode"] == "full": torch.save(opt.state_dict(), tmp / "opt.pt")
+        json.dump({"step": step}, open(tmp / "state.json", "w"))
         ex = tmp / "extra"; ex.mkdir(exist_ok=True)
         for nm in ("best.json", "orig_vocab.txt"):
             if (out / nm).exists(): shutil.copy(out / nm, ex / nm)
@@ -202,7 +235,7 @@ def main():
             for b in group:
                 l, n = fwd(*collate(train, b, pad, dev))
                 scaler.scale(l / ntok).backward(); tot += l.item()
-            scaler.unscale_(opt); gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.unscale_(opt); gn = torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
             if not math.isfinite(gn.item()):
                 log(event="NONFINITE", step=step); 
                 if prec == "fp16": opt.zero_grad(set_to_none=True); scaler.update(); continue
@@ -239,6 +272,8 @@ def main():
             sd = load_file(out / "best" / "model.safetensors"); model.load_state_dict(sd, strict=False); model.tie_weights()
             log(event="restored_best", checker_pass=round(best["score"], 3))
     dt = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[cfg["save_dtype"]]
+    if cfg["lora"]:
+        model = model.merge_and_unload()
     model.to(dt).save_pretrained(out / "final", safe_serialization=True); tok.save_pretrained(out / "final")
     json.dump({k: v for k, v in cfg.items()}, open(out / "final" / "train_config.json", "w"), indent=1)
     if cfg["add_molde_tokens"] and (out / "final" / "tokenizer.json").exists():
