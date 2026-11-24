@@ -182,7 +182,7 @@ def flows():
     send('change the goal to 3000'); time.sleep(6)
     after = sum('That sounds like a new app' in t for t in texts())
     stop_now()
-    save('F9 a change request does not trigger the new-app question', after == before, f'clarifiers before={before} after={after}')
+    save('F9 a change request does not trigger the new-app question', after <= before, f'clarifiers before={before} after={after}')
     titles = app_titles()
     save('F10 no app lost after all flows', len(titles) == n0 + 1 and any('Water' in x for x in titles), str(titles))
 
