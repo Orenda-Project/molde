@@ -32,6 +32,8 @@ class ScriptedPage implements JsTransport {
 const water = 'app "Water" drop ocean\ntable drink ml num\nform drink\n';
 
 void main() {
+  roundThree();
+  roundThreeFlows();
   late Directory tmp;
   late WebBridge bridge;
   late ScriptedPage page;
@@ -152,7 +154,7 @@ void main() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': water, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
     await c.send('same');
-    expect(c.chat.last.text, contains('already works like that'));
+    expect(c.chat.last.text, contains('already does that'));
     expect(page.calls, isNot(contains('applyEdit')));
   });
 
@@ -168,7 +170,7 @@ void main() {
     expect(await run({'ok': false, 'modelError': true, 'program': '', 'errors': ['out of memory'], 'stats': {}}), contains('out of memory'));
     final ask = await run({'ok': false, 'ask': {'question': 'What do you want to track?', 'options': ['Water', 'Money']}, 'program': '', 'errors': [], 'stats': {}});
     expect(ask, contains('What do you want to track?'));
-    expect(ask, contains('Water, Money'));
+    expect(c.chat.last.buttons.map((b) => b.label), ['Water', 'Money']);
   });
 
   test('no model installed: the chat says how to install one, nothing breaks', () async {
@@ -207,4 +209,188 @@ class _Holder implements JsTransport {
   JsTransport? inner;
   @override
   Future<void> run(String js) async => inner?.run(js);
+}
+
+// ---------------- round 3 ----------------
+const waterFull = 'app "Water" drop ocean\ntable drink ml num, kind text\nsetting goal num = 2000 "Daily goal (ml)"\n"Today" head\nbutton "250" tap add drink ml = 250\nform drink\ntrend drink, it.ml\n';
+
+void roundThree() {
+  group('round 3 rules', () {
+    test('namesAThing: 1 to 3 words with a real noun build at once; vague or long requests may ask', () {
+      for (final r in ['todo', 'water', 'budget', 'notes', 'medicine', 'reminders', 'counter', 'habits', 'expenses', 'workout', 'a todo list', 'budget app']) {
+        expect(namesAThing(r), isTrue, reason: r);
+      }
+      expect(namesAThing('make me an app'), isFalse);
+      expect(namesAThing('something please'), isFalse);
+      expect(namesAThing('I want a thing that helps me keep track of my days'), isFalse);
+      expect(namesAThing(''), isFalse);
+    });
+    test('looksLikeNewApp: new-app wording without a name of the current app', () {
+      expect(looksLikeNewApp('a habit tracker', waterFull), isTrue);
+      expect(looksLikeNewApp('make me a budget app', waterFull), isTrue);
+      expect(looksLikeNewApp('build a timer', waterFull), isTrue);
+      expect(looksLikeNewApp('create a to do list', waterFull), isTrue);
+      expect(looksLikeNewApp('make a drink counter', waterFull), isFalse); // names "drink"
+      expect(looksLikeNewApp('a water log', waterFull), isFalse); // names the app
+      expect(looksLikeNewApp('change the goal to 3000', waterFull), isFalse);
+      expect(looksLikeNewApp('make it green', waterFull), isFalse);
+      expect(looksLikeNewApp('add a note to each drink', waterFull), isFalse);
+    });
+    test('removedLines counts what the new program lost', () {
+      expect(removedLines('a\nb\nc\n', 'a\nc\nd\n'), ['b']);
+      expect(removedLines('a\na\nb\n', 'a\nb\n'), ['a']);
+    });
+  });
+}
+
+void roundThreeFlows() {
+  late Directory tmp; late WebBridge bridge; late ScriptedPage page; late MoldeController c;
+  setUp(() async {
+    tmp = Directory.systemTemp.createTempSync('molde_r3_');
+    final holder = _Holder();
+    bridge = WebBridge(holder); page = ScriptedPage(bridge); holder.inner = page;
+    bridge.onRaw(jsonEncode({'t': 'ready'}));
+    final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1);
+    c = MoldeController(store: AppStore(Directory('${tmp.path}/molde')), bridge: bridge, llm: llm, modelDirs: [tmp], readAsset: (p) async => waterFull);
+    page.handlers['open'] = (a) => {'ok': true};
+    page.handlers['describe'] = (a) => {'text': 'Keeps: drink'};
+    await c.store.save(AppRecord(id: 'w', name: 'Water', source: waterFull));
+    await c.init();
+  });
+  tearDown(() => tmp.deleteSync(recursive: true));
+
+  test('ask: options are buttons; tapping one sends Question and Answer with the original request and no second ask', () async {
+    c.startNewApp();
+    final seen = <Map<String, dynamic>>[];
+    page.handlers['generate'] = (a) {
+      seen.add(a);
+      if (seen.length == 1) return {'ok': false, 'ask': {'question': 'What is it for?', 'options': ['Home', 'Work']}, 'program': '', 'errors': [], 'stats': {}};
+      return {'ok': true, 'program': 'app "Home" drop ocean\n', 'errors': [], 'stats': {'seconds': 1}};
+    };
+    await c.send('make me an app'); // vague: may ask
+    expect(seen.first['allowAsk'], isTrue);
+    final m = c.chat.last;
+    expect(m.buttons.map((b) => b.label), ['Home', 'Work']);
+    expect(c.pendingAsk, isNotNull);
+    await m.buttons.first.onTap();
+    expect(seen.length, 2);
+    expect(seen[1]['request'], 'make me an app');
+    expect(seen[1]['ask'], {'question': 'What is it for?', 'answer': 'Home'});
+    expect(seen[1]['allowAsk'], isFalse);
+    expect(c.pendingAsk, isNull);
+  });
+
+  test('ask: typed text answers the open question too', () async {
+    c.startNewApp();
+    final seen = <Map<String, dynamic>>[];
+    page.handlers['generate'] = (a) {
+      seen.add(a);
+      return seen.length == 1 ? {'ok': false, 'ask': {'question': 'For?', 'options': ['A']}, 'program': '', 'errors': [], 'stats': {}} : {'ok': true, 'program': 'app "X" drop ocean\n', 'errors': [], 'stats': {}};
+    };
+    await c.send('an app');
+    await c.send('my own answer');
+    expect(seen[1]['ask'], {'question': 'For?', 'answer': 'my own answer'});
+    expect(seen[1]['request'], 'an app');
+  });
+
+  test('a named one to three word request never gets a chance to ask', () async {
+    c.startNewApp();
+    final seen = <Map<String, dynamic>>[];
+    page.handlers['generate'] = (a) { seen.add(a); return {'ok': true, 'program': 'app "Todo" drop ocean\n', 'errors': [], 'stats': {}}; };
+    for (final r in ['todo', 'water', 'budget']) { c.startNewApp(); await c.send(r); }
+    expect(seen.map((a) => a['allowAsk']), [false, false, false]);
+  });
+
+  test('New app stays selected after a create when the user chose it; the header says which mode', () async {
+    c.startNewApp();
+    expect(c.modeLabel, 'New app');
+    page.handlers['generate'] = (a) => {'ok': true, 'program': 'app "Todo" drop ocean\n', 'errors': [], 'stats': {}};
+    await c.send('todo');
+    expect(c.newAppMode, isTrue);
+    expect(c.modeLabel, 'New app');
+    expect(c.apps.length, 2);
+    c.changeCurrent();
+    expect(c.modeLabel, 'Changing Todo');
+  });
+
+  test('Change mode + a new-app request: asks with two buttons, never silently changes', () async {
+    c.changeCurrent();
+    final seen = <Map<String, dynamic>>[];
+    page.handlers['generate'] = (a) { seen.add(a); return {'ok': true, 'program': 'app "Habits" drop ocean\n', 'errors': [], 'stats': {}}; };
+    await c.send('a habit tracker');
+    expect(seen, isEmpty);
+    final m = c.chat.last;
+    expect(m.buttons.map((b) => b.label), ['New app', 'Change Water']);
+    await m.buttons.first.onTap();
+    expect(seen.single['kind'], 'create');
+    expect(c.apps.length, 2);
+    expect(c.apps.any((a) => a.id == 'w'), isTrue); // Water is not lost
+  });
+
+  test('Change Water button sends the request as an edit', () async {
+    c.changeCurrent();
+    final seen = <Map<String, dynamic>>[];
+    page.handlers['generate'] = (a) { seen.add(a); return {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}}; };
+    await c.send('a habit tracker');
+    await c.chat.last.buttons.last.onTap();
+    expect(seen.single['kind'], 'edit');
+  });
+
+  test('setting-only change: reported as "Goal is now 3000" and applied', () async {
+    c.changeCurrent();
+    page.handlers['generate'] = (a) => {'ok': true, 'program': waterFull.replaceAll('= 2000', '= 3000'), 'errors': [], 'stats': {'seconds': 2}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['Goal is now 3000'], 'warnings': [], 'refused': [], 'settings': [{'name': 'goal', 'text': 'Goal is now 3000'}]};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('change the goal to 3000');
+    expect(c.chat.last.text, contains('Goal is now 3000'));
+    expect(c.chat.last.text, isNot(contains('nothing changed')));
+    expect(page.calls, contains('applyEdit'));
+  });
+
+  test('an edit that removes more than 20% of the lines is refused unless the request asked to remove', () async {
+    c.changeCurrent();
+    final cut = 'app "Water" drop ocean\ntable drink ml num, kind text\n';
+    page.handlers['generate'] = (a) => {'ok': true, 'program': cut, 'errors': [], 'stats': {}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['removes from the screen: trend'], 'warnings': [], 'refused': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('make it green');
+    expect(page.calls, isNot(contains('applyEdit')));
+    expect(c.chat.last.text, contains('would have removed'));
+    expect(c.chat.last.text, contains('trend drink'));
+    expect(c.chat.last.buttons.map((b) => b.label), ['Try again']);
+    await c.send('remove the chart and the form');
+    expect(page.calls, contains('applyEdit'));
+  });
+
+  test('truly empty diff: "This app already does that" with the relevant line', () async {
+    c.changeCurrent();
+    page.handlers['generate'] = (a) => {'ok': true, 'program': waterFull, 'errors': [], 'stats': {}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': [], 'settings': []};
+    await c.send('add a goal');
+    expect(c.chat.last.text, contains('This app already does that'));
+    expect(c.chat.last.code, contains('setting goal'));
+  });
+
+  test('edits get a line budget of at least the current length plus room', () async {
+    c.changeCurrent();
+    final seen = <Map<String, dynamic>>[];
+    page.handlers['generate'] = (a) { seen.add(a); return {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}}; };
+    await c.send('make it green');
+    expect(seen.single['maxLines'], greaterThanOrEqualTo(70));
+    expect(seen.single['maxLines'], greaterThanOrEqualTo(programLines(waterFull).length));
+  });
+
+  test('examples open with sample data (seed passed once) and Clear removes it', () async {
+    await c.loadExample('water.mo');
+    expect(page.calls.where((x) => x == 'open').length, greaterThan(0));
+    expect(c.current!.sample, isTrue);
+    expect(c.current!.exampleId, 'water');
+    var cleared = false;
+    page.handlers['open'] = (a) { cleared = !a.containsKey('seed'); return {'ok': true}; };
+    await c.clearSample();
+    expect(c.current!.sample, isFalse);
+    expect(c.current!.snapshot, isNull);
+    expect(cleared, isTrue);
+    expect(page.calls, contains('flush'));
+  });
 }

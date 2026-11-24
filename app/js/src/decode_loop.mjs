@@ -10,12 +10,21 @@ export const DEFAULT_SYSTEM = 'You write MoldeScript, a tiny language for small 
 
 const clean = s => String(s).replace(/<\|tok:/g, '<| tok:');   // the native side reads <|tok:ID|> as a special token
 
-export function userText(kind, request, current) {
+// After an ask: the original request, the question and the answer (the format the model is trained on).
+// An edit puts the same three lines where its request goes.
+export function userText(kind, request, current, ask) {
+  const qa = ask && ask.question != null ? `\nQuestion: ${clean(ask.question)}\nAnswer: ${clean(ask.answer)}` : '';
   if (kind === 'edit') {
     const cur = String(current || '').replace(/\n*$/, '\n');
-    return `Edit request: ${clean(request)}\n\nCurrent program:\n${clean(cur)}`;
+    return `Edit request: ${clean(request)}${qa}\n\nCurrent program:\n${clean(cur)}`;
   }
-  return `Request: ${clean(request)}`;
+  return `Request: ${clean(request)}${qa}`;
+}
+
+// The first line may be an ask only when allowed: with allowAsk=false the grammar offers only the app line.
+// (The decoder still accepts a model that asks; only the grammar changes.)
+export function noAsk(grammar) {
+  return grammar.includes('( ask-stmt | app-stmt ) nl') ? grammar.replace('( ask-stmt | app-stmt ) nl', 'app-stmt nl') : grammar;
 }
 
 // <bos>=2, <start_of_turn>=105, <end_of_turn>=106 as real ids, exactly like training (the GGUF would
@@ -32,29 +41,34 @@ const hashOf = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7)
  * returns { ok, program, errors, ask, cancelled, timedOut, stats }
  */
 export async function generate(o) {
-  const { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = 6 * 60 * 1000, maxLines = 70 } = o;
+  const { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = 6 * 60 * 1000, maxLines = 70, allowAsk = true, ask: askCtx = null, cancelNative = null } = o;
   const types = arm === 'E';
-  const user = userText(kind, request, current);
+  const user = userText(kind, request, current, askCtx);
   const seedBase = hashOf(request);
   const t0 = Date.now();
   const st = { calls: 0, genTok: 0, genMs: 0, promptTok: 0, promptMs: 0, cacheTok: 0, rejected: 0, fallbacks: 0, gramMs: 0, gramFail: 0, lines: 0 };
   let prefix = '', stoppedBy = null, errorText = null;
+  // the deadline also interrupts a line in progress: the native side checks its cancel flag after every token
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; if (cancelNative) try { cancelNative(); } catch (e) { /* ignore */ } }, deadlineMs);
   const log = [];
   for (let n = 0; n < maxLines; n++) {
+    if (timedOut || Date.now() - t0 > deadlineMs) { stoppedBy = 'timeout'; break; }
     if (cancelled()) { stoppedBy = 'cancel'; break; }
-    if (Date.now() - t0 > deadlineMs) { stoppedBy = 'timeout'; break; }
     let g;
     const tg = performance.now();
     try { g = buildLineGrammar(prefix, { names: true, types }).grammar; } catch (e) { st.gramFail++; g = buildLineGrammar(prefix, { names: false }).grammar; }
+    if (!allowAsk && !prefix) g = noAsk(g);
     st.gramMs += performance.now() - tg;
     const lineNo = prefix ? prefix.split('\n').length : 1;
     let first = null, accepted = null, ended = false;
     for (let k = 0; k < 4; k++) {
+      if (timedOut) { stoppedBy = 'timeout'; break; }
       if (cancelled()) { stoppedBy = 'cancel'; break; }
       const req = { prompt: promptFor(system, user, prefix), grammar: g, nPredict: 200, stopNl: true, temp: k === 0 ? 0 : 0.7, seed: k === 0 ? 1 : (seedBase + k * 7919 + n) | 0 };
       const x = await complete(req);
       if (x.stop === 'error') { errorText = x.error || 'the model stopped with an error'; stoppedBy = 'error'; break; }
-      if (x.stop === 'cancel') { stoppedBy = 'cancel'; break; }
+      if (x.stop === 'cancel') { stoppedBy = timedOut ? 'timeout' : 'cancel'; break; }
       st.calls++; st.genTok += x.n_gen || 0; st.genMs += x.ms_gen || 0; st.promptTok += x.n_prompt || 0; st.promptMs += x.ms_prompt || 0; st.cacheTok += x.n_cache || 0;
       if (x.stop === 'eos' && !x.text) { ended = true; break; }
       if (x.stop === 'limit') { st.rejected++; continue; }
@@ -75,6 +89,7 @@ export async function generate(o) {
     const ls = prefix.split('\n').filter(Boolean);
     if (ls.length > 10 && new Set(ls.slice(-6)).size === 1) break;                           // degenerate repetition
   }
+  clearTimeout(timer);
   const seconds = (Date.now() - t0) / 1000;
   const stats = { seconds: +seconds.toFixed(2), tokens: st.genTok, tokPerSec: st.genMs ? +(st.genTok / (st.genMs / 1000)).toFixed(1) : 0, calls: st.calls, resamples: st.rejected, fallbacks: st.fallbacks, lines: st.lines, promptTokens: st.promptTok, cachedTokens: st.cacheTok, grammarMs: Math.round(st.gramMs), grammarFailures: st.gramFail, arm };
   if (stoppedBy === 'cancel') return { ok: false, cancelled: true, program: prefix, errors: [], stats, log };

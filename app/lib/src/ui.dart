@@ -65,6 +65,17 @@ class _ShellPageState extends State<ShellPage> {
         if (c.booted && c.current == null && !c.busy) Positioned.fill(child: _Empty(c: c, onChat: () => setState(() { open = true; }))),
         if (widget.mm.ready && !widget.mm.hasModel && c.apps.isEmpty && !widget.mm.setupDismissed && !open)
           Positioned.fill(child: ModelSetupScreen(mm: widget.mm, onExamples: () => setState(() => widget.mm.setupDismissed = true))),
+        if (!open && c.current?.sample == true)
+          Positioned(
+            left: 16,
+            bottom: 24 + mq.padding.bottom,
+            child: ActionChip(
+              key: const Key('sample-clear'),
+              avatar: const Icon(Icons.layers_clear_outlined, size: 18),
+              label: const Text('Sample data · Clear'),
+              onPressed: c.clearSample,
+            ),
+          ),
         if (!open)
           Positioned(
             right: 16,
@@ -160,10 +171,23 @@ class _Sheet extends StatelessWidget {
                 onTap: onToggleApps,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Row(children: [
-                    Flexible(child: Text(showApps ? 'Your apps' : (c.current?.name ?? 'No app yet'), overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium)),
-                    const SizedBox(width: 4),
-                    Icon(showApps ? Icons.expand_less : Icons.expand_more, size: 20),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Flexible(child: Text(showApps ? 'Your apps' : (c.current?.name ?? 'No app yet'), overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium)),
+                      const SizedBox(width: 4),
+                      Icon(showApps ? Icons.expand_less : Icons.expand_more, size: 20),
+                    ]),
+                    if (!showApps)
+                      Semantics(
+                        label: 'Mode: ${c.modeLabel}',
+                        child: Container(
+                          key: const Key('mode-label'),
+                          margin: const EdgeInsets.only(top: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: (c.current == null || c.newAppMode) ? cs.primaryContainer : cs.secondaryContainer, borderRadius: BorderRadius.circular(8)),
+                          child: Text(c.modeLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: (c.current == null || c.newAppMode) ? cs.onPrimaryContainer : cs.onSecondaryContainer)),
+                        ),
+                      ),
                   ]),
                 ),
               ),

@@ -102,7 +102,7 @@ class LlmService {
     final threads = (cores * 3 ~/ 4).clamp(2, 4);
     final side = await readSidecar(f);
     final sw = Stopwatch()..start();
-    final err = await _ch.invokeMethod<String>('load', {'path': f.path, 'nCtx': 2048, 'threads': threads});
+    final err = await _ch.invokeMethod<String>('load', {'path': f.path, 'nCtx': 4096, 'threads': threads});
     if (err != null && err.isNotEmpty) {
       loadError = err;
       return;

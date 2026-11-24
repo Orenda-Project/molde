@@ -8,6 +8,8 @@ import { describe } from '../vendor/lang/describe.mjs';
 import { check } from '../vendor/lang/check.mjs';
 import { format } from '../vendor/lang/format.mjs';
 import { generate, DEFAULT_SYSTEM } from './decode_loop.mjs';
+import { SEEDS } from '../vendor/render/demo/seed.mjs';
+import { prepareEdit } from './edit_prep.mjs';
 
 const RUNTIME = { currency: 'Rs', locale: 'en-US', tz: 'local' };
 const INSET = 88;                       // strip at the bottom that the host's chat button uses
@@ -46,11 +48,22 @@ function snapshot(force) {
   S.lastKey = key;
   post({ t: 'snapshot', payload });
 }
+// Sample data for the example apps: the web demo's own seeds, moved so the history ends today.
+const SEED_OF = { focus: 'pomodoro' };
+function seedSample(a, id) {
+  const f = SEEDS[SEED_OF[id] || id];
+  if (!f) return false;
+  const demoDay = new Date(2026, 10, 26).getTime();
+  const t = new Date(a.clock); const today = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+  const delta = today - demoDay;
+  const proxy = new Proxy(a, { get(o, k) { if (k === 'addRow') return (tb, v, ms) => o.addRow(tb, v, ms === undefined ? ms : ms + delta); const x = o[k]; return typeof x === 'function' ? x.bind(o) : x; } });
+  try { f(proxy); return true; } catch (e) { log('sample data failed: ' + e); return false; }
+}
 function nameOf(a) { const h = a.prog && a.prog.header; return h && h.name ? h.name : 'App'; }
 
 const methods = {
   ping: () => ({ ok: true }),
-  async open({ id, source, snapshot: snap, undo, nowMs, mode, theme }) {
+  async open({ id, source, snapshot: snap, undo, nowMs, mode, theme, seed }) {
     stop();
     S.id = id; S.mode = mode || S.mode;
     const opts = { now: nowMs || Date.now(), currency: RUNTIME.currency, tz: RUNTIME.tz };
@@ -58,6 +71,7 @@ const methods = {
     const a = load(source, opts);
     if (!a.ok) return { ok: false, errors: (a.errors || []).map(String) };
     a.versionsUndo = Array.isArray(undo) ? undo.slice() : [];
+    if (seed && !snap) seedSample(a, seed);
     S.app = a; S.lastKey = '';
     mountApp();
     S.timer = setInterval(tickClock, 1000);
@@ -74,12 +88,15 @@ const methods = {
     if (!S.app) return { verdict: 'refused', refused: ['no app is open'], changes: [], warnings: [] };
     const c = check(source);
     if (!c.ok) return { verdict: 'refused', refused: c.errors.map(String), changes: [], warnings: [] };
-    const r = evolve(S.app.ever, source);
-    const ui = uiChanges(S.app.source, source);
-    return { verdict: r.verdict, warnings: r.warnings || [], changes: [...(r.changes || []), ...ui], refused: r.refused || [], notes: r.notes || [] };
+    const prep = prepareEdit(S.app.source, source);
+    const r = evolve(S.app.ever, prep.source);
+    const ui = uiChanges(S.app.source, prep.source);
+    const sets = prep.settings.map(x => x.text);
+    return { verdict: r.verdict, warnings: r.warnings || [], changes: [...sets, ...(r.changes || []).filter(c => !sets.length || !/default|setting/i.test(c)), ...ui], refused: r.refused || [], notes: r.notes || [], settings: prep.settings };
   },
   applyEdit({ source }) {
-    const r = S.app.applyEdit(source);
+    const prep = prepareEdit(S.app.source, source);
+    const r = S.app.applyEdit(prep.source);
     if (r.verdict !== 'refused') { mountApp(); snapshot(true); }
     return { verdict: r.verdict, warnings: r.warnings || [], changes: r.changes || [], refused: r.refused || [], name: nameOf(S.app), canUndo: (S.app.versionsUndo || []).length };
   },
@@ -92,10 +109,10 @@ const methods = {
   describe({ source }) { try { return { text: describe(source) }; } catch (e) { return { text: '' }; } },
   check({ source }) { const c = check(source); return { ok: c.ok, errors: c.errors.map(String) }; },
   format({ source }) { try { return { text: format(source) }; } catch (e) { return { text: source }; } },
-  async generate({ kind, request, current, system, arm, deadlineMs }) {
+  async generate({ kind, request, current, system, arm, deadlineMs, allowAsk, ask, maxLines }) {
     S.cancel = false;
     const r = await generate({
-      kind, request, current, system: system || DEFAULT_SYSTEM, arm: arm || 'E', deadlineMs,
+      kind, request, current, system: system || DEFAULT_SYSTEM, arm: arm || 'E', deadlineMs, allowAsk: allowAsk !== false, ask, maxLines: maxLines || 70, cancelNative: () => native('cancel', {}),
       complete: req => native('complete', req),
       cancelled: () => S.cancel,
       onProgress: p => post({ t: 'progress', lines: p.lines, program: p.program, rejected: p.rejected }),

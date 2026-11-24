@@ -14,6 +14,8 @@ class AppRecord {
     List<Map<String, dynamic>>? history,
     int? createdAt,
     int? updatedAt,
+    this.sample = false,
+    this.exampleId,
   })  : undo = undo ?? [],
         history = history ?? [],
         createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch,
@@ -27,6 +29,8 @@ class AppRecord {
   List<Map<String, dynamic>> history; // {at, kind: create|edit|undo|example|import, request?, summary?}
   int createdAt;
   int updatedAt;
+  bool sample; // an example app still holding its sample data (one tap clears it)
+  String? exampleId;
 
   static const int format = 1;
 
@@ -40,6 +44,8 @@ class AppRecord {
         'history': history,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
+        'sample': sample,
+        'exampleId': exampleId,
       };
 
   static AppRecord? fromJson(Object? j) {
@@ -57,6 +63,8 @@ class AppRecord {
           : [],
       createdAt: j['createdAt'] is int ? j['createdAt'] as int : null,
       updatedAt: j['updatedAt'] is int ? j['updatedAt'] as int : null,
+      sample: j['sample'] == true,
+      exampleId: j['exampleId'] is String ? j['exampleId'] as String : null,
     );
   }
 
