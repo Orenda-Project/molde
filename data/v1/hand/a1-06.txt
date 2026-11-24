@@ -1,0 +1,395 @@
+@create style=multi_feature domain=a1_ramadan_deeds
+ramadan checklist: roza, taraweeh, quran, sadaqah, dua, tick each for today, a count for this week and a calendar of fully done days
+---
+app "Ramadan" moon mint
+table deed name pick Roza|Taraweeh|Quran|Sadaqah|Dua
+count(deed today) "of 5 done today" head
+each options deed.name as n
+  row card gap 2
+    text n bold grow
+    toggle deed today where name = n
+"This week" count(deed week) "of 35" faint
+"Perfect days" countof(days last 30 days, count(deed on it) = 5) faint
+heat last 30 days, count(deed on it), 5
+===
+@create style=short domain=a1_eid_tasks
+eid preparation checklist
+---
+app "Eid Prep" gift plum
+table task what text, due date?, done bool
+count(task where done = no) "things left" big
+each task where done = no sort due as t
+  row card tap edit t swipe remove t
+    toggle t.done
+    text t.what grow
+    t.due faint
+form task
+"Done" faint
+list task where done = yes
+===
+@create style=multi_feature domain=a1_umrah
+umrah preparation with two pages: a packing checklist by type (clothes, documents, medicine, other) and a savings page with a thermometer for the trip money
+---
+app "Umrah" mosque ocean
+table pack item text, kind pick Clothes|Documents|Medicine|Other = Clothes, done bool
+table saved amount money
+setting cost money = 400000 "Trip cost"
+screen packs "Pack" box
+  "Packed" count(pack where done = yes) "of" count(pack) head
+  each options pack.kind as k
+    each pack where kind = k as p
+      row tap edit p swipe remove p
+        text p.item grow
+        toggle p.done
+  form pack, "Add item"
+screen money "Savings" coin
+  let have = sum(saved.amount)
+  let p = clamp(have / cost, 0, 1)
+  row gap 3
+    draw 30, 100 width 40
+      rect 8, 4, 14, 92 stroke ink thick 2 radius 7
+      rect 8, 96 - 92 * p, 14, 92 * p fill good radius 7
+    stack grow
+      text have big
+      "of" cost faint
+  quick saved, amount, [5000, 10000, 20000]
+  form saved
+===
+@create style=custom_ui domain=a1_names_99
+a board with 99 small squares for the names of Allah, I tap a square when I have learned that name and it turns green, count at the top
+---
+app "99 Names" star mint
+table learned n num 1..99
+"Learned" count(learned) "of 99" big
+grid 11 gap 1
+  each 1..99
+    box height 24 radius 4 fill if(count(learned year where n = it) > 0, good, soft) tap toggle learned year where n = it
+      text it size tiny align center
+===
+@create style=short domain=a1_tahajjud
+tahajjud streak
+---
+app "Tahajjud" moon ink
+table night
+remind "Tahajjud time" at 3:30
+stat streak(night), "nights in a row"
+stat count(night month), "nights this month"
+button if(count(night today) > 0, "Prayed", "I prayed tahajjud") tap toggle night
+calendar night
+===
+@create style=short domain=a1_salawat
+salawat counter 100 a day
+---
+app "Salawat" beads plum
+table salawat
+setting target num = 100 "Daily target"
+ring count(salawat today), target, "salawat today"
+button "+1" tap add salawat
+button "+10" tap add salawat then add salawat then add salawat then add salawat then add salawat then add salawat then add salawat then add salawat then add salawat then add salawat
+stat streak(salawat), "day streak"
+===
+@create style=custom_ui domain=a1_hifz_bars
+surah memorisation: each surah with its number of ayahs and how many I know, a plus button for each new ayah and a green bar that fills
+---
+app "Memorise" book mint
+table surah name text, ayahs num 1..286, done num 0..286 = 0
+each surah sort name as s
+  stack card gap 1 tap edit s swipe remove s
+    row
+      text s.name bold grow
+      s.done "of" s.ayahs faint
+      button "+1" tap set s.done = s.done + 1
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * s.done / s.ayahs, 3 fill good radius 1
+form surah, "Add surah"
+===
+@create style=detailed domain=a1_masjid_log
+For the men in my family: which prayer I prayed in the masjid with jamaat, count per prayer this month and a streak of Fajr in the masjid.
+---
+app "Jamaat" mosque slate
+table masjid prayer pick Fajr|Zuhr|Asr|Maghrib|Isha
+count(masjid month) "jamaat prayers this month" big
+streak(masjid where prayer = Fajr) "day Fajr streak" faint
+row gap 1
+  each options masjid.prayer
+    button it grow tap add masjid prayer = it
+share masjid month by prayer, count(it), it.key
+===
+@create style=multi_feature domain=a1_tafsir_notes
+my tafsir notes: surah, ayah number, long note, search by surah name, newest first
+---
+app "Tafsir Notes" book plum
+table note surah text, ayah num 1..286, body long
+state q text = ""
+field q "Search surah"
+each note where has(surah, q) sort at desc as n
+  stack card gap 0 tap edit n swipe remove n
+    row
+      text n.surah bold grow
+      n.ayah faint
+    n.body faint
+form note, "Add note"
+===
+@create style=custom_ui domain=a1_reflect_prompt
+a daily reflection question that changes every day from my own list of questions, shown big on the first screen
+---
+app "Reflect" brain plum
+table prompt question text
+if count(prompt) = 0
+  "Add some questions below." faint
+each prompt sort at as p
+  if index = monthday(today) % count(prompt)
+    stack card pad 3
+      text p.question big
+form prompt, "Add a question"
+list prompt
+===
+@create style=multi_feature domain=a1_five_minute
+five minute journal: morning page with three things I am grateful for and my intention, evening page with my wins, and a streak
+---
+app "Five Minutes" pen ink
+table morning grateful long, intention text
+table evening wins long
+remind "Morning page" at 7:00
+remind "Evening page" at 21:00
+screen am "Morning" sun
+  form morning, "Save morning"
+  streak(morning) "day streak" faint
+screen pm "Evening" moon
+  form evening, "Save evening"
+  log evening
+===
+@create style=short domain=a1_writing_streak
+daily writing
+---
+app "Writing" pen slate
+table page body long
+stat streak(page), "day streak"
+stat count(page month), "days written this month"
+form page, "Write"
+calendar page
+===
+@create style=detailed domain=a1_weekly_review
+A weekly review form: what went well, a rating from 1 to 5 and my focus for next week. I save it and read my old reviews below.
+---
+app "Weekly Review" check slate
+table review wins long, rating num 1..5 = 3, focus text
+state r new review
+field r
+button "Save week" tap save r
+"Average rating" round(avg(review.rating) * 10) / 10 faint
+each review sort at desc as w
+  stack card gap 0 tap edit w
+    w.at "Rating" w.rating bold
+    w.focus faint
+===
+@create style=custom_ui domain=a1_time_budget
+where does my day go: I add hours for work, family, prayer, sleep, study, phone, and see bars comparing them for this week
+---
+app "My Day" clock ocean
+table hours activity pick Work|Family|Prayer|Sleep|Study|Phone|Fun, h num 0.25..24 unit "h"
+"Logged this week" sum(hours.h week) "hours" big
+share hours week by activity, sum(it.h), it.key
+form hours
+log hours last 7 days
+===
+@create style=short domain=a1_fast_food
+fast food counter, I want to eat less of it
+---
+app "Fast Food" food slate
+table junk
+setting limit num = 4 "Max per month"
+goal count(junk month), limit, "times this month", "times"
+button "I ate fast food" tap add junk
+stat since(junk), "days since the last time"
+===
+@create style=custom_ui domain=a1_iftar_menu
+iftar menu for the 30 days: a grid of day boxes, tap a day to see and edit its dishes, days with a menu are green
+---
+app "Iftar Menu" food mint
+table iftar day num 1..30, dish text
+state sel num = 1
+grid 6 gap 1
+  each 1..30
+    box height 36 radius 8 fill if(it = sel, accent, if(count(iftar where day = it) > 0, good, soft)) tap set sel = it
+      text it size small align center
+"Day" sel head
+each iftar where day = sel as d
+  row card tap edit d swipe remove d
+    text d.dish grow
+form iftar, "Add dish"
+===
+@create style=multi_feature domain=a1_monthly_ration
+monthly ration list: item, quantity, price per unit, total cost at the bottom, tick when bought
+---
+app "Ration" cart mint
+table ration item text, qty num 0.5..500, price money, bought bool
+text sumof(ration, it.qty * it.price) big
+"Still to buy" sumof(ration where bought = no, it.qty * it.price) faint
+each ration sort item as r
+  row card tap edit r swipe remove r
+    toggle r.bought
+    text r.item grow
+    r.qty "x" r.price faint
+form ration
+===
+@create style=custom_ui domain=a1_macro_pie
+what is on my plate: log meals with protein, carbs and fat in grams and draw a ring split into three coloured parts for today
+---
+app "Plate" food mint
+table meal item text, protein num 0..300 = 0, carbs num 0..500 = 0, fat num 0..300 = 0
+let p = sum(meal.protein today)
+let c = sum(meal.carbs today)
+let f = sum(meal.fat today)
+let t = max(p + c + f, 1)
+draw 100, 100 width 200
+  circle 50, 50, 40 stroke soft thick 14
+  arc 50, 50, 40, 0, 360 * p / t stroke accent thick 14
+  arc 50, 50, 40, 360 * p / t, 360 * (p + c) / t stroke good thick 14
+  arc 50, 50, 40, 360 * (p + c) / t, 360 stroke warn thick 14
+  label 50, 50, p + c + f "g" head
+row gap 2
+  "Protein" p color accent
+  "Carbs" c color good
+  "Fat" f color warn
+form meal
+===
+@create style=short domain=a1_yoga_timers
+yoga flow timers
+---
+app "Yoga Flow" leaf mint
+timer 30s, "Tree pose"
+timer 45s, "Warrior"
+timer 60s, "Child pose", notify "Flow complete"
+===
+@create style=custom_ui domain=a1_couch5k
+couch to 5k plan for 8 weeks with 3 runs per week, a grid where I tap each run when I finish it
+---
+app "Couch to 5K" run mint
+table did wk num 1..8, run num 1..3
+"Runs done" count(did) "of 24" big
+each 1..8 as w
+  row gap 1
+    text "Week" w size small width 8
+    each 1..3 as r
+      box grow height 28 radius 6 fill if(count(did year where wk = w and run = r) > 0, accent, soft) tap toggle did year where wk = w and run = r
+===
+@create style=short domain=a1_jump_rope
+jump rope sets
+---
+app "Jump Rope" bolt ink
+table jumps count num 10..2000
+stat max(jumps.count), "best set"
+stat sum(jumps.count week), "jumps this week"
+quick jumps, count, [50, 100, 200]
+daybars last 7 days, sum(jumps.count on it)
+===
+@create style=typos domain=a1_eye_break
+my eyes hurt from the laptop, remind me to look away evry hour and count it
+---
+app "Eye Break" eye ocean
+table brk
+remind "Look 20 feet away for 20 seconds" every 1h from 9:00 to 18:00
+button "Looked away" tap add brk
+stat count(brk today), "eye breaks today"
+daybars last 7 days, count(brk on it)
+===
+@create style=detailed domain=a1_checkups
+Health checkups I should repeat: blood test, dental, eye test. I write the last date and how many months between, and it shows which are overdue.
+---
+app "Checkups" heart ocean
+table check what text, last date, every num 1..60 = 12 unit "months"
+let overdue = countof(check, addmonths(it.last, it.every) < today)
+text overdue "overdue" big color if(overdue > 0, bad, good)
+each check sort last as c
+  row card tap edit c swipe remove c
+    text c.what bold grow
+    addmonths(c.last, c.every) color if(addmonths(c.last, c.every) < today, bad, muted)
+form check
+===
+@create style=multi_feature domain=a1_symptoms
+symptom diary for women: cramps, headache, mood, bloating, acne, fatigue with strength 1 to 3, what was most common this month, a heat map
+---
+app "Symptoms" heart plum
+table symptom kind pick Cramps|Headache|Mood|Bloating|Acne|Fatigue, strength num 1..3 = 2
+share symptom month by kind, count(it), it.key
+heat last 56 days, count(symptom on it), 3
+form symptom
+log symptom last 14 days
+===
+@create style=custom_ui domain=a1_feelings
+a way to say how I feel: chips for happy, calm, tired, anxious, angry, sad, a field for why, save button, and which feeling I had most this month
+---
+app "Feelings" smile plum
+table feeling emo pick Happy|Calm|Tired|Anxious|Angry|Sad, why text?
+state e pick Happy|Calm|Tired|Anxious|Angry|Sad = Calm
+state w text = ""
+choice e
+field w "Why?"
+button "Save" tap add feeling emo = e, why = w then set w = ""
+share feeling month by emo, count(it), it.key
+log feeling
+===
+@oos style=detailed domain=a1_nutritionist_oos oos=ai
+Chat with an AI nutritionist that makes my diet plan, and I also want to log my meals and calories
+---
+app "Meals" apple mint
+table meal item text, kcal num 0..3000
+setting goal num = 2000 "Calories a day"
+ring sum(meal.kcal today), goal, "kcal today"
+form meal
+log meal last 7 days
+===
+@oos style=short domain=a1_dnd_oos oos=other_apps
+silence my phone at prayer times and keep a list of the five times
+---
+app "Prayer Times" mosque ocean
+table slot name pick Fajr|Zuhr|Asr|Maghrib|Isha, at_time time
+remind "Prayer time" at slot.at_time
+each slot sort at_time as s
+  row card tap edit s swipe remove s
+    text s.name bold grow
+    text s.at_time head
+form slot, "Set time"
+===
+@edit style=plain domain=a1_e_memorise_remind ref=a1_hifz_bars
+remind me to revise every evening at 8 pm
+---
++ remind "Revise what you learned" at 20:00
+===
+@edit style=plain domain=a1_e_tahajjud_dark ref=a1_tahajjud
+make it purple
+---
+~ app "Tahajjud" moon ink => app "Tahajjud" moon plum
+===
+@edit style=plain domain=a1_e_eid_cost ref=a1_eid_tasks
+add the cost for each task
+---
+~ due date?, done bool => due date?, done bool, cost money?
+===
+@edit style=plain domain=a1_e_feel_level ref=a1_feelings
+add how strong the feeling is from 1 to 5
+---
+~ why text?\nstate e => why text?, level num 1..5 = 3\nstate e
+===
+@edit style=plain domain=a1_e_time_goal ref=a1_time_budget
+add a goal of 56 hours a week for family time
+---
+~ "Logged this week" => setting family_goal num = 56 "Family hours a week"\n"Family hours" sum(hours.h week where activity = Family) "of" family_goal faint\n"Logged this week"
+===
+@edit style=plain domain=a1_e_umrah_theme ref=a1_umrah
+change the colours to green
+---
+~ app "Umrah" mosque ocean => app "Umrah" mosque mint
+===
+@edit style=plain domain=a1_e_couch_remind ref=a1_couch5k
+remind me on monday wednesday friday morning to run
+---
++ remind "Run day" at 6:30 on mon wed fri
+===
+@edit style=plain domain=a1_e_review_dark ref=a1_weekly_review
+add a reminder every sunday evening
+---
++ remind "Do your weekly review" at 19:00 on sun
+===

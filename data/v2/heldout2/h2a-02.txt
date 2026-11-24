@@ -1,0 +1,297 @@
+@create style=detailed domain=h2a_rent
+I own 4 rooms that I rent out. Each month I want to note who paid how much and see the total I collected this month
+---
+app "Rent" home slate
+table rent tenant text, room num 1..4, amount money
+stat sum(rent.amount month), "collected this month"
+form rent
+list rent by day
+===
+@create style=short domain=h2a_granny_meds
+grandma medicine reminder morning noon night
+---
+app "Medicine" pill mint
+table dose
+toggle dose today
+remind "Grandma's medicine" at 8:00, 14:00, 21:00
+stat count(dose last 7 days), "doses in 7 days"
+===
+@create style=vague domain=h2a_cricket
+my cricket scores
+---
+app "Cricket" ball mint
+table innings runs num 0..300, balls num 1..300
+stat max(innings.runs), "best score"
+trend innings, it.runs
+form innings
+list innings
+===
+@create style=detailed domain=h2a_bike_fund
+saving up for a bike that costs 15000. I put money in whenever I have some and want to see how close I am
+---
+app "Bike Fund" bike mint
+table save amount money
+setting target money = 15000 "Bike price"
+goal sum(save.amount), target, "saved so far"
+form save
+list save by day
+===
+@create style=typos domain=h2a_library
+who borowed my books and have they returned them
+---
+app "Lent Books" book plum
+table loan book text, who text, back bool
+stat count(loan where back = no), "still out"
+form loan
+list loan
+===
+@create style=short domain=h2a_mood
+mood diary, 3 moods + a note
+---
+app "Mood" smile plum
+table mood level pick Great|Okay|Bad = Okay, note long?
+share mood month by level, count(it), it.key
+form mood
+list mood by day
+===
+@create style=detailed domain=h2a_petrol
+petrol log for my motorbike: litres, price paid and odometer km each time I fill up. show how much I spent this month
+---
+app "Petrol" fire slate
+table fill litres num 0.1..50, paid money, km num 0..
+stat sum(fill.paid month), "spent this month"
+form fill
+list fill
+===
+@create style=vague domain=h2a_salah
+prayers done today
+---
+app "Prayers" mosque mint
+table prayer name pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr
+each options prayer.name
+  row card
+    toggle prayer today where name = it
+    text it grow
+stat count(prayer today), "of 5 today"
+===
+@create style=custom_ui domain=h2a_recipes
+recipe cards, name, cooking time and the steps written out. tall cards please
+---
+app "Recipes" food mint
+table recipe name text, mins num 1..600 unit "min", steps long
+form recipe
+each recipe sort it.name
+  stack card gap 1 pad 3
+    it.name head
+    it.mins "min" faint
+    it.steps
+===
+@create style=short domain=h2a_weight
+weight log trend
+---
+app "Weight" scale slate
+table weigh kg num 20..250
+stat last(weigh.kg), "kg now"
+trend weigh, it.kg
+form weigh
+list weigh by day
+===
+@create style=multi_feature domain=h2a_wedding
+sister's wedding. guest list with side (bride or groom) and how many people, and a spending list. one tab each, and show the total headcount and total spent at top of each
+---
+app "Wedding" gift plum
+table guest name text, side pick Bride|Groom = Bride, people num 1..20 = 1
+table expense what text, amount money
+screen guests "Guests" users
+  stat sum(guest.people), "people invited"
+  form guest
+  list guest
+screen spend "Spending" wallet
+  stat sum(expense.amount), "spent so far"
+  form expense
+  list expense
+===
+@create style=custom_ui domain=h2a_flash
+flashcards for english words, show the word, tap to reveal meaning, next button. random order
+---
+app "Flashcards" cards ocean
+table card front text, back text
+state i num = 1
+state shown bool = no
+let cur = nth(card shuffle, i)
+form card
+if count(card, yes) > 0
+  stack card gap 1 tap set shown = not shown
+    text cur.front head
+    if shown
+      text cur.back
+  button "Next" tap set i = i % count(card, yes) + 1 then set shown = no
+===
+@create style=multi_feature domain=h2a_habits
+habit tracker for exercise, reading, and no sugar. tick each day, show current streak and best streak for each, and a 7 day bar chart
+---
+app "Habits" check mint
+table habit name text
+table check habit ref habit
+form habit
+each habit as h
+  stack card gap 1
+    row gap 1
+      toggle h.check
+      h.name bold grow
+      "streak" streak(h.check) "best" best(h.check) faint
+    daybars last 7 days, count(h.check on it)
+===
+@create style=custom_ui domain=h2a_weightplot
+chart of my weight over time with gridlines and a line at my goal weight of 70
+---
+app "Weight Chart" scale ocean
+table weigh kg num 30..200
+setting goal num = 70 "Goal weight"
+plot 0..count(weigh, yes), 50..120 axes gridlines
+  poly stroke accent thick 2
+    each weigh
+      pt index, it.kg
+  poly stroke good thick 1
+    pt 0, goal
+    pt count(weigh, yes), goal
+form weigh
+===
+@create style=multi_feature domain=h2a_milk
+I have 3 buffalo: Kali, Gori and Moti. record litres of milk from each every day, price per litre setting, show today's income and each one's total today
+---
+app "Dairy" milk mint
+table animal name text
+table milk animal ref animal, litres num 0.1..40
+setting price money = 180 "Price per litre"
+stat sum(milk.litres today) * price, "income today"
+each animal
+  row card
+    it.name bold grow
+    sum(it.milk.litres today) "litres today"
+form animal
+form milk
+===
+@create style=multi_feature domain=h2a_udhar
+udhar khata: people I gave money to or got from. for each person show what balance is, who owes me and who I owe
+---
+app "Udhar" money slate
+table person name text
+table entry person ref person, amount money, kind pick Gave|Got = Gave
+form person
+form entry
+each person sort sum(it.entry.amount where kind = Gave) - sum(it.entry.amount where kind = Got) desc
+  row card
+    it.name bold grow
+    sum(it.entry.amount where kind = Gave) - sum(it.entry.amount where kind = Got) color if(sum(it.entry.amount where kind = Gave) >= sum(it.entry.amount where kind = Got), good, bad)
+===
+@edit style=plain domain=h2a_ed_tab
+add a second tab that just shows history
+--- before
+app "Pushups" dumbbell mint
+table set reps num 1..500
+stat sum(set.reps today), "reps today"
+quick set, reps, [10, 20]
+--- after
+app "Pushups" dumbbell mint
+table set reps num 1..500
+stat sum(set.reps today), "reps today"
+quick set, reps, [10, 20]
+screen history "History" list
+  list set by day
+===
+@edit style=plain domain=h2a_ed_goal
+my target is more like 10000 steps now
+--- before
+app "Steps" walk mint
+table walk steps num 0..100000
+setting target num = 6000 "Daily steps"
+goal sum(walk.steps today), target, "today", "steps"
+form walk
+--- after
+app "Steps" walk mint
+table walk steps num 0..100000
+setting target num = 10000 "Daily steps" set
+goal sum(walk.steps today), target, "today", "steps"
+form walk
+===
+@edit style=plain domain=h2a_ed_filter
+i need to filter by category in the list
+--- before
+app "Expenses" wallet ink
+table spend category pick Food|Bills|Fun = Food, amount money
+form spend
+list spend
+--- after
+app "Expenses" wallet ink
+table spend category pick Food|Bills|Fun = Food, amount money
+state show pick All|Food|Bills|Fun = All
+choice show
+form spend
+each spend where show = All or category = show sort it.at desc empty "Nothing here"
+  row card tap edit it swipe remove it
+    it.category grow
+    it.amount bold
+===
+@edit style=plain domain=h2a_ed_rename_field
+call the ml column amount instead, I also log juice
+--- before
+app "Drinks" cup ocean
+table drink ml num 1..2000 unit "ml"
+stat sum(drink.ml today), "ml today"
+quick drink, ml, [250, 500]
+list drink
+--- after
+app "Drinks" cup ocean
+table drink amount num 1..2000 unit "ml" was ml
+stat sum(drink.amount today), "ml today"
+quick drink, amount, [250, 500]
+list drink
+===
+@edit style=plain domain=h2a_ed_search
+add a search box for my notes
+--- before
+app "Notes" note slate
+table note title text, body long
+form note
+list note
+--- after
+app "Notes" note slate
+table note title text, body long
+state q text
+field q "Search"
+form note
+each note where has(title, q) or has(body, q) empty "No notes found"
+  stack card gap 0 tap edit it swipe remove it
+    it.title bold
+    it.body faint
+===
+@ask style=ask domain=h2a_ask3
+help me with my shop
+---
+ask "What do you want to do for your shop?" "Track stock" "Track daily sales" "Keep customer credit"
+===
+@ask style=ask domain=h2a_ask4
+app for school
+---
+ask "Who is this school app for?" "A teacher" "A student" "A parent"
+===
+@oos style=detailed domain=h2a_oos_cam oos=camera
+scan the barcode on each item with the phone camera to add it to my stock, and I need to see the quantity left of every item
+---
+app "Stock" box slate
+table item name text, qty num 0..
+form item
+each item sort it.name empty "No items yet"
+  row card tap edit it
+    it.name grow
+    it.qty bold color if(it.qty < 3, warn, ink)
+===
+@oos style=typos domain=h2a_oos_print oos=print
+need to prnt receipts for my customers after every sale, also daily total
+---
+app "Sales" cart ink
+table sale customer text, item text, price money
+stat sum(sale.price today), "total today"
+form sale
+list sale by day

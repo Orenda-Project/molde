@@ -1,0 +1,348 @@
+@create style=short domain=b2_student_directory
+student phone book with search
+---
+app "Students" users ocean
+table student name text, parent text, phone text?, grade num 1..12
+state q text = ""
+field q "Search name"
+each student where has(name, q) sort name as s
+  row card tap edit s swipe remove s
+    stack grow
+      s.name bold
+      s.parent faint
+    "Grade" s.grade faint
+"Showing" count(student where has(name, q)) "of" count(student) faint
+form student, "Add student"
+===
+@create style=custom_ui domain=b2_absence_calendar
+month calendar of days my daughter was absent from school, arrows to change month, count of days absent this month
+---
+app "Absences" calendar plum
+table absent reason pick Sick|Family|Other = Sick
+state m date = today
+monthnav m
+calendar absent, m
+count(absent month of m) "days absent in" monthname(m) head
+count(absent where reason = Sick) "sick days this year" faint
+===
+@create style=detailed domain=b2_homeschool_hours
+We homeschool two children. Each subject has a weekly hours goal for each child. I log the hours taught and want to see this week's hours against the goal for every subject.
+---
+app "Homeschool" book mint
+table child name text
+table subject name text, child ref child, weekly_goal num 1..40 = 5 "Weekly goal (h)"
+table lesson subject ref subject, hours num 0.25..8
+each child as c
+  stack card gap 1
+    c.name head
+    each c.subject as s
+      row gap 1
+        s.name grow
+        sum(s.lesson.hours week) "of" s.weekly_goal "h" color if(sum(s.lesson.hours week) >= s.weekly_goal, good, ink)
+form child, "Add child"
+form subject, "Add subject"
+form lesson, "Log lesson"
+===
+@create style=multi_feature domain=b2_tutor_students
+private tutor: students with a subject and fee per session, log every session, flag a student I haven't seen for 7 days, and my income this month
+---
+app "Tutor diary" school slate
+table student name text, subject text, fee money
+table session student ref student, topic text?
+"Income this month" sum(session month, it.student.fee) big
+each student sort name as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      s.subject faint
+    if due(s.session, 7)
+      "Not seen in 7 days" color warn small
+    count(s.session month) "this month" faint
+form student, "Add student"
+form session, "Log session"
+===
+@create style=typos domain=b2_family_bmi
+bmi for everyone in the family, hight and weight, and tell if underweight normal or over
+---
+app "Family BMI" scale mint
+table member name text, cm num 50..220, kg num 3..200
+each member sort name as m
+  let bmi = m.kg / pow(m.cm / 100, 2)
+  row card tap edit m
+    m.name bold grow
+    text fixed(bmi, 1) big
+    if(bmi < 18.5, "Under", if(bmi < 25, "Normal", "Over")) color if(bmi < 25 and bmi >= 18.5, good, warn)
+form member, "Add person"
+===
+@create style=detailed domain=b2_step_challenge
+Family step challenge for the week. Everyone enters their steps each evening. I want a ranking for this week with total steps and a bar for each person compared to the leader.
+---
+app "Step race" walk mint
+table person name text
+table steps person ref person, count num 0..60000
+"Family steps this week" sum(steps.count week) big
+each person sort sum(it.steps.count week) desc as p
+  stack gap 0
+    row gap 1
+      p.name bold grow
+      sum(p.steps.count week) bold
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * sum(p.steps.count week) / max(max(person, sum(it.steps.count week)), 1), 4 fill accent radius 2
+form person, "Add person"
+form steps, "Add steps"
+===
+@create style=multi_feature domain=b2_football_trials
+trial day for the academy: each boy gets scored 1 to 10 on pace, shooting and passing by me, average of the three and a ranking
+---
+app "Trials" ball slate
+table boy name text, age num 6..19
+table score boy ref boy, pace num 1..10 = 5, shooting num 1..10 = 5, passing num 1..10 = 5
+each boy sort avg(it.score.pace) + avg(it.score.shooting) + avg(it.score.passing) desc as b
+  row card tap edit b
+    text index + 1 faint
+    b.name bold grow
+    fixed((avg(b.score.pace) + avg(b.score.shooting) + avg(b.score.passing)) / 3, 1) big
+form boy, "Add player"
+form score, "Add score"
+===
+@create style=vague domain=b2_pet_spending
+what I spend on my pets
+---
+app "Pet costs" paw slate
+table pet name text
+table cost pet ref pet, amount money, type pick Food|Vet|Toys|Grooming|Other = Food
+"This month" sum(cost.amount month) big
+share cost month by type, sum(it.amount), it.key
+each pet as p
+  row card
+    p.name bold grow
+    sum(p.cost.amount year) "this year" faint
+form pet, "Add pet"
+form cost, "Add expense"
+===
+@create style=detailed domain=b2_kennel_boarding
+Dog boarding kennel. Each stay has a check-in date and a check-out date, nightly price is in settings. The bill is nights times the price. Show dogs currently staying and what each stay costs.
+---
+app "Kennel" paw ocean
+table dog name text, owner text
+table stay dog ref dog, checkin date, checkout date
+setting price money = 1200 "Price per night"
+count(stay where checkin <= today and checkout >= today) "dogs staying now" big
+each stay sort checkin desc as s
+  row card tap edit s
+    stack grow
+      s.dog.name bold
+      s.checkin "to" s.checkout faint
+    text (s.checkout - s.checkin) * price bold
+form dog, "Add dog"
+form stay, "Add stay"
+===
+@create style=custom_ui domain=b2_nap_timer
+baby nap timer that I start when she falls asleep, 45 minutes then a notice, and save the nap in a list with how long
+---
+app "Nap timer" moon plum
+table nap length dur
+timer 45m, "Nap", notify "Nap time is over, check on the baby"
+button "Saved a 45 minute nap" tap add nap length = 45m
+"Today" sum(nap.length today) big
+list nap by day
+===
+@create style=multi_feature domain=b2_subject_pomodoro
+study timer 25 minutes, I pick the subject first, each finished session is saved with the subject, then show share of minutes per subject this week
+---
+app "Study timer" timer ink
+table session subject pick Maths|Physics|Chemistry|Urdu|English = Maths, minutes num 1..180 = 25
+state subject_now pick Maths|Physics|Chemistry|Urdu|English = Maths
+choice subject_now
+timer 25m, "Focus", add session subject = subject_now then notify "Session saved"
+"Minutes this week" sum(session.minutes week) big
+share options session.subject, sum(session.minutes week where subject = it), it
+list session today
+===
+@create style=short domain=b2_vocab_cards
+english vocabulary cards for my son, random one at a time, mark known
+---
+app "Vocab" brain plum
+table card word text, meaning text, known bool
+state show bool = no
+each card where known = no shuffle top 1 empty "All words known"
+  stack card gap 2 tap set show = not show
+    it.word big
+    if show
+      it.meaning head color accent
+      button "I know it" tap set it.known = yes then set show = no
+count(card where known = yes) "known of" count(card) faint
+form card, "Add card"
+===
+@create style=detailed domain=b2_scout_badges
+Scout troop: scouts earn badges. I list scouts and badge types, then record each time a scout earns one. Show how many badges each scout has and how many scouts hold each badge.
+---
+app "Scout badges" star mint
+table scout name text, patrol pick Eagles|Wolves|Lions = Eagles
+table badge name text
+table earned scout ref scout, badge ref badge
+each scout sort count(it.earned) desc as s
+  row card
+    s.name bold grow
+    s.patrol faint
+    count(s.earned) "badges" bold
+"By badge" head
+each badge as b
+  row
+    b.name grow
+    count(b.earned) "scouts" faint
+form scout, "Add scout"
+form badge, "Add badge"
+form earned, "Award badge"
+===
+@create style=typos domain=b2_reading_race
+class reading race, each kid logs books finnished, show who is ahead with a bar chart
+---
+app "Reading race" book mint
+table kid name text
+table book kid ref kid, title text
+count(book month) "books this month" big
+bars kid, count(it.book), it.name
+each kid sort count(it.book) desc top 3 as k
+  row card
+    text index + 1 bold
+    k.name grow
+    count(k.book) "books" bold
+form kid, "Add kid"
+form book, "Finished a book"
+===
+@create style=multi_feature domain=b2_clinic_slots
+small family clinic, two doctors, patients get an appointment time, show today's list per doctor with the time and patient and a reminder the evening before
+---
+app "Clinic" heart ocean
+table doctor name text
+table appointment doctor ref doctor, patient text, day date, start time
+remind "Appointments tomorrow, check the list" at 18:00
+each doctor as d
+  stack card gap 1
+    row
+      d.name head grow
+      count(d.appointment where day = today) "today" bold
+    each d.appointment where day = today sort start as a
+      row gap 1
+        a.start bold
+        a.patient grow
+form doctor, "Add doctor"
+form appointment, "Book appointment"
+===
+@create style=vague domain=b2_kids_moods
+how my kids feel each day
+---
+app "Moods" smile plum
+table child name text
+table mood child ref child, feeling pick Happy|Okay|Sad|Angry = Happy
+each child as c
+  stack card gap 1
+    c.name head
+    last(c.mood.feeling) big
+    each options mood.feeling as f
+      row gap 1
+        text f grow
+        count(c.mood last 30 days where feeling = f) faint
+    row gap 1
+      each options mood.feeling as f
+        button f tap add mood child = c, feeling = f
+form child, "Add child"
+===
+@create style=custom_ui domain=b2_fee_calc
+fee calculator for my school, tab one to enter the fee and number of children and a sibling discount percent, tab two to see what each month costs for a year
+---
+app "School fee" calc slate
+state fee money = 8000
+state kids num = 1
+state discount num = 10
+let total = fee * kids * (1 - if(kids > 1, discount, 0) / 100)
+screen enter "Fees" calc
+  field fee "Monthly fee per child"
+  field kids "Children"
+  field discount "Sibling discount %"
+  "Per month" round(total) big
+screen year "Year" calendar
+  each 1..12 as mo
+    row card
+      text mo grow
+      round(total) bold
+  "Total for the year" round(total * 12) big
+===
+@oos style=short domain=b2_oos_scan_homework oos=camera
+take a photo of the homework page and read the questions, plus a tick list for homework done
+---
+app "Homework ticks" book ocean
+table hw subject text, what text, done bool
+count(hw where done = no) "left to do" big
+each hw where done = no sort at as h
+  row card
+    toggle h.done
+    h.subject bold
+    h.what grow
+form hw, "Add homework"
+===
+@edit style=plain domain=b2_e_dir_class ref=b2_student_directory
+add a section A B or C to each student and let me search by parent name too
+---
+~ grade num 1..12 => grade num 1..12, section pick A|B|C = A
+~ each student where has(name, q) => each student where has(name, q) or has(parent, q)
+===
+@edit style=plain domain=b2_e_abs_reason ref=b2_absence_calendar
+rename Family to Travel
+---
+~ pick Sick|Family|Other = Sick => pick Sick|Travel was Family|Other = Sick
+===
+@edit style=plain domain=b2_e_homeschool_bar ref=b2_homeschool_hours
+show total hours taught this week at the top
+---
++ "Hours taught this week" sum(lesson.hours week) big
+===
+@edit style=plain domain=b2_e_tutor_paid ref=b2_tutor_students
+add a paid tick to each session and show how much money is still unpaid
+---
+~ topic text? => topic text?, paid bool
++ "Unpaid" sum(session where paid = no, it.student.fee) color warn
+===
+@edit style=plain domain=b2_e_bmi_goal ref=b2_family_bmi
+rename kg to weight and add a target weight
+---
+~ kg num 3..200 => weight num 3..200 was kg, target num? 3..200
+~ m.kg / pow => m.weight / pow
+===
+@edit style=plain domain=b2_e_steps_goal ref=b2_step_challenge
+add a daily goal setting of 8000 steps and show how many people reached it today
+---
+~ "Family steps this week" sum(steps.count week) big => setting goal num 1000..50000 = 8000 "Daily step goal"\n"Family steps this week" sum(steps.count week) big\n"Reached the goal today" count(person, sum(it.steps.count today) >= goal) faint
+===
+@edit style=plain domain=b2_e_pets_budget ref=b2_pet_spending
+add a monthly budget of 15000 with a bar
+---
+~ "This month" sum(cost.amount month) big => setting budget money = 15000 "Monthly pet budget"\ngoal sum(cost.amount month), budget, "spent this month"
+===
+@edit style=plain domain=b2_e_kennel_discount ref=b2_kennel_boarding
+add a discount percent to each stay and use it in the bill
+---
+~ checkout date => checkout date, discount num 0..100 = 0 "Discount %"
+~ (s.checkout - s.checkin) * price bold => (s.checkout - s.checkin) * price * (100 - s.discount) / 100 bold
+===
+@edit style=plain domain=b2_e_pomo_length ref=b2_subject_pomodoro
+make the timer 50 minutes
+---
+~ timer 25m, "Focus", add session subject = subject_now => timer 50m, "Focus", add session subject = subject_now, minutes = 50
+===
+@edit style=plain domain=b2_e_scout_remove ref=b2_scout_badges
+remove the by badge list
+---
+- "By badge" head
+- each badge as b
+-   row
+-     b.name grow
+-     count(b.earned) "scouts" faint
+===
+@edit style=plain domain=b2_e_moods_heat ref=b2_kids_moods
+add a heat map of the days anyone was sad
+---
++ "Sad days" head
++ heat last 28 days, count(mood on it where feeling = Sad), 2

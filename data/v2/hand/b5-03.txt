@@ -1,0 +1,435 @@
+@create style=custom_ui domain=b5_star_gazing
+stargazing nights log: date and place, and under each night the things I saw (planet, galaxy, comet etc) with a 1 to 5 rating. show each night as a card with a star row that fills by best rating
+---
+app "Night Sky" moon ink
+table night day date, place text
+table sighting night ref night, object text, rating num 1..5 = 3
+each night sort day desc as n
+  stack card gap 1 tap edit n
+    row
+      n.day bold
+      n.place grow faint
+    row gap 0
+      each 1..5 as s
+        icon star color if(s <= max(n.sighting.rating), warn, muted)
+    each n.sighting as g
+      g.object g.rating faint
+form sighting, "Add sighting"
+form night, "New night"
+===
+@oos style=vague domain=b5_van_gps oos=location
+show where the school van is on a map right now and who is on it
+---
+app "Van Riders" bus ocean
+table kid name text, stop text
+table ride kid ref kid
+each kid sort stop as k
+  row card
+    k.name bold grow
+    toggle k.ride
+"On board" count(ride today) head
+form kid, "Add kid"
+===
+@oos style=detailed domain=b5_fish_photo oos=camera
+snap a picture of each fish when it arrives and log the tank it goes in and the date
+---
+app "Fish Arrivals" fish ocean
+table tank name text
+table arrival tank ref tank, species text, note text?, photo image?
+each tank sort name as t
+  stack card gap 1
+    t.name bold
+    each t.arrival as a
+      row
+        a.species grow
+        a.at faint
+form arrival, "Log arrival"
+form tank, "Add tank"
+===
+@create style=short domain=b5_tandoor_orders
+tandoor: regulars take naans every day, how many each took today and total
+---
+app "Tandoor" bread slate
+table customer name text, usual num 1..100 = 10
+table pickup customer ref customer, naans num 1..200
+"Naans out today" sum(pickup.naans today) big
+bars customer sort name, sum(it.pickup.naans today), it.name
+each customer sort name as c
+  row card tap edit c
+    c.name bold grow
+    "usual" c.usual faint
+    button "Usual" tap add pickup customer = c, naans = c.usual
+form pickup, "Add pickup"
+form customer, "Add regular"
+===
+@create style=custom_ui domain=b5_rooftop_beds
+rooftop vegetable beds. each bed has a crop, planting date and days to harvest. show every bed as a tile that turns green when ready, with days left, and when I last watered it
+---
+app "Rooftop Beds" plant mint
+table bed name text, crop text, planted date, harvest_days num 10..365 = 60
+table watering bed ref bed
+grid 2 gap 1
+  each bed sort planted as b
+    let left = b.harvest_days - (today - b.planted)
+    stack card gap 1 fill if(left <= 0, good, soft) tap edit b
+      b.name bold
+      b.crop faint
+      if(left <= 0, "Ready to pick", join(plural(left, "day"), " to harvest"))
+      "Watered" plural(since(b.watering), "day") "ago" tiny
+      button "Water" tap add watering bed = b
+form bed, "Plant a bed"
+===
+@create style=detailed domain=b5_chess_ladder
+chess club ladder. each member has a rating that I adjust by hand, and we log games against an opponent name with win loss or draw. ranking sorted by rating, plus each member's win count
+---
+app "Chess Ladder" game ink
+table player name text, rating num 600..2800 = 1200
+table game player ref player, opponent text, result pick Win|Loss|Draw = Win
+each player sort rating desc as p
+  row card tap edit p
+    "#" index + 1 bold
+    p.name bold grow
+    count(p.game where result = Win) "W" count(p.game where result = Loss) "L" count(p.game where result = Draw) "D" faint
+    p.rating bold
+form game, "Log game"
+form player, "Add player"
+===
+@create style=vague domain=b5_stamp_album
+stamp collection by country, condition and worth
+---
+app "Stamp Album" tag plum
+table country name text
+table stamp country ref country, year num 1840..2026, value money?, condition pick Mint|Used|Damaged = Used
+"Collection worth" sum(stamp.value) big
+each country sort name as c
+  row card tap edit c
+    c.name bold grow
+    count(c.stamp) "stamps" faint
+    sum(c.stamp.value) bold
+form stamp, "Add stamp"
+form country, "Add country"
+===
+@create style=multi_feature domain=b5_podcast_pipeline
+podcast episodes move through idea, recorded, edited, published. each has a guest from my guest list. counts per stage on top and next episode to record
+---
+app "Pod Desk" music plum
+table guest name text, topic text?
+table episode title text, guest ref guest, stage pick Idea|Recorded|Edited|Published = Idea
+row gap 1
+  each options episode.stage as st
+    stack grow align center
+      count(episode where stage = st) big
+      st tiny faint
+"Next to record" head
+each episode where stage = Idea sort at top 1 as e
+  row card
+    e.title bold grow
+    e.guest.name faint
+each episode sort at desc as e
+  row card tap edit e
+    e.title grow
+    e.stage faint
+form episode, "New episode"
+form guest, "Add guest"
+===
+@create style=detailed domain=b5_bookbinding
+I bind theses and notebooks for students. orders have a customer, how many copies, price per copy and the due date. show late ones in red and how much money is pending on orders not done
+---
+app "Binding Desk" book slate
+table customer name text, phone text?
+table orders customer ref customer, title text, copies num 1..500, price money, due date, done bool
+let late = count(orders where done = no and due < today)
+"Pending money" sum(orders where done = no, it.copies * it.price) big
+late "late orders" color if(late > 0, bad, good)
+each orders where done = no sort due as o
+  row card tap edit o
+    stack grow gap 0
+      o.title bold
+      o.customer.name o.copies "copies" faint
+    o.due color if(o.due < today, bad, ink)
+    toggle o.done
+form orders, "New order"
+form customer, "Add customer"
+===
+@create style=multi_feature domain=b5_solar_panels
+solar: several panel strings, I note the kWh each produced per day. show last 14 days chart, this month's units and money saved at a price per unit setting
+---
+app "Solar" sun mint
+table panel name text, watts num 100..20000
+table output panel ref panel, kwh num 0..200
+setting unit_price money = 45 "Price per unit"
+daybars last 14 days, sum(output.kwh on it)
+"This month" sum(output.kwh month) "kWh" big
+"Saved" round(sum(output.kwh month) * unit_price) faint
+each panel sort name as p
+  row card tap edit p
+    p.name bold grow
+    "avg" fixed(avg(p.output.kwh), 1) "kWh" faint
+form output, "Log output"
+form panel, "Add panel"
+===
+@create style=typos domain=b5_generator_diesel
+generator diesel. gensets burn some litres per hour, i log hours each one ran, and diesel i buy with cost. tell me roughly how much diesel is left
+---
+app "Genset" bolt ink
+table genset name text, lph num 0.5..200
+table run genset ref genset, hours num 0.1..24
+table refuel litres num 1..5000, cost money
+let burned = sum(run, it.hours * it.genset.lph)
+let left = sum(refuel.litres) - burned
+left "litres left (estimate)" big color if(left < 20, bad, good)
+"Burned" round(burned) "L, spent" sum(refuel.cost) faint
+each genset sort name as g
+  row card tap edit g
+    g.name bold grow
+    round(sum(g.run.hours)) "hours" faint
+form run, "Log run"
+form refuel, "Diesel bought"
+form genset, "Add genset"
+===
+@create style=detailed domain=b5_well_levels
+we have 3 hand pump wells and I measure the water depth every week in metres. draw a line for each well so I can see if it is dropping, and warn if latest is deeper than the first
+---
+app "Well Depths" drop ocean
+table well name text
+table dip well ref well, depth num 0..120
+each well sort name as w
+  stack card gap 1
+    row
+      w.name head grow
+      last(w.dip.depth) "m" bold color if(last(w.dip.depth) > first(w.dip.depth), bad, good)
+    if last(w.dip.depth) > first(w.dip.depth)
+      "Water is dropping" color bad
+    trend w.dip, it.depth
+form dip, "Measure"
+form well, "Add well"
+===
+@create style=multi_feature domain=b5_cold_storage
+cold storage for potato farmers. each lot has farmer, bags, monthly rent per bag and in-date. farmers take bags out in parts. show bags left per lot and rent due so far, counting each started 30 days as a month
+---
+app "Cold Store" box slate
+table lot farmer text, bags num 1..5000, rent money, stored date
+table takeout lot ref lot, bags num 1..5000
+let months(l lot) = floor((today - l.stored) / 30) + 1
+"Bags inside" sum(lot.bags) - sum(takeout.bags) big
+each lot sort stored as l
+  let left = l.bags - sum(l.takeout.bags)
+  row card tap edit l
+    stack grow gap 0
+      l.farmer bold
+      left "bags left" faint
+    "rent due" left * l.rent * months(l) bold
+form takeout, "Bags taken out"
+form lot, "New lot"
+===
+@create style=custom_ui domain=b5_mushroom_trays
+mushroom trays shown as a grid of coloured squares by stage (spawn pinning fruiting done), tap a tray to edit it. log kg picked per tray
+---
+app "Mushroom Room" plant mint
+table tray code text, stage pick Spawn|Pinning|Fruiting|Done = Spawn
+table picked tray ref tray, kg num 0.1..30
+grid 5 gap 1
+  each tray sort code as t
+    box height 48 radius 6 tap edit t fill if(t.stage = Fruiting, good, if(t.stage = Pinning, warn, if(t.stage = Done, muted, soft)))
+      t.code small bold align center
+"Picked this week" sum(picked.kg week) "kg" big
+each tray sort code as t
+  row
+    t.code grow
+    sum(t.picked.kg) "kg" faint
+form picked, "Log picking"
+form tray, "Add tray"
+===
+@create style=detailed domain=b5_pottery_kiln
+pottery studio kiln firings with temperature and hours, and the pieces in each firing. each piece comes out good, cracked or glaze issue. show success percent per firing as a bar chart
+---
+app "Kiln Log" fire plum
+table firing name text, temp num 600..1400, hours num 1..40
+table piece firing ref firing, name text, result pick Good|Cracked|Glaze_issue = Good
+bars firing sort at, count(it.piece where result = Good) * 100 / count(it.piece), it.name
+each firing sort at desc as f
+  row card tap edit f
+    f.name bold grow
+    f.temp "C" faint
+    count(f.piece where result = Good) "of" count(f.piece) "good"
+form piece, "Add piece"
+form firing, "New firing"
+===
+@create style=vague domain=b5_soap_batches
+handmade soap batches and when they are ready to sell
+---
+app "Soap Room" gift mint
+table batch name text, made date, cure_days num 14..120 = 42
+table sale batch ref batch, qty num 1..100, price money
+each batch sort made as b
+  let ready_in = b.cure_days - (today - b.made)
+  row card tap edit b
+    b.name bold grow
+    if(ready_in > 0, join(plural(ready_in, "day"), " to cure"), "Ready") color if(ready_in > 0, warn, good)
+    sum(b.sale.qty) "sold" faint
+form sale, "Record sale"
+form batch, "New batch"
+===
+@create style=short domain=b5_pickle_jars
+pickle jars ready date check, flavour made date and days to wait
+---
+app "Pickles" food ocean
+table jar flavour text, made date, wait_days num 3..90 = 14, count num 1..40 = 1
+table eaten jar ref jar, n num 1..40 = 1
+each jar sort made as j
+  row card tap edit j
+    j.flavour bold grow
+    j.count - sum(j.eaten.n) "left" faint
+    if(today - j.made >= j.wait_days, "ready", plural(j.wait_days - (today - j.made), "day")) color if(today - j.made >= j.wait_days, good, warn)
+    button "Ate one" tap add eaten jar = j
+form jar, "New jar"
+===
+@create style=detailed domain=b5_translation_jobs
+freelance translator. jobs have a client, word count, due date and status (todo doing sent paid). my rate per word is a setting. show money still unpaid and words due this week
+---
+app "Translator" pen ink
+table client name text
+table job client ref client, title text, words num 50..200000, due date, status pick Todo|Doing|Sent|Paid = Todo
+setting rate num = 4 "Rate per word"
+"Unpaid" sum(job where status != Paid, it.words * rate) big
+"Words due this week" sum(job where due - today <= 7 and status != Paid, it.words) faint
+each job where status != Paid sort due as j
+  row card tap edit j
+    stack grow gap 0
+      j.title bold
+      j.client.name faint
+    j.due faint
+    j.status bold
+form job, "New job"
+form client, "Add client"
+===
+@create style=typos domain=b5_snooker_club
+snooker club, 4 tables, we charge by the hour. log each game minutes and show the bill and todays earning per table
+---
+app "Snooker Club" ball slate
+table cuetable name text
+table game cuetable ref cuetable, mins num 10..600 = 60
+setting hour_rate money = 400 "Rate per hour"
+"Earned today" round(sum(game today, it.mins * hour_rate / 60)) big
+each cuetable sort name as t
+  row card tap edit t
+    t.name bold grow
+    round(sum(t.game.mins today) * hour_rate / 60) bold
+    button "+1h" tap add game cuetable = t, mins = 60
+form game, "Log game"
+form cuetable, "Add table"
+===
+@create style=short domain=b5_cycling_club
+club riders, rides with km, monthly leaderboard
+---
+app "Cycle Club" bike mint
+table rider name text
+table ride rider ref rider, km num 1..300
+each rider sort sum(it.ride.km month) desc as r
+  row card
+    "#" index + 1 bold
+    r.name grow
+    sum(r.ride.km month) "km" bold
+form ride, "Log ride"
+form rider, "Add rider"
+===
+@create style=multi_feature domain=b5_open_mic
+open mic night sign up list. each act has a performer, kind (poetry music comedy story), minutes and a tick when done. show total minutes left and a 5 minute timer for whoever is on
+---
+app "Open Mic" music plum
+table act performer text, kind pick Poetry|Music|Comedy|Story = Music, mins num 1..15 = 5, done bool
+"Minutes left" sum(act where done = no, it.mins) big
+timer 5m, "On stage"
+each act where done = no sort at as a
+  row card
+    a.performer bold grow
+    a.kind faint
+    a.mins "min"
+    toggle a.done
+form act, "Sign up"
+===
+@create style=detailed domain=b5_debate_scores
+debate tournament, teams score points 0 to 30 in each of 5 rounds. leaderboard sorted by total, and the highest single round for each team
+---
+app "Debate Board" users plum
+table team name text
+table score team ref team, round num 1..5, points num 0..30
+each team sort sum(it.score.points) desc as t
+  row card tap edit t
+    "#" index + 1 bold
+    t.name bold grow
+    "best" max(t.score.points) faint
+    sum(t.score.points) bold
+form score, "Enter score"
+form team, "Add team"
+===
+@create style=custom_ui domain=b5_village_league
+village cricket league table: teams, matches with won lost or tied against someone, two points for a win one for a tie, table ordered by points
+---
+app "Village League" ball mint
+table team name text
+table match team ref team, opponent text, result pick Won|Lost|Tied = Won
+let pts(t team) = count(t.match where result = Won) * 2 + count(t.match where result = Tied)
+each team sort pts(it) desc as t
+  row card
+    "#" index + 1 bold
+    t.name bold grow
+    count(t.match) "played" faint
+    pts(t) bold
+form match, "Add result"
+form team, "Add team"
+===
+@oos style=detailed domain=b5_podcast_upload oos=internet
+when an episode is edited, upload it to spotify and post the link on twitter. also keep my list of episodes by stage
+---
+app "Pod Stages" music plum
+table episode title text, stage pick Idea|Recorded|Edited|Published = Idea
+each options episode.stage as st
+  stack card gap 1
+    st bold
+    each episode where stage = st as e
+      e.title tap edit e
+form episode, "New episode"
+===
+@oos style=short domain=b5_stamp_print oos=print
+print a nice catalogue page of my stamps by country
+---
+app "Stamp Count" tag plum
+table country name text
+table stamp country ref country, year num 1840..2026
+each country sort name as c
+  row card
+    c.name bold grow
+    count(c.stamp) "stamps"
+form stamp, "Add stamp"
+form country, "Add country"
+===
+@edit style=plain domain=b5_tandoor_price ref=b5_tandoor_orders
+add the price of a naan as a setting and show money earned today
+---
++ setting price_per_naan money = 20 "Price per naan"
++ "Earned today" sum(pickup.naans today) * price_per_naan bold
+===
+@edit style=plain domain=b5_chess_drawn ref=b5_chess_ladder
+rename Draw to Drawn
+---
+~ Win|Loss|Draw = Win => Win|Loss|Drawn was Draw = Win
+~ result = Draw => result = Drawn
+===
+@edit style=plain domain=b5_stamp_note ref=b5_stamp_album
+add a note box for each stamp and show it under the country row
+---
+~ condition pick Mint|Used|Damaged = Used => condition pick Mint|Used|Damaged = Used, note long?
++ "Latest note" last(stamp.note) faint
+===
+@edit style=plain domain=b5_solar_weekly ref=b5_solar_panels
+make the chart weekly for the last 4 weeks instead of daily
+---
+~ daybars last 14 days, sum(output.kwh on it) => bars 1..4, sum(output.kwh where at > today - 7 * it and at <= today - 7 * (it - 1)), join("W", it)
+===
+@edit style=plain domain=b5_soap_units ref=b5_soap_batches
+call the quantity column units instead
+---
+~ sale batch ref batch, qty num 1..100, price money => sale batch ref batch, units num was qty 1..100, price money
+~ sum(b.sale.qty) => sum(b.sale.units)
+===

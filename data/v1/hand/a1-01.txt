@@ -1,0 +1,399 @@
+@create style=multi_feature domain=a1_bp_log
+blood pressure log: top and bottom number, pulse, tell me if the last reading is high, and a chart of the last 2 weeks
+---
+app "BP Log" heart ocean
+table bp sys num 60..250 "Top number", dia num 30..150 "Bottom number", pulse num? 30..220
+let high = last(bp.sys) >= 140 or last(bp.dia) >= 90
+text last(bp.sys) "/" last(bp.dia) big color if(high, warn, good)
+if high
+  "Last reading is high. Rest for a few minutes and measure again." faint
+"Average this week" round(avg(bp.sys last 7 days)) "/" round(avg(bp.dia last 7 days)) faint
+trend bp last 14 days sort at, it.sys
+form bp, "Save reading"
+log bp
+===
+@create style=detailed domain=a1_sugar_diary
+My dad has diabetes. I need to write down his sugar reading in mg/dl, whether it was fasting, after a meal or at bedtime, and see the average for the week.
+---
+app "Sugar Diary" drop mint
+table sugar level num 30..600 unit "mg/dl", timing pick Fasting|After_meal|Bedtime = Fasting, note text?
+let now_lvl = last(sugar.level)
+text now_lvl "mg/dl" big color if(now_lvl > 180, bad, if(now_lvl < 70, warn, good))
+"Fasting average, last 7 days" round(avg(sugar.level last 7 days where timing = Fasting)) faint
+"After meal average, last 7 days" round(avg(sugar.level last 7 days where timing = After_meal)) faint
+form sugar
+log sugar
+===
+@create style=short domain=a1_weight_target
+weight tracker with a target
+---
+app "Weight" scale mint
+table weigh kg num 20..300 unit "kg"
+setting target num = 65 "Target (kg)"
+row gap 3
+  stat last(weigh.kg), "kg now"
+  stat abs(round((last(weigh.kg) - target) * 10) / 10), "kg from target"
+trend weigh last 90 days sort at, it.kg
+form weigh
+list weigh
+===
+@create style=custom_ui domain=a1_gym_bests
+gym log where I pick the lift, enter kg and reps, and each lift shows my best weight so far
+---
+app "Lifts" dumbbell ink
+table lift exercise pick Squat|Bench|Deadlift|Press|Row, kg num 0..400, reps num 1..50
+each options lift.exercise as ex
+  stack card gap 0
+    row
+      text ex bold grow
+      max(lift.kg where exercise = ex) "kg best" bold
+    "Last" last(lift.kg where exercise = ex) "kg x" last(lift.reps where exercise = ex) faint
+form lift, "Add set"
+log lift last 14 days
+===
+@create style=typos domain=a1_run_log
+runing log, distance in km and how many minutes, show my total km this month and pace
+---
+app "Running" run ocean
+table run km num 0.1..100 unit "km", mins num 1..600 unit "min"
+"This month" sum(run.km month) "km" big
+"Pace" round(sum(run.mins month) / sum(run.km month) * 10) / 10 "min per km" faint
+daybars last 14 days, sum(run.km on it)
+form run
+log run
+===
+@create style=vague domain=a1_yoga_daily
+i want to do yoga every day but i keep forgetting
+---
+app "Daily Yoga" leaf mint
+table yoga
+stat streak(yoga), "days in a row"
+button if(count(yoga today) > 0, "Done for today", "I did yoga") tap toggle yoga
+calendar yoga
+"Best run" best(yoga) "days" faint
+remind "Time for yoga" at 6:30, 19:00
+===
+@create style=short domain=a1_steps_ring
+daily steps ring
+---
+app "Steps" walk mint
+table walk steps num 1..100000
+setting goal num = 8000 "Daily steps goal"
+ring sum(walk.steps today), goal, "steps today"
+quick walk, steps, [1000, 2000, 5000]
+form walk
+daybars last 7 days, sum(walk.steps on it)
+===
+@create style=detailed domain=a1_sleep_hours
+Write down how many hours I slept and how rested I felt from 1 to 5. Show the weekly average against the hours I need.
+---
+app "Sleep" bed ink
+table sleep hours num 1..16 unit "h", rested num 1..5 = 3
+setting need num = 8 "Hours I need"
+goal round(avg(sleep.hours last 7 days) * 10) / 10, need, "average hours, last 7 days", "h"
+daybars last 7 days, sum(sleep.hours on it)
+"Rested on average" round(avg(sleep.rested last 7 days) * 10) / 10 "of 5" faint
+form sleep
+log sleep
+===
+@create style=custom_ui domain=a1_mood_faces
+five buttons from 1 to 5 for how I feel today and a colour grid for the last four weeks, red for bad and green for good
+---
+app "Mood" smile plum
+table mood score num 1..5
+"How do you feel?" head
+row gap 1
+  each 1..5
+    button it grow tap add mood score = it
+"Last 4 weeks" faint
+grid 7 gap 1
+  each days last 28 days
+    box height 26 radius 6 fill if(count(mood on it) = 0, soft, hue(avg(mood.score on it) * 30))
+"Average this month" round(avg(mood.score month) * 10) / 10 "of 5" faint
+===
+@create style=detailed domain=a1_cycle_screens
+Period tracker. I log the first day with flow and cramps from 0 to 3. One page for today with the next expected date, another page for history.
+---
+app "Cycle" heart plum
+table period flow pick Light|Medium|Heavy = Medium, cramps num 0..3 = 0
+let cyc = round(gap(period))
+screen daily "Today" heart
+  "Cycle day" since(period) + 1 big
+  "Usual cycle" cyc "days. Next period in about" cyc - since(period) "days" faint
+  button "Period started today" tap add period
+  form period, "Add an earlier date"
+screen hist "History" calendar
+  calendar period
+  "Average cramps" round(avg(period.cramps) * 10) / 10 "of 3" faint
+  log period
+===
+@create style=custom_ui domain=a1_pregnancy
+pregnancy tracker: I set the due date, it shows which week I am in with a ring and has a baby kick counter on another page
+---
+app "Pregnancy" baby plum
+setting due date "Due date"
+table kick
+let wk = clamp(floor((280 - (due - today)) / 7), 0, 40)
+screen week "Week" baby
+  ring wk, 40, "weeks along"
+  "Days to go" due - today big
+  "Trimester" if(wk < 13, 1, if(wk < 27, 2, 3)) faint
+screen kicks "Kicks" heart
+  count(kick today) "kicks today" big
+  button "Baby kicked" tap add kick
+  daybars last 7 days, count(kick on it)
+===
+@create style=multi_feature domain=a1_elder_pills
+tablets for my mother: name, morning noon or night, how many are left, tick when taken, warn when stock is low, reminders morning and night
+---
+app "Ammi Medicine" pill plum
+table pill name text, part pick Morning|Noon|Night, left num 0.. "Tablets left"
+table taken pill ref pill
+count(taken today) "of" count(pill) "taken today" head
+each options pill.part as s
+  "" s bold
+  each pill where part = s sort name as p
+    row card gap 1 tap edit p
+      p.name bold grow
+      p.left "left" color if(p.left <= 5, bad, muted)
+      button "-1" tap set p.left = p.left - 1
+      toggle p.taken
+form pill, "Add medicine"
+remind "Morning medicine" at 8:00
+remind "Night medicine" at 21:00
+===
+@create style=detailed domain=a1_physio
+Exercises my physiotherapist gave me for my knee: name, reps and sets. I tick each one when done today and want a reminder twice a day.
+---
+app "Knee Physio" bike mint
+table ex name text, reps num 1..100, sets num 1..10 = 3
+table did ex ref ex
+count(did today) "of" count(ex) "done today" big
+each ex sort name as e
+  row card gap 2 tap edit e swipe remove e
+    stack grow
+      e.name bold
+      e.sets "x" e.reps faint
+    toggle e.did
+form ex, "Add exercise"
+heat last 28 days, count(did on it), 3
+remind "Knee exercises" at 9:00, 18:00
+===
+@create style=short domain=a1_pushups
+30 day pushup challenge
+---
+app "Pushups" dumbbell ink
+setting start date = today "Start day"
+table pushup reps num 1..300
+let day = today - start + 1
+let target = 10 + day
+"Day" day "of 30" head
+goal sum(pushup.reps today), target, "pushups today", "reps"
+quick pushup, reps, [10, 20, 30]
+heat last 30 days, sum(pushup.reps on it), 50
+===
+@create style=custom_ui domain=a1_interval_timer
+interval timer for workouts, 45 seconds work then 15 seconds rest, and count how many rounds I finished
+---
+app "Intervals" timer ink
+table round
+timer 45s, "Work", add round
+timer 15s, "Rest"
+count(round today) "rounds today" big
+button "Reset rounds" tap remove all round today
+===
+@create style=multi_feature domain=a1_body_measure
+body measurements every month: waist, hips, chest, arms in cm, show change since the first time, and a page for the log
+---
+app "Measurements" scale mint
+table measure part pick Waist|Hips|Chest|Arms, cm num 20..200 unit "cm"
+screen change "Change" scale
+  each options measure.part as p
+    row card
+      text p bold grow
+      last(measure.cm where part = p) "cm"
+      last(measure.cm where part = p) - first(measure.cm where part = p) "cm since start" faint
+screen add "Add" plus
+  form measure
+  log measure
+===
+@create style=detailed domain=a1_headache
+Headache diary: strength from 1 to 10, what triggered it (stress, sleep, food, screen, weather), a note, and which trigger shows up most this month
+---
+app "Headaches" brain slate
+table headache strength num 1..10, trigger pick Stress|Sleep|Food|Screen|Weather|Unknown = Unknown, note text?
+"This month" count(headache month) "headaches" big
+"Worst" max(headache.strength month) "of 10" faint
+"Triggers" head
+share headache month by trigger, count(it), it.key
+form headache
+log headache
+===
+@create style=short domain=a1_appointments
+doctor appointments with reminders
+---
+app "Appointments" calendar ocean
+table appt doctor text, day date, place text?
+remind "Doctor visit tomorrow" at appt.day - 1d at 9:00
+"Next" head
+each appt where day >= today sort day top 3
+  row card
+    it.day it.doctor bold grow
+    it.place faint
+form appt
+list appt
+===
+@create style=vague domain=a1_cycling
+started cycling to work and want to see how far I go
+---
+app "Bike to Work" bike mint
+table ride km num 0.5..200 unit "km"
+setting weekly num = 40 "Weekly goal (km)"
+goal sum(ride.km week), weekly, "km this week", "km"
+quick ride, km, [5, 10, 20]
+"This month" sum(ride.km month) "km in" count(ride month) "rides" faint
+daybars last 14 days, sum(ride.km on it)
+list ride
+===
+@create style=custom_ui domain=a1_swim_laps
+swimming lap counter, a big plus button and a row of little bars that grows with every lap I swim
+---
+app "Laps" drop ocean
+table lap
+let n = count(lap today)
+"Laps today" n big
+draw 100, 20
+  each 1..min(n, 20) as i
+    rect 5 * (i - 1), 4, 4, 12 fill accent radius 1
+button "+1 lap" tap add lap
+button "Undo" tap remove last(lap today)
+"All time" count(lap) "laps" faint
+===
+@create style=short domain=a1_gym_days
+gym days calendar
+---
+app "Gym Days" dumbbell slate
+table gym
+calendar gym
+stat count(gym month), "visits this month"
+stat streak(gym), "day streak"
+===
+@create style=short domain=a1_resting_hr
+resting heart rate
+---
+app "Resting HR" heart ocean
+table hr bpm num 30..220 unit "bpm"
+text last(hr.bpm) "bpm" big
+row gap 3
+  stat min(hr.bpm last 30 days), "lowest, 30 days"
+  stat max(hr.bpm last 30 days), "highest, 30 days"
+trend hr last 30 days sort at, it.bpm
+form hr
+===
+@create style=detailed domain=a1_asthma
+Asthma diary for my son: each time he uses the inhaler, plus the peak flow number now and then. Show puffs per day for two weeks.
+---
+app "Inhaler" cloud ocean
+table puff
+table peak flow num 50..800
+count(puff today) "puffs today" big
+daybars last 14 days, count(puff on it)
+button "He used the inhaler" tap add puff
+"Last peak flow" last(peak.flow) faint
+form peak, "Add peak flow"
+===
+@create style=multi_feature domain=a1_back_pain
+back pain diary: a slider for how bad it is, where it hurts, a save button, a line of the last month, and a note field
+---
+app "Back Pain" bolt slate
+table pain level num 0..10, spot pick Lower_back|Upper_back|Neck|Hips, note text?
+state lvl num = 3
+state spot2 pick Lower_back|Upper_back|Neck|Hips = Lower_back
+slider lvl 0..10
+choice spot2
+button "Save" tap add pain level = lvl, spot = spot2
+"Average this month" round(avg(pain.level month) * 10) / 10 faint
+trend pain last 30 days sort at, it.level
+log pain
+===
+@create style=vague domain=a1_desk_move
+I sit all day at the office and my back hurts, make me move more
+---
+app "Move" walk mint
+table moved
+remind "Stand up and stretch" every 2h from 9:00 to 18:00
+button "I moved" tap add moved
+stat count(moved today), "breaks today"
+daybars last 7 days, count(moved on it)
+===
+@create style=multi_feature domain=a1_workouts_screens
+workout log with type, minutes and calories, a weekly minutes goal, and a page for weekly numbers and a page to set goals
+---
+app "Workouts" dumbbell ink
+table workout kind pick Run|Gym|Yoga|Swim|Cycle, mins num 5..300, kcal num? 0..2000
+setting weekly num = 150 "Weekly minutes goal"
+screen log "Log" list
+  form workout
+  list workout last 14 days
+screen week "Week" chart
+  goal sum(workout.mins week), weekly, "minutes this week", "min"
+  share workout week by kind, sum(it.mins), it.key
+  daybars last 7 days, sum(workout.mins on it)
+screen goals "Goals" target
+  field weekly
+  "Burned this week" sum(workout.kcal week) "kcal" faint
+===
+@create style=custom_ui domain=a1_set_dots
+five circles for my five sets, I tap the circle when I finish a set and there is a reset button
+---
+app "Sets" dumbbell ink
+state done num = 0
+row gap 2
+  each 1..5
+    box grow height 48 radius 24 fill if(it <= done, accent, soft) tap set done = it
+      text it align center color if(it <= done, bg, ink)
+if done >= 5
+  "All sets done" big color good
+button "Reset" tap set done = 0
+===
+@edit style=plain domain=a1_e_bp_note ref=a1_bp_log
+add a note field to the readings
+---
+~ pulse num? 30..220 => pulse num? 30..220, note text?
+===
+@edit style=plain domain=a1_e_sugar_remind ref=a1_sugar_diary
+remind me to check at 7:30 every morning
+---
++ remind "Check your sugar" at 7:30
+===
+@edit style=plain domain=a1_e_weight_dark ref=a1_weight_target
+make it dark
+---
+~ app "Weight" scale mint => app "Weight" scale ink
+===
+@edit style=plain domain=a1_e_yoga_time ref=a1_yoga_daily
+reminder only in the morning at 7
+---
+~ at 6:30, 19:00 => at 7:00
+===
+@edit style=plain domain=a1_e_mood_note ref=a1_mood_faces
+let me add a note about why
+---
+~ table mood score num 1..5 => table mood score num 1..5, why text?
+===
+@edit style=plain domain=a1_e_gym_second ref=a1_gym_bests
+I also want to write down my body weight
+---
+~ form lift, "Add set" => form lift, "Add set"\ntable bodywt kg num 20..300 unit "kg"\n"Body weight" last(bodywt.kg) "kg" faint\nform bodywt, "Add body weight"
+===
+@edit style=plain domain=a1_e_run_goal ref=a1_run_log
+add a monthly goal of 100 km with a bar
+---
+~ table run km num 0.1..100 unit "km", mins num 1..600 unit "min" => table run km num 0.1..100 unit "km", mins num 1..600 unit "min"\nsetting goal num = 100 "Monthly goal (km)"
++after "Pace" round(sum(run.mins month) / sum(run.km month) * 10) / 10 "min per km" faint :: goal sum(run.km month), goal, "km this month", "km"
+===
+@edit style=plain domain=a1_e_steps_week ref=a1_steps_ring
+show a heat map as well
+---
++ heat last 70 days, sum(walk.steps on it), goal
+===

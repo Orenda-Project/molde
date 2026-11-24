@@ -1,0 +1,420 @@
+@create style=detailed domain=b4_restaurant_tables
+we run a small dhaba with about 12 tables. waiters punch in what each table ordered, and at the end i need the bill for one table at a time, only the unpaid items, then a button to close the table
+---
+app "Table Bills" food ocean
+table dish name text, price money
+table order table_no num 1..30, dish ref dish, qty num 1..20 = 1, status pick Open|Paid = Open
+state open_table num = 1
+let bill = sum(order where table_no = open_table and status = Open, it.qty * it.dish.price)
+row gap 1
+  button "<" tap set open_table = max(open_table - 1, 1)
+  text "Table" open_table head grow align center
+  button ">" tap set open_table = min(open_table + 1, 30)
+"Bill" bill big
+each order where table_no = open_table and status = Open as o
+  row card tap edit o swipe remove o
+    o.dish.name grow
+    o.qty "x" o.dish.price
+button "Close table" tap set all order.status = Paid where table_no = open_table
+form dish, "Add dish to menu"
+form order, "Add order"
+===
+@edit style=plain domain=b4_restaurant_service ref=b4_restaurant_tables
+add 10 percent service charge that i can change and show it under the bill
+---
+~ state open_table num = 1 => setting service num 0..30 = 10 "Service charge %"\nstate open_table num = 1
++after "Bill" bill big :: "Service" round(bill * service / 100) "= total" round(bill * (1 + service / 100)) faint
+===
+@create style=short domain=b4_pharmacy_shelf
+medicine shop stock, which ones to reorder
+---
+app "Pharmacy Shelf" pill mint
+table medicine name text, reorder_at num 0.. = 10, price money
+table delivery medicine ref medicine, qty num 1..2000
+table sale medicine ref medicine, qty num 1..200 = 1
+let low = count(medicine, sum(it.delivery.qty) - sum(it.sale.qty) <= it.reorder_at)
+low "medicines to reorder" head color if(low > 0, warn, good)
+"Sales today" sum(sale today, it.qty * it.medicine.price) big
+each medicine sort name as m
+  let left = sum(m.delivery.qty) - sum(m.sale.qty)
+  row card tap edit m
+    stack grow
+      m.name bold
+      text left "left" faint
+    button "Sold 1" tap add sale medicine = m
+    text left bold color if(left <= m.reorder_at, warn, ink)
+form delivery, "Stock arrived"
+form medicine, "New medicine"
+===
+@edit style=plain domain=b4_pharmacy_expiry ref=b4_pharmacy_shelf
+add an expiry date to each medicine and show a red warning when it expires within 60 days
+---
+~ reorder_at num 0.. = 10, price money => reorder_at num 0.. = 10, price money, expiry date?
+~ left "left" faint => left "left" faint\n      if m.expiry < today + 60\n        "Expires soon" tiny color bad
+===
+@create style=multi_feature domain=b4_clinic_visits
+small clinic: patients register once, each visit has the complaint, fee charged and whether the fee was paid. i want to see today's income, unpaid fees per patient, and a chart of patients per day
+---
+app "Clinic" heart ocean
+table patient name text, age num 0..110, phone text?
+table visit patient ref patient, complaint text, fee money, paid bool
+"Today" count(visit today) "patients" big
+"Collected" sum(visit.fee today where paid = yes) "of" sum(visit.fee today) faint
+daybars last 7 days, count(visit on it)
+each patient sort name as p
+  let owing = sum(p.visit.fee where paid = no)
+  row card tap edit p
+    stack grow
+      p.name bold
+      text count(p.visit) "visits, last" last(p.visit.at) faint
+    if owing > 0
+      text "owes" owing color bad
+form visit, "Add visit"
+form patient, "New patient"
+===
+@create style=typos domain=b4_tailor_orders
+darzi shop: suit orders from customers, they pay advnace and rest on delivry. need to see balance of each order and which ones are due this week
+---
+app "Tailor Orders" pen plum
+table customer name text, phone text?
+table orderw customer ref customer, item pick Shalwar_Kameez|Suit|Waistcoat|Coat|Other = Shalwar_Kameez, price money, due date, status pick Cutting|Stitching|Ready|Delivered = Cutting
+table advance orderw ref orderw, amount money
+let pending = count(orderw where status != Delivered)
+pending "orders in progress" head
+"Due this week" count(orderw where status != Delivered and due <= today + 7) color warn
+each orderw where status != Delivered sort due as o
+  let balance = o.price - sum(o.advance.amount)
+  row card tap edit o
+    stack grow
+      o.customer.name bold
+      text o.item "due" o.due faint
+    stack align end
+      text "Balance" balance bold
+      choice o.status
+form customer, "Add customer"
+form orderw, "New order"
+form advance, "Advance paid"
+===
+@edit style=plain domain=b4_tailor_measure ref=b4_tailor_orders
+add a notes box for the measurements to each customer
+---
+~ phone text? => phone text?, measurements long?
+===
+@create style=custom_ui domain=b4_salon_chair
+ladies parlour. clients, services with price, and each appointment shows who and when. top of screen should show today's earnings and the number of appointments today
+---
+app "Parlour" smile plum
+table client name text, phone text?
+table service name text, price money, mins num 10..300 = 60
+table booking client ref client, service ref service, slot time, done bool
+"Today" sum(booking today, it.service.price) big
+count(booking today) "appointments" faint
+each booking today sort slot as b
+  row card tap edit b swipe remove b
+    b.slot bold
+    stack grow
+      b.client.name
+      b.service.name faint
+    toggle b.done
+form booking, "Book appointment"
+form client, "New client"
+form service, "Add service"
+===
+@create style=detailed domain=b4_rider_trips
+i deliver parcels on a bike for a courier. every parcel has the area and the money i get per delivery, and some parcels are cash on delivery that i must hand over later. show my earning today and how much cash i am carrying
+---
+app "Rider" bike slate
+table area name text
+table parcel area ref area, fee money, cod money = 0, handed bool
+let cash_held = sum(parcel.cod where handed = no)
+"Earned today" sum(parcel.fee today) big
+"Cash with me" cash_held head color if(cash_held > 0, warn, good)
+each area sort name as a
+  row card
+    a.name grow
+    count(a.parcel today) "parcels"
+    sum(a.parcel.fee today) bold
+button "Hand over cash" tap set all parcel.handed = yes where handed = no
+form parcel, "Add parcel"
+form area, "Add area"
+list parcel by day
+===
+@create style=multi_feature domain=b4_food_drive
+our mohalla group gives ration bags before Ramadan. families register, volunteers donate money, and every bag handed out is noted. show how many bags we can still afford at 2500 per bag
+---
+app "Ration Drive" gift mint
+table family head text, members num 1..30, area text?
+table donation donor text, amount money
+table handout family ref family, bags num 1..5 = 1
+setting bag_cost money = 2500 "Cost of one bag"
+let given = sum(handout.bags)
+let affordable = floor(sum(donation.amount) / bag_cost) - given
+"Raised" sum(donation.amount) big
+row gap 2
+  stat given, "bags given"
+  stat affordable, "bags we can still give"
+each family sort head as f
+  row card tap edit f
+    f.head bold grow
+    sum(f.handout.bags) "bags"
+    button "Give bag" tap add handout family = f
+form family, "Register family"
+form donation, "Record donation"
+===
+@edit style=plain domain=b4_food_drive_goal ref=b4_food_drive
+we want to reach 400 bags this season, show a bar for it
+---
+~ setting bag_cost money = 2500 "Cost of one bag" => setting bag_cost money = 2500 "Cost of one bag"\nsetting season_goal num 1..5000 = 400 "Bags to give this season"
++after "Raised" sum(donation.amount) big :: goal given, season_goal, "bags given so far"
+===
+@create style=detailed domain=b4_garden_beds
+terrace garden with many pots. each pot has a plant and how often it needs water, i log when i water it and when i add fertiliser. tell me which pots are overdue
+---
+app "Terrace Garden" plant mint
+table pot name text, plant text, gap_days num 1..30 = 3 "Water every (days)"
+table watering pot ref pot, fertiliser bool
+let overdue = count(pot, due(it.watering, it.gap_days))
+overdue "pots need water" head color if(overdue > 0, warn, good)
+each pot sort name as p
+  row card gap 1 tap edit p swipe remove p
+    stack grow
+      p.name bold
+      text p.plant "watered" since(p.watering) "days ago" faint
+    if due(p.watering, p.gap_days)
+      text "Thirsty" color warn
+    button "Water" tap add watering pot = p
+form pot, "Add pot"
+===
+@edit style=plain domain=b4_garden_fert ref=b4_garden_beds
+show how many times each pot got fertiliser
+---
+~ p.plant "watered" since(p.watering) "days ago" faint => p.plant "watered" since(p.watering) "days ago" faint\n      text count(p.watering where fertiliser = yes) "x fertiliser" tiny faint
+===
+@create style=short domain=b4_rain_gauge
+rain in mm each day
+---
+app "Rain Gauge" rain ocean
+table rain mm num 0..500
+"This month" sum(rain.mm month) "mm" big
+"Rainy days" count(days month, count(rain on it) > 0) faint
+daybars last 14 days, sum(rain.mm on it)
+form rain, "Add rainfall"
+list rain by day
+===
+@create style=vague domain=b4_five_prayers
+five prayers every day, did i pray or miss
+---
+app "Prayers" mosque mint
+table prayer name pick Fajr|Zuhr|Asr|Maghrib|Isha, place pick Home|Mosque = Home
+each options prayer.name as nm
+  row card
+    nm bold grow
+    toggle prayer today where name = nm
+"Prayed today" count(prayer today) "of 5" head
+heat last 70 days, count(prayer on it), 5
+===
+@create style=detailed domain=b4_phone_repair
+mobile repair counter. customers leave a phone with a fault and i quote a price. parts i buy for a job cost me money. i need profit per job and a list of phones ready to collect
+---
+app "Phone Repair" phone slate
+table job customer text, phone_model text, fault text, quote money, status pick Received|Fixing|Ready|Collected = Received
+table part job ref job, name text, cost money
+let profit_all = sum(job.quote where status = Collected) - sum(part.cost)
+"Profit so far" profit_all big color if(profit_all >= 0, good, bad)
+"Ready to collect" count(job where status = Ready) head
+each job where status != Collected sort at desc as j
+  let margin = j.quote - sum(j.part.cost)
+  stack card gap 1 tap edit j
+    row
+      text j.customer j.phone_model bold grow
+      text margin color if(margin >= 0, good, bad)
+    j.fault faint
+    choice j.status
+form job, "New phone"
+form part, "Add part cost"
+===
+@create style=multi_feature domain=b4_recipe_cost
+home bakery recipes: each recipe has ingredients with the quantity and price, so i can see what one batch costs and the cost per piece if it makes 24 pieces
+---
+app "Recipe Cost" bread mint
+table recipe name text, pieces num 1..500 = 24
+table ingredient recipe ref recipe, item text, qty num 0..5000, unit pick g|ml|pcs = g, cost money
+each recipe sort name as r
+  let batch = sum(r.ingredient.cost)
+  stack card gap 1 tap edit r swipe remove r
+    row
+      r.name head grow
+      text batch bold
+    text "Per piece" round(batch / r.pieces) faint
+    each r.ingredient as i
+      row
+        i.item grow
+        text i.qty i.unit faint
+        i.cost
+form recipe, "New recipe"
+form ingredient, "Add ingredient"
+===
+@edit style=plain domain=b4_recipe_margin ref=b4_recipe_cost
+add a selling price per piece and show my profit per piece
+---
+~ pieces num 1..500 = 24 => pieces num 1..500 = 24, sell_price money = 0
+~ "Per piece" round(batch / r.pieces) faint => "Per piece" round(batch / r.pieces) faint\n    text "Profit per piece" round(r.sell_price - batch / r.pieces) color if(r.sell_price > batch / r.pieces, good, bad)
+===
+@create style=custom_ui domain=b4_cake_orders
+cake orders: name, flavour, pounds, pickup date. show the board by status so i can tap to move an order to the next stage
+---
+app "Cake Board" gift plum
+table cake name text, flavour pick Chocolate|Vanilla|Red_Velvet|Coffee = Chocolate, pounds num 1..20 = 2, pickup date, stage pick New|Baking|Decorating|Ready = New
+grid 2 gap 1
+  each options cake.stage as s
+    stack card gap 1
+      text s bold
+      each cake where stage = s sort pickup as c
+        row tap edit c
+          text c.name c.pounds "lb" grow
+          c.pickup faint
+"Total pounds to bake" sum(cake.pounds where stage != Ready) big
+form cake, "New order"
+===
+@create style=typos domain=b4_auto_driver
+rikshaw driver: fares i earn evrey day and the cng i fill, tell me profit for the week
+---
+app "Rickshaw" car slate
+table fare amount money
+table fuel amount money, litres num 1..40
+let earned = sum(fare.amount week)
+let spent = sum(fuel.amount week)
+"This week profit" earned - spent big color if(earned >= spent, good, bad)
+row gap 2
+  stat earned, "earned"
+  stat spent, "fuel"
+daybars last 7 days, sum(fare.amount on it) - sum(fuel.amount on it)
+quick fare, amount, [100, 200, 300, 500]
+form fuel, "Filled CNG"
+===
+@create style=detailed domain=b4_cleanup_volunteers
+we organise weekend beach cleanups. volunteers sign up, every cleanup has a date and a place, and for each one i note how many kg of waste was collected and hours each volunteer gave. show total hours per volunteer
+---
+app "Cleanup Crew" leaf mint
+table volunteer name text, phone text?
+table cleanup place text, day date, kg num 0..5000
+table shift volunteer ref volunteer, cleanup ref cleanup, hours num 0.5..12
+"Waste collected" sum(cleanup.kg) "kg" big
+"Volunteer hours" sum(shift.hours) head
+each volunteer sort name as v
+  row card tap edit v
+    v.name bold grow
+    sum(v.shift.hours) "h"
+each cleanup sort day desc as c
+  row card tap edit c
+    c.place grow
+    c.day c.kg "kg" faint
+form cleanup, "New cleanup"
+form volunteer, "Add volunteer"
+form shift, "Log hours"
+===
+@create style=short domain=b4_fasting_days
+mondays and thursdays fasting tracker
+---
+app "Fasts" moon mint
+table fast
+calendar fast
+"Fasts this month" count(fast month) big
+"Streak" streak(fast) "days" faint
+===
+@create style=multi_feature domain=b4_kitchen_pantry
+kitchen pantry: items with how many i have and the level where i must buy more, a button to use one, and a shopping list at the bottom that only shows the low ones
+---
+app "Pantry" food ocean
+table item name text, qty num 0.., low_at num 0.. = 2, shelf pick Dry|Fridge|Freezer|Spices = Dry
+state place pick Dry|Fridge|Freezer|Spices = Dry
+choice place
+each item where shelf = place sort name as i
+  row card gap 1 tap edit i swipe remove i
+    i.name bold grow color if(i.qty <= i.low_at, warn, ink)
+    button "-" tap set i.qty = i.qty - 1
+    i.qty bold
+    button "+" tap set i.qty = i.qty + 1
+"Shopping list" head
+each item where qty <= low_at sort name
+  row
+    it.name grow
+    it.shelf faint
+form item, "Add item"
+===
+@edit style=plain domain=b4_pantry_unit ref=b4_kitchen_pantry
+add a unit like kg or packs next to the quantity
+---
+~ qty num 0.., low_at => qty num 0.., unit pick kg|packs|bottles|pieces = packs, low_at
+~ i.qty bold => i.qty i.unit bold
+===
+@create style=detailed domain=b4_tiffin_service
+home tiffin service. each subscriber has a plan (lunch only or lunch and dinner) with a monthly fee, we mark each delivered tiffin, and payments come in parts. show who has not paid in full this month
+---
+app "Tiffin Service" food ocean
+table sub name text, plan pick Lunch|Lunch_Dinner = Lunch, fee money, address text?
+table delivered sub ref sub
+table paid sub ref sub, amount money
+each sub sort name as s
+  let due = s.fee - sum(s.paid.amount month)
+  row card tap edit s
+    stack grow
+      s.name bold
+      text count(s.delivered month) "tiffins this month" faint
+    stack align end
+      text if(due > 0, "owes", "settled") color if(due > 0, bad, good)
+      text due faint
+    toggle s.delivered
+form sub, "New subscriber"
+form paid, "Payment received"
+===
+@oos style=detailed domain=b4_patient_reminders oos=messaging
+my clinic wants to text every patient the day before their appointment and also keep a list of appointments with the date, time and doctor
+---
+app "Appointments" calendar ocean
+table doctor name text
+table appt patient text, doctor ref doctor, day date, at_time time
+"Tomorrow" count(appt where day = today + 1) "appointments" head
+each appt where day >= today sort day as a
+  row card tap edit a swipe remove a
+    stack grow
+      a.patient bold
+      a.doctor.name faint
+    text a.day a.at_time
+form appt, "Add appointment"
+form doctor, "Add doctor"
+===
+@oos style=vague domain=b4_delivery_route_map oos=location
+show my delivery stops on a map with the best route, and keep count of drops per day
+---
+app "Drops" map slate
+table stop name text, address text?
+table drop stop ref stop
+each stop sort name as s
+  row card tap edit s
+    s.name bold grow
+    count(s.drop today) "drops today"
+    button "Dropped" tap add drop stop = s
+daybars last 7 days, count(drop on it)
+form stop, "Add stop"
+===
+@create style=short domain=b4_tea_stall
+chai stall cups sold
+---
+app "Chai Stall" cup mint
+table cups kind pick Chai|Coffee|Green_Tea = Chai, qty num 1..50 = 1
+setting price money = 30 "Price per cup"
+"Sales today" sum(cups.qty today) * price big
+each options cups.kind as k
+  row card
+    k bold grow
+    sum(cups.qty today where kind = k) "cups"
+    button "+1" tap add cups kind = k
+daybars last 7 days, sum(cups.qty on it) * price
+===
+@edit style=plain domain=b4_tea_sugar ref=b4_tea_stall
+we also buy sugar and milk, add a place to write what i spent and show profit
+---
+~ "Sales today" sum(cups.qty today) * price big => table expense item text, amount money\n"Sales today" sum(cups.qty today) * price big
++after "Sales today" sum(cups.qty today) * price big :: "Profit today" sum(cups.qty today) * price - sum(expense.amount today) head color if(sum(cups.qty today) * price >= sum(expense.amount today), good, bad)
++ form expense, "Spent on stock"

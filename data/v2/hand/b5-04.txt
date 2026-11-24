@@ -1,0 +1,400 @@
+@create style=detailed domain=b5_date_palms
+date palm orchard: every palm has a tag number and variety (Ajwa, Khudri, Mabroom or Local). at harvest I weigh dates per palm. show total kg per variety, and which palm gave the most
+---
+app "Palm Grove" tree mint
+table palm tag text, variety pick Ajwa|Khudri|Mabroom|Local = Local
+table cutting palm ref palm, kg num 0.5..400
+"Total harvest" sum(cutting.kg year) "kg" big
+each options palm.variety as v
+  row
+    v bold grow
+    sum(cutting year, if(it.palm.variety = v, it.kg, 0)) "kg"
+"Top palm" head
+each palm sort sum(it.cutting.kg) desc top 1 as p
+  row card
+    p.tag bold grow
+    p.variety faint
+    sum(p.cutting.kg) "kg" bold
+form cutting, "Weigh harvest"
+form palm, "Add palm"
+===
+@create style=short domain=b5_invigilation
+exam duty roster: teachers, hall, day and morning or evening session
+---
+app "Duty Roster" school slate
+table teacher name text
+table duty teacher ref teacher, hall text, day date, session pick Morning|Evening = Morning
+each teacher sort name as t
+  row card tap edit t
+    t.name bold grow
+    count(t.duty) "duties" bold
+each duty sort day as d
+  row card tap edit d swipe remove d
+    d.day bold
+    d.teacher.name grow
+    d.hall d.session faint
+form duty, "Assign duty"
+form teacher, "Add teacher"
+===
+@create style=multi_feature domain=b5_hackathon_judging
+hackathon judging: each team gets 1 to 10 from judges for idea, build and demo. show a ranking by total and the average for each criterion per team
+---
+app "Hack Judge" bolt ink
+table team name text
+table mark team ref team, criterion pick Idea|Build|Demo = Idea, points num 1..10
+each team sort sum(it.mark.points) desc as t
+  stack card gap 1
+    row
+      "#" index + 1 bold
+      t.name head grow
+      sum(t.mark.points) big
+    row gap 2
+      each options mark.criterion as c
+        stack grow align center
+          fixed(avg(t.mark.points where criterion = c), 1) bold
+          c tiny faint
+form mark, "Add mark"
+form team, "Add team"
+===
+@create style=custom_ui domain=b5_icecream_hours
+ice cream cart: flavours and cups sold, and a bar chart of cups sold in each hour of the day from 10 am to 9 pm so I know when to be out
+---
+app "Ice Cream Cart" cup mint
+table flavour name text, price money
+table sale flavour ref flavour, cups num 1..20 = 1
+plot 10..22, 0..max(1..22, sum(sale.cups where hour(at) = it)) axes
+  each 10..21
+    rect it + 0.1, 0, 0.8, sum(sale.cups where hour(at) = it) fill accent radius 2
+    tick it + 0.5, it
+"Cups today" sum(sale.cups today) big
+each flavour sort name as f
+  row card
+    f.name bold grow
+    sum(f.sale.cups today) "today" faint
+    button "+1" tap add sale flavour = f
+form flavour, "Add flavour"
+===
+@create style=vague domain=b5_juice_margin
+juice stall which fruit makes me money
+---
+app "Juice Stall" cup mint
+table fruit name text, cost_per_kg money, glasses_per_kg num 1..20 = 5
+table sold fruit ref fruit, glasses num 1..50
+setting glass_price money = 120 "Glass price"
+each fruit sort name as f
+  let made = sum(f.sold.glasses) * glass_price
+  let spent = sum(f.sold.glasses) / f.glasses_per_kg * f.cost_per_kg
+  row card tap edit f
+    f.name bold grow
+    sum(f.sold.glasses) "glasses" faint
+    round(made - spent) "profit" bold color if(made > spent, good, bad)
+form sold, "Sold glasses"
+form fruit, "Add fruit"
+===
+@create style=detailed domain=b5_shagun_ledger
+shagun ledger for family weddings. for each family I write what we received and what we gave back, cash or item, with the amount. I need to see the balance with each family so we return fairly
+---
+app "Shagun Book" gift plum
+table family name text, relation text?
+table exchange family ref family, direction pick Received|Given = Received, kind pick Cash|Item = Cash, amount money
+each family sort name as f
+  let net = sum(f.exchange.amount where direction = Received) - sum(f.exchange.amount where direction = Given)
+  row card tap edit f
+    stack grow gap 0
+      f.name bold
+      f.relation faint
+    if(net > 0, "we owe return", "settled or ahead") faint
+    abs(net) bold color if(net > 0, warn, good)
+form exchange, "Add entry"
+form family, "Add family"
+===
+@create style=custom_ui domain=b5_qurbani_shares
+qurbani: each animal has a price and 7 shares. people join an animal and pay. draw 7 little squares per animal that fill as people join, and show the price of one share
+---
+app "Qurbani" paw mint
+table animal name text, price money
+table member animal ref animal, person text, shares num 1..7 = 1, paid money = 0
+each animal sort name as a
+  let taken = sum(a.member.shares)
+  stack card gap 1
+    row
+      a.name bold grow
+      a.price / 7 "per share" faint
+    draw 100, 12
+      each 1..7 as n
+        rect (n - 1) * 14.3, 0, 12, 12 fill if(n <= taken, accent, soft) radius 2
+    taken "of 7 shares" if(taken > 7, "(too many)", "") faint color if(taken > 7, bad, muted)
+    "Collected" sum(a.member.paid) "of" a.price faint
+form member, "Add person"
+form animal, "Add animal"
+===
+@create style=typos domain=b5_azan_duty
+volunteers who give azan in our mosque, each prayer each day. show how many azans each one gave this month and which prayer today has nobody yet
+---
+app "Azan Rota" mosque ocean
+table volunteer name text
+table azan volunteer ref volunteer, prayer pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr
+each options azan.prayer as p
+  row card
+    p bold grow
+    if(count(azan today where prayer = p) = 0, "nobody yet", last(azan.volunteer.name where prayer = p)) color if(count(azan today where prayer = p) = 0, warn, good)
+each volunteer sort name as v
+  row
+    v.name grow
+    count(v.azan month) faint
+form azan, "Log azan"
+form volunteer, "Add volunteer"
+===
+@create style=short domain=b5_seed_bank
+seed packets i keep and what i planted from them
+---
+app "Seed Box" leaf mint
+table seed name text, year num 2015..2035, packets num 0.. = 1
+table sowing seed ref seed, packets num 1..20 = 1
+each seed sort name as s
+  row card tap edit s
+    s.name bold grow
+    s.year faint
+    s.packets - sum(s.sowing.packets) "left" bold color if(s.packets - sum(s.sowing.packets) <= 0, bad, ink)
+    button "Sow" tap add sowing seed = s
+form seed, "Add seeds"
+===
+@create style=detailed domain=b5_fishing_boat
+we fish from two boats. each trip has the boat, kg caught, fuel cost. fish price per kg is a setting. show profit per trip and a line of kg per trip for the season
+---
+app "Boat Trips" fish ocean
+table boat name text
+table trip boat ref boat, kg num 0..2000, fuel money
+setting price_kg money = 350 "Fish price per kg"
+trend trip sort at, it.kg
+each boat sort name as b
+  row card tap edit b
+    b.name bold grow
+    count(b.trip) "trips" faint
+    round(sum(b.trip.kg) * price_kg - sum(b.trip.fuel)) "profit" bold
+form trip, "Log trip"
+form boat, "Add boat"
+===
+@create style=multi_feature domain=b5_truck_trips
+we run 5 trucks. every trip has load in tons, the fare and diesel cost. profit per truck as a bar chart and a list of trips by day
+---
+app "Truck Desk" car slate
+table truck plate text
+table trip truck ref truck, tons num 0.5..40, fare money, diesel money
+bars truck sort plate, sum(it.trip.fare) - sum(it.trip.diesel), it.plate
+each truck sort plate as t
+  row card tap edit t
+    t.plate bold grow
+    count(t.trip month) "trips this month" faint
+form trip, "Add trip"
+form truck, "Add truck"
+list trip by day
+===
+@create style=typos domain=b5_rain_gauge
+rain gauge readings from 3 fields in mm per day. chart for each field of last 30 days and the month total
+---
+app "Rain Gauge" rain ocean
+table field name text
+table rain field ref field, mm num 0..400
+each field sort name as f
+  stack card gap 1
+    row
+      f.name head grow
+      sum(f.rain.mm month) "mm this month" bold
+    daybars last 30 days, sum(f.rain.mm on it)
+form rain, "Add reading"
+form field, "Add field"
+===
+@create style=vague domain=b5_bird_watch
+birds i have seen with where and how many
+---
+app "Bird List" egg mint
+table species name text
+table sighting species ref species, place text, n num 1..500 = 1
+"Species seen" count(species) big
+each species sort name as s
+  row card tap edit s
+    s.name bold grow
+    count(s.sighting) "times" faint
+    max(s.sighting.n) "max" bold
+form sighting, "Add sighting"
+form species, "New species"
+===
+@create style=detailed domain=b5_shoe_mileage
+running shoes, each pair should be retired at some km (default 700). log every run with distance and shoe. show a progress bar per pair of km used toward the retire limit
+---
+app "Shoe Miles" run ocean
+table shoe name text, retire_km num 100..2000 = 700
+table run shoe ref shoe, km num 0.5..100
+each shoe sort name as s
+  stack card gap 1 tap edit s
+    s.name bold
+    goal sum(s.run.km), s.retire_km, "km on this pair", "km"
+form run, "Log run"
+form shoe, "Add shoes"
+===
+@create style=custom_ui domain=b5_sourdough
+sourdough: a 4 hour timer for next feeding and a log of loaves, flour grams and a rating good okay or dense. show average rating per hydration
+---
+app "Sourdough" bread mint
+table feeding ratio pick One_one|One_two|One_five = One_two
+table loaf flour num 100..2000 = 500, hydration num 50..100 = 75, rating pick Good|Okay|Dense = Okay
+timer 4h, "Next feeding", add feeding
+"Last fed" plural(since(feeding), "day") "ago" faint
+each loaf sort at desc top 5 as l
+  row card tap edit l
+    l.flour "g" l.hydration "%" grow
+    l.rating bold color if(l.rating = Good, good, if(l.rating = Dense, bad, ink))
+"Good loaves" count(loaf where rating = Good) "of" count(loaf) head
+form loaf, "Log loaf"
+===
+@create style=multi_feature domain=b5_tailor_wedding_set
+bridal boutique: each customer has an order for several pieces (lehenga, shirt, dupatta ...) each with its own price and a ready tick. show how many pieces are ready per customer and total price
+---
+app "Boutique" gift plum
+table customer name text, event_day date?
+table piece customer ref customer, what text, price money, ready bool
+each customer sort name as c
+  row card tap edit c
+    stack grow gap 0
+      c.name bold
+      count(c.piece where ready = yes) "of" count(c.piece) "ready" faint
+    sum(c.piece.price) bold
+each piece where ready = no sort at as p
+  row
+    p.customer.name grow
+    p.what faint
+    toggle p.ready
+form piece, "Add piece"
+form customer, "Add customer"
+===
+@oos style=short domain=b5_juice_ai oos=ai
+let the app work out the best fruit to buy tomorrow using AI, and show my juice sales by fruit
+---
+app "Juice Sales" cup mint
+table fruit name text
+table sold fruit ref fruit, glasses num 1..50
+each fruit sort name as f
+  row card
+    f.name bold grow
+    sum(f.sold.glasses) "glasses" bold
+form sold, "Sold glasses"
+form fruit, "Add fruit"
+===
+@oos style=detailed domain=b5_azan_voice oos=voice
+read out the azan duty list every morning in a voice and keep the volunteer list with their prayer counts
+---
+app "Azan Counts" mosque ocean
+table volunteer name text
+table azan volunteer ref volunteer, prayer pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr
+each volunteer sort name as v
+  row card
+    v.name bold grow
+    count(v.azan month) "this month"
+form azan, "Log azan"
+form volunteer, "Add volunteer"
+===
+@edit style=plain domain=b5_palms_age ref=b5_date_palms
+add the year each palm was planted and show the age next to the tag in the top palm row
+---
+~ table palm tag text, variety pick Ajwa|Khudri|Mabroom|Local = Local => table palm tag text, variety pick Ajwa|Khudri|Mabroom|Local = Local, planted_year num? 1980..2030
+~ p.variety faint => p.variety faint\n    year(today) - p.planted_year "years old" faint
+===
+@edit style=plain domain=b5_hackathon_round ref=b5_hackathon_judging
+add a round field (round 1 or final) and only count the final round in the ranking
+---
+~ table mark team ref team, criterion pick Idea|Build|Demo = Idea, points num 1..10 => table mark team ref team, criterion pick Idea|Build|Demo = Idea, round pick Qualifier|Final = Final, points num 1..10
+~ sort sum(it.mark.points) desc as t => sort sum(it.mark.points where round = Final) desc as t
+~ sum(t.mark.points) big => sum(t.mark.points where round = Final) big
+===
+@edit style=plain domain=b5_icecream_price ref=b5_icecream_hours
+show how much money I made today, using each flavour's price
+---
++after "Cups today" sum(sale.cups today) big :: "Money today" sum(sale today, it.cups * it.flavour.price) bold
+===
+@edit style=plain domain=b5_juice_large ref=b5_juice_margin
+add a large glass option on each sale, large costs more, price in a setting
+---
+~ setting glass_price money = 120 => setting glass_price money = 120\nsetting large_price money = 180 "Large glass price"
+~ table sold fruit ref fruit, glasses num 1..50 => table sold fruit ref fruit, glasses num 1..50, size pick Regular|Large = Regular
+~ let made = sum(f.sold.glasses) * glass_price => let made = sum(f.sold.glasses where size = Regular) * glass_price + sum(f.sold.glasses where size = Large) * large_price
+===
+@edit style=plain domain=b5_shagun_cash ref=b5_shagun_ledger
+rename Item to Gift in the kind options
+---
+~ kind pick Cash|Item = Cash => kind pick Cash|Gift was Item = Cash
+===
+@edit style=plain domain=b5_qurbani_note ref=b5_qurbani_shares
+add an optional phone number for each person, and show who joined last on the card
+---
+~ person text, shares => person text, phone text?, shares
++after     taken "of 7 shares" if(taken > 7, "(too many)", "") faint color if(taken > 7, bad, muted) ::     "Last joined" last(a.member.person) faint
+===
+@edit style=plain domain=b5_truck_trips_chart ref=b5_truck_trips
+remove the bar chart and show a profit number per truck in the row instead
+---
+- bars truck sort plate, sum(it.trip.fare) - sum(it.trip.diesel), it.plate
+~ count(t.trip month) "trips this month" faint => count(t.trip month) "trips this month" faint\n    sum(t.trip.fare) - sum(t.trip.diesel) "profit" bold
+===
+@edit style=plain domain=b5_rain_weekly ref=b5_rain_gauge
+make it weekly, last 8 weeks
+---
+~ daybars last 30 days, sum(f.rain.mm on it) => bars 1..8, sum(f.rain.mm where at > today - 7 * it and at <= today - 7 * (it - 1)), join("W", it)
+===
+@edit style=plain domain=b5_shoe_alert ref=b5_shoe_mileage
+warn me in red when a pair is within 50 km of retire
+---
+~ s.name bold => s.name bold color if(s.retire_km - sum(s.run.km) <= 50, bad, ink)
+===
+@create style=custom_ui domain=b5_shot_list
+short film shot list. scenes have shots with a tick when filmed, a progress bar for each scene, and an overall percent at the top
+---
+app "Shot List" star ink
+table scene name text, location text?
+table shot scene ref scene, what text, filmed bool
+"Filmed" round(count(shot where filmed = yes) * 100 / count(shot)) "%" big
+each scene sort name as s
+  stack card gap 1
+    row
+      s.name bold grow
+      count(s.shot where filmed = yes) "of" count(s.shot) faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * count(s.shot where filmed = yes) / max(count(s.shot), 1), 4 fill accent radius 2
+    each s.shot as h
+      row
+        h.what grow
+        toggle h.filmed
+form shot, "Add shot"
+form scene, "Add scene"
+===
+@create style=typos domain=b5_carrom_cup
+carrom tornament in our lane. players, and every win logged with who they beat. table sorted by wins
+---
+app "Carrom Cup" game ink
+table player name text
+table win player ref player, beat text
+each player sort count(it.win) desc as p
+  row card
+    "#" index + 1 bold
+    p.name bold grow
+    count(p.win) "wins" bold
+    button "+ win" tap add win player = p, beat = "?"
+form player, "Add player"
+list win by day
+===
+@create style=vague domain=b5_nursery_orders
+plant nursery, orders for saplings and what is left
+---
+app "Nursery" plant mint
+table sapling name text, ready num 0.. = 0, price money
+table order sapling ref sapling, buyer text, qty num 1..500, picked bool
+each sapling sort name as s
+  let promised = sum(s.order.qty where picked = no)
+  row card tap edit s
+    s.name bold grow
+    s.ready "ready" faint
+    promised "promised" color if(promised > s.ready, bad, ink)
+form order, "Take order"
+form sapling, "Add sapling"
+===

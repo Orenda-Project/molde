@@ -1,0 +1,384 @@
+@create style=detailed domain=a3_carrom
+Scoreboard for carrom between me and my brother. Tap to add coins for each of us, the queen is 3 points, and keep count of boards won.
+---
+app "Carrom" board plum
+table pts player pick Me|Bro, coins num 1..9 = 1
+table boardwin winner pick Me|Bro
+let me_s = sum(pts.coins where player = Me)
+let bro_s = sum(pts.coins where player = Bro)
+row gap 2
+  stack grow align center card
+    "Me" bold
+    text me_s big
+    button "+1 coin" tap add pts player = Me, coins = 1
+    button "Queen +3" tap add pts player = Me, coins = 3
+  stack grow align center card
+    "Bro" bold
+    text bro_s big
+    button "+1 coin" tap add pts player = Bro, coins = 1
+    button "Queen +3" tap add pts player = Bro, coins = 3
+row gap 2
+  "Boards won: Me" count(boardwin where winner = Me)
+  "Bro" count(boardwin where winner = Bro)
+button "I won this board" tap add boardwin winner = Me then remove all pts
+button "Bro won this board" tap add boardwin winner = Bro then remove all pts
+===
+@edit style=plain domain=a3_e_carrom1 ref=a3_carrom
+make it dark and moody
+---
+~ app "Carrom" board plum => app "Carrom" board ink
+===
+@create style=short domain=a3_ludo
+ludo turn tracker for 4 players
+---
+app "Ludo" dice mint
+table player name text
+table sixes who ref player
+state turn num = 0
+let n = max(count(player), 1)
+"Now playing" faint
+each player sort at desc as p
+  if index = turn % n
+    p.name big
+button "Next player" tap set turn = turn + 1
+each player sort at desc as p
+  row card
+    p.name grow
+    "sixes" count(p.sixes) faint
+    button "Rolled a 6" tap add sixes who = p
+form player, "Add player"
+===
+@create style=custom_ui domain=a3_badminton
+badminton match to 21 points, two sides, big tap areas that add a point, show who is leading and sets won
+---
+app "Badminton" ball ocean
+table point side pick Left|Right
+table setwon side pick Left|Right
+let l = count(point where side = Left)
+let r = count(point where side = Right)
+let over = (l >= 21 or r >= 21) and abs(l - r) >= 2
+grid 2 gap 2
+  stack card align center pad 3 fill soft tap add point side = Left
+    "Left" faint
+    text l big
+  stack card align center pad 3 fill soft tap add point side = Right
+    "Right" faint
+    text r big
+if over
+  if(l > r, "Left", "Right") "wins the set" head color good
+  button "Next set" tap add setwon side = if(l > r, Left, Right) then remove all point
+else
+  if(l = r, "Level", if(l > r, "Left leads", "Right leads")) faint
+"Sets: Left" count(setwon where side = Left) "| Right" count(setwon where side = Right) bold
+button "Undo point" tap remove last(point)
+===
+@create style=multi_feature domain=a3_rummy
+rummy scores: players, a score for every round, running total, who is winning, new game button
+---
+app "Rummy" cards slate
+table player name text
+table score who ref player, pts num -200..200 = 0
+each player sort name as p
+  row card gap 2
+    p.name bold grow
+    "Total" sum(p.score.pts) big
+    "Rounds" count(p.score) faint
+let low = minof(player, sum(it.score.pts))
+"Lowest total" low faint
+form player, "Add player"
+form score, "Add round score"
+button "New game" tap remove all score
+===
+@create style=vague domain=a3_cricket_gully
+gully cricket with the kids
+---
+app "Gully cricket" ball mint
+table ball runs num 0..6 = 0, out bool
+state team text = ""
+let total = sum(ball.runs all)
+let wk = count(ball where out = yes)
+text total "/" wk big
+"Balls" count(ball) faint
+row gap 1
+  each [0, 1, 2, 3, 4, 6]
+    button it tap add ball runs = it
+button "Out!" fill bad tap add ball out = yes
+button "New innings" tap remove all ball
+===
+@create style=short domain=a3_dice_pair
+roll two dice
+---
+app "Two dice" dice ink
+state a num = 1
+state b num = 1
+row gap 3 align center
+  draw 100, 100 width 100
+    rect 4, 4, 92, 92 radius 14 fill surface stroke ink thick 2
+    label 50, 54, a big
+  draw 100, 100 width 100
+    rect 4, 4, 92, 92 radius 14 fill surface stroke ink thick 2
+    label 50, 54, b big
+"Total" a + b head
+button "Roll" tap set a = random(6) then set b = random(6)
+===
+@create style=typos domain=a3_coin_streak
+heads or tails flipper and shows how many heads in a row
+---
+app "Heads or tails" coin plum
+table flip side pick Heads|Tails
+state res num = 1
+let heads = count(flip where side = Heads)
+let tails = count(flip where side = Tails)
+draw 100, 100 width 140 tap set res = random(2) then add flip side = if(res = 1, Heads, Tails)
+  circle 46 fill if(res = 1, accent, muted)
+  label 50, 54, if(res = 1, "H", "T") big
+text heads "heads" bold
+text tails "tails" bold
+"Flips" count(flip) faint
+===
+@create style=detailed domain=a3_picker
+A random picker for who does the dishes tonight. I add the names of the family, tap a button and it shows one name.
+---
+app "Who is it" users mint
+table member name text
+state pick_i num = 1
+let n = max(count(member), 1)
+each member sort at as m
+  if index = pick_i - 1
+    m.name big
+button "Pick someone" tap set pick_i = random(n)
+form member, "Add name"
+list member
+===
+@create style=custom_ui domain=a3_tictactoe_grid
+tic tac toe on a 3 by 3 board, tap a square to put X or O in turn, button to start over
+---
+app "Noughts" board ink
+table mark cell num 1..9, who pick X|O
+let n = count(mark)
+let turn = if(n % 2 = 0, "X", "O")
+"Turn:" turn big
+grid 3 gap 1
+  each 1..9 as c
+    box height 70 radius 8 fill soft tap add mark cell = c, who = if(n % 2 = 0, X, O)
+      last(mark.who where cell = c) head align center
+button "Start over" tap remove all mark
+===
+@create style=custom_ui domain=a3_gomoku5
+a small 5x5 board where two players tap squares to put red or blue dots, count how many dots each has
+---
+app "Dots board" board plum
+table dot cell num 1..25, color pick Red|Blue
+let n = count(dot)
+"Red" count(dot where color = Red) "| Blue" count(dot where color = Blue) bold
+"Next:" if(n % 2 = 0, "Red", "Blue") faint
+grid 5 gap 1
+  each 1..25 as c
+    box height 52 radius 26 fill if(count(dot where cell = c and color = Red) > 0, red, if(count(dot where cell = c and color = Blue) > 0, blue, soft)) tap add dot cell = c, color = if(n % 2 = 0, Red, Blue)
+button "Clear board" tap remove all dot
+===
+@create style=detailed domain=a3_quiz_gk
+A general knowledge quiz game I can add my own questions to. Show one question at a time with 3 answers and keep my score.
+---
+app "GK quiz" star plum
+table q ask text, a text, b text, c text, right pick A|B|C
+table got q ref q, ok bool
+let score = count(got where ok = yes)
+"Score" score "of" count(got) big
+each q as x
+  if count(x.got) = 0
+    stack card gap 1
+      x.ask head
+      button x.a tap add got q = x, ok = (x.right = A)
+      button x.b tap add got q = x, ok = (x.right = B)
+      button x.c tap add got q = x, ok = (x.right = C)
+form q, "Add question"
+button "Play again" tap remove all got
+===
+@create style=short domain=a3_vocab_cards
+vocabulary flashcards
+---
+app "Vocab" book plum
+table card word text, meaning text
+state flip bool = no
+state k num = 0
+let n = max(count(card), 1)
+each card sort word as c
+  if index = k % n
+    stack card gap 2 align center tap set flip = not flip
+      if flip
+        c.meaning big
+      else
+        c.word big
+row gap 1
+  button "Next" tap set k = k + 1 then set flip = no
+  button "Shuffle" tap set k = random(n) then set flip = no
+form card, "Add card"
+===
+@create style=custom_ui domain=a3_memory_match
+memory game score keeper, I flip cards on a real table so the app just counts my tries and matched pairs with big buttons
+---
+app "Memory" brain mint
+table tryx pair bool
+let tries = count(tryx all)
+let pairs = count(tryx where pair = yes)
+text pairs "pairs" big
+"Tries" tries faint
+"Accuracy" round(pairs * 100 / max(tries, 1)) "%" bold
+draw 100, 8
+  rect 0, 0, 100, 8 fill soft radius 4
+  rect 0, 0, 100 * pairs / 8, 8 fill good radius 4
+row gap 1
+  button "Matched" fill good tap add tryx pair = yes
+  button "Missed" tap add tryx pair = no
+button "New game" tap remove all tryx
+===
+@create style=custom_ui domain=a3_bingo
+bingo card with 25 squares, I tap a number to mark it, tell me when I have 5 marked in the first row
+---
+app "Bingo" grid plum
+table hit n num 1..25
+grid 5 gap 1
+  each 1..25 as c
+    box height 50 radius 8 fill if(count(hit where n = c) > 0, accent, soft) tap toggle hit where n = c
+      text c head align center color if(count(hit where n = c) > 0, bg, ink)
+"Marked" count(hit) "of 25" faint
+if countof(1..5, count(hit where n = it) > 0) = 5
+  "BINGO! Top row done" big color good
+button "New card" tap remove all hit
+===
+@create style=short domain=a3_hangman
+hangman wrong guess counter
+---
+app "Hangman" board ink
+table wrong letter text
+let bad_n = count(wrong)
+draw 100, 100 width 160
+  line 10, 95, 90, 95 stroke ink thick 2
+  line 25, 95, 25, 10 stroke ink thick 2
+  line 25, 10, 60, 10 stroke ink thick 2
+  line 60, 10, 60, 22 stroke ink thick 2
+  if bad_n >= 1
+    circle 60, 30, 8 stroke ink thick 2
+  if bad_n >= 2
+    line 60, 38, 60, 62 stroke ink thick 2
+  if bad_n >= 3
+    line 60, 44, 48, 55 stroke ink thick 2
+  if bad_n >= 4
+    line 60, 44, 72, 55 stroke ink thick 2
+  if bad_n >= 5
+    line 60, 62, 50, 78 stroke ink thick 2
+  if bad_n >= 6
+    line 60, 62, 70, 78 stroke ink thick 2
+if bad_n >= 6
+  "Out of tries" head color bad
+form wrong, "Wrong letter"
+button "New word" tap remove all wrong
+===
+@create style=multi_feature domain=a3_truth_dare
+truth or dare picker: my own lists of truths and dares, a button that picks a random one, and a spin again button
+---
+app "Truth or dare" smile plum
+table tod kind pick Truth|Dare, text text
+state t_kind text = Truth
+state n_pick num = 1
+let cnt = max(count(tod where kind = t_kind), 1)
+row gap 1
+  each options tod.kind
+    button it fill if(t_kind = it, accent, soft) tap set t_kind = it then set n_pick = random(cnt)
+each tod where kind = t_kind as x
+  if index = n_pick - 1
+    stack card
+      x.text big
+button "Another one" tap set n_pick = random(cnt)
+form tod
+===
+@create style=detailed domain=a3_lucky_draw
+Lucky draw for our office party. I type in the names, press draw and the winner is shown big, and past winners are kept.
+---
+app "Lucky draw" gift plum
+table entrant name text
+table winner name text
+state idx num = 0
+let n = max(count(entrant), 1)
+count(entrant) "in the draw" faint
+if idx > 0
+  each entrant sort at as e
+    if index = idx - 1
+      e.name big color accent
+button "Draw!" tap set idx = random(n)
+each entrant sort at as e
+  if index = idx - 1
+    button "Keep as winner" tap add winner name = e.name
+form entrant, "Add name"
+"Past winners" head
+list winner
+===
+@create style=custom_ui domain=a3_spinner
+a spinner wheel with 6 coloured slices that I tap and a pointer lands on a random slice
+---
+app "Spinner" game plum
+state ang num = 0
+state spun num = 0
+draw 100, 100 width 240 tap set ang = random(360) then set spun = spun + 1
+  each 0..5 as s
+    arc 50, 50, 44, s * 60, s * 60 + 60 fill hue(s * 60) opacity 0.8
+  circle 50, 50, 6 fill ink
+  line 50, 50, 50 + 40 * sin(ang), 50 - 40 * cos(ang) stroke ink thick 3
+text "Landed on slice" floor(ang / 60) + 1 big
+"Spins" spun faint
+===
+@create style=custom_ui domain=a3_reaction
+tap as many times as you can in 10 seconds, big circle to tap, shows taps and best score
+---
+app "Tap race" bolt plum
+table runx taps num 0..
+state taps num = 0
+state left num = 10
+state going bool = no
+every 1s if going set left = left - 1
+when going and left <= 0 set going = no then add runx taps = taps
+draw 100, 100 width 180 tap set taps = taps + if(going, 1, 0)
+  circle 46 fill if(going, accent, soft)
+  label 50, 54, taps big
+text left "s left" head
+button "Start" tap set taps = 0 then set left = 10 then set going = yes
+"Best" max(runx.taps) faint
+===
+@edit style=plain domain=a3_e_ludo1 ref=a3_ludo
+show how many turns each person has had
+---
+~ "sixes" count(p.sixes) faint => "sixes" count(p.sixes) faint\n    button "Played" tap add played who = p
+~ table sixes who ref player => table sixes who ref player\ntable played who ref player
+===
+@edit style=plain domain=a3_e_badm1 ref=a3_badminton
+let me choose how many points a set goes to, not always 21
+---
+~ let over = (l >= 21 or r >= 21) => setting target num = 21 "Points per set"\nlet over = (l >= target or r >= target)
+===
+@edit style=plain domain=a3_e_dice1 ref=a3_dice_pair
+count how many times I got a double
+---
+~ state a num = 1 => table rolls double bool\nstate a num = 1
+~ tap set a = random(6) then set b = random(6) => tap set a = random(6) then set b = random(6) then add rolls double = (a = b)
++ "Doubles so far" count(rolls where double = yes) faint
+===
+@edit style=plain domain=a3_e_vocab1 ref=a3_vocab_cards
+add a example sentence to each card
+---
+~ table card word text, meaning text => table card word text, meaning text, example text?
+===
+@edit style=plain domain=a3_e_quiz1 ref=a3_quiz_gk
+add a topic to every question like sports or history
+---
+~ table q ask text, => table q topic pick Sports|History|Science|Other = Other, ask text,
+===
+@edit style=plain domain=a3_e_bingo1 ref=a3_bingo
+change the theme to green
+---
+~ app "Bingo" grid plum => app "Bingo" grid mint
+===
+@edit style=plain domain=a3_e_lucky1 ref=a3_lucky_draw
+add a reminder at 6 pm on friday to run the draw
+---
++ remind "Run the lucky draw" at 18:00 on fri

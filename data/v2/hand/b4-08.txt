@@ -1,0 +1,363 @@
+@create style=short domain=b4_breakfast_stall
+halwa puri breakfast stall, plates sold and ingredient cost every day, so I see profit
+---
+app "Breakfast Stall" food mint
+table plates qty num 1..200 = 1
+table cost_b item pick Flour|Oil|Chana|Semolina|Gas|Other = Flour, amount money
+setting plate_price money = 180 "Price per plate"
+let income = sum(plates.qty today) * plate_price
+let spent = sum(cost_b.amount today)
+text "Profit today" income - spent big color if(income >= spent, good, bad)
+row gap 2
+  stat sum(plates.qty today), "plates"
+  stat spent, "spent"
+button "Plate sold" tap add plates qty = 1
+form cost_b, "Bought"
+===
+@edit style=plain domain=b4_breakfast_costchart ref=b4_breakfast_stall
+chart of my spending per item this month
+---
++ share cost_b month by item, sum(it.amount), it.key
+===
+@create style=detailed domain=b4_expired_returns
+we are a medical store and return expired or damaged medicines to the distributor for credit. each return has the medicine, batch, quantity, value, and a status: packed, sent, credit received. show value waiting for credit
+---
+app "Returns" pill slate
+table distributor name text
+table return_m distributor ref distributor, medicine text, batch text?, qty num 1..1000, value money, status pick Packed|Sent|Credited = Packed
+text "Waiting for credit" sum(return_m.value where status != Credited) big color warn
+each distributor sort name as d
+  row card tap edit d
+    d.name bold grow
+    text count(d.return_m where status != Credited) "open"
+    text sum(d.return_m.value where status != Credited) bold
+each return_m where status != Credited sort at as r
+  row card tap edit r
+    stack grow
+      r.medicine bold
+      text r.distributor.name r.qty "pcs" faint
+    choice r.status
+form return_m, "New return"
+form distributor, "Add distributor"
+===
+@create style=multi_feature domain=b4_homeo_followups
+homeopathy clinic. every consultation records the remedy given, potency, days of medicine and I want a follow up date automatically at the end. remind me the morning of each follow up and show today's follow ups
+---
+app "Homeo Clinic" heart mint
+table patient name text, phone text?
+table consult patient ref patient, remedy text, potency pick Thirty_C|Two_Hundred_C|One_M = Thirty_C, days num 3..90 = 14, fee money
+remind "Follow up today" at consult.at + 14d at 9:00
+text "Follow ups today" count(consult, (it.at + it.days) <= today and (it.at + it.days) >= today) head
+each consult sort at desc top 20 as c
+  row card tap edit c
+    stack grow
+      c.patient.name bold
+      text c.remedy c.potency faint
+    text "follow up" c.at + c.days
+form consult, "New consultation"
+form patient, "New patient"
+===
+@create style=custom_ui domain=b4_birth_register
+village midwife register: for each birth I note the mother's name, delivery place (home or clinic), baby weight in kg, and the outcome. show this year's births and how many babies were under 2.5 kg
+---
+app "Birth Register" baby plum
+table birth mother text, place pick Home|Clinic|Hospital = Home, weight num 0.5..6, outcome pick Healthy|Weak|Referred = Healthy
+text count(birth year) "births this year" big
+text count(birth year where weight < 2.5) "under 2.5 kg" head color warn
+text "Referred" count(birth year where outcome = Referred) faint
+each options birth.place as p
+  row card
+    p bold grow
+    text count(birth year where place = p)
+each birth sort at desc top 10 as b
+  row card tap edit b
+    b.mother grow
+    text b.weight "kg"
+    text b.outcome faint
+form birth, "Add birth"
+===
+@edit style=plain domain=b4_birth_weeks ref=b4_birth_register
+show births per week for the last 8 weeks as bars
+---
++ bars birth last 8 weeks by week, count(it), it.key
+===
+@create style=multi_feature domain=b4_umrah_packing
+packing list for umrah for 4 people, items grouped by kind (clothes, documents, medicines, gifts), each item has who it is for and a packed tick. show how many packed per group
+---
+app "Umrah Pack" bag mint
+table pack_item name text, kind pick Clothes|Documents|Medicines|Gifts|Other = Clothes, person text?, packed bool
+text count(pack_item where packed = yes) "of" count(pack_item) "packed" big
+goal count(pack_item where packed = yes), count(pack_item), "ready"
+each options pack_item.kind as k
+  stack card gap 1
+    row
+      k head grow
+      text count(pack_item where kind = k and packed = yes) "/" count(pack_item where kind = k) faint
+    each pack_item where kind = k as i
+      row tap edit i
+        i.name grow
+        i.person faint
+        toggle i.packed
+form pack_item, "Add item"
+===
+@edit style=plain domain=b4_umrah_priority ref=b4_umrah_packing
+add a must-have flag and an option to see only the must-haves not yet packed
+---
+~ person text?, packed bool => person text?, must bool, packed bool
+~ count(pack_item where packed = yes) "of" => state only_must bool = no\ntoggle only_must\ntext count(pack_item where packed = yes) "of"
+~ each pack_item where kind = k as i => each pack_item where kind = k and (must = yes or not only_must) as i
+===
+@create style=detailed domain=b4_embroidery_artisans
+we get hand embroidery done by women artisans at home. each piece given to an artisan has a rate agreed, when it comes back we mark it. show how much I owe each artisan for returned pieces minus what I already paid
+---
+app "Embroidery" pen plum
+table artisan name text, village text?
+table piece artisan ref artisan, design text, rate money, returned bool
+table wage artisan ref artisan, amount money
+each artisan sort name as a
+  let owed = sum(a.piece.rate where returned = yes) - sum(a.wage.amount)
+  row card tap edit a
+    stack grow
+      a.name bold
+      text count(a.piece where returned = no) "pieces with her" faint
+    text owed bold color if(owed > 0, warn, good)
+text "Total owed" sum(piece.rate where returned = yes) - sum(wage.amount) big
+form piece, "Give piece"
+form wage, "Pay artisan"
+form artisan, "Add artisan"
+===
+@create style=short domain=b4_tv_repair
+tv fridge washing machine repairs, technician and the bill, my cut is 30%
+---
+app "Appliance Repair" tool slate
+table tech name text
+table rep tech ref tech, item pick TV|Fridge|Washer|AC|Other = TV, bill money
+setting cut num 0..100 = 30 "My cut %"
+each tech sort name as t
+  row card tap edit t
+    t.name bold grow
+    text count(t.rep month) "jobs"
+    text sum(t.rep.bill month) * cut / 100 "mine" faint
+text "My income this month" sum(rep.bill month) * cut / 100 big
+form rep, "Add repair"
+form tech, "Add technician"
+===
+@create style=typos domain=b4_iron_wala
+iron wala, i press cloths of 40 homes, monthly bill by house at 10 rupee per cloth, let me go to previous months
+---
+app "Press Bill" tool ocean
+table home name text, lane text?
+table pressed home ref home, cloths num 1..100
+setting per_cloth money = 10 "Rate per cloth"
+state m date = today
+monthnav m
+each home sort lane as h
+  row card tap edit h
+    stack grow
+      h.name bold
+      h.lane faint
+    text sum(h.pressed.cloths month of m) "cloths"
+    text sum(h.pressed.cloths month of m) * per_cloth bold
+text "Month total" sum(pressed.cloths month of m) * per_cloth big
+form pressed, "Cloths taken"
+form home, "Add home"
+===
+@edit style=plain domain=b4_iron_rename ref=b4_iron_wala
+rename the home table to customer
+---
+~ table home name text, lane text? => table customer was home name text, lane text?
+~ table pressed home ref home, cloths => table pressed home ref customer, cloths
+~ each home sort lane as h => each customer sort lane as h
+~ form home, "Add home" => form customer, "Add customer"
+===
+@create style=detailed domain=b4_tow_calls
+car towing service. every call has the customer, kilometres towed and charge is a base fee plus per km rate which I can change. show total earned today, and calls still unpaid
+---
+app "Towing" car slate
+table tow customer text, km num 1..300, paid bool
+setting base_fee money = 1500 "Base fee"
+setting km_rate money = 100 "Per km"
+each tow where paid = no sort at desc as t
+  row card tap edit t
+    stack grow
+      t.customer bold
+      text t.km "km" faint
+    text base_fee + t.km * km_rate bold
+    toggle t.paid
+text "Today" sum(tow today, base_fee + it.km * km_rate) big
+text "Unpaid" count(tow where paid = no) head color warn
+form tow, "New call"
+===
+@create style=multi_feature domain=b4_case_management
+NGO case workers visit families that we support. each family gets a type of support (food, school fees, medical, rent) and I must visit again within 30 days. show the families overdue for a visit
+---
+app "Case Visits" users ocean
+table family head text, area text?, support pick Food|School_fees|Medical|Rent = Food
+table fvisit family ref family, notes long?
+text count(family, due(it.fvisit, 30)) "families overdue" head color warn
+each family sort head as f
+  row card tap edit f
+    stack grow
+      f.head bold
+      text f.support f.area faint
+    if due(f.fvisit, 30)
+      text "Visit due" color warn
+    else
+      text since(f.fvisit) "days ago" faint
+    button "Visited" tap add fvisit family = f
+form fvisit, "Visit notes"
+form family, "Add family"
+===
+@edit style=plain domain=b4_case_prio ref=b4_case_management
+add a priority for each family, high medium or low, and a filter to show only high
+---
+~ support pick Food|School_fees|Medical|Rent = Food => support pick Food|School_fees|Medical|Rent = Food, priority pick High|Medium|Low = Medium
+~ each family sort head as f => state show_prio pick High|Medium|Low = High\nchoice show_prio\neach family where priority = show_prio sort head as f
+===
+@create style=detailed domain=b4_microloan_group
+women's micro loan group. each member takes a loan, repays every week in small amounts. show for each member what is outstanding and who missed paying this week
+---
+app "Loan Group" coin plum
+table member name text, village text?
+table loan member ref member, amount money, weekly money
+table repay member ref member, amount money
+each member sort name as m
+  let left = sum(m.loan.amount) - sum(m.repay.amount)
+  row card tap edit m
+    stack grow
+      m.name bold
+      text "weekly" sum(m.loan.weekly) faint
+    text left bold color if(left > 0, ink, good)
+    if left > 0 and count(m.repay week) = 0
+      text "missed" color bad
+text "Outstanding" sum(loan.amount) - sum(repay.amount) big
+text "Collected this week" sum(repay.amount week) head
+form repay, "Repayment"
+form loan, "New loan"
+form member, "Add member"
+===
+@create style=custom_ui domain=b4_water_filters
+we install clean water filters in villages. for each household we test the water after install, result pass or fail with TDS number. show pass percent per village, and failed households to revisit
+---
+app "Filter Tests" drop ocean
+table village name text
+table household head text, village ref village, tds num 0..2000, result pick Pass|Fail = Pass
+text round(100 * count(household where result = Pass) / count(household)) "% pass" big
+each village sort name as v
+  row card tap edit v
+    v.name bold grow
+    text count(v.household where result = Pass) "of" count(v.household)
+text "To revisit" head color warn
+each household where result = Fail sort at as h
+  row card tap edit h
+    h.head grow
+    text h.village.name faint
+    text "TDS" h.tds
+form household, "Add household"
+form village, "Add village"
+===
+@create style=short domain=b4_tree_watering_rota
+who waters the park trees on which day, volunteers
+---
+app "Tree Rota" tree mint
+table vol name text
+table slot vol ref vol, weekday pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, area text
+table watered_t slot ref slot
+text "Today" head
+each slot where weekday = dayname(today) as s
+  row card
+    s.vol.name bold grow
+    s.area faint
+    toggle s.watered_t
+each options slot.weekday as d
+  row
+    d bold
+    text count(slot where weekday = d) "volunteers" faint
+form slot, "Assign"
+form vol, "Add volunteer"
+===
+@create style=detailed domain=b4_rose_care
+i grow roses in 20 pots. each rose pot gets fertiliser every 30 days, pruning in february, and i count blooms every week. show which need fertiliser and total blooms this week
+---
+app "Rose Care" leaf plum
+table rose name text, colour text?
+table feed_r rose ref rose
+table bloom rose ref rose, count num 0..200
+each rose sort name as r
+  row card tap edit r
+    stack grow
+      r.name bold
+      text r.colour "blooms last count" last(r.bloom.count) faint
+    if due(r.feed_r, 30)
+      text "Feed me" color warn
+    button "Fed" tap add feed_r rose = r
+text "Blooms this week" sum(bloom.count week) big
+form bloom, "Count blooms"
+form rose, "Add rose"
+===
+@create style=multi_feature domain=b4_herb_drying
+i dry herbs like mint, tulsi and neem. each batch is weighed wet and again dry in grams, show the dry ratio per batch and the total dry stock
+---
+app "Herb Drying" leaf mint
+table batch_h herb pick Mint|Tulsi|Neem|Aloe|Other = Mint, wet_g num 10..20000, dry_g num? 0..10000
+text "Dry stock" sum(batch_h.dry_g) "g" big
+each options batch_h.herb as h
+  row card
+    h bold grow
+    text sum(batch_h.dry_g where herb = h) "g dry"
+each batch_h sort at desc as b
+  row card tap edit b swipe remove b
+    b.herb bold
+    text b.wet_g "g wet" grow
+    text round(100 * b.dry_g / b.wet_g) "% remains" faint
+form batch_h, "New batch"
+===
+@create style=vague domain=b4_monsoon_log
+heavy rain days, flooding in street or house
+---
+app "Monsoon" rain ocean
+table storm mm num 10..500, flood pick None|Street|House = None
+text count(storm year) "heavy rain days" big
+text count(storm year where flood = House) "days water entered house" head color bad
+each storm sort at desc as s
+  row card tap edit s swipe remove s
+    s.mm "mm" bold grow
+    s.flood color if(s.flood = House, bad, if(s.flood = Street, warn, muted))
+form storm, "Add rain day"
+===
+@create style=detailed domain=b4_mushroom_bags
+mushroom farm in a shed: each bag batch is started on a date, then harvested several times in kg. show yield per bag and which batches are finished (no harvest in 10 days)
+---
+app "Mushrooms" leaf slate
+table mbatch name text, bags num 1..2000, started date
+table mharvest mbatch ref mbatch, kg num 0.1..200
+each mbatch sort started desc as b
+  row card tap edit b
+    stack grow
+      b.name bold
+      text b.bags "bags, started" b.started faint
+    text fixed(sum(b.mharvest.kg) / b.bags, 2) "kg per bag"
+    if due(b.mharvest, 10)
+      text "Finished" color muted
+form mharvest, "Harvest"
+form mbatch, "New batch"
+===
+@create style=custom_ui domain=b4_allergy_diary
+allergy diary: each day i note severity from 1 to 5 and the trigger i think caused it (pollen, dust, smoke, food). show the average severity per trigger and the worst day this month
+---
+app "Allergy" smile plum
+table symptom severity num 1..5, trigger pick Pollen|Dust|Smoke|Food|Unknown = Unknown
+text "Worst this month" max(symptom.severity month) big
+each options symptom.trigger as t
+  row card
+    t bold grow
+    text count(symptom where trigger = t) "times"
+    text "avg" fixed(avg(symptom.severity where trigger = t), 1) faint
+daybars last 14 days, max(symptom.severity on it)
+form symptom, "Add symptom"
+===
+@edit style=plain domain=b4_allergy_note ref=b4_allergy_diary
+add a note box for medicine taken
+---
+~ trigger pick Pollen|Dust|Smoke|Food|Unknown = Unknown => trigger pick Pollen|Dust|Smoke|Food|Unknown = Unknown, medicine text?
++ list symptom

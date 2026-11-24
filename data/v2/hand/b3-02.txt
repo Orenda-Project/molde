@@ -1,0 +1,405 @@
+@create style=custom_ui domain=b3_darts
+darts 501: each player's card shows what's left, quick buttons for the usual scores 26 41 45 60 100 and a box for any other score
+---
+app "Darts 501" target ink
+table player name text
+table throw player ref player, score num 0..180
+each player as p
+  let left = 501 - sum(p.throw.score)
+  stack card gap 1
+    row
+      p.name head grow
+      left big color if(left = 0, good, ink)
+    "Visits" count(p.throw) "| average" fixed(sum(p.throw.score) / count(p.throw), 1) faint
+    row gap 1
+      each [26, 41, 45, 60, 100] as sc
+        button sc tap add throw player = p, score = sc
+form player, "Add player"
+form throw, "Add exact score"
+===
+@create style=short domain=b3_rummy
+rummy night scores per round, lowest total wins
+---
+app "Rummy Nights" cards plum
+table player name text
+table hand player ref player, round_no num 1..40, points num 0..500
+"Lowest total wins" faint
+each player sort sum(it.hand.points) as p
+  row card
+    p.name bold grow
+    count(p.hand) "rounds" faint
+    sum(p.hand.points) big
+bars player, sum(it.hand.points), it.name
+form player, "Add player"
+form hand, "Add round score"
+===
+@create style=detailed domain=b3_board_shelf
+We own a lot of board games and some never get played. List each game with how many players it is best with, log every play with the winner and how long it took, and flag the ones nobody has played for a long time (I choose how many days).
+---
+app "Game Shelf" dice mint
+table game title text, best_with num 1..12 = 4
+table play game ref game, winner text?, mins num 5..600 = 45
+setting stale num = 60 "Days before a game counts as neglected"
+"Plays this month" count(play month) big
+each game sort count(it.play) desc as g
+  row card tap edit g
+    stack grow
+      g.title bold
+      "Best with" g.best_with "players" faint
+    count(g.play) "plays" bold
+    if(due(g.play, stale), "Gathering dust", "Fresh") color if(due(g.play, stale), warn, good)
+form game, "Add game"
+form play, "Log a play"
+===
+@create style=multi_feature domain=b3_shaadi_week
+shaadi week planner: mehndi, baraat, walima each with a date and start time, a list of errands under each one that i can tick, how many days are left, and a reminder the day before
+---
+app "Shaadi Week" gift plum
+table ritual name text, ritual_date date, start time
+table errand ritual ref ritual, what text, done bool
+remind "Function tomorrow" at ritual.ritual_date - 1d at 10:00
+each ritual sort ritual_date as r
+  stack card gap 1
+    row
+      r.name head grow
+      plural(r.ritual_date - today, "day") "to go" faint
+    r.start faint
+    "Errands done" count(r.errand where done = yes) "of" count(r.errand) faint
+    each r.errand as e
+      row tap edit e
+        toggle e.done
+        e.what grow
+form ritual, "Add function"
+form errand, "Add errand"
+===
+@create style=vague domain=b3_salami_book
+people give us envelopes at weddings and we have to give back later, i want to remember who gave what
+---
+app "Salami Book" wallet mint
+table giver name text, family text?
+table envelope giver ref giver, amount money, occasion pick Wedding|Birthday|Eid|Other = Wedding, returned bool
+"Received in total" sum(envelope.amount) big
+"Not yet returned" sum(envelope.amount where returned = no) faint
+each giver sort sum(it.envelope.amount) desc as g
+  row card tap edit g
+    stack grow
+      g.name bold
+      g.family faint
+    sum(g.envelope.amount) bold
+share envelope by occasion, sum(it.amount), it.key
+form giver, "Add person"
+form envelope, "Add envelope"
+===
+@create style=custom_ui domain=b3_catering_calc
+catering calculator: type number of guests with a slider and it tells me kg of rice, kg of meat and pieces of naan, with per head amounts i can change
+---
+app "Catering Calc" food mint
+setting rice_per_head num = 0.25 "Rice per head (kg)"
+setting meat_per_head num = 0.2 "Meat per head (kg)"
+setting naan_per_head num = 2 "Naan per head"
+state guests num = 200
+field guests "Number of guests"
+slider guests 10..1000
+"Rice" fixed(guests * rice_per_head, 0) "kg" big
+"Meat" fixed(guests * meat_per_head, 0) "kg" big
+"Naan" round(guests * naan_per_head) "pieces" big
+"With 10 percent extra for latecomers" round(guests * 1.1) "plates" faint
+===
+@create style=typos domain=b3_umrah_fund
+we are 5 in the family saving for umrah, everyone puts in money when they can and i want to see who is behind
+---
+app "Umrah Fund" mosque ocean
+setting cost money = 450000 "Cost per person"
+table member name text
+table saving member ref member, amount money
+"Family total" sum(saving.amount) "of" count(member) * cost big
+each member sort name as m
+  stack card gap 1
+    row
+      m.name bold grow
+      cost - sum(m.saving.amount) "to go" faint
+    goal sum(m.saving.amount), cost, "saved"
+    button "Add 10000" tap add saving member = m, amount = 10000
+form member, "Add traveller"
+form saving, "Add saving"
+===
+@create style=detailed domain=b3_trip_costs
+Planning trips abroad. Each trip has a name and number of travellers, flights with airline and fare, and hotel stays with nights and rate per night. For every trip show the grand total and the cost per traveller.
+---
+app "Trip Costs" plane ocean
+table trip name text, travellers num 1..20 = 1
+table flight trip ref trip, airline text, fare money
+table stay trip ref trip, hotel text, nights num 1..60, rate money
+each trip as t
+  let total = sum(t.flight.fare) + sum(t.stay, it.nights * it.rate)
+  stack card gap 1 tap edit t
+    row
+      t.name head grow
+      total big
+    "Per traveller" round(total / t.travellers) faint
+    "Flights" sum(t.flight.fare) "| Hotels" sum(t.stay, it.nights * it.rate) faint
+form trip, "New trip"
+form flight, "Add flight"
+form stay, "Add stay"
+===
+@create style=typos domain=b3_bike_mileage
+every time i fill petrol in the bike i write litres price and the meter reading, tell me my real mileage and what i spend a month
+---
+app "Bike Mileage" bike mint
+table fill litres num 0.5..30, price money, odo num 0..
+let km_run = last(fill.odo) - first(fill.odo)
+let litres_used = sum(fill.litres) - first(fill.litres)
+"Mileage" fixed(km_run / litres_used, 1) "km per litre" big
+"Spent this month" sum(fill.price month) faint
+trend fill, it.odo
+list fill by day
+form fill, "Add fill-up"
+===
+@create style=multi_feature domain=b3_reno_rooms
+house renovation by room, each room has a budget, expenses go under the room with an item name, cost and a paid tick, show over budget in red and total spent against total budget
+---
+app "House Renovation" tool slate
+table room name text, budget money
+table expense room ref room, item text, cost money, paid bool
+"Spent" sum(expense.cost) "of" sum(room.budget) big
+each room as r
+  let used = sum(r.expense.cost)
+  stack card gap 1
+    row
+      r.name bold grow
+      used "of" r.budget color if(used > r.budget, bad, ink)
+    goal used, r.budget, "of budget"
+    "Unpaid" sum(r.expense.cost where paid = no) faint
+form room, "Add room"
+form expense, "Add expense"
+===
+@create style=short domain=b3_gas_cylinder
+how long does a gas cylinder last us and when to order the next
+---
+app "Gas Cylinder" fire slate
+table refill price money
+let usual = round(gap(refill))
+"Last refill" since(refill) "days ago" big
+"Lasts about" usual "days" faint
+if(since(refill) >= usual - 3 and usual > 0, "Time to order the next one", "Still fine") head
+"Spent this year" sum(refill.price year) faint
+button "Refilled at the same price" tap add refill price = last(refill.price)
+list refill by day
+form refill, "Add refill"
+===
+@create style=detailed domain=b3_domestic_help
+Our maid, cook and driver each have a monthly salary. I tap a button on the days one of them is absent, and the app shows how many leaves this month and what I should pay after cutting one thirtieth of the salary per leave.
+---
+app "Domestic Help" home mint
+table helper name text, salary money, role pick Maid|Cook|Driver|Guard = Maid
+table leave helper ref helper, reason text?
+each helper as h
+  let cut = h.salary / 30 * count(h.leave month)
+  stack card gap 1 tap edit h
+    row
+      h.name bold grow
+      h.role faint
+    "Leaves this month" count(h.leave month) faint
+    "Pay this month" h.salary - cut big
+    button "Mark leave today" tap add leave helper = h
+form helper, "Add helper"
+===
+@create style=vague domain=b3_car_papers
+car insurance and token tax always expire when i forget, remind me a month before
+---
+app "Car Papers" car slate
+table car name text, plate text
+table paper car ref car, kind pick Insurance|Token_tax|Fitness|Registration = Insurance, expires date
+remind "Car paper expires soon" at paper.expires - 30d at 9:00
+"Expiring within 60 days" count(paper, it.expires - today <= 60) big
+each paper sort expires as p
+  row card tap edit p
+    stack grow
+      p.car.name bold
+      p.kind faint
+    p.expires bold color if(p.expires - today < 30, bad, ink)
+form car, "Add car"
+form paper, "Add paper"
+===
+@create style=multi_feature domain=b3_qurbani_shares
+qurbani: we buy a cow and split into 7 shares among families, each animal has price and number of parts, each share has a name and how many parts they take, show shares still free and the price per share
+---
+app "Qurbani Shares" paw mint
+table animal kind pick Cow|Camel|Goat = Cow, price money, parts num 1..7 = 7
+table share animal ref animal, name text, taken num 1..7 = 1
+each animal as a
+  let free = a.parts - sum(a.share.taken)
+  stack card gap 1
+    row
+      a.kind head grow
+      free "shares free" color if(free = 0, good, warn)
+    "Per share" round(a.price / a.parts) faint
+    each a.share as s
+      row tap edit s
+        s.name grow
+        s.taken "share" faint
+form animal, "Add animal"
+form share, "Add shareholder"
+===
+@create style=short domain=b3_fasting_qaza
+qaza fasts i owe and the ones i have made up
+---
+app "Fasting" moon mint
+table fast kind pick Ramadan|Qaza|Nafl = Ramadan
+setting owed num = 0 "Qaza fasts owed"
+let paid_back = count(fast where kind = Qaza)
+"Qaza left" max(owed - paid_back, 0) big
+goal paid_back, owed, "qaza made up"
+"Ramadan days kept this year" count(fast year where kind = Ramadan) faint
+calendar fast
+list fast by day
+===
+@create style=custom_ui domain=b3_khatam
+30 boxes for the 30 paras of the quran, tap a box when i finish that para and it turns green, with a bar for how far i am and a reminder at 5:30
+---
+app "Khatam" book mint
+table para_done para_no num 1..30
+remind "Quran time" at 5:30
+"Paras finished" count(para_done) "of 30" big
+goal count(para_done), 30, "of the Quran"
+grid 6 gap 1
+  each 1..30 as n
+    box height 36 radius 8 fill if(count(para_done all where para_no = n) > 0, good, soft) tap toggle para_done all where para_no = n
+      n small align center
+button "Start a new khatam" tap remove all para_done
+===
+@create style=typos domain=b3_knitting
+knitting projects with how many rows i want and rows done so far, a button to add 10 rows at a time
+---
+app "Knitting" heart plum
+table project name text, target_rows num 1..5000
+table rows_done project ref project, rows num 1..300 = 10
+each project as p
+  let done = sum(p.rows_done.rows)
+  stack card gap 1
+    row
+      p.name head grow
+      done "of" p.target_rows faint
+    goal done, p.target_rows, "rows"
+    row gap 1
+      button "+10 rows" tap add rows_done project = p, rows = 10
+      button "+1 row" tap add rows_done project = p, rows = 1
+daybars last 7 days, sum(rows_done.rows on it)
+form project, "New project"
+===
+@create style=multi_feature domain=b3_novel
+writing a novel: chapters with a stage (plan, draft, revised, done), log words written against a chapter, a daily word goal I can change, words per day for two weeks, and total words
+---
+app "Novel" pen ink
+table chapter title text, stage pick Plan|Draft|Revised|Done = Plan
+table writing chapter ref chapter, words num 1..20000
+setting goal num = 500 "Words a day"
+goal sum(writing.words today), goal, "words today"
+"Total words" sum(writing.words) big
+daybars last 14 days, sum(writing.words on it)
+each chapter as c
+  row card tap edit c
+    c.title bold grow
+    c.stage faint
+    sum(c.writing.words) "words" bold
+form chapter, "Add chapter"
+form writing, "Log words"
+===
+@create style=custom_ui domain=b3_sprint_board
+sprint board with four columns, todo doing review done, a card for each task showing title and who owns it, and points done out of total at the top
+---
+app "Sprint Board" list ocean
+table person name text
+table task owner ref person, title text, points num 1..13 = 3, status pick Todo|Doing|Review|Done = Todo
+"Points done" sum(task.points where status = Done) "of" sum(task.points) big
+grid 4 gap 1
+  each options task.status as s
+    stack gap 1
+      s bold
+      each task where status = s as t
+        stack card gap 0 tap edit t
+          t.title small
+          t.owner.name tiny faint
+form person, "Add teammate"
+form task, "Add task"
+===
+@create style=detailed domain=b3_timesheet
+I bill clients by the hour. Each project belongs to a client with an hourly rate; I log hours with a tick for billable. Show hours this week and the amount to invoice (billable hours times rate) on each project.
+---
+app "Timesheet" clock slate
+table project client text, name text, rate money
+table entry project ref project, hrs num 0.25..16, billable bool
+each project as p
+  let billed = sum(p.entry.hrs where billable = yes)
+  stack card gap 1
+    row
+      p.name bold grow
+      p.client faint
+    "Hours this week" sum(p.entry.hrs week) faint
+    "To invoice" billed * p.rate big
+form project, "Add project"
+form entry, "Log hours"
+===
+@oos style=detailed domain=b3_drive_map oos=location
+show my drives on a map and track my car live while i drive, and keep a record of each trip's km
+---
+app "Drive Log" car slate
+table drive from_place text, to_place text, km num 1..2000, purpose pick Work|Family|Errand = Work
+"Km this month" sum(drive.km month) big
+share drive month by purpose, sum(it.km), it.key
+list drive by day
+form drive, "Log a drive"
+===
+@edit style=plain domain=b3_darts_e1 ref=b3_darts
+rename score to points
+---
+~ score num 0..180 => points num 0..180 was score
+~ sum(p.throw.score) => sum(p.throw.points)
+~ sum(p.throw.score) => sum(p.throw.points)
+~ score = sc => points = sc
+===
+@edit style=plain domain=b3_rummy_e1 ref=b3_rummy
+add a note to each round
+---
+~ points num 0..500 => points num 0..500, note text?
+===
+@edit style=plain domain=b3_board_e1 ref=b3_board_shelf
+let me give each game a rating out of 5 and show the best rated first
+---
+~ best_with num 1..12 = 4 => best_with num 1..12 = 4, rating num? 1..5
+~ each game sort count(it.play) desc as g => each game sort rating desc as g
+===
+@edit style=plain domain=b3_shaadi_e1 ref=b3_shaadi_week
+add a budget for each function and show it under the time
+---
+~ start time => start time, budget money?
++after     r.start faint ::     "Budget" r.budget faint
+===
+@edit style=plain domain=b3_car_papers_e1 ref=b3_car_papers
+also remind me a week before
+---
++ remind "Car paper expires this week" at paper.expires - 7d at 9:00
+===
+@edit style=plain domain=b3_qurbani_e1 ref=b3_qurbani_shares
+add a paid tick for every shareholder and show how many shares are unpaid
+---
+~ taken num 1..7 = 1 => taken num 1..7 = 1, paid bool
++after     "Per share" round(a.price / a.parts) faint ::     "Unpaid shares" sum(a.share.taken where paid = no) faint
+===
+@edit style=plain domain=b3_knitting_e1 ref=b3_knitting
+take the chart off
+---
+- daybars last 7 days, sum(rows_done.rows on it)
+===
+@edit style=plain domain=b3_sprint_e1 ref=b3_sprint_board
+add a priority high or normal to tasks and make the high ones stand out
+---
+~ status pick Todo|Doing|Review|Done = Todo => status pick Todo|Doing|Review|Done = Todo, priority pick High|Normal = Normal
+~ stack card gap 0 tap edit t => stack card gap 0 fill if(t.priority = High, warn, soft) tap edit t
+===
+@edit style=plain domain=b3_timesheet_e1 ref=b3_timesheet
+i also pay for things for clients, add expenses per project and include them in the invoice amount
+---
++after table entry project ref project, hrs num 0.25..16, billable bool :: table expense project ref project, what text, cost money
+~ billed * p.rate big => billed * p.rate + sum(p.expense.cost) big
++ form expense, "Add expense"

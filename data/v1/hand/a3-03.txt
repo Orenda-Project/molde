@@ -1,0 +1,390 @@
+@create style=detailed domain=a3_pomodoro_goal
+Pomodoro timer for studying: 25 minutes focus, 5 minutes break, and I want to count how many focus rounds I did today against a goal of 6.
+---
+app "Pomodoro" timer ink
+table round topic text?
+setting goal num = 6 "Rounds per day"
+timer 25m, "Focus", add round then notify "Break time"
+timer 5m, "Break"
+goal count(round today), goal, "rounds today"
+daybars last 7 days, count(round on it)
+list round today
+===
+@edit style=plain domain=a3_e_pomo1 ref=a3_pomodoro_goal
+make focus 50 minutes
+---
+~ timer 25m, => timer 50m,
+===
+@create style=custom_ui domain=a3_interval
+interval trainer: 40 seconds work, 20 seconds rest, counts rounds, big timer that changes colour between work and rest
+---
+app "Intervals" bolt ink
+setting work dur = 40s "Work"
+setting rest dur = 20s "Rest"
+state left dur = 40s
+state going bool = no
+state working bool = yes
+state rounds num = 0
+every 1s if going set left = left - 1s
+when going and left <= 0s set rounds = rounds + if(working, 0, 1) then set left = if(working, rest, work) then set working = not working
+stack align center card pad 3 fill if(working, accent, good)
+  if(working, "WORK", "REST") head
+  text left big
+  "Round" rounds + 1 faint
+row gap 1
+  button if(going, "Pause", "Start") tap set going = not going
+  button "Reset" tap set going = no then set left = work then set working = yes then set rounds = 0
+===
+@edit style=plain domain=a3_e_interval1 ref=a3_interval
+set work to 30 seconds and rest to 15
+---
+~ setting work dur = 40s => setting work dur = 30s
+~ setting rest dur = 20s => setting rest dur = 15s
+~ state left dur = 40s => state left dur = 30s
+===
+@create style=multi_feature domain=a3_cook_timers
+cooking timers: three timers for rice, lentils and tea, each with its own start button, and a reminder note
+---
+app "Kitchen timers" food mint
+timer 15m, "Rice"
+timer 40m, "Lentils", notify "Check the lentils"
+timer 4m, "Tea", notify "Tea is ready"
+"Tip: start the longest one first." faint
+===
+@edit style=plain domain=a3_e_cook1 ref=a3_cook_timers
+add an egg timer for 8 minutes
+---
++after timer 4m, "Tea", notify "Tea is ready" :: timer 8m, "Eggs", notify "Eggs are done"
+===
+@create style=short domain=a3_plank
+plank timer with log
+---
+app "Plank" dumbbell ink
+table hold secs num 5..600
+timer 60s, "Plank", notify "Done, well held"
+quick hold, secs, [30, 45, 60, 90]
+"Best hold" max(hold.secs) "s" big
+trend hold sort at, it.secs
+log hold
+===
+@create style=detailed domain=a3_tally
+A tally counter for people entering my shop. Big plus button, a minus in case I tap by mistake, today's total and a bar chart of the last 7 days.
+---
+app "Door count" users slate
+table entry
+state mark num = 0
+text count(entry today) big
+"people today" faint
+row gap 2
+  button "+1" tap add entry
+  button "-1" tap remove last(entry today)
+daybars last 7 days, count(entry on it)
+"This week" count(entry week) faint
+===
+@edit style=plain domain=a3_e_tally1 ref=a3_tally
+call it Footfall and add a goal of 100 per day
+---
+~ app "Door count" users slate => app "Footfall" users slate
+~ state mark num = 0 => setting goal num = 100 "Daily target"
++after count(entry today) big :: goal count(entry today), goal, "target for today"
+===
+@create style=short domain=a3_swim_laps
+swimming lap counter
+---
+app "Laps" run ocean
+table swimmer name text
+table lap swimmer ref swimmer
+each swimmer as s
+  row card gap 2
+    s.name bold grow
+    count(s.lap today) "laps" big
+    button "+1" tap add lap swimmer = s
+button "Clear today" tap remove all lap today
+form swimmer, "Add swimmer"
+===
+@create style=custom_ui domain=a3_tasbeeh_ring
+tasbeeh counter with a big ring that fills up to 33 then starts again, tap the ring to count, total count at the bottom
+---
+app "Tasbeeh" beads mint
+table tap
+setting lim num = 33 "Round size"
+let n = count(tap today)
+draw width 240 tap add tap
+  circle 44 stroke soft thick 8
+  arc 44, 0, 360 * (n % lim) / lim stroke accent thick 8
+  label 50, 48, n % lim big
+  label 50, 66, "of" lim faint
+"Rounds done" floor(n / lim) head
+"Total today" n faint
+when n > 0 and n % lim = 0 notify "Round complete"
+===
+@edit style=plain domain=a3_e_tasb1 ref=a3_tasbeeh_ring
+make the round 100
+---
+~ setting lim num = 33 => setting lim num = 100
+===
+@create style=custom_ui domain=a3_stopwatch
+a stopwatch with start stop and reset and a lap button, laps listed with time
+---
+app "Stopwatch" clock ink
+table lap t dur
+state el dur = 0s
+state on bool = no
+every 1s if on set el = el + 1s
+text el big
+row gap 1
+  button if(on, "Stop", "Start") tap set on = not on
+  button "Lap" tap add lap t = el
+  button "Reset" tap set on = no then set el = 0s then remove all lap
+each lap sort at desc as l
+  row card
+    "Lap" l.t bold
+===
+@create style=custom_ui domain=a3_breathing
+breathing exercise, a circle that grows and shrinks, four steps: in, hold, out, hold, change every 4 seconds
+---
+app "Breathe" leaf mint
+state ph num = 0
+state go bool = no
+every 4s if go set ph = (ph + 1) % 4
+draw 100, 100 width 200
+  circle 50, 50, 46 stroke soft thick 2
+  circle 50, 50, if(ph = 0, 20, if(ph = 1, 40, if(ph = 2, 40, 20))) fill accent opacity 0.7
+  label 50, 52, if(ph = 0, "Breathe in", if(ph = 1, "Hold", if(ph = 2, "Breathe out", "Rest"))) head
+button if(go, "Stop", "Begin") tap set go = not go
+===
+@create style=detailed domain=a3_event_countdown
+Countdown to my sister's wedding. I set the date and the app shows days left, weeks left, and a ring that fills as the day gets closer, since it was planned 100 days ago.
+---
+app "Wedding countdown" gift plum
+setting day date = today "Wedding date"
+let left = max(day - today, 0)
+ring 100 - min(left, 100), 100, "of the last 100 days gone"
+text left "days to go" big
+floor(left / 7) "weeks and" left % 7 "days" faint
+when left = 7 notify "One week to the wedding, check the list"
+===
+@create style=short domain=a3_eid_days
+days left to Eid
+---
+app "Eid" moon mint
+setting eid date = today "Eid date"
+text max(eid - today, 0) big
+"days to go" head
+if eid - today <= 0
+  "Eid Mubarak!" big color good
+===
+@create style=multi_feature domain=a3_countdowns_multi
+several countdowns: exams, trip and birthday, each with its own date, show days left sorted by closest, add new from a second tab
+---
+app "Countdowns" calendar ocean
+table ev name text, date date
+screen list "Days left" calendar
+  each ev where date >= today sort date as e
+    row card gap 2
+      e.name bold grow
+      e.date - today "days" big
+  "Past" faint
+  each ev where date < today sort date desc as e
+    row gap 2
+      e.name faint grow
+      abs(e.date - today) "days ago" faint
+screen add "Add" plus
+  form ev, "Save countdown"
+remind "An event is tomorrow" at ev.date - 1d at 9:00
+===
+@edit style=plain domain=a3_e_cds1 ref=a3_countdowns_multi
+add a category like Exam Trip Birthday
+---
+~ table ev name text, date date => table ev name text, date date, kind pick Exam|Trip|Birthday|Other = Other
+===
+@create style=custom_ui domain=a3_days_since
+days since last time, tap a big button when I have a cup of chai, and show days since and a heat map of the last 10 weeks
+---
+app "Chai" coffee mint
+table cup
+let n = count(cup today)
+text n "cups today" big
+button "Had a cup" tap add cup
+"Last cup" since(cup) "days ago" faint
+heat last 70 days, count(cup on it), 4
+===
+@create style=detailed domain=a3_nospend
+No spend days tracker. I tap the toggle on days I spent nothing and want to see my current streak and best streak and a month calendar.
+---
+app "No spend" coin mint
+table nospend
+state m date = today
+let ok = count(nospend today) > 0
+"Spent nothing today?" bold
+toggle nospend
+"Streak" streak(nospend) "days" big
+"Best" best(nospend) "days" faint
+monthnav m
+calendar nospend, m
+===
+@create style=custom_ui domain=a3_egg_timer2
+egg timer where I choose soft, medium or hard boiled and it counts down the right minutes
+---
+app "Egg timer" egg ocean
+state kind pick Soft|Medium|Hard = Medium
+state left dur = 420s
+state go bool = no
+every 1s if go set left = left - 1s
+when go and left <= 0s set go = no then notify "Eggs are ready"
+choice kind
+text left big
+row gap 1
+  button "Set time" tap set left = if(kind = Soft, 240s, if(kind = Medium, 420s, 600s)) then set go = no
+  button if(go, "Pause", "Start") tap set go = not go
+===
+@create style=short domain=a3_wash_hands
+20 second hand wash timer for kids
+---
+app "Wash hands" drop mint
+state left dur = 20s
+state go bool = no
+every 1s if go set left = left - 1s
+when go and left <= 0s set go = no then set left = 20s then notify "Squeaky clean!"
+draw 100, 100 width 180 tap set go = not go
+  circle 44 stroke soft thick 8
+  arc 44, 0, 360 * (20 - second(left)) / 20 stroke accent thick 8
+  label 50, 54, left big
+"Tap the circle to start" faint
+===
+@create style=multi_feature domain=a3_gym_rest
+gym helper with two tabs: a rest timer with 60 and 90 second buttons, and a sets log with exercise, reps and weight
+---
+app "Gym rest" dumbbell ink
+table setx lift text, reps num 1..50, kg num 0..300
+state left dur = 60s
+state go bool = no
+every 1s if go set left = left - 1s
+when go and left <= 0s set go = no then notify "Rest over"
+screen rest "Rest" timer
+  text left big
+  row gap 1
+    button "60s" tap set left = 60s then set go = yes
+    button "90s" tap set left = 90s then set go = yes
+    button "Stop" tap set go = no
+screen sets "Sets" dumbbell
+  "Sets today" count(setx today) big
+  form setx, "Log set"
+  log setx today
+===
+@create style=short domain=a3_jump_rope
+jump rope counter
+---
+app "Jump rope" bolt ink
+table jumps n num 1..2000
+quick jumps, n, [50, 100, 200]
+"Today" sum(jumps.n today) big
+"Best day total" maxof(days last 30 days, sum(jumps.n on it)) faint
+daybars last 7 days, sum(jumps.n on it)
+===
+@create style=vague domain=a3_meditate
+meditation
+---
+app "Sit" leaf plum
+table sit mins num 1..120 = 10
+timer 10m, "Sit", add sit then notify "Slowly open your eyes"
+"Streak" streak(sit) "days" big
+"This month" sum(sit.mins month) "min" faint
+heat last 70 days, sum(sit.mins on it), 20
+===
+@create style=custom_ui domain=a3_parking_timer
+parking meter reminder: I enter minutes paid, press start and get a notice 10 minutes before time runs out, with a progress bar
+---
+app "Parking" car slate
+state paid num = 60
+state left dur = 0s
+state go bool = no
+field paid "Minutes paid"
+every 1s if go set left = left - 1s
+when go and left <= 10m notify "10 minutes left on the meter"
+when go and left <= 0s set go = no
+text left big
+draw 100, 4
+  rect 0, 0, 100, 4 fill soft radius 2
+  rect 0, 0, 100 * clamp(left / max(paid * 60s, 1s), 0, 1), 4 fill accent radius 2
+button "Start" tap set left = paid * 60s then set go = yes
+===
+@create style=multi_feature domain=a3_rep_counter
+rep counter for push ups: big tap button for each rep, sets saved with a button, total reps today and per set list
+---
+app "Push ups" dumbbell ink
+table setr reps num 1..500
+state cur num = 0
+text cur big
+button "+1 rep" tap set cur = cur + 1
+row gap 1
+  button "Save set" tap add setr reps = cur then set cur = 0
+  button "Clear" tap set cur = 0
+"Total today" sum(setr.reps today) bold
+each setr today sort at desc as r
+  row card tap edit r swipe remove r
+    "Set of" r.reps
+===
+@create style=short domain=a3_steps
+daily steps logger with goal
+---
+app "Steps" walk mint
+table walk steps num 1..50000
+setting goal num = 8000 "Daily goal"
+ring sum(walk.steps today), goal, "steps today"
+quick walk, steps, [1000, 2000, 5000]
+daybars last 7 days, sum(walk.steps on it)
+list walk today
+===
+@create style=detailed domain=a3_laundry
+Laundry timers for the washing machine and dryer. Two timers, one for wash 45 minutes and one for dry 60 minutes, and a log of laundry days.
+---
+app "Laundry" home ocean
+table load kind pick Wash|Dry
+timer 45m, "Wash", add load kind = Wash then notify "Wash done, move to dryer"
+timer 60m, "Dry", add load kind = Dry then notify "Dry done, fold"
+"Loads this week" count(load week) big
+log load
+===
+@create style=custom_ui domain=a3_kids_reading
+a reading timer for my son, he reads for 15 minutes and gets a star, show stars as a row of star icons for this week
+---
+app "Reading stars" star plum
+table star
+timer 15m, "Read", add star then notify "Star earned!"
+"Stars this week" count(star week) big
+row gap 1
+  each 1..count(star week)
+    icon star
+===
+@create style=short domain=a3_visitor_count
+guests at the event counter
+---
+app "Guests" users plum
+table guest group pick Family|Friends|Work, size num 1..20 = 1
+state g pick Family|Friends|Work = Family
+choice g
+button "+1 guest" tap add guest group = g, size = 1
+button "+Couple" tap add guest group = g, size = 2
+"Total" sum(guest.size) big
+share guest by group, sum(it.size), it.key
+===
+@oos style=detailed domain=a3_oos_sync_counter oos=sync
+A counter for the number of visitors at our family stall that me and my brother both tap on our own phones and it adds up on both phones live.
+---
+app "Stall counter" users mint
+table visit
+text count(visit today) big
+"people today" faint
+button "+1 visitor" tap add visit
+button "Undo" tap remove last(visit today)
+daybars last 7 days, count(visit on it)
+"This counts taps on this phone only." faint
+===
+@oos style=short domain=a3_oos_voice_timer oos=voice
+timer that speaks out loud when time is up and I can say start with my voice
+---
+app "Timer" timer ink
+timer 10m, "Timer", notify "Time is up"
+"Use the Start button." faint
+===

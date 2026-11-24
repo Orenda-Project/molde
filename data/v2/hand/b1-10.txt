@@ -1,0 +1,320 @@
+@create style=detailed domain=b1_cow_heat_calendar
+for each cow I mark the days she came in heat, so I can guess the next one about 21 days later. show a calendar of heat days for the selected cow and the date of expected next heat
+---
+app "Heat Calendar" paw plum
+table cow_h name text
+table heat cow_h ref cow_h
+state pick_cow text = ""
+each cow_h sort name as c
+  row card tap set pick_cow = c.name fill if(pick_cow = c.name, accent, surface)
+    c.name bold grow
+    if count(c.heat) > 0
+      text "next about" last(c.heat.at) + 21 faint
+    toggle c.heat
+form cow_h, "Add cow"
+===
+@create style=custom_ui domain=b1_shop_heatmap
+heat map of how many customers came to my shop each day for the last 10 weeks, a button to add one customer and the busiest weekday if possible
+---
+app "Footfall" users ocean
+table visitor
+button "+1 customer" tap add visitor
+"Today" count(visitor today) big
+heat last 70 days, count(visitor on it), 40
+"Last 10 weeks, darker is busier" faint
+===
+@create style=multi_feature domain=b1_cow_trend
+dairy: for each cow note milk litres per milking, I want a line chart of total litres over the last 14 days and the cow that gave most this week highlighted
+---
+app "Cow Milk" milk mint
+table cowx name text
+table milk cowx ref cowx, litres num 0..60
+let top_week = max(cowx, sum(it.milk.litres week))
+trend days last 14 days, sum(milk.litres on it)
+each cowx sort name as c
+  row card tap edit c fill if(sum(c.milk.litres week) = top_week and top_week > 0, soft, surface)
+    c.name bold grow
+    text sum(c.milk.litres week) "L this week" bold
+form milk, "Milk"
+form cowx, "Add cow"
+===
+@create style=detailed domain=b1_rent_raise
+I rent flats and every year the rent goes up by a percent which is a setting. each flat has a starting rent and a start date; show the rent each flat should pay now after the yearly raises
+---
+app "Rent Raise" home slate
+table flat_r name text, start_rent money, start date
+setting raise num = 10 "Yearly raise %"
+each flat_r sort name as f
+  let years = floor((today - f.start) / 365)
+  let now_rent = round(f.start_rent * pow(1 + raise / 100, years))
+  row card tap edit f
+    stack grow
+      f.name bold
+      text years "raises so far" faint
+    now_rent bold
+"Total rent now" sum(flat_r, round(it.start_rent * pow(1 + raise / 100, floor((today - it.start) / 365)))) big
+form flat_r, "Add flat"
+===
+@create style=short domain=b1_fodder_cuts
+berseem fodder cuts per field
+---
+app "Fodder" leaf mint
+table fodder_field name text
+table cut fodder_field ref fodder_field, loads num 1..50
+each fodder_field sort name as f
+  row card tap edit f
+    f.name bold grow
+    text count(f.cut) "cuts"
+    text since(f.cut) "days since" faint
+    button "Cut" tap add cut fodder_field = f, loads = 1
+form fodder_field, "Add field"
+===
+@create style=multi_feature domain=b1_flour_sacks
+flour sacks dealer: I buy sacks at a cost and sell at a price, both per sack. record sacks bought and sold, show sacks in hand, stock value at cost and profit on what I sold
+---
+app "Flour Sacks" bag slate
+table sack_buy sacks num 1..1000, cost_each money
+table sack_sell sacks num 1..1000, price_each money
+let in_hand = sum(sack_buy.sacks) - sum(sack_sell.sacks)
+in_hand "sacks in hand" big
+"Sales" sum(sack_sell, it.sacks * it.price_each) "| Bought for" sum(sack_buy, it.sacks * it.cost_each) faint
+"Profit estimate" sum(sack_sell, it.sacks * it.price_each) - sum(sack_sell.sacks) * (sum(sack_buy, it.sacks * it.cost_each) / max(sum(sack_buy.sacks), 1)) head
+daybars last 7 days, sum(sack_sell.sacks on it)
+form sack_buy, "Bought"
+form sack_sell, "Sold"
+===
+@create style=custom_ui domain=b1_farm_crop_tabs
+farm record with 2 tabs. tab one is for expenses (crop, kind of expense, amount), tab two is for selling the crop (crop, maunds, rate). show profit per crop in the second tab
+---
+app "Farm Record" leaf mint
+table crop name text
+table farm_exp crop ref crop, kind pick Seed|Water|Labour|Spray|Rent = Seed, amount money
+table farm_sale crop ref crop, maunds num 1..5000, rate money
+screen costs "Expenses" wallet
+  "Total spent" sum(farm_exp.amount) big
+  form farm_exp
+  list farm_exp by day
+screen sales "Selling" chart
+  each crop sort name as c
+    row card tap edit c
+      c.name bold grow
+      text sum(c.farm_sale, it.maunds * it.rate) - sum(c.farm_exp.amount) bold
+  form farm_sale
+  form crop, "Add crop"
+===
+@create style=detailed domain=b1_paint_contractor
+paint contractor: each job has the client, rooms with area in square feet and the paint rate per square foot. show the quote for each job and what advance is taken
+---
+app "Paint Jobs" pen plum
+table pjob2 client text, advance money = 0
+table room pjob2 ref pjob2, name text, sqft num 20..3000, rate money = 40
+each pjob2 sort at desc as j
+  let quote = sum(j.room, it.sqft * it.rate)
+  row card tap edit j
+    stack grow
+      j.client bold
+      text count(j.room) "rooms" faint
+    text "quote" quote
+    text "left" quote - j.advance bold
+form room, "Add room to a job"
+form pjob2, "New job"
+===
+@create style=multi_feature domain=b1_milk_fat_price
+I buy milk from farmers and pay by fat percent: price per litre is the fat percent times a rate I set. record litres and fat for each delivery and show what I owe each farmer this week
+---
+app "Fat Pricing" milk ocean
+table dfarmer name text
+table delivery2 dfarmer ref dfarmer, litres num 1..200, fat num 2..10
+setting fat_rate money = 30 "Rate per fat point"
+each dfarmer sort name as f
+  row card tap edit f
+    f.name bold grow
+    text sum(f.delivery2.litres week) "L"
+    text sum(f.delivery2 week, it.litres * it.fat * fat_rate) bold
+"Payable this week" sum(delivery2 week, it.litres * it.fat * fat_rate) big
+form delivery2, "Delivery"
+form dfarmer, "Add farmer"
+===
+@create style=custom_ui domain=b1_price_calc
+for my shop: type the cost price, the margin percent and a discount, and show the selling price and profit per piece. margin and discount with sliders
+---
+app "Price Calc" calc ink
+state cost money = 100
+state margin num = 20
+state discount num = 0
+let selling = cost * (1 + margin / 100) * (1 - discount / 100)
+field cost "Cost price"
+"Margin %" margin faint
+slider margin 0..100
+"Discount %" discount faint
+slider discount 0..50
+"Sell at" round(selling) big
+"Profit per piece" round(selling - cost) head color if(selling >= cost, good, bad)
+===
+@create style=typos domain=b1_cow_cost_litre
+how much each litre of milk costs me, i put feed cost and medicine cost and the milk litres
+---
+app "Litre Cost" milk mint
+table feed_c amount money
+table med_c amount money
+table litres_m litres num 1..500
+let cost_all = sum(feed_c.amount month) + sum(med_c.amount month)
+"Cost per litre" round(cost_all / max(sum(litres_m.litres month), 1)) big
+"Feed" sum(feed_c.amount month) faint
+"Medicine" sum(med_c.amount month) faint
+form feed_c, "Feed"
+form med_c, "Medicine"
+form litres_m, "Milk litres"
+===
+@create style=detailed domain=b1_sales_tax_log
+I run a small shop that charges 17 percent sales tax on some items. for each sale I enter the amount and tick if taxable. show the tax I collected this month so I can pay it
+---
+app "Tax Log" calc slate
+table taxsale amount money, taxable bool, item text?
+setting tax_rate num = 17 "Tax %"
+"Tax collected" round(sum(taxsale.amount month where taxable = yes) * tax_rate / 100) big
+"Taxable sales" sum(taxsale.amount month where taxable = yes) faint
+"Other sales" sum(taxsale.amount month where taxable = no) faint
+form taxsale, "Sale"
+list taxsale by day
+===
+@create style=short domain=b1_land_units
+land area converter kanal marla to square feet
+---
+app "Land Area" map ink
+state kanal num = 0
+state marla num = 0
+let total_marla = kanal * 20 + marla
+field kanal "Kanal"
+field marla "Marla"
+"Total" total_marla "marla" big
+"Square feet" round(total_marla * 272.25) head
+===
+@create style=vague domain=b1_veg_seed_shop
+seeds shop stock and sales
+---
+app "Seed Shop" plant mint
+table seed name text, price money
+table seed_in seed ref seed, packs num 1..2000
+table seed_out seed ref seed, packs num 1..500
+each seed sort name as s
+  row card tap edit s
+    s.name bold grow
+    text sum(s.seed_in.packs) - sum(s.seed_out.packs) "packs"
+    text sum(s.seed_out.packs month) * s.price "this month"
+form seed_out, "Sold"
+form seed_in, "Stock in"
+form seed, "Add seed"
+===
+@create style=detailed domain=b1_poultry_water
+I want to see in one place for each shed: number of birds, daily water intake in litres, feed in kg, and the feed per bird in grams for today. alert colour if feed per bird looks low under 100 grams
+---
+app "Shed Intake" egg ocean
+table shed2 name text, birds num 100..30000
+table intake shed2 ref shed2, water num 0..20000, feed num 0..5000
+each shed2 sort name as s
+  let per_bird = sum(s.intake.feed today) * 1000 / s.birds
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      text s.birds "birds" faint
+    text "Water" sum(s.intake.water today) "L | Feed" sum(s.intake.feed today) "kg"
+    text round(per_bird) "g per bird" color if(per_bird < 100, warn, good)
+form intake, "Today's intake"
+form shed2, "Add shed"
+===
+@create style=multi_feature domain=b1_committee_two_pots
+we run two committees, a 10k one and a 20k one. members can be in either. each has its own member list and monthly collection; show the pot size and the collected amount of each, and who has not paid this month
+---
+app "Two Committees" users plum
+table committee name text, installment money
+table cm2 committee ref committee, name text
+table cpay2 cm2 ref cm2, amount money
+each committee sort installment as c
+  let pot = c.installment * count(c.cm2)
+  stack card gap 1
+    row
+      c.name bold grow
+      text "pot" pot
+    each c.cm2 sort name as m
+      row gap 1
+        m.name grow
+        if sum(m.cpay2.amount month) >= c.installment
+          "paid" color good
+        else
+          "pending" color warn
+form cpay2, "Payment"
+form cm2, "Add member"
+form committee, "Add committee"
+===
+@create style=custom_ui domain=b1_shop_goal_day
+my shop should make 15000 every day. one big ring for today's sales against that target, buttons for quick amounts, and a chart of last 7 days
+---
+app "Daily Target" target mint
+setting day_target money = 15000 "Daily target"
+table daily_take amount money
+goal sum(daily_take.amount today), day_target, "sold today"
+row gap 1
+  each [500, 1000, 2000, 5000]
+    button it tap add daily_take amount = it
+daybars last 7 days, sum(daily_take.amount on it)
+list daily_take today
+===
+@edit style=plain domain=b1_heat_note ref=b1_cow_heat_calendar
+add a field for the bull name or notes on each heat
+---
+~ table heat cow_h ref cow_h => table heat cow_h ref cow_h, note text?
+===
+@edit style=plain domain=b1_footfall_sales ref=b1_shop_heatmap
+also let me log the sale amount each time and show the total
+---
+~ table visitor => table visitor sale money = 0
+~ button "+1 customer" tap add visitor => button "+1 customer" tap add visitor sale = 0
++ "Sales today" sum(visitor.sale today) head
+===
+@edit style=plain domain=b1_sacks_rename ref=b1_flour_sacks
+rename cost each to buy price
+---
+~ cost_each money => buy_price money was cost_each
+~ it.cost_each => it.buy_price
+~ it.cost_each => it.buy_price
+===
+@edit style=plain domain=b1_rent_raise_paid ref=b1_rent_raise
+add a table for rent paid by each flat and show the balance this month
+---
+~ setting raise => table paid_r flat_r ref flat_r, amount money\nsetting raise
+~ now_rent bold => text "balance" now_rent - sum(f.paid_r.amount month) bold
++ form paid_r, "Rent received"
+===
+@edit style=plain domain=b1_price_round ref=b1_price_calc
+round the selling price to the nearest 10
+---
+~ round(selling) big => round(selling / 10) * 10 big
+===
+@edit style=plain domain=b1_litre_cost_chart ref=b1_cow_cost_litre
+add a chart of milk litres per day this week
+---
++ daybars last 7 days, sum(litres_m.litres on it)
+===
+@edit style=plain domain=b1_tax_category ref=b1_sales_tax_log
+add a category (Grocery, Cloth, Other) to each sale and a chart of sales per category this month
+---
+~ item text? => item text?, category pick Grocery|Cloth|Other = Grocery
++ bars options taxsale.category, sum(taxsale.amount month where category = it), it
+===
+@edit style=plain domain=b1_target_weekly ref=b1_shop_goal_day
+make the target weekly at 100000
+---
+~ setting day_target money = 15000 "Daily target" => setting week_target money = 100000 "Weekly target" was day_target
+~ goal sum(daily_take.amount today), day_target, "sold today" => goal sum(daily_take.amount week), week_target, "sold this week"
+===
+@edit style=plain domain=b1_committee_remind_two ref=b1_committee_two_pots
+remind everyone on the 10th and 25th
+---
++ remind "Committee payment due" monthly on 10, 25 at 10:00
+===
+@edit style=plain domain=b1_paint_discount ref=b1_paint_contractor
+add a discount percent for each job
+---
+~ advance money = 0 => advance money = 0, discount num 0..50 = 0
+~ let quote = sum(j.room, it.sqft * it.rate) => let quote = round(sum(j.room, it.sqft * it.rate) * (100 - j.discount) / 100)

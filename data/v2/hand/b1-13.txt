@@ -1,0 +1,45 @@
+@create style=short domain=b1_kulfi_cart
+kulfi cart sales in summer evenings
+---
+app "Kulfi" cup ocean
+table kulfi flavour pick Malai|Mango|Pista|Falsa = Malai, price money = 60
+quick kulfi, flavour, [Malai, Mango, Pista]
+"Tonight" sum(kulfi.price today) big
+text count(kulfi today) "sticks" faint
+daybars last 14 days, sum(kulfi.price on it)
+===
+@create style=detailed domain=b1_goat_partnership
+me and my cousin raise goats together as partners. all feed and medicine expenses are paid by either of us, and when we sell, the money is split half and half. show what each of us has paid, and who should pay whom at the end
+---
+app "Goat Partners" paw mint
+table partner_p name text
+table gexpense partner_p ref partner_p, amount money, what text?
+table gsale amount money, animal text?
+let all_cost = sum(gexpense.amount)
+let profit_each = (sum(gsale.amount) - all_cost) / 2
+"Profit to split" sum(gsale.amount) - all_cost big
+each partner_p sort name as p
+  row card tap edit p
+    p.name bold grow
+    text "paid" sum(p.gexpense.amount)
+    text "gets" round(sum(p.gexpense.amount) + profit_each) bold
+form gexpense, "Expense"
+form gsale, "Sale"
+form partner_p, "Add partner"
+===
+@create style=typos domain=b1_buffalo_loan_chit
+i took cash from 3 peple to buy a buffalo and return little by little, who i owe and how much is left
+---
+app "Buffalo Loan" money slate
+table lender name text
+table taken lender ref lender, amount money
+table returned2 lender ref lender, amount money
+each lender sort name as l
+  let left = sum(l.taken.amount) - sum(l.returned2.amount)
+  row card tap edit l
+    l.name bold grow
+    text left bold color if(left > 0, warn, good)
+"I owe in total" sum(taken.amount) - sum(returned2.amount) big
+form taken, "Took money"
+form returned2, "Returned"
+form lender, "Add lender"

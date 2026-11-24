@@ -1,0 +1,330 @@
+@create style=detailed domain=b4_menu_costing
+restaurant dishes with their ingredient costs so I know my margin. each dish has a selling price, and ingredients lines with the cost for one plate. show each dish with cost, price and margin percent, worst margin first
+---
+app "Menu Costing" food slate
+table dishc name text, price money
+table ingr dishc ref dishc, item text, cost money
+each dishc sort round(100 * (it.price - sum(it.ingr.cost)) / it.price) as d
+  let cost = sum(d.ingr.cost)
+  stack card gap 1 tap edit d
+    row
+      d.name bold grow
+      text round(100 * (d.price - cost) / d.price) "% margin" color if(d.price - cost < d.price * 0.3, warn, good)
+    text "Cost" cost "Price" d.price faint
+form ingr, "Add ingredient"
+form dishc, "Add dish"
+===
+@edit style=plain domain=b4_menu_course ref=b4_menu_costing
+group dishes as starter main or dessert and chart average price of each group
+---
+~ table dishc name text, price money => table dishc name text, course pick Starter|Main|Dessert = Main, price money
++ bars options dishc.course, avg(dishc.price where course = it), it
+===
+@create style=multi_feature domain=b4_cooking_class
+i teach cooking classes at home, morning or evening batch. students enrol with a monthly fee, and every class day i tick who came. each class teaches one recipe. show attendance this month per student and fee pending
+---
+app "Cooking Class" food plum
+table cstudent name text, batch pick Morning|Evening = Morning, fee money
+table cclass recipe text, day date
+table cattend cstudent ref cstudent, cclass ref cclass
+table cfee cstudent ref cstudent, amount money
+each cstudent sort name as s
+  let pending = s.fee - sum(s.cfee.amount month)
+  row card tap edit s
+    stack grow
+      s.name bold
+      text s.batch faint
+    text count(s.cattend month) "classes"
+    text if(pending > 0, "owes", "paid") color if(pending > 0, bad, good)
+text "Classes this month" count(cclass month) head
+form cattend, "Mark attendance"
+form cfee, "Fee received"
+form cclass, "New class"
+form cstudent, "Enrol student"
+===
+@edit style=plain domain=b4_cooking_rename ref=b4_cooking_class
+the Evening batch should be called Night batch now
+---
+~ Morning|Evening = Morning => Morning|Night was Evening = Morning
+===
+@create style=vague domain=b4_medicine_delivery
+medicine home delivery orders by phone
+---
+app "Med Delivery" pill ocean
+table rider name text
+table morder customer text, address text, amount money, status pick New|Out|Delivered = New, rider ref rider?
+text count(morder where status != Delivered) "to deliver" big
+each morder where status != Delivered sort at as o
+  stack card gap 1 tap edit o
+    row
+      o.customer bold grow
+      text o.amount
+    o.address faint
+    row
+      choice o.status
+      text o.rider.name faint
+form morder, "New order"
+form rider, "Add rider"
+===
+@edit style=plain domain=b4_meddel_note ref=b4_medicine_delivery
+add a note box for each order like ring bell twice
+---
+~ amount money, status => amount money, note long?, status
+~ o.address faint => o.address o.note faint
+===
+@create style=custom_ui domain=b4_pathology_samples
+pathology lab: each sample tube is booked with patient and test, status collected, running or done. show the ones running with how many hours since collection, red after 6 hours
+---
+app "Samples" pill ocean
+table sample patient text, test text, status pick Collected|Running|Done = Collected
+text count(sample where status != Done) "samples in progress" big
+each sample where status != Done sort at as s
+  row card tap edit s
+    stack grow
+      s.patient bold
+      s.test faint
+    text hour(now - s.at) "h" color if(hour(now - s.at) >= 6, bad, ink)
+    choice s.status
+form sample, "Book sample"
+===
+@edit style=plain domain=b4_samples_done ref=b4_pathology_samples
+also show how many were finished today
+---
++ "Done today" count(sample today where status = Done) head
+===
+@create style=short domain=b4_walk_log
+evening walk in km and my target 20 km a week
+---
+app "Evening Walk" run mint
+table walk km num 0.1..30
+setting week_goal num = 20 "Weekly km goal"
+goal sum(walk.km week), week_goal, "km this week"
+daybars last 7 days, sum(walk.km on it)
+calendar walk
+form walk, "Walked"
+===
+@edit style=plain domain=b4_walk_weekly ref=b4_walk_log
+make the chart weekly
+---
+~ daybars last 7 days, sum(walk.km on it) => bars walk last 8 weeks by week, sum(it.km), it.key
+===
+@create style=short domain=b4_tahajjud
+tahajjud nights
+---
+app "Tahajjud" moon plum
+table night
+calendar night
+text "This month" count(night month) big
+text "Best streak" best(night) "nights" head
+===
+@create style=detailed domain=b4_coin_box
+we empty the sadaqah box at the masjid every Friday. i count coins and notes by value: 1, 2, 5, 10, 20, 50, 100, 500. each count entry has the note value and how many. show the total of the box this week and the total ever
+---
+app "Charity Box" coin mint
+table cbox value num 1..5000, pieces num 1..500 = 1
+text "This week" sum(cbox week, it.value * it.pieces) big
+text "All time" sum(cbox, it.value * it.pieces) head
+quick cbox, value, [1, 5, 10, 20, 50, 100, 500]
+each cbox sort at desc top 8 as c
+  row card tap edit c swipe remove c
+    text c.value grow
+    text "x" c.pieces
+    text c.value * c.pieces bold
+form cbox, "Add count"
+===
+@edit style=plain domain=b4_coin_remind ref=b4_coin_box
+remind me every friday at 6 pm to count it
+---
++ remind "Count the charity box" at 18:00 on fri
+===
+@create style=detailed domain=b4_ice_factory
+ice factory delivers blocks to fish shops and juice shops. each delivery has the shop and blocks count, the price per block is 350. keep each shop's total bill
+---
+app "Ice Delivery" cup ocean
+table shop name text, route text?
+table iced shop ref shop, blocks num 1..200
+setting block_price money = 350 "Price per block"
+each shop sort name as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      s.route faint
+    text sum(s.iced.blocks month) "blocks this month"
+    text sum(s.iced.blocks) * block_price bold
+text "Blocks today" sum(iced.blocks today) big
+form iced, "Delivered"
+form shop, "Add shop"
+===
+@edit style=plain domain=b4_ice_payments ref=b4_ice_factory
+shops pay in cash, add payments and show the balance of each shop
+---
+~ table iced shop ref shop, blocks num 1..200 => table iced shop ref shop, blocks num 1..200\ntable paid_ice shop ref shop, amount money
+~ sum(s.iced.blocks) * block_price bold => text sum(s.iced.blocks) * block_price - sum(s.paid_ice.amount) "due" bold
++ form paid_ice, "Payment"
+===
+@create style=multi_feature domain=b4_oil_change_shop
+quick lube shop: every car that comes has number plate, oil type (synthetic, semi, mineral), charge, the km on the meter. next change is due after 5000 km. show cars due soon with the km left
+---
+app "Lube Shop" car slate
+table lcar plate text, owner text?, phone text?
+table lube lcar ref lcar, oil pick Synthetic|Semi|Mineral = Semi, charge money, km num 0..500000
+setting interval num = 5000 "Change every (km)"
+text "Cars served today" count(lube today) big
+text "Income today" sum(lube.charge today) head
+each lcar sort plate as c
+  let next = last(c.lube.km) + interval
+  row card tap edit c
+    stack grow
+      c.plate bold
+      text c.owner faint
+    text "next at" next "km" faint
+form lube, "New service"
+form lcar, "Add car"
+===
+@edit style=plain domain=b4_lube_charge ref=b4_oil_change_shop
+rename the charge column to price
+---
+~ oil pick Synthetic|Semi|Mineral = Semi, charge money => oil pick Synthetic|Semi|Mineral = Semi, price money was charge
+~ sum(lube.charge today) => sum(lube.price today)
+===
+@create style=detailed domain=b4_ration_cards
+government ration depot. families have cards with a monthly quota of flour in kg, we issue flour in several turns, and need to see who has quota left this month and a search box by head name
+---
+app "Ration Depot" bag slate
+table card head text, quota num 1..200 = 20
+table issue card ref card, kg num 1..200
+state q text = ""
+field q "Search by name"
+each card where has(head, q) sort head as c
+  let left = c.quota - sum(c.issue.kg month)
+  row card tap edit c
+    stack grow
+      c.head bold
+      text c.quota "kg quota" faint
+    text left "kg left" color if(left <= 0, muted, good)
+    button "Issue 5" tap add issue card = c, kg = 5
+text "Issued this month" sum(issue.kg month) "kg" big
+form issue, "Issue flour"
+form card, "New card"
+===
+@create style=multi_feature domain=b4_blood_bank
+blood bank stock. units donated by blood group, units issued to patients and every unit expires after 35 days. show stock per group, and units expiring in the next 5 days
+---
+app "Blood Bank" heart plum
+table unit_in group pick A_pos|A_neg|B_pos|B_neg|O_pos|O_neg|AB_pos|AB_neg = O_pos, units num 1..50
+table unit_out group pick A_pos|A_neg|B_pos|B_neg|O_pos|O_neg|AB_pos|AB_neg = O_pos, units num 1..50
+grid 4 gap 1
+  each options unit_in.group as g
+    stack card gap 0 align center
+      g bold
+      text sum(unit_in.units where group = g) - sum(unit_out.units where group = g) big color if(sum(unit_in.units where group = g) - sum(unit_out.units where group = g) < 3, bad, ink)
+text "Expiring in 5 days" sum(unit_in.units where at + 35 <= today + 5 and at + 35 >= today) head color warn
+form unit_in, "Units received"
+form unit_out, "Units issued"
+===
+@create style=typos domain=b4_school_survey
+doing a door to door survey in our union council for kids out of school. each house has the head name, how many kids 5-16 and how many are not going to school and why (fees, work, distance, other)
+---
+app "Out of School" school mint
+table house head text, street text?, kids num 0..20, out num 0..20, why pick Fees|Work|Distance|Other = Fees
+text sum(house.out) "kids out of" sum(house.kids) big
+text round(100 * sum(house.out) / sum(house.kids)) "% out of school" head color warn
+share house sort out desc top 5, it.out, it.head
+each options house.why as w
+  row card
+    w bold grow
+    text sum(house.out where why = w)
+form house, "Add house"
+===
+@create style=custom_ui domain=b4_sprinkler_zones
+garden with 3 sprinkler zones. big timer for each zone, 10 minutes each, when done it notifies me, and log how many minutes each zone ran today
+---
+app "Sprinkler" drop mint
+table ran zone pick Front|Back|Side = Front, minutes num 1..120 = 10
+timer 10m, "Front lawn", add ran zone = Front then notify "Front lawn done"
+timer 10m, "Back lawn", add ran zone = Back then notify "Back lawn done"
+timer 10m, "Side beds", add ran zone = Side then notify "Side beds done"
+each options ran.zone as z
+  row card
+    z bold grow
+    text sum(ran.minutes today where zone = z) "min today"
+===
+@edit style=plain domain=b4_sprinkler_fourth ref=b4_sprinkler_zones
+add a fourth zone called Roof pots
+---
+~ Front|Back|Side = Front => Front|Back|Side|Roof_pots = Front
++ timer 5m, "Roof pots", add ran zone = Roof_pots then notify "Roof pots done"
+===
+@create style=multi_feature domain=b4_crop_calendar
+what to sow this month: crops with the month to sow and month to harvest, and my sowing records. show what I should sow this month, what to harvest this month and what I already sowed
+---
+app "Crop Calendar" plant mint
+table crop name text, sow_month num 1..12, harvest_month num 1..12
+table sowed crop ref crop
+text monthname(today) head
+"Sow now" head
+each crop where sow_month = month(today) sort name as c
+  row card tap edit c
+    c.name grow
+    if count(c.sowed year) > 0
+      text "sowed" color good
+    else
+      button "Sowed" tap add sowed crop = c
+"Harvest now" head
+each crop where harvest_month = month(today) sort name
+  text it.name
+form crop, "Add crop"
+===
+@edit style=plain domain=b4_crop_next ref=b4_crop_calendar
+also show what to sow next month
+---
++ "Next month" head
++ each crop where sow_month = month(addmonths(today, 1)) sort name\n  text it.name
+===
+@create style=short domain=b4_well_depth
+depth of my tube well water in feet each week, warn me if below 120
+---
+app "Well Depth" drop slate
+table depth feet num 10..600
+setting danger num = 120 "Warn below (feet)"
+text last(depth.feet) "ft" big color if(last(depth.feet) > danger, warn, ink)
+trend depth last 90 days sort at, it.feet
+form depth, "Measured"
+===
+@create style=detailed domain=b4_cold_store
+potato cold storage. each farmer stores bags and pays rent per bag per month, when he takes bags out the stock goes down. show bags stored now per farmer and total stock
+---
+app "Cold Store" package slate
+table farmer name text, village text?
+table stored farmer ref farmer, bags num 1..2000
+table taken farmer ref farmer, bags num 1..2000
+setting rent money = 40 "Rent per bag per month"
+each farmer sort name as f
+  let inside = sum(f.stored.bags) - sum(f.taken.bags)
+  row card tap edit f
+    stack grow
+      f.name bold
+      text f.village faint
+    text inside "bags" bold
+    text inside * rent "rent per month" faint
+text "Total stock" sum(stored.bags) - sum(taken.bags) "bags" big
+form stored, "Bags stored"
+form taken, "Bags taken out"
+form farmer, "Add farmer"
+===
+@create style=vague domain=b4_zakat_receivers
+zakat I gave this year to who
+---
+app "Zakat Given" gift mint
+table receiver name text, kind pick Poor|Relative|Student|Debtor|Other = Poor
+table zgive receiver ref receiver, amount money
+text "Given this year" sum(zgive.amount year) big
+each receiver sort name as r
+  row card tap edit r
+    stack grow
+      r.name bold
+      r.kind faint
+    text sum(r.zgive.amount year) bold
+share receiver, sum(it.zgive.amount), it.name
+form zgive, "Gave"
+form receiver, "Add person"

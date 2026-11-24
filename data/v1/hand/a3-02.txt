@@ -1,0 +1,478 @@
+@create style=detailed domain=a3_gst_bill
+Restaurant bill with sales tax and a service charge, then split between my friends. I enter the food total and how many of us there are.
+---
+app "Bill split" calc slate
+setting tax num = 16 "Sales tax %"
+state food money = 0
+state svc num = 10
+state pax num = 2
+field food "Food total"
+"Service charge" svc "%" faint
+slider svc 0..20
+field pax "People"
+let taxamt = food * tax / 100
+let svcamt = food * svc / 100
+let all = food + taxamt + svcamt
+"Tax" taxamt faint
+"Service" svcamt faint
+"Grand total" all head
+"Each pays" round(all / max(pax, 1)) big
+===
+@edit style=plain domain=a3_e_gst1 ref=a3_gst_bill
+add a tip box too
+---
+~ let all = food + taxamt + svcamt => state tipx money = 0\nfield tipx "Extra tip"\nlet all = food + taxamt + svcamt + tipx
+===
+@create style=short domain=a3_discount
+sale price after discount
+---
+app "Sale price" tag mint
+state price money = 0
+state off num = 20
+state off2 num = 0
+field price "Price tag"
+field off "Discount %"
+field off2 "Extra discount %"
+let final = price * (1 - off / 100) * (1 - off2 / 100)
+"You pay" round(final) big
+"You save" round(price - final) bold color good
+===
+@edit style=plain domain=a3_e_disc1 ref=a3_discount
+make the app orange looking
+---
+~ app "Sale price" tag mint => app "Sale price" tag plum
+===
+@create style=custom_ui domain=a3_len_conv
+length converter, I type a number, tap the unit chips like metres feet inches km miles and see it in all the others
+---
+app "Length" calc ocean
+state u pick Metres|Feet|Inches|Km|Miles = Metres
+state v num = 1
+field v "Value"
+choice u
+let m = v * if(u = Metres, 1, if(u = Feet, 0.3048, if(u = Inches, 0.0254, if(u = Km, 1000, 1609.34))))
+grid 2 gap 1
+  stack card
+    "Metres" faint
+    round(m * 100) / 100 head
+  stack card
+    "Feet" faint
+    round(m / 0.3048 * 100) / 100 head
+  stack card
+    "Inches" faint
+    round(m / 0.0254 * 100) / 100 head
+  stack card
+    "Km" faint
+    round(m / 1000 * 1000) / 1000 head
+  stack card
+    "Miles" faint
+    round(m / 1609.34 * 1000) / 1000 head
+===
+@create style=custom_ui domain=a3_temp_therm
+temperature converter with a thermometer drawing that fills up as celsius goes up, also show fahrenheit
+---
+app "Temperature" sun ocean
+state c num = 25
+slider c -10..50
+"Celsius" c big
+"Fahrenheit" round(c * 9 / 5 + 32) head
+draw 40, 110 width 60
+  rect 14, 6, 12, 80 stroke ink thick 2 radius 6
+  circle 20, 94, 12 fill if(c > 35, red, if(c < 10, blue, accent))
+  rect 17, 86 - 78 * clamp((c + 10) / 60, 0, 1), 6, 8 + 78 * clamp((c + 10) / 60, 0, 1) fill if(c > 35, red, if(c < 10, blue, accent))
+if(c > 35, "Very hot", if(c < 10, "Cold", "Comfortable")) faint
+===
+@create style=multi_feature domain=a3_bmi_bar
+BMI calculator: weight, height, a coloured bar showing where I fall, category name, and healthy weight range for my height
+---
+app "BMI" scale mint
+state kg num = 70
+state cm num = 170
+field kg "Weight (kg)"
+field cm "Height (cm)"
+let h = cm / 100
+let bmi = round(kg / max(h * h, 0.01) * 10) / 10
+text bmi big
+if(bmi < 18.5, "Underweight", if(bmi < 25, "Healthy", if(bmi < 30, "Overweight", "Obese"))) head
+draw 100, 14
+  rect 0, 4, 18.5 * 2.5, 6 fill blue
+  rect 18.5 * 2.5, 4, 6.5 * 2.5, 6 fill good
+  rect 25 * 2.5, 4, 5 * 2.5, 6 fill warn
+  rect 30 * 2.5, 4, 100 - 75, 6 fill bad
+  circle clamp(bmi, 10, 40) * 2.5 - 25, 7, 5 fill ink
+"Healthy range for you:" round(18.5 * h * h * 10) / 10 "to" round(24.9 * h * h * 10) / 10 "kg" faint
+===
+@create style=detailed domain=a3_fuel_trip
+Fuel cost calculator for road trips. I enter the distance, my car's km per litre and today's petrol price, and I want the cost and cost per person.
+---
+app "Trip fuel" car slate
+setting kmpl num = 12 "Car km per litre"
+setting petrol money = 270 "Petrol price per litre"
+state km num = 0
+state riders num = 1
+field km "Distance (km)"
+field riders "People in the car"
+let litres = km / max(kmpl, 1)
+"Fuel needed" round(litres * 10) / 10 "litres" head
+"Cost" round(litres * petrol) big
+"Per person" round(litres * petrol / max(riders, 1)) bold
+===
+@edit style=plain domain=a3_e_fuel1 ref=a3_fuel_trip
+add a toll price box and include it in the cost
+---
+~ let litres = => state toll money = 0\nfield toll "Toll"\nlet litres =
+~ "Cost" round(litres * petrol) big => "Cost" round(litres * petrol + toll) big
+===
+@create style=multi_feature domain=a3_mileage_log
+log every fuel fill up with litres, km on the meter and price, show km per litre for the last fill and a trend line
+---
+app "Mileage" car ocean
+table fill litres num 1..200, odo num 0.., price money
+let last_kmpl = (last(fill.odo) - first(fill.odo)) / max(sum(fill.litres) - first(fill.litres), 1)
+"Average" round(last_kmpl * 10) / 10 "km per litre" big
+"Spent on fuel" sum(fill.price) faint
+trend fill sort at, it.odo
+form fill, "Add fill-up"
+log fill
+===
+@create style=custom_ui domain=a3_paint_room
+how much paint for a room: wall length, width, height, number of doors and windows, shows litres and number of 4 litre tins
+---
+app "Paint" pen ocean
+setting cover num = 10 "Sq m per litre"
+state len num = 4
+state wid num = 3
+state hgt num = 3
+state opens num = 2
+field len "Length (m)"
+field wid "Width (m)"
+field hgt "Height (m)"
+field opens "Doors and windows"
+let area = 2 * (len + wid) * hgt - opens * 1.8
+"Wall area" round(area) "sq m" faint
+let litres = area * 2 / max(cover, 1)
+"Two coats need" round(litres * 10) / 10 "litres" big
+let tins = if(litres / 4 = floor(litres / 4), litres / 4, floor(litres / 4) + 1)
+"Buy" tins "tins of 4 litres" head
+===
+@create style=short domain=a3_tiles
+tiles needed for my floor
+---
+app "Tiles" grid slate
+state fl num = 4
+state fw num = 3
+state ts num = 60
+field fl "Floor length (m)"
+field fw "Floor width (m)"
+field ts "Tile side (cm)"
+let n = fl * fw * 10000 / max(ts * ts, 1) * 1.1
+let up = if(n = floor(n), n, floor(n) + 1)
+"Tiles with 10% spare" up big
+"Floor" fl * fw "sq m" faint
+===
+@create style=custom_ui domain=a3_recipe_scale
+recipe scaler, I list the ingredients for the original servings then say how many people I'm cooking for and it shows the new amounts
+---
+app "Recipe scaler" food mint
+setting orig num = 4 "Recipe serves"
+state want num = 4
+table ing name text, qty num 0..10000, unit pick g|ml|pcs|tsp = g
+field want "Cooking for"
+let k = want / max(orig, 1)
+"Multiply by" round(k * 100) / 100 faint
+each ing sort at as i
+  row card gap 2
+    i.name grow
+    i.qty i.unit faint
+    round(i.qty * k * 10) / 10 i.unit bold
+form ing, "Add ingredient"
+===
+@edit style=plain domain=a3_e_recipe1 ref=a3_recipe_scale
+add a note field for each ingredient
+---
+~ unit pick g|ml|pcs|tsp = g => unit pick g|ml|pcs|tsp = g, note text?
+===
+@create style=detailed domain=a3_age_calc
+Age calculator. I set the birth date and it tells me age in years, how many days I have lived and how many days until my next birthday.
+---
+app "Age" calendar plum
+setting born date = today "Date of birth"
+let yrs = year(today) - year(born) - if(month(today) * 100 + monthday(today) < month(born) * 100 + monthday(born), 1, 0)
+text yrs "years" big
+"Days lived" today - born head
+"Next birthday in" addmonths(born, 12 * (yrs + 1)) - today "days" bold
+"Weeks lived" floor((today - born) / 7) faint
+===
+@create style=short domain=a3_date_gap
+days between two dates
+---
+app "Date gap" calendar ocean
+state d1 date = today
+state d2 date = today
+field d1 "From"
+field d2 "To"
+text abs(d2 - d1) "days" big
+floor(abs(d2 - d1) / 7) "weeks and" abs(d2 - d1) % 7 "days" faint
+===
+@create style=detailed domain=a3_currency_rate
+Currency converter where I type the exchange rate myself. Dollar to rupee and rupee to dollar, with a button to swap the direction.
+---
+app "Exchange" coin mint
+setting rate num = 280 "Rupees per dollar"
+state amt num = 1
+state usd_to_pkr bool = yes
+field amt "Amount"
+button if(usd_to_pkr, "USD to PKR (tap to swap)", "PKR to USD (tap to swap)") tap set usd_to_pkr = not usd_to_pkr
+if usd_to_pkr
+  round(amt * rate * 100) / 100 "PKR" big
+else
+  round(amt / max(rate, 1) * 100) / 100 "USD" big
+"Rate" rate faint tap edit rate
+===
+@create style=multi_feature domain=a3_grade_avg
+grades: add each course with marks and credit hours, show the weighted average, number of courses and the best subject
+---
+app "Grades" school plum
+table course name text, marks num 0..100, credit num 1..6 = 3
+let wavg = sumof(course, it.marks * it.credit) / max(sumof(course, it.credit), 1)
+text round(wavg * 10) / 10 "%" big
+count(course) "courses" faint
+"Best:" last(course.name where marks = max(course.marks)) bold
+draw 100, 4
+  rect 0, 0, 100, 4 fill soft radius 2
+  rect 0, 0, wavg, 4 fill accent radius 2
+list course
+form course
+===
+@edit style=plain domain=a3_e_grade1 ref=a3_grade_avg
+add a target average I want to reach
+---
+~ let wavg => setting want num = 80 "Target average"\nlet wavg
++after round(wavg * 10) / 10 "%" big :: if(wavg >= want, "Target reached", "Target not reached yet") faint
+===
+@create style=detailed domain=a3_salary_net
+Salary calculator: gross salary, income tax percent, provident fund percent and other fixed deductions, shows take home per month and per year.
+---
+app "Take home" wallet slate
+setting tax num = 5 "Income tax %"
+setting pf num = 8 "Provident fund %"
+state gross money = 0
+state other money = 0
+field gross "Gross salary"
+field other "Other deductions"
+let taxamt = gross * tax / 100
+let pfamt = gross * pf / 100
+"Tax" round(taxamt) faint
+"Provident fund" round(pfamt) faint
+"Take home each month" round(gross - taxamt - pfamt - other) big
+"In a year" round((gross - taxamt - pfamt - other) * 12) head
+===
+@create style=short domain=a3_zakat_quick
+zakat on my savings
+---
+app "Zakat" mosque mint
+setting nisab money = 400000 "Nisab value"
+state cash money = 0
+state gold money = 0
+state owed money = 0
+field cash "Cash and bank"
+field gold "Gold value"
+field owed "Loans to pay"
+let net = cash + gold - owed
+if net >= nisab
+  "Zakat due" round(net * 0.025) big
+else
+  "Below nisab, nothing due" head
+"Net savings" net faint
+===
+@create style=short domain=a3_pct_change
+percentage change calculator
+---
+app "Percent change" calc ink
+state old num = 100
+state nw num = 120
+field old "Old value"
+field nw "New value"
+let ch = (nw - old) / max(abs(old), 0.0001) * 100
+text round(ch * 10) / 10 "%" big color if(ch >= 0, good, bad)
+if(ch >= 0, "Increase of", "Decrease of") abs(nw - old) faint
+===
+@create style=detailed domain=a3_loan_flat
+Simple loan calculator with flat interest. Amount, yearly rate and months, tells me monthly installment and total interest.
+---
+app "Loan" money slate
+state amt money = 100000
+state rate num = 15
+state months num = 12
+field amt "Loan amount"
+field rate "Yearly rate %"
+field months "Months"
+let interest = amt * rate / 100 * months / 12
+"Monthly installment" round((amt + interest) / max(months, 1)) big
+"Total interest" round(interest) head
+"Total to pay" round(amt + interest) faint
+===
+@edit style=plain domain=a3_e_loan1 ref=a3_loan_flat
+call it "Bank loan" and make it purple
+---
+~ app "Loan" money slate => app "Bank loan" money plum
+===
+@create style=custom_ui domain=a3_elec_slabs
+electricity bill from units with three slabs, first 100 units cheap, next 100 medium and the rest expensive, bars showing how much each slab costs
+---
+app "Bijli bill" bolt ocean
+setting r1 num = 10 "Rate first 100"
+setting r2 num = 15 "Rate next 100"
+setting r3 num = 25 "Rate above 200"
+state units num = 150
+field units "Units used"
+let c1 = min(units, 100) * r1
+let c2 = clamp(units - 100, 0, 100) * r2
+let c3 = max(units - 200, 0) * r3
+let tot = c1 + c2 + c3
+text tot big
+"Rupees for" units "units" faint
+draw 100, 10
+  rect 0, 0, 100 * c1 / max(tot, 1), 10 fill good
+  rect 100 * c1 / max(tot, 1), 0, 100 * c2 / max(tot, 1), 10 fill warn
+  rect 100 * (c1 + c2) / max(tot, 1), 0, 100 * c3 / max(tot, 1), 10 fill bad
+"Slab 1" c1 "| Slab 2" c2 "| Slab 3" c3 faint
+===
+@create style=typos domain=a3_speed_calc
+speed distance time calculater
+---
+app "Speed" car slate
+state dist num = 100
+state hrs num = 2
+state spd num = 60
+field dist "Distance (km)"
+field hrs "Time (hours)"
+"Speed" round(dist / max(hrs, 0.01) * 10) / 10 "km/h" big
+field spd "Speed (km/h)"
+"Time for the distance" floor(dist / max(spd, 1)) "h" round(dist / max(spd, 1) * 60) % 60 "min" head
+===
+@create style=custom_ui domain=a3_cup_grams
+baking helper, I pick flour or sugar or butter or rice and say cups, it shows grams
+---
+app "Cups to grams" cup mint
+state what pick Flour|Sugar|Butter|Rice = Flour
+state cups num = 1
+choice what
+field cups "Cups"
+let g = cups * if(what = Flour, 125, if(what = Sugar, 200, if(what = Butter, 227, 185)))
+text round(g) "g" big
+"That is about" round(g / 28.35 * 10) / 10 "oz" faint
+===
+@create style=multi_feature domain=a3_markup_shop
+profit calculator for my shop: cost price, selling price, shows profit, margin percent and markup percent, and how many I need to sell to make 10000
+---
+app "Profit" tag slate
+state cost money = 0
+state sell money = 0
+field cost "Cost price"
+field sell "Selling price"
+let pr = sell - cost
+"Profit per piece" pr big color if(pr >= 0, good, bad)
+"Margin" round(pr / max(sell, 0.01) * 100) "% | Markup" round(pr / max(cost, 0.01) * 100) "%" faint
+"Pieces to sell for 10000" if(pr > 0, round(10000 / pr), 0) head
+===
+@create style=short domain=a3_water_tank
+water tank litres
+---
+app "Tank" drop ocean
+state rad num = 50
+state hgt num = 120
+state lvl num = 80
+field rad "Radius (cm)"
+field hgt "Height (cm)"
+slider lvl 0..100
+let full = pi * rad * rad * hgt / 1000
+"Capacity" round(full) "litres" head
+"Now holds" round(full * lvl / 100) "litres" big
+draw 60, 100 width 70
+  rect 10, 96 - 90 * lvl / 100, 40, 90 * lvl / 100 fill accent
+  rect 10, 6, 40, 90 stroke ink thick 2
+===
+@create style=detailed domain=a3_rent_share
+Rent split between flatmates by room size. I list each person with their room's square feet, set the monthly rent, and see what each pays.
+---
+app "Rent share" home slate
+setting rent money = 60000 "Monthly rent"
+table mate name text, sqft num 20..1000
+let total = sum(mate.sqft)
+each mate sort sqft desc as m
+  row card gap 2
+    m.name bold grow
+    m.sqft "sq ft" faint
+    round(rent * m.sqft / max(total, 1)) bold
+"Rent" rent faint tap edit rent
+form mate, "Add flatmate"
+===
+@create style=multi_feature domain=a3_gpa_calc
+GPA calculator: each course with a letter grade and credit hours, convert letters to points, show GPA with a bar out of 4
+---
+app "GPA" school plum
+table crs name text, grade pick A|B|C|D|F = A, hrs num 1..6 = 3
+let pts(g text) = if(g = A, 4, if(g = B, 3, if(g = C, 2, if(g = D, 1, 0))))
+let gpa = sumof(crs, if(it.grade = A, 4, if(it.grade = B, 3, if(it.grade = C, 2, if(it.grade = D, 1, 0)))) * it.hrs) / max(sumof(crs, it.hrs), 1)
+text round(gpa * 100) / 100 big
+draw 100, 5
+  rect 0, 0, 100, 5 fill soft radius 2
+  rect 0, 0, 25 * gpa, 5 fill accent radius 2
+"out of 4.0 over" sumof(crs, it.hrs) "credit hours" faint
+list crs
+form crs
+===
+@create style=vague domain=a3_hours_pay
+freelance hours
+---
+app "Hours" clock mint
+setting rate money = 1500 "Hourly rate"
+table job client text, hrs num 0.25..24, paid bool
+let owed = sum(job.hrs where paid = no) * rate
+"Waiting to be paid" round(owed) big
+"Hours this month" sum(job.hrs month) faint
+each job where paid = no as j
+  row card
+    j.client grow
+    j.hrs "h" faint
+    toggle j.paid
+form job
+===
+@create style=short domain=a3_gold_tola
+gold tola to gram converter
+---
+app "Gold" coin ink
+setting rate money = 250000 "Price per tola"
+state tola num = 1
+field tola "Tola"
+"Grams" round(tola * 11.664 * 100) / 100 big
+"Value" round(tola * rate) head
+"Price per gram" round(rate / 11.664) faint
+===
+@oos style=detailed domain=a3_oos_live_rate oos=internet
+Make a currency converter that fetches today's dollar and euro rates from the internet by itself, and converts any amount I type.
+---
+app "Converter" coin mint
+setting usd money = 280 "Rupees per dollar"
+setting eur money = 300 "Rupees per euro"
+state amt num = 1
+field amt "Amount in rupees"
+"Dollars" round(amt / max(usd, 1) * 100) / 100 big
+"Euros" round(amt / max(eur, 1) * 100) / 100 head
+"Update the two rates in settings when they change." faint
+===
+@oos style=detailed domain=a3_oos_bill_whatsapp oos=messaging
+Split the dinner bill equally between my friends and send each friend their amount on WhatsApp automatically.
+---
+app "Dinner split" users mint
+state bill money = 0
+table friend name text
+field bill "Bill total"
+let each_pay = bill / max(count(friend), 1)
+"Each pays" round(each_pay) big
+each friend as f
+  row card
+    f.name grow
+    round(each_pay) bold
+form friend, "Add friend"

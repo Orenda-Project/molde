@@ -1,0 +1,529 @@
+@create style=detailed domain=a2_envelopes
+I budget with envelopes. Each envelope has a name and a monthly limit, and when I spend something I pick the envelope. I want to see how full each one is this month.
+---
+app "Envelopes" wallet mint
+table cat name text, limit money
+table spend cat ref cat, amount money, note text?
+state m date = today
+monthnav m
+each cat sort name as c
+  let used = sum(c.spend.amount month of m)
+  stack card gap 1
+    row
+      c.name bold grow
+      text used "of" c.limit faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(used / c.limit, 0, 1), 4 fill if(used > c.limit, bad, accent) radius 2
+form cat, "New envelope"
+form spend, "Add spending"
+===
+@create style=multi_feature domain=a2_savings_goals
+savings goals: name and target for each goal, a ring showing progress, quick +500 and +2000 buttons, and a list of deposits
+---
+app "Goals" target mint
+table goal name text, target money
+table deposit goal ref goal, amount money
+each goal sort name as g
+  stack card gap 1 tap edit g
+    ring sum(g.deposit.amount), g.target, g.name
+    row gap 1
+      button "+500" tap add deposit goal = g, amount = 500
+      button "+2000" tap add deposit goal = g, amount = 2000
+form goal, "New goal"
+form deposit, "Add savings"
+log deposit
+===
+@create style=detailed domain=a2_committee
+Our family committee has members who each pay a fixed amount every month and each person takes the full pot in their own turn. I need to see whose turn it is and who has paid.
+---
+app "Committee" users plum
+setting start date = today "First month"
+setting share money = 5000 "Monthly share"
+table member name text, turn num 1..40
+table paid member ref member, amount money
+let idx = (year(today) - year(start)) * 12 + month(today) - month(start) + 1
+"Pot this month" share * count(member) big
+"Month" idx "- takes the pot:" faint
+each member where turn = idx
+  it.name head
+each member sort turn as m
+  row card gap 2 tap edit m
+    m.turn m.name bold grow
+    if count(m.paid month) > 0
+      "Paid" color good
+    else
+      button "Got it" tap add paid member = m, amount = share
+form member, "Add member"
+===
+@create style=multi_feature domain=a2_loan_book
+loans I took: who from, amount, monthly instalment, a button to record an instalment, how much is left and about how many instalments remain
+---
+app "Loans" money slate
+table loan who text, amount money, emi money
+table instalment loan ref loan, amount money
+"Total I owe" sumof(loan, it.amount) - sum(instalment.amount) big
+each loan sort who as l
+  let left = max(l.amount - sum(l.instalment.amount), 0)
+  stack card gap 1 tap edit l
+    row
+      l.who bold grow
+      text left bold
+    "About" round(left / max(l.emi, 1)) "instalments to go" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(1 - left / max(l.amount, 1), 0, 1), 4 fill good radius 2
+    button "Paid instalment" tap add instalment loan = l, amount = l.emi
+remind "Instalment day" monthly on 5 at 9:00
+form loan, "Add loan"
+===
+@create style=short domain=a2_bills_due
+monthly bills I must pay
+---
+app "Bills" bolt slate
+table bill name text, amount money, due_day num 1..31
+table paid bill ref bill
+count(bill) - countof(bill, count(it.paid month) > 0) "bills left this month" big
+"Still to pay" sumof(bill, if(count(it.paid month) > 0, 0, it.amount)) faint
+each bill sort due_day as b
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid month
+    stack grow
+      b.name bold
+      "due on the" b.due_day faint
+    b.amount bold
+remind "Bills due soon" monthly on 1, 10, 20 at 9:00
+form bill
+===
+@create style=typos domain=a2_zakat_business
+zakat calculator for my business i put cash stock what people owe me and what i owe then it tells zakat
+---
+app "Business zakat" mosque plum
+setting nisab money = 0 "Nisab value"
+state cash money = 0
+state stock money = 0
+state owed money = 0
+state debts money = 0
+field cash "Cash in hand and bank"
+field stock "Goods in stock"
+field owed "Money people owe me"
+field debts "Money I owe"
+let net = cash + stock + owed - debts
+"Net amount" net big
+if net >= nisab and nisab > 0
+  "Zakat due (2.5%)" round(net * 0.025) big color good
+else
+  "Below nisab, no zakat due" faint
+===
+@create style=multi_feature domain=a2_salary_overtime
+salary tracker: hourly rate, overtime counts 1.5 times, add shifts of normal or overtime hours, show the pay this month and hours worked
+---
+app "Pay" money mint
+table shift hours num 0..24 = 8, kind pick Normal|Overtime = Normal
+setting rate money = 400 "Hourly rate"
+setting mult num = 1.5 "Overtime multiplier"
+let normal = sum(shift.hours month where kind = Normal)
+let extra = sum(shift.hours month where kind = Overtime)
+"Pay this month" normal * rate + extra * rate * mult big
+"Normal" normal "h | Overtime" extra "h" faint
+quick shift, hours, [4, 8, 10]
+button "Overtime 2h" tap add shift hours = 2, kind = Overtime
+daybars last 7 days, sum(shift.hours on it)
+log shift
+===
+@create style=detailed domain=a2_dinner_split
+Splitting a restaurant bill with friends where everyone pays for what they ate plus the same percent of tip. I add the people, then each dish and who ate it.
+---
+app "Dinner split" food ocean
+setting tip num = 10 "Tip percent"
+table diner name text
+table item what text, price money, eater ref diner
+"Bill" sum(item.price) "+ tip" round(sum(item.price) * tip / 100) faint
+each diner sort name as d
+  let own = sum(d.item.price)
+  row card gap 2
+    d.name bold grow
+    text round(own * (1 + tip / 100)) bold
+form diner, "Add person"
+form item, "Add dish"
+===
+@create style=short domain=a2_subscriptions
+my subscriptions and renewal dates
+---
+app "Subscriptions" bell plum
+table sub name text, price money, cycle pick Monthly|Yearly = Monthly, renews date
+let monthly = sumof(sub, if(it.cycle = Monthly, it.price, it.price / 12))
+"Per month" round(monthly) big
+"Per year" round(monthly * 12) faint
+each sub sort renews as s
+  row card gap 2 tap edit s swipe remove s
+    stack grow
+      s.name bold
+      "renews" s.renews faint color if(s.renews - today <= 7, warn, muted)
+    s.price s.cycle faint
+remind "Subscription renews soon" at sub.renews - 3d at 9:00
+form sub, "Add subscription"
+===
+@create style=multi_feature domain=a2_investments
+investment log: each fund with units, what I paid in total and today's price per unit, show total worth and gain or loss in green or red
+---
+app "Investments" chart ink
+table holding name text, units num 0.., cost money, price_now money
+let worth = sumof(holding, it.units * it.price_now)
+let paid = sum(holding.cost)
+"Worth" worth big
+"Gain" worth - paid bold color if(worth >= paid, good, bad)
+each holding sort name as h
+  row card gap 2 tap edit h swipe remove h
+    stack grow
+      h.name bold
+      h.units "units" faint
+    h.units * h.price_now - h.cost bold color if(h.units * h.price_now >= h.cost, good, bad)
+form holding, "Add fund"
+===
+@create style=custom_ui domain=a2_gold_ring
+a ring that fills as I buy gold in grams towards my daughter's wedding goal
+---
+app "Gold savings" coin plum
+table buy grams num 0.., price money?
+setting goal num = 50 "Goal (grams)"
+let have = sum(buy.grams all)
+draw 100, 100 width 200
+  circle 44 stroke soft thick 10
+  arc 44, 0, 360 * clamp(have / goal, 0, 1) stroke accent thick 10
+  label 50, 46, have big
+  label 50, 62, "of" goal "g" faint
+quick buy, grams, [1, 2, 5]
+form buy
+log buy
+===
+@create style=detailed domain=a2_lent_friends
+I lend small amounts to friends and forget. Keep each friend, the amounts I lent, and let me tick when they gave it back. Show who owes me the most.
+---
+app "Lent money" users ocean
+table friend name text
+table lent friend ref friend, amount money, back bool
+"Out right now" sum(lent.amount where back = no) big
+each friend sort sum(it.lent.amount where back = no) desc as f
+  stack card gap 1
+    row
+      f.name bold grow
+      sum(f.lent.amount where back = no) bold color if(sum(f.lent.amount where back = no) > 0, warn, good)
+    each f.lent where back = no as l
+      row gap 1
+        l.amount grow faint
+        toggle l.back
+form friend, "Add friend"
+form lent, "Lent money"
+===
+@create style=vague domain=a2_daily_cash
+track the cash I spend every day
+---
+app "Daily cash" wallet ocean
+table spend what text, amount money
+"Spent today" sum(spend.amount today) big
+"This week" sum(spend.amount week) faint
+form spend
+daybars last 7 days, sum(spend.amount on it)
+log spend
+===
+@create style=multi_feature domain=a2_petrol_cost
+petrol log: litres, money paid and km driven since last fill, then show cost per km, km per litre, and a line of fill costs
+---
+app "Petrol" car slate
+table fill litres num 1..80, cost money, km num 1..2000
+"Cost per km" round(sum(fill.cost) / max(sum(fill.km), 1) * 10) / 10 big
+"Km per litre" round(sum(fill.km) / max(sum(fill.litres), 1) * 10) / 10 faint
+"Spent this month" sum(fill.cost month) faint
+trend fill, it.cost
+form fill, "Add fill"
+list fill
+===
+@create style=custom_ui domain=a2_eid_fund
+Eid shopping fund shown as ten boxes that light up one by one as I save toward the target
+---
+app "Eid fund" gift mint
+table saved amount money
+setting target money = 30000 "Eid budget"
+let p = clamp(sum(saved.amount all) / target, 0, 1)
+row gap 1
+  each 1..10 as n
+    box grow height 24 radius 6 fill if(n <= floor(p * 10), good, soft)
+text round(p * 100) "% saved" big
+"Target" target faint tap edit target
+quick saved, amount, [500, 1000, 2000]
+form saved
+===
+@create style=multi_feature domain=a2_income_expense
+income and expense with three tabs: a summary with what is left this month and spending by kind, a tab to add income by source, a tab to add spending
+---
+app "Money" wallet slate
+table income source pick Salary|Freelance|Rent|Other = Salary, amount money
+table expense kind pick Food|Bills|Travel|Fun|Other = Food, amount money
+let got = sum(income.amount month)
+let gone = sum(expense.amount month)
+screen home "Month" chart
+  "Left this month" got - gone big color if(got >= gone, good, bad)
+  row gap 2
+    stat got, "in"
+    stat gone, "out"
+  share expense month by kind, sum(it.amount), it.key
+screen earn "Income" plus
+  form income
+  log income
+screen outgo "Spending" cart
+  form expense
+  log expense
+===
+@create style=detailed domain=a2_grocery_budget
+Weekly grocery budget. I set a limit, write each thing I buy with its price and the shop, and see how much of the limit is gone and which shop eats my money.
+---
+app "Grocery budget" cart mint
+table buy item text, price money, store pick Market|Supermarket|Corner_shop = Market
+setting weekly money = 15000 "Weekly limit"
+goal sum(buy.price week), weekly, "spent this week"
+form buy, "Add item"
+share buy week by store, sum(it.price), it.key
+list buy week
+===
+@create style=custom_ui domain=a2_school_fee_grid
+school fees for each child, three small boxes for term 1 2 and 3 that are green when paid and red when not
+---
+app "School fees" school ocean
+table child name text
+table fee child ref child, term pick Term_1|Term_2|Term_3 = Term_1, amount money
+each child sort name as c
+  stack card gap 1
+    c.name bold
+    row gap 1
+      each options fee.term as t
+        stack grow align center
+          text t size small
+          box height 10 radius 5 fill if(count(c.fee where term = t) > 0, good, bad)
+    "Paid in total" sum(c.fee.amount) faint
+form child, "Add child"
+form fee, "Record payment"
+===
+@create style=short domain=a2_electricity
+electricity meter readings and bill
+---
+app "Electricity" bolt ocean
+table reading kwh num 0..
+setting rate money = 45 "Price per unit"
+let used = last(reading.kwh) - first(reading.kwh month)
+"Units this month" used big
+"Bill so far" used * rate faint
+form reading, "Meter reading"
+list reading
+===
+@create style=custom_ui domain=a2_nospend_days
+a calendar where I tap the days I spent nothing, with a streak
+---
+app "No-spend days" calendar mint
+table nospend
+state m date = today
+monthnav m
+calendar nospend, m
+"Streak" streak(nospend) "days" big
+"This month" count(nospend month of m) "of" monthdays(m) "days" faint
+===
+@create style=detailed domain=a2_shagun_book
+Record the money envelopes we give and receive at weddings, eids and birthdays so we can return the same amount next time. Show the totals by occasion.
+---
+app "Shagun" gift plum
+table envelope person text, amount money, event pick Wedding|Eid|Birthday|Other = Wedding, way pick Gave|Got = Gave
+"Gave" sum(envelope.amount where way = Gave) "| Got" sum(envelope.amount where way = Got) head
+share envelope by event, sum(it.amount), it.key
+form envelope, "Add envelope"
+log envelope
+===
+@create style=short domain=a2_dollar_convert
+dollars to rupees
+---
+app "Dollar" calc ocean
+setting rate num = 280 "Rupees per dollar"
+state usd num = 0
+field usd "Dollars"
+"In rupees" round(usd * rate) big
+"1 dollar =" rate faint tap edit rate
+===
+@create style=custom_ui domain=a2_margin_calc
+profit calculator for my goods: cost price, selling price, number of pieces, shows profit in green or red and the margin percent
+---
+app "Margin" calc slate
+state cost money = 0
+state sell money = 0
+state qty num = 1
+field cost "Cost price"
+field sell "Selling price"
+field qty "Pieces"
+"Profit" (sell - cost) * qty big color if(sell >= cost, good, bad)
+"Margin" round((sell - cost) * 100 / max(sell, 1)) "%" faint
+===
+@create style=detailed domain=a2_flat_rate_loan
+Shop installment calculator. I enter the price, the down payment, the number of months and the flat yearly percent the shop charges, and it shows the monthly amount.
+---
+app "Installments" calc ocean
+state price money = 0
+state down money = 0
+state months num = 12
+state rate num = 10
+field price "Price"
+field down "Down payment"
+"Months" months head
+slider months 3..60
+"Flat percent per year" rate head
+slider rate 0..40
+let borrowed = max(price - down, 0)
+let total = borrowed * (1 + rate / 100 * months / 12)
+"Monthly" round(total / max(months, 1)) big
+"Total to pay" round(total) faint
+===
+@create style=custom_ui domain=a2_52_weeks
+52 week saving challenge, a grid of 52 boxes numbered by week, tap a week when I saved it, and the total I have saved
+---
+app "52 weeks" target mint
+table done wk num 1..52
+setting step money = 100 "Weekly step"
+let saved = sumof(1..52, count(done all where wk = it) * it * step)
+"Saved so far" saved big
+grid 7 gap 1
+  each 1..52 as w
+    if count(done where wk = w) > 0
+      box height 36 radius 6 fill accent tap remove last(done where wk = w)
+        text w size small align center color bg
+    else
+      box height 36 radius 6 fill soft tap add done wk = w
+        text w size small align center
+===
+@create style=short domain=a2_fitra
+fitra for the family
+---
+app "Fitra" mosque mint
+setting rate money = 300 "Fitra per person"
+state people num = 4
+field people "Family members"
+"Fitra to give" people * rate big
+===
+@create style=multi_feature domain=a2_salary_slip
+salary slip maths: gross salary, tax percent, provident fund percent, show each deduction and the take home pay
+---
+app "Salary" money ink
+setting gross money = 80000 "Gross salary"
+setting tax num = 5 "Tax percent"
+setting pf num = 5 "Provident fund percent"
+let tax_amt = gross * tax / 100
+let pf_amt = gross * pf / 100
+"Take home" gross - tax_amt - pf_amt big
+row gap 2
+  stat round(tax_amt), "tax"
+  stat round(pf_amt), "provident fund"
+"Gross" gross faint tap edit gross
+===
+@create style=vague domain=a2_gift_fund
+we are collecting money for a colleague's gift
+---
+app "Gift fund" gift mint
+setting per money = 500 "Each person gives"
+table person name text, paid bool
+let got = count(person where paid = yes) * per
+"Collected" got big
+"From" count(person where paid = yes) "of" count(person) "people" faint
+each person sort name as p
+  row card gap 2 tap edit p swipe remove p
+    toggle p.paid
+    p.name grow
+form person, "Add person"
+===
+@create style=custom_ui domain=a2_rule_503020
+split my salary 50 30 20 into needs wants and savings with three bars drawn
+---
+app "50 30 20" chart ink
+setting pay money = 60000 "Monthly pay"
+draw 100, 40 width 300
+  rect 0, 2, 50, 8 fill accent radius 2
+  rect 0, 16, 30, 8 fill warn radius 2
+  rect 0, 30, 20, 8 fill good radius 2
+row
+  text "Needs" grow
+  text pay * 0.5 bold
+row
+  text "Wants" grow
+  text pay * 0.3 bold
+row
+  text "Savings" grow
+  text pay * 0.2 bold
+"Change pay" faint tap edit pay
+===
+@oos style=detailed domain=a2_oos_committee_wa oos=messaging
+Committee tracker with members and phone numbers that automatically sends a WhatsApp message to everyone who has not paid this month, and marks who paid.
+---
+app "Committee" users mint
+table member name text, phone text?
+table paid member ref member, amount money
+setting share money = 3000 "Monthly share"
+count(member) - countof(member, count(it.paid month) > 0) "not paid yet" big
+each member sort name as m
+  if count(m.paid month) = 0
+    row card gap 2
+      m.name bold grow
+      m.phone faint
+      button "Paid" tap add paid member = m, amount = share
+remind "Check who has not paid" monthly on 10 at 10:00
+form member, "Add member"
+===
+@oos style=short domain=a2_oos_gold_live oos=internet
+gold calculator with today's live gold rate from the internet and my jewellery value
+---
+app "Gold value" coin plum
+setting rate money = 250000 "Price per tola (type today's rate)"
+state tola num = 0
+field tola "My gold (tola)"
+"Worth about" round(tola * rate) big
+"Rate" rate faint tap edit rate
+===
+@oos style=typos domain=a2_oos_sync_expense oos=sync
+daily expenses app that syncs live between my phone and my wifes phone so we both see everything
+---
+app "Home expenses" wallet ocean
+table spend what text, amount money, who pick Me|Wife = Me
+"Today" sum(spend.amount today) big
+"Me" sum(spend.amount month where who = Me) "| Wife" sum(spend.amount month where who = Wife) faint
+form spend
+log spend
+===
+@edit style=plain domain=a2_e_env_remind ref=a2_envelopes
+remind me on the 25th to check my envelopes
+---
++ remind "Check the envelopes" monthly on 25 at 20:00
+===
+@edit style=plain domain=a2_e_bills_ink ref=a2_bills_due
+make it dark
+---
+~ app "Bills" bolt slate => app "Bills" bolt ink
+===
+@edit style=plain domain=a2_e_subs_note ref=a2_subscriptions
+add a note to each subscription
+---
+~ renews date => renews date, note text?
+===
+@edit style=plain domain=a2_e_salary_goal ref=a2_salary_overtime
+add a monthly goal of 60000 with a bar
+---
++after setting mult num = 1.5 "Overtime multiplier" :: setting aim money = 60000 "Monthly goal"
++after "Pay this month" normal * rate + extra * rate * mult big :: goal normal * rate + extra * rate * mult, aim, "of my goal"
+===
+@edit style=plain domain=a2_e_petrol_chart ref=a2_petrol_cost
+show how much I spend on petrol each day this week
+---
++ daybars last 7 days, sum(fill.cost on it)
+===
+@edit style=plain domain=a2_e_goals_note ref=a2_savings_goals
+I want a note with each deposit
+---
+~ table deposit goal ref goal, amount money => table deposit goal ref goal, amount money, note text?
+===
+@edit style=plain domain=a2_e_committee_share ref=a2_committee
+the monthly share is 10000 now
+---
+~ setting share money = 5000 "Monthly share" => setting share money = 10000 "Monthly share"

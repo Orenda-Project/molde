@@ -1,0 +1,300 @@
+@create style=detailed domain=b1_cotton_pickers
+cotton season: pickers pick kg for me and I pay per kg at a rate that I can change. record kg picked by each picker, show their pay this week and total kg in the season
+---
+app "Cotton Pickers" leaf mint
+table picker name text
+table picked picker ref picker, kg num 1..200
+table picker_paid picker ref picker, amount money
+setting pick_rate money = 40 "Pay per kg"
+each picker sort name as p
+  let owed = sum(p.picked.kg) * pick_rate - sum(p.picker_paid.amount)
+  row card tap edit p
+    p.name bold grow
+    text sum(p.picked.kg week) "kg this week"
+    owed bold color if(owed > 0, warn, good)
+"Season total" sum(picked.kg) "kg" big
+form picked, "Kg picked"
+form picker_paid, "Paid"
+form picker, "Add picker"
+===
+@create style=short domain=b1_kite_stock
+patang dor stock before basant
+---
+app "Kite Stock" star plum
+table kite_item name text, price money
+table kite_in kite_item ref kite_item, pieces num 1..5000
+table kite_out kite_item ref kite_item, pieces num 1..1000
+each kite_item sort name as k
+  row card tap edit k
+    k.name bold grow
+    sum(k.kite_in.pieces) - sum(k.kite_out.pieces)
+form kite_out, "Sold"
+form kite_in, "Stock in"
+form kite_item, "Add item"
+===
+@create style=multi_feature domain=b1_shoe_sizes
+shoe shop with sizes. each model has a price and I keep how many pairs of each size (6, 7, 8, 9, 10) are in stock. sale reduces the size. show total pairs and models with only 2 pairs left in total
+---
+app "Shoe Stock" bag slate
+table model name text, price money
+table pairs model ref model, size pick S6|S7|S8|S9|S10 = S8, qty num 1..100
+table pairsold model ref model, size pick S6|S7|S8|S9|S10 = S8, qty num 1..10 = 1
+each model sort name as m
+  let left = sum(m.pairs.qty) - sum(m.pairsold.qty)
+  stack card gap 1 tap edit m
+    row
+      m.name bold grow
+      text left "pairs" color if(left <= 2, warn, ink)
+    row gap 1
+      each options pairs.size as sz
+        text sz tiny
+        text sum(m.pairs.qty where size = sz) - sum(m.pairsold.qty where size = sz) small
+"Pairs in shop" sum(pairs.qty) - sum(pairsold.qty) big
+form pairs, "Stock in"
+form pairsold, "Sold"
+form model, "Add model"
+===
+@create style=detailed domain=b1_microloan_group
+I run a small microfinance group. every borrower has a loan amount and weekly installment. I record each weekly payment and want to see loan remaining for everybody and who missed this week
+---
+app "Microloan" coin mint
+table borrower2 name text, loan money, weekly money
+table weekpay borrower2 ref borrower2, amount money
+"Missed this week" count(borrower2, count(it.weekpay week) = 0) big color warn
+each borrower2 sort name as b
+  let left = b.loan - sum(b.weekpay.amount)
+  row card tap edit b
+    b.name bold grow
+    text "left" left
+    if count(b.weekpay week) = 0
+      "missed" color bad
+    else
+      "paid" color good
+form weekpay, "Weekly payment"
+form borrower2, "New borrower"
+===
+@create style=custom_ui domain=b1_chilling_centre
+milk chilling centre: members bring milk, the price per litre depends on the shift (morning is 5 rupees higher). show each member's litres and money for the fortnight and a bar chart of litres by member
+---
+app "Chilling Centre" milk ocean
+table cmember name text
+table bring cmember ref cmember, litres num 1..300, shift pick Morning|Evening = Morning
+setting base_price money = 130 "Base price per litre"
+each cmember sort name as m
+  let morning = sum(m.bring.litres last 14 days where shift = Morning)
+  let evening = sum(m.bring.litres last 14 days where shift = Evening)
+  row card tap edit m
+    m.name bold grow
+    text morning + evening "L"
+    text morning * (base_price + 5) + evening * base_price bold
+bars cmember, sum(it.bring.litres last 14 days), it.name
+form bring, "Milk brought"
+form cmember, "Add member"
+===
+@create style=vague domain=b1_oven_batches
+bakery oven batches, cost per batch and pieces
+---
+app "Oven Batches" bread plum
+table batch kind pick Bread|Cake|Biscuit = Bread, trays num 1..40, cost money, pieces num 1..2000
+"Pieces this week" sum(batch.pieces week) big
+"Cost per piece" round(sum(batch.cost week) / max(sum(batch.pieces week), 1)) faint
+each batch sort at desc top 10 as b
+  row card tap edit b
+    b.kind bold grow
+    b.pieces "pcs"
+    b.cost faint
+form batch
+===
+@create style=detailed domain=b1_spray_schedule
+orchard spray schedule: each field gets sprayed with a chemical and I want to know the fields that were not sprayed for more than 15 days, and the cost of spray per acre
+---
+app "Spray Plan" drop mint
+table orch_field name text, acres num 0.5..300
+table spray2 orch_field ref orch_field, chemical text, cost money
+"Need spray" count(orch_field, due(it.spray2, 15)) head color warn
+each orch_field sort name as f
+  row card tap edit f
+    f.name bold grow
+    if due(f.spray2, 15)
+      "spray now" color warn
+    else
+      text since(f.spray2) "days ago" faint
+    text round(sum(f.spray2.cost) / f.acres) "per acre"
+form spray2, "Sprayed"
+form orch_field, "Add field"
+===
+@create style=multi_feature domain=b1_house_build_budget
+building my house: stages like foundation, bricks, roof, plaster, finishing each has a budget; I enter every payment with the stage and the shop. show spent against budget for each stage with a bar
+---
+app "House Build" home ink
+table stage name text, budget money
+table spend stage ref stage, amount money, shop text?
+"Total spent" sum(spend.amount) "of" sum(stage.budget) big
+each stage sort at as s
+  let used = sum(s.spend.amount)
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      text used "of" s.budget color if(used > s.budget, bad, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(used / s.budget, 0, 1), 4 fill if(used > s.budget, bad, accent) radius 2
+form spend, "Payment"
+form stage, "Add stage"
+===
+@create style=typos domain=b1_water_bill_share
+we are 3 familys sharing one water bill every month, split by number of people in each family not equal, i type the bill and people
+---
+app "Water Bill" drop ocean
+table fam name text, people num 1..30
+state bill money = 0
+field bill "Bill this month"
+let heads = sum(fam.people)
+each fam sort name as f
+  row card tap edit f
+    f.name bold grow
+    text f.people "people"
+    round(bill * f.people / max(heads, 1)) bold
+form fam, "Add family"
+===
+@create style=detailed domain=b1_wool_shearing
+sheep farm: I shear sheep once or twice a year and record kg of wool per flock and the buyer's rate. show total wool, total income and the flock which gave most per sheep
+---
+app "Wool" paw slate
+table wflock name text, sheep num 5..3000
+table shearing wflock ref wflock, kg num 1..3000, rate money
+each wflock sort name as f
+  row card tap edit f
+    f.name bold grow
+    text sum(f.shearing.kg) "kg"
+    text round(sum(f.shearing.kg) * 100 / f.sheep) / 100 "kg per sheep" faint
+    sum(f.shearing, it.kg * it.rate) bold
+"Total wool" sum(shearing.kg year) "kg" big
+"Income" sum(shearing year, it.kg * it.rate) head
+form shearing, "Shearing"
+form wflock, "Add flock"
+===
+@create style=custom_ui domain=b1_horse_rides
+tourist horse rides at the lake: each ride is timed with a start and stop button and the charge is per 10 minutes at a rate I set. at the end show my rides and money today
+---
+app "Horse Rides" star mint
+table ride mins num 1..240, charge money
+setting per10 money = 300 "Price per 10 min"
+state started when = now
+state going bool = no
+if going
+  button "Stop ride" tap add ride mins = round((now - started) / 1m), charge = round((now - started) / 1m / 10 * per10) then set going = no
+else
+  button "Start ride" tap set started = now then set going = yes
+"Rides today" count(ride today) big
+"Money today" sum(ride.charge today) head
+list ride today
+===
+@create style=short domain=b1_milk_diary_calendar
+doodh ka hisab, litres daily at the milkman, with a calendar
+---
+app "Doodh Diary" milk mint
+table doodh litres num 0.5..10 = 1
+setting rate money = 200 "Rate per litre"
+calendar doodh
+"This month" sum(doodh.litres month) "L" big
+"Bill" sum(doodh.litres month) * rate head
+===
+@create style=custom_ui domain=b1_loyalty_stamps
+coffee stall loyalty card: each customer has a card with 10 circles, tapping a customer adds a stamp and the circles fill. the 10th is free. show the circles for each customer
+---
+app "Stamps" cup slate
+table regular name text
+table stamp regular ref regular
+each regular sort name as r
+  row card gap 1
+    r.name bold grow
+    draw 100, 10 width 140 tap add stamp regular = r
+      each 1..10 as n
+        circle 5 + (n - 1) * 10, 5, 4 fill if(n <= count(r.stamp) % 10, accent, soft)
+    text floor(count(r.stamp) / 10) "free" faint
+form regular, "Add customer"
+===
+@create style=detailed domain=b1_rickshaw_loan_chit
+my rickshaw was bought on monthly instalments from a dealer; I want to tick every instalment paid, see how many are left out of 36, and the money still to pay with a bar
+---
+app "Rickshaw Loan" car ink
+setting emi money = 14500 "Monthly instalment"
+table emi_done
+goal count(emi_done), 36, "instalments paid"
+"Left" 36 - count(emi_done) "months" head
+"Still to pay" (36 - count(emi_done)) * emi big
+button "Paid this month" tap add emi_done
+list emi_done by day
+===
+@create style=multi_feature domain=b1_dairy_customers_cash
+my dairy shop sells milk, yoghurt and ghee. each sale has the product and amount. customers can be walk-in or regular (regular have a name). show sales by product and total owed by regulars who pay later
+---
+app "Dairy Shop" milk plum
+table regular_c name text
+table dsale2 product pick Milk|Yoghurt|Ghee|Cream = Milk, amount money, buyer ref regular_c?, paid bool = yes
+table regular_pay buyer ref regular_c, amount money
+"Today" sum(dsale2.amount today) big
+bars options dsale2.product, sum(dsale2.amount month where product = it), it
+each regular_c sort name as r
+  let owed = sum(dsale2.amount where buyer = r and paid = no) - sum(r.regular_pay.amount)
+  row card tap edit r
+    r.name bold grow
+    owed bold color if(owed > 0, bad, good)
+form dsale2, "Sale"
+form regular_pay, "Payment"
+form regular_c, "Add regular"
+===
+@create style=short domain=b1_vendor_cash_book
+cash in cash out book
+---
+app "Cash Book" wallet ink
+table cashrow kind pick In|Out = In, amount money, why text?
+let balance = sum(cashrow.amount where kind = In) - sum(cashrow.amount where kind = Out)
+"Balance" balance big color if(balance >= 0, good, bad)
+"In today" sum(cashrow.amount today where kind = In) faint
+"Out today" sum(cashrow.amount today where kind = Out) faint
+form cashrow
+list cashrow by day
+===
+@edit style=plain domain=b1_cotton_chart ref=b1_cotton_pickers
+chart of kg picked per day for the last 2 weeks
+---
++ daybars last 14 days, sum(picked.kg on it)
+===
+@edit style=plain domain=b1_kites_price ref=b1_kite_stock
+add a low stock warning at 20 pieces
+---
+~ sum(k.kite_in.pieces) - sum(k.kite_out.pieces) => sum(k.kite_in.pieces) - sum(k.kite_out.pieces) color if(sum(k.kite_in.pieces) - sum(k.kite_out.pieces) < 20, warn, ink)
+===
+@edit style=plain domain=b1_microloan_rename ref=b1_microloan_group
+call weekly the instalment
+---
+~ weekly money => instalment money was weekly
+===
+@edit style=plain domain=b1_spray_second ref=b1_spray_schedule
+let me set the 15 days as a setting
+---
+~ table orch_field => setting gap_days num = 15 "Spray gap (days)"\ntable orch_field
+~ due(it.spray2, 15) => due(it.spray2, gap_days)
+~ due(f.spray2, 15) => due(f.spray2, gap_days)
+===
+@edit style=plain domain=b1_build_tab ref=b1_house_build_budget
+add a tab for a list of all payments
+---
++ screen payments "Payments" list
++   list spend by day
+===
+@edit style=plain domain=b1_cashbook_cat ref=b1_vendor_cash_book
+add a category to each entry (Sales, Rent, Salary, Other) and show out money by category as bars
+---
+~ why text? => why text?, category pick Sales|Rent|Salary|Other = Other
++ bars options cashrow.category, sum(cashrow.amount month where category = it and kind = Out), it
+===
+@edit style=plain domain=b1_stamps_ten ref=b1_loyalty_stamps
+make it 8 stamps for a free one
+---
+~ draw 100, 10 width 140 => draw 80, 10 width 140
+~ each 1..10 as n => each 1..8 as n
+~ % 10 => % 8
+~ count(r.stamp) / 10 => count(r.stamp) / 8

@@ -1,0 +1,448 @@
+@create style=detailed domain=a2_aid_families
+We distribute aid to families in villages. Keep each family with the number of members and village, tap what we gave (ration, medicine, clothes or cash), and show the families who got nothing in the last 30 days first.
+---
+app "Aid families" heart mint
+table family head_name text, members num 1..20, village text?
+table pack family ref family, what pick Ration|Medicine|Clothes|Cash = Ration
+countof(family, due(it.pack, 30)) "families without help for 30 days" big
+each family sort since(it.pack) desc as f empty "No families yet"
+  stack card gap 1 tap edit f
+    row
+      f.head_name bold grow
+      f.village faint
+    if due(f.pack, 30)
+      "Needs a visit" size small color warn
+    row gap 1
+      each options pack.what as w
+        button w tap add pack family = f, what = w
+form family, "Add family"
+===
+@create style=custom_ui domain=a2_ration_tiles
+forty numbered houses as square tiles, tap a house when it received its ration today and it turns green, and say how many are done
+---
+app "Ration day" food mint
+table given hh num 1..40
+count(given today) "of 40 houses done" big
+grid 8 gap 1
+  each 1..40 as n
+    box ratio 1 radius 6 fill if(count(given today where hh = n) > 0, good, soft) tap toggle given where hh = n
+      text n size tiny align center
+===
+@create style=custom_ui domain=a2_inflation
+how much will something cost in some years with inflation, I type the price, the percent and the years
+---
+app "Inflation" calc slate
+state price money = 100
+state rate num = 10
+state years num = 5
+field price "Price today"
+field rate "Inflation % per year"
+field years "Years"
+"Price then" round(price * pow(1 + rate / 100, years)) big
+"100 today buys only" fixed(100 / pow(1 + rate / 100, years), 1) faint
+===
+@create style=multi_feature domain=a2_fixed_deposit
+fixed deposit calculator: amount, yearly profit rate, years, profit added every month, shows the maturity amount and the profit in short form
+---
+app "Fixed deposit" money ocean
+state amount money = 500000
+state rate num = 12
+state years num = 3
+field amount "Deposit"
+field rate "Yearly rate %"
+"Years" years faint
+slider years 1..10
+let total = amount * pow(1 + rate / 1200, 12 * years)
+"At maturity" compact(total) big
+"Profit" grouped(round(total - amount)) faint
+===
+@create style=short domain=a2_family_fund_bars
+who gave how much to the family fund
+---
+app "Family fund" users mint
+table member name text
+table give member ref member, amount money
+"Collected" sum(give.amount) big
+bars member, sum(it.give.amount), it.name
+each member sort name as m empty "Add family members"
+  row card gap 2
+    m.name grow
+    button "+1000" tap add give member = m, amount = 1000
+form member, "Add person"
+===
+@create style=custom_ui domain=a2_rickshaw_weeks
+bars for my rickshaw fares in each of the last four weeks and the total this week
+---
+app "Rickshaw weeks" car ink
+table trip fare money
+"This week" compact(sum(trip.fare week)) big
+plot 0..4, 0..max(maxof(1..4, sum(trip.fare week of (today - 7 * (4 - it)))), 1) axes gridlines
+  each 1..4 as w
+    rect index + 0.15, 0, 0.7, sum(trip.fare week of (today - 7 * (4 - w))) fill accent radius 2
+    tick index + 0.5, "W" w
+quick trip, fare, [100, 200, 500]
+===
+@create style=typos domain=a2_maths_drill
+addition practice for my son two random numbers he types answer and it says correct or try again then goes away
+---
+app "Maths drill" calc mint
+table attempt ok bool
+state a num = 6
+state b num = 7
+state ans num = 0
+state msg text = ""
+"What is" a "+" b "?" big
+field ans "Answer"
+button "Check" tap add attempt ok = if(ans = a + b, yes, no) then set msg = if(ans = a + b, "Correct", "Try again") then set a = random(20) then set b = random(20) then set ans = 0 then after 2s set msg = ""
+text msg head
+"Right so far" count(attempt where ok = yes) "of" count(attempt) faint
+===
+@create style=multi_feature domain=a2_spelling_test
+spelling test: I add words, and a button shows five random words from the list to test the kids, with a message when there are no words
+---
+app "Spelling" pencil plum
+table word spelling text
+state test bool = no
+button "Test me with 5 words" tap set test = yes
+if test
+  each word shuffle top 5 as w empty "Add some words first"
+    row card
+      w.spelling big
+form word, "Add word"
+list word
+===
+@create style=multi_feature domain=a2_cashbook
+cash book with three tabs: a book tab with balance and where the money went, a cash in tab with a form and list, and a cash out tab with a form and list
+---
+app "Cash book" book slate
+table cash_in what text, amount money
+table cash_out what text, amount money
+screen book "Book" book
+  "Balance" sum(cash_in.amount) - sum(cash_out.amount) big color if(sum(cash_in.amount) >= sum(cash_out.amount), good, bad)
+  row gap 2
+    stat sum(cash_in.amount month), "in this month"
+    stat sum(cash_out.amount month), "out this month"
+  daybars last 7 days, sum(cash_out.amount on it)
+screen ins "Cash in" plus
+  form cash_in
+  log cash_in
+screen outs "Cash out" minus
+  form cash_out
+  log cash_out
+===
+@create style=custom_ui domain=a2_report_card
+report card tiles, one square for each subject coloured green for 80 and above, orange for 50 and above and red below, showing the latest score
+---
+app "Report card" school ocean
+table mark subject pick Maths|English|Urdu|Science|Islamiat = Maths, score num 0..100
+grid 5 gap 1
+  each options mark.subject as s
+    stack ratio 1 radius 8 pad 1 middle fill if(count(mark where subject = s) = 0, soft, if(last(mark.score where subject = s) >= 80, good, if(last(mark.score where subject = s) >= 50, warn, bad)))
+      text s size tiny bold align center
+      last(mark.score where subject = s) bold align center
+form mark, "Add mark"
+===
+@create style=detailed domain=a2_night_shifts
+I work night security shifts that cross midnight. I enter the start and end time, and the app should work out the hours and what I earn this week at my hourly pay.
+---
+app "Night shifts" moon ink
+table shift start time, end time
+setting rate money = 350 "Pay per hour"
+"Hours this week" sumof(shift week, (it.end - it.start) / 1h) big
+"Pay this week" sumof(shift week, (it.end - it.start) / 1h) * rate faint
+each shift sort at desc top 10 as s empty "No shifts yet"
+  row card gap 2 tap edit s swipe remove s
+    s.start "to" s.end grow
+    (s.end - s.start) / 1h "h" bold
+form shift, "Add shift"
+===
+@create style=vague domain=a2_task_roulette
+I never know what to do next at work
+---
+app "What next" list ink
+table task title text, done bool
+state chosen ref task
+button "Pick one for me" tap set chosen = random(task where done = no)
+chosen.title big
+button "Done with it" tap set chosen.done = yes
+count(task where done = no) "tasks waiting" faint
+form task, "Add task"
+===
+@create style=custom_ui domain=a2_quick_expense
+three big buttons for tea, lunch and rickshaw that add my usual cost, and a small saved message that disappears
+---
+app "Quick expense" wallet ocean
+table spend what text, amount money
+state msg text = ""
+"Today" sum(spend.amount today) big
+row gap 1
+  button "Tea 50" tap add spend what = "Tea", amount = 50 then set msg = "Saved" then after 2s set msg = ""
+  button "Lunch 300" tap add spend what = "Lunch", amount = 300 then set msg = "Saved" then after 2s set msg = ""
+  button "Rickshaw 150" tap add spend what = "Rickshaw", amount = 150 then set msg = "Saved" then after 2s set msg = ""
+text msg color good
+log spend
+===
+@create style=multi_feature domain=a2_supplier_payables
+suppliers I owe money to: a tab with each supplier and the amount still due, and a tab to enter bills and payments I made
+---
+app "Suppliers" cart slate
+table supplier name text, phone text?
+table bill supplier ref supplier, amount money
+table payment supplier ref supplier, amount money
+screen owed "Owed" wallet
+  "Total due" sum(bill.amount) - sum(payment.amount) big
+  each supplier sort name as s empty "No suppliers yet"
+    let due_amt = sum(s.bill.amount) - sum(s.payment.amount)
+    row card gap 2 tap edit s
+      s.name bold grow
+      text due_amt bold color if(due_amt > 0, warn, good)
+  form supplier, "Add supplier"
+screen entry "Entries" pen
+  form bill, "New bill"
+  form payment, "Payment made"
+===
+@create style=detailed domain=a2_ptm_notes
+Parent teacher meeting notes. For each child I want a long note with the date it was written and I want to see how many days ago I last talked to that family.
+---
+app "PTM notes" school plum
+table kid name text, parent text?
+table note kid ref kid, body long
+each kid sort name as k empty "Add your students"
+  stack card gap 1
+    row
+      k.name bold grow
+      "Talked" plural(since(k.note), "day") "ago" faint
+    each k.note sort at desc top 1 as n
+      n.body size small
+form kid, "Add student"
+form note, "New note"
+===
+@create style=custom_ui domain=a2_fee_months
+twelve square tiles for the months of the school year, tap a month when the fee is paid, and see how many months are paid
+---
+app "Fee months" school ocean
+table paid m num 1..12
+count(paid year) "of 12 months paid" big
+grid 4 gap 1
+  each 1..12 as k
+    if count(paid year where m = k) > 0
+      box ratio 1 radius 8 fill good tap remove last(paid year where m = k)
+        text monthshort(addmonths(today, k - month(today))) size small align center color bg
+    else
+      box ratio 1 radius 8 fill soft tap add paid m = k
+        text monthshort(addmonths(today, k - month(today))) size small align center
+===
+@create style=multi_feature domain=a2_leave_requests
+staff leave requests with two tabs: one to ask for leave with the dates and reason, one for the manager to change each request between pending, approved and rejected
+---
+app "Leave requests" plane ocean
+table req name text, from_day date, to_day date, reason text?, status pick Pending|Approved|Rejected = Pending
+screen ask "Ask" plus
+  form req, "Ask for leave"
+screen review "Review" check
+  count(req where status = Pending) "waiting for a decision" big
+  each req sort from_day as r empty "No requests"
+    stack card gap 1 tap edit r
+      row
+        r.name bold grow
+        plural(r.to_day - r.from_day + 1, "day") faint
+      r.from_day "to" r.to_day faint
+      choice r.status
+===
+@create style=detailed domain=a2_debt_snowball
+My debts: name, what is left and the minimum I must pay. I record payments. Sort them smallest first and mark the first one as the one to pay extra on.
+---
+app "Debts" money slate
+table debt name text, left money, min money
+table payment debt ref debt, amount money
+"Total left" sumof(debt, it.left - sum(it.payment.amount)) big
+each debt sort it.left - sum(it.payment.amount) as d empty "No debts, well done"
+  let rest = d.left - sum(d.payment.amount)
+  row card gap 2 tap edit d
+    stack grow
+      d.name bold
+      if index = 0
+        "Pay extra on this one" size small color accent
+    text rest bold
+    button "Paid" tap add payment debt = d, amount = d.min
+form debt, "Add debt"
+===
+@create style=custom_ui domain=a2_power_split
+we share one electricity meter between three flats, I note each flat's units and set the bill, and it shows what each flat pays in proportion
+---
+app "Power split" bolt ocean
+table meter who pick Flat_A|Flat_B|Flat_C = Flat_A, units num 1..2000
+setting bill money = 20000 "Total bill"
+sum(meter.units month) "units this month" faint
+each options meter.who as w
+  row card gap 2
+    text w bold grow
+    sum(meter.units month where who = w) "units" faint
+    round(bill * sum(meter.units month where who = w) / max(sum(meter.units month), 1)) bold
+form meter, "Add reading"
+===
+@create style=multi_feature domain=a2_profit_loss_plot
+small business chart with two lines for the last 7 days, green for money in and red for money out, and today's profit as a number
+---
+app "Profit chart" chart ink
+table income amount money
+table cost amount money
+"Profit today" sum(income.amount today) - sum(cost.amount today) big
+plot 0..6, 0..max(max(maxof(days last 7 days, sum(income.amount on it)), maxof(days last 7 days, sum(cost.amount on it))), 1) axes gridlines
+  poly stroke good thick 2
+    each days last 7 days
+      pt index, sum(income.amount on it)
+  poly stroke bad thick 2
+    each days last 7 days
+      pt index, sum(cost.amount on it)
+  each days last 7 days
+    tick index, dayname(it)
+form income, "Money in"
+form cost, "Money out"
+===
+@create style=custom_ui domain=a2_study_week
+bars of how many hours I studied on each weekday with day names under them, and the hours form
+---
+app "Study week" school mint
+table study day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, hours num 0.. = 1
+"Hours this week" sum(study.hours week) big
+plot 0..7, 0..max(maxof(options study.day, sum(study.hours week where day = it)), 1) axes
+  each options study.day as dd
+    rect index + 0.15, 0, 0.7, sum(study.hours week where day = dd) fill accent radius 2
+    tick index + 0.5, dd
+form study, "Add hours"
+===
+@oos style=detailed domain=a2_oos_easypaisa oos=other_apps
+Read my JazzCash and EasyPaisa transactions automatically and show my spending by category. I can also add cash expenses myself.
+---
+app "Spending" wallet mint
+table spend amount money, category pick Food|Bills|Travel|Fun|Other = Food, note text?
+"This month" sum(spend.amount month) big
+share spend month by category, sum(it.amount), it.key
+form spend, "Add expense"
+log spend
+===
+@create style=multi_feature domain=a2_eid_rush
+tailor eid rush: orders with the customer, number of suits and the date they need them, show a bar for how many suits are due on each of the next 7 days
+---
+app "Eid rush" star plum
+table order customer text, suits num 1..20 = 1, due date
+"Suits due this week" sumof(order where due >= today and due < today + 7, it.suits) big
+plot 0..7, 0..max(maxof(1..7, sum(order.suits where due = today + it - 1)), 1) axes
+  each 1..7 as n
+    rect index + 0.15, 0, 0.7, sum(order.suits where due = today + n - 1) fill accent radius 2
+    tick index + 0.5, dayname(today + n - 1)
+each order where due >= today sort due as o empty "No orders yet"
+  row card gap 2 tap edit o swipe remove o
+    o.customer bold grow
+    o.suits "suits, due" o.due faint
+form order, "New order"
+===
+@create style=detailed domain=a2_mobile_load
+I sell mobile load. A button for each company adds a 100 sale, I also can type a different amount. My margin is a percent I set. Show my profit today and how sales split by company.
+---
+app "Load shop" phone ocean
+table load company pick Jazz|Zong|Telenor|Ufone = Jazz, amount money
+setting margin num = 2 "My margin %"
+"Sold today" grouped(sum(load.amount today)) big
+"My profit" round(sum(load.amount today) * margin / 100) bold
+row gap 1
+  each options load.company as k
+    button k tap add load company = k, amount = 100
+form load, "Other amount"
+share load week by company, sum(it.amount), it.key
+===
+@create style=short domain=a2_flour_mill
+flour mill grinding book
+---
+app "Flour mill" bag slate
+table grind customer text, kg num 1.., paid bool
+setting rate money = 8 "Rate per kg"
+"Ground today" sum(grind.kg today) "kg" big
+"Not paid yet" sumof(grind where paid = no, it.kg) * rate faint
+each grind sort at desc top 10 as g empty "No customers today"
+  row card gap 2 tap edit g swipe remove g
+    stack grow
+      g.customer bold
+      g.kg "kg" faint
+    g.kg * rate bold
+    toggle g.paid
+form grind, "Add customer"
+===
+@create style=typos domain=a2_fish_stall
+fish stall i write kg bought in the morning and kg sold during day and see how much is left and money made
+---
+app "Fish stall" fish ocean
+table buy kg num 1..500, cost money
+table sell kg num 0.. = 1, price money
+let left = sum(buy.kg today) - sum(sell.kg today)
+"Left unsold" left "kg" big color if(left < 0, bad, ink)
+"Made today" sum(sell.price today) - sum(buy.cost today) bold
+form buy, "Bought"
+form sell, "Sold"
+daybars last 7 days, sum(sell.price on it)
+===
+@create style=multi_feature domain=a2_bus_conductor
+bus conductor counter: three buttons for short, medium and far tickets at different fares set in settings, tickets sold today and money collected
+---
+app "Bus tickets" bus slate
+table ticket stage pick Short|Medium|Far = Short, fare money
+setting short_fare money = 30 "Short fare"
+setting medium_fare money = 60 "Medium fare"
+setting far_fare money = 100 "Far fare"
+"Collected" sum(ticket.fare today) big
+count(ticket today) "tickets" faint
+row gap 1
+  each options ticket.stage as k
+    button k tap add ticket stage = k, fare = if(k = Short, short_fare, if(k = Medium, medium_fare, far_fare))
+button "Undo last" tap remove last(ticket today)
+===
+@create style=short domain=a2_stationery_search
+stationery shop price list with search
+---
+app "Stationery" pencil ink
+table item name text, price money, shelf text?
+state q text = ""
+field q "Search"
+each item where has(name, q) sort name as i empty "No item matches"
+  row card gap 2 tap edit i swipe remove i
+    stack grow
+      i.name bold
+      i.shelf faint
+    i.price bold
+form item, "Add item"
+===
+@edit style=plain domain=a2_e_stationery_dark ref=a2_stationery_search
+make it dark
+---
+~ app "Stationery" pencil ink => app "Stationery" pencil slate
+===
+@edit style=plain domain=a2_e_load_margin ref=a2_mobile_load
+my margin is 3 percent now
+---
+~ setting margin num = 2 => setting margin num = 3
+===
+@edit style=plain domain=a2_e_cashbook_remind ref=a2_cashbook
+remind me every evening at 8 to write the cash book
+---
++ remind "Write the cash book" at 20:00
+===
+@edit style=plain domain=a2_e_night_name ref=a2_night_shifts
+call it guard hours
+---
+~ app "Night shifts" moon ink => app "Guard hours" moon ink
+===
+@edit style=plain domain=a2_e_fee_remind ref=a2_fee_months
+remind me on the 5th every month about the fee
+---
++ remind "School fee is due" monthly on 5 at 10:00
+===
+@edit style=plain domain=a2_e_bus_long ref=a2_bus_conductor
+call the far tickets long
+---
+~ pick Short|Medium|Far = Short => pick Short|Medium|Long was Far = Short
+===
+@edit style=plain domain=a2_e_aid_phone ref=a2_aid_families
+add a phone number for each family
+---
+~ village text? => village text?, phone text?

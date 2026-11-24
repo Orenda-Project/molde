@@ -1,0 +1,339 @@
+@create style=detailed domain=b1_tool_lending
+my workshop lends tools like drills and ladders to neighbours for a day fee. record who took what, when it goes out, tick when returned, and show items still outside and fee earned this month
+---
+app "Tool Lending" tool slate
+table loaned tool text, borrower text, fee money, back bool
+"Still outside" count(loaned where back = no) big color warn
+"Fees this month" sum(loaned.fee month) head
+each loaned where back = no sort at as l
+  row card tap edit l
+    stack grow
+      l.tool bold
+      l.borrower faint
+    l.fee
+    toggle l.back
+form loaned, "Lend a tool"
+===
+@create style=multi_feature domain=b1_pickle_maker
+home pickle business: each batch uses ingredients with cost, makes some jars. jars sold at a price. show cost per jar for each batch and jars left in hand
+---
+app "Pickles" food plum
+table pbatch name text, jars_made num 5..500
+table pcost pbatch ref pbatch, what text, amount money
+table jarsale pbatch ref pbatch, jars num 1..200, price money
+each pbatch sort at desc as b
+  let cost = sum(b.pcost.amount)
+  stack card gap 1 tap edit b
+    row
+      b.name bold grow
+      text b.jars_made - sum(b.jarsale.jars) "jars left"
+    text "Cost per jar" round(cost / b.jars_made) faint
+    text "Sold for" sum(b.jarsale, it.jars * it.price) bold
+form pcost, "Ingredient cost"
+form jarsale, "Jars sold"
+form pbatch, "New batch"
+===
+@create style=custom_ui domain=b1_feed_mix_calc
+poultry feed mix calculator: price per kg of corn, soya and fish meal as settings, and I slide how many kg of each in a 100 kg batch. show cost per kg of the mix and total batch cost
+---
+app "Feed Mix" egg mint
+setting corn_price money = 70 "Corn per kg"
+setting soya_price money = 150 "Soya per kg"
+setting fish_price money = 220 "Fish meal per kg"
+state corn num = 60
+state soya num = 30
+state fish num = 10
+"Corn" corn "kg" faint
+slider corn 0..100
+"Soya" soya "kg" faint
+slider soya 0..100
+"Fish meal" fish "kg" faint
+slider fish 0..100
+let batch = corn * corn_price + soya * soya_price + fish * fish_price
+"Batch cost" batch big
+"Per kg" round(batch / max(corn + soya + fish, 1)) head
+===
+@create style=short domain=b1_plot_leads
+plot customers follow up
+---
+app "Plot Leads" map slate
+table lead name text, phone text?, stage pick Interested|Visited|Token|Closed = Interested, budget money?
+each lead where stage != Closed sort at desc as l
+  row card tap edit l
+    l.name bold grow
+    choice l.stage
+"Open leads" count(lead where stage != Closed) head
+"Closed" count(lead where stage = Closed) faint
+form lead
+===
+@create style=detailed domain=b1_goat_kidding
+goat farm: for every doe I note each kidding with how many kids and how many survived. show kids born this year and survival percent per doe and in total
+---
+app "Kidding" paw mint
+table doe tag text
+table kidding doe ref doe, born num 1..4, survived num 0..4
+each doe sort tag as d
+  row card tap edit d
+    d.tag bold grow
+    text sum(d.kidding.born) "born"
+    text round(sum(d.kidding.survived) * 100 / max(sum(d.kidding.born), 1)) "% survived" faint
+"Kids this year" sum(kidding.born year) big
+"Survival" round(sum(kidding.survived year) * 100 / max(sum(kidding.born year), 1)) "%" head
+form kidding, "Kidding"
+form doe, "Add doe"
+===
+@create style=vague domain=b1_potter_market
+clay pots made and sold
+---
+app "Potter" cup plum
+table pots_made count num 1..500
+table pots_sold count num 1..200, price money
+text sum(pots_made.count) - sum(pots_sold.count) "pots in hand" big
+"Earned" sum(pots_sold, it.count * it.price) head
+daybars last 7 days, sum(pots_sold.count on it)
+form pots_made, "Made"
+form pots_sold, "Sold"
+===
+@create style=detailed domain=b1_butcher_rates
+butcher shop selling beef, mutton and chicken. I keep today's rate per kg for each meat as a setting, record kg sold, and show money sold per meat and the daily total
+---
+app "Butcher" food slate
+setting beef_rate money = 1400 "Beef per kg"
+setting mutton_rate money = 2600 "Mutton per kg"
+setting chicken_rate money = 550 "Chicken per kg"
+table meat_sale meat pick Beef|Mutton|Chicken = Beef, kg num 0.25..50 = 1
+let beef_money = sum(meat_sale.kg today where meat = Beef) * beef_rate
+let mutton_money = sum(meat_sale.kg today where meat = Mutton) * mutton_rate
+let chicken_money = sum(meat_sale.kg today where meat = Chicken) * chicken_rate
+"Today" beef_money + mutton_money + chicken_money big
+"Beef" beef_money faint
+"Mutton" mutton_money faint
+"Chicken" chicken_money faint
+quick meat_sale, meat, [Beef, Mutton, Chicken]
+form meat_sale
+===
+@create style=typos domain=b1_pet_shop_stock
+pet shop birds and fish stock and when i sell, with price of each kind
+---
+app "Pet Shop" paw ocean
+table kind name text, price money
+table pet_in kind ref kind, qty num 1..500
+table pet_out kind ref kind, qty num 1..100
+each kind sort name as k
+  row card tap edit k
+    k.name bold grow
+    text sum(k.pet_in.qty) - sum(k.pet_out.qty) "in stock"
+    text k.price faint
+"Sales this month" sum(pet_out month, it.qty * it.kind.price) big
+form pet_out, "Sold"
+form pet_in, "Stock in"
+form kind, "Add kind"
+===
+@create style=custom_ui domain=b1_net_cafe
+internet cafe with 5 computers. when a customer sits I press start on a timer, and when they leave I log the minutes and the charge at a rate per hour that I set. show earning today and a log
+---
+app "Net Cafe" cloud slate
+table session pc num 1..5, mins num 1..600, charge money
+setting hour_rate money = 120 "Rate per hour"
+state minutes num = 30
+"Minutes to charge" minutes faint
+slider minutes 5..240
+"Charge" round(minutes * hour_rate / 60) big
+button "Log session" tap add session pc = 1, mins = minutes, charge = round(minutes * hour_rate / 60)
+timer 1h, "Customer timer", notify "Hour is over"
+"Today" sum(session.charge today) head
+list session by day
+===
+@create style=detailed domain=b1_roommate_rent
+four of us share a flat. rent and bills are paid by different people during the month. enter who paid what, each person's share is equal; show who should pay whom, i.e. balance of each person
+---
+app "Flatmates" users ocean
+table mate name text
+table bill_paid what text, amount money, who ref mate
+let each_share = sum(bill_paid.amount month) / max(count(mate), 1)
+"Total this month" sum(bill_paid.amount month) big
+each mate sort name as m
+  let net = sum(m.bill_paid.amount month) - each_share
+  row card tap edit m
+    m.name bold grow
+    text if(net >= 0, "gets back", "owes") abs(round(net)) bold color if(net >= 0, good, bad)
+form bill_paid, "Bill paid"
+form mate, "Add flatmate"
+===
+@create style=multi_feature domain=b1_book_stall
+second hand book stall on the footpath. I note each book I bought with price and when sold the sale price, and also some books I rent per day. show profit this month and books in stock
+---
+app "Book Stall" book ink
+table second_book title text, bought money, sold_price money = 0, rent_per_day money = 0
+table book_rented second_book ref second_book, days num 1..30
+"In stock" count(second_book where sold_price = 0) big
+"Profit this month" sum(second_book month where sold_price > 0, it.sold_price - it.bought) head
+"Rent income" sum(book_rented month, it.days * it.second_book.rent_per_day) faint
+each second_book sort at desc as b
+  row card tap edit b
+    b.title bold grow
+    b.bought faint
+    b.sold_price
+form second_book, "Add book"
+form book_rented, "Book rented out"
+===
+@create style=short domain=b1_cow_fair_costs
+cattle fair costs and prices
+---
+app "Cattle Fair" paw mint
+table fair_cost what pick Transport|Entry|Feed|Broker = Transport, amount money
+table fair_deal animal text, bought money, sold money = 0
+"Spent on fair" sum(fair_cost.amount) head
+"Net profit" sum(fair_deal.sold where sold > 0) - sum(fair_deal.bought where sold > 0) - sum(fair_cost.amount) big
+form fair_deal
+form fair_cost
+===
+@create style=detailed domain=b1_saving_envelope_monthly
+I want to put money aside every month for four things: Eid shopping, school books, a goat for qurbani and a repair fund. each has a target and I log deposits. show progress of each and the total saved
+---
+app "Savings Pots" coin mint
+table pot name text, target money
+table pot_dep pot ref pot, amount money
+"Total saved" sum(pot_dep.amount) big
+each pot sort name as p
+  stack card gap 1 tap edit p
+    row
+      p.name bold grow
+      text sum(p.pot_dep.amount) "of" p.target
+    goal sum(p.pot_dep.amount), p.target, "saved"
+form pot_dep, "Deposit"
+form pot, "Add pot"
+===
+@create style=vague domain=b1_lease_shop_accounts
+my plaza shop sales and rent paid
+---
+app "Shop Accounts" wallet slate
+table shop_sale amount money
+table shop_rent amount money
+"Sales this month" sum(shop_sale.amount month) big
+"Rent paid" sum(shop_rent.amount month) faint
+"Left after rent" sum(shop_sale.amount month) - sum(shop_rent.amount month) head
+form shop_sale, "Sale"
+form shop_rent, "Rent"
+===
+@create style=custom_ui domain=b1_hawker_ledger
+hawker selling on cart, I mark the cart cash at morning and tap buttons for sales and costs to see profit, a big red number if I am in loss
+---
+app "Cart Profit" cart ink
+table cart_in amount money
+table cart_out amount money
+let profit = sum(cart_in.amount today) - sum(cart_out.amount today)
+profit big color if(profit < 0, bad, good)
+row gap 1
+  each [50, 100, 200, 500]
+    button it tap add cart_in amount = it
+row gap 1
+  each [100, 500, 1000]
+    button it fill soft tap add cart_out amount = it
+"In" sum(cart_in.amount today) faint
+"Out" sum(cart_out.amount today) faint
+===
+@create style=detailed domain=b1_stud_service_dues
+we run a bull stud service. farmers bring their cows and pay a fee per service, some pay later. each bull has a fee. show services done per bull this month and money pending from farmers
+---
+app "Stud Service" paw slate
+table bull2 name text, fee money
+table service bull2 ref bull2, farmer text, paid bool
+each bull2 sort name as b
+  row card tap edit b
+    b.name bold grow
+    text count(b.service month) "services"
+    text b.fee * count(b.service where paid = no) "pending" color warn
+"Pending money" sum(service where paid = no, it.bull2.fee) big
+form service, "New service"
+form bull2, "Add bull"
+===
+@create style=typos domain=b1_cheese_dairy_milk_use
+how much milk i used for paneer and how much paneer came out, kg per 10 litre
+---
+app "Paneer" milk plum
+table paneer_batch milk_l num 5..500, paneer_kg num 0.5..100
+"Yield" fixed(sum(paneer_batch.paneer_kg) * 10 / max(sum(paneer_batch.milk_l), 1), 2) "kg per 10 L" big
+text sum(paneer_batch.milk_l) "L used" faint
+trend paneer_batch sort at, it.paneer_kg
+form paneer_batch
+===
+@create style=multi_feature domain=b1_welfare_cash_aid
+our welfare group gives monthly cash aid to some families. each family gets a fixed amount per month and I tick given for this month. show how much cash is needed per month and who has not received yet
+---
+app "Welfare Aid" heart mint
+table needy_fam name text, monthly money
+table aid_given needy_fam ref needy_fam, amount money
+"Needed per month" sum(needy_fam.monthly) big
+"Given this month" sum(aid_given.amount month) head
+each needy_fam sort name as f
+  row card tap edit f
+    f.name bold grow
+    f.monthly
+    if sum(f.aid_given.amount month) >= f.monthly
+      "given" color good
+    else
+      button "Give" tap add aid_given needy_fam = f, amount = f.monthly
+form needy_fam, "Add family"
+===
+@create style=detailed domain=b1_irrigation_fee_collect
+canal water users association: each farmer pays water fee per acre per season. I record acres and fee payments. show total fee due, collected and each farmer's pending amount
+---
+app "Water Fee" drop ocean
+table wuser name text, acres num 0.5..500
+table feepay wuser ref wuser, amount money
+setting acre_fee money = 800 "Fee per acre"
+each wuser sort name as u
+  let pending = u.acres * acre_fee - sum(u.feepay.amount)
+  row card tap edit u
+    u.name bold grow
+    text u.acres "acres"
+    pending bold color if(pending > 0, bad, good)
+"Total due" sum(wuser.acres) * acre_fee big
+"Collected" sum(feepay.amount) head
+form feepay, "Fee paid"
+form wuser, "Add farmer"
+===
+@edit style=plain domain=b1_tool_lending_phone ref=b1_tool_lending
+add the borrower's phone and a due date for return and show overdue ones in red
+---
+~ borrower text, => borrower text, phone text?, due_back date?,
+~ l.fee => l.fee fill if(l.due_back < today, bad, surface)
+===
+@edit style=plain domain=b1_pickle_rename_opt ref=b1_pickle_maker
+add a status to each batch: Cooking, Ready, Sold out
+---
+~ jars_made num 5..500 => jars_made num 5..500, status pick Cooking|Ready|Sold_out = Cooking
+~ b.name bold grow => b.name bold grow\n      choice b.status
+===
+@edit style=plain domain=b1_leads_follow ref=b1_plot_leads
+add a follow up date and show leads to call today at the top
+---
+~ budget money? => budget money?, follow_up date?
+~ "Open leads" => "Call today" count(lead where follow_up <= today and stage != Closed) head\n"Open leads"
+===
+@edit style=plain domain=b1_butcher_weekly ref=b1_butcher_rates
+add a chart of money per day for the week
+---
++ daybars last 7 days, sum(meat_sale.kg on it where meat = Beef) * beef_rate + sum(meat_sale.kg on it where meat = Mutton) * mutton_rate + sum(meat_sale.kg on it where meat = Chicken) * chicken_rate
+===
+@edit style=plain domain=b1_roommate_remove ref=b1_roommate_rent
+add a category (Rent, Electricity, Gas, Internet, Food) to each bill
+---
+~ what text, => what text, category pick Rent|Electricity|Gas|Internet|Food = Rent,
+===
+@edit style=plain domain=b1_savings_pots_note ref=b1_saving_envelope_monthly
+add a due date for each pot and remind me a week before
+---
+~ target money => target money, due date?
++ remind "A saving pot is almost due" at pot.due - 7d at 9:00
+===
+@edit style=plain domain=b1_cart_profit_note ref=b1_hawker_ledger
+add a weekly profit line below
+---
++ "This week" sum(cart_in.amount week) - sum(cart_out.amount week) head
+===
+@edit style=plain domain=b1_welfare_reminder ref=b1_welfare_cash_aid
+remind me on the 1st of the month at 10 am
+---
++ remind "Give monthly aid to the families" monthly on 1 at 10:00

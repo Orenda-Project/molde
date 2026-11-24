@@ -1,0 +1,462 @@
+@create style=multi_feature domain=a3_trip_planner
+trip planner with 3 tabs: day by day plan, trip expenses with a total, and a packing checklist
+---
+app "Trip" plane ocean
+table plan day date, what text
+table spent label text, amount money
+table pack item text, packed bool
+screen days "Plan" calendar
+  each plan sort day as p
+    row card gap 2 tap edit p swipe remove p
+      p.day bold
+      p.what grow
+  form plan, "Add to plan"
+screen money "Money" wallet
+  "Spent so far" sum(spent.amount all) big
+  form spent
+  list spent
+screen bag "Pack" box
+  "Packed" count(pack where packed = yes) "of" count(pack) head
+  each pack sort at as i
+    row card
+      i.item grow
+      toggle i.packed
+  form pack, "Add item"
+===
+@edit style=plain domain=a3_e_trip1 ref=a3_trip_planner
+remind me the day before each plan item
+---
++ remind "Plan item tomorrow" at plan.day - 1d at 9:00
+===
+@create style=detailed domain=a3_packing_ring
+Packing checklist for a weekend away. Items grouped as Clothes, Toiletries, Documents and Gadgets with tick boxes, and a ring showing how much is packed.
+---
+app "Pack list" box mint
+table item name text, group pick Clothes|Toiletries|Documents|Gadgets = Clothes, ok bool
+ring count(item where ok = yes), max(count(item), 1), "packed"
+each options item.group as g
+  text g head
+  each item where group = g sort name as i
+    row card tap edit i swipe remove i
+      i.name grow
+      toggle i.ok
+form item
+===
+@edit style=plain domain=a3_e_pack1 ref=a3_packing_ring
+add how many of each item
+---
+~ ok bool => ok bool, qty num 1..20 = 1
+~ i.name grow => i.name grow\n      i.qty faint
+===
+@create style=multi_feature domain=a3_car_service
+car maintenance log: service type, odometer, cost, show km since last oil change and total spent this year, remind me every 5000 km based on setting
+---
+app "Car care" car slate
+table service what pick Oil|Tyres|Brakes|Battery|Other = Oil, odo num 0.., cost money
+setting gap num = 5000 "Oil change every (km)"
+let last_oil = last(service.odo where what = Oil)
+let now_odo = max(service.odo)
+"Since last oil change" now_odo - last_oil "km" big
+goal now_odo - last_oil, gap, "km driven", "km"
+"Spent this year" sum(service.cost year) bold
+form service
+log service
+===
+@edit style=plain domain=a3_e_car1 ref=a3_car_service
+add a note field to every service
+---
+~ cost money => cost money, note text?
+===
+@create style=custom_ui domain=a3_chore_rota
+chores for the kids by weekday: chores with day and which kid, grid with a column per day, tick when done
+---
+app "Chores" home mint
+table kid name text
+table chore what text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, who ref kid
+table did chore ref chore
+"Today" head
+each chore where day = dayname(today) as c
+  row card gap 2
+    c.who.name bold
+    c.what grow
+    toggle c.did
+each options chore.day as dd
+  stack gap 0
+    text dd faint
+    each chore where day = dd as c
+      row gap 1 tap edit c swipe remove c
+        c.what grow
+        c.who.name faint
+form kid, "Add kid"
+form chore, "Add chore"
+===
+@create style=detailed domain=a3_moving_list
+Moving house checklist, tasks by room, each room has a bar for how many tasks are done, and a countdown to moving day I can set.
+---
+app "Moving" box ocean
+setting moveday date = today "Moving day"
+table task what text, room pick Kitchen|Bedroom|Living|Bath|Other = Other, done bool
+text moveday - today "days to move" big
+each options task.room as r
+  stack card gap 1
+    row gap 2
+      text r bold grow
+      count(task where room = r and done = yes) "of" count(task where room = r) faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * count(task where room = r and done = yes) / max(count(task where room = r), 1), 3 fill good radius 1
+each task where done = no sort room as t
+  row gap 2
+    toggle t.done
+    t.what grow
+form task
+===
+@create style=multi_feature domain=a3_gift_ideas
+gift ideas: list of people, for each person their gift ideas with price and a bought tick, total budget per person and overall
+---
+app "Gifts" gift plum
+table person name text
+table gift for ref person, idea text, price money?, bought bool
+"Total planned" sum(gift.price all) big
+each person sort name as p
+  stack card gap 1
+    row gap 2
+      p.name head grow
+      sum(p.gift.price) bold
+    each p.gift as g
+      row gap 2 tap edit g swipe remove g
+        toggle g.bought
+        g.idea grow
+        g.price faint
+form person, "Add person"
+form gift, "Add idea"
+===
+@create style=detailed domain=a3_birthdays
+Birthdays and anniversaries of family and friends. Show who is next with days left, and remind me on the day itself.
+---
+app "Birthdays" gift plum
+table bd name text, date date, kind pick Birthday|Anniversary = Birthday
+remind "Someone's special day today" at bd.date
+each bd as b
+  let nx = addmonths(b.date, 12 * (year(today) - year(b.date)))
+  let nb = if(nx < today, addmonths(nx, 12), nx)
+  row card gap 2 tap edit b swipe remove b
+    b.name bold grow
+    b.kind faint
+    text nb - today "days" big
+form bd
+===
+@edit style=plain domain=a3_e_bd1 ref=a3_birthdays
+add a gift idea field
+---
+~ kind pick Birthday|Anniversary = Birthday => kind pick Birthday|Anniversary = Birthday, idea text?
+===
+@create style=short domain=a3_anniv
+our wedding anniversary counter
+---
+app "Anniversary" heart plum
+setting wed date = today "Wedding date"
+let yrs = year(today) - year(wed) - if(month(today) * 100 + monthday(today) < month(wed) * 100 + monthday(wed), 1, 0)
+text yrs "years together" big
+"Days together" today - wed head
+"Next anniversary in" addmonths(wed, 12 * (yrs + 1)) - today "days" faint
+===
+@create style=custom_ui domain=a3_rsvp
+RSVP counter for my daughter's birthday party, guests with yes no maybe and number of extra people, showing totals as three coloured tiles and the headcount
+---
+app "RSVP" users plum
+table g name text, reply pick Yes|No|Maybe = Maybe, extra num 0..5 = 0
+row gap 1
+  stack grow card align center fill good
+    count(g where reply = Yes) big
+    "Yes" faint
+  stack grow card align center fill bad
+    count(g where reply = No) big
+    "No" faint
+  stack grow card align center fill warn
+    count(g where reply = Maybe) big
+    "Maybe" faint
+"Expected headcount" count(g where reply = Yes) + sum(g.extra where reply = Yes) head
+each g sort name as x
+  row card gap 2 tap edit x swipe remove x
+    x.name grow
+    x.reply faint
+form g, "Add guest"
+===
+@edit style=plain domain=a3_e_rsvp1 ref=a3_rsvp
+also show how many said no
+---
++ "Not coming" count(g where reply = No) faint
+===
+@create style=detailed domain=a3_shop_budget
+Shopping list with prices and a budget. I tick items once in the trolley, and the bar shows how much of the budget is used and goes orange when over.
+---
+app "Shopping" cart mint
+setting budget money = 10000 "Budget"
+table item name text, price money, got bool
+goal sum(item.price where got = yes), budget, "in the trolley"
+"Planned total" sum(item.price all) faint
+each item sort got as i
+  row card gap 2 tap edit i swipe remove i
+    toggle i.got
+    i.name grow
+    i.price bold
+form item
+===
+@edit style=plain domain=a3_e_shop1 ref=a3_shop_budget
+add a category like food, cleaning, other
+---
+~ price money, got bool => price money, got bool, cat pick Food|Cleaning|Other = Food
+===
+@create style=multi_feature domain=a3_home_repairs
+home repairs list: what is broken, room, urgency low medium high, estimated cost, done tick; sort by urgency and show total cost of open jobs
+---
+app "Repairs" tool slate
+table fix what text, room pick Kitchen|Bath|Bedroom|Outside = Kitchen, urgency pick High|Medium|Low = Medium, cost money?, done bool
+"Open jobs" count(fix where done = no) big
+"Estimated cost" sum(fix.cost where done = no) bold
+each fix where done = no sort urgency as f
+  row card gap 2 tap edit f
+    toggle f.done
+    stack grow
+      f.what bold
+      f.room f.cost size small color muted
+    f.urgency color if(f.urgency = High, bad, if(f.urgency = Medium, warn, muted))
+form fix
+===
+@create style=custom_ui domain=a3_meter_trend
+electricity meter readings: I type the reading every month, show units used since the last reading and a line chart of readings
+---
+app "Meter" bolt ocean
+table reading units num 0..
+let used = last(reading.units) - max(reading.units where units < last(reading.units))
+"Latest reading" last(reading.units) head
+"Used since previous" used "units" big
+trend reading sort at, it.units
+form reading
+log reading
+===
+@edit style=plain domain=a3_e_meter1 ref=a3_meter_trend
+remind me to read the meter on the 1st at 8 in the morning
+---
++ remind "Read the meter" monthly on 1 at 8:00
+===
+@create style=custom_ui domain=a3_hotel_compare
+compare hotels for our trip, name, price per night and rating, I set the nights, shows total and a bar per hotel scaled to the dearest
+---
+app "Hotels" bed ocean
+setting nights num = 3 "Nights"
+table hotel name text, price money, rating num 1..10
+each hotel sort price as h
+  stack card gap 1
+    row gap 2
+      h.name bold grow
+      h.rating "/10" faint
+      h.price * nights bold
+    draw 100, 3
+      rect 0, 0, 100 * h.price / max(maxof(hotel, it.price), 1), 3 fill accent radius 1
+"Cheapest total" min(hotel.price) * nights faint
+form hotel
+===
+@create style=multi_feature domain=a3_bag_weight
+luggage weight: bags with item and kg, a bar for each bag against the 23 kg limit, red if over
+---
+app "Luggage" bag ink
+setting limit num = 23 "Bag limit (kg)"
+table bag name text
+table gear in ref bag, item text, kg num 0.1..30
+each bag as b
+  stack card gap 1
+    row gap 2
+      b.name bold grow
+      sum(b.gear.kg) "kg" color if(sum(b.gear.kg) > limit, bad, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(b.gear.kg) / limit, 0, 1), 4 fill if(sum(b.gear.kg) > limit, bad, good) radius 2
+    each b.gear as g
+      row gap 2 swipe remove g
+        g.item grow
+        g.kg faint
+form bag, "Add bag"
+form gear, "Add item"
+===
+@create style=short domain=a3_visa_docs
+visa documents checklist
+---
+app "Visa docs" list ink
+table doc name text, due date, got bool
+remind "Document due soon" at doc.due - 3d at 9:00
+"Collected" count(doc where got = yes) "of" count(doc) big
+each doc sort due as d
+  row card gap 2
+    toggle d.got
+    d.name grow
+    d.due faint
+form doc
+===
+@create style=custom_ui domain=a3_route_line
+road trip stops drawn as a route line: I add each stop with its distance from the start in km and the line shows dots at the right distance
+---
+app "Road trip" map ocean
+table stop name text, km num 0..5000
+let far = max(max(stop.km), 1)
+draw 100, 30 width 300
+  line 5, 15, 95, 15 stroke soft thick 2
+  each stop as s
+    circle 5 + 90 * s.km / far, 15, 3 fill accent
+"Total distance" max(stop.km) "km" big
+each stop sort km as s
+  row card gap 2 tap edit s swipe remove s
+    s.name grow
+    s.km "km" faint
+form stop
+===
+@create style=short domain=a3_gas_cylinder
+gas cylinder refill tracker
+---
+app "Gas" fire ink
+table refill
+"Days since last refill" since(refill) big
+"Usually lasts" round(gap(refill)) "days" faint
+button "Changed cylinder today" tap add refill
+log refill
+===
+@create style=detailed domain=a3_pet_care
+Pet care for our cat and dog. For each pet tick off feeding twice a day and a walk, and see which pet has not been fed today.
+---
+app "Pets" paw mint
+table pet name text
+table care pet ref pet, kind pick Food|Walk|Vet = Food
+each pet sort name as p
+  stack card gap 1
+    row gap 2
+      p.name head grow
+      if count(p.care today where kind = Food) = 0
+        "Not fed yet" color bad
+      else
+        "Fed" count(p.care today where kind = Food) "x" color good
+    row gap 1
+      button "Fed" tap add care pet = p, kind = Food
+      button "Walk" tap add care pet = p, kind = Walk
+      button "Vet" tap add care pet = p, kind = Vet
+form pet, "Add pet"
+===
+@create style=multi_feature domain=a3_potluck
+potluck dinner planner: who brings what with the type main side dessert or drink, and warn me if a type has nobody yet
+---
+app "Potluck" food mint
+table bring who text, dish text, kind pick Main|Side|Dessert|Drink
+each options bring.kind as k
+  stack card gap 1
+    row gap 2
+      text k head grow
+      count(bring where kind = k) "dishes" faint color if(count(bring where kind = k) = 0, bad, ink)
+    each bring where kind = k as b
+      row gap 2 tap edit b swipe remove b
+        b.dish grow
+        b.who faint
+form bring, "I will bring"
+===
+@create style=short domain=a3_home_inventory
+home inventory for insurance, value by room
+---
+app "Inventory" box slate
+table thing name text, room pick Living|Kitchen|Bedroom|Study|Garage = Living, value money
+"Total value" sum(thing.value all) big
+share thing by room, sum(it.value), it.key
+form thing
+list thing
+===
+@create style=detailed domain=a3_rent_paid
+Rent tracker for my tenant. Reminder on the 5th every month, a tick box when this month's rent is received, and a list of all payments with the date.
+---
+app "Rent in" home slate
+table pay amount money, note text?
+setting rent money = 45000 "Monthly rent"
+remind "Rent is due today" monthly on 5 at 9:00
+"This month" if(count(pay month) > 0, "Received", "Not yet") head color if(count(pay month) > 0, good, bad)
+button "Mark rent received" tap add pay amount = rent
+"Received this year" sum(pay.amount year) big
+log pay
+===
+@create style=multi_feature domain=a3_maid_days
+maid attendance: a month calendar where I tap days she came, number of days this month and salary to pay based on daily rate
+---
+app "Maid days" home ocean
+table came
+setting rate money = 800 "Pay per day"
+state m date = today
+monthnav m
+calendar came, m
+"Days" count(came month of m) big
+"To pay" count(came month of m) * rate head
+===
+@create style=custom_ui domain=a3_wedding_budget
+wedding budget with vendors, each vendor has quoted price and paid so far, bars showing paid of quoted and the total still to pay
+---
+app "Wedding budget" gift plum
+table vendor name text, quoted money, paid money = 0
+"Still to pay" sum(vendor.quoted all) - sum(vendor.paid all) big
+each vendor sort name as v
+  stack card gap 1 tap edit v swipe remove v
+    row gap 2
+      v.name bold grow
+      v.paid "of" v.quoted faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(v.paid / max(v.quoted, 1), 0, 1), 3 fill good radius 1
+form vendor
+===
+@create style=custom_ui domain=a3_kid_stars
+chore stars for my two kids, each kid has a row with stars from chores this week, when they reach 10 stars a notice says reward time
+---
+app "Chore stars" star mint
+table kid name text
+table star kid ref kid, why text?
+each kid as k
+  row card gap 2
+    k.name bold grow
+    row gap 0
+      each 1..min(count(k.star week), 10)
+        icon star color yellow
+    button "+1 star" tap add star kid = k
+when countof(kid, count(it.star week) >= 10) > 0 notify "Reward time!"
+form kid, "Add kid"
+===
+@oos style=detailed domain=a3_oos_flight_search oos=internet
+Search the web for the cheapest flights to Dubai next month and show me the best ones, then keep my budget for the trip.
+---
+app "Trip budget" plane ocean
+setting budget money = 150000 "Trip budget"
+table cost what text, amount money
+goal sum(cost.amount all), budget, "planned spend"
+form cost, "Add cost (flight, hotel...)"
+list cost
+===
+@oos style=short domain=a3_oos_share_pack oos=messaging
+packing list that I can send to my husband on whatsapp
+---
+app "Pack list" box mint
+table item name text, ok bool
+"Packed" count(item where ok = yes) "of" count(item) big
+each item sort at as i
+  row card
+    i.name grow
+    toggle i.ok
+form item
+===
+@oos style=detailed domain=a3_oos_print_chart oos=print
+Make a weekly chores chart for the kids that I can print out and stick on the fridge, with names and days.
+---
+app "Chore chart" home mint
+table kid name text
+table chore what text, kid ref kid, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun
+each options chore.day as dd
+  text dd bold
+  each chore where day = dd as c
+    row card gap 2 tap edit c swipe remove c
+      c.what grow
+      c.kid.name faint
+form kid, "Add kid"
+form chore, "Add chore"
+===

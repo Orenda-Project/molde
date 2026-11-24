@@ -1,0 +1,298 @@
+@create style=typos domain=h2a_chai
+chai stall sales, chai biscuit samosa paratha. show how much i made today n last week
+---
+app "Chai Stall" cup mint
+table sale item pick Chai|Biscuit|Samosa|Paratha = Chai, qty num 1..100 = 1, price money
+stat sum(sale.price today), "Sales today"
+form sale
+daybars last 7 days, sum(sale.price on it)
+list sale by day
+===
+@create style=detailed domain=h2a_bp
+BP log for my father. Two readings a day, morning and evening, with the top and bottom numbers and an optional note. I want a line showing how it goes over time.
+---
+app "Dad BP" heart ocean
+table reading sys num 60..250, dia num 30..150, slot pick Morning|Evening = Morning, note text?
+stat last(reading.sys), "last top number"
+trend reading, it.sys
+form reading
+list reading by day
+===
+@create style=short domain=h2a_games
+hours i play games
+---
+app "Game Time" game slate
+table session game text, hours num 0..24 unit "h"
+stat sum(session.hours today), "hours today"
+daybars last 7 days, sum(session.hours on it)
+form session
+list session
+===
+@create style=detailed domain=h2a_field
+wheat field expenses this season: seed, fertilizer, diesel, labour. I want to see the total and which one costs the most
+---
+app "Field Costs" leaf mint
+table cost kind pick Seed|Fertilizer|Diesel|Labour = Seed, amount money, note text?
+stat sum(cost.amount year), "spent this year"
+share cost year by kind, sum(it.amount), it.key
+form cost
+list cost
+===
+@create style=vague domain=h2a_chores
+chore chart for my three kids Ali Sara Hamza
+---
+app "Kids Chores" star plum
+table chore kid pick Ali|Sara|Hamza = Ali, task text, done bool
+stat count(chore where done = no), "chores left"
+form chore
+each chore where done = no empty "All done"
+  row card
+    toggle it.done
+    text it.task grow
+    text it.kid faint
+===
+@create style=detailed domain=h2a_invoices
+invoices for my design clients - client name, amount, due date and whether they paid. show total unpaid and remind me a day before something is due
+---
+app "Invoices" note ink
+table invoice client text, amount money, due date, paid bool
+stat sum(invoice.amount where paid = no), "unpaid"
+form invoice
+list invoice
+remind "Invoice due tomorrow" at invoice.due - 1d at 9:00
+===
+@create style=typos domain=h2a_taxi
+taxi: every trip fare and fuel cost, whats left after fuel today and for the week
+---
+app "Taxi Day" car slate
+table trip fare money, fuel money = 0
+stat sum(trip.fare today) - sum(trip.fuel today), "left after fuel today"
+daybars last 7 days, sum(trip.fare on it) - sum(trip.fuel on it)
+form trip
+list trip by day
+===
+@create style=short domain=h2a_marks
+marks book: student, subject, score out of 100, average per subject
+---
+app "Marks Book" pencil mint
+table mark student text, subject pick Math|Urdu|English|Science = Math, score num 0..100
+share mark all by subject, avg(it.score), it.key
+form mark
+list mark
+===
+@create style=vague domain=h2a_gymvisits
+clients check in at my gym, how many this week and per client
+---
+app "Gym Check-ins" dumbbell ink
+table visit client text, plan pick Strength|Cardio|Yoga = Strength
+stat count(visit week), "check-ins this week"
+share visit month by client, count(it), it.key
+form visit
+list visit by day
+===
+@create style=short domain=h2a_fasts
+calendar to tick the days I fasted
+---
+app "Fasts" moon plum
+table fast
+state m date = today
+monthnav m
+calendar fast, m
+stat count(fast year), "fasts this year"
+===
+@create style=multi_feature domain=h2a_pets
+pets: dog, cat and parrot. keep vet visits for each with reason, cost and the next visit date, remind me 2 days before, and show how long since each was last seen
+---
+app "Pet Care" paw mint
+table pet name text, kind pick Dog|Cat|Parrot = Dog
+table vet pet ref pet, reason pick Vaccine|Checkup|Illness = Checkup, cost money?, next date?
+form pet
+form vet
+each pet
+  row card
+    text it.name bold grow
+    text "last seen" since(it.vet) "days ago"
+remind "Vet visit coming up" at vet.next - 2d at 9:00
+===
+@create style=custom_ui domain=h2a_ludo
+scoreboard for ludo night, Ali and Sara, big +1 and +5 buttons for each and a reset
+---
+app "Ludo Score" dice ink
+table pt player pick Ali|Sara, n num
+row gap 2
+  each options pt.player
+    stack card gap 1 align center
+      it bold
+      sum(pt.n where player = it) big
+      row gap 1
+        button "+1" tap add pt player = it, n = 1
+        button "+5" tap add pt player = it, n = 5
+button "Reset" tap remove all pt
+===
+@create style=multi_feature domain=h2a_pomodoro
+study timer 25 minutes and count how many I finish each day, with a chart
+---
+app "Focus" hourglass slate
+table study
+timer 25m, "Focus", add study then notify "Session done"
+stat count(study today), "sessions today"
+daybars last 7 days, count(study on it)
+===
+@create style=multi_feature domain=h2a_shop
+small shop with two tabs. Stock tab where items under their low level turn red-ish and I can edit them, and a Sell tab where tapping an item sells one and lowers stock. total sales too
+---
+app "Shop" cart slate
+table item name text, qty num 0.., low num 0.. = 5, price money
+table sale item ref item, n num 1.. = 1
+screen stock "Stock" box
+  form item
+  each item sort it.name
+    row card fill if(it.qty <= it.low, warn, soft) tap edit it
+      text it.name grow
+      text it.qty bold
+screen sell "Sell" cart
+  stat sum(sale, it.n * it.item.price), "total sales"
+  each item
+    button it.name it.price tap add sale item = it then set it.qty = it.qty - 1
+===
+@create style=custom_ui domain=h2a_glass
+a glass that fills up as I drink water, goal 2 liters, with 200 300 500 ml buttons
+---
+app "Glass" drop ocean
+table drink ml num 1..2000
+setting goal num = 2000 "Goal (ml)"
+let n = sum(drink.ml today)
+draw 100, 120 width 160 middle
+  rect 20, 10, 60, 100 stroke edge thick 2 radius 6
+  rect 21, 109 - 98 * clamp(n / goal, 0, 1), 58, 98 * clamp(n / goal, 0, 1) fill accent opacity 0.7
+  label 50, 60, round(100 * n / goal) "%"
+quick drink, ml, [200, 300, 500]
+===
+@create style=multi_feature domain=h2a_budget
+monthly budget: I spend on food, bills, fun and transport. set a monthly limit, show progress against it and bars per category. separate tab for adding
+---
+app "Budget" wallet mint
+table spend category pick Food|Bills|Fun|Transport = Food, amount money
+setting limit money = 50000 "Monthly limit"
+screen add "Add" plus
+  form spend
+screen view "Summary" chart
+  goal sum(spend.amount month), limit, "spent this month"
+  share spend month by category, sum(it.amount), it.key
+===
+@edit style=plain domain=h2a_ed_note
+can i write a little note with each drink, like after gym
+--- before
+app "Water" drop ocean
+table drink ml num 1..5000 unit "ml"
+setting goal num = 2000 "Daily goal (ml)"
+goal sum(drink.ml today), goal, "today", "ml"
+quick drink, ml, [250, 500]
+form drink
+list drink
+--- after
+app "Water" drop ocean
+table drink ml num 1..5000 unit "ml", note text?
+setting goal num = 2000 "Daily goal (ml)"
+goal sum(drink.ml today), goal, "today", "ml"
+quick drink, ml, [250, 500]
+form drink
+list drink
+===
+@edit style=plain domain=h2a_ed_weekly
+make it weekly instead of daily
+--- before
+app "Running" run ocean
+table run km num 0.1..100
+setting goal num = 5 "Daily goal (km)"
+goal sum(run.km today), goal, "today", "km"
+form run
+list run
+--- after
+app "Running" run ocean
+table run km num 0.1..100
+setting goal num = 5 "Weekly goal (km)" set
+goal sum(run.km week), goal, "this week", "km"
+form run
+list run
+===
+@edit style=plain domain=h2a_ed_meals
+rename Food to Meals
+--- before
+app "Spending" wallet mint
+table spend category pick Food|Bills|Fun = Food, amount money
+stat sum(spend.amount month), "this month"
+form spend
+list spend by day
+--- after
+app "Spending" wallet mint
+table spend category pick Meals was Food|Bills|Fun = Meals, amount money
+stat sum(spend.amount month), "this month"
+form spend
+list spend by day
+===
+@edit style=plain domain=h2a_ed_nochart
+get rid of the chart, its just clutter
+--- before
+app "Steps" walk mint
+table walk steps num 0..100000
+stat sum(walk.steps today), "steps today"
+trend walk, it.steps
+form walk
+list walk by day
+--- after
+app "Steps" walk mint
+table walk steps num 0..100000
+stat sum(walk.steps today), "steps today"
+form walk
+list walk by day
+===
+@edit style=plain domain=h2a_ed_remind
+remind me every evening at 8 to log my sleep
+--- before
+app "Sleep" bed plum
+table night bed time, wake time
+stat sum(night, it.wake - it.bed) / 1h / count(night), "hours slept on average"
+form night
+list night
+--- after
+app "Sleep" bed plum
+table night bed time, wake time
+stat sum(night, it.wake - it.bed) / 1h / count(night), "hours slept on average"
+form night
+list night
+remind "Log your sleep" at 20:00
+===
+@ask style=ask domain=h2a_ask1
+make me an app for my business
+---
+ask "What kind of business do you run?" "Selling goods" "Services for clients" "Something else"
+===
+@ask style=ask domain=h2a_ask2
+something to keep track of stuff
+---
+ask "What would you like to keep track of?" "Money" "Health" "Tasks" "Something else"
+===
+@oos style=detailed domain=h2a_oos_msg oos=messaging
+log my tailoring orders with customer name, due date and price, and send each customer a WhatsApp when the suit is ready
+---
+app "Tailor Orders" tool plum
+table order customer text, due date, price money, ready bool
+stat count(order where ready = no), "suits pending"
+form order
+each order where ready = no sort it.due
+  row card
+    toggle it.ready
+    text it.customer grow
+    text it.due faint
+remind "Order due today" at order.due at 9:00
+===
+@oos style=short domain=h2a_oos_net oos=internet
+track the gold I buy in tola and show the live gold rate from the internet
+---
+app "Gold" coin ink
+table buy tola num 0.1..100, price money
+stat sum(buy.tola), "tola owned"
+stat sum(buy.price), "total paid"
+form buy
+list buy by day

@@ -1,0 +1,88 @@
+@create style=detailed domain=a3_flash_random
+Vocabulary flashcards that show a random card each time. I add the word and its meaning, tap the card to flip it, and press next for another random one.
+---
+app "Random cards" book plum
+table card word text, meaning text
+state cur num = 1
+state flip bool = no
+each card sort word as c
+  if index = cur - 1
+    stack card gap 2 align center tap set flip = not flip
+      if flip
+        c.meaning big
+      else
+        c.word big
+button "Next random card" tap set cur = random(max(count(card), 1)) then set flip = no
+form card, "Add card"
+===
+@edit style=plain domain=a3_e_flashr1 ref=a3_flash_random
+add a button to mark cards I know and show how many I know
+---
+~ table card word text, meaning text => table card word text, meaning text, known bool
++ "Known" count(card where known = yes) "of" count(card) faint
+===
+@create style=multi_feature domain=a3_spend_plot
+weekly spending chart with axes and gridlines: log what I spend, a bar for each of the last 7 days drawn on a proper chart, plus today's total
+---
+app "Spend chart" chart ocean
+table spend amount money, what text?
+text sum(spend.amount today) big
+"spent today" faint
+plot 0..7, 0..max(maxof(days last 7 days, sum(spend.amount on it)), 1) axes gridlines
+  each days last 7 days
+    rect index + 0.15, 0, 0.7, sum(spend.amount on it) fill accent
+    tick index + 0.5, dayname(it)
+form spend
+list spend today
+===
+@create style=custom_ui domain=a3_pow_growth
+a compound interest toy: I set the amount, yearly rate and years, and a line chart shows how the money grows each year
+---
+app "Growth" chart mint
+state amt num = 10000
+state rate num = 8
+state yrs num = 10
+field amt "Start amount"
+field rate "Yearly rate %"
+slider yrs 1..30
+let end = amt * pow(1 + rate / 100, yrs)
+"After" yrs "years" faint
+fixed(end, 0) big
+plot 0..yrs, 0..max(end, 1) axes
+  poly stroke accent thick 1
+    each 0..yrs
+      pt it, amt * pow(1 + rate / 100, it)
+===
+@create style=short domain=a3_memory_pairs
+memory match with shuffled cards
+---
+app "Match" brain plum
+table sym name text
+table open s ref sym
+state a num = 0
+each sym shuffle as s
+  box height 54 radius 10 fill if(count(s.open) > 0, accent, soft) tap toggle s.open
+    text if(count(s.open) > 0, s.name, "?") big align center
+"Open cards" count(open all) faint
+button "Close all" tap remove all open
+form sym, "Add symbol"
+===
+@create style=detailed domain=a3_next_up
+Quiz night order: I enter the teams, the app shows which team is next in the list, and a button moves to the next team, wrapping around to the first. Also shows a random team for the bonus question.
+---
+app "Quiz night" cards plum
+table team name text
+state turn num = 1
+let n = max(count(team), 1)
+"Up:" nth(team sort at, turn).name big
+"Take it away!" faint
+button "Next team" tap set turn = turn % n + 1
+button "Bonus question: random team" tap set turn = random(n)
+each team sort at as t empty "Add the teams below"
+  text t.name faint
+form team, "Add team"
+===
+@edit style=plain domain=a3_e_nextup1 ref=a3_next_up
+show how many teams are playing
+---
++ "Teams playing" count(team) faint

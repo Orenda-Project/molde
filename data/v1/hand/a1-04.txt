@@ -1,0 +1,376 @@
+@create style=detailed domain=a1_quit_smoking
+I am quitting smoking. I set the quit date, how many cigarettes I smoked a day and the price of one. Show days clean, money saved, and a button when I resist a craving.
+---
+app "Quit Smoking" fire slate
+table smoke
+table craving
+setting start date "Quit date"
+setting before num = 15 "Cigarettes a day before"
+setting price money = 30 "Price of one cigarette"
+let days = today - start
+stat days, "days since I quit"
+stat (before * days - count(smoke)) * price, "money saved so far"
+stat count(craving), "cravings resisted"
+button "I resisted a craving" tap add craving
+button "I smoked one" tap add smoke
+"Smoked since quit date" count(smoke) faint
+===
+@oos style=detailed domain=a1_screen_oos oos=other_apps
+Block Instagram and YouTube on my phone after 45 minutes a day, and show how much time I spent
+---
+app "Screen Time" phone ocean
+table screen mins num 1..600 unit "min"
+setting limit num = 45 "Daily limit (min)"
+goal sum(screen.mins today), limit, "min on social apps today", "min"
+quick screen, mins, [10, 15, 30]
+daybars last 7 days, sum(screen.mins on it)
+list screen today
+===
+@create style=short domain=a1_reading_pages
+pages I read each day
+---
+app "Reading" book plum
+table read book text, pages num 1..500
+setting goal num = 20 "Pages a day"
+goal sum(read.pages today), goal, "pages today", "pages"
+stat streak(read), "day streak"
+form read
+log read last 14 days
+===
+@create style=custom_ui domain=a1_meditation
+a meditation timer for 10 minutes that logs a session when it ends and shows how many days in a row I sat
+---
+app "Meditate" moon ink
+table sit
+timer 10m, "Sit quietly", add sit then notify "Session done"
+stat streak(sit), "days in a row"
+stat count(sit month), "sessions this month"
+heat last 28 days, count(sit on it), 1
+===
+@create style=multi_feature domain=a1_early_wake
+wake up early: I enter the time I woke, set my target time, count how many mornings this month I was on time
+---
+app "Early Rise" alarm ocean
+table wake at_time time "Woke up at"
+setting target time = 5:30 "Target wake time"
+let ontime = count(wake month where at_time <= target)
+text ontime "of" count(wake month) "mornings on time" big
+remind "Sleep early tonight" at 22:00
+form wake
+each wake month sort at desc as w
+  row card tap edit w swipe remove w
+    text w.at_time bold grow
+    if(w.at_time <= target, "On time", "Late") color if(w.at_time <= target, good, warn)
+===
+@create style=short domain=a1_cold_shower
+cold shower streak
+---
+app "Cold Shower" snow ocean
+table shower
+stat streak(shower), "day streak"
+button if(count(shower today) > 0, "Done today", "Took a cold shower") tap toggle shower
+"Best" best(shower) "days" faint
+calendar shower
+===
+@create style=custom_ui domain=a1_water_glasses
+a row of glasses for the day, each glass fills blue when I drink one, tap the button to add a glass
+---
+app "Glasses" cup ocean
+table glass
+setting goal num = 8 "Glasses a day"
+let n = count(glass today)
+draw 100, 30 width 300
+  each 1..goal
+    rect 100 * (it - 1) / goal, 2, 80 / goal, 24 radius 2 fill if(it <= n, accent, soft)
+text n "of" goal "glasses" head
+button "Drank a glass" tap add glass
+button "Undo" tap remove last(glass today)
+===
+@create style=vague domain=a1_daily_habits
+I want to build a few good habits, nothing complicated
+---
+app "Habits" check mint
+table done habit pick Walk|Read|Write|Stretch
+ring count(done today), 4, "habits today"
+each options done.habit as h
+  row card gap 2
+    text h bold grow
+    streak(done where habit = h) "days" faint
+    toggle done today where habit = h
+"Perfect days in the last 30" countof(days last 30 days, count(done on it) = 4) faint
+===
+@create style=short domain=a1_sugar_free
+sugar free days counter
+---
+app "Sugar Free" apple mint
+table slip
+stat since(slip), "days sugar free"
+button "I had sugar" tap add slip
+count(slip month) "slips this month" faint
+heat last 28 days, count(slip on it), 1
+===
+@create style=custom_ui domain=a1_thirty_days
+a 30 day challenge board: I set the first day, there are 30 boxes and I tap each day I did it and it turns dark
+---
+app "30 Days" target ink
+table done
+setting start date "Day 1"
+"Days done" count(done) "of 30" big
+grid 6 gap 1
+  each 1..30
+    box height 40 radius 8 fill if(count(done on (start + it - 1)) > 0, accent, soft) tap toggle done on (start + it - 1)
+      text it align center color if(count(done on (start + it - 1)) > 0, bg, ink)
+===
+@create style=multi_feature domain=a1_chai_limit
+count my cups of tea and coffee, limit of 4 a day, turns red when I go over, and a chart of the week
+---
+app "Cups" coffee plum
+table cup kind pick Tea|Coffee|Energy_drink = Tea
+setting limit num = 4 "Cups a day"
+goal count(cup today), limit, "cups today", "cups"
+row gap 1
+  each options cup.kind
+    button it grow tap add cup kind = it
+daybars last 7 days, count(cup on it)
+share cup week by kind, count(it), it.key
+===
+@create style=detailed domain=a1_new_words
+I learn 5 new English words every day. Write the word and its meaning, show a ring for today's words and a list of all words.
+---
+app "Words" pencil ocean
+table word term text, meaning text
+ring count(word today), 5, "new words today"
+form word, "Add word"
+stat count(word), "words learned"
+each word sort at desc top 30 as w
+  stack card gap 0 tap edit w swipe remove w
+    text w.term bold
+    w.meaning faint
+===
+@create style=multi_feature domain=a1_digital_detox
+phone free hours: a 60 minute timer, each finished one is logged, total hours this week and a streak
+---
+app "Detox" shield mint
+table detox
+timer 60m, "Phone away", add detox
+stat count(detox week), "hours phone free this week"
+stat streak(detox), "day streak"
+daybars last 7 days, count(detox on it)
+===
+@create style=custom_ui domain=a1_habit_dots
+grid with a row for each habit gym, read, code and seven dots for the last seven days, tap a dot to mark that day
+---
+app "Habit Dots" check ink
+table check habit pick Gym|Read|Code
+each options check.habit as h
+  row gap 1
+    text h bold width 6
+    each days last 7 days as d
+      box grow height 24 radius 12 fill if(count(check on d where habit = h) > 0, accent, soft) tap toggle check on d where habit = h
+row gap 1
+  text "" width 6
+  each days last 7 days
+    text dayname(it) size tiny grow align center
+===
+@create style=detailed domain=a1_urge_log
+When I feel the urge to bite my nails I tap one button and then say if I resisted or gave in. Show the percentage I resisted this week.
+---
+app "Urges" bolt slate
+table urge outcome pick Resisted|Gave_in
+text count(urge today) "urges today" head
+row gap 1
+  each options urge.outcome
+    button it grow tap add urge outcome = it
+"Resisted this week" round(count(urge week where outcome = Resisted) * 100 / count(urge week)) "%" big
+daybars last 7 days, count(urge on it where outcome = Gave_in)
+===
+@create style=short domain=a1_pullups
+pull up progress
+---
+app "Pull-ups" dumbbell ink
+table pull reps num 1..60
+stat max(pull.reps), "best set"
+stat sum(pull.reps week), "reps this week"
+trend pull last 60 days sort at, it.reps
+form pull
+===
+@oos style=detailed domain=a1_selfie_oos oos=camera
+Each Sunday I want to take a selfie with the app camera and compare it to the last one, and also write my weight
+---
+app "Progress" scale mint
+table week kg num 20..300 unit "kg", note text?, photo image?
+text last(week.kg) "kg" big
+trend week last 6 months sort at, it.kg
+form week, "Add weekly check"
+remind "Weekly weigh-in" at 8:00 on sun
+===
+@oos style=short domain=a1_streak_sync_oos oos=sync
+streak competition with my friend, we both see each other's streaks
+---
+app "My Streak" flame ink
+table day
+stat streak(day), "my streak"
+stat best(day), "best streak"
+button if(count(day today) > 0, "Done today", "Done for today") tap toggle day
+calendar day
+===
+@oos style=multi_feature domain=a1_run_weather_oos oos=internet
+run log, and show today's weather and air quality for my city so I know if I should run
+---
+app "Run Log" run ocean
+table run km num 0.1..100 unit "km", feel num 1..5 = 3
+stat sum(run.km week), "km this week"
+stat count(run month), "runs this month"
+daybars last 14 days, sum(run.km on it)
+form run
+log run
+===
+@oos style=detailed domain=a1_voice_gratitude_oos oos=voice
+I want to speak my gratitude and have it written down for me, and see how many days in a row I did it
+---
+app "Gratitude" heart plum
+table thanks note long
+stat streak(thanks), "days in a row"
+form thanks, "Write it here"
+log thanks
+===
+@create style=typos domain=a1_sleep_phone
+no phone in bed!! help me sleep befor 11 and keep a streak
+---
+app "Sleep Early" bed ink
+table early
+remind "Phone away, time for bed" at 22:15
+button if(count(early today) > 0, "In bed on time", "I slept before 11") tap toggle early
+stat streak(early), "nights in a row"
+heat last 28 days, count(early on it), 1
+===
+@create style=multi_feature domain=a1_weekly_goals
+weekly goals screen with goals I add and tick, a screen for habits per day of the week and a stats screen with percent done
+---
+app "Weekly" target mint
+table goal title text, done bool
+table habit_done day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, what text
+screen goals "Goals" target
+  form goal, "Add goal"
+  each goal sort at as g
+    row card tap edit g swipe remove g
+      text g.title grow
+      toggle g.done
+screen days "Days" calendar
+  each options habit_done.day as d
+    stack card gap 0
+      text d bold
+      each habit_done where day = d as h
+        text h.what faint
+  form habit_done, "Add to a day"
+screen stats "Stats" chart
+  ring count(goal where done = yes), count(goal), "goals done"
+===
+@create style=custom_ui domain=a1_breath_circle
+breathing exercise: a circle that gets bigger and smaller, I tap the button for each breath cycle and it counts breaths, 4 seconds in 4 out
+---
+app "Breathe" cloud mint
+table breath
+state big_ bool = no
+let r = if(big_, 40, 20)
+draw 100, 100 width 200
+  circle 50, 50, r fill accent opacity 0.5
+  label 50, 50, count(breath today) big
+every 4s set big_ = not big_
+button "Count one breath" tap add breath
+"Breaths today" count(breath today) faint
+===
+@create style=detailed domain=a1_steps_challenge
+Office steps challenge: my daily steps goal is 7000, I type my steps at night, and I want the ring, a streak of days I hit the goal and a monthly total.
+---
+app "Steps Challenge" walk mint
+table walk steps num 100..60000
+setting goal num = 7000 "Daily goal"
+ring sum(walk.steps today), goal, "steps today"
+"Days I hit the goal this month" countof(days month, sum(walk.steps on it) >= goal) faint
+"Month total" sum(walk.steps month) big
+form walk
+log walk last 14 days
+===
+@create style=short domain=a1_no_spend
+no spend days
+---
+app "No Spend" wallet slate
+table spent
+button "I spent money today" tap toggle spent
+"No-spend days this month" countof(days month, count(spent on it) = 0 and it <= today) big
+calendar spent
+===
+@create style=vague domain=a1_calm_mind
+my mind is always busy, give me something to calm down
+---
+app "Calm" moon plum
+table calm kind pick Breathing|Walk|Prayer|Writing|Quiet
+text "What helped today?" head
+row gap 1
+  each options calm.kind
+    button it grow tap add calm kind = it
+count(calm today) "calm moments today" big
+share calm month by kind, count(it), it.key
+remind "Take two quiet minutes" every 3h from 10:00 to 19:00
+===
+@create style=detailed domain=a1_fitness_week_plan
+Weekly gym plan: I choose the muscle group for each weekday, tick it off when done, and see on top what is planned for today and how many I finished this week.
+---
+app "Gym Plan" dumbbell ink
+table plan day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, group pick Chest|Back|Legs|Arms|Shoulders|Cardio|Rest
+table did plan ref plan
+"Today" head
+each plan where day = dayname(today) as p
+  row card gap 2
+    text p.group bold grow
+    toggle p.did
+"Finished this week" count(did week) big
+each options plan.day as d
+  row
+    text d faint width 5
+    each plan where day = d as p
+      text p.group
+form plan
+===
+@edit style=plain domain=a1_e_quit_remind ref=a1_quit_smoking
+remind me to stay strong at noon and evening
+---
++ remind "Stay strong, you are doing it" at 12:00, 18:00
+===
+@edit style=plain domain=a1_e_reading_genre ref=a1_reading_pages
+add a type of book field, novel, study, religious
+---
+~ pages num 1..500 => pages num 1..500, kind pick Novel|Study|Religious = Novel
+===
+@edit style=plain domain=a1_e_meditate_15 ref=a1_meditation
+make it 15 minutes
+---
+~ timer 10m, "Sit quietly" => timer 15m, "Sit quietly"
+===
+@edit style=plain domain=a1_e_early_theme ref=a1_early_wake
+make it dark
+---
+~ app "Early Rise" alarm ocean => app "Early Rise" alarm ink
+===
+@edit style=plain domain=a1_e_shower_temp ref=a1_cold_shower
+write how many minutes each time
+---
+~ table shower => table shower mins num? 1..30
+===
+@edit style=plain domain=a1_e_chai_size ref=a1_chai_limit
+add a field for sugar spoons
+---
+~ table cup kind pick Tea|Coffee|Energy_drink = Tea => table cup kind pick Tea|Coffee|Energy_drink = Tea, sugar num? 0..5
+===
+@edit style=plain domain=a1_e_glass_ten ref=a1_water_glasses
+change my goal to 10 glasses
+---
+~ setting goal num = 8 => setting goal num = 10
+===
+@edit style=plain domain=a1_e_words_goal ref=a1_new_words
+make the daily goal a setting I can change, starting at 5
+---
+~ ring count(word today), 5, "new words today" => ring count(word today), words_goal, "new words today"
+~ table word term text, meaning text => table word term text, meaning text\nsetting words_goal num = 5 "Words a day"
+===

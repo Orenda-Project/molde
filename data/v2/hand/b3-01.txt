@@ -1,0 +1,438 @@
+@create style=short domain=b3_carrom
+carrom club scoreboard, who has the most wins this season
+---
+app "Carrom Club" game plum
+table player name text
+table win winner ref player, margin num 1..29, board pick Home|Club|Cafe = Home
+"Leaderboard" head
+each player sort count(it.win) desc as p
+  row card
+    p.name bold grow
+    count(p.win) "wins" faint
+    sum(p.win.margin) "pts" bold
+form player, "Add player"
+form win, "Log a win"
+list win by day
+===
+@create style=vague domain=b3_wedding_vendors
+my sister's wedding is in march and i keep forgetting what we still owe the caterer, the decorator and everyone else
+---
+app "Wedding Dues" gift plum
+table vendor name text, service pick Catering|Decor|Photo|Venue|Music|Other = Other, quote money
+table payment vendor ref vendor, amount money, paid_on date = today
+"Still to pay" sum(vendor.quote) - sum(payment.amount) big
+goal sum(payment.amount), sum(vendor.quote), "paid so far"
+each vendor as v
+  let left = v.quote - sum(v.payment.amount)
+  row card tap edit v
+    stack grow
+      v.name bold
+      v.service faint
+    if(left <= 0, "Paid", "Owes") abs(left) color if(left <= 0, good, warn)
+form vendor, "Add vendor"
+form payment, "Add payment"
+===
+@create style=detailed domain=b3_road_trip
+Road trips with my family: each trip has a name and start date, and every leg has the place, kilometres, litres of petrol put in and toll paid. For every trip show total km, how many legs, petrol mileage in km per litre and total tolls.
+---
+app "Road Trips" car ocean
+table trip name text, start date = today
+table leg trip ref trip, place text, dist num 1..2000, litres num? 0..200, toll money?
+each trip sort start desc as t
+  let km_total = sum(t.leg.dist)
+  let petrol = sum(t.leg.litres)
+  stack card gap 1 tap edit t
+    row
+      t.name head grow
+      t.start faint
+    text km_total "km over" count(t.leg) "legs"
+    "Mileage" fixed(km_total / petrol, 1) "km per litre" faint
+    "Tolls" sum(t.leg.toll) faint
+form trip, "New trip"
+form leg, "Add leg"
+===
+@create style=typos domain=b3_car_service
+i have 2 cars and a bike, when did each one last get oil changed and what did the workshop charge me. warn me if its been 3 months
+---
+app "Garage" car slate
+table vehicle name text, plate text?
+table service vehicle ref vehicle, work pick Oil|Tyres|Brakes|Battery|Wash|Other = Oil, cost money, odo num 0..
+"Spent this year" sum(service.cost year) big
+each vehicle as v
+  let oil_late = due(v.service where work = Oil, 90)
+  stack card gap 1 tap edit v
+    row
+      v.name head grow
+      v.plate faint
+    if(oil_late, "Oil change due", "Oil is fine") bold color if(oil_late, warn, good)
+    "Odometer" last(v.service.odo) "km" faint
+    "Spent on this vehicle" sum(v.service.cost) faint
+form vehicle, "Add vehicle"
+form service, "Add service"
+===
+@create style=custom_ui domain=b3_housie
+housie number board, 1 to 90 in a grid, tap a number when it is called and it lights up
+---
+app "Housie" dice plum
+table called ball_no num 1..90
+"Numbers called" count(called) big
+"Last called" last(called.ball_no) faint
+grid 10 gap 1
+  each 1..90 as n
+    box height 28 radius 6 fill if(count(called all where ball_no = n) > 0, accent, soft) tap toggle called all where ball_no = n
+      text n tiny align center
+button "New game" tap remove all called
+===
+@create style=multi_feature domain=b3_chess_ladder
+chess club ladder. players, every game logged against a player as win draw or loss, a point for a win and half for a draw, ranking by points, plus a bar chart of points
+---
+app "Chess Ladder" board ink
+table player name text, rating num 400..3000 = 1200
+table game player ref player, result pick Win|Draw|Loss = Win, opponent text?
+let pts(p player) = count(p.game where result = Win) + count(p.game where result = Draw) / 2
+"Ranking" head
+each player sort pts(it) desc as p
+  row card tap edit p
+    p.name bold grow
+    count(p.game) "games" faint
+    pts(p) "pts" bold
+bars player, pts(it), it.name
+form player, "Add player"
+form game, "Log a game"
+===
+@create style=short domain=b3_gully_cricket
+gully cricket, batters and runs off each ball
+---
+app "Gully Cricket" ball ocean
+table batter name text
+table ball batter ref batter, runs num 0..6 = 0
+"Team total" sum(ball.runs) big
+each batter as b
+  let scored = sum(b.ball.runs)
+  let faced = count(b.ball)
+  stack card gap 1
+    row
+      b.name bold grow
+      text scored "off" faced big
+    "Strike rate" round(scored * 100 / faced) faint
+    row gap 1
+      each [0, 1, 2, 4, 6] as r
+        button r tap add ball batter = b, runs = r
+form batter, "Add batter"
+===
+@create style=detailed domain=b3_masjid_fund
+We are collecting for the masjid roof and wudu area. Keep a list of donors, each gift with amount and what it is for, show how much we raised against the target and who the top five givers are.
+---
+app "Masjid Fund" mosque mint
+table donor name text, phone text?
+table gift donor ref donor, amount money, purpose pick Roof|Wudu_area|Carpets|Fans = Roof
+setting target money = 2000000 "Fund target"
+goal sum(gift.amount), target, "raised so far"
+"By purpose" head
+each gift by purpose
+  row
+    it.key grow
+    sum(it.amount) bold
+"Top givers" head
+each donor sort sum(it.gift.amount) desc top 5 as d
+  row card
+    d.name bold grow
+    sum(d.gift.amount)
+form donor, "Add donor"
+form gift, "Record gift"
+===
+@create style=multi_feature domain=b3_masjid_rota
+rota for who does azan, khutba, cleaning and tea on which date, reminder the evening before, and show this week's duties first plus how many duties each volunteer has done
+---
+app "Masjid Rota" mosque slate
+table volunteer name text, phone text?
+table duty volunteer ref volunteer, role pick Khutba|Azan|Cleaning|Tea = Azan, duty_date date
+remind "Masjid duty tomorrow" at duty.duty_date - 1d at 18:00
+"This week" head
+each duty where duty_date >= today and duty_date <= today + 7 sort duty_date as d
+  row card tap edit d
+    d.duty_date bold
+    d.role grow
+    d.volunteer.name
+"Duties per volunteer" head
+each volunteer sort count(it.duty) desc as v
+  row
+    v.name grow
+    count(v.duty) "duties" faint
+form volunteer, "Add volunteer"
+form duty, "Assign duty"
+===
+@create style=vague domain=b3_pottery
+i do pottery at weekends and lose track of which pot is at which stage
+---
+app "Clay Log" cup plum
+table piece name text, clay pick Stoneware|Porcelain|Earthenware = Stoneware
+table step piece ref piece, stage pick Thrown|Trimmed|Bisque|Glazed|Fired = Thrown, note text?
+"Pieces still in progress" count(piece, last(it.step.stage) != Fired) big
+each piece as p
+  stack card gap 1
+    row
+      p.name bold grow
+      last(p.step.stage) faint
+    p.clay faint
+    row gap 1
+      each options step.stage as s
+        button s tap add step piece = p, stage = s
+form piece, "New piece"
+===
+@create style=detailed domain=b3_freelance_clients
+Freelance design work. Clients each have jobs with a price and a status (quote, active, done, paid), and I log hours against each job. For every client show what they owe me for finished jobs and my effective rate per hour.
+---
+app "Client Jobs" bag ocean
+table client name text, email text?
+table job client ref client, title text, price money, status pick Quote|Active|Done|Paid = Quote
+table worked job ref job, hrs num 0.25..24
+each client as c
+  let owed = sum(c.job.price where status = Done)
+  let hours = sum(c.job, sum(it.worked.hrs))
+  stack card gap 1 tap edit c
+    row
+      c.name head grow
+      "Owes" owed bold color if(owed > 0, warn, ink)
+    "Hours" hours faint
+    "Paid so far" sum(c.job.price where status = Paid) faint
+    "Rate per hour" round(sum(c.job.price where status != Quote) / hours) faint
+form client, "Add client"
+form job, "Add job"
+form worked, "Log hours"
+===
+@create style=short domain=b3_guitar
+guitar practice minutes per song with a streak
+---
+app "Guitar Practice" music plum
+table song title text, level pick Easy|Medium|Hard = Easy
+table practice song ref song, mins num 1..240 = 15
+setting goal num = 20 "Daily minutes"
+"Streak" streak(practice) "days" big
+goal sum(practice.mins today), goal, "minutes today", "min"
+daybars last 7 days, sum(practice.mins on it)
+each song sort sum(it.practice.mins) desc as s
+  row card tap edit s
+    stack grow
+      s.title bold
+      s.level faint
+    sum(s.practice.mins) "min" bold
+    button "+15" tap add practice song = s, mins = 15
+form song, "Add song"
+form practice, "Log practice"
+===
+@create style=custom_ui domain=b3_party_plan
+two tabs, one for my parties with the task list under each (tick them off, who does it) and one for adding new parties and tasks
+---
+app "Party Plans" gift mint
+table event name text, event_date date
+table task event ref event, what text, owner text?, done bool
+screen plan "Plan" list
+  each event sort event_date as e
+    stack card gap 1
+      row
+        e.name head grow
+        e.event_date faint
+      goal count(e.task where done = yes), count(e.task), "tasks done"
+      each e.task as t
+        row tap edit t
+          toggle t.done
+          t.what grow
+          t.owner faint
+screen add "Add" plus
+  form event, "New party"
+  form task, "New task"
+===
+@create style=detailed domain=b3_society_dues
+I collect maintenance dues for our apartment block. Each flat has a number and an owner, payments are logged against the flat, and the monthly amount is a setting. Show how much came in this month and list only the flats that have not paid enough yet.
+---
+app "Society Dues" home slate
+table flat number text, owner text
+table dues flat ref flat, amount money
+setting monthly money = 3000 "Monthly dues"
+"Collected this month" sum(dues.amount month) "of" count(flat) * monthly big
+"Not paid yet" head
+each flat sort number as f
+  if sum(f.dues.amount month) < monthly
+    row card
+      f.number bold
+      f.owner grow
+      monthly - sum(f.dues.amount month) color warn
+form flat, "Add flat"
+form dues, "Record payment"
+===
+@create style=vague domain=b3_bus_pass
+is the monthly bus pass worth it or should i just pay per ride
+---
+app "Commute" bus ocean
+table ride route pick Office|Market|Uni|Other = Office, fare money
+setting pass money = 6000 "Monthly pass price"
+setting usual money = 120 "Usual fare"
+let spent = sum(ride.fare month)
+"Paid per ride this month" spent big
+goal spent, pass, "of the pass price"
+if(spent > pass, "The pass would have been cheaper", "Paying per ride is still cheaper") head
+row gap 1
+  each options ride.route as r
+    button r tap add ride route = r, fare = usual
+share ride month by route, sum(it.fare), it.key
+===
+@create style=custom_ui domain=b3_kabaddi
+kabaddi scoreboard with big numbers for Lions and Tigers, buttons for 1, 2 or 3 points for each team and an undo
+---
+app "Kabaddi Score" ball ink
+table point team pick Lions|Tigers = Lions, pts num 1..3 = 1
+let lions = sum(point.pts where team = Lions)
+let tigers = sum(point.pts where team = Tigers)
+row gap 2 align center
+  stack grow align center
+    "Lions" faint
+    text lions huge
+  "-" big
+  stack grow align center
+    "Tigers" faint
+    text tigers huge
+if(lions > tigers, "Lions lead", if(tigers > lions, "Tigers lead", "Tied")) head align center
+row gap 1
+  each [1, 2, 3] as n
+    button "Lions +" n tap add point team = Lions, pts = n
+row gap 1
+  each [1, 2, 3] as n
+    button "Tigers +" n tap add point team = Tigers, pts = n
+button "Undo" tap remove last(point)
+===
+@create style=typos domain=b3_rickshaw
+rikshaw driver here. fares i get each day and petrol i buy, show profit for today and last week
+---
+app "Rickshaw Day" car mint
+table trip fare money, stand pick Station|Market|Hospital|School|Other = Station
+table fuel cost money, litres num 0..50
+let earned = sum(trip.fare today)
+let spent = sum(fuel.cost today)
+"Today's profit" earned - spent big
+row gap 2
+  stat earned, "fares"
+  stat spent, "fuel"
+  stat count(trip today), "trips"
+quick trip, fare, [100, 150, 200]
+daybars last 7 days, sum(trip.fare on it) - sum(fuel.cost on it)
+share trip week by stand, sum(it.fare), it.key
+form fuel, "Petrol bought"
+===
+@create style=short domain=b3_commissions
+paintings people ordered, size, price, where each one is, and what's still unpaid in the pipeline
+---
+app "Commissions" pen plum
+table commission customer text, size pick Small|Medium|Large = Medium, price money, status pick Sketch|Painting|Delivered = Sketch, due date?
+state filter_status text = ""
+row gap 1
+  each options commission.status as s
+    button s fill if(filter_status = s, accent, soft) tap set filter_status = if(filter_status = s, "", s)
+"Open value" sum(commission.price where status != Delivered) big
+each commission where filter_status = "" or status = filter_status sort due as c
+  row card tap edit c
+    stack grow
+      c.customer bold
+      c.size c.status faint
+    c.price bold
+form commission, "New commission"
+===
+@create style=detailed domain=b3_water_tanker
+We buy water from tanker suppliers. Log each delivery with the supplier, litres and what we paid. I want the cost per 1000 litres for each supplier so I know who is cheapest, and how much we spent this month.
+---
+app "Water Tanker" drop ocean
+table supplier name text
+table delivery supplier ref supplier, litres num 500..20000 = 5000, cost money
+each supplier as s
+  let per_k = sum(s.delivery.cost) * 1000 / sum(s.delivery.litres)
+  row card
+    s.name bold grow
+    stack align end
+      round(per_k) "per 1000 L" bold
+      count(s.delivery) "deliveries" faint
+"Spent this month" sum(delivery.cost month) big
+"Days since last tanker" since(delivery) faint
+list delivery by day
+form supplier, "Add supplier"
+form delivery, "Log delivery"
+===
+@oos style=detailed domain=b3_wedding_rsvp oos=messaging
+send whatsapp invitations to all the wedding guests and track who replied yes or no
+---
+app "Guest List" gift plum
+table guest name text, side pick Bride|Groom = Bride, rsvp pick Waiting|Coming|Not_coming = Waiting, seats num 1..10 = 1
+"Seats confirmed" sum(guest.seats where rsvp = Coming) big
+"Still waiting" count(guest where rsvp = Waiting) faint
+each guest sort name as g
+  row card tap edit g
+    g.name bold grow
+    g.rsvp faint
+form guest, "Add guest"
+===
+@create style=multi_feature domain=b3_squad_stats
+squad stats for our pubg team, per match kills for each player, a bar chart of total kills and the average per match
+---
+app "Squad Stats" game ink
+table player name text
+table outing player ref player, match_no num 1..500, kills num 0..40
+"Total kills" head
+bars player, sum(it.outing.kills), it.name
+each player sort sum(it.outing.kills) desc as p
+  row card
+    p.name bold grow
+    text sum(p.outing.kills) "kills in" count(p.outing) "matches" faint
+    "avg" fixed(sum(p.outing.kills) / count(p.outing), 1) bold
+form player, "Add player"
+form outing, "Log a match"
+===
+@edit style=plain domain=b3_carrom_e1 ref=b3_carrom
+add singles or doubles on each win and show the doubles wins next to the wins
+---
+~ board pick Home|Club|Cafe = Home => board pick Home|Club|Cafe = Home, kind pick Singles|Doubles = Singles
+~ count(p.win) "wins" faint => count(p.win) "wins" count(p.win where kind = Doubles) "doubles" faint
+===
+@edit style=plain domain=b3_wedding_e1 ref=b3_wedding_vendors
+call catering food instead
+---
+~ Catering|Decor => Food was Catering|Decor
+===
+@edit style=plain domain=b3_road_trip_e1 ref=b3_road_trip
+rename litres to fuel
+---
+~ litres num? 0..200 => fuel num? 0..200 was litres
+~ sum(t.leg.litres) => sum(t.leg.fuel)
+===
+@edit style=plain domain=b3_car_service_e1 ref=b3_car_service
+show what i spent on each kind of work this year
+---
++after "Spent this year" sum(service.cost year) big :: "By kind of work" head\nshare service year by work, sum(it.cost), it.key
+===
+@edit style=plain domain=b3_chess_e1 ref=b3_chess_ladder
+tag every game blitz, rapid or classical and count the blitz ones
+---
+~ result pick Win|Draw|Loss = Win, opponent text? => result pick Win|Draw|Loss = Win, pace pick Blitz|Rapid|Classical = Rapid, opponent text?
++after "Ranking" head :: "Blitz games" count(game where pace = Blitz) faint
+===
+@edit style=plain domain=b3_masjid_e1 ref=b3_masjid_fund
+some gifts are only pledges, add a pledge tick and keep them out of the raised total
+---
+~ purpose pick Roof|Wudu_area|Carpets|Fans = Roof => purpose pick Roof|Wudu_area|Carpets|Fans = Roof, pledge bool
+~ goal sum(gift.amount), target, "raised so far" => goal sum(gift.amount where pledge = no), target, "received so far"\n"Pledged, not yet received" sum(gift.amount where pledge = yes) faint
+===
+@edit style=plain domain=b3_freelance_e1 ref=b3_freelance_clients
+add a deadline to jobs and list each client's active jobs by deadline
+---
+~ status pick Quote|Active|Done|Paid = Quote => status pick Quote|Active|Done|Paid = Quote, deadline date?
++after     "Hours" hours faint ::     each c.job where status = Active sort deadline as j\n      row\n        j.title grow\n        j.deadline faint
+===
+@edit style=plain domain=b3_gully_e1 ref=b3_gully_cricket
+need a wicket button for each batter and wickets in the team total
+---
+~ runs num 0..6 = 0 => runs num 0..6 = 0, out bool
+~ "Team total" sum(ball.runs) big => "Team total" sum(ball.runs) "/" count(ball where out = yes) big
++after         button r tap add ball batter = b, runs = r ::       button "Out" fill bad tap add ball batter = b, runs = 0, out = yes
+===
+@edit style=plain domain=b3_guitar_e1 ref=b3_guitar
+my goal is 30 minutes a day now
+---
+~ setting goal num = 20 "Daily minutes" => setting goal num = 30 "Daily minutes" set

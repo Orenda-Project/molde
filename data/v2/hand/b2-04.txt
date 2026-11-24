@@ -1,0 +1,382 @@
+@create style=detailed domain=b2_archery_rounds
+Our archery club shoots rounds of 10 arrows. For every arrow I enter the points (0 to 10). I want each archer's total for a round, their best round ever, and the club record at the top.
+---
+app "Archery" target mint
+table archer name text
+table round archer ref archer, label text
+table arrow round ref round, points num 0..10
+"Club record" max(round, sum(it.arrow.points)) big
+each archer sort name as a
+  stack card gap 1
+    a.name head
+    "Best round" max(a.round, sum(it.arrow.points)) bold
+    each a.round sort at desc top 3 as r
+      row gap 1
+        r.label grow
+        sum(r.arrow.points) "pts" bold
+        count(r.arrow) "arrows" faint
+form archer, "Add archer"
+form round, "Start round"
+form arrow, "Add arrow"
+===
+@create style=multi_feature domain=b2_league_table
+league table for our mohalla cricket teams: each result is won drawn or lost, 3 points for a win and 1 for a draw, sorted by points
+---
+app "Mohalla league" trophy ocean
+table team name text
+table fixture team ref team, opponent text, result pick Won|Drawn|Lost = Won
+"Table" head
+each team sort count(it.fixture where result = Won) * 3 + count(it.fixture where result = Drawn) desc as t
+  row card
+    t.name bold grow
+    count(t.fixture) "played" faint
+    count(t.fixture where result = Won) * 3 + count(t.fixture where result = Drawn) "pts" bold
+form team, "Add team"
+form fixture, "Add result"
+===
+@create style=vague domain=b2_babysitter_pay
+babysitter hours and what I owe her
+---
+app "Sitter pay" baby mint
+table shift hours num 0.5..14, note text?
+setting rate money = 400 "Hourly rate"
+"Owed this week" sum(shift.hours week) * rate big
+"Hours this week" sum(shift.hours week) faint
+"Hours this month" sum(shift.hours month) faint
+form shift
+list shift by day
+===
+@create style=short domain=b2_diaper_count
+diapers wet and dirty, per day
+---
+app "Diapers" baby ocean
+table diaper kind pick Wet|Dirty|Both = Wet
+count(diaper today) "today" big
+row gap 2
+  stat count(diaper today where kind = Wet), "wet"
+  stat count(diaper today where kind = Dirty), "dirty"
+quick diaper, kind, [Wet, Dirty, Both]
+daybars last 7 days, count(diaper on it)
+===
+@create style=detailed domain=b2_solid_foods
+We started solids for the baby last week. Each new food gets tried over a few days, and I want to note if there was a reaction like a rash. List the foods tried, how many times each, and a warning on the ones that caused a reaction.
+---
+app "First foods" food mint
+table food name text
+table trial food ref food, reaction pick None|Rash|Upset|Vomit = None
+count(food) "foods tried" big
+each food sort name as f
+  row card tap edit f
+    f.name bold grow
+    count(f.trial) "tries" faint
+    if count(f.trial where reaction != None) > 0
+      "reaction" color bad bold
+    else
+      "ok" color good
+form food, "Add food"
+form trial, "Log a try"
+===
+@create style=custom_ui domain=b2_puppy_weights
+puppies from the same litter, weigh them every Sunday in grams, a card per puppy with a small line of its weights and how much it gained since last week
+---
+app "Litter" paw mint
+table puppy name text, colour text?
+table weighing puppy ref puppy, grams num 100..40000
+each puppy as p
+  stack card gap 1
+    row
+      p.name head grow
+      last(p.weighing.grams) "g" bold
+    "Gained" last(p.weighing.grams) - max(p.weighing.grams last 14 days where grams < last(p.weighing.grams)) faint
+    trend p.weighing, it.grams
+form puppy, "Add puppy"
+form weighing, "Weigh"
+===
+@create style=multi_feature domain=b2_dog_training
+dog training: list of commands like sit, stay, come; each practice I mark whether he did it, show the success rate for each command
+---
+app "Dog school" paw plum
+table command name text
+table try command ref command, did bool
+each command as c
+  stack card gap 1
+    row
+      c.name bold grow
+      round(100 * count(c.try where did = yes) / max(count(c.try), 1)) "%" big color if(count(c.try where did = yes) * 2 >= count(c.try), good, warn)
+    row gap 1
+      button "Did it" tap add try command = c, did = yes
+      button "Missed" tap add try command = c, did = no
+form command, "Add command"
+===
+@create style=typos domain=b2_bird_cage
+cleaning the budgies cage evry 3 days and fresh water daily, remind me
+---
+app "Budgie care" paw mint
+table clean what pick Cage|Water|Seed = Cage
+if due(clean where what = Cage, 3)
+  "Clean the cage today" color bad head
+else
+  "Cage cleaned" since(clean where what = Cage) "days ago" faint
+if count(clean today where what = Water) = 0
+  "Fresh water needed" color warn
+quick clean, what, [Cage, Water, Seed]
+remind "Fresh water for the budgies" at 8:00
+list clean by day
+===
+@create style=detailed domain=b2_pet_sitting_biz
+I look after neighbours' pets when they travel. Each client has pets and each stay is a number of nights at a nightly rate. Show what each client owes and my total earnings this month.
+---
+app "Pet sitting" paw ocean
+table client name text, pets text
+table stay client ref client, nights num 1..60, rate money = 1500, paid bool
+"Earned this month" sum(stay month, it.nights * it.rate) big
+each client sort name as c
+  row card tap edit c
+    stack grow
+      c.name bold
+      c.pets faint
+    sum(c.stay where paid = no, it.nights * it.rate) "owed" color if(sum(c.stay where paid = no, it.nights * it.rate) > 0, warn, good)
+each stay where paid = no sort at as s
+  row card gap 1
+    toggle s.paid
+    s.client.name grow
+    s.nights "nights" faint
+form client, "Add client"
+form stay, "Add stay"
+===
+@create style=vague domain=b2_migraine_diary
+migraine diary
+---
+app "Migraines" heart plum
+table attack severity num 1..10 = 5, trigger pick Stress|Sleep|Food|Weather|Screen|Unknown = Unknown, hours num 1..72 = 4
+count(attack month) "attacks this month" big
+"Worst" max(attack.severity month) faint
+share options attack.trigger, count(attack where trigger = it), it
+form attack
+list attack by day
+===
+@create style=multi_feature domain=b2_first_aid_kit
+home first aid kit and medicine cabinet: each item has an expiry date, show what has expired and what expires in 30 days, remind me a month before
+---
+app "First aid" heart ocean
+table item name text, shelf pick Kit|Cabinet|Car = Kit, expiry date
+remind "Medicine expires soon" at item.expiry - 30d at 9:00
+count(item where expiry < today) "expired" big color if(count(item where expiry < today) > 0, bad, good)
+count(item where expiry >= today and expiry <= today + 30) "expire within 30 days" color warn
+each item sort expiry as i
+  row card tap edit i swipe remove i
+    stack grow
+      i.name bold
+      i.shelf faint
+    i.expiry color if(i.expiry < today, bad, if(i.expiry <= today + 30, warn, muted))
+form item, "Add item"
+===
+@create style=detailed domain=b2_blood_donors
+We keep a list of blood donors for our hostel. A donor can give blood again after 90 days. I log each donation and want to see who is eligible right now and who is not.
+---
+app "Blood donors" drop plum
+table donor name text, group pick A_pos|A_neg|B_pos|B_neg|O_pos|O_neg|AB_pos|AB_neg = O_pos, phone text?
+table donation donor ref donor, units num 1..2 = 1
+count(donor, due(it.donation, 90)) "can donate now" big color good
+each donor sort name as d
+  row card tap edit d
+    stack grow
+      d.name bold
+      d.group faint
+    if due(d.donation, 90)
+      "Eligible" color good
+    else
+      "in" 90 - since(d.donation) "days" color muted
+form donor, "Add donor"
+form donation, "Log donation"
+===
+@create style=custom_ui domain=b2_parent_meeting
+parent teacher meeting: I make 10 minute slots, parents book one, show free slots in green and booked in grey with the parent name
+---
+app "PTM slots" school ocean
+table slot start time
+table booking slot ref slot, parent text, child text
+each slot sort start as s
+  row card
+    s.start bold
+    if count(s.booking) = 0
+      "Free" color good grow
+    else
+      last(s.booking.parent) grow
+      last(s.booking.child) faint
+"Booked" count(booking) "of" count(slot) faint
+form slot, "Add slot"
+form booking, "Book slot"
+===
+@create style=multi_feature domain=b2_trip_money
+class trip money collection: each trip costs a set amount per student, record every payment and show who still owes and how much, plus the grand total so far
+---
+app "Trip money" bus ocean
+table kid name text
+table payment kid ref kid, amount money
+setting cost money = 3000 "Trip cost per child"
+"Collected" sum(payment.amount) "of" count(kid) * cost big
+each kid sort name as k
+  row card
+    k.name bold grow
+    if(sum(k.payment.amount) >= cost, "Paid", "Owes") max(cost - sum(k.payment.amount), 0) color if(sum(k.payment.amount) >= cost, good, bad)
+form kid, "Add student"
+form payment, "Record payment"
+===
+@create style=short domain=b2_class_library
+classroom library, who has which book
+---
+app "Class library" book plum
+table pupil name text
+table loan pupil ref pupil, book text, back bool
+count(loan where back = no) "books out" big
+each loan where back = no sort at as l
+  row card
+    toggle l.back
+    l.book bold grow
+    l.pupil.name faint
+form pupil, "Add pupil"
+form loan, "Lend book"
+===
+@create style=detailed domain=b2_cycling_club
+Weekend cycling club. Members post their ride distance after each ride. I want a monthly leaderboard with total km per member, the longest single ride for each, and a bar chart of the club's km per week.
+---
+app "Cycling club" bike mint
+table rider name text
+table ride rider ref rider, km num 1..300
+"Club km this month" sum(ride.km month) big
+each rider sort sum(it.ride.km month) desc as r
+  row card
+    text index + 1 faint
+    r.name bold grow
+    sum(r.ride.km month) "km" bold
+    max(r.ride.km) "longest" faint
+bars days last 4 weeks, sum(ride.km on it)
+form rider, "Add rider"
+form ride, "Add ride"
+===
+@create style=multi_feature domain=b2_tennis_coach
+tennis coach: students, each lesson I give is 1 hour at my rate, tick when the student has paid, total unpaid per student and total unpaid overall
+---
+app "Coach books" ball slate
+table student name text
+table lesson student ref student, paid bool
+setting rate money = 2000 "Rate per lesson"
+"Unpaid in total" count(lesson where paid = no) * rate big color warn
+each student sort name as s
+  row card
+    s.name bold grow
+    count(s.lesson where paid = no) * rate color if(count(s.lesson where paid = no) > 0, bad, good)
+    count(s.lesson) "lessons" faint
+"Unpaid lessons" head
+each lesson where paid = no sort at as l
+  row card
+    toggle l.paid
+    l.student.name grow
+    l.at faint
+form student, "Add student"
+form lesson, "Add lesson"
+===
+@create style=vague domain=b2_syllabus_done
+how much of the syllabus I have covered
+---
+app "Syllabus" school ocean
+table class name text
+table topic class ref class, title text, covered bool
+each class as c
+  stack card gap 1
+    row
+      c.name head grow
+      round(100 * count(c.topic where covered = yes) / max(count(c.topic), 1)) "%" big
+    each c.topic as t
+      row gap 1
+        toggle t.covered
+        t.title grow
+form class, "Add class"
+form topic, "Add topic"
+===
+@create style=typos domain=b2_kids_bedtime
+my kids bed time and wake up time, how many hours they sleept, one card each
+---
+app "Kids sleep" moon plum
+table kid name text
+table night kid ref kid, bed time, wake time
+each kid as k
+  stack card gap 1
+    k.name head
+    "Last night" last(k.night.wake) - last(k.night.bed) big
+    "Average" sum(k.night, it.wake - it.bed) / max(count(k.night), 1) faint
+form kid, "Add kid"
+form night, "Log night"
+===
+@oos style=short domain=b2_oos_print_card oos=print
+baby vaccine record I can print as a PDF for the clinic
+---
+app "Vaccine record" baby mint
+table shot vaccine text, given date
+count(shot) "shots given" big
+each shot sort given as s
+  row card tap edit s
+    s.vaccine bold grow
+    s.given faint
+form shot, "Add shot"
+===
+@oos style=detailed domain=b2_oos_whatsapp_import oos=other_apps
+Copy the player list from my WhatsApp group automatically and then track who pays the monthly ground fee in my app.
+---
+app "Ground fee" ball ocean
+table player name text
+table fee player ref player, amount money
+"This month" sum(fee.amount month) big
+each player sort name as p
+  row card
+    p.name bold grow
+    if(count(p.fee month) > 0, "Paid", "Due") color if(count(p.fee month) > 0, good, bad)
+form player, "Add player"
+form fee, "Record fee"
+===
+@edit style=plain domain=b2_e_archery_note ref=b2_archery_rounds
+add the date of the competition to each round and a field for the wind
+---
+~ round archer ref archer, label text => round archer ref archer, label text, wind pick Calm|Breezy|Strong = Calm
+~ r.label grow => r.label r.wind faint grow
+===
+@edit style=plain domain=b2_e_league_ppw ref=b2_league_table
+make a win worth 2 points instead of 3
+---
+~ count(it.fixture where result = Won) * 3 => count(it.fixture where result = Won) * 2
+~ count(t.fixture where result = Won) * 3 => count(t.fixture where result = Won) * 2
+===
+@edit style=plain domain=b2_e_sitter_rate ref=b2_babysitter_pay
+her rate is 450 now and add a bonus setting for late nights
+---
+~ setting rate money = 400 "Hourly rate" => setting rate money = 450 "Hourly rate" set\nsetting bonus money = 0 "Late night bonus"
+~ sum(shift.hours week) * rate => sum(shift.hours week) * rate + bonus
+===
+@edit style=plain domain=b2_e_diaper_rename ref=b2_diaper_count
+rename Dirty to Poop
+---
+~ pick Wet|Dirty|Both = Wet => pick Wet|Poop was Dirty|Both = Wet
+~ where kind = Dirty => where kind = Poop
+~ quick diaper, kind, [Wet, Dirty, Both] => quick diaper, kind, [Wet, Poop, Both]
+===
+@edit style=plain domain=b2_e_foods_chart ref=b2_solid_foods
+show a bar per food with the number of reactions
+---
++ bars food, count(it.trial where reaction != None), it.name
+===
+@edit style=plain domain=b2_e_migraine_water ref=b2_migraine_diary
+add a column for hours slept the night before and show the average
+---
+~ hours num 1..72 = 4 => hours num 1..72 = 4, slept num 0..14 = 7
++ "Average sleep before an attack" fixed(avg(attack.slept), 1) "h" faint
+===
+@edit style=plain domain=b2_e_library_chart ref=b2_class_library
+add a chart of books lent each day this week
+---
++ daybars last 7 days, count(loan on it)
+===
+@edit style=plain domain=b2_e_kidsleep_hour ref=b2_kids_bedtime
+make the bedtime reminder at 8:30 pm every day
+---
++ remind "Time for bed" at 20:30

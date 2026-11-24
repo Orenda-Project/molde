@@ -1,0 +1,446 @@
+@create style=custom_ui domain=a3_thermo_save
+savings thermometer for my umrah fund that goes red to the top as I put money in, with a goal I can change
+---
+app "Umrah fund" coin mint
+table dep amount money
+setting goal money = 500000 "Goal"
+let have = sum(dep.amount all)
+let p = clamp(have / goal, 0, 1)
+row gap 3
+  draw 40, 120 width 56
+    rect 14, 6, 12, 90 stroke ink thick 2 radius 6
+    circle 20, 104, 12 fill red
+    rect 16, 100 - 92 * p, 8, 4 + 92 * p fill red
+  stack grow gap 1
+    text have big
+    "of" goal faint tap edit goal
+    round(p * 100) "% saved" bold
+quick dep, amount, [5000, 10000, 25000]
+form dep
+log dep
+===
+@edit style=plain domain=a3_e_thermo1 ref=a3_thermo_save
+remind me on the 1st of every month to add savings
+---
++ remind "Add to the umrah fund" monthly on 1 at 10:00
+===
+@create style=custom_ui domain=a3_glass
+a glass of water that fills up during the day, tap buttons for a small cup or a bottle, goal 8 glasses
+---
+app "Water glass" drop ocean
+table sip ml num 50..2000
+setting goal num = 2000 "Daily goal (ml)"
+let p = clamp(sum(sip.ml today) / goal, 0, 1)
+draw 70, 110 width 90
+  rect 10, 104 - 96 * p, 50, 96 * p fill accent opacity 0.8
+  path "M8 6h44l-6 100H14z" stroke ink thick 2
+  label 35, 55, round(p * 100) "%" bold
+text sum(sip.ml today) "ml" big
+quick sip, ml, [200, 330, 500]
+"Goal" goal "ml" faint tap edit goal
+===
+@edit style=plain domain=a3_e_glass1 ref=a3_glass
+make my goal 2500 ml
+---
+~ setting goal num = 2000 "Daily goal (ml)" => setting goal num = 2500 "Daily goal (ml)"
+===
+@create style=custom_ui domain=a3_battery
+a battery shaped bar showing how much of my syllabus is finished, chapters I tick off, green when above 80 percent
+---
+app "Syllabus battery" school mint
+table chap name text, done bool
+let n = max(count(chap), 1)
+let p = count(chap where done = yes) / n
+draw 100, 40 width 180
+  rect 2, 6, 88, 28 radius 6 stroke ink thick 2
+  rect 90, 14, 6, 12 fill ink radius 2
+  rect 5, 9, 82 * p, 22 radius 4 fill if(p >= 0.8, good, if(p >= 0.4, warn, bad))
+round(p * 100) "% done" big
+each chap sort at as c
+  row card
+    c.name grow
+    toggle c.done
+form chap, "Add chapter"
+===
+@edit style=plain domain=a3_e_battery1 ref=a3_battery
+use a plum theme
+---
+~ app "Syllabus battery" school mint => app "Syllabus battery" school plum
+===
+@create style=short domain=a3_workout_heat
+workout days heat map
+---
+app "Workout heat" dumbbell ink
+table workout mins num 5..240 = 30
+"Workouts this month" count(workout month) big
+heat last 70 days, count(workout on it), 1
+quick workout, mins, [20, 30, 45, 60]
+"Darker means worked out that day." faint
+===
+@create style=detailed domain=a3_gym_calendar
+A month calendar where I tap the days I went to the gym to mark them, with arrows to look at other months and a count of days this month.
+---
+app "Gym days" dumbbell slate
+table gymday
+state m date = today
+monthnav m
+calendar gymday, m
+"Days this month" count(gymday month of m) big
+"Streak" streak(gymday) "days" faint
+===
+@create style=custom_ui domain=a3_mood_cal
+mood colour calendar: each day I pick one of five moods and the day box on the month grid gets coloured, red for awful to green for great
+---
+app "Mood colours" smile plum
+table mood level pick Awful|Bad|Okay|Good|Great = Okay
+state m date = today
+row gap 1
+  each options mood.level as o
+    button o tap add mood level = o
+monthnav m
+grid 7 gap 1
+  each days month of m as d
+    box height 36 radius 8 fill if(count(mood on d) = 0, soft, if(last(mood.level on d) = Great, good, if(last(mood.level on d) = Good, teal, if(last(mood.level on d) = Okay, yellow, if(last(mood.level on d) = Bad, orange, red))))) tap remove last(mood on d)
+      text monthday(d) size small align center
+"Tap a coloured day to clear it." faint
+===
+@edit style=plain domain=a3_e_mood1 ref=a3_mood_cal
+add a note box for what happened that day
+---
+~ table mood level pick Awful|Bad|Okay|Good|Great = Okay => table mood level pick Awful|Bad|Okay|Good|Great = Okay, note text?
+===
+@create style=custom_ui domain=a3_school_grid
+my school timetable as a grid, five days across and six periods down, each cell shows the subject, I can add a slot with day, period and subject
+---
+app "Timetable" school ocean
+table slot day pick Mon|Tue|Wed|Thu|Fri, period num 1..6, subject text
+grid 6 gap 1
+  box
+  each ["Mon", "Tue", "Wed", "Thu", "Fri"] as dd
+    text dd bold align center
+  each 1..6 as p
+    text p faint align center
+    each ["Mon", "Tue", "Wed", "Thu", "Fri"] as dd
+      box height 40 radius 6 fill if(count(slot where day = dd and period = p) > 0, accent, soft)
+        text last(slot.subject where day = dd and period = p) size tiny align center
+form slot, "Add slot"
+===
+@edit style=plain domain=a3_e_grid1 ref=a3_school_grid
+add a room number to each slot
+---
+~ subject text => subject text, room text?
+===
+@create style=custom_ui domain=a3_seating
+classroom seating chart with 20 desks in 4 rows of 5, each desk shows the student name when I assign one to a desk number
+---
+app "Seating" seat slate
+table desk nr num 1..20, name text
+grid 5 gap 1
+  each 1..20 as n
+    box height 54 radius 8 fill if(count(desk where nr = n) > 0, accent, soft) tap edit last(desk where nr = n)
+      text n size tiny
+      text last(desk.name where nr = n) size small bold
+form desk, "Seat a student"
+"Seated" count(desk) "of 20" faint
+===
+@edit style=plain domain=a3_e_seat1 ref=a3_seating
+show how many desks are still empty
+---
++ "Empty desks" 20 - count(desk) faint
+===
+@create style=multi_feature domain=a3_kanban
+a small kanban board for my side project: cards with a title, three columns Todo Doing Done, change a card's column by tapping, count in each column
+---
+app "Kanban" list ink
+table card title text, col pick Todo|Doing|Done = Todo
+each options card.col as c
+  stack card gap 1
+    text c head
+    count(card where col = c) "cards" faint
+    each card where col = c as x
+      stack gap 1 tap edit x swipe remove x
+        x.title bold
+        choice x.col
+form card, "New card"
+===
+@edit style=plain domain=a3_e_kanban1 ref=a3_kanban
+add a due date to each card
+---
+~ col pick Todo|Doing|Done = Todo => col pick Todo|Doing|Done = Todo, due date?
+===
+@create style=custom_ui domain=a3_dots100
+100 day challenge, a grid of 100 circles where one more fills in each time I tap Done today, and show how many days left
+---
+app "100 days" target mint
+table day
+let n = count(day)
+"Day" n "of 100" head
+grid 10 gap 0
+  each 1..100 as k
+    draw 10, 10
+      circle 5, 5, 4 fill if(k <= n, accent, soft)
+button "Done today" tap toggle day
+"Days left" 100 - n faint
+===
+@create style=detailed domain=a3_pie_budget
+Pie chart for my monthly money split into needs, wants and savings. I add each spend with its type and the pie shows the shares.
+---
+app "Money pie" chart plum
+table spend amount money, kind pick Need|Want|Save = Need, note text?
+let a = sum(spend.amount month where kind = Need)
+let b = sum(spend.amount month where kind = Want)
+let c = sum(spend.amount month where kind = Save)
+let t = max(a + b + c, 1)
+draw 100, 100 width 200
+  arc 50, 50, 44, 0, 360 * a / t fill accent
+  arc 50, 50, 44, 360 * a / t, 360 * (a + b) / t fill warn
+  arc 50, 50, 44, 360 * (a + b) / t, 360 fill good
+row gap 2
+  "Needs" round(a * 100 / t) "%" bold color accent
+  "Wants" round(b * 100 / t) "%" bold color warn
+  "Savings" round(c * 100 / t) "%" bold color good
+form spend
+===
+@create style=custom_ui domain=a3_dial_budget
+a speedometer style dial showing how much of my monthly budget I used, needle moves, turns red near the end
+---
+app "Budget dial" wallet slate
+table spend amount money
+setting budget money = 50000 "Monthly budget"
+let used = sum(spend.amount month)
+let p = clamp(used / budget, 0, 1)
+let ang = -90 + 180 * p
+draw 100, 60 width 220
+  arc 50, 55, 40, -90, 90 stroke soft thick 8
+  arc 50, 55, 40, -90, ang stroke if(p > 0.85, bad, accent) thick 8
+  line 50, 55, 50 + 34 * sin(ang), 55 - 34 * cos(ang) stroke ink thick 2
+  circle 50, 55, 3 fill ink
+text used big
+round(p * 100) "% of" budget faint tap edit budget
+form spend
+===
+@create style=multi_feature domain=a3_stock_bars
+shop stock levels: item, quantity, minimum level, a bar for each item that turns red when it is at or under the minimum, and a +1 and -1 button
+---
+app "Stock" box slate
+table item name text, qty num 0.. = 0, low num 0.. = 5
+each item sort name as i
+  stack card gap 1
+    row gap 2
+      i.name bold grow
+      i.qty big color if(i.qty <= i.low, bad, ink)
+      button "-" tap set i.qty = i.qty - 1
+      button "+" tap set i.qty = i.qty + 1
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, clamp(i.qty * 100 / max(i.low * 4, 1), 0, 100), 4 fill if(i.qty <= i.low, bad, good) radius 2
+form item
+===
+@create style=short domain=a3_calorie_ring
+calorie counter with ring
+---
+app "Calories" apple mint
+table meal kcal num 1..3000, what text?
+setting goal num = 2000 "Daily kcal"
+ring sum(meal.kcal today), goal, "kcal eaten"
+quick meal, kcal, [100, 250, 500]
+form meal
+log meal
+===
+@create style=detailed domain=a3_sleep_bars
+Sleep tracker, I enter how many hours I slept each night. Show a bar for each of the last 14 nights and the average, with a goal of 8 hours.
+---
+app "Sleep" bed plum
+table night hrs num 0..16 = 7
+setting need num = 8 "Hours needed"
+"Average" round(avg(night.hrs last 14 days) * 10) / 10 "hours" big
+goal last(night.hrs), need, "last night", "h"
+daybars last 14 days, sum(night.hrs on it)
+form night
+===
+@create style=short domain=a3_house_points
+school house points board
+---
+app "House points" trophy plum
+table pt house pick Red|Blue|Green|Yellow, n num 1..100 = 5
+bars options pt.house, sum(pt.n where house = it), it
+quick pt, house, [Red, Blue, Green, Yellow]
+form pt, "Add points"
+===
+@create style=custom_ui domain=a3_book_shelf
+my reading progress, for each book a bar showing pages read out of total pages and a plus 10 pages button
+---
+app "Reading" book plum
+table book title text, total num 1..3000, read num 0..3000 = 0
+each book sort at desc as b
+  stack card gap 1
+    row gap 2
+      b.title bold grow
+      round(b.read * 100 / max(b.total, 1)) "%" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(b.read / max(b.total, 1), 0, 1), 4 fill accent radius 2
+    row gap 1
+      button "+10 pages" tap set b.read = b.read + 10
+      button "Finished" tap set b.read = b.total
+form book, "Add book"
+===
+@create style=custom_ui domain=a3_traffic_light
+traffic light for my weekly pocket money: green if I used less than 60 percent, yellow up to 90, red after that
+---
+app "Spend light" coin ink
+table spend amount money
+setting weekly money = 3000 "Weekly money"
+let p = sum(spend.amount week) / max(weekly, 1)
+row gap 3 align center
+  draw 40, 110 width 60
+    rect 4, 4, 32, 102 radius 10 fill ink
+    circle 20, 24, 12 fill if(p > 0.9, red, soft)
+    circle 20, 55, 12 fill if(p > 0.6 and p <= 0.9, yellow, soft)
+    circle 20, 86, 12 fill if(p <= 0.6, green, soft)
+  stack grow
+    sum(spend.amount week) big
+    "of" weekly faint tap edit weekly
+form spend
+===
+@create style=multi_feature domain=a3_chain30
+30 day chain: a row of boxes for the last 30 days that fill when I did my habit, a toggle for today, current streak and best streak
+---
+app "Chain" check mint
+table did
+"Done today" bold
+toggle did
+row gap 2
+  "Streak" streak(did) "days" big
+  "Best" best(did) "days" faint
+grid 10 gap 1
+  each days last 30 days
+    box height 22 radius 4 fill if(count(did on it) > 0, accent, soft) tap toggle did on it
+===
+@create style=multi_feature domain=a3_weight_dash
+weight tracker: log weight, a line chart, lowest and latest weight, and the change since the start
+---
+app "Weight" scale ocean
+table w kg num 20..300
+"Latest" last(w.kg) "kg" big
+row gap 2
+  stat min(w.kg), "lowest"
+  stat last(w.kg) - first(w.kg), "change since start"
+trend w sort at, it.kg
+form w
+log w
+===
+@create style=custom_ui domain=a3_mood_weather
+for each of the last 7 days show a weather icon for my mood, sun for good, cloud for ok, rain for bad, with tap buttons to log mood
+---
+app "Mood weather" cloud ocean
+table feel m pick Good|Ok|Bad
+row gap 1
+  each options feel.m as o
+    button o tap add feel m = o
+row gap 1
+  each days last 7 days
+    stack grow align center
+      icon if(count(feel on it) = 0, "minus", if(last(feel.m on it) = Good, "sun", if(last(feel.m on it) = Ok, "cloud", "rain")))
+      text dayname(it) size tiny color muted
+===
+@create style=multi_feature domain=a3_plants_dash
+plant care with two tabs: one lists my plants with days since I watered them and a water button, the other shows a heat map of all watering
+---
+app "Plants" plant mint
+table plant name text, every num 1..30 = 7
+table watered plant ref plant
+screen care "Plants" plant
+  each plant sort at as p
+    row card gap 2
+      p.name bold grow
+      since(p.watered) "days" color if(since(p.watered) >= p.every, bad, muted)
+      button "Water" tap add watered plant = p
+  form plant, "Add plant"
+screen hist "History" chart
+  heat last 70 days, count(watered on it), 3
+  "Days with watering" count(watered last 70 days) faint
+===
+@create style=custom_ui domain=a3_class_week_grid
+attendance grid, one row per student and 5 coloured boxes for the last 5 days, tap a box to mark present
+---
+app "Attendance grid" users slate
+table kid name text
+table here kid ref kid
+each kid sort name as k
+  row gap 1 align center
+    k.name grow
+    each days last 5 days
+      box width 36 height 28 radius 6 fill if(count(k.here on it) > 0, good, soft) tap toggle k.here on it
+        text dayname(it) size tiny align center
+form kid, "Add student"
+===
+@create style=custom_ui domain=a3_bills_cal
+a month grid showing the days my bills are due coloured, red if unpaid and green if paid, and a list of bills below
+---
+app "Bills month" wallet slate
+table bill name text, due date, amount money, paid bool
+grid 7 gap 1
+  each days month of today
+    box height 34 radius 6 fill if(count(bill on it) = 0, soft, if(count(bill where due = it and paid = no) > 0, bad, good))
+      text monthday(it) size small align center
+"Unpaid this month" sum(bill.amount month where paid = no) big
+each bill sort due as b
+  row card gap 2 tap edit b
+    b.name grow
+    b.due faint
+    b.amount bold
+    toggle b.paid
+form bill
+===
+@create style=multi_feature domain=a3_time_stack
+daily time split: log minutes for study, work and rest, show one stacked bar for today with three colours and totals underneath
+---
+app "Time split" clock ocean
+table blk kind pick Study|Work|Rest, mins num 5..600
+let s = sum(blk.mins today where kind = Study)
+let w = sum(blk.mins today where kind = Work)
+let r = sum(blk.mins today where kind = Rest)
+let t = max(s + w + r, 1)
+draw 100, 10
+  rect 0, 0, 100 * s / t, 10 fill accent
+  rect 100 * s / t, 0, 100 * w / t, 10 fill warn
+  rect 100 * (s + w) / t, 0, 100 * r / t, 10 fill good
+row gap 2
+  "Study" s "min" color accent
+  "Work" w "min" color warn
+  "Rest" r "min" color good
+form blk
+===
+@create style=custom_ui domain=a3_star_ratings
+movie ratings with 5 stars drawn in a row, filled gold for the rating I gave, list of movies I watched
+---
+app "Movies" star plum
+table movie title text, stars num 1..5 = 3
+each movie sort at desc as m
+  row card gap 2 tap edit m swipe remove m
+    m.title bold grow
+    row gap 0
+      each 1..5 as k
+        icon star color if(k <= m.stars, yellow, soft)
+form movie
+===
+@oos style=detailed domain=a3_oos_receipt_cam oos=camera
+I want to take a photo of my shop receipts with the camera and have the app read the total by itself and add it up for the month.
+---
+app "Receipts" bag slate
+table receipt shop text, total money, pic image?
+"This month" sum(receipt.total month) big
+daybars last 7 days, sum(receipt.total on it)
+form receipt, "Add receipt"
+list receipt
+===
+@oos style=short domain=a3_oos_map_parking oos=location
+remember where I parked on a map using gps
+---
+app "Parked" car slate
+table spot place text, floor text?
+"Last spot" last(spot.place) big
+form spot, "Save spot"
+list spot
+===

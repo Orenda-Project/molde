@@ -1,0 +1,407 @@
+@create style=detailed domain=b5_tour_guide
+I guide small tour groups in the old city. a group has a size and each tour has stops with minutes spent. show total walking time of the tour and how many minutes since 9 am the last stop ends if I start at 9:00
+---
+app "Tour Guide" map ocean
+table tour name text, people num 1..50
+table stop tour ref tour, place text, mins num 5..120 = 20
+each tour sort name as t
+  stack card gap 1
+    row
+      t.name head grow
+      t.people "people" faint
+    "Total time" sum(t.stop.mins) "min, ends at" join(9 + floor(sum(t.stop.mins) / 60), ":", fixed(sum(t.stop.mins) % 60, 0)) bold
+    each t.stop as s
+      row
+        s.place grow
+        s.mins "min" faint
+form stop, "Add stop"
+form tour, "New tour"
+===
+@create style=vague domain=b5_dye_lots
+cloth dyeing lots, colour, metres and hours in the vat
+---
+app "Dye House" drop plum
+table lot colour text, metres num 10..5000
+table vat lot ref lot, hours num 0.5..24
+each lot sort at desc as l
+  row card tap edit l
+    l.colour bold grow
+    l.metres "m" faint
+    sum(l.vat.hours) "h" bold
+form vat, "Vat time"
+form lot, "New lot"
+===
+@create style=multi_feature domain=b5_tubewell_hours
+tubewell pumps: each pump, hours it ran and litres of diesel burnt each time. show diesel per hour for each pump with a line chart of the diesel use
+---
+app "Tubewell" drop slate
+table pump name text
+table runlog pump ref pump, hours num 0.5..24, diesel num 0.5..100
+each pump sort name as p
+  stack card gap 1
+    row
+      p.name bold grow
+      fixed(sum(p.runlog.diesel) / sum(p.runlog.hours), 2) "L per hour" bold
+    trend p.runlog, it.diesel
+form runlog, "Log run"
+form pump, "Add pump"
+===
+@create style=custom_ui domain=b5_family_khatam
+our family khatam in ramadan. each of the 30 paras is given to a person, tick when read. show 30 squares coloured by given and read, and how many each person read
+---
+app "Family Khatam" book mint
+table person name text
+table para n num 1..30, person ref person, read bool
+grid 10 gap 1
+  each 1..30 as k
+    box height 30 radius 4 fill if(count(para where n = k and read = yes) > 0, good, if(count(para where n = k) > 0, warn, soft))
+      k small align center
+goal count(para where read = yes), 30, "paras read"
+each person sort name as p
+  row card
+    p.name bold grow
+    count(p.para where read = yes) "of" count(p.para) faint
+form para, "Give a para"
+form person, "Add person"
+===
+@create style=detailed domain=b5_fuel_pumps
+petrol station with 4 dispensers. at the start and end of the day I note the meter reading of each dispenser. litres sold today is last minus first, price per litre is a setting. show sales per dispenser and the total
+---
+app "Fuel Station" car slate
+table dispenser name text
+table meter dispenser ref dispenser, reading num 0..99999999
+setting price_litre money = 270 "Price per litre"
+let sold(d dispenser) = last(d.meter.reading today) - first(d.meter.reading today)
+"Litres today" sum(dispenser, sold(it)) big
+"Sales" round(sum(dispenser, sold(it)) * price_litre) head
+each dispenser sort name as d
+  row card
+    d.name bold grow
+    sold(d) "L" faint
+    round(sold(d) * price_litre) bold
+form meter, "Meter reading"
+form dispenser, "Add dispenser"
+===
+@create style=detailed domain=b5_paint_rooms
+painting contractor. each house has rooms with length width and height in feet. wall area is 2 times length plus width times height. paint needed is area divided by coverage per litre (setting 100 sq ft). show per house totals
+---
+app "Paint Calc" pen ocean
+table house name text
+table room house ref house, label text, length num 3..60, width num 3..60, height num 7..20 = 10
+setting coverage num = 100 "Sq ft per litre"
+let area(r room) = 2 * (r.length + r.width) * r.height
+each house sort name as h
+  stack card gap 1
+    row
+      h.name head grow
+      sum(h.room, area(it)) "sq ft" bold
+    "Paint" fixed(sum(h.room, area(it)) / coverage, 1) "litres" faint
+    each h.room as r
+      row
+        r.label grow
+        area(r) "sq ft" faint
+form room, "Add room"
+form house, "Add house"
+===
+@create style=detailed domain=b5_mosque_budget
+mosque monthly expenses (electricity, gas, imam salary, repairs, other) and donations received. month arrows. show spent vs received for the month and share of each expense type
+---
+app "Mosque Accounts" mosque mint
+table expense type pick Electricity|Gas|Imam|Repairs|Other = Other, amount money
+table donation amount money, note text?
+state m date = today
+monthnav m
+"Received" sum(donation.amount month of m) big
+"Spent" sum(expense.amount month of m) head color if(sum(expense.amount month of m) > sum(donation.amount month of m), bad, ink)
+each options expense.type as t
+  row
+    t grow
+    sum(expense.amount month of m where type = t) bold
+form expense, "Add expense"
+form donation, "Add donation"
+===
+@create style=multi_feature domain=b5_poultry_vaccines
+poultry vaccine schedule: vaccines have a day of age they are due (day 7, 14, 21...). each shed has a date chicks were placed. for each shed show which vaccines are due or overdue and not yet given
+---
+app "Vaccine Plan" egg mint
+table shed name text, placed date
+table vaccine name text, age num 1..60
+table given shed ref shed, vaccine ref vaccine
+each shed sort name as s
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      "age" today - s.placed "days" faint
+    each vaccine sort age as v
+      if v.age <= today - s.placed and count(s.given where vaccine = v) = 0
+        row
+          v.name grow
+          "due since day" v.age color warn
+          button "Given" tap add given shed = s, vaccine = v
+form shed, "Add shed"
+form vaccine, "Add vaccine"
+===
+@create style=short domain=b5_salesman_beat
+salesman beat plan, shops with area, visits and order value, shops not visited in 7 days on top
+---
+app "Beat Plan" cart slate
+table shop name text, area text
+table visit shop ref shop, order money = 0
+each shop sort name as s
+  if due(s.visit, 7)
+    row card tap edit s
+      s.name bold grow
+      s.area faint
+      "visit due" color warn
+"Orders this week" sum(visit.order week) head
+form visit, "Log visit"
+form shop, "Add shop"
+===
+@create style=custom_ui domain=b5_uniform_sizes
+school uniform stock by size S M L XL. a table of boxes: rows are items (shirt, trouser, tie), columns the sizes, each box shows how many are left. buttons to receive or sell one
+---
+app "Uniform Stock" tag ocean
+table uitem name text
+table move uitem ref uitem, size pick S|M|L|XL = M, qty num -50..50
+each uitem sort name as u
+  row gap 1
+    u.name bold grow
+    each options move.size as z
+      stack radius 6 pad 1 fill if(sum(u.move.qty where size = z) <= 2, warn, soft) align center
+        sum(u.move.qty where size = z) bold
+        z tiny
+    button "+1 M" tap add move uitem = u, size = M, qty = 1
+    button "-1 M" tap add move uitem = u, size = M, qty = -1
+form uitem, "Add item"
+===
+@create style=typos domain=b5_bulb_log
+bulbs in the house, which room and watt and when i changed. show bulbs older than a year
+---
+app "Bulb Log" bolt ink
+table room name text
+table bulb room ref room, watt num 3..200
+table changed bulb ref bulb
+each bulb sort at as b
+  if due(b.changed, 365)
+    row card
+      b.room.name bold grow
+      b.watt "W" faint
+      button "Changed" tap add changed bulb = b
+form bulb, "Add bulb"
+form room, "Add room"
+===
+@create style=vague domain=b5_pen_letters
+pen friends and letters sent and received
+---
+app "Letters" note plum
+table friend name text, country text?
+table letter friend ref friend, direction pick Sent|Received = Sent
+each friend sort name as f
+  row card tap edit f
+    f.name bold grow
+    count(f.letter where direction = Sent) "sent" faint
+    count(f.letter where direction = Received) "got" faint
+    if(count(f.letter where direction = Received) > count(f.letter where direction = Sent), "your turn", "") color warn
+form letter, "Add letter"
+form friend, "Add friend"
+===
+@create style=short domain=b5_fair_rides
+mela rides, ticket price and how many sold today
+---
+app "Mela Rides" ball plum
+table ride name text, price money
+table ticket ride ref ride, qty num 1..20 = 1
+"Today" sum(ticket today, it.qty * it.ride.price) big
+each ride sort name as r
+  row card
+    r.name bold grow
+    sum(r.ticket.qty today) "sold" faint
+    button "+1" tap add ticket ride = r
+form ride, "Add ride"
+===
+@create style=detailed domain=b5_carpool
+school carpool among 4 families. each drive is logged with the driver. whoever has driven the fewest times this month is next, show that name big
+---
+app "Carpool" car ocean
+table member name text
+table drive member ref member
+let next = nth(member sort count(it.drive month), 1).name
+"Next driver" head
+next big
+each member sort name as m
+  row card
+    m.name bold grow
+    count(m.drive month) "drives" bold
+    button "Drove" tap add drive member = m
+form member, "Add family"
+===
+@create style=multi_feature domain=b5_set_list
+stand up set list. jokes with their length in minutes, and every time I perform I note how each joke landed (big, some, none). show laugh score per joke and the total minutes of my best set
+---
+app "Set List" smile plum
+table joke title text, mins num 0.5..10 = 1
+table landed joke ref joke, laugh pick Big|Some|None = Some
+each joke sort count(it.landed where laugh = Big) desc as j
+  row card tap edit j
+    stack grow gap 0
+      j.title bold
+      j.mins "min" faint
+    count(j.landed where laugh = Big) "big" color good
+    count(j.landed where laugh = None) "died" color bad
+"Best set length" sum(joke, if(count(it.landed where laugh = Big) > count(it.landed where laugh = None), it.mins, 0)) "min" head
+form landed, "Log performance"
+form joke, "New joke"
+===
+@create style=typos domain=b5_weather_diary
+weather diary: each day i put the weather and the temp. line of temps for 30 days and how many rainy days this month
+---
+app "Weather Diary" cloud ocean
+table reading sky pick Sunny|Cloudy|Rain|Fog = Sunny, temp num -10..55
+"Rainy days" count(reading month where sky = Rain) big
+trend reading sort at, it.temp
+each reading sort at desc top 7 as r
+  row card tap edit r
+    r.at faint
+    r.sky bold grow
+    r.temp "C"
+form reading, "Add today"
+===
+@create style=vague domain=b5_spaced_review
+lecture topics i need to review again after 3 days
+---
+app "Review Queue" brain plum
+table topic name text
+table review topic ref topic
+each topic sort name as t
+  row card tap edit t
+    t.name bold grow
+    if(due(t.review, 3), "review now", join(plural(since(t.review), "day"), " ago")) color if(due(t.review, 3), warn, muted)
+    button "Reviewed" tap add review topic = t
+form topic, "Add topic"
+===
+@create style=detailed domain=b5_water_bills
+village water committee. every house pays a monthly bill. show a grid with one box per house, green if paid this month, red if not, tap to mark paid for the amount in a setting. and how much is still to collect
+---
+app "Water Bills" drop ocean
+table house family text
+table billpaid house ref house, amount money
+setting monthly_bill money = 300 "Monthly bill"
+grid 6 gap 1
+  each house sort family as h
+    stack radius 6 pad 1 fill if(count(h.billpaid month) > 0, good, bad) tap add billpaid house = h, amount = monthly_bill
+      h.family tiny align center color bg
+"Still to collect" (count(house) - count(billpaid month)) * monthly_bill big
+form house, "Add house"
+===
+@create style=short domain=b5_board_games
+board games we own, how many players and minutes, and which one to play tonight picked at random
+---
+app "Game Shelf" dice plum
+table boardgame name text, players num 1..12 = 4, mins num 5..300 = 45
+table played boardgame ref boardgame
+state pick_name text = ""
+button "Pick one for tonight" tap set pick_name = random(boardgame).name
+pick_name big
+each boardgame sort name as g
+  row card tap edit g
+    g.name bold grow
+    g.players "players" faint
+    count(g.played) "plays" bold
+    button "Played" tap add played boardgame = g
+form boardgame, "Add game"
+===
+@create style=custom_ui domain=b5_biryani_ratings
+my biryani hunt. places, and each time I eat I give a rating 1 to 5 and the price. show average rating per place as bars and average price
+---
+app "Biryani Hunt" food mint
+table spot name text, area text?
+table meal spot ref spot, rating num 1..5, price money
+bars spot sort name, avg(it.meal.rating), it.name
+each spot sort avg(it.meal.rating) desc as s
+  row card tap edit s
+    s.name bold grow
+    fixed(avg(s.meal.rating), 1) "stars" bold
+    round(avg(s.meal.price)) faint
+form meal, "Add meal"
+form spot, "Add place"
+===
+@create style=detailed domain=b5_bike_service
+motorbike service intervals. each bike has parts (chain, tyre, brake, oil) and I log when I serviced each part. show for each bike and each part how many days since service and flag oil after 90 days, chain after 180
+---
+app "Bike Care" bike slate
+table bike name text
+table service bike ref bike, part pick Chain|Tyre|Brake|Oil = Oil
+let limit(p text) = if(p = Oil, 90, if(p = Chain, 180, 365))
+each bike sort name as b
+  stack card gap 1
+    b.name head
+    each options service.part as p
+      row
+        p grow
+        plural(since(b.service where part = p), "day") faint
+        if(due(b.service where part = p, limit(p)), "service", "ok") color if(due(b.service where part = p, limit(p)), warn, good)
+form service, "Log service"
+form bike, "Add bike"
+===
+@create style=vague domain=b5_homework_in
+how many kids handed in homework each day per class
+---
+app "Homework In" pencil mint
+table klass name text, kids num 1..60
+table handin klass ref klass, n num 0..60
+each klass sort name as k
+  stack card gap 1
+    row
+      k.name bold grow
+      sum(k.handin.n today) "of" k.kids faint
+    daybars last 7 days, sum(k.handin.n on it)
+form handin, "Add count"
+form klass, "Add class"
+===
+@edit style=plain domain=b5_tour_start ref=b5_tour_guide
+start time should be a setting not always 9
+---
+~ table tour name text, people => setting start_hour num = 9 "Start hour"\ntable tour name text, people
+~ join(9 + floor( => join(start_hour + floor(
+===
+@edit style=plain domain=b5_fuel_types ref=b5_fuel_pumps
+add petrol or diesel to each dispenser and show litres sold today per fuel type
+---
+~ table dispenser name text => table dispenser name text, fuel pick Petrol|Diesel = Petrol
++ each options dispenser.fuel as ft
++   row card\n    ft bold grow\n    sum(dispenser where fuel = ft, sold(it)) "L" bold
+===
+@edit style=plain domain=b5_paint_coats ref=b5_paint_rooms
+add number of coats as a setting, two by default, paint needed doubles with two coats
+---
+~ setting coverage num = 100 => setting coats num = 2 "Coats"\nsetting coverage num = 100
+~ sum(h.room, area(it)) / coverage => sum(h.room, area(it)) * coats / coverage
+===
+@edit style=plain domain=b5_mosque_salary ref=b5_mosque_budget
+call the Imam expense type Salary
+---
+~ Electricity|Gas|Imam|Repairs|Other = Other => Electricity|Gas|Salary was Imam|Repairs|Other = Other
+===
+@edit style=plain domain=b5_carpool_km ref=b5_carpool
+log how many km each drive was and show total km per family
+---
+~ table drive member ref member => table drive member ref member, km num 1..100 = 5
+~ count(m.drive month) "drives" bold => count(m.drive month) "drives" bold\n    sum(m.drive.km month) "km" faint
+===
+@edit style=plain domain=b5_weather_humidity ref=b5_weather_diary
+add humidity percent, optional, and show it in the recent list
+---
+~ temp num -10..55 => temp num -10..55, humidity num? 0..100
+~ r.temp "C" => r.temp "C" r.humidity "%" faint
+===
+@edit style=plain domain=b5_games_stars ref=b5_board_games
+give each game a 1 to 5 star rating (optional) and list the best rated first
+---
+~ mins num 5..300 = 45 => mins num 5..300 = 45, stars num? 1..5
+~ each boardgame sort name as g => each boardgame sort stars desc as g
+===
+@edit style=plain domain=b5_bike_brakes ref=b5_bike_service
+rename Brake to Brakes
+---
+~ Chain|Tyre|Brake|Oil = Oil => Chain|Tyre|Brakes was Brake|Oil = Oil
+===

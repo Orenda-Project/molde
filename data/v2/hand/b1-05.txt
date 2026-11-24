@@ -1,0 +1,269 @@
+@create style=detailed domain=b1_driving_school
+driving school: each learner buys a package of lessons for a fee. I tick each lesson taken and see lessons left in the package and how much fee is still pending
+---
+app "Driving School" car ocean
+table learner name text, package num 5..40 = 12, fee money, vehicle pick Car|Bike = Car
+table lesson learner ref learner
+table feein learner ref learner, amount money
+each learner sort name as l
+  let taken = count(l.lesson)
+  row card tap edit l
+    stack grow
+      l.name bold
+      text l.vehicle faint
+    text l.package - taken "lessons left"
+    text "fee pending" l.fee - sum(l.feein.amount) color if(sum(l.feein.amount) < l.fee, warn, good)
+    toggle l.lesson
+form feein, "Fee received"
+form learner, "New learner"
+===
+@create style=short domain=b1_henna_bookings
+mehndi bookings and advance
+---
+app "Henna" heart plum
+table bride name text, event date, price money, advance money = 0
+each bride where event >= today sort event as b
+  row card tap edit b
+    b.name bold grow
+    b.event
+    text "balance" b.price - b.advance bold
+"Booked this month" count(bride month) faint
+form bride, "New booking"
+===
+@create style=multi_feature domain=b1_welding_jobs
+welding workshop: jobs for customers, each job has the material cost and labour days. I want profit on each job as price minus material minus labour at 1500 a day, plus the number of jobs still open
+---
+app "Welding Jobs" tool slate
+table customer name text, phone text?
+table job customer ref customer, what text, price money, material money, days num 0.5..60, status pick Open|Done = Open
+setting day_rate money = 1500 "Labour per day"
+"Open jobs" count(job where status = Open) head
+each job sort at desc as j
+  let profit = j.price - j.material - j.days * day_rate
+  row card tap edit j
+    stack grow
+      j.what bold
+      text j.customer.name faint
+    text profit color if(profit >= 0, good, bad)
+    choice j.status
+"Profit this month" sum(job, it.price - it.material - it.days * day_rate) big
+form job, "New job"
+form customer, "New customer"
+===
+@create style=detailed domain=b1_supplier_dues
+medical store payables: I buy from several suppliers on bills and pay them later in parts. show how much I owe each supplier and the total I owe, with bills older than 30 days flagged
+---
+app "Supplier Dues" pill ink
+table supplier name text, phone text?
+table bill supplier ref supplier, amount money, number text?
+table paid_out supplier ref supplier, amount money
+"I owe" sum(bill.amount) - sum(paid_out.amount) big
+each supplier sort name as s
+  let owe = sum(s.bill.amount) - sum(s.paid_out.amount)
+  row card tap edit s
+    s.name bold grow
+    if count(s.bill, it.at < now - 30d) > 0
+      "old bills" color warn
+    owe bold
+form bill, "New bill"
+form paid_out, "Paid supplier"
+form supplier, "Add supplier"
+===
+@create style=custom_ui domain=b1_greengrocer_waste
+for each vegetable I note kg bought, kg sold and kg thrown away. show the waste percent in red when above 10 and a bar chart of waste per vegetable
+---
+app "Waste Watch" apple mint
+table veggie name text
+table stockin veggie ref veggie, kg num 1..1000
+table stockout veggie ref veggie, kg num 0.5..1000, how pick Sold|Wasted = Sold
+each veggie sort name as v
+  let wasted = sum(v.stockout.kg where how = Wasted)
+  let pct = wasted * 100 / max(sum(v.stockin.kg), 1)
+  row card tap edit v
+    v.name bold grow
+    text round(pct) "% waste" color if(pct > 10, bad, ink)
+bars veggie, sum(it.stockout.kg where how = Wasted), it.name
+form stockin, "Bought"
+form stockout, "Sold or thrown"
+form veggie, "Add vegetable"
+===
+@create style=vague domain=b1_photo_shoots
+photographer shoots and payments
+---
+app "Shoots" star ink
+table shoot client text, day date, package money
+table shoot_pay shoot ref shoot, amount money
+each shoot sort day desc as s
+  row card tap edit s
+    s.client bold grow
+    s.day
+    text "due" s.package - sum(s.shoot_pay.amount) color warn
+form shoot, "New shoot"
+form shoot_pay, "Payment"
+===
+@create style=detailed domain=b1_ac_service
+I repair and service ACs. for every customer visit, I note the work type, labour charge, and parts. the next service is due 6 months after the last service of that customer, show the customers due now
+---
+app "AC Service" bolt ocean
+table acclient name text, phone text?
+table visit acclient ref acclient, work pick Service|Gas_fill|Repair|Install = Service, labour money, parts money = 0
+"Due for service" count(acclient, since(it.visit) > 180) big
+each acclient sort name as c
+  row card tap edit c
+    c.name bold grow
+    text "last visit" since(c.visit) "days ago" color if(since(c.visit) > 180, warn, muted)
+    text sum(c.visit.labour) + sum(c.visit.parts) bold
+form visit, "Visit"
+form acclient, "New client"
+===
+@create style=multi_feature domain=b1_loan_emi
+loans I took for the shop: each loan has a bank, monthly emi, and how many months, I tick each month paid. show months left, total emi this month and a bar for progress
+---
+app "Loan EMIs" money slate
+table loan_item bank text, emi money, months num 1..120
+table emi_paid loan_item ref loan_item, amount money
+"EMI per month" sum(loan_item.emi) big
+each loan_item as l
+  let done = count(l.emi_paid)
+  stack card gap 1 tap edit l
+    row
+      l.bank bold grow
+      text l.months - done "months left"
+    goal done, l.months, "paid"
+    button "Paid this month" tap add emi_paid loan_item = l, amount = l.emi
+form loan_item, "Add loan"
+===
+@create style=detailed domain=b1_bike_installments
+motorcycle dealer selling on installments. every customer has an advance, a monthly installment and total months. I record each installment received, and want a list of customers who did not pay this month
+---
+app "Bike Installments" bike ink
+table cust name text, phone text?, monthly money, months num 6..60
+table inst cust ref cust, amount money
+"Not paid this month" count(cust, count(it.inst month) = 0) head color warn
+each cust sort name as c
+  row card tap edit c
+    c.name bold grow
+    text count(c.inst) "of" c.months
+    if count(c.inst month) = 0
+      "pending" color bad
+    else
+      "paid" color good
+form inst, "Installment"
+form cust, "New customer"
+===
+@create style=short domain=b1_canteen_sales
+school canteen daily sale by item
+---
+app "Canteen" food mint
+table snack name text, price money
+table snack_sold snack ref snack, qty num 1..300
+each snack sort name as s
+  row card tap edit s
+    s.name bold grow
+    text sum(s.snack_sold.qty today) "sold"
+    text sum(s.snack_sold.qty today) * s.price bold
+"Today" sum(snack_sold today, it.qty * it.snack.price) big
+form snack_sold, "Sold"
+form snack, "Add snack"
+===
+@create style=custom_ui domain=b1_hajj_fund
+saving for hajj of 12 lakh, show a thermometer of how much saved, my monthly deposits and the months it will take at my average monthly saving
+---
+app "Hajj Fund" mosque mint
+setting goal_amount money = 1200000 "Target"
+table deposit amount money
+let saved = sum(deposit.amount)
+let avg_month = saved / max(count(deposit.at), 1)
+draw 40, 100 width 80
+  rect 14, 4, 12, 92 fill soft radius 6
+  rect 14, 96 - 92 * clamp(saved / goal_amount, 0, 1), 12, 92 * clamp(saved / goal_amount, 0, 1) fill accent radius 6
+"Saved" saved "of" goal_amount big
+form deposit, "Add deposit"
+list deposit by day
+===
+@create style=detailed domain=b1_sponsor_children
+our small charity has sponsors who each pay monthly for one child. I list children and sponsors, record each month's sponsor payment, and want the list of children whose sponsor has not paid this month
+---
+app "Sponsors" heart plum
+table sponsor name text, monthly money
+table child_sp name text, sponsor ref sponsor, school text?
+table sponsor_pay sponsor ref sponsor, amount money
+"Unpaid this month" count(sponsor, sum(it.sponsor_pay.amount month) < it.monthly) head
+each child_sp sort name as c
+  row card tap edit c
+    c.name bold grow
+    text c.sponsor.name faint
+    if sum(c.sponsor.sponsor_pay.amount month) < c.sponsor.monthly
+      "unpaid" color warn
+form sponsor_pay, "Sponsor payment"
+form child_sp, "Add child"
+form sponsor, "Add sponsor"
+===
+@oos style=vague domain=b1_sync_partners oos=sync
+shop stock that my brother and i both can edit from our phones at the same time
+---
+app "Shop Stock" package slate
+table item name text, qty num 0.., low num 0.. = 5
+each item sort qty as i
+  row card tap edit i
+    i.name bold grow color if(i.qty <= i.low, warn, ink)
+    i.qty bold
+form item
+===
+@oos style=detailed domain=b1_voice_entry oos=voice
+I run a juice shop and want to just speak the sale like "two mango one orange" and have it written in, with daily total of glasses
+---
+app "Juice Count" cup mint
+table glass flavour pick Mango|Orange|Apple = Mango, qty num 1..20 = 1
+"Glasses today" sum(glass.qty today) big
+quick glass, flavour, [Mango, Orange, Apple]
+list glass by day
+===
+@edit style=plain domain=b1_driving_priority ref=b1_driving_school
+add a priority to learners (test soon, normal) and show a line counting the test soon ones
+---
+~ vehicle pick Car|Bike = Car => vehicle pick Car|Bike = Car, priority pick Normal|Test_soon = Normal
+~ each learner sort name as l => "Test soon" count(learner where priority = Test_soon) head\neach learner sort name as l
+===
+@edit style=plain domain=b1_henna_rename ref=b1_henna_bookings
+rename the advance column to deposit
+---
+~ advance money = 0 => deposit money = 0 was advance
+~ b.advance => b.deposit
+===
+@edit style=plain domain=b1_henna_chart ref=b1_henna_bookings
+add a chart of income per month for this year
+---
++ bars days last 6 months, sum(bride.price month of it), monthname(it)
+===
+@edit style=plain domain=b1_welding_second_table ref=b1_welding_jobs
+add a table for payments received per job and show what is still unpaid for each job
+---
+~ setting day_rate => table jobpay job ref job, amount money\nsetting day_rate
+~ form job, "New job" => form job, "New job"\nform jobpay, "Payment received"
++after     choice j.status ::     text "unpaid" j.price - sum(j.jobpay.amount) faint
+===
+@edit style=plain domain=b1_supplier_flag_setting ref=b1_supplier_dues
+make the 30 days a setting called old_days
+---
+~ "I owe" => setting old_days num = 30 "Old after (days)"\n"I owe"
+~ now - 30d => now - old_days * 1d
+===
+@edit style=plain domain=b1_waste_nochart ref=b1_greengrocer_waste
+take the chart off
+---
+- bars veggie, sum(it.stockout.kg where how = Wasted), it.name
+===
+@edit style=plain domain=b1_waste_option ref=b1_greengrocer_waste
+add a third way out called Gifted
+---
+~ how pick Sold|Wasted = Sold => how pick Sold|Wasted|Gifted = Sold
+===
+@edit style=plain domain=b1_photo_weekly_tab ref=b1_photo_shoots
+add a second tab that shows only shoots coming this week
+---
++ screen soon "This week" calendar
++   each shoot where day >= today and day < today + 7 sort day as s
++     row card tap edit s
++       s.client bold grow
++       s.day

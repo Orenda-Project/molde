@@ -1,0 +1,315 @@
+@create style=custom_ui domain=b2_class_seating
+seating chart for my classroom, 4 columns of desks, show each desk number and who sits there, I assign seats with a form
+---
+app "Seating" seat ocean
+table seat desk num 1..24, student text
+grid 4 gap 1
+  each 1..24 as d
+    stack card pad 1 ratio 1 middle
+      text d tiny faint
+      last(seat.student where desk = d) bold align center
+form seat, "Seat a student"
+"Seated" count(seat) "of 24" faint
+===
+@create style=short domain=b2_term_countdown
+how many days till the holidays
+---
+app "Holidays" calendar mint
+setting holidays date = 2026-12-18 "First day of holidays"
+text holidays - today "days to go" big
+"Weeks" floor((holidays - today) / 7) faint
+===
+@create style=detailed domain=b2_science_experiments
+We do a science experiment each week in class. Each experiment has a title and a grade, and students write what they observed. Show how many observations each experiment has and which students haven't written one yet.
+---
+app "Experiments" brain plum
+table student name text
+table experiment title text, grade num 1..12
+table observation experiment ref experiment, student ref student, note text
+each experiment sort at desc as e
+  stack card gap 1
+    row
+      e.title bold grow
+      count(e.observation) "observations" faint
+    "Missing:" count(student) - count(e.observation) faint
+form student, "Add student"
+form experiment, "Add experiment"
+form observation, "Add observation"
+===
+@create style=vague domain=b2_toddler_words
+my daughter's new words
+---
+app "First words" baby mint
+table word text text, said date = today
+count(word) "words so far" big
+"This month" count(word month) faint
+trend days last 8 weeks, count(word week of it)
+list word by day
+form word
+===
+@create style=multi_feature domain=b2_blood_sugar_family
+three of us in the family have diabetes, readings for each person with fasting or random, show out of range ones in red above 180 and the 7 day average per person
+---
+app "Family sugar" heart plum
+table person name text
+table reading person ref person, level num 40..600, kind pick Fasting|Random = Fasting
+each person as p
+  stack card gap 1
+    row
+      p.name head grow
+      round(avg(p.reading.level last 7 days)) "avg" bold
+    "Out of range this week" count(p.reading last 7 days where level > 180) color if(count(p.reading last 7 days where level > 180) > 0, bad, good)
+    "Last" last(p.reading.level) faint
+form person, "Add person"
+form reading, "Add reading"
+===
+@create style=typos domain=b2_footbal_fees
+we play footbal evry friday, ground costs 3000, split between whoever came, show what each player owes
+---
+app "Friday football" ball mint
+table player name text
+table played player ref player
+setting ground money = 3000 "Ground cost"
+let n = count(played today)
+"Each pays" round(ground / max(n, 1)) big
+count(played week) "plays this week" faint
+each player sort name as p
+  row card tap toggle p.played today
+    p.name bold grow
+    if(count(p.played today) > 0, "in", "out") color if(count(p.played today) > 0, good, muted)
+form player, "Add player"
+===
+@create style=detailed domain=b2_hostel_study_hours
+Boarding school hostel: each student has to study at least 2 hours every night. The warden logs minutes studied per student per night. Show who missed the target last night and the weekly average per student.
+---
+app "Prep hours" book slate
+table student name text
+table prep student ref student, minutes num 0..300
+setting need num 30..240 = 120 "Minimum minutes"
+count(student, sum(it.prep.minutes yesterday) < need) "short last night" big color warn
+each student sort name as s
+  row card
+    s.name bold grow
+    sum(s.prep.minutes yesterday) "min" color if(sum(s.prep.minutes yesterday) < need, bad, good)
+    round(sum(s.prep.minutes last 7 days) / 7) "avg" faint
+form student, "Add student"
+form prep, "Log prep time"
+===
+@create style=custom_ui domain=b2_stopwatch_laps
+stopwatch for sprint training, a start button that sets the start moment, a stop button that saves the time, and a list of my best times
+---
+app "Stopwatch" timer ink
+table lap secs dur
+state started when = now
+state running bool = no
+button "Start" tap set started = now then set running = yes
+if running
+  text now - started big
+  button "Stop" tap add lap secs = now - started then set running = no
+"Best" min(lap.secs) head
+list lap
+===
+@create style=short domain=b2_kids_dua
+bedtime dua tick for the kids every night
+---
+app "Bedtime dua" moon plum
+table child name text
+table dua child ref child
+each child as c
+  row card
+    toggle c.dua
+    c.name bold grow
+    streak(c.dua) "nights" faint
+form child, "Add child"
+===
+@create style=multi_feature domain=b2_ielts_practice
+IELTS practice: I do listening, reading, writing and speaking tests with a band score from 1 to 9, show the latest band for each skill and the average, a line chart for writing
+---
+app "IELTS" book ocean
+table practice skill pick Listening|Reading|Writing|Speaking = Listening, band num 1..9
+each options practice.skill as sk
+  row card
+    text sk bold grow
+    last(practice.band where skill = sk) big
+    "avg" fixed(avg(practice.band where skill = sk), 1) faint
+"Overall average" fixed(avg(practice.band), 1) head
+"Writing trend" faint
+plot 0..max(count(practice where skill = Writing), 2), 1..9 axes
+  poly stroke accent thick 2
+    each practice where skill = Writing sort at
+      pt index, it.band
+form practice
+===
+@create style=detailed domain=b2_baby_medicine_schedule
+Doctor gave baby three medicines at different gaps: one every 8 hours, one every 12 and a drop once a day. I tick each dose, and want to see which is due and when the last one was given.
+---
+app "Baby meds" pill mint
+table med name text, gap_hours num 4..24
+table dose med ref med
+each med as m
+  row card
+    stack grow
+      m.name bold
+      "every" m.gap_hours "hours" faint
+    if(count(m.dose today) = 0 or hour(now - last(m.dose.at)) >= m.gap_hours, "Due", "Given") color if(count(m.dose today) = 0, warn, good)
+    button "Give" tap add dose med = m
+form med, "Add medicine"
+===
+@create style=vague domain=b2_dad_gym_split
+dad's gym split chest back legs
+---
+app "Gym split" dumbbell slate
+table session day pick Chest|Back|Legs|Shoulders = Chest, minutes num 10..180 = 60
+"Next" if(last(session.day) = Chest, "Back", if(last(session.day) = Back, "Legs", if(last(session.day) = Legs, "Shoulders", "Chest"))) big
+count(session week) "sessions this week" faint
+each options session.day as dd
+  row
+    text dd grow
+    count(session month where day = dd) faint
+form session
+===
+@create style=custom_ui domain=b2_tug_of_war
+tug of war game for two kids at one phone, each kid taps their side, the marker moves toward the winner and when it reaches the end say who won
+---
+app "Tug of war" game ink
+state pos num = 50
+draw 100, 20
+  rect 0, 8, 100, 4 fill soft
+  circle pos, 10, 6 fill accent
+button "Red pull" fill bad tap set pos = clamp(pos - 5, 0, 100)
+button "Blue pull" fill accent tap set pos = clamp(pos + 5, 0, 100)
+if pos <= 0
+  "Red wins!" big color bad
+if pos >= 100
+  "Blue wins!" big color accent
+button "Again" tap set pos = 50
+===
+@create style=multi_feature domain=b2_goat_kids_weights
+goats and their kids: each kid goat has a mother, I weigh monthly. show each mother with her kids and their latest weights
+---
+app "Goat herd" paw mint
+table mother tag text
+table kid mother ref mother, name text
+table weight kid ref kid, kg num 1..80
+each mother as m
+  stack card gap 1
+    row
+      m.tag head grow
+      count(m.kid) "kids" faint
+    each m.kid as k
+      row gap 1
+        k.name grow
+        last(k.weight.kg) "kg" bold
+form mother, "Add mother"
+form kid, "Add kid"
+form weight, "Weigh"
+===
+@create style=short domain=b2_puberty_period
+my daughters period dates
+---
+app "Cycle" calendar plum
+table period
+"Days since last" since(period) big
+"Average gap" round(gap(period)) "days" faint
+calendar period
+===
+@create style=detailed domain=b2_football_subs
+Match day sub rotation: 14 players, I want each player's minutes played this season. After every match I enter minutes for those who played. Show who has played the least so I can rotate fairly.
+---
+app "Minutes played" ball ocean
+table player name text
+table minutes player ref player, mins num 0..120
+"Fairness" head
+each player sort sum(it.minutes.mins) as p
+  row card
+    p.name bold grow
+    sum(p.minutes.mins) "min" bold
+    count(p.minutes where mins > 0) "games" faint
+form player, "Add player"
+form minutes, "Add minutes"
+===
+@create style=typos domain=b2_nursery_fees
+nusery school feee collection, kids, month, amount, balance carried over
+---
+app "Nursery fees" school mint
+table kid name text, monthly money
+table fee kid ref kid, amount money
+let due_total = sum(kid.monthly) * (month(today))
+each kid sort name as k
+  row card tap edit k
+    k.name bold grow
+    text k.monthly * month(today) - sum(k.fee.amount year) bold color if(k.monthly * month(today) - sum(k.fee.amount year) > 0, bad, good)
+"Total owed so far" due_total - sum(fee.amount year) big
+form kid, "Add kid"
+form fee, "Add fee"
+===
+@create style=multi_feature domain=b2_pet_groomer
+dog groomer appointments: owner, dog, service (bath, trim, nails), price, done tick. show todays jobs, todays earnings and the tally by service this month
+---
+app "Groomer" paw ocean
+table appt owner text, dog text, service pick Bath|Trim|Nails = Bath, price money, day date = today, done bool
+"Today's earnings" sum(appt.price where day = today and done = yes) big
+each appt where day = today sort at as a
+  row card tap edit a
+    toggle a.done
+    stack grow
+      a.dog bold
+      a.owner faint
+    a.service faint
+    a.price bold
+each options appt.service as sv
+  row
+    text sv grow
+    count(appt month where service = sv and done = yes) faint
+form appt, "Book dog"
+===
+@oos style=short domain=b2_oos_maps_clinic oos=other_apps
+show my clinics on google maps and keep a list of appointments
+---
+app "Appointments" heart ocean
+table appt who text, place text, day date
+each appt where day >= today sort day as a
+  row card tap edit a
+    a.day bold
+    a.who grow
+    a.place faint
+form appt, "Add appointment"
+===
+@edit style=plain domain=b2_e_seating_clear ref=b2_class_seating
+add a clear button that removes all the seats
+---
++ button "Clear seats" tap remove all seat
+===
+@edit style=plain domain=b2_e_term_second ref=b2_term_countdown
+add the exam date as another countdown
+---
++ setting exams date = 2026-12-01 "First exam day"
++ text exams - today "days to the exams" head
+===
+@edit style=plain domain=b2_e_words_lang ref=b2_toddler_words
+add a language choice, English Urdu or Pashto
+---
+~ table word text text, said date = today => table word text text, language pick English|Urdu|Pashto = English, said date = today
++ "Urdu words" count(word where language = Urdu) faint
+===
+@edit style=plain domain=b2_e_fees_rename ref=b2_footbal_fees
+rename ground to pitch
+---
+~ setting ground money = 3000 "Ground cost" => setting pitch money = 3000 "Pitch cost" was ground
+~ round(ground / max(n, 1)) => round(pitch / max(n, 1))
+===
+@edit style=plain domain=b2_e_prep_target ref=b2_hostel_study_hours
+make the minimum 90 minutes
+---
+~ setting need num 30..240 = 120 "Minimum minutes" => setting need num 30..240 = 90 "Minimum minutes" set
+===
+@edit style=plain domain=b2_e_ielts_goal ref=b2_ielts_practice
+add a target band setting 7 and show how far the overall average is from it
+---
+~ "Overall average" fixed(avg(practice.band), 1) head => setting target num 1..9 = 7 "Target band"\n"Overall average" fixed(avg(practice.band), 1) head\n"Gap to target" fixed(max(target - avg(practice.band), 0), 1) faint
+===
+@edit style=plain domain=b2_e_groomer_tip ref=b2_pet_groomer
+add a tip field and include it in the earnings
+---
+~ price money, => price money, tip money = 0,
+~ sum(appt.price where day = today and done = yes) => sum(appt.price where day = today and done = yes) + sum(appt.tip where day = today and done = yes)

@@ -1,0 +1,388 @@
+@create style=detailed domain=b2_physio_plan
+After my knee operation the physio gave me four exercises to do daily. I want to tick each one when done today, see my streak, and log a pain score from 1 to 10 each evening to see if it is improving.
+---
+app "Knee rehab" heart mint
+table exercise name text, reps text = "10 x 3"
+table done exercise ref exercise
+table pain score num 1..10
+"Done today" count(done today) "of" count(exercise) big
+each exercise as e
+  row card
+    toggle e.done
+    stack grow
+      e.name bold
+      e.reps faint
+    streak(e.done) "days" faint
+"Pain over two weeks" head
+trend pain last 14 days, it.score
+form pain, "Log pain"
+form exercise, "Add exercise"
+===
+@create style=short domain=b2_tooth_fairy
+lost teeth and what the fairy paid
+---
+app "Tooth fairy" tooth plum
+table child name text
+table tooth child ref child, which text, reward money = 100
+each child as c
+  row card
+    c.name bold grow
+    count(c.tooth) "teeth" faint
+    sum(c.tooth.reward) bold
+form child, "Add child"
+form tooth, "Lost a tooth"
+===
+@create style=multi_feature domain=b2_growth_chart
+baby growth: weight in kg and length in cm at each checkup, for each child, latest numbers and a line for weight
+---
+app "Growth" baby mint
+table baby name text, born date
+table checkup baby ref baby, kg num 1..40, cm num 30..150
+each baby as b
+  stack card gap 1
+    b.name head
+    row gap 2
+      stat last(b.checkup.kg), "kg now"
+      stat last(b.checkup.cm), "cm now"
+      stat count(b.checkup), "checkups"
+    trend b.checkup, it.kg
+form baby, "Add baby"
+form checkup, "Add checkup"
+===
+@create style=vague domain=b2_potty_stickers
+potty training sticker chart
+---
+app "Potty chart" star mint
+table attempt worked pick Yes|Accident = Yes
+count(attempt today where worked = Yes) "stickers today" big
+"Total stickers" count(attempt where worked = Yes) faint
+row gap 1
+  button "Success" fill good tap add attempt worked = Yes
+  button "Accident" tap add attempt worked = Accident
+grid 7 gap 1
+  each days last 28 days
+    box height 24 radius 6 fill if(count(attempt on it where worked = Yes) > 0, accent, soft)
+===
+@create style=detailed domain=b2_fish_tanks
+I have three aquariums. Each needs a partial water change every week and I forget which one is due. Log water changes and feedings per tank and highlight the tanks that are overdue.
+---
+app "Fish tanks" fish ocean
+table tank name text, litres num 5..1000 = 60
+table change tank ref tank, percent num 5..100 = 25
+table feeding tank ref tank
+each tank as t
+  stack card gap 1 tap edit t
+    row
+      t.name head grow
+      t.litres "L" faint
+    if due(t.change, 7)
+      "Water change overdue" color bad bold
+    else
+      "Last change" since(t.change) "days ago" faint
+    "Fed today" count(t.feeding today) "times" faint
+    row gap 1
+      button "Fed" tap add feeding tank = t
+      button "Water changed" tap add change tank = t, percent = 25
+form tank, "Add tank"
+===
+@create style=typos domain=b2_riding_lessons
+horse ridding school, riders book lessons on a horse, i need to see how many lessons each rider took and each horse worked this week so no horse is overworked
+---
+app "Riding school" paw slate
+table rider name text
+table horse name text, max_week num 1..30 = 10 "Max lessons per week"
+table lesson rider ref rider, horse ref horse, length pick Half_hour|Hour = Hour
+each horse as h
+  row card
+    h.name bold grow
+    count(h.lesson week) "of" h.max_week color if(count(h.lesson week) >= h.max_week, bad, ink)
+"Riders" head
+each rider sort name as r
+  row card tap edit r
+    r.name bold grow
+    count(r.lesson) "lessons" faint
+form rider, "Add rider"
+form horse, "Add horse"
+form lesson, "Book lesson"
+===
+@create style=multi_feature domain=b2_school_canteen
+school canteen: items with price and stock left, each sale takes one off the stock, sales total today, and which items are almost out
+---
+app "Canteen" food ocean
+table item name text, price money, stock num 0.. = 20, low num 0.. = 5
+table sale item ref item, qty num 1..50 = 1
+let income = sum(sale, it.qty * it.item.price)
+sum(sale today, it.qty * it.item.price) "sold today" big
+count(item, it.stock <= it.low) "items almost out" color warn
+each item sort stock as i
+  row card gap 1
+    stack grow
+      i.name bold
+      i.price faint
+    text i.stock - sum(i.sale.qty) big color if(i.stock - sum(i.sale.qty) <= i.low, bad, ink)
+    button "Sell 1" tap add sale item = i, qty = 1
+form item, "Add item"
+===
+@create style=custom_ui domain=b2_sports_day
+sports day points for the four houses, tabs for scoring and for the leaderboard, big coloured bars
+---
+app "Sports day" trophy ocean
+table house name text
+table event name text
+table points house ref house, event ref event, amount num 1..10
+screen score "Score" ball
+  form points, "Add points"
+  form event, "Add event"
+  form house, "Add house"
+screen board "Leaderboard" trophy
+  each house sort sum(it.points.amount) desc as h
+    stack card gap 1
+      row
+        h.name bold grow
+        sum(h.points.amount) big
+      draw 100, 6
+        rect 0, 0, 100, 6 fill soft radius 3
+        rect 0, 0, 100 * sum(h.points.amount) / max(sum(points.amount), 1), 6 fill accent radius 3
+===
+@create style=detailed domain=b2_syrup_dose
+Calculator for my toddler's paracetamol syrup: I type her weight in kg and it tells me the millilitres to give. The bottle says 15 mg per kg and the syrup is 120 mg in 5 ml. Also warn me not to give more than 4 doses a day.
+---
+app "Syrup dose" pill mint
+table given
+state kg num = 12
+let mg = kg * 15
+let ml = mg * 5 / 120
+field kg "Weight (kg)"
+"Give" fixed(ml, 1) "ml" big
+"That is" round(mg) "mg" faint
+button "Gave a dose" tap add given
+"Doses today" count(given today) "of 4" bold color if(count(given today) >= 4, bad, ink)
+"Last dose" since(given) "days ago" faint
+===
+@create style=short domain=b2_fever_log
+fever log for the kids
+---
+app "Fever log" heart plum
+table child name text
+table temp child ref child, deg num 35..42, note text?
+each child as c
+  stack card gap 1
+    row
+      c.name head grow
+      last(c.temp.deg) "C" big color if(last(c.temp.deg) >= 38, bad, good)
+    trend c.temp last 3 days, it.deg
+form child, "Add child"
+form temp, "Take temperature"
+===
+@create style=multi_feature domain=b2_gym_renewals
+gym members with a membership end date. highlight those expiring in the next 7 days, sum the fees collected this month and let me add each payment
+---
+app "Gym members" dumbbell slate
+table member name text, ends date, fee money
+table payment member ref member, amount money
+"Collected this month" sum(payment.amount month) big
+count(member where ends >= today and ends <= today + 7) "expiring this week" color warn
+each member sort ends as m
+  row card tap edit m
+    stack grow
+      m.name bold
+      "ends" m.ends faint
+    if(m.ends < today, "Expired", plural(m.ends - today, "day")) color if(m.ends < today, bad, if(m.ends - today <= 7, warn, muted))
+form member, "Add member"
+form payment, "Record payment"
+===
+@create style=custom_ui domain=b2_exam_hall
+exam hall seating map, 20 seats in a grid of 5 columns, tap a seat to assign the next student, show the roll number on the seat
+---
+app "Exam hall" seat ocean
+table seat_use seat num 1..20, roll num 1..999
+grid 5 gap 1
+  each 1..20 as n
+    stack radius 8 pad 1 fill if(count(seat_use where seat = n) > 0, accent, soft) ratio 1 middle
+      text n tiny
+      last(seat_use.roll where seat = n) bold align center
+form seat_use, "Assign seat"
+"Seated" count(seat_use) "of 20" faint
+===
+@create style=detailed domain=b2_ward_vitals
+I am a nurse on a ward of eight beds. For each bed I note pulse and temperature every few hours. Show the latest for each bed and make it red if pulse is over 110 or temperature over 38.
+---
+app "Ward rounds" heart plum
+table bed number num 1..8, patient text
+table vitals bed ref bed, pulse num 30..220, temp num 34..42
+each bed sort number as b
+  row card tap edit b
+    stack grow
+      "Bed" b.number bold
+      b.patient faint
+    last(b.vitals.pulse) "bpm" color if(last(b.vitals.pulse) > 110, bad, ink)
+    last(b.vitals.temp) "C" color if(last(b.vitals.temp) > 38, bad, ink)
+    since(b.vitals) "d" faint
+form bed, "Add bed"
+form vitals, "Add vitals"
+===
+@create style=vague domain=b2_feeding_sides
+which side did I feed the baby from last
+---
+app "Feed side" baby plum
+table feed side pick Left|Right = Left
+"Next side" if(last(feed.side) = Left, "Right", "Left") big
+"Last feed" since(feed) "days ago" faint
+row gap 1
+  button "Left" tap add feed side = Left
+  button "Right" tap add feed side = Right
+"Today" count(feed today) "feeds" bold
+list feed today
+===
+@create style=multi_feature domain=b2_grades_percent
+students with several subjects, each subject has total marks, I enter marks obtained, show percent and a letter grade A to F, plus the overall percent per student
+---
+app "Report" school plum
+table student name text
+table subject name text, total num 1.. = 100
+table result student ref student, subject ref subject, marks num 0..
+each student sort name as s
+  stack card gap 1
+    row
+      s.name head grow
+      round(100 * sum(s.result.marks) / max(sum(s.result, it.subject.total), 1)) "%" big
+    each s.result as r
+      row gap 1
+        r.subject.name grow
+        r.marks "/" r.subject.total faint
+        if(r.marks * 100 / r.subject.total >= 80, "A", if(r.marks * 100 / r.subject.total >= 60, "B", if(r.marks * 100 / r.subject.total >= 40, "C", "F"))) bold
+form student, "Add student"
+form subject, "Add subject"
+form result, "Enter marks"
+===
+@create style=typos domain=b2_swim_levels
+swiming lessons for kids, levels bronze silver gold, move them up when ready and see how many are in each level
+---
+app "Swim levels" drop ocean
+table kid name text, level pick Beginner|Bronze|Silver|Gold = Beginner
+table lesson kid ref kid, skill text?
+each options kid.level as lv
+  row
+    text lv bold grow
+    count(kid where level = lv) "kids" faint
+each kid sort name as k
+  row card gap 1
+    k.name bold grow
+    k.level faint
+    count(k.lesson) "lessons" faint
+    button "Level up" tap set k.level = if(k.level = Beginner, Bronze, if(k.level = Bronze, Silver, Gold))
+form kid, "Add kid"
+form lesson, "Log lesson"
+===
+@create style=detailed domain=b2_fitness_test
+I am a PE teacher. Each term the students do sit ups in one minute and a 1 km run. Keep both results per student, show the class best for each, and who improved since last term.
+---
+app "Fitness test" run mint
+table student name text
+table test student ref student, situps num 0..100, run_secs num 120..1200, term pick Term1|Term2|Term3 = Term1
+"Best sit-ups" max(test.situps) big
+"Fastest 1 km" min(test.run_secs) "sec" bold
+each student sort name as s
+  row card tap edit s
+    s.name bold grow
+    last(s.test.situps) "sit-ups" faint
+    last(s.test.run_secs) "s" faint
+    if(last(s.test.situps) > first(s.test.situps), "better", "same") color good small
+form student, "Add student"
+form test, "Add result"
+===
+@create style=custom_ui domain=b2_pill_box
+weekly pill box for my mum: a row of 7 day squares for each medicine, tap a square when she took it, red if she missed a past day
+---
+app "Pill box" pill plum
+table med name text, dose text?
+table taken med ref med
+each med as m
+  stack card gap 1
+    row
+      m.name bold grow
+      m.dose faint
+    row gap 1
+      each days last 7 days as d
+        stack grow align center tap toggle m.taken on d
+          dayname(d) tiny color muted
+          box height 24 radius 6 fill if(count(m.taken on d) > 0, good, if(d < today, bad, soft))
+form med, "Add medicine"
+===
+@oos style=detailed domain=b2_oos_voice_meds oos=voice
+Read out loud my mother's medicine times and let her say "taken" to tick it. Also a simple list of medicines with the time.
+---
+app "Medicines" pill plum
+table med name text, time time
+table taken med ref med
+remind "Time for your medicine" at med.time
+each med sort time as m
+  row card tap edit m
+    toggle m.taken
+    m.name bold grow
+    m.time faint
+form med, "Add medicine"
+===
+@oos style=short domain=b2_oos_gps_run oos=location
+draw my running route on a map using gps and show km and time of each run
+---
+app "Runs" run mint
+table run km num 0.5..100, minutes num 1..600
+sum(run.km week) "km this week" big
+trend run last 10 days, it.km
+form run, "Add run"
+list run by day
+===
+@edit style=plain domain=b2_e_physio_sets ref=b2_physio_plan
+add a hold time in seconds to each exercise and make the done list show it
+---
+~ reps text = "10 x 3" => reps text = "10 x 3", hold num 0..120 = 0 unit "s"
+~ e.reps faint => e.reps e.hold "s" faint
+===
+@edit style=plain domain=b2_e_tooth_total ref=b2_tooth_fairy
+show the total paid to all kids at the top
+---
++ "Total paid" sum(tooth.reward) big
+===
+@edit style=plain domain=b2_e_tank_species ref=b2_fish_tanks
+add a species note to each tank
+---
+~ litres num 5..1000 = 60 => litres num 5..1000 = 60, species text?
+~ t.litres "L" faint => t.litres "L" t.species faint
+===
+@edit style=plain domain=b2_e_canteen_cat ref=b2_school_canteen
+add a category to items (Snacks, Drinks, Meals) and show sold today per category
+---
+~ table item name text, => table item name text, category pick Snacks|Drinks|Meals = Snacks,
++ "Sold by category" head
++ each options item.category as cat
++   row gap 1
++     text cat grow
++     sum(sale today where item.category = cat, it.qty * it.item.price) bold
+===
+@edit style=plain domain=b2_e_house_names ref=b2_sports_day
+rename the points table amount to score
+---
+~ amount num 1..10 => score num 1..10 was amount
+~ sum(it.points.amount) desc => sum(it.points.score) desc
+~ sum(h.points.amount) big => sum(h.points.score) big
+~ max(sum(points.amount), 1) => max(sum(points.score), 1)
+~ 100 * sum(h.points.amount) => 100 * sum(h.points.score)
+===
+@edit style=plain domain=b2_e_fever_limit ref=b2_fever_log
+the fever line should be 37.5 and not 38
+---
+~ >= 38, bad => >= 37.5, bad
+===
+@edit style=plain domain=b2_e_potty_remove ref=b2_potty_stickers
+remove the heat grid
+---
+- grid 7 gap 1
+-   each days last 28 days
+-     box height 24 radius 6 fill if(count(attempt on it where worked = Yes) > 0, accent, soft)
+===
+@edit style=plain domain=b2_e_sides_note ref=b2_feeding_sides
+add a minutes field and show total minutes today
+---
+~ table feed side pick Left|Right = Left => table feed side pick Left|Right = Left, minutes num 1..90 = 15
++after "Today" count(feed today) "feeds" bold :: "Minutes today" sum(feed.minutes today) faint

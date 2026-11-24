@@ -1,0 +1,402 @@
+@create style=detailed domain=b4_bee_hives
+i keep 14 bee boxes on a farm. each box gets inspected every two weeks and i note if i saw the queen. honey i take out is weighed in kg per box. show which boxes are overdue for a look and total honey this year
+---
+app "Apiary" leaf mint
+table hive name text, strength pick Weak|Medium|Strong = Medium
+table inspection hive ref hive, queen_seen bool, note text?
+table harvest hive ref hive, kg num 0.1..60
+"Honey this year" sum(harvest.kg year) "kg" big
+"Boxes to inspect" count(hive, due(it.inspection, 14)) head color warn
+each hive sort name as h
+  row card tap edit h
+    stack grow
+      h.name bold
+      text h.strength "- last look" since(h.inspection) "days ago" faint
+    text sum(h.harvest.kg) "kg"
+    button "Inspected" tap add inspection hive = h
+form harvest, "Weigh honey"
+form hive, "Add box"
+===
+@edit style=plain domain=b4_bee_filter ref=b4_bee_hives
+let me filter to only the weak boxes with one tap
+---
+~ each hive sort name as h => state only_weak bool = no\ntoggle only_weak\neach hive where strength = Weak or not only_weak sort name as h
+===
+@create style=multi_feature domain=b4_blood_donors
+blood donor list for our college society. group, phone, each time they donate is logged, and a donor can only give again after 90 days so show who is eligible now. top shows how many donations this year
+---
+app "Blood Donors" heart plum
+table donor name text, group pick A|B|AB|O = O, phone text?
+table donation donor ref donor, place text, source pick Camp|Hospital|Walk_in = Camp
+"Donations this year" count(donation year) big
+"Eligible now" count(donor, due(it.donation, 90)) head color good
+state want pick A|B|AB|O = O
+choice want
+each donor where group = want sort name as d
+  row card tap edit d
+    stack grow
+      d.name bold
+      text d.phone faint
+    if due(d.donation, 90)
+      text "Can donate" color good
+    else
+      text "Wait" 90 - since(d.donation) "days" color warn
+form donation, "Log donation"
+form donor, "Register donor"
+===
+@edit style=plain domain=b4_blood_rename ref=b4_blood_donors
+call the Walk_in option Individual instead
+---
+~ Camp|Hospital|Walk_in = Camp => Camp|Hospital|Individual was Walk_in = Camp
+===
+@create style=vague domain=b4_kids_vaccines
+baby vaccines, what is due next
+---
+app "Baby Shots" baby mint
+table child name text, born date
+table shot child ref child, vaccine pick BCG|Polio|Penta|Measles|Typhoid|Other = Polio
+each child sort name as c
+  row card tap edit c
+    stack grow
+      c.name bold
+      text "Age" floor((today - c.born) / 30) "months" faint
+      text count(c.shot) "shots given" faint
+    text "last:" last(c.shot.vaccine) faint
+    button "Shot given" tap add shot child = c
+form child, "Add child"
+form shot, "Record shot"
+===
+@create style=detailed domain=b4_dental_chair
+dental clinic. each treatment has a price (cleaning, filling, extraction, root canal) and patients can pay in installments. show who still owes money and the total i earned this month
+---
+app "Dental Clinic" tooth ocean
+table patient name text, phone text?
+table treatment patient ref patient, kind pick Cleaning|Filling|Extraction|Root_canal|Other = Filling, price money
+table installment patient ref patient, amount money
+"Collected this month" sum(installment.amount month) big
+"Billed this month" sum(treatment.price month) faint
+each patient sort name as p
+  let owes = sum(p.treatment.price) - sum(p.installment.amount)
+  if owes > 0
+    row card tap edit p
+      p.name bold grow
+      text "owes" owes color bad
+form treatment, "Add treatment"
+form installment, "Payment"
+form patient, "New patient"
+===
+@create style=short domain=b4_physio_packs
+physio session packs per patient
+---
+app "Physio" heart ocean
+table patient name text
+table pack patient ref patient, sessions num 1..40 = 10
+table session patient ref patient
+each patient sort name as p
+  let left = sum(p.pack.sessions) - count(p.session)
+  row card tap edit p
+    p.name bold grow
+    text left "sessions left" color if(left <= 1, warn, ink)
+    button "Done" tap add session patient = p
+form pack, "Sold a pack"
+form patient, "New patient"
+===
+@create style=typos domain=b4_shoe_repair
+shoe repair stall, i give a token to every pair, need to see pairs not collected yet and money pending
+---
+app "Shoe Repair" tool slate
+table pair token num 1..999, work pick Sole|Stitch|Polish|Heel|Zip = Sole, price money, collected bool
+"Pairs waiting" count(pair where collected = no) big
+"Money pending" sum(pair.price where collected = no) head
+each pair where collected = no sort token as p
+  row card tap edit p
+    p.token bold
+    p.work grow
+    p.price
+    toggle p.collected
+form pair, "New pair"
+===
+@create style=multi_feature domain=b4_car_wash
+car wash. price depends on the vehicle (car, jeep, bike, van) and i change prices anytime. show money today, count by vehicle, and chart of the last 7 days
+---
+app "Car Wash" car ocean
+table wash vehicle pick Car|Jeep|Bike|Van = Car, amount money
+setting car_price money = 500 "Car"
+setting jeep_price money = 700 "Jeep"
+setting bike_price money = 150 "Bike"
+setting van_price money = 900 "Van"
+"Today" sum(wash.amount today) big
+each options wash.vehicle as v
+  row card
+    v bold grow
+    count(wash today where vehicle = v)
+    button "Wash" tap add wash vehicle = v, amount = if(v = Car, car_price, if(v = Jeep, jeep_price, if(v = Bike, bike_price, van_price)))
+daybars last 7 days, sum(wash.amount on it)
+list wash today
+===
+@edit style=plain domain=b4_wash_rename ref=b4_car_wash
+rename the amount column to price
+---
+~ vehicle pick Car|Jeep|Bike|Van = Car, amount money => vehicle pick Car|Jeep|Bike|Van = Car, price money was amount
+~ "Today" sum(wash.amount today) big => "Today" sum(wash.price today) big
+~ amount = if(v = Car => price = if(v = Car
+~ sum(wash.amount on it) => sum(wash.price on it)
+===
+@create style=custom_ui domain=b4_samosa_stall
+samosa stall: each morning i note how many i made, through the day tap for each one sold. show how many are left and at what time most are sold
+---
+app "Samosa Stall" food mint
+table batch made num 1..500
+table sold qty num 1..10 = 1
+let left = sum(batch.made today) - sum(sold.qty today)
+left "left" huge big color if(left < 10, warn, ink)
+button "Sold 1" fill accent tap add sold qty = 1
+row gap 1
+  button "Sold 2" tap add sold qty = 2
+  button "Sold 5" tap add sold qty = 5
+form batch, "Made today"
+daybars last 7 days, sum(sold.qty on it)
+===
+@create style=detailed domain=b4_water_tanker
+i supply water tankers to houses. tanker sizes are 1000, 2000 or 4000 litres at different prices, each house has an account, and they pay later. show each house balance and total unpaid
+---
+app "Tanker Accounts" drop ocean
+table house name text, area text?
+table trip house ref house, size pick L1000|L2000|L4000 = L1000, price money
+table payment house ref house, amount money
+let unpaid = sum(trip.price) - sum(payment.amount)
+"Unpaid in total" unpaid big color if(unpaid > 0, warn, good)
+each house sort name as h
+  let bal = sum(h.trip.price) - sum(h.payment.amount)
+  row card tap edit h
+    stack grow
+      h.name bold
+      text count(h.trip month) "trips this month" faint
+    text bal bold color if(bal > 0, bad, good)
+form trip, "Delivered"
+form payment, "Payment"
+form house, "New house"
+===
+@edit style=plain domain=b4_tanker_note ref=b4_water_tanker
+add a driver name to each trip and show how many trips each driver did this month
+---
+~ L4000 = L1000, price money => L4000 = L1000, price money, driver text?
++ "Trips by driver" head
++ each trip month by driver\n  row\n    text it.key grow\n    count(it)
+===
+@create style=custom_ui domain=b4_school_van
+school van: kids on the route, monthly fee per child, and every month some pay late. one screen with the kids list and red or green by paid or not this month, and a button on each to mark paid
+---
+app "School Van" bus ocean
+table kid name text, stop text, fee money
+table fee_paid kid ref kid, amount money
+state m date = today
+monthnav m
+"Collected" sum(fee_paid.amount month of m) "of" sum(kid.fee) big
+each kid sort stop as k
+  let ok = sum(k.fee_paid.amount month of m) >= k.fee
+  row card fill if(ok, good, soft) tap edit k
+    stack grow
+      k.name bold
+      k.stop faint
+    if not ok
+      button "Paid" tap add fee_paid kid = k, amount = k.fee
+form kid, "Add child"
+form fee_paid, "Payment"
+===
+@create style=detailed domain=b4_quran_classes
+i teach Quran to 20 kids at home. every day each child recites some lines, and i mark whether it was a new lesson or revision. show which child has not come for 3 days
+---
+app "Quran Class" book mint
+table student name text, para num 1..30 = 1
+table recite student ref student, lines num 1..60 = 5, kind pick New_lesson|Revision = New_lesson
+each student sort name as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      text "Para" s.para faint
+    text count(s.recite week) "visits"
+    if since(s.recite) >= 3
+      text "absent" since(s.recite) "days" color warn
+    button "Recited" tap add recite student = s
+"Lines recited today" sum(recite.lines today) big
+form recite, "Add lesson"
+form student, "Add student"
+===
+@create style=multi_feature domain=b4_qurbani_shares
+Eid animal sharing. we buy cows and each cow has 7 shares, every family takes some shares and pays an advance. show shares left per cow and money still due from each family
+---
+app "Qurbani Shares" paw mint
+table cow tag text, cost money
+table family name text, phone text?
+table booking cow ref cow, family ref family, shares num 1..7 = 1, advance money = 0
+each cow sort tag as c
+  let taken = sum(c.booking.shares)
+  row card tap edit c
+    c.tag bold grow
+    text taken "of 7 shares" color if(taken >= 7, good, ink)
+    text if(taken > 7, "Over booked", "") color bad
+each family sort name as f
+  let due = sum(f.booking, it.shares * it.cow.cost / 7 - it.advance)
+  row card tap edit f
+    f.name bold grow
+    text "due" round(due) color if(due > 0, warn, good)
+form booking, "Book shares"
+form family, "Add family"
+form cow, "Add cow"
+===
+@edit style=plain domain=b4_qurbani_chart ref=b4_qurbani_shares
+add a bar chart of shares booked per cow
+---
++ bars cow sort tag, sum(it.booking.shares), it.tag
+===
+@create style=detailed domain=b4_blanket_drive
+winter blanket drive for an NGO. blankets come in from donors and we give them out to families in villages. keep stock in hand and show which village got how many
+---
+app "Blanket Drive" gift ocean
+table village name text
+table received donor text, qty num 1..500
+table given village ref village, qty num 1..100
+let stock = sum(received.qty) - sum(given.qty)
+stock "blankets in stock" big color if(stock < 20, warn, ink)
+each village sort name as v
+  row card tap edit v
+    v.name bold grow
+    sum(v.given.qty) "given"
+form received, "Blankets received"
+form given, "Blankets given"
+form village, "Add village"
+===
+@create style=short domain=b4_tree_planting
+saplings planted at each site and how many survived
+---
+app "Tree Drive" tree mint
+table site name text
+table planting site ref site, saplings num 1..1000
+table check site ref site, alive num 0..1000
+each site sort name as s
+  let planted = sum(s.planting.saplings)
+  row card tap edit s
+    s.name bold grow
+    text planted "planted"
+    text round(100 * last(s.check.alive) / planted) "% alive" faint
+form planting, "Planted"
+form check, "Survival count"
+form site, "New site"
+===
+@edit style=plain domain=b4_tree_chart ref=b4_tree_planting
+chart of saplings planted for each site
+---
++ bars site sort name, sum(it.planting.saplings), it.name
+===
+@create style=custom_ui domain=b4_solar_output
+i read the solar inverter meter every evening in kWh. show a line of last 30 days of units, the best day, and what I saved at 45 rupees per unit
+---
+app "Solar" sun ocean
+table reading kwh num 0..200
+setting rate money = 45 "Rupees per unit"
+"Saved this month" sum(reading.kwh month) * rate big
+"Best day" max(reading.kwh) "kWh" faint
+trend reading last 30 days sort at, it.kwh
+form reading, "Today's units"
+===
+@edit style=plain domain=b4_solar_weekly ref=b4_solar_output
+show a bar per week instead of the line
+---
+~ trend reading last 30 days sort at, it.kwh => bars reading last 8 weeks by week, sum(it.kwh), it.key
+===
+@create style=short domain=b4_heat_diary
+temperature at noon every day, tell me when it crosses 40
+---
+app "Heat Diary" sun slate
+table temp deg num 0..55
+setting limit num = 40 "Danger above"
+let hot = count(temp month where deg > limit)
+hot "days above" limit big color if(hot > 0, bad, ink)
+trend temp last 14 days sort at, it.deg
+form temp, "Noon temperature"
+===
+@edit style=plain domain=b4_heat_note ref=b4_heat_diary
+add a note box for each reading, like windy or cloudy
+---
+~ table temp deg num 0..55 => table temp deg num 0..55, note text?
++ list temp
+===
+@create style=custom_ui domain=b4_barber_chairs
+three barbers work in my shop and get 40 percent of each haircut. tap a barber name to add a cut at the price shown, show everyone's share today
+---
+app "Barber Shop" scale slate
+table barber name text
+table cut barber ref barber, price money
+setting cut_price money = 300 "Haircut price"
+setting share num 0..100 = 40 "Barber share %"
+each barber sort name as b
+  stack card gap 1 tap add cut barber = b, price = cut_price
+    b.name head
+    text count(b.cut today) "cuts today" faint
+    text "Share" sum(b.cut.price today) * share / 100 bold
+"Shop total today" sum(cut.price today) big
+form barber, "Add barber"
+===
+@create style=detailed domain=b4_mechanic_jobs
+bike mechanic: each job has the number plate, work done, labour charge and the spare parts used with price. i need the total bill for each job and who has not paid
+---
+app "Workshop" tool slate
+table job plate text, work text, labour money, paid bool
+table spare job ref job, name text, price money
+each job where paid = no sort at desc as j
+  let bill = j.labour + sum(j.spare.price)
+  stack card gap 1 tap edit j
+    row
+      j.plate bold grow
+      text bill head
+    j.work faint
+    toggle j.paid
+"Unpaid bills" sum(job where paid = no, it.labour + sum(it.spare.price)) big
+form job, "New job"
+form spare, "Add spare part"
+===
+@create style=vague domain=b4_veg_cart
+vegetable cart profit, buy rate and sell rate each day
+---
+app "Veg Cart" apple mint
+table veg name text, buy money, sell money
+table soldv veg ref veg, kg num 0.1..200
+let profit = sum(soldv, it.kg * (it.veg.sell - it.veg.buy))
+"Profit today" sum(soldv today, it.kg * (it.veg.sell - it.veg.buy)) big
+"All time" profit faint
+each veg sort name as v
+  row card tap edit v
+    v.name bold grow
+    text sum(v.soldv.kg today) "kg today"
+    text v.sell - v.buy "per kg" faint
+form soldv, "Sold"
+form veg, "New vegetable"
+===
+@edit style=plain domain=b4_veg_nochart ref=b4_veg_cart
+take out the all time line
+---
+- "All time" profit faint
+===
+@oos style=detailed domain=b4_medicine_barcode oos=camera
+scan the barcode on medicine strips with the phone camera to add them, and keep a count of how many strips of each i have
+---
+app "Strips" pill mint
+table medicine name text
+table strip medicine ref medicine, qty num 1..100
+each medicine sort name as m
+  row card tap edit m
+    m.name bold grow
+    text sum(m.strip.qty) "strips"
+form strip, "Add strips"
+form medicine, "New medicine"
+===
+@oos style=short domain=b4_van_sync oos=sync
+my brother and I both write in the same flour shop book on our own phones, keep them matching. sales by day
+---
+app "Flour Shop" bag slate
+table salef item pick Atta|Maida|Suji|Besan = Atta, kg num 1..100, price money
+"Sales today" sum(salef.price today) big
+daybars last 7 days, sum(salef.price on it)
+form salef, "Add sale"
+list salef by day

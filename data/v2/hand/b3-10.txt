@@ -1,0 +1,429 @@
+@create style=custom_ui domain=b3_basketball
+basketball scoreboard for home and away, buttons for 1 2 3 points, pick the quarter with chips, big totals, undo
+---
+app "Basketball" ball ink
+table bpoint team pick Home|Away = Home, pts num 1..3, quarter num 1..4
+state period num = 1
+let home_total = sum(bpoint.pts where team = Home)
+let away_total = sum(bpoint.pts where team = Away)
+row gap 1
+  each [1, 2, 3, 4] as q
+    button q fill if(period = q, accent, soft) tap set period = q
+row gap 2 align center
+  stack grow align center
+    "Home" faint
+    home_total huge
+  stack grow align center
+    "Away" faint
+    away_total huge
+row gap 1
+  each [1, 2, 3] as n
+    button "Home +" n tap add bpoint team = Home, pts = n, quarter = period
+row gap 1
+  each [1, 2, 3] as n
+    button "Away +" n tap add bpoint team = Away, pts = n, quarter = period
+"This quarter" sum(bpoint.pts where quarter = period) faint
+button "Undo" tap remove last(bpoint)
+===
+@create style=custom_ui domain=b3_hot_potato
+hot potato party game: a 30 second countdown that ticks every second, start stop and reset buttons, when it hits zero say boom and count the explosions
+---
+app "Hot Potato" timer ink
+table explosion
+state secs num = 30
+state running bool = no
+every 1s if running and secs > 0 set secs = secs - 1
+when running and secs = 0 notify "Boom! The potato exploded" then add explosion
+when secs = 0 set running = no
+secs huge align center
+row gap 1
+  button "Start" tap set running = yes
+  button "Stop" tap set running = no
+  button "Reset" tap set secs = 30 then set running = no
+"Explosions today" count(explosion today) faint
+===
+@create style=detailed domain=b3_dominoes
+Dominoes with the family, played to a target score that I can change. Each player gets a score every round. Show each player's total with a bar to the target and say Winner when someone has reached it.
+---
+app "Dominoes" board slate
+setting target num = 200 "Play to"
+table player name text
+table dom_round player ref player, points num 0..100
+each player sort sum(it.dom_round.points) desc as p
+  let total = sum(p.dom_round.points)
+  stack card gap 1
+    row
+      p.name head grow
+      total big color if(total >= target, good, ink)
+    goal total, target, "points"
+    if total >= target
+      "Winner!" bold color good
+form player, "Add player"
+form dom_round, "Add round score"
+===
+@create style=vague domain=b3_henna_bookings
+i do bridal and eid henna from home and double book people all the time
+---
+app "Henna Bookings" gift plum
+table henna_booking client text, slot time, design pick Simple|Medium|Bridal = Simple, price money
+remind "Henna appointment soon" at henna_booking.slot
+"Earned today" sum(henna_booking.price today) big
+share henna_booking month by design, count(it), it.key
+each henna_booking today sort slot as b
+  row card tap edit b
+    b.slot bold
+    stack grow
+      b.client bold
+      b.design faint
+    b.price bold
+form henna_booking, "Add booking"
+===
+@create style=multi_feature domain=b3_ramadan_times
+ramadan timetable: first roza date is a setting, a table of day number with sehri and iftar times, show which roza it is today and today's times on top, reminder at iftar time
+---
+app "Ramadan Times" moon slate
+setting first_roza date = 2027-02-08 "First roza"
+table ramadan_day day_no num 1..30, sehri time, iftar time
+remind "Iftar time" at ramadan_day.iftar
+let roza_no = today - first_roza + 1
+"Roza" roza_no big
+each ramadan_day where day_no = roza_no as d
+  row card
+    "Sehri ends" d.sehri bold grow
+    "Iftar" d.iftar bold
+each ramadan_day sort day_no as e
+  row tap edit e
+    e.day_no grow
+    e.sehri e.iftar faint
+form ramadan_day, "Add a day"
+===
+@create style=detailed domain=b3_blood_donors
+Blood donor list for our community. Each donor has a blood group and phone. When someone donates I tap a button. A donor is eligible again 90 days after the last donation. Show how many are eligible now, how many per group, and each donor's days since last donation.
+---
+app "Blood Donors" heart plum
+table blood_donor name text, group pick A_pos|A_neg|B_pos|B_neg|AB_pos|O_pos|O_neg = O_pos, phone text?
+table donation blood_donor ref blood_donor
+"Eligible to donate now" count(blood_donor, due(it.donation, 90)) big
+each options blood_donor.group as g
+  row
+    g bold grow
+    count(blood_donor, it.group = g and due(it.donation, 90)) "ready" faint
+each blood_donor sort name as d
+  row card tap edit d
+    stack grow
+      d.name bold
+      d.group faint
+    "Last" since(d.donation) "days ago" faint
+    button "Donated" tap add donation blood_donor = d
+form blood_donor, "Add donor"
+===
+@create style=typos domain=b3_fare_watch
+flight prices go up and down, i note the price now and then for each route, tell me when its below my target and show a line
+---
+app "Fare Watch" plane ocean
+table flight_route name text, target money
+table price_seen flight_route ref flight_route, price money
+each flight_route sort name as r
+  let now_price = last(r.price_seen.price)
+  stack card gap 1
+    row
+      r.name bold grow
+      now_price big color if(now_price <= r.target, good, ink)
+    "Target" r.target "| lowest seen" min(r.price_seen.price) faint
+    trend r.price_seen, it.price
+    if now_price <= r.target
+      "Buy now" bold color good
+form flight_route, "Add route"
+form price_seen, "Log a price"
+===
+@create style=multi_feature domain=b3_luggage_weights
+family luggage for the flight: allowance per person in kg is a setting, each traveller has bags with weights, show total per traveller in red if over and a bar against the allowance
+---
+app "Luggage Weights" box slate
+setting limit_kg num = 30 "Allowance per person (kg)"
+table traveller name text
+table bag traveller ref traveller, kg num 0.5..40
+each traveller sort name as t
+  let total = sum(t.bag.kg)
+  stack card gap 1
+    row
+      t.name bold grow
+      fixed(total, 1) "kg" big color if(total > limit_kg, bad, ink)
+    goal total, limit_kg, "of allowance", "kg"
+form traveller, "Add traveller"
+form bag, "Add bag"
+===
+@create style=short domain=b3_battery_warranty
+ups and inverter batteries, installed date and warranty months, when the warranty ends
+---
+app "Battery Warranty" bolt slate
+table battery place text, installed date, warranty_months num 1..60 = 24
+each battery sort installed as b
+  let ends = addmonths(b.installed, b.warranty_months)
+  row card tap edit b
+    stack grow
+      b.place bold
+      "Warranty ends" ends faint
+    if(ends < today, "Expired", join(ends - today, " days left")) color if(ends < today, bad, ink)
+form battery, "Add battery"
+===
+@create style=vague domain=b3_painter_quotes
+got quotes from three painters for the whole house, who is cheapest
+---
+app "Painter Quotes" pen mint
+table painter name text, phone text?
+table paint_quote painter ref painter, room text, price money
+let cheapest = min(painter, sum(it.paint_quote.price))
+"Cheapest total" cheapest big
+each painter sort sum(it.paint_quote.price) as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      count(p.paint_quote) "rooms quoted" faint
+    sum(p.paint_quote.price) bold color if(sum(p.paint_quote.price) = cheapest, good, ink)
+form painter, "Add painter"
+form paint_quote, "Add quote"
+===
+@create style=typos domain=b3_recipe_tests
+testing biryani and other dishes again and again, rating out of 5 and what i changed, best rating and a line of how it improved
+---
+app "Recipe Tests" food mint
+table dish name text
+table attempt dish ref dish, rating num 1..5, tweak long?
+each dish sort name as d
+  stack card gap 1
+    row
+      d.name head grow
+      count(d.attempt) "tries" faint
+    "Best rating" max(d.attempt.rating) "/ 5" bold
+    "Last tweak" last(d.attempt.tweak) faint
+    trend d.attempt, it.rating
+form dish, "Add dish"
+form attempt, "Log a try"
+===
+@create style=short domain=b3_sketch_a_day
+one sketch a day, streak and a heat map
+---
+app "Sketch a Day" pen plum
+table sketch subject text?
+"Streak" streak(sketch) "days" big
+"Best streak" best(sketch) "days" faint
+heat last 70 days, count(sketch on it), 1
+button "I sketched today" tap add sketch
+list sketch by day
+===
+@create style=detailed domain=b3_training_feedback
+I run training sessions for staff. Each session has a topic and trainer, and attendees leave a rating out of 5 and a comment. Show people count and average rating per session, and the average across all sessions.
+---
+app "Training Feedback" school ocean
+table session_run topic text, trainer text
+table attendee session_run ref session_run, rating num 1..5, comment text?
+"Average across sessions" fixed(avg(attendee.rating), 1) big
+each session_run sort at desc as s
+  row card tap edit s
+    stack grow
+      s.topic bold
+      s.trainer faint
+    count(s.attendee) "people" faint
+    fixed(avg(s.attendee.rating), 1) "/ 5" bold
+form session_run, "Add session"
+form attendee, "Add feedback"
+===
+@create style=multi_feature domain=b3_okr_tracker
+objectives with key results, each key result has a target and a current value with a +1 button, show each objective's progress as a percent of its key results with a bar
+---
+app "OKR Tracker" target ocean
+table objective title text
+table key_result objective ref objective, name text, target num 1..1000000, current num 0.. = 0
+each objective sort title as o
+  let progress = sum(o.key_result, min(it.current / it.target, 1)) / count(o.key_result)
+  stack card gap 1
+    row
+      o.title head grow
+      round(progress * 100) "%" big
+    goal round(progress * 100), 100, "of the objective"
+    each o.key_result as k
+      row tap edit k
+        k.name grow
+        k.current "/" k.target faint
+        button "+1" tap set k.current = k.current + 1
+form objective, "Add objective"
+form key_result, "Add key result"
+===
+@create style=typos domain=b3_pump_shift
+i work at a petrol pump, litres of petrol and diesel sold each shift, prices change so keep them as settings, cash i should hand in today
+---
+app "Pump Shift" bolt slate
+setting petrol_price money = 270 "Petrol per litre"
+setting diesel_price money = 280 "Diesel per litre"
+table pump_sale fuel pick Petrol|Diesel = Petrol, litres num 1..500
+let cash = sum(pump_sale.litres today where fuel = Petrol) * petrol_price + sum(pump_sale.litres today where fuel = Diesel) * diesel_price
+"Cash due today" cash big
+"Petrol litres" sum(pump_sale.litres today where fuel = Petrol) faint
+"Diesel litres" sum(pump_sale.litres today where fuel = Diesel) faint
+list pump_sale today
+form pump_sale, "Add sale"
+===
+@create style=multi_feature domain=b3_planner_clients
+wedding planner: clients can have weddings, each wedding has a date and my fee, payments are recorded against a wedding, show per client what is still to collect and list their weddings by date
+---
+app "Planner Clients" gift plum
+table client name text
+table wedding client ref client, wedding_date date, fee money
+table client_payment wedding ref wedding, amount money
+each client sort name as c
+  let fees = sum(c.wedding.fee)
+  let received = sum(c.wedding, sum(it.client_payment.amount))
+  stack card gap 1
+    row
+      c.name head grow
+      fees - received "to collect" bold color if(fees > received, warn, good)
+    each c.wedding sort wedding_date as w
+      row tap edit w
+        w.wedding_date grow
+        w.fee faint
+form client, "Add client"
+form wedding, "Add wedding"
+form client_payment, "Record payment"
+===
+@create style=short domain=b3_fixtures
+tournament fixtures with teams and date, winner after the match
+---
+app "Fixtures" trophy ocean
+table fixture team_a text, team_b text, play_date date, winner text?
+"Played" count(fixture where play_date < today) "of" count(fixture) big
+"Next up" head
+each fixture where play_date >= today sort play_date top 5 as f
+  row card tap edit f
+    f.play_date bold
+    f.team_a "vs" f.team_b grow
+"Results" head
+each fixture where play_date < today sort play_date desc as r
+  row tap edit r
+    r.team_a "vs" r.team_b grow
+    r.winner bold
+form fixture, "Add fixture"
+===
+@create style=vague domain=b3_gate_log
+i am the guard at the apartment gate and need to know who is inside right now
+---
+app "Gate Log" shield slate
+table visitor flat text, who text, left bool
+"Inside now" count(visitor where left = no) big
+each visitor where left = no sort at as v
+  row card
+    stack grow
+      v.who bold
+      "to flat" v.flat faint
+    v.at faint
+    button "Left" tap set v.left = yes
+"Visitors today" count(visitor today) faint
+form visitor, "Log a visitor"
+===
+@create style=detailed domain=b3_truck_loads
+I drive a truck and carry loads for a few customers, each customer has a rate per ton. Log each load with tons. Show what I earned this month and for each customer the tons this month and the amount.
+---
+app "Truck Loads" bus slate
+table customer name text, rate_per_ton money
+table load customer ref customer, tons num 0.5..40
+"Earned this month" sum(load month, it.tons * it.customer.rate_per_ton) big
+each customer sort name as c
+  row card
+    stack grow
+      c.name bold
+      c.rate_per_ton "per ton" faint
+    sum(c.load.tons month) "t this month" faint
+    sum(c.load.tons month) * c.rate_per_ton bold
+form customer, "Add customer"
+form load, "Log a load"
+===
+@create style=multi_feature domain=b3_candle_batches
+homemade candle business: batches with scent, how many made and what it cost, sales against a batch with quantity and price, show how many sold of the batch and its profit in green or red
+---
+app "Candle Batches" fire plum
+table candle_batch scent text, made num 1..500, cost money
+table candle_sold candle_batch ref candle_batch, qty num 1..100, price money
+each candle_batch sort at desc as b
+  let income = sum(b.candle_sold, it.qty * it.price)
+  stack card gap 1
+    row
+      b.scent bold grow
+      sum(b.candle_sold.qty) "of" b.made "sold" faint
+    "Profit" income - b.cost bold color if(income - b.cost >= 0, good, bad)
+form candle_batch, "New batch"
+form candle_sold, "Record sale"
+===
+@create style=typos domain=b3_eid_shopping
+eid shoping for everyone in the family, each person has a budget and i add what i bought for them, show over budget in red
+---
+app "Eid Shopping" cart plum
+table family_member name text, budget money
+table purchase family_member ref family_member, item text, cost money
+"Spent" sum(purchase.cost) "of" sum(family_member.budget) big
+each family_member sort name as m
+  let spent = sum(m.purchase.cost)
+  stack card gap 1
+    row
+      m.name bold grow
+      spent "of" m.budget color if(spent > m.budget, bad, ink)
+    goal spent, m.budget, "of budget"
+form family_member, "Add person"
+form purchase, "Add purchase"
+===
+@oos style=short domain=b3_fuel_price_site oos=internet
+fetch today's petrol price from the oil company website and work out what a fill-up will cost me
+---
+app "Fill-up Cost" bolt slate
+setting price num = 270 "Petrol price per litre"
+state litres num = 20
+field litres "Litres"
+slider litres 1..60
+"Cost of a fill-up" round(litres * price) big
+===
+@edit style=plain domain=b3_basketball_e1 ref=b3_basketball
+a bar chart of points in each quarter please
+---
++ "Points per quarter" head\nbars [1, 2, 3, 4], sum(bpoint.pts where quarter = it), it
+===
+@edit style=plain domain=b3_dominoes_e1 ref=b3_dominoes
+we play to 250 now
+---
+~ setting target num = 200 "Play to" => setting target num = 250 "Play to" set
+===
+@edit style=plain domain=b3_okr_e1 ref=b3_okr_tracker
+call current done so far
+---
+~ current num 0.. = 0 => done_so_far num 0.. = 0 was current
+~ it.current => it.done_so_far
+~ k.current "/" => k.done_so_far "/"
+~ tap set k.current = k.current + 1 => tap set k.done_so_far = k.done_so_far + 1
+===
+@edit style=plain domain=b3_painter_e1 ref=b3_painter_quotes
+add days needed for each quote and show the days under the rooms count
+---
+~ room text, price money => room text, price money, days num? 1..60
++after       count(p.paint_quote) "rooms quoted" faint ::       "Days" sum(p.paint_quote.days) faint
+===
+@edit style=plain domain=b3_luggage_e1 ref=b3_luggage_weights
+the airline allows 23 kg
+---
+~ setting limit_kg num = 30 "Allowance per person (kg)" => setting limit_kg num = 23 "Allowance per person (kg)" set
+===
+@edit style=plain domain=b3_pump_e1 ref=b3_pump_shift
+we sell hi octane too, add it with its own price setting
+---
++after setting diesel_price money = 280 "Diesel per litre" :: setting hioctane_price money = 300 "Hi-octane per litre"
+~ fuel pick Petrol|Diesel = Petrol => fuel pick Petrol|Diesel|Hi_octane = Petrol
+~ * diesel_price => * diesel_price + sum(pump_sale.litres today where fuel = Hi_octane) * hioctane_price
+===
+@edit style=plain domain=b3_planner_e1 ref=b3_planner_clients
+add the venue for every wedding and show it next to the fee
+---
+~ fee money => fee money, venue text?
+~ w.fee faint => w.fee w.venue faint
+===
+@edit style=plain domain=b3_donors_e1 ref=b3_blood_donors
+add the city of each donor and show it under the group
+---
+~ phone text? => phone text?, city text?
+~ d.group faint => d.group d.city faint

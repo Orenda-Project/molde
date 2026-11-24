@@ -1,0 +1,32 @@
+@create style=detailed domain=b4_supplier_purchases
+the restaurant buys from a few suppliers, butcher, vegetable man, dairy, gas agency. every purchase has the supplier, a category and the amount. show total bought this month per supplier and total for all
+---
+app "Purchases" cart slate
+table supplier name text, phone text?
+table buy supplier ref supplier, category pick Meat|Veg|Dairy|Gas|Other = Meat, amount money
+text "Bought this month" sum(buy.amount month) big
+each supplier sort name as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      text count(s.buy month) "purchases" faint
+    text sum(s.buy.amount month) bold
+form buy, "New purchase"
+form supplier, "Add supplier"
+===
+@edit style=plain domain=b4_purchase_payments ref=b4_supplier_purchases
+we pay suppliers later, add a payments table and show what we still owe each supplier
+---
+~ table buy supplier ref supplier, category => table paid_s supplier ref supplier, amount money\ntable buy supplier ref supplier, category
+~ sum(s.buy.amount month) bold => text sum(s.buy.amount) - sum(s.paid_s.amount) "owed" bold
++ form paid_s, "Paid supplier"
+===
+@edit style=plain domain=b4_purchase_chart ref=b4_supplier_purchases
+a chart of what we spend by category this month
+---
++ share buy month by category, sum(it.amount), it.key
+===
+@edit style=plain domain=b4_purchase_fuel ref=b4_supplier_purchases
+call the Gas category Fuel
+---
+~ Meat|Veg|Dairy|Gas|Other = Meat => Meat|Veg|Dairy|Fuel was Gas|Other = Meat

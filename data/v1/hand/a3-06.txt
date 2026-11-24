@@ -1,0 +1,405 @@
+@create style=multi_feature domain=a3_uno_scores
+Uno score sheet with two tabs. Players tab to add names and see totals, Rounds tab to enter the points each player got in a round. Highlight who has the lowest total.
+---
+app "Uno scores" cards plum
+table pl name text
+table rd who ref pl, pts num 0..500
+screen players "Players" users
+  each pl sort name as p
+    row card gap 2
+      p.name bold grow
+      "Total" sum(p.rd.pts) big
+      if sum(p.rd.pts) = minof(pl, sum(it.rd.pts))
+        icon star color yellow
+  form pl, "Add player"
+screen rounds "Rounds" cards
+  form rd, "Add round points"
+  log rd
+===
+@edit style=plain domain=a3_e_uno1 ref=a3_uno_scores
+add a button that clears all rounds for a new game
+---
++after   form rd, "Add round points" ::   button "New game" tap remove all rd
+===
+@create style=custom_ui domain=a3_chess_clock
+chess clock with two big halves, each player has 10 minutes, tapping your half stops your clock and starts the other, shows who is low on time
+---
+app "Chess clock" clock ink
+state t1 dur = 600s
+state t2 dur = 600s
+state turn num = 0
+every 1s if turn = 1 set t1 = t1 - 1s
+every 1s if turn = 2 set t2 = t2 - 1s
+grid 1 gap 2
+  stack card align center pad 4 fill if(turn = 1, accent, soft) tap set turn = 2
+    "Player 1" faint
+    text t1 big color if(t1 < 60s, bad, ink)
+  stack card align center pad 4 fill if(turn = 2, accent, soft) tap set turn = 1
+    "Player 2" faint
+    text t2 big color if(t2 < 60s, bad, ink)
+button "Pause" tap set turn = 0
+button "Reset" tap set turn = 0 then set t1 = 600s then set t2 = 600s
+===
+@edit style=plain domain=a3_e_chess1 ref=a3_chess_clock
+make it 5 minutes each
+---
+~ state t1 dur = 600s => state t1 dur = 300s
+~ state t2 dur = 600s => state t2 dur = 300s
+~ set t1 = 600s then set t2 = 600s => set t1 = 300s then set t2 = 300s
+===
+@create style=custom_ui domain=a3_race_board
+two player race to 30 squares, each player taps roll and their piece moves forward by the dice, show both pieces on a track
+---
+app "Race" game plum
+state pa num = 0
+state pb num = 0
+state last num = 1
+draw 100, 30 width 320
+  rect 0, 5, 100, 20 fill soft radius 4
+  circle min(pa, 30) * 100 / 30, 11, 4 fill red
+  circle min(pb, 30) * 100 / 30, 19, 4 fill blue
+if pa >= 30
+  "Red wins!" big color good
+if pb >= 30
+  "Blue wins!" big color good
+row gap 1
+  button "Red rolls" fill red tap set last = random(6) then set pa = pa + last
+  button "Blue rolls" fill blue tap set last = random(6) then set pb = pb + last
+"Last roll" last faint
+button "Restart" tap set pa = 0 then set pb = 0
+===
+@create style=detailed domain=a3_would_you
+Would you rather game for the family. I add questions with two options, a button shows a random one and everyone votes with A or B so I can see which is more popular.
+---
+app "Would you rather" smile plum
+table wyr a text, b text
+table vote q ref wyr, side pick A|B
+state k num = 1
+let n = max(count(wyr), 1)
+each wyr sort at as w
+  if index = k - 1
+    stack card gap 1
+      w.a head
+      "or" faint align center
+      w.b head
+      row gap 2
+        button "A" tap add vote q = w, side = A
+        button "B" tap add vote q = w, side = B
+      "A" count(w.vote where side = A) "| B" count(w.vote where side = B) faint
+button "Next question" tap set k = random(n)
+form wyr, "Add question"
+===
+@edit style=plain domain=a3_e_wyr1 ref=a3_would_you
+add a category to each question, like funny or food
+---
+~ table wyr a text, b text => table wyr a text, b text, topic pick Funny|Food|Family|Other = Funny
+===
+@create style=custom_ui domain=a3_penalties
+penalty shootout scoreboard, for each team a row of five circles that go green for a goal or red for a miss as I tap buttons, and the score
+---
+app "Penalties" ball ocean
+table kick team pick A|B, goal bool
+let ga = count(kick where team = A and goal = yes)
+let gb = count(kick where team = B and goal = yes)
+text ga "-" gb big
+row gap 1
+  each 1..5 as k
+    draw width 36
+      circle 50, 50, 44 fill if(count(kick where team = A) < k, soft, if(last(kick.goal where team = A) = yes, good, bad))
+row gap 1
+  each 1..5 as k
+    draw width 36
+      circle 50, 50, 44 fill if(count(kick where team = B) < k, soft, if(last(kick.goal where team = B) = yes, good, bad))
+row gap 1
+  button "A scores" tap add kick team = A, goal = yes
+  button "A misses" tap add kick team = A, goal = no
+row gap 1
+  button "B scores" tap add kick team = B, goal = yes
+  button "B misses" tap add kick team = B, goal = no
+button "New shootout" tap remove all kick
+===
+@create style=short domain=a3_darts
+darts 501 scoreboard
+---
+app "Darts" target slate
+table throw who pick P1|P2, pts num 0..180
+let r1 = 501 - sum(throw.pts where who = P1)
+let r2 = 501 - sum(throw.pts where who = P2)
+row gap 2
+  stack grow align center card
+    "P1" bold
+    text r1 big color if(r1 <= 0, good, ink)
+  stack grow align center card
+    "P2" bold
+    text r2 big color if(r2 <= 0, good, ink)
+form throw, "Add score"
+log throw
+===
+@edit style=plain domain=a3_e_darts1 ref=a3_darts
+call the players Dad and Sara
+---
+~ who pick P1|P2 => who pick Dad was P1|Sara was P2
+~ where who = P1 => where who = Dad
+~ where who = P2 => where who = Sara
+~ "P1" bold => "Dad" bold
+~ "P2" bold => "Sara" bold
+===
+@create style=short domain=a3_gaming_log
+games played hours log
+---
+app "Gaming" game ink
+table play game text, hrs num 0.25..12
+"This week" sum(play.hrs week) "hours" big
+share play by game, sum(it.hrs), it.key
+daybars last 7 days, sum(play.hrs on it)
+form play
+===
+@create style=custom_ui domain=a3_times_table
+times tables practice for my son: shows two random numbers up to 12, he types the answer, I tap check and it keeps the score
+---
+app "Times tables" calc mint
+table tryx ok bool
+state a num = 3
+state b num = 4
+state ans num = 0
+"What is" a "x" b head
+field ans "Answer"
+button "Check" tap add tryx ok = (ans = a * b) then set a = random(12) then set b = random(12) then set ans = 0
+"Right" count(tryx where ok = yes) "of" count(tryx) big
+if count(tryx) > 0
+  if(last(tryx.ok) = yes, "Correct!", "Not quite") color if(last(tryx.ok) = yes, good, warn)
+button "Reset score" tap remove all tryx
+===
+@create style=detailed domain=a3_overtime
+Overtime pay calculator for my job. I log hours each day, anything above 8 hours counts at 1.5 times the hourly rate, and I see the total for the month.
+---
+app "Overtime" clock slate
+setting rate money = 400 "Hourly rate"
+table shift hrs num 0..16 = 8
+let pay = sumof(shift month, min(it.hrs, 8) * rate + max(it.hrs - 8, 0) * rate * 1.5)
+"This month" round(pay) big
+"Hours" sum(shift.hrs month) faint
+"Overtime hours" sumof(shift month, max(it.hrs - 8, 0)) faint
+form shift, "Log shift"
+log shift
+===
+@edit style=plain domain=a3_e_ot1 ref=a3_overtime
+make the overtime multiplier a setting I can change
+---
+~ setting rate money = 400 "Hourly rate" => setting rate money = 400 "Hourly rate"\nsetting mult num = 1.5 "Overtime multiplier"
+~ rate * 1.5) => rate * mult)
+===
+@create style=short domain=a3_bmr
+daily calories I need
+---
+app "Calorie need" apple mint
+state sex pick Male|Female = Male
+state age num = 30
+state kg num = 70
+state cm num = 170
+choice sex
+field age "Age"
+field kg "Weight (kg)"
+field cm "Height (cm)"
+let bmr = 10 * kg + 6.25 * cm - 5 * age + if(sex = Male, 5, -161)
+"Resting need" round(bmr) "kcal" big
+"Lightly active" round(bmr * 1.375) "kcal" head
+===
+@create style=detailed domain=a3_carpool
+Carpool cost sharing. Four of us go to office, I enter distance each way, working days in the month and the car's km per litre, and it tells each person's monthly share.
+---
+app "Carpool" car ocean
+setting petrol money = 270 "Petrol per litre"
+state km num = 15
+state days num = 22
+state kmpl num = 12
+state riders num = 4
+field km "Distance one way (km)"
+field days "Working days"
+field kmpl "Car km per litre"
+field riders "People"
+let cost = km * 2 * days / max(kmpl, 1) * petrol
+"Month fuel" round(cost) faint
+"Each pays" round(cost / max(riders, 1)) big
+===
+@create style=short domain=a3_commission
+sales commission calculator
+---
+app "Commission" money mint
+setting target money = 500000 "Monthly target"
+table sale amount money, client text?
+let tot = sum(sale.amount month)
+let rate = if(tot >= target, 5, if(tot >= target / 2, 3, 1))
+"Sales" tot big
+"Rate" rate "%" faint
+"Commission" round(tot * rate / 100) head
+goal tot, target, "of target"
+form sale
+===
+@create style=detailed domain=a3_share_profit
+Share trade profit calculator for PSX. Buy price, number of shares, sell price and brokerage percent, shows net profit after brokerage on both sides.
+---
+app "Trade profit" chart slate
+setting fee num = 0.15 "Brokerage %"
+state buy num = 100
+state qty num = 100
+state sell num = 110
+field buy "Buy price"
+field qty "Shares"
+field sell "Sell price"
+let cost = buy * qty * (1 + fee / 100)
+let got = sell * qty * (1 - fee / 100)
+"Net profit" round(got - cost) big color if(got >= cost, good, bad)
+round((got - cost) / max(cost, 1) * 1000) / 10 "%" faint
+===
+@create style=custom_ui domain=a3_run_rate
+cricket chase calculator: target, runs scored, balls left, shows the required run rate and a bar of runs still needed
+---
+app "Chase" ball ocean
+state target num = 150
+state runs num = 60
+state balls num = 60
+field target "Target"
+field runs "Runs so far"
+field balls "Balls left"
+let need = max(target - runs, 0)
+"Need" need "off" balls "balls" big
+"Required rate" round(need * 6 / max(balls, 1) * 100) / 100 "per over" head
+draw 100, 6
+  rect 0, 0, 100, 6 fill soft radius 3
+  rect 0, 0, 100 * clamp(runs / max(target, 1), 0, 1), 6 fill accent radius 3
+===
+@create style=multi_feature domain=a3_screen_time
+screen time budget for my kids: log minutes on phone or tv, daily limit setting, ring showing today's use, warning colour when over, and a 7 day bar chart
+---
+app "Screen time" phone plum
+table use mins num 5..600, what pick Phone|TV|Tablet = Phone
+setting limit num = 120 "Daily limit (min)"
+ring sum(use.mins today), limit, "min used today"
+if sum(use.mins today) > limit
+  "Over the limit" color bad head
+quick use, mins, [15, 30, 60]
+daybars last 7 days, sum(use.mins on it)
+share use today by what, sum(it.mins), it.key
+===
+@create style=short domain=a3_study_ring
+study hours goal
+---
+app "Study" book ocean
+table study mins num 5..600
+setting goal num = 180 "Daily minutes"
+ring sum(study.mins today), goal, "min studied"
+quick study, mins, [25, 45, 60]
+"Streak" streak(study) "days" faint
+daybars last 7 days, sum(study.mins on it)
+===
+@create style=detailed domain=a3_score_spades
+Bridge or spades score keeping for two teams across many hands. Each hand I enter the bid and tricks won for each team, points are 10 times the bid if made, otherwise minus 10 times the bid.
+---
+app "Spades" cards ink
+table hand team pick Us|Them, bid num 1..13, won num 0..13
+let us = sumof(hand where team = Us, if(it.won >= it.bid, it.bid * 10 + it.won - it.bid, 0 - it.bid * 10))
+let them = sumof(hand where team = Them, if(it.won >= it.bid, it.bid * 10 + it.won - it.bid, 0 - it.bid * 10))
+row gap 2
+  stack grow card align center
+    "Us" bold
+    text us big
+  stack grow card align center
+    "Them" bold
+    text them big
+form hand, "Add hand"
+log hand
+===
+@create style=custom_ui domain=a3_treasure_hunt
+treasure hunt for kids, clues are stored in a list, a big button reveals the next clue one at a time and a row of footprints shows progress
+---
+app "Treasure hunt" map plum
+table clue text text
+state step num = 1
+let n = count(clue)
+each clue sort at as c
+  if index = step - 1
+    stack card gap 1
+      "Clue" step "of" n faint
+      c.text head
+row gap 1
+  each 1..n
+    icon if(it <= step, "star", "minus")
+button "Found it, next clue" tap set step = min(step + 1, n)
+button "Start again" tap set step = 1
+form clue, "Add clue"
+===
+@create style=custom_ui domain=a3_table_tennis
+table tennis score to 11 with serve indicator, tap a side to add a point, serve changes every 2 points, and a dot shows who serves
+---
+app "Table tennis" ball mint
+table pt side pick Left|Right
+let l = count(pt where side = Left)
+let r = count(pt where side = Right)
+let serve = floor((l + r) / 2) % 2
+grid 2 gap 2
+  stack card align center pad 3 fill soft tap add pt side = Left
+    draw 20, 8
+      circle 10, 4, 3 fill if(serve = 0, accent, soft)
+    text l big
+  stack card align center pad 3 fill soft tap add pt side = Right
+    draw 20, 8
+      circle 10, 4, 3 fill if(serve = 1, accent, soft)
+    text r big
+if (l >= 11 or r >= 11) and abs(l - r) >= 2
+  if(l > r, "Left", "Right") "wins!" big color good
+button "Undo" tap remove last(pt)
+button "New game" tap remove all pt
+===
+@create style=vague domain=a3_game_night
+game night with friends
+---
+app "Game night" game plum
+table pl name text
+table win who ref pl, game text?
+each pl sort name as p
+  row card gap 2
+    p.name bold grow
+    count(p.win) "wins" big
+    button "Won!" tap add win who = p
+form pl, "Add friend"
+"Rounds played" count(win) faint
+===
+@create style=custom_ui domain=a3_lucky_dice_bets
+dice game with pretend points: I guess a number 1 to 6, roll, if the dice matches I win 5 points otherwise lose 1, show total points
+---
+app "Lucky six" dice mint
+table bet won bool
+state guess num = 1
+state roll num = 1
+let pts = count(bet where won = yes) * 5 - count(bet where won = no)
+"Pick" guess head
+slider guess 1..6
+draw 100, 100 width 120
+  rect 4, 4, 92, 92 radius 14 fill surface stroke ink thick 2
+  label 50, 54, roll big
+button "Roll" tap set roll = random(6) then add bet won = (roll = guess)
+"Points" pts big color if(pts >= 0, good, bad)
+===
+@oos style=detailed domain=a3_oos_ai_riddle oos=ai
+A riddle game where the AI makes up new riddles every day and checks my answer, and also keeps a score of how many I solved.
+---
+app "Riddles" brain plum
+table riddle q text, a text
+table solved r ref riddle
+"Solved" count(solved) "of" count(riddle) big
+each riddle sort at as x
+  if count(x.solved) = 0
+    stack card gap 1
+      x.q head
+      button "I solved it" tap add solved r = x
+form riddle, "Add riddle and answer"
+===
+@oos style=short domain=a3_oos_spotify_timer oos=other_apps
+workout timer that starts my spotify playlist when I press start
+---
+app "Workout timer" timer ink
+table done mins num 1..180 = 30
+timer 30m, "Workout", add done then notify "Workout finished"
+"This week" count(done week) "workouts" big
+===

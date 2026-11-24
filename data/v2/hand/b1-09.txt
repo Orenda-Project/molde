@@ -1,0 +1,296 @@
+@create style=detailed domain=b1_margin_products
+in my general store each product has a cost price and a selling price. I enter units sold daily and want profit per product this month and the product earning the most
+---
+app "Margins" tag ocean
+table product name text, cost money, price money
+table units product ref product, qty num 1..500
+let best = max(product, sum(it.units.qty month) * (it.price - it.cost))
+"Best product profit" best big
+each product sort name as p
+  let profit = sum(p.units.qty month) * (p.price - p.cost)
+  row card tap edit p
+    p.name bold grow
+    text sum(p.units.qty month) "sold"
+    profit bold color if(profit = best, good, ink)
+form units, "Sold today"
+form product, "Add product"
+===
+@create style=short domain=b1_firewood_yard
+lakri tal firewood sold by maund
+---
+app "Wood Yard" fire slate
+table woodsale maunds num 0.5..100, rate money = 900, buyer text?
+"Today" sum(woodsale today, it.maunds * it.rate) big
+text sum(woodsale.maunds today) "maunds" faint
+form woodsale
+list woodsale by day
+===
+@create style=multi_feature domain=b1_used_phones
+second hand phone dealer. each phone has the buy price and I add repair spending against it. when sold I enter the sale price. show profit per phone and phones still in stock
+---
+app "Used Phones" phone ink
+table handset model text, imei text?, bought money, sold_for money = 0
+table handset_repair handset ref handset, cost money, what text?
+"In stock" count(handset, it.sold_for = 0) head
+"Profit this month" sum(handset month where sold_for > 0, it.sold_for - it.bought - sum(it.handset_repair.cost)) big
+each handset sort at desc as h
+  let spent = h.bought + sum(h.handset_repair.cost)
+  row card tap edit h
+    h.model bold grow
+    text "cost" spent faint
+    if h.sold_for > 0
+      text h.sold_for - spent bold color if(h.sold_for >= spent, good, bad)
+    else
+      "in stock" color warn
+form handset, "Buy phone"
+form handset_repair, "Repair cost"
+===
+@create style=custom_ui domain=b1_collector_tabs
+I collect rent from a few houses. screen one shows each house with rent due and a button to mark this month's rent received in full, screen two shows total collected and a chart of the last 6 months
+---
+app "Rent Collector" home mint
+table rhouse name text, rent money
+table rcollected rhouse ref rhouse, amount money
+screen houses "Houses" home
+  each rhouse sort name as h
+    row card tap edit h
+      h.name bold grow
+      if sum(h.rcollected.amount month) >= h.rent
+        "received" color good
+      else
+        button "Received" tap add rcollected rhouse = h, amount = h.rent
+  form rhouse, "Add house"
+screen totals "Totals" chart
+  "Collected this month" sum(rcollected.amount month) big
+  "Still to collect" sum(rhouse.rent) - sum(rcollected.amount month) head
+  daybars last 30 days, sum(rcollected.amount on it)
+===
+@create style=detailed domain=b1_qurbani_shares
+we organise qurbani cows in our street: each cow has 7 shares. people take shares and pay. show for each cow shares taken, shares left and the money collected against the cow price
+---
+app "Qurbani Shares" paw mint
+table cow_lot label text, price money
+table taker cow_lot ref cow_lot, name text, shares num 1..7, paid money = 0
+each cow_lot sort label as c
+  let taken = sum(c.taker.shares)
+  stack card gap 1 tap edit c
+    row
+      c.label bold grow
+      text taken "of 7 shares"
+    goal sum(c.taker.paid), c.price, "collected"
+    text 7 - taken "shares left" faint color if(taken >= 7, good, warn)
+form taker, "Add share holder"
+form cow_lot, "Add cow"
+===
+@create style=vague domain=b1_staff_pay
+shop staff salary with absents and advance
+---
+app "Staff Pay" users slate
+table staff name text, salary money
+table absent staff ref staff
+table salary_adv staff ref staff, amount money
+each staff sort name as s
+  let cut = round(s.salary / 30 * count(s.absent month))
+  row card tap edit s
+    s.name bold grow
+    text count(s.absent month) "absents"
+    text s.salary - cut - sum(s.salary_adv.amount month) bold
+form absent, "Mark absent"
+form salary_adv, "Advance"
+form staff, "Add staff"
+===
+@create style=detailed domain=b1_wedding_catering
+we do wedding catering: each event has the host, date, number of guests and rate per plate. record the advance payments and show events coming up with the balance still due
+---
+app "Catering" food plum
+table event host text, day date, guests num 20..3000, plate_rate money
+table event_adv event ref event, amount money
+each event where day >= today sort day as e
+  let total = e.guests * e.plate_rate
+  stack card gap 1 tap edit e
+    row
+      e.host bold grow
+      e.day
+    text "Total" total "| Balance" total - sum(e.event_adv.amount) bold
+"Events this month" count(event month) head
+"Booked value" sum(event month, it.guests * it.plate_rate) big
+form event, "New event"
+form event_adv, "Advance received"
+===
+@create style=typos domain=b1_prize_bonds
+prize bonds i own, with the denomination and series and how many, show total value and the next draw date i set
+---
+app "Prize Bonds" star mint
+table bond series text, face num 100..40000, pieces num 1..100 = 1
+setting next_draw date = today "Next draw"
+"Total value" sum(bond, it.face * it.pieces) big
+"Next draw in" next_draw - today "days" head
+each bond sort at as b
+  row card tap edit b
+    b.series bold grow
+    text b.pieces "x" b.face
+form bond, "Add bond"
+===
+@create style=multi_feature domain=b1_tent_rental
+we rent out tents, chairs and lights for events. each item has total pieces and a rent per day. when a rental goes out I log pieces and when it returns I log it back. show what is out right now per item
+---
+app "Event Rental" box plum
+table gear name text, owned num 1..5000, per_day money
+table gear_out gear ref gear, pieces num 1..2000, client text
+table gear_back gear ref gear, pieces num 1..2000
+each gear sort name as g
+  let out_now = sum(g.gear_out.pieces) - sum(g.gear_back.pieces)
+  row card tap edit g
+    g.name bold grow
+    text out_now "out of" g.owned
+    text g.owned - out_now "in store" color if(g.owned - out_now < 10, warn, good)
+form gear_out, "Gone out"
+form gear_back, "Came back"
+form gear, "Add item"
+===
+@create style=custom_ui domain=b1_petty_cash
+office petty cash: I get a float of 20000 at the start of the month, every expense is typed with a category. show how much is left as a progress bar that turns warn when under 20 percent
+---
+app "Petty Cash" wallet slate
+setting float money = 20000 "Monthly float"
+table pexp kind pick Tea|Stationery|Travel|Repairs|Misc = Misc, amount money, note text?
+let left = float - sum(pexp.amount month)
+"Left" left big color if(left < float / 5, warn, ink)
+draw 100, 4
+  rect 0, 0, 100, 4 fill soft radius 2
+  rect 0, 0, 100 * clamp(left / float, 0, 1), 4 fill if(left < float / 5, warn, accent) radius 2
+bars options pexp.kind, sum(pexp.amount month where kind = it), it
+form pexp, "Spent"
+list pexp by day
+===
+@create style=detailed domain=b1_chick_booking
+hatchery: customers book day old chicks for a delivery date and pay part in advance. show bookings for the next 7 days with chicks needed per day and amount still to collect
+---
+app "Chick Booking" egg plum
+table cbook name text, phone text?, chicks num 100..20000, rate money, due date
+table cbook_pay cbook ref cbook, amount money
+"Chicks needed this week" sum(cbook.chicks where due >= today and due < today + 7) big
+each cbook where due >= today sort due as b
+  let total = b.chicks * b.rate
+  row card tap edit b
+    stack grow
+      b.name bold
+      b.due faint
+    text b.chicks "chicks"
+    text "left" total - sum(b.cbook_pay.amount) bold
+form cbook, "New booking"
+form cbook_pay, "Advance"
+===
+@create style=short domain=b1_egg_rate_log
+egg market rate each day and my selling rate
+---
+app "Egg Rates" egg mint
+table rate market money, mine money
+"Today market" last(rate.market) big
+text "mine" last(rate.mine) faint
+trend rate sort at, it.market
+form rate
+===
+@create style=detailed domain=b1_vendor_stall_pitch
+I sell at 3 different weekly bazaars (Monday, Thursday, Saturday). each bazaar has a stall fee. I enter sales per bazaar and want profit after stall fee for each bazaar this month
+---
+app "Weekly Bazaars" cart ocean
+table bazaar name text, stall_fee money
+table bazaar_sale bazaar ref bazaar, amount money
+each bazaar sort name as b
+  let visits = count(b.bazaar_sale, yes)
+  row card tap edit b
+    b.name bold grow
+    text sum(b.bazaar_sale.amount month) "sales"
+    text sum(b.bazaar_sale.amount month) - count(b.bazaar_sale month) * b.stall_fee bold
+form bazaar_sale, "Day's sales at bazaar"
+form bazaar, "Add bazaar"
+===
+@create style=custom_ui domain=b1_goat_sale_ledger
+goats I sold at the cattle market: date, buyer, weight kg and price per kg, money received so far. show who still owes me and the total pending
+---
+app "Goat Sales" paw mint
+table goat_deal buyer text, kg num 10..200, per_kg money, received money = 0
+each goat_deal sort at desc as d
+  let total = d.kg * d.per_kg
+  row card tap edit d
+    d.buyer bold grow
+    text total
+    text if(d.received >= total, "settled", "owes") total - d.received color if(d.received >= total, good, bad)
+"Pending" sum(goat_deal, it.kg * it.per_kg - it.received) big
+form goat_deal, "New deal"
+===
+@create style=vague domain=b1_spice_shop
+masala shop, spice stock and what sold
+---
+app "Masala" leaf plum
+table spice name text, per_kg money
+table spice_in spice ref spice, kg num 0.5..500
+table spice_out spice ref spice, kg num 0.1..100
+each spice sort name as s
+  row card tap edit s
+    s.name bold grow
+    text sum(s.spice_in.kg) - sum(s.spice_out.kg) "kg"
+    text sum(s.spice_out.kg month) * s.per_kg "this month"
+form spice_out, "Sold"
+form spice_in, "Stock in"
+form spice, "Add spice"
+===
+@create style=typos domain=b1_tution_van
+iam a van driver and parents pay monthly, i mark kids who didnt come on a day so the fee is less per day missed, rate per missed day is a setting
+---
+app "Van Fees" bus ocean
+table kid name text, fee money
+table missed kid ref kid
+setting day_cut money = 50 "Cut per missed day"
+each kid sort name as k
+  row card tap edit k
+    k.name bold grow
+    text count(k.missed month) "days missed"
+    text k.fee - count(k.missed month) * day_cut bold
+"Total to collect" sum(kid.fee) - count(missed month) * day_cut big
+form missed, "Mark missed"
+form kid, "Add kid"
+===
+@create style=detailed domain=b1_shop_investment_partners
+three of us run a shop together with different investments. record each partner's investment and each month's profit; show each partner's share of profit in proportion to the investment
+---
+app "Partners" users slate
+table partner name text
+table invest partner ref partner, amount money
+table profit_month amount money
+let total_invested = sum(invest.amount)
+"Profit this month" sum(profit_month.amount month) big
+each partner sort name as p
+  let part = sum(p.invest.amount) * 100 / max(total_invested, 1)
+  row card tap edit p
+    p.name bold grow
+    text round(part) "%"
+    text round(sum(profit_month.amount month) * part / 100) bold
+form invest, "Investment"
+form profit_month, "Monthly profit"
+form partner, "Add partner"
+===
+@edit style=plain domain=b1_margin_chart ref=b1_margin_products
+show a chart of profit per product
+---
++ bars product, sum(it.units.qty month) * (it.price - it.cost), it.name
+===
+@edit style=plain domain=b1_firewood_weekly ref=b1_firewood_yard
+add a delivery charge and show the weekly total instead
+---
+~ buyer text? => buyer text?, delivery money = 0
+~ sum(woodsale today, it.maunds * it.rate) => sum(woodsale week, it.maunds * it.rate + it.delivery)
+~ "Today" => "This week"
+===
+@edit style=plain domain=b1_phones_option ref=b1_used_phones
+add a condition for each phone: New, Used or Broken, default Used
+---
+~ imei text?, => imei text?, condition pick New|Used|Broken = Used,
+===
+@edit style=plain domain=b1_staff_rename ref=b1_staff_pay
+rename the advance list to early pay
+---
+~ table salary_adv => table early_pay was salary_adv
+~ sum(s.salary_adv.amount month) => sum(s.early_pay.amount month)
+~ form salary_adv, => form early_pay,

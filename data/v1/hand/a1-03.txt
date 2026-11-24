@@ -1,0 +1,463 @@
+@create style=short domain=a1_cat_feeding
+cat feeding log
+---
+app "Cat Feeding" paw mint
+table fed food pick Dry|Wet|Treat = Dry
+remind "Feed the cat" at 8:00, 18:00
+text count(fed today) "meals today" big
+"Last fed" hour(now - last(fed.at)) "h ago" faint
+row gap 1
+  each options fed.food
+    button it grow tap add fed food = it
+log fed last 3 days
+===
+@create style=detailed domain=a1_vet_visits
+Vet visits for my pets. I add each pet with its species, then log every visit with the reason, what it cost and the date of the next one, with a reminder 2 days before.
+---
+app "Vet Book" paw ocean
+table pet name text, species pick Cat|Dog|Bird|Rabbit|Other = Cat
+table visit pet ref pet, reason text, cost money, next date?
+remind "Vet visit in 2 days" at visit.next - 2d at 9:00
+each pet sort name as p
+  stack card gap 0
+    text p.name head
+    p.species "- spent" sum(p.visit.cost) faint
+    each p.visit as v
+      row tap edit v swipe remove v
+        text v.reason grow
+        v.cost faint
+form pet, "Add pet"
+form visit, "Log visit"
+===
+@create style=multi_feature domain=a1_plant_water
+my plants: name, water every how many days, a button when I water, tell me which ones need water today
+---
+app "Plant Care" plant mint
+table plant name text, every num 1..60 = 3 unit "days"
+table watered plant ref plant
+let thirsty = countof(plant, since(it.watered) >= it.every or count(it.watered) = 0)
+"Need water" thirsty big color if(thirsty > 0, warn, good)
+each plant sort name as p
+  row card gap 1 tap edit p
+    stack grow
+      text p.name bold
+      "every" p.every "days" faint
+    if since(p.watered) >= p.every or count(p.watered) = 0
+      "Thirsty" color warn
+    button "Watered" tap add watered plant = p
+form plant, "Add plant"
+===
+@create style=detailed domain=a1_harvest
+Kitchen garden harvest: which crop, how many kg, share of each crop this month and the total for the year.
+---
+app "Harvest" leaf mint
+table harvest crop pick Tomato|Chilli|Okra|Spinach|Mint|Other, kg num 0.1..200 unit "kg"
+"This year" sum(harvest.kg year) "kg" big
+"This month" sum(harvest.kg month) "kg" faint
+share harvest month by crop, sum(it.kg), it.key
+form harvest
+log harvest
+===
+@create style=custom_ui domain=a1_dog_walk
+dog walks, a ring of minutes walked today against 60 and a streak of days I walked him
+---
+app "Dog Walks" paw ocean
+table walk mins num 5..240 unit "min"
+ring sum(walk.mins today), 60, "min walked today"
+stat streak(walk), "day streak"
+quick walk, mins, [15, 30, 45]
+daybars last 7 days, sum(walk.mins on it)
+===
+@create style=custom_ui domain=a1_aquarium
+fish tank care: draw a little tank with as many fish as I have, the water turns orange if I have not changed it for 2 weeks, buttons for water change and feeding
+---
+app "Aquarium" drop ocean
+table change
+table feed
+setting fish num = 5 "Fish in the tank"
+let dirty = since(change)
+draw 100, 60 width 260
+  rect 4, 4, 92, 52 stroke ink thick 2 radius 4
+  rect 6, 14, 88, 40 fill if(dirty > 14, warn, accent) opacity 0.3
+  each 1..fish
+    circle 10 + 80 * index / max(fish, 1), 30 + 10 * sin(index * 70), 3 fill accent
+"Water changed" dirty "days ago" faint
+row gap 1
+  button "Changed water" tap add change
+  button "Fed the fish" tap add feed
+"Fed today" count(feed today) "times" faint
+===
+@create style=multi_feature domain=a1_sowing
+sowing calendar for my garden: crop, month to sow, notes, and show what I should sow this month on top
+---
+app "Sowing" plant mint
+table sow crop text, mon num 1..12 "Month (1 to 12)", notes text?
+"Sow this month" head
+each sow where mon = month(today) as s
+  row card
+    text s.crop bold grow
+    s.notes faint
+if count(sow where mon = month(today)) = 0
+  "Nothing planned for this month." faint
+"All crops" head
+each sow sort mon as s
+  row tap edit s swipe remove s
+    text s.mon faint
+    text s.crop grow
+form sow
+===
+@create style=short domain=a1_pet_weight
+dog weight
+---
+app "Dog Weight" scale ocean
+table pw kg num 0.5..90 unit "kg"
+text last(pw.kg) "kg" big
+trend pw last 12 months sort at, it.kg
+form pw
+===
+@create style=custom_ui domain=a1_hen_eggs
+my hens: one big button to add an egg, eggs today in a large number, eggs this week, and what the feed cost this month
+---
+app "Hen Eggs" egg mint
+table egg
+table feedbuy cost money
+setting price num = 40 "Price per egg"
+text count(egg today) "eggs today" big
+button "+1 egg" tap add egg
+row gap 3
+  stat count(egg week), "this week"
+  stat count(egg month) * price, "worth this month"
+daybars last 7 days, count(egg on it)
+"Feed bought this month" sum(feedbuy.cost month) faint
+form feedbuy, "Feed bought"
+===
+@create style=multi_feature domain=a1_pet_checklist
+daily pet checklist, food water walk medicine, each ticks for today, and one list per pet
+---
+app "Pet Day" paw mint
+table pet name text
+table task pet ref pet, what pick Food|Water|Walk|Medicine
+table did task ref task
+count(did today) "of" count(task) "done today" head
+each pet sort name as p
+  stack card gap 1
+    text p.name head
+    each p.task as t
+      row gap 1
+        text t.what grow
+        toggle t.did
+form pet, "Add pet"
+form task, "Add task"
+===
+@create style=detailed domain=a1_milk_yield
+Milk from my buffalo morning and evening in litres, how much I sold at my price per litre this month, and a chart of the week.
+---
+app "Milk Yield" milk ocean
+table milk litres num 0.5..50 unit "L", time pick Morning|Evening
+setting price money = 180 "Price per litre"
+"Today" sum(milk.litres today) "L" big
+"This month" sum(milk.litres month) "L =" sum(milk.litres month) * price bold
+daybars last 7 days, sum(milk.litres on it)
+form milk
+log milk last 7 days
+===
+@create style=short domain=a1_trees
+trees I planted
+---
+app "My Trees" tree mint
+table tree kind text, planted date, alive bool
+"Planted" count(tree) "trees," count(tree where alive = yes) "alive" big
+each tree sort planted desc as t
+  row card tap edit t swipe remove t
+    text t.kind bold grow
+    t.planted faint
+    toggle t.alive
+form tree
+===
+@create style=vague domain=a1_balcony_plants
+my balcony plants keep dying and I don't know why
+---
+app "Balcony" plant mint
+table water plant text?
+table feedp plant text?
+remind "Water the balcony plants" at 7:30
+remind "Give plants fertilizer" monthly on 1, 15 at 9:00
+button "I watered them" tap add water
+button "Gave fertilizer" tap add feedp
+"Last watered" since(water) "days ago" big
+"Last fertilizer" since(feedp) "days ago" faint
+calendar water
+===
+@oos style=detailed domain=a1_plant_photo_oos oos=ai
+Take a photo of a sick leaf and tell me what disease it has, and also keep a watering schedule for each plant
+---
+app "Plant Doctor" plant mint
+table plant name text, every num 1..60 = 3 unit "days"
+table watered plant ref plant
+each plant sort name as p
+  row card gap 1 tap edit p
+    stack grow
+      text p.name bold
+      "Last watered" since(p.watered) "days ago" faint
+    button "Watered" tap add watered plant = p
+form plant, "Add plant"
+===
+@oos style=short domain=a1_pet_gps_oos oos=location
+dog tracker with gps and a log of his walks
+---
+app "Dog Walks" paw mint
+table walk km num 0.1..30 unit "km", mins num 5..240 unit "min"
+"This week" sum(walk.km week) "km" big
+daybars last 7 days, sum(walk.km on it)
+form walk
+log walk
+===
+@create style=custom_ui domain=a1_salah_grid
+a grid for the five prayers, one row for each of the last 7 days, I tap a box when I prayed and it gets coloured
+---
+app "Salah" mosque mint
+table prayer name pick Fajr|Zuhr|Asr|Maghrib|Isha
+row gap 1
+  text "" size tiny width 5
+  each options prayer.name
+    text it size tiny grow align center
+each days last 7 days as d
+  row gap 1
+    text dayname(d) size tiny width 5
+    each options prayer.name as n
+      box grow height 28 radius 6 fill if(count(prayer on d where name = n) > 0, accent, soft) tap toggle prayer on d where name = n
+"Prayed this week" count(prayer week) "of" 35 faint
+===
+@create style=detailed domain=a1_quran_khatam
+Khatam planner. I choose how many days I want to finish the Quran, it tells me the pages to read each day out of 604 and shows my progress.
+---
+app "Khatam" book mint
+setting days num = 30 "Days to finish"
+table read pages num 1..604
+let per = floor(603 / days) + 1
+ring sum(read.pages), 604, "of 604 pages"
+goal sum(read.pages today), per, "pages today", "pages"
+"At this pace" round((604 - sum(read.pages)) / per) "days left" faint
+quick read, pages, [1, 2, 5, 10]
+log read last 7 days
+===
+@create style=custom_ui domain=a1_bead_circle
+tasbeeh with a circle of 33 beads that light up as I count, tap in the middle to count, rounds counted too
+---
+app "Beads" beads plum
+table zikr
+setting target num = 33 "Beads in a round"
+let n = count(zikr today)
+draw 100, 100 width 260 tap add zikr
+  each 1..target as i
+    circle 50 + 40 * sin(360 * i / target), 50 - 40 * cos(360 * i / target), 3 fill if(i <= n % target, accent, soft)
+  label 50, 48, n % target big
+  label 50, 62, "Round" floor(n / target) + 1 faint
+"Total today" n faint
+===
+@create style=multi_feature domain=a1_dhikr_list
+dhikr counters on one page: SubhanAllah, Alhamdulillah, Allahu Akbar, Astaghfirullah, each with plus one button and its count today
+---
+app "Dhikr" beads mint
+table zikr phrase pick SubhanAllah|Alhamdulillah|AllahuAkbar|Astaghfirullah
+each options zikr.phrase as ph
+  row card gap 2
+    text ph bold grow
+    count(zikr today where phrase = ph) big
+    button "+1" tap add zikr phrase = ph
+"Total today" count(zikr today) faint
+daybars last 7 days, count(zikr on it)
+===
+@create style=vague domain=a1_gratitude
+I want to be more thankful, something small I can do at night
+---
+app "Gratitude" heart plum
+table thanks note text
+remind "What are you thankful for today?" at 21:30
+count(thanks today) "of 3 things today" head
+form thanks, "I am thankful for"
+streak(thanks) "day streak" faint
+log thanks
+===
+@create style=multi_feature domain=a1_journal_screens
+daily journal with two pages: one to write today with how I feel and a long note, one to read past days with a calendar of the days I wrote
+---
+app "Journal" pen slate
+table entry feel pick Great|Good|Okay|Low|Bad = Okay, body long
+screen write "Write" pen
+  form entry, "Save entry"
+  streak(entry) "day streak" faint
+screen past "Past" book
+  calendar entry
+  each entry last 30 days as e
+    stack card gap 0 tap edit e
+      e.at e.feel bold
+      e.body faint
+===
+@create style=multi_feature domain=a1_dua_list
+my duas: title, the text, a heart to mark favourites, search by title, favourites on top
+---
+app "Duas" heart plum
+table dua title text, words long, fav bool
+state q text = ""
+field q "Search"
+each dua where fav = yes and has(title, q) sort title as d
+  stack card gap 0 tap edit d
+    row
+      text d.title bold grow
+      toggle d.fav
+    d.words faint
+each dua where fav = no and has(title, q) sort title as d
+  row card tap edit d swipe remove d
+    text d.title grow
+    toggle d.fav
+form dua
+===
+@create style=short domain=a1_monday_thursday
+monday thursday fasting
+---
+app "Sunnah Fasts" moon mint
+table fast
+remind "Tomorrow is a sunnah fast" at 20:00 on sun wed
+button if(count(fast today) > 0, "Fasted today", "I fasted today") tap toggle fast
+stat count(fast month), "fasts this month"
+calendar fast
+===
+@create style=vague domain=a1_friday_kahf
+remind me every friday to read surah kahf
+---
+app "Jummah" mosque mint
+table kahf
+remind "Surah Kahf, ghusl and early to Jummah" at 9:00 on fri
+button if(count(kahf week) > 0, "Read this week", "I read Surah Kahf") tap toggle kahf week
+"Weeks in a row" streak(kahf) faint
+===
+@create style=detailed domain=a1_qaza
+I have missed prayers from years back to make up. I know roughly how many I owe for each prayer; I tap when I pray one qaza and see how many are left.
+---
+app "Qaza" mosque ink
+setting owed num = 200 "Owed for each prayer"
+table made name pick Fajr|Zuhr|Asr|Maghrib|Isha|Witr
+each options made.name as n
+  stack card gap 1
+    row
+      text n bold grow
+      text owed - count(made where name = n) "left" faint
+      button "Prayed one" tap add made name = n
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(count(made where name = n) / owed, 0, 1), 3 fill accent radius 1
+"Made up in total" count(made) big
+===
+@create style=multi_feature domain=a1_hifz
+hifz revision: surah name, status new revising or strong, last revised date, and a list of what I should revise today because it is over a week old
+---
+app "Hifz" book plum
+table hifz surah text, status pick New|Revising|Strong = New, last date
+"Revise today" head
+each hifz where last < today - 7 sort last as h
+  row card tap edit h
+    text h.surah bold grow
+    (today - h.last) "days ago" color warn
+if count(hifz where last < today - 7) = 0
+  "All revised in the last week." faint color good
+"All surahs" head
+each hifz sort surah as h
+  row tap edit h swipe remove h
+    text h.surah grow
+    h.status faint
+form hifz
+===
+@create style=custom_ui domain=a1_day_review
+evening review: three sliders for sleep, energy and kindness today from 1 to 5, save button, and bars showing the averages of the week
+---
+app "Day Review" smile plum
+table review sleep num 1..5, energy num 1..5, kind num 1..5
+state sl num = 3
+state en num = 3
+state kd num = 3
+"Sleep" sl faint
+slider sl 1..5
+"Energy" en faint
+slider en 1..5
+"Kindness" kd faint
+slider kd 1..5
+button "Save today" tap add review sleep = sl, energy = en, kind = kd
+"This week" head
+draw 100, 30
+  rect 0, 2, 20 * avg(review.sleep last 7 days), 6 fill accent radius 2
+  rect 0, 12, 20 * avg(review.energy last 7 days), 6 fill good radius 2
+  rect 0, 22, 20 * avg(review.kind last 7 days), 6 fill warn radius 2
+===
+@create style=detailed domain=a1_sadqa
+A sadqa jar. Every time I give something I write how much and to whom, and I want to see the total this month and a goal of giving every day.
+---
+app "Sadqa" gift mint
+table sadqa amount money, to text?
+setting goal num = 30 "Days to give this month"
+"This month" sum(sadqa.amount month) big
+goal countof(days month, count(sadqa on it) > 0), goal, "days I gave this month", "days"
+streak(sadqa) "day streak" faint
+form sadqa
+log sadqa
+===
+@create style=custom_ui domain=a1_sunset_prayers
+five prayer times on cards, I type the time for each once, the next prayer is highlighted and each card has a done tick for today
+---
+app "Prayer Times" mosque ocean
+table slot name pick Fajr|Zuhr|Asr|Maghrib|Isha, at_time time
+table prayed slot ref slot
+remind "Prayer time" at slot.at_time
+each slot sort at_time as s
+  row card gap 2 tap edit s swipe remove s
+    text s.name bold grow
+    text s.at_time head
+    toggle s.prayed
+form slot, "Set time"
+===
+@edit style=plain domain=a1_e_cat_note ref=a1_cat_feeding
+add a note to each meal
+---
+~ food pick Dry|Wet|Treat = Dry => food pick Dry|Wet|Treat = Dry, note text?
+===
+@edit style=plain domain=a1_e_plant_heat ref=a1_plant_water
+add a heat map of all watering
+---
++ heat last 70 days, count(watered on it), 3
+===
+@edit style=plain domain=a1_e_bead_target ref=a1_bead_circle
+use 100 beads
+---
+~ setting target num = 33 "Beads in a round" => setting target num = 100 "Beads in a round"
+===
+@edit style=plain domain=a1_e_thanks_time ref=a1_gratitude
+reminder in the morning too
+---
+~ at 21:30 => at 8:00, 21:30
+===
+@edit style=plain domain=a1_e_khatam_days ref=a1_quran_khatam
+make it 60 days
+---
+~ setting days num = 30 => setting days num = 60
+===
+@edit style=plain domain=a1_e_journal_tag ref=a1_journal_screens
+add a tag, work or home or family
+---
+~ body long => body long, tag pick Work|Home|Family = Home
+===
+@edit style=plain domain=a1_e_dua_cat ref=a1_dua_list
+add a category like morning, evening, travel
+---
+~ fav bool => fav bool, kind pick Morning|Evening|Travel|Other = Other
+===
+@edit style=plain domain=a1_e_vet_meds ref=a1_vet_visits
+add a table for medicines my pet takes
+---
++ table meds pet ref pet, name text, dose text?
++ form meds, "Add medicine"
+===
+@edit style=plain domain=a1_e_salah_dark ref=a1_salah_grid
+dark theme please
+---
+~ app "Salah" mosque mint => app "Salah" mosque ink
+===

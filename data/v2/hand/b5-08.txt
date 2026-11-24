@@ -1,0 +1,414 @@
+@create style=short domain=b5_rabbit_litters
+rabbit does and their litters, how many born and how many weaned
+---
+app "Rabbitry" paw mint
+table doe name text
+table litter doe ref doe, born num 1..15, weaned num 0..15 = 0
+each doe sort name as d
+  row card tap edit d
+    d.name bold grow
+    count(d.litter) "litters" faint
+    sum(d.litter.weaned) "of" sum(d.litter.born) "weaned" bold
+form litter, "New litter"
+form doe, "Add doe"
+===
+@create style=custom_ui domain=b5_fabric_rolls
+fabric rolls in my shop with metres at start, cut lengths sold from each roll. a thin bar under every roll showing how much is left
+---
+app "Cloth Rolls" tag plum
+table roll name text, metres num 1..500
+table cutlen roll ref roll, m num 0.25..50
+each roll sort name as r
+  let left = r.metres - sum(r.cutlen.m)
+  stack card gap 1 tap edit r
+    row
+      r.name bold grow
+      fixed(left, 1) "m left" bold color if(left < 3, bad, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(left / r.metres, 0, 1), 4 fill accent radius 2
+form cutlen, "Cut a length"
+form roll, "New roll"
+===
+@create style=detailed domain=b5_mandi_commission
+I am a commission agent in the cattle market. for every deal I note the seller, the animal and sale price, and I take 2 percent from the seller (a setting). show my commission today and this month, and who the biggest seller is
+---
+app "Mandi Agent" paw slate
+table seller name text, village text?
+table deal seller ref seller, animal pick Cow|Buffalo|Goat|Camel = Cow, price money
+setting commission_pct num = 2 "Commission %"
+"Commission today" round(sum(deal.price today) * commission_pct / 100) big
+"This month" round(sum(deal.price month) * commission_pct / 100) faint
+each seller sort sum(it.deal.price) desc as s
+  row card tap edit s
+    s.name bold grow
+    count(s.deal) "deals" faint
+    sum(s.deal.price) bold
+form deal, "Record deal"
+form seller, "Add seller"
+===
+@create style=vague domain=b5_jumma_collection
+friday collection in the mosque box, counted every week
+---
+app "Jumma Box" mosque mint
+table week_count total money, note text?
+"This month" sum(week_count.total month) big
+bars week_count sort at, it.total, dayname(it.at)
+list week_count by day
+form week_count, "Add count"
+===
+@create style=typos domain=b5_eidi_tracker
+kids eidi tracker. each kid, how much eidi they got and from whom. who got the most and a bar for each kid
+---
+app "Eidi" gift plum
+table kid name text
+table eidi kid ref kid, from_who text, amount money
+bars kid sort name, sum(it.eidi.amount), it.name
+each kid sort sum(it.eidi.amount) desc as k
+  row card tap edit k
+    "#" index + 1 bold
+    k.name grow
+    count(k.eidi) "gifts" faint
+    sum(k.eidi.amount) bold
+form eidi, "Add eidi"
+form kid, "Add kid"
+===
+@create style=multi_feature domain=b5_wedding_events
+wedding events schedule: mehndi, barat, walima etc each with a day and start time, and a task list under every event with ticks. progress for each event and next event up top
+---
+app "Wedding Plan" gift plum
+table event name text, day date, start time
+table task event ref event, what text, done bool
+"Next up" head
+each event where day >= today sort day top 1 as e
+  row card
+    e.name big grow
+    e.day e.start faint
+each event sort day as e
+  stack card gap 1 tap edit e
+    row
+      e.name bold grow
+      count(e.task where done = yes) "of" count(e.task) faint
+    each e.task as t
+      row
+        t.what grow
+        toggle t.done
+form task, "Add task"
+form event, "Add event"
+===
+@create style=detailed domain=b5_orphan_sponsors
+we run a small orphan support programme. children, and sponsors who promise a monthly amount to one child. show each child with the total promised and what has actually been received this month
+---
+app "Sponsor Book" heart plum
+table child name text
+table pledge child ref child, sponsor text, monthly money
+table received pledge ref pledge, amount money
+each child sort name as c
+  let promised = sum(c.pledge.monthly)
+  row card tap edit c
+    c.name bold grow
+    "promised" promised faint
+    "received" sum(received month, if(it.pledge.child = c, it.amount, 0)) bold
+"Shortfall this month" sum(pledge.monthly) - sum(received.amount month) head
+form received, "Payment received"
+form pledge, "Add sponsor"
+form child, "Add child"
+===
+@create style=short domain=b5_daycare_days
+daycare kids, tick who came today, fee per day
+---
+app "Daycare" baby mint
+table kid name text, day_fee money = 600
+table came kid ref kid
+each kid sort name as k
+  row card
+    k.name bold grow
+    toggle k.came
+    count(k.came month) * k.day_fee "this month" faint
+"Here today" count(came today) "of" count(kid) head
+form kid, "Add child"
+===
+@create style=detailed domain=b5_delivery_km
+pharmacy delivery boys. each run has distance in km and the boy gets 12 rupees per km (setting). show each boy's allowance this month
+---
+app "Delivery Runs" bike ocean
+table rider name text
+table trip rider ref rider, km num 0.5..80, order_no text?
+setting per_km money = 12 "Allowance per km"
+each rider sort name as r
+  row card tap edit r
+    r.name bold grow
+    fixed(sum(r.trip.km month), 1) "km" faint
+    round(sum(r.trip.km month) * per_km) bold
+form trip, "Add run"
+form rider, "Add rider"
+===
+@create style=vague domain=b5_compost_bins
+compost bins turn every week and temperature
+---
+app "Compost" leaf mint
+table bin name text
+table turned bin ref bin
+table temp bin ref bin, celsius num 0..90
+each bin sort name as b
+  stack card gap 1
+    row
+      b.name bold grow
+      last(b.temp.celsius) "C" bold color if(last(b.temp.celsius) > 65, warn, ink)
+    if due(b.turned, 7)
+      "Turn it today" color warn
+    trend b.temp, it.celsius
+form temp, "Add temperature"
+form turned, "Turned"
+form bin, "Add bin"
+===
+@create style=detailed domain=b5_cutlist
+woodworking projects with a cut list: part name, length in cm and quantity, tick when cut. total length of timber needed and how many parts left to cut for every project
+---
+app "Cut List" tool slate
+table project name text
+table part project ref project, label text, cm num 1..600, qty num 1..50 = 1, cut bool
+each project sort name as p
+  stack card gap 1
+    row
+      p.name head grow
+      sum(p.part, it.cm * it.qty) "cm timber" faint
+    "Parts left to cut" count(p.part where cut = no) bold
+    each p.part as r
+      row
+        r.label grow
+        r.qty "x" r.cm "cm" faint
+        toggle r.cut
+form part, "Add part"
+form project, "New project"
+===
+@create style=short domain=b5_card_delivery
+wedding cards: which family got how many, delivered or not
+---
+app "Cards" gift plum
+table family name text
+table cards family ref family, n num 1..20 = 1, delivered bool
+"Cards not delivered" sum(cards where delivered = no, it.n) big
+each family sort name as f
+  row card tap edit f
+    f.name bold grow
+    sum(f.cards.n) "cards" faint
+form cards, "Add cards"
+form family, "Add family"
+===
+@create style=typos domain=b5_watch_shifts
+neighbourhood watch volunteers and night shifts, hours each. who did most this month
+---
+app "Night Watch" shield ink
+table volunteer name text, phone text?
+table shift volunteer ref volunteer, day date, hours num 1..12 = 4
+each volunteer sort sum(it.shift.hours month) desc as v
+  row card tap edit v
+    v.name bold grow
+    sum(v.shift.hours month) "h this month" bold
+each shift where day >= today sort day as s
+  row
+    s.day bold
+    s.volunteer.name grow
+form shift, "Add shift"
+form volunteer, "Add volunteer"
+===
+@create style=detailed domain=b5_farm_wages
+farm labour. each worker has a daily wage, I tick the days they came and write any advance given. weekly pay is days times wage minus advance. show it for each worker
+---
+app "Farm Labour" plant slate
+table worker name text, wage money
+table came worker ref worker
+table advance worker ref worker, amount money
+each worker sort name as w
+  let pay = count(w.came week) * w.wage - sum(w.advance.amount week)
+  row card tap edit w
+    stack grow gap 0
+      w.name bold
+      count(w.came week) "days this week" faint
+    toggle w.came
+    pay "to pay" bold color if(pay < 0, bad, ink)
+form advance, "Give advance"
+form worker, "Add worker"
+===
+@create style=custom_ui domain=b5_hifz_grid
+revision grid for the 30 paras. a square for each para coloured green if revised in the last 14 days, orange if in 14 to 30 days, red if longer or never. tap a square to mark it revised today
+---
+app "Revision Grid" book mint
+table revised para num 1..30
+grid 10 gap 1
+  each 1..30 as n
+    let gap = since(revised where para = n)
+    box height 30 radius 4 fill if(gap <= 14, good, if(gap <= 30, warn, bad)) tap add revised para = n
+      n small align center color bg
+"Fresh this fortnight" count(1..30, since(revised where para = it) <= 14) "of 30" head
+===
+@create style=multi_feature domain=b5_staff_leave
+shop staff leave: each person has 18 days a year (setting). leaves are sick, casual or annual with number of days. show balance left this year for each person and who is taking leave most
+---
+app "Leave Book" calendar slate
+table staff name text
+table leave staff ref staff, kind pick Sick|Casual|Annual = Casual, days num 0.5..30
+setting entitlement num = 18 "Days a year"
+each staff sort name as s
+  let used = sum(s.leave.days year)
+  row card tap edit s
+    s.name bold grow
+    used "used" faint
+    entitlement - used "left" bold color if(entitlement - used <= 2, warn, good)
+each options leave.kind as k
+  row
+    k grow
+    sum(leave.days year where kind = k) faint
+form leave, "Add leave"
+form staff, "Add staff"
+===
+@create style=vague domain=b5_bakery_trays
+oven trays baked and burnt, by product
+---
+app "Oven Log" bread slate
+table product name text, per_tray num 1..200 = 24
+table baked product ref product, trays num 1..20, burnt num 0..20 = 0
+each product sort name as p
+  row card tap edit p
+    p.name bold grow
+    sum(p.baked.trays today) * p.per_tray "baked today" faint
+    sum(p.baked.burnt) "trays burnt" color if(sum(p.baked.burnt) > 0, warn, muted)
+form baked, "Log baking"
+form product, "Add product"
+===
+@create style=detailed domain=b5_ptm_slots
+parent teacher meeting: each teacher has 10 minute slots one after another and parents book a slot. show for each teacher the slots with the parent name or free, 8 slots from 9 am
+---
+app "PTM Slots" school ocean
+table teacher name text
+table booking teacher ref teacher, slot num 1..8, parent text
+each teacher sort name as t
+  stack card gap 1
+    t.name bold
+    each 1..8 as n
+      row
+        join(8 + floor((n * 10 + 50) / 60), ":", fixed((n * 10 + 50) % 60, 0)) faint
+        if(count(t.booking where slot = n) > 0, last(t.booking.parent where slot = n), "free") grow color if(count(t.booking where slot = n) > 0, ink, good)
+form booking, "Book a slot"
+form teacher, "Add teacher"
+===
+@create style=short domain=b5_candle_stock
+candle scents poured and sold, what is in stock
+---
+app "Candles" fire plum
+table candle scent text, price money
+table pour candle ref candle, qty num 1..100
+table sold candle ref candle, qty num 1..100
+each candle sort scent as c
+  let stock = sum(c.pour.qty) - sum(c.sold.qty)
+  row card tap edit c
+    c.scent bold grow
+    stock "in stock" color if(stock <= 0, bad, ink)
+    button "Sold 1" tap add sold candle = c, qty = 1
+form pour, "Poured"
+form candle, "New scent"
+===
+@create style=detailed domain=b5_renovation_quotes
+renovating the house. each job (plumbing, tiles, paint...) gets quotes from different contractors. show the lowest quote for each job in green and the total if I pick the lowest for all
+---
+app "Quotes" home slate
+table job name text
+table quote job ref job, contractor text, amount money
+"Total at lowest quotes" sum(job, min(it.quote.amount)) big
+each job sort name as j
+  stack card gap 1
+    j.name head
+    each j.quote sort amount as q
+      row
+        q.contractor grow
+        q.amount bold color if(q.amount = min(j.quote.amount), good, ink)
+form quote, "Add quote"
+form job, "Add job"
+===
+@oos style=detailed domain=b5_hifz_lock oos=other
+lock the app with my fingerprint and also keep the revision grid for the 30 paras with green for recently revised
+---
+app "Revision Squares" book mint
+table revised para num 1..30
+grid 10 gap 1
+  each 1..30 as n
+    box height 30 radius 4 fill if(since(revised where para = n) <= 14, good, soft) tap add revised para = n
+      n small align center
+===
+@create style=typos domain=b5_tea_pluckers
+tea garden pluckers, kg of leaf they plucked each day, rate per kg is 18. who plucked most this week and what i owe each
+---
+app "Leaf Weigh" leaf mint
+table plucker name text
+table leaf plucker ref plucker, kg num 0.5..80
+setting rate_kg money = 18 "Rate per kg"
+each plucker sort sum(it.leaf.kg week) desc as p
+  row card tap edit p
+    p.name bold grow
+    fixed(sum(p.leaf.kg week), 1) "kg" faint
+    round(sum(p.leaf.kg week) * rate_kg) bold
+"Leaf this week" sum(leaf.kg week) "kg" head
+form leaf, "Weigh leaf"
+form plucker, "Add plucker"
+===
+@create style=vague domain=b5_pet_hostel
+pet boarding, nights each pet stayed and the nightly rate
+---
+app "Pet Hostel" paw mint
+table pet name text, owner text, nightly money = 800
+table stay pet ref pet, nights num 1..60
+each pet sort name as p
+  row card tap edit p
+    stack grow gap 0
+      p.name bold
+      p.owner faint
+    sum(p.stay.nights) "nights" faint
+    sum(p.stay.nights) * p.nightly bold
+form stay, "Add stay"
+form pet, "Add pet"
+===
+@edit style=plain domain=b5_rabbit_wean_rate ref=b5_rabbit_litters
+show weaning percent for each doe and add a goal percent setting of 80 that turns it red when below
+---
+~ app "Rabbitry" paw mint => app "Rabbitry" paw mint\nsetting wean_goal num = 80 "Weaning goal %"
+~ sum(d.litter.weaned) "of" sum(d.litter.born) "weaned" bold => round(sum(d.litter.weaned) * 100 / sum(d.litter.born)) "% weaned" bold color if(sum(d.litter.weaned) * 100 / sum(d.litter.born) < wean_goal, bad, good)
+===
+@edit style=plain domain=b5_fabric_unit ref=b5_fabric_rolls
+change metres to yards, rename the fields metres and m to yards and yd, text too
+---
+~ metres num 1..500 => yards num was metres 1..500
+~ m num 0.25..50 => yd num was m 0.25..50
+~ r.metres - sum(r.cutlen.m) => r.yards - sum(r.cutlen.yd)
+~ "m left" => "yd left"
+~ left / r.metres => left / r.yards
+===
+@edit style=plain domain=b5_mandi_goat ref=b5_mandi_commission
+add a sheep option to the animals
+---
+~ Cow|Buffalo|Goat|Camel = Cow => Cow|Buffalo|Goat|Sheep|Camel = Cow
+===
+@edit style=plain domain=b5_eidi_total ref=b5_eidi_tracker
+add a total of all eidi at the top and make the kids bar chart go away
+---
+- bars kid sort name, sum(it.eidi.amount), it.name
++ "Total eidi" sum(eidi.amount) big
+===
+@edit style=plain domain=b5_wedding_budget ref=b5_wedding_events
+add a cost to each event and show the total spend
+---
+~ table event name text, day date, start time => table event name text, day date, start time, cost money = 0
++ "Total cost" sum(event.cost) big
+===
+@edit style=plain domain=b5_daycare_late ref=b5_daycare_days
+add a late pickup fee per late tick on each kid's day, 100 rupees a time, kept in a setting
+---
+~ table came kid ref kid => setting late_fee money = 100 "Late pickup fee"\ntable came kid ref kid, late bool
+~ count(k.came month) * k.day_fee "this month" => count(k.came month) * k.day_fee + count(k.came month where late = yes) * late_fee "this month"
+===
+@edit style=plain domain=b5_pet_discount ref=b5_pet_hostel
+give 10 percent off the whole stay when a pet stayed more than a week, the percent as a setting
+---
+~ table pet name text, owner text, nightly money = 800 => setting discount_pct num = 10 "Long stay discount %"\ntable pet name text, owner text, nightly money = 800
+~ sum(p.stay.nights) * p.nightly bold => sum(p.stay.nights) * p.nightly * if(sum(p.stay.nights) > 7, 100 - discount_pct, 100) / 100 bold
+===

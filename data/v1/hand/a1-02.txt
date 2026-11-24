@@ -1,0 +1,449 @@
+@create style=custom_ui domain=a1_meal_plan
+a weekly meal plan, one card per weekday with breakfast lunch and dinner, today's card highlighted
+---
+app "Meal Plan" food mint
+table meal day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, slot pick Breakfast|Lunch|Dinner, dish text
+each options meal.day as d
+  stack card gap 0 fill if(d = dayname(today), soft, surface)
+    text d bold
+    each meal where day = d sort slot as m
+      row tap edit m swipe remove m
+        text m.slot faint
+        text m.dish grow
+form meal
+===
+@create style=detailed domain=a1_recipe_book
+My recipe book. Each recipe has a name, cooking time, servings and steps, and I add the ingredients to it separately. One page to browse and one to add.
+---
+app "Recipes" book mint
+table recipe name text, mins num 5..300 unit "min", serves num 1..20 = 4, steps long?
+table ingredient recipe ref recipe, item text, qty text
+screen browse "Recipes" book
+  each recipe sort name as r
+    stack card gap 0 tap edit r
+      text r.name head
+      r.mins "min," r.serves "servings" faint
+      each r.ingredient as i
+        "-" i.item i.qty faint
+screen new_r "Add" plus
+  form recipe, "Save recipe"
+  form ingredient, "Add ingredient"
+===
+@create style=multi_feature domain=a1_pantry
+pantry stock: item, how many, minimum I want to keep, plus and minus buttons, search box, and a count of what is running low
+---
+app "Pantry" box slate
+table stock name text, qty num 0..1000, low num 0..1000 = 2, unit text = "pcs"
+state q text = ""
+let lowc = countof(stock, it.qty <= it.low)
+"Running low" lowc big color if(lowc > 0, warn, good)
+field q "Search"
+each stock where has(name, q) sort name as s
+  row card gap 1 tap edit s
+    stack grow
+      text s.name bold
+      s.qty s.unit color if(s.qty <= s.low, bad, muted)
+    button "-" tap set s.qty = s.qty - 1
+    button "+" tap set s.qty = s.qty + 1
+form stock, "Add item"
+===
+@create style=detailed domain=a1_calorie_protein
+Log what I eat with calories and protein, show a ring for calories against my daily goal and a bar for protein, and the last week of meals.
+---
+app "Calories" apple ocean
+table meal item text, kcal num 0..3000, protein num 0..200 = 0 unit "g"
+setting kcal_goal num = 2000 "Calorie goal"
+setting protein_goal num = 80 "Protein goal (g)"
+ring sum(meal.kcal today), kcal_goal, "kcal today"
+goal sum(meal.protein today), protein_goal, "protein today", "g"
+form meal
+log meal last 7 days
+===
+@create style=custom_ui domain=a1_roza_grid
+ramzan fasting tracker: a grid of 30 boxes, I tap the box for each roza I kept and it turns green, with a count at the top
+---
+app "Roza" moon mint
+table roza day num 1..30
+"Fasts kept" count(roza year) "of 30" big
+grid 6 gap 1
+  each 1..30
+    box height 44 radius 8 fill if(count(roza year where day = it) > 0, accent, soft) tap toggle roza year where day = it
+      text it align center color if(count(roza year where day = it) > 0, bg, ink)
+remind "Sehri time is near" at 4:15
+remind "Iftar dua" at 18:10
+===
+@create style=short domain=a1_tiffin
+school tiffin planner
+---
+app "Tiffin" food ocean
+table tiffin day pick Mon|Tue|Wed|Thu|Fri, item text, drink text?
+"Today's tiffin" head
+each tiffin where day = dayname(today) as t
+  row card
+    text t.item bold grow
+    t.drink faint
+each options tiffin.day as d
+  row
+    text d bold
+    text count(tiffin where day = d) "items" faint
+form tiffin
+===
+@create style=multi_feature domain=a1_fridge_expiry
+fridge food list with expiry date, red when it expires within 2 days, a reminder the day before, and sorted by date
+---
+app "Fridge" milk mint
+table food name text, expires date, qty text?
+remind "Something in the fridge expires tomorrow" at food.expires - 1d at 8:00
+count(food where expires - today <= 2) "expiring soon" head
+each food sort expires as f
+  row card tap edit f swipe remove f
+    text f.name bold grow
+    f.qty faint
+    f.expires - today "days" color if(f.expires - today <= 2, bad, muted)
+form food
+===
+@create style=custom_ui domain=a1_fasting_16_8
+intermittent fasting clock: start fast button, shows hours since I started in a ring out of 16
+---
+app "Fasting" hourglass slate
+table fast
+setting hours num = 16 "Fast length (h)"
+let gone = round((now - last(fast.at)) / 1h)
+ring min(gone, hours), hours, "hours fasted"
+if gone >= hours
+  "You can eat now" big color good
+button "Start fast now" tap add fast
+count(fast month) "fasts this month" faint
+===
+@oos style=multi_feature domain=a1_grocery_oos oos=messaging
+grocery list with a bought tick, clear bought items button, and send the list to my wife on whatsapp every evening
+---
+app "Grocery" cart mint
+table item name text, bought bool
+count(item where bought = no) "to buy" head
+each item where bought = no sort name as g
+  row card tap edit g swipe remove g
+    text g.name grow
+    toggle g.bought
+form item, "Add item"
+button "Clear bought items" tap remove all item where bought = yes
+"Bought" faint
+list item where bought = yes
+===
+@oos style=detailed domain=a1_pantry_oos oos=camera
+I want to scan the barcode on every pack and the app adds it to my kitchen stock with how many are left
+---
+app "Kitchen Stock" box slate
+table pack name text, qty num 0..500 = 1
+each pack sort name as p
+  row card gap 1 tap edit p swipe remove p
+    text p.name bold grow
+    p.qty
+    button "-" tap set p.qty = p.qty - 1
+form pack, "Add pack"
+===
+@create style=multi_feature domain=a1_dawat
+dawat planner: guest name, how many people, yes no or maybe, total heads coming, and how much rice to cook at 100 grams each
+---
+app "Dawat" users plum
+table guest name text, people num 1..20 = 1, rsvp pick Yes|No|Maybe = Maybe
+let heads = sum(guest.people where rsvp = Yes)
+text heads "people coming" big
+"Maybe" sum(guest.people where rsvp = Maybe) "more" faint
+"Rice to cook" round(heads * 0.1 * 10) / 10 "kg" bold
+each guest sort name as g
+  row card tap edit g swipe remove g
+    text g.name bold grow
+    g.people "people" faint
+    choice g.rsvp
+form guest
+===
+@create style=short domain=a1_kitchen_timers
+kitchen timers
+---
+app "Kitchen Timers" timer ocean
+timer 10m, "Rice"
+timer 20m, "Daal"
+timer 45s, "Eggs", notify "Eggs are ready"
+===
+@create style=detailed domain=a1_cook_ratings
+After I cook something new I write the dish name, how the family liked it from 1 to 5 stars, and a note. Show my top rated dishes first.
+---
+app "Dish Ratings" star plum
+table dish name text, stars num 1..5 = 4, note text?
+"Dishes cooked" count(dish) head
+"Average rating" round(avg(dish.stars) * 10) / 10 "of 5" faint
+each dish sort stars desc as d
+  row card tap edit d swipe remove d
+    text d.name bold grow
+    d.stars "/ 5" color if(d.stars >= 4, good, muted)
+form dish
+===
+@create style=custom_ui domain=a1_chore_chart
+chore chart for my kids: each kid has a card with buttons for bed, dishes, homework, reading and tidy, a button turns green when done today and I see stars this week
+---
+app "Chores" star plum
+table kid name text
+table done kid ref kid, chore pick Bed|Dishes|Homework|Reading|Tidy
+each kid sort name as k
+  stack card gap 1
+    row
+      text k.name head grow
+      count(k.done week) "stars this week" faint
+    row gap 1
+      each options done.chore as c
+        button c grow fill if(count(k.done today where chore = c) > 0, good, soft) tap toggle k.done today where chore = c
+form kid, "Add child"
+===
+@create style=multi_feature domain=a1_pocket_money
+pocket money for each of my children: add money given, add money spent, see the balance in green or red, quick plus 50 and minus 50 buttons
+---
+app "Pocket Money" coin mint
+table kid name text
+table entry kid ref kid, amount money, kind pick Got|Spent = Got, note text?
+each kid as k
+  let bal = sum(k.entry.amount where kind = Got) - sum(k.entry.amount where kind = Spent)
+  stack card gap 1
+    row
+      text k.name head grow
+      text bal big color if(bal < 0, bad, good)
+    row gap 1
+      button "+50" tap add entry kid = k, amount = 50, kind = Got
+      button "-50" tap add entry kid = k, amount = 50, kind = Spent
+form kid, "Add child"
+form entry, "Add other amount"
+===
+@create style=detailed domain=a1_homework
+Homework tracker for my daughter: subject, what to do, due date, tick when done. Warn about late ones and remind her the evening before.
+---
+app "Homework" pencil ocean
+table hw subject pick Maths|English|Urdu|Science|Islamiat|Other = Maths, task text, due date, done bool
+let late = count(hw where done = no and due < today)
+remind "Homework is due tomorrow" at hw.due - 1d at 17:00
+"Late" late big color if(late > 0, bad, good)
+each hw where done = no sort due as h
+  row card gap 1 tap edit h
+    stack grow
+      text h.subject bold
+      h.task faint
+    h.due color if(h.due < today, bad, muted)
+    toggle h.done
+form hw
+===
+@create style=multi_feature domain=a1_baby_log
+baby log with two pages: feeds in ml with time since last feed, and sleep in minutes with a total for today
+---
+app "Baby Log" baby plum
+table feed ml num 10..400 unit "ml"
+table sleep mins num 5..720 unit "min"
+screen feeds "Feeds" milk
+  "Last fed" hour(now - last(feed.at)) "h" minute(now - last(feed.at)) "min ago" big
+  quick feed, ml, [60, 90, 120]
+  "Today" sum(feed.ml today) "ml in" count(feed today) "feeds" faint
+  log feed last 3 days
+screen sleeps "Sleep" moon
+  "Slept today" round(sum(sleep.mins today) / 6) / 10 "h" big
+  quick sleep, mins, [30, 60, 120]
+  daybars last 7 days, sum(sleep.mins on it) / 60
+  list sleep today
+===
+@create style=short domain=a1_baby_growth
+baby weight and height every month
+---
+app "Growth" baby mint
+table growth kg num 1..30 unit "kg", cm num 30..130 unit "cm"
+row gap 3
+  stat last(growth.kg), "kg now"
+  stat last(growth.cm), "cm now"
+"Weight" faint
+trend growth last 12 months sort at, it.kg
+form growth
+log growth
+===
+@create style=detailed domain=a1_vaccines
+Vaccination card for my children. For each child I add the vaccines with due dates, tick them when given, and get a reminder 3 days before.
+---
+app "Vaccines" shield mint
+table kid name text, born date
+table shot kid ref kid, vaccine pick BCG|Polio|Penta|Measles|MMR|Typhoid|Other, due date, given bool
+remind "Vaccine due in 3 days" at shot.due - 3d at 9:00
+each kid sort name as k
+  stack card gap 1
+    text k.name head
+    each k.shot sort due as s
+      row gap 1 tap edit s
+        text s.vaccine bold grow
+        s.due faint
+        toggle s.given
+form kid, "Add child"
+form shot, "Add vaccine"
+===
+@create style=multi_feature domain=a1_family_calendar
+shared family calendar: events with a date and who it is for, filter by person, month calendar, reminder the evening before
+---
+app "Family" users ocean
+table event title text, day date, who pick All|Dad|Mom|Ali|Sara = All
+state view_who pick All|Dad|Mom|Ali|Sara = All
+remind "Family event tomorrow" at event.day - 1d at 18:00
+choice view_who
+each event where day >= today and (view_who = All or who = view_who or who = All) sort day top 8 as e
+  row card tap edit e swipe remove e
+    text e.day bold
+    text e.title grow
+    e.who faint
+calendar event
+form event
+===
+@create style=custom_ui domain=a1_star_chart
+sticker chart for my son, a grid of stars that fill when he does something good, 10 stars means a treat
+---
+app "Star Chart" star plum
+table star reason text?
+setting target num = 10 "Stars for a treat"
+let n = count(star)
+"Treats earned" floor(n / target) big
+grid 5 gap 1
+  each 1..target
+    stack align center pad 1 radius 8 fill if(it <= n % target, accent, soft)
+      icon star
+button "Add a star" tap add star
+===
+@create style=detailed domain=a1_kid_reading
+My son reads a book every night. Write the book and pages he read, a weekly pages goal with a bar, and a list of the week.
+---
+app "Reading Kid" book ocean
+table read book text, pages num 1..500
+setting weekly num = 100 "Pages per week"
+goal sum(read.pages week), weekly, "pages this week", "pages"
+"Books this week" count(read week by book) faint
+form read
+log read last 14 days
+===
+@create style=short domain=a1_potty
+potty training chart
+---
+app "Potty" star mint
+table potty result pick Success|Accident|Tried = Success
+text count(potty today where result = Success) "successes today" big
+"This week" round(count(potty week where result = Success) * 100 / count(potty week)) "% success" faint
+row gap 1
+  each options potty.result
+    button it grow tap add potty result = it
+daybars last 7 days, count(potty on it where result = Success)
+===
+@create style=vague domain=a1_call_nani
+we keep forgetting to call grandma
+---
+app "Call Nani" phone mint
+table call
+remind "Call Nani today" at 19:00 on sun
+since(call) "days since the last call" big
+button "We called her" tap add call
+calendar call
+===
+@create style=short domain=a1_protein_quick
+protein per day
+---
+app "Protein" egg ink
+table eat food text, g num 1..150 unit "g"
+setting goal num = 90 "Goal (g)"
+ring sum(eat.g today), goal, "g of protein"
+form eat
+log eat last 3 days
+===
+@create style=vague domain=a1_diet_plan
+I need to lose some weight, help me eat better
+---
+app "Eat Better" apple mint
+table meal item text, kcal num 0..3000
+table weigh kg num 20..300 unit "kg"
+setting goal num = 1800 "Calories a day"
+goal sum(meal.kcal today), goal, "kcal today", "kcal"
+form meal, "Add food"
+"Weight" last(weigh.kg) "kg" head
+trend weigh last 60 days sort at, it.kg
+form weigh, "Add weight"
+===
+@create style=custom_ui domain=a1_morning_routine
+morning routine for my 5 year old, big tiles for wake up, brush teeth, dress, breakfast, bag, that turn green when ticked today
+---
+app "Morning" sun mint
+table step name pick Wake|Brush|Dress|Breakfast|Bag
+"Ready in" count(step today) "of 5" big
+grid 2 gap 1
+  each options step.name
+    stack card pad 2 radius 12 fill if(count(step today where name = it) > 0, good, soft) tap toggle step today where name = it
+      text it head align center
+===
+@create style=short domain=a1_eidi
+eidi money tracker
+---
+app "Eidi" gift plum
+table eidi from text, amount money
+"Total eidi" sum(eidi.amount) big
+share eidi all by from, sum(it.amount), it.key
+form eidi
+===
+@create style=multi_feature domain=a1_school_bag
+school bag checklist for each weekday: what to pack, which day, tick it off when packed, resets each day on its own
+---
+app "School Bag" school ocean
+table item what text, day pick Mon|Tue|Wed|Thu|Fri
+table packed item ref item
+count(packed today) "of" count(item where day = dayname(today)) "packed today" head
+each item where day = dayname(today) sort what as i
+  row card
+    text i.what grow
+    toggle i.packed
+form item, "Add item"
+===
+@edit style=plain domain=a1_e_meal_cook ref=a1_meal_plan
+add a field for who cooks
+---
+~ dish text => dish text, cook text?
+===
+@edit style=plain domain=a1_e_pantry_light ref=a1_pantry
+make it dark
+---
+~ app "Pantry" box slate => app "Pantry" box ink
+===
+@edit style=plain domain=a1_e_chores_remind ref=a1_chore_chart
+remind the kids at 6 every evening
+---
++ remind "Chores time" at 18:00
+===
+@edit style=plain domain=a1_e_homework_notes ref=a1_homework
+add a note box for each homework
+---
+~ done bool => done bool, note text?
+===
+@edit style=plain domain=a1_e_baby_dark ref=a1_baby_log
+change colours to blue
+---
+~ app "Baby Log" baby plum => app "Baby Log" baby ocean
+===
+@edit style=plain domain=a1_e_roza_sehri ref=a1_roza_grid
+move the sehri reminder to 4:00
+---
+~ at 4:15 => at 4:00
+===
+@edit style=plain domain=a1_e_cal_goal ref=a1_calorie_protein
+change goal to 1800 calories
+---
+~ setting kcal_goal num = 2000 => setting kcal_goal num = 1800
+===
+@edit style=plain domain=a1_e_recipe_rating ref=a1_recipe_book
+add a rating from 1 to 5 to every recipe
+---
+~ steps long? => steps long?, rating num? 1..5
+===
+@edit style=plain domain=a1_e_fridge_where ref=a1_fridge_expiry
+add where it is kept, fridge or freezer
+---
+~ qty text? => qty text?, place pick Fridge|Freezer = Fridge
+===
+@edit style=plain domain=a1_e_pocket_goal ref=a1_pocket_money
+add a savings goal of 2000 for each child
+---
+~ table kid name text => table kid name text, goal money = 2000
++after       text bal big color if(bal < 0, bad, good) ::       goal bal, k.goal, "saved"

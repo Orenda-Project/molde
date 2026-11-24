@@ -1,0 +1,402 @@
+@create style=detailed domain=b4_curd_dairy
+small dairy shop makes curd and lassi from milk. each morning i note milk litres used for a batch, and kg of curd that came out, then through the day curd sold in kg. show curd made vs sold and yield per litre
+---
+app "Curd Dairy" milk mint
+table cbatch litres num 1..500, curd_kg num 1..400
+table csold kg num 0.25..50
+setting curd_price money = 300 "Curd per kg"
+let made = sum(cbatch.curd_kg today)
+text made - sum(csold.kg today) "kg curd left" big
+text "Yield" fixed(sum(cbatch.curd_kg) / sum(cbatch.litres), 2) "kg per litre" head
+text "Sales today" sum(csold.kg today) * curd_price faint
+quick csold, kg, [0.5, 1, 2, 5]
+form cbatch, "New batch"
+===
+@create style=custom_ui domain=b4_school_canteen
+school canteen: items with a price, tap an item each time a student buys one. two columns of big tiles, and at the bottom the total and the top seller of the day
+---
+app "Canteen" food mint
+table citem name text, price money
+table cbuy citem ref citem
+grid 2 gap 1
+  each citem sort name as i
+    stack card gap 0 tap add cbuy citem = i
+      i.name head
+      text i.price faint
+      text count(i.cbuy today) "sold" bold
+text "Today" sum(citem, count(it.cbuy today) * it.price) big
+text "Top seller" first(citem sort count(it.cbuy today) desc).name faint
+form citem, "Add item"
+===
+@edit style=plain domain=b4_canteen_hours ref=b4_school_canteen
+chart of how many sold per item this week
+---
++ bars citem sort name, count(it.cbuy week), it.name
+===
+@create style=custom_ui domain=b4_oven_batches
+bakery oven: set the timer for 25 minutes for each tray, when it rings it notes a batch and tells me to take out. tray count today and by bread type (bun, rusk, cake)
+---
+app "Oven" bread plum
+table tray kind pick Bun|Rusk|Cake = Bun
+state next_kind pick Bun|Rusk|Cake = Bun
+choice next_kind
+timer 25m, "Tray in oven", add tray kind = next_kind then notify "Take the tray out"
+each options tray.kind as k
+  row card
+    k bold grow
+    text count(tray today where kind = k) "trays"
+text "Total trays today" count(tray today) big
+===
+@create style=short domain=b4_health_camp
+corporate health camp: name, weight, height cm and show bmi
+---
+app "Health Camp" heart mint
+table person name text, kg num 20..250, cm num 100..230
+each person sort at desc as p
+  let bmi = p.kg / ((p.cm / 100) * (p.cm / 100))
+  row card tap edit p
+    p.name bold grow
+    text fixed(bmi, 1) bold color if(bmi >= 30, bad, if(bmi >= 25, warn, good))
+    text if(bmi >= 30, "Obese", if(bmi >= 25, "Over", if(bmi >= 18.5, "Normal", "Under"))) faint
+text count(person) "checked" big
+form person, "Add person"
+===
+@edit style=plain domain=b4_camp_phone ref=b4_health_camp
+add a phone number and a note box on each person
+---
+~ cm num 100..230 => cm num 100..230, phone text?, note long?
+~ p.name bold grow => p.name p.phone bold grow
+===
+@create style=detailed domain=b4_dialysis_sessions
+dialysis centre. each patient needs 3 sessions a week. we mark each session done, and show who has had fewer than 3 sessions this week so we can call them
+---
+app "Dialysis" heart ocean
+table dpatient name text, shift pick Morning|Afternoon|Evening = Morning, phone text?
+table dsession dpatient ref dpatient
+text count(dpatient, count(it.dsession week) < 3) "patients behind this week" head color warn
+each dpatient sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      text p.shift p.phone faint
+    text count(p.dsession week) "of 3" color if(count(p.dsession week) >= 3, good, warn)
+    button "Session" tap add dsession dpatient = p
+form dpatient, "Add patient"
+===
+@create style=custom_ui domain=b4_kids_fever
+my daughter has fever. log her temperature, and when I give paracetamol i tap a button. show the time when the next dose is allowed (6 hours after the last) and the temperature as a line
+---
+app "Fever" heart plum
+table temp_k deg num 35..42
+table dose_k mg num 50..1000 = 250
+let next_ok = last(dose_k.at) + 6h
+text last(temp_k.deg) "C" big color if(last(temp_k.deg) >= 38.5, bad, ink)
+if now >= next_ok
+  "Next dose can be given" color good
+else
+  "Wait" next_ok - now color warn
+button "Gave paracetamol" tap add dose_k mg = 250
+trend temp_k last 3 days sort at, it.deg
+form temp_k, "Temperature"
+===
+@edit style=plain domain=b4_fever_gap ref=b4_kids_fever
+make the gap between doses a setting, it is 8 hours for syrup
+---
+~ let next_ok = last(dose_k.at) + 6h => setting gap_h num 1..24 = 6 "Hours between doses"\nlet next_ok = last(dose_k.at) + gap_h * 1h
+===
+@create style=multi_feature domain=b4_boutique_measures
+boutique customers measurements. chest, waist, hip, shoulder, sleeve and length in inches taken on different dates, so i can see the latest and what changed since the first one. the orders are also noted with the delivery date
+---
+app "Measurements" pen plum
+table bcust name text, phone text?
+table measure bcust ref bcust, chest num 20..70, waist num 20..70, hip num 20..70, shoulder num 10..30, sleeve num 10..40, length num 20..70
+table border bcust ref bcust, item text, deliver_on date, done bool
+each bcust sort name as c
+  stack card gap 1 tap edit c
+    c.name head
+    text "Chest" last(c.measure.chest) "Waist" last(c.measure.waist) "Hip" last(c.measure.hip) faint
+    text "Waist change" last(c.measure.waist) - first(c.measure.waist) faint
+    text count(c.border where done = no) "orders open" color warn
+form measure, "New measurements"
+form border, "New order"
+form bcust, "Add customer"
+===
+@create style=typos domain=b4_puncture_shop
+puncture shop, bike tyre 100 car tyre 300 tubeless 500, tap when done, how much today
+---
+app "Puncture" tool slate
+table fix kind pick Bike|Car|Tubeless = Bike, price money
+each options fix.kind as k
+  row card tap add fix kind = k, price = if(k = Bike, 100, if(k = Car, 300, 500))
+    k bold grow
+    text count(fix today where kind = k)
+text "Today" sum(fix.price today) big
+daybars last 7 days, sum(fix.price on it)
+===
+@create style=detailed domain=b4_car_pool
+four of us share one car to the office. whoever drives that day buys fuel, and we split the total fuel cost by the number of rides each person took. show what each owes or gets back
+---
+app "Car Pool" car ocean
+table rider_p name text
+table ride_p rider_p ref rider_p
+table fuel_p rider_p ref rider_p, amount money
+let cost_per_ride = sum(fuel_p.amount month) / count(ride_p month)
+text "Fuel this month" sum(fuel_p.amount month) big
+text "Per ride" round(cost_per_ride) head
+each rider_p sort name as r
+  let bal = sum(r.fuel_p.amount month) - count(r.ride_p month) * cost_per_ride
+  row card tap edit r
+    stack grow
+      r.name bold
+      text count(r.ride_p month) "rides" faint
+    text if(bal >= 0, "gets back", "owes") abs(round(bal)) color if(bal >= 0, good, bad)
+    button "Rode today" tap add ride_p rider_p = r
+form fuel_p, "Bought fuel"
+form rider_p, "Add person"
+===
+@edit style=plain domain=b4_carpool_rename ref=b4_car_pool
+rename the people table to member
+---
+~ table rider_p name text => table member was rider_p name text
+~ table ride_p rider_p ref rider_p => table ride_p rider_p ref member
+~ table fuel_p rider_p ref rider_p => table fuel_p rider_p ref member
+~ each rider_p sort name as r => each member sort name as r
+~ form rider_p, "Add person" => form member, "Add person"
+===
+@create style=custom_ui domain=b4_school_bus_roll
+school bus roll call, kids board in the morning and get off in the evening, tick both for each kid. show who is still on the bus
+---
+app "Bus Roll" bus ocean
+table kid_b name text, stop text?
+table board kid_b ref kid_b
+table alight kid_b ref kid_b
+text count(kid_b, count(it.board today) > 0 and count(it.alight today) = 0) "kids on the bus now" big
+each kid_b sort name as k
+  row card tap edit k
+    stack grow
+      k.name bold
+      text k.stop faint
+    text "Up" faint
+    toggle k.board
+    text "Down" faint
+    toggle k.alight
+form kid_b, "Add kid"
+===
+@edit style=plain domain=b4_bus_remind ref=b4_school_bus_roll
+remind me at 7:30 and 2:30 on school days
+---
++ remind "Bus roll call" at 7:30, 14:30 on mon tue wed thu fri
+===
+@create style=detailed domain=b4_tubewell_hours
+a tubewell is shared by 6 farmers. we note hours it ran for each farmer, and diesel cost for each month is split by the hours. show each farmer's share of diesel
+---
+app "Tubewell" drop slate
+table farmer_t name text
+table run farmer_t ref farmer_t, hours num 0.25..24
+table diesel amount money
+state m date = today
+monthnav m
+let total_h = sum(run.hours month of m)
+text "Diesel" sum(diesel.amount month of m) big
+text "Hours run" total_h head
+each farmer_t sort name as f
+  row card tap edit f
+    stack grow
+      f.name bold
+      text sum(f.run.hours month of m) "hours" faint
+    text round(sum(diesel.amount month of m) * sum(f.run.hours month of m) / total_h) bold
+form run, "Hours used"
+form diesel, "Diesel bought"
+form farmer_t, "Add farmer"
+===
+@edit style=plain domain=b4_tubewell_paid ref=b4_tubewell_hours
+add a table for the money each farmer has paid and show what is still due from him
+---
+~ table diesel amount money => table paid_t farmer_t ref farmer_t, amount money\ntable diesel amount money
+~ round(sum(diesel.amount month of m) * sum(f.run.hours month of m) / total_h) bold => round(sum(diesel.amount month of m) * sum(f.run.hours month of m) / total_h - sum(f.paid_t.amount month of m)) "due" bold
++ form paid_t, "Farmer paid"
+===
+@create style=multi_feature domain=b4_orphanage_needs
+orphanage monthly needs. each need is an item with cost like rice, uniforms, medicine. donors give money towards a need. show how much is still needed for each need with a bar and only the unfunded first
+---
+app "Orphanage Needs" gift ocean
+table need_o name text, cost money
+table gift_o need_o ref need_o, donor text, amount money
+each need_o sort sum(it.gift_o.amount) / it.cost as n
+  let got = sum(n.gift_o.amount)
+  stack card gap 1 tap edit n
+    row
+      n.name bold grow
+      text got "of" n.cost
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(got / n.cost, 0, 1), 4 fill if(got >= n.cost, good, accent) radius 2
+    text "Needed" max(n.cost - got, 0) faint
+text "Total still needed" sum(need_o, max(it.cost - sum(it.gift_o.amount), 0)) big
+form gift_o, "Donation"
+form need_o, "Add need"
+===
+@edit style=plain domain=b4_needs_urgent ref=b4_orphanage_needs
+add an urgent flag and show a count of urgent needs not yet funded
+---
+~ cost money => cost money, urgent bool
++ "Urgent unfunded" count(need_o, it.urgent and sum(it.gift_o.amount) < it.cost) head color bad
+===
+@create style=short domain=b4_eid_gift_packs
+eid gift packs for orphans: each pack has items like clothes, sweets, toy with cost, i make 50 packs
+---
+app "Gift Packs" gift mint
+table pack_i name text, cost money
+setting packs num 1..1000 = 50 "Number of packs"
+each pack_i sort name as i
+  row card tap edit i swipe remove i
+    i.name bold grow
+    text i.cost
+    text i.cost * packs faint
+text "One pack costs" sum(pack_i.cost) big
+text "All packs" sum(pack_i.cost) * packs head
+form pack_i, "Add item"
+===
+@create style=detailed domain=b4_masjid_roster
+masjid staff roster: imam, muezzin, cleaner and the days each of them is on duty. show today's staff and who covers which prayer, and count duty days this week
+---
+app "Masjid Roster" mosque mint
+table staff_m name text, role pick Imam|Muezzin|Cleaner|Substitute = Muezzin
+table duty_m staff_m ref staff_m, weekday pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, prayer pick All|Fajr|Zuhr|Asr|Maghrib|Isha = All
+text "On duty today" head
+each duty_m where weekday = dayname(today) as d
+  row card tap edit d
+    d.staff_m.name bold grow
+    text d.staff_m.role d.prayer faint
+each staff_m sort name as s
+  row
+    s.name grow
+    text count(s.duty_m) "duty days a week" faint
+form duty_m, "Assign duty"
+form staff_m, "Add staff"
+===
+@create style=short domain=b4_iftar_hosts
+which house hosts iftar on which ramadan day
+---
+app "Iftar Hosts" moon plum
+table host house text, day num 1..30, guests num 1..100 = 20
+state today_r num = 1
+row gap 1
+  button "<" tap set today_r = max(today_r - 1, 1)
+  text "Ramadan day" today_r head grow align center
+  button ">" tap set today_r = min(today_r + 1, 30)
+each host where day = today_r as h
+  row card tap edit h
+    h.house bold grow
+    text h.guests "guests"
+text "Days without a host" 30 - count(host, it.day >= 1) head
+form host, "Add host"
+===
+@edit style=plain domain=b4_iftar_menu ref=b4_iftar_hosts
+add what they are cooking for iftar as a note
+---
+~ guests num 1..100 = 20 => guests num 1..100 = 20, menu text?
+~ h.guests "guests" => text h.menu h.guests "guests"
+===
+@create style=vague domain=b4_ramadan_water
+water glasses between iftar and sehri
+---
+app "Ramadan Water" drop ocean
+table glass_r
+setting target num = 8 "Glasses target"
+goal count(glass_r today), target, "glasses"
+button "Drank a glass" tap add glass_r
+daybars last 7 days, count(glass_r on it)
+===
+@create style=custom_ui domain=b4_fertilizer_mix
+garden fertiliser mixing, label says 2 grams per litre of water. i type how many litres of water I'm mixing and it tells grams of fertiliser, and I can change the 2 grams for other fertilisers
+---
+app "Fertiliser Mix" leaf mint
+setting g_per_l num 0.1..50 = 2 "Grams per litre"
+state litres num = 10
+field litres "Litres of water"
+slider litres 1..100
+text litres * g_per_l "grams" huge big
+text "of fertiliser in" litres "litres" faint
+===
+@create style=multi_feature domain=b4_plant_frost
+cold night alert for my potted plants: each plant has the lowest temperature it can take. i type tonight's forecast low and see which plants must be brought inside
+---
+app "Frost Cover" cloud ocean
+table fplant name text, min_temp num -10..30
+state tonight num = 5
+field tonight "Tonight's low (C)"
+slider tonight -10..30
+text count(fplant where min_temp > tonight) "plants to bring inside" head color warn
+each fplant where min_temp > tonight sort name as p
+  row card tap edit p
+    p.name bold grow
+    text "needs above" p.min_temp
+each fplant where min_temp <= tonight sort name as p
+  row
+    p.name grow
+    text "safe" color good
+form fplant, "Add plant"
+===
+@edit style=plain domain=b4_frost_rename ref=b4_plant_frost
+rename the min temp column to tolerance
+---
+~ min_temp num -10..30 => tolerance num -10..30 was min_temp
+~ where min_temp > tonight sort name as p\n  row card => where tolerance > tonight sort name as p\n  row card
+~ count(fplant where min_temp > tonight) => count(fplant where tolerance > tonight)
+~ p.min_temp => p.tolerance
+~ where min_temp <= tonight => where tolerance <= tonight
+===
+@create style=custom_ui domain=b4_sky_journal
+sky journal: one line per day with the sky, clear cloudy rain fog. show last 28 days as a grid of coloured squares by sky type and count of each this month
+---
+app "Sky Journal" cloud ocean
+table sky kind pick Clear|Cloudy|Rain|Fog = Clear
+row gap 1
+  each options sky.kind
+    button it tap add sky kind = it
+grid 7 gap 1
+  each days last 28 days
+    box height 16 radius 3 fill if(count(sky on it where kind = Rain) > 0, accent, if(count(sky on it where kind = Cloudy) > 0, muted, if(count(sky on it where kind = Clear) > 0, warn, soft)))
+each options sky.kind as k
+  row
+    k grow
+    text count(sky month where kind = k)
+===
+@create style=detailed domain=b4_relief_camp
+flood relief camp. families register with how many members, tents are given, and food items like rice, flour, oil are handed out by quantity. show stock left of each item we received from donors
+---
+app "Relief Camp" home ocean
+table fam head text, members num 1..30, tents num 0..5 = 1
+table stock_r item pick Rice|Flour|Oil|Sugar|Tea = Rice, kg num 1..5000
+table issue_r fam ref fam, item pick Rice|Flour|Oil|Sugar|Tea = Rice, kg num 0.5..100
+text count(fam) "families," sum(fam.members) "people" big
+each options stock_r.item as i
+  row card
+    i bold grow
+    text sum(stock_r.kg where item = i) - sum(issue_r.kg where item = i) "kg left" color if(sum(stock_r.kg where item = i) - sum(issue_r.kg where item = i) < 20, warn, ink)
+each fam sort head as f
+  row card tap edit f
+    f.head bold grow
+    text f.members "people"
+    text sum(f.issue_r.kg) "kg given" faint
+form issue_r, "Give food"
+form stock_r, "Stock received"
+form fam, "Register family"
+===
+@create style=typos domain=b4_fishing_trips
+fishing boat trips, i note the ice and diesel cost for each trip and then kg of catch by fish kind, sold at rate per kg i enter. profit of each trip
+---
+app "Fishing Trips" fish ocean
+table ftrip day date, diesel money, ice money
+table catch ftrip ref ftrip, kind pick Rohu|Catfish|Prawn|Other = Rohu, kg num 1..500, rate money
+each ftrip sort day desc as t
+  let profit = sum(t.catch, it.kg * it.rate) - t.diesel - t.ice
+  row card tap edit t
+    stack grow
+      t.day bold
+      text sum(t.catch.kg) "kg" faint
+    text profit bold color if(profit >= 0, good, bad)
+text "Best trip" max(ftrip, sum(it.catch, it.kg * it.rate) - it.diesel - it.ice) big
+form catch, "Add catch"
+form ftrip, "New trip"

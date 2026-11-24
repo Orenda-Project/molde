@@ -1,0 +1,394 @@
+@create style=detailed domain=b5_birthday_party
+planning my daughter's birthday party. guests with a yes, no or maybe, how many kids each is bringing, and gifts received with who gave it. total heads on top because cake slices depend on it
+---
+app "Party Plan" gift plum
+table guest name text, rsvp pick Yes|No|Maybe = Maybe, kids num 0..8 = 1
+table gift guest ref guest, what text
+"Heads coming" sum(guest where rsvp = Yes, it.kids + 1) big
+"Maybe" sum(guest where rsvp = Maybe, it.kids + 1) faint
+each guest sort name as g
+  row card tap edit g
+    g.name bold grow
+    g.rsvp color if(g.rsvp = Yes, good, if(g.rsvp = No, bad, warn))
+    count(g.gift) "gifts" faint
+form guest, "Add guest"
+form gift, "Gift received"
+===
+@create style=custom_ui domain=b5_clinic_token
+clinic waiting room token counter. a huge number shows who is being served now, a next button moves on, and a list of patients waiting with their token
+---
+app "Token Desk" users mint
+table patient name text, token num 1..999
+state serving num = 1
+serving big
+button "Next patient" tap set serving = serving + 1
+button "Back" tap set serving = max(serving - 1, 1)
+"Waiting" head
+each patient where token >= serving sort token as p
+  row card tap edit p
+    p.token bold
+    p.name grow
+    if(p.token = serving, "now", plural(p.token - serving, "turn")) faint
+form patient, "Add patient"
+===
+@create style=multi_feature domain=b5_polling_booths
+election day counts: booths with registered voters, and a count of votes cast every hour. turnout percent per booth as progress bar and a chart of total votes by hour
+---
+app "Booth Count" flag slate
+table booth name text, registered num 1..5000
+table cast booth ref booth, voters num 1..2000
+plot 8..18, 0..max(1..18, sum(cast.voters where hour(at) = it)) axes
+  each 8..17
+    rect it + 0.1, 0, 0.8, sum(cast.voters where hour(at) = it) fill accent radius 2
+    tick it + 0.5, it
+each booth sort name as b
+  stack card gap 1
+    b.name bold
+    goal sum(b.cast.voters), b.registered, "voted"
+form cast, "Add count"
+form booth, "Add booth"
+===
+@create style=vague domain=b5_dairy_fat
+milk collection centre, farmers bring milk with fat percent and we pay by litres times fat
+---
+app "Milk Centre" milk mint
+table farmer name text
+table delivery farmer ref farmer, litres num 1..300, fat num 2..9 = 4
+setting rate money = 22 "Rate per fat point"
+let pay(d delivery) = d.litres * d.fat * rate
+each farmer sort name as f
+  row card tap edit f
+    f.name bold grow
+    sum(f.delivery.litres week) "L this week" faint
+    sum(f.delivery week, pay(it)) bold
+"Paid out this week" sum(delivery week, pay(it)) head
+form delivery, "Add delivery"
+form farmer, "Add farmer"
+===
+@create style=detailed domain=b5_feed_mix
+animal feed recipes. each recipe has ingredients with percent share and price per kg. I set how many kg I want to mix, and it shows kg of each ingredient and cost per kg of the final feed
+---
+app "Feed Mix" food mint
+table recipe name text
+table part recipe ref recipe, what text, percent num 1..100, price_kg money
+setting batch_kg num = 100 "Batch size (kg)"
+each recipe sort name as r
+  stack card gap 1
+    row
+      r.name head grow
+      sum(r.part.percent) "% total" faint color if(sum(r.part.percent) = 100, good, warn)
+    each r.part as p
+      row
+        p.what grow
+        fixed(batch_kg * p.percent / 100, 1) "kg" faint
+    "Cost per kg of feed" fixed(sum(r.part, it.percent * it.price_kg) / 100, 1) bold
+form part, "Add ingredient"
+form recipe, "New recipe"
+===
+@create style=typos domain=b5_rice_mill
+rice mill lots. farmer, paddy kg in, moisture percent, and how much rice came out. i want recovery percent for every lot and the average
+---
+app "Rice Mill" bread slate
+table lot farmer text, kg_in num 100..50000, moisture num 8..30
+table milled lot ref lot, kg_out num 50..40000
+each lot sort at desc as l
+  let recovery = sum(l.milled.kg_out) * 100 / l.kg_in
+  row card tap edit l
+    stack grow gap 0
+      l.farmer bold
+      l.kg_in "kg at" l.moisture "% moisture" faint
+    round(recovery) "%" bold color if(recovery < 60, warn, good)
+"Average recovery" round(sum(milled.kg_out) * 100 / sum(lot.kg_in)) "%" head
+form milled, "Milled output"
+form lot, "New lot"
+===
+@create style=short domain=b5_tractor_hire
+tractor hire hours per farmer, rate per hour and diesel
+---
+app "Tractor Hire" car slate
+table tractor name text
+table hire tractor ref tractor, farmer text, hours num 0.5..24
+table diesel tractor ref tractor, cost money
+setting hour_rate money = 2500 "Rate per hour"
+each tractor sort name as t
+  row card tap edit t
+    t.name bold grow
+    sum(t.hire.hours month) * hour_rate - sum(t.diesel.cost month) "net" bold
+form hire, "Add hire"
+form diesel, "Add diesel"
+form tractor, "Add tractor"
+===
+@create style=detailed domain=b5_football_split
+weekend football. we rent the ground each match and split the cost between whoever played. log each match with the ground cost and tick the players, then show what each player owes in total
+---
+app "Football Fees" ball mint
+table match day date, ground money
+table played match ref match, player text
+each match sort day desc as m
+  row card tap edit m
+    m.day bold
+    count(m.played) "players" faint grow
+    m.ground / max(count(m.played), 1) "each" bold
+"Total owed by each player" head
+each played by player as g
+  row
+    g.key grow
+    sum(g, it.match.ground / max(count(it.match.played), 1)) bold
+form played, "Add player to match"
+form match, "New match"
+===
+@create style=vague domain=b5_movie_club
+movie night club picks and who voted for what
+---
+app "Movie Club" star plum
+table movie title text, genre pick Action|Comedy|Drama|Horror = Comedy
+table vote movie ref movie, voter text
+each movie sort count(it.vote) desc as m
+  row card tap edit m
+    m.title bold grow
+    m.genre faint
+    count(m.vote) "votes" bold
+form vote, "Cast vote"
+form movie, "Add movie"
+===
+@create style=multi_feature domain=b5_tuck_credit
+school tuck shop where kids have a prepaid balance. parents top up, kids buy things. show each child's balance and warn when below 100
+---
+app "Tuck Shop" cup mint
+table kid name text, klass text?
+table topup kid ref kid, amount money
+table purchase kid ref kid, item text, price money
+each kid sort name as k
+  let bal = sum(k.topup.amount) - sum(k.purchase.price)
+  row card tap edit k
+    stack grow gap 0
+      k.name bold
+      k.klass faint
+    bal bold color if(bal < 100, bad, good)
+"Spent today" sum(purchase.price today) head
+form purchase, "Sell item"
+form topup, "Top up"
+form kid, "Add child"
+===
+@create style=custom_ui domain=b5_water_tanks
+rooftop water tanks, each has a capacity in litres and I write the level in percent whenever I check. draw each tank with water inside at the latest level, blue, and red when under 20 percent
+---
+app "Tank Levels" drop ocean
+table tank name text, litres num 100..20000
+table check tank ref tank, percent num 0..100
+grid 2 gap 2
+  each tank sort name as t
+    let lvl = last(t.check.percent)
+    stack card gap 1 align center
+      draw 60, 80 width 90
+        rect 5, 5, 50, 70 stroke ink thick 2 radius 4
+        rect 6, 74 - 68 * lvl / 100, 48, 68 * lvl / 100 fill if(lvl < 20, bad, accent)
+      t.name bold
+      round(t.litres * lvl / 100) "L" faint
+form check, "Add level"
+form tank, "Add tank"
+===
+@create style=detailed domain=b5_photocopy_meter
+photocopy shop. every morning and evening I note the machine counter. copies made today is last reading minus first reading of today, price per copy is a setting, and I also note paper reams bought
+---
+app "Copy Shop" list slate
+table meter count num 0..9999999
+table paper reams num 1..50
+setting copy_price money = 3 "Price per copy"
+let made = last(meter.count today) - first(meter.count today)
+made "copies today" big
+"Earned" made * copy_price head
+daybars last 7 days, last(meter.count on it) - first(meter.count on it)
+"Paper bought this month" sum(paper.reams month) "reams" faint
+form meter, "Counter reading"
+form paper, "Bought paper"
+===
+@create style=typos domain=b5_handloom_orders
+handloom weavers, each order has metres and rate per metre and done tick. who owes how much to be paid for finished orders
+---
+app "Loom Orders" tag plum
+table weaver name text
+table piece weaver ref weaver, metres num 1..500, rate money, done bool
+each weaver sort name as w
+  let due = sum(w.piece, if(it.done = yes, it.metres * it.rate, 0))
+  row card tap edit w
+    w.name bold grow
+    count(w.piece where done = no) "in progress" faint
+    due "to pay" bold
+form piece, "New order"
+form weaver, "Add weaver"
+===
+@create style=detailed domain=b5_cinema_booth
+small cinema ticket booth. shows with a time, gold and silver tickets with different prices. sold ticket log with the show. gold 500 silver 300. earnings per show in a bar chart
+---
+app "Cinema Booth" star ink
+table show movie text, start time
+table ticket show ref show, class pick Gold|Silver = Silver, qty num 1..10 = 1
+let fare(c text) = if(c = Gold, 500, 300)
+bars show sort start, sum(it.ticket, it.qty * fare(it.class)), it.movie
+each show sort start as s
+  row card tap edit s
+    stack grow gap 0
+      s.movie bold
+      s.start faint
+    sum(s.ticket.qty) "tickets" faint
+    button "Silver" tap add ticket show = s, class = Silver
+    button "Gold" tap add ticket show = s, class = Gold
+form show, "Add show"
+===
+@create style=vague domain=b5_ferry_runs
+river ferry runs, passengers each run and fare
+---
+app "Ferry" plane ocean
+table run day date, passengers num 1..80, fare money = 50
+"Today" sum(run today, it.passengers * it.fare) big
+daybars last 14 days, sum(run on it, it.passengers)
+form run, "Log run"
+list run by day
+===
+@create style=multi_feature domain=b5_sports_day
+school sports day events (100m, relay, sack race ...), each with a list of students and their place 1 2 3. gold silver bronze count for each house (pick of 4 houses)
+---
+app "Sports Day" trophy ocean
+table event name text
+table result event ref event, student text, house pick Red|Blue|Green|Yellow = Red, place num 1..3
+each options result.house as h
+  row card
+    h bold grow
+    count(result where house = h and place = 1) "gold" bold
+    count(result where house = h and place = 2) "silver" faint
+    count(result where house = h and place = 3) "bronze" faint
+each event sort name as e
+  stack card gap 1
+    e.name bold
+    each e.result sort place as r
+      row
+        r.place bold
+        r.student grow
+        r.house faint
+form result, "Add result"
+form event, "Add event"
+===
+@create style=short domain=b5_goat_feed_mix
+how much feed per goat per day in a group, bought bags
+---
+app "Goat Feed" paw mint
+table herd name text, goats num 1..500, grams num 100..3000 = 800
+table bag herd ref herd, kg num 5..100 = 50
+each herd sort name as h
+  let daily = h.goats * h.grams / 1000
+  row card tap edit h
+    h.name bold grow
+    fixed(daily, 1) "kg a day" faint
+    round(sum(h.bag.kg) / daily) "days of feed" bold color if(sum(h.bag.kg) / daily < 7, warn, good)
+form bag, "Bought bag"
+form herd, "Add herd"
+===
+@create style=custom_ui domain=b5_pomodoro_projects
+study timer. pick the project, a 25 minute timer, when it ends it adds a session to that project. show sessions this week per project as bars
+---
+app "Study Focus" timer ink
+table project name text
+table session project ref project
+state active ref project
+choice active
+timer 25m, "Focus", add session project = active then notify "Session done"
+bars project sort name, count(it.session week), it.name
+form project, "Add project"
+===
+@create style=detailed domain=b5_lab_samples
+water testing lab. samples come from villages, each sample gets tests for chlorine and TDS. flag a sample red if TDS is over 500. show how many failed this month
+---
+app "Water Lab" drop ocean
+table village name text
+table sample village ref village, tds num 0..5000, chlorine num 0..10
+let failed = count(sample month where tds > 500)
+failed "failed this month" big color if(failed > 0, bad, good)
+each village sort name as v
+  row card tap edit v
+    v.name bold grow
+    count(v.sample) "samples" faint
+    "avg TDS" round(avg(v.sample.tds)) bold color if(avg(v.sample.tds) > 500, bad, ink)
+each sample sort at desc top 6 as s
+  row
+    s.village.name grow
+    s.tds s.chlorine faint
+form sample, "Add sample"
+form village, "Add village"
+===
+@oos style=vague domain=b5_clinic_sms oos=messaging
+clinic token counter that also texts the patient when their turn is near
+---
+app "Token Counter" users mint
+table patient name text, token num 1..999
+state serving num = 1
+serving big
+button "Next patient" tap set serving = serving + 1
+each patient where token >= serving sort token as p
+  row card
+    p.token bold
+    p.name grow
+form patient, "Add patient"
+===
+@edit style=plain domain=b5_party_cake ref=b5_birthday_party
+add cake cost per head as a setting and show the cake budget
+---
+~ table guest name text, rsvp => setting cake_per_head money = 150 "Cake cost per head"\ntable guest name text, rsvp
++after "Maybe" sum(guest where rsvp = Maybe, it.kids + 1) faint :: "Cake budget" sum(guest where rsvp = Yes, it.kids + 1) * cake_per_head bold
+===
+@edit style=plain domain=b5_clinic_doctor ref=b5_clinic_token
+two doctors share the desk, add the doctor to each patient and a switch to show one doctor's queue
+---
+~ table patient name text, token num 1..999 => table patient name text, token num 1..999, doctor pick Dr_Amin|Dr_Sara = Dr_Amin
+~ state serving num = 1 => state serving num = 1\nstate doc pick Dr_Amin|Dr_Sara = Dr_Amin
+~ serving big => choice doc\nserving big
+~ each patient where token >= serving sort token as p => each patient where token >= serving and doctor = doc sort token as p
+===
+@edit style=plain domain=b5_booth_enrolled ref=b5_polling_booths
+rename registered to enrolled
+---
+~ registered num 1..5000 => enrolled num was registered 1..5000
+~ b.registered => b.enrolled
+===
+@edit style=plain domain=b5_dairy_shift ref=b5_dairy_fat
+add morning or evening to each delivery and show morning litres today at the top
+---
+~ fat num 2..9 = 4 => fat num 2..9 = 4, shift pick Morning|Evening = Morning
++after "Paid out this week" sum(delivery week, pay(it)) head :: "Morning litres today" sum(delivery.litres today where shift = Morning) faint
+===
+@edit style=plain domain=b5_rice_charge ref=b5_rice_mill
+add milling charge per kg of paddy as a setting and show the income this month
+---
+~ table lot farmer => setting charge_kg money = 4 "Milling charge per kg"\ntable lot farmer
++ "Milling income this month" sum(lot month, it.kg_in * charge_kg) bold
+===
+@edit style=plain domain=b5_tractor_nodiesel ref=b5_tractor_hire
+stop tracking diesel, only hire income
+---
+- table diesel tractor ref tractor, cost money
+- form diesel, "Add diesel"
+~ * hour_rate - sum(t.diesel.cost month) "net" => * hour_rate "income"
+===
+@edit style=plain domain=b5_football_who ref=b5_football_split
+rename player to who
+---
+~ player text => who text was player
+~ by player as g => by who as g
+===
+@edit style=plain domain=b5_tuck_threshold ref=b5_tuck_credit
+the warning balance should be a setting, 100 to start
+---
+~ table kid name text, klass text? => setting low_balance money = 100 "Warn below"\ntable kid name text, klass text?
+~ bal < 100 => bal < low_balance
+===
+@edit style=plain domain=b5_tanks_alert ref=b5_water_tanks
+red limit should be a setting instead of 20, call it low percent
+---
+~ table tank name text, litres => setting low_percent num = 20 "Low percent"\ntable tank name text, litres
+~ lvl < 20 => lvl < low_percent
+===
+@edit style=plain domain=b5_cinema_gold ref=b5_cinema_booth
+gold is 600 now
+---
+~ c = Gold, 500, 300 => c = Gold, 600, 300
+===

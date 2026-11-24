@@ -1,0 +1,507 @@
+@create style=detailed domain=a2_pharmacy_expiry
+For my medical store I need to list medicines with how many are left and the expiry date. Warn me about the ones that expire within a month and remind me on the first of each month to check.
+---
+app "Medicine stock" pill mint
+table med name text, qty num 0.., expiry date
+remind "Check medicines near expiry" monthly on 1 at 9:00
+count(med where expiry - today <= 30) "expire within 30 days" big color if(count(med where expiry - today <= 30) > 0, warn, ink)
+each med sort expiry as m
+  row card gap 2 tap edit m swipe remove m
+    stack grow
+      m.name bold
+      m.qty "left" faint
+    m.expiry color if(m.expiry - today <= 30, bad, muted)
+form med, "Add medicine"
+===
+@create style=custom_ui domain=a2_cake_price
+cake pricing calculator, I type cost of flour, butter and other things plus hours I work, it adds my hourly wage and a profit margin slider and tells the price
+---
+app "Cake price" bread plum
+setting wage money = 300 "My hourly wage"
+state flour money = 0
+state butter money = 0
+state other money = 0
+state hours num = 1
+state margin num = 20
+field flour "Flour and sugar"
+field butter "Butter and eggs"
+field other "Boxes and other"
+field hours "Hours of work"
+let cost = flour + butter + other + hours * wage
+"Margin" margin "%" faint
+slider margin 0..60
+"Cost" cost head
+"Price" round(cost * (1 + margin / 100)) big
+===
+@create style=short domain=a2_barber_queue
+barber shop waiting queue
+---
+app "Queue" user slate
+table customer name text, done bool
+count(customer where done = no) "waiting" big
+each customer where done = no sort at top 1 as c
+  stack card gap 1
+    "Now serving" faint
+    c.name big
+    button "Done, call next" tap set c.done = yes
+each customer where done = no sort at as c
+  row gap 2
+    c.name grow
+    button "Skip" tap remove c
+"Served today" count(customer today where done = yes) faint
+form customer, "Add to queue"
+===
+@create style=multi_feature domain=a2_dhaba_menu
+dhaba app with a menu tab to add dishes with price and a ready switch, and an orders tab with a plus one button for each ready dish and today's sale
+---
+app "Dhaba" food ink
+table dish name text, price money, ready bool = yes
+table order dish ref dish, qty num 1..20 = 1
+screen menu "Menu" food
+  each dish sort name as d
+    row card gap 2 tap edit d
+      stack grow
+        d.name bold
+        d.price faint
+      toggle d.ready
+  form dish, "Add dish"
+screen orders "Orders" list
+  "Today's sale" sumof(order today, it.qty * it.dish.price) big
+  each dish where ready = yes sort name as d
+    row card gap 2
+      d.name grow
+      count(d.order today) "sold" faint
+      button "+1" tap add order dish = d
+===
+@create style=short domain=a2_cloth_rolls
+cloth shop rolls in metres
+---
+app "Cloth shop" bag plum
+table roll name text, metres num 0.., rate money
+"Stock value" sumof(roll, it.metres * it.rate) head
+each roll sort name as r
+  row card gap 1 tap edit r swipe remove r
+    stack grow
+      r.name bold
+      r.metres "m at" r.rate faint
+    button "-1 m" tap set r.metres = r.metres - 1
+    button "-3 m" tap set r.metres = r.metres - 3
+form roll, "Add roll"
+===
+@create style=detailed domain=a2_water_cans
+I supply water cans to houses. Each customer takes some cans a week. Let me tap plus one can whenever I deliver and show who is still pending this week.
+---
+app "Water cans" drop ocean
+table customer name text, cans num 1..20 = 2 "Cans per week"
+table delivery customer ref customer, cans num 1..20 = 1
+each customer sort name as c
+  let got = sum(c.delivery.cans week)
+  row card gap 2
+    stack grow
+      c.name bold
+      text got "of" c.cans "this week" faint
+    if(got >= c.cans, "Done", "Pending") color if(got >= c.cans, good, warn)
+    button "+1 can" tap add delivery customer = c
+form customer, "Add customer"
+===
+@create style=multi_feature domain=a2_newspaper
+newspaper hawker: readers with monthly price per paper, a tick for delivered today, count of papers this month and the bill for each, and total
+---
+app "Newspaper" note slate
+table reader name text, price money
+table drop reader ref reader
+"Bills this month" sumof(reader, count(it.drop month) * it.price) head
+each reader sort name as r
+  row card gap 2 tap edit r
+    stack grow
+      r.name bold
+      count(r.drop month) "papers this month" faint
+    count(r.drop month) * r.price bold
+    toggle r.drop
+form reader, "Add reader"
+===
+@create style=multi_feature domain=a2_tiffin_service
+tiffin service with two tabs: today, where I tap lunch or dinner for each client, and month, which shows how much each client owes after what they paid, with a got paid button
+---
+app "Tiffin" food mint
+table client name text, fee money "Price per meal", address text?
+table meal client ref client, kind pick Lunch|Dinner = Lunch
+table paid client ref client, amount money
+screen daily "Today" food
+  count(meal today) "tiffins today" big
+  each client sort name as c
+    row card gap 2
+      c.name bold grow
+      button "Lunch" tap add meal client = c, kind = Lunch
+      button "Dinner" tap add meal client = c, kind = Dinner
+screen month "Month" wallet
+  each client sort name as c
+    let due = count(c.meal month) * c.fee - sum(c.paid.amount month)
+    row card gap 2
+      stack grow
+        c.name bold
+        count(c.meal month) "meals" faint
+      text due bold color if(due > 0, warn, good)
+      button "Got paid" tap add paid client = c, amount = due
+  form client, "Add client"
+===
+@create style=detailed domain=a2_photo_shoots
+Wedding photographer bookings: client, shoot date, package basic standard or premium, total price and the advance already paid. Show what balance I still have to collect and remind me the day before each shoot.
+---
+app "Shoots" star plum
+table booking client text, day date, package pick Basic|Standard|Premium = Standard, price money, advance money = 0
+remind "Shoot tomorrow" at booking.day - 1d at 9:00
+"Balance to collect" sum(booking.price) - sum(booking.advance) big
+each booking where day >= today sort day as b
+  row card gap 2 tap edit b swipe remove b
+    stack grow
+      b.client bold
+      b.day b.package faint
+    "Due" b.price - b.advance faint
+form booking, "New booking"
+===
+@create style=detailed domain=a2_measurements
+Customer measurements for my tailoring shop: name, chest, waist, length and sleeve in inches, all saved so I can find them when they come again.
+---
+app "Measurements" pen ocean
+table fit name text, chest num 20..60 unit "in", waist num 20..60 unit "in", length num 20..60 unit "in", sleeve num 10..40 unit "in"
+each fit sort name as f
+  stack card gap 1 tap edit f swipe remove f
+    f.name bold
+    "Chest" f.chest "| Waist" f.waist "| Length" f.length "| Sleeve" f.sleeve faint
+form fit, "Add measurements"
+===
+@create style=multi_feature domain=a2_car_wash
+car wash: a button for each vehicle type that adds a wash at its own price, prices set in settings, today's income and count, and a split of this week's income by vehicle
+---
+app "Car wash" car ocean
+table wash kind pick Car|Bike|Van = Car, price money
+setting car_price money = 500 "Car price"
+setting bike_price money = 200 "Bike price"
+setting van_price money = 800 "Van price"
+"Today" sum(wash.price today) big
+count(wash today) "vehicles" faint
+row gap 1
+  each options wash.kind as k
+    button k tap add wash kind = k, price = if(k = Car, car_price, if(k = Bike, bike_price, van_price))
+share wash week by kind, sum(it.price), it.key
+===
+@create style=custom_ui domain=a2_credit_limit
+shop customers with a credit limit, a bar that fills as their balance grows and goes red when they pass the limit, buttons to add 500 credit or record a payment
+---
+app "Credit" wallet slate
+table customer name text, limit money
+table entry customer ref customer, amount money, kind pick Took|Paid = Took
+each customer sort name as c
+  let bal = sum(c.entry.amount where kind = Took) - sum(c.entry.amount where kind = Paid)
+  stack card gap 1 tap edit c
+    row
+      c.name bold grow
+      text bal bold color if(bal > c.limit, bad, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(bal / max(c.limit, 1), 0, 1), 4 fill if(bal > c.limit, bad, accent) radius 2
+    if bal > c.limit
+      "Over the limit" size small color bad
+    row gap 1
+      button "+500" tap add entry customer = c, amount = 500
+      button "Paid 500" tap add entry customer = c, amount = 500, kind = Paid
+form customer, "Add customer"
+===
+@create style=multi_feature domain=a2_dairy_yield
+dairy farm milk yield with tabs: today, with each cow, litres so far today and a +1 litre button, and cows, with a line of each cow's yield
+---
+app "Dairy" milk mint
+table cow tag text
+table yield cow ref cow, litres num 0.., slot pick Morning|Evening = Morning
+screen daily "Today" milk
+  "Total today" sum(yield.litres today) "litres" big
+  each cow sort tag as c
+    row card gap 2
+      c.tag bold grow
+      sum(c.yield.litres today) "L" faint
+      button "+1 L" tap add yield cow = c, litres = 1
+  form yield, "Record milk"
+screen herd "Cows" paw
+  each cow sort tag as c
+    stack card gap 1 tap edit c
+      c.tag bold
+      "This week" sum(c.yield.litres week) "L" faint
+      trend c.yield, it.litres
+  form cow, "Add cow"
+===
+@create style=short domain=a2_poultry_feed
+poultry feed cost per egg
+---
+app "Poultry" egg mint
+table feed bags num 1..100, cost money
+table lay eggs num 1..500
+"Eggs this month" sum(lay.eggs month) big
+"Feed cost per egg" round(sum(feed.cost month) / max(sum(lay.eggs month), 1) * 10) / 10 faint
+"Feed bought" sum(feed.cost month) faint
+quick lay, eggs, [30, 60, 90]
+form feed, "Feed bought"
+daybars last 7 days, sum(lay.eggs on it)
+===
+@create style=detailed domain=a2_cart_evening
+I sell fruit from a cart. In the morning I write what I took and how many, and during the day I tap sold. In the evening I want to see what is left of each thing and the total sold.
+---
+app "Evening count" cart ink
+table load item text, took num 1.., sold num 0.. = 0
+"Sold" sum(load.sold today) "of" sum(load.took today) big
+each load today as l
+  row card gap 2 tap edit l
+    stack grow
+      l.item bold
+      l.took - l.sold "left" faint color if(l.took - l.sold <= 0, warn, muted)
+    button "Sold 1" tap set l.sold = min(l.sold + 1, l.took)
+form load, "Morning load"
+===
+@create style=multi_feature domain=a2_bike_rental
+bike rental shop: rider name, hours, tick when paid, price per hour in settings, income today and who has not paid yet
+---
+app "Bike rental" bike mint
+table rental rider text, hours num 1..24 = 1, paid bool
+setting per_hour money = 100 "Price per hour"
+"Income today" sumof(rental today, it.hours) * per_hour big
+"Not paid yet" sumof(rental where paid = no, it.hours) * per_hour faint
+each rental sort at desc top 10 as r
+  row card gap 2 tap edit r swipe remove r
+    r.rider bold grow
+    r.hours "h" faint
+    toggle r.paid
+form rental, "New rental"
+===
+@create style=detailed domain=a2_household_staff
+Salary for our maid and driver. Each has a monthly salary and sometimes takes advance money. Show what is left to pay each one this month and a button to add 1000 advance.
+---
+app "Household staff" users slate
+table staff name text, salary money
+table advance staff ref staff, amount money
+each staff sort name as s
+  let due = s.salary - sum(s.advance.amount month)
+  row card gap 2 tap edit s
+    stack grow
+      s.name bold
+      "Advance taken" sum(s.advance.amount month) faint
+    text due bold
+    button "+1000" tap add advance staff = s, amount = 1000
+form staff, "Add staff"
+===
+@create style=custom_ui domain=a2_cash_count
+cash counter for my drawer, I type how many notes of 5000, 1000, 500, 100 and 50 and 10 I have and it shows the total
+---
+app "Cash count" coin mint
+state n5000 num = 0
+state n1000 num = 0
+state n500 num = 0
+state n100 num = 0
+state n50 num = 0
+state n10 num = 0
+field n5000 "5000 notes"
+field n1000 "1000 notes"
+field n500 "500 notes"
+field n100 "100 notes"
+field n50 "50 notes"
+field n10 "10 notes"
+"Total" n5000 * 5000 + n1000 * 1000 + n500 * 500 + n100 * 100 + n50 * 50 + n10 * 10 big
+===
+@create style=short domain=a2_sadqa
+sadqa and charity giving
+---
+app "Sadqa" heart mint
+table give amount money, to pick Mosque|Poor|Orphans|Other = Poor
+"Streak" streak(give) "days" big
+"This month" sum(give.amount month) faint
+quick give, amount, [50, 100, 500]
+form give
+log give
+===
+@create style=multi_feature domain=a2_market_rates
+market rates diary for tomato, onion, potato and flour, show the lowest and highest I saw this month for each
+---
+app "Market rates" tag ocean
+table price item pick Tomato|Onion|Potato|Flour = Tomato, rate money
+each options price.item as k
+  row card gap 2
+    text k bold grow
+    last(price.rate where item = k) bold
+    "low" min(price.rate month where item = k) "high" max(price.rate month where item = k) faint
+form price, "Add rate"
+log price
+===
+@create style=detailed domain=a2_scrap_dealer
+Scrap dealer buying book. I buy iron, copper, brass, aluminium and paper by weight, each with a rate per kg. Show what I spent today and the kilograms I bought of each metal this week.
+---
+app "Scrap dealer" bag slate
+table buy metal pick Iron|Copper|Brass|Aluminium|Paper = Iron, kg num 0.., rate money
+"Spent today" sumof(buy today, it.kg * it.rate) big
+each options buy.metal as k
+  row
+    text k grow
+    sum(buy.kg week where metal = k) "kg this week" bold
+form buy, "Add purchase"
+list buy today
+===
+@create style=custom_ui domain=a2_hall_bookings
+marriage hall bookings with a month grid where booked days are coloured, arrows to change month, and the list of bookings with advance paid
+---
+app "Hall" home plum
+table booking day date, client text, advance money = 0, guests num 50..1000 = 300
+state d date = today
+monthnav d
+grid 7 gap 1
+  each 1..weekday(d - monthday(d) + 1) - 1 as n
+    box
+  each days month of d as x
+    box height 32 radius 6 fill if(count(booking where day = x) > 0, accent, soft)
+      text monthday(x) size small align center color if(count(booking where day = x) > 0, bg, ink)
+each booking where month(day) = month(d) and year(day) = year(d) sort day as b
+  row card gap 2 tap edit b swipe remove b
+    b.day bold
+    b.client grow
+    b.advance faint
+form booking, "New booking"
+===
+@create style=multi_feature domain=a2_day_closing
+closing the shop each day: sales buttons, an expense form, expected cash in drawer, and a box where I type the cash I counted to see the difference
+---
+app "Day closing" calc slate
+table sale amount money
+table expense amount money
+state counted money = 0
+quick sale, amount, [100, 500, 1000]
+form expense, "Expense"
+field counted "Cash counted in drawer"
+let expected = sum(sale.amount today) - sum(expense.amount today)
+"Expected" expected big
+"Difference" counted - expected bold color if(counted >= expected, good, bad)
+===
+@create style=multi_feature domain=a2_crop_accounts
+farm accounts with tabs: crops with profit, costs by kind (seed, fertiliser, labour, water, fuel) with a share chart, and sales with kg and rate
+---
+app "Crop accounts" plant mint
+table crop name text
+table cost crop ref crop, kind pick Seed|Fertiliser|Labour|Water|Fuel = Seed, amount money
+table income crop ref crop, kg num 1.., rate money
+screen crops "Crops" plant
+  each crop sort name as c
+    let profit = sumof(c.income, it.kg * it.rate) - sum(c.cost.amount)
+    row card gap 2
+      c.name bold grow
+      text profit bold color if(profit >= 0, good, bad)
+  form crop, "Add crop"
+screen spend "Costs" wallet
+  form cost, "Add cost"
+  share cost by kind, sum(it.amount), it.key
+screen sell "Sales" coin
+  form income, "Record sale"
+  log income
+===
+@create style=detailed domain=a2_gym_members
+Gym members with the monthly fee and the date until which they have paid. Show how many are active, who expires this week, and a button to renew for thirty days.
+---
+app "Gym" dumbbell ink
+table member name text, fee money, until date
+count(member where until >= today) "active members" big
+"Expiring this week" head
+each member where until >= today and until < today + 7 sort until as m
+  row card gap 2
+    m.name grow
+    m.until faint
+    button "Renew" tap set m.until = today + 30
+"Expired" head
+each member where until < today sort until desc as m
+  row card gap 2
+    m.name grow
+    m.until faint color bad
+    button "Renew" tap set m.until = today + 30
+form member, "Add member"
+===
+@create style=short domain=a2_daily_kist
+daily kist payments of my rickshaw on a calendar
+---
+app "Daily kist" car slate
+table kist
+setting amount money = 800 "Daily kist"
+state m date = today
+monthnav m
+calendar kist, m
+"Paid days" count(kist month of m) "of" monthdays(m) big
+"Paid so far" count(kist month of m) * amount faint
+remind "Pay the daily kist" at 18:00
+===
+@create style=vague domain=a2_daily_target
+I want to hit a sales target every day in my shop
+---
+app "Sales target" target ocean
+table sale amount money
+setting target money = 15000 "Daily target"
+ring sum(sale.amount today), target, "of today's target"
+quick sale, amount, [200, 500, 1000, 2000]
+form sale
+daybars last 7 days, sum(sale.amount on it)
+list sale today
+===
+@create style=typos domain=a2_stock_take
+stock taking sheet for my shelves item how many i counted how many should be there and show the missing ones
+---
+app "Stock take" box slate
+table shelf item text, counted num 0.., expected num 0..
+count(shelf where counted != expected) "items that do not match" big
+each shelf sort item as s
+  row card gap 2 tap edit s swipe remove s
+    s.item bold grow
+    s.counted "of" s.expected faint
+    s.counted - s.expected bold color if(s.counted < s.expected, bad, good)
+form shelf, "Add item"
+===
+@oos style=detailed domain=a2_oos_print_bill oos=print
+Shop bill maker: I add items with price and quantity and it shows the total, then prints the bill on my thermal printer and saves a PDF.
+---
+app "Bill maker" calc slate
+table line item text, price money, qty num 1.. = 1
+"Total" sumof(line, it.price * it.qty) big
+each line as l
+  row card gap 2 tap edit l swipe remove l
+    stack grow
+      l.item bold
+      l.qty "x" l.price faint
+    l.price * l.qty bold
+button "New bill" tap remove all line
+form line, "Add item"
+===
+@edit style=plain domain=a2_e_pharmacy_batch ref=a2_pharmacy_expiry
+add a batch number for each medicine
+---
+~ qty num 0.., expiry date => qty num 0.., expiry date, batch text?
+===
+@edit style=plain domain=a2_e_water_name ref=a2_water_cans
+call it Pani Wala
+---
+~ app "Water cans" drop ocean => app "Pani Wala" drop ocean
+===
+@edit style=plain domain=a2_e_wash_bus ref=a2_car_wash
+we wash buses too now
+---
+~ pick Car|Bike|Van = Car => pick Car|Bike|Van|Bus = Car
+===
+@edit style=plain domain=a2_e_queue_noskip ref=a2_barber_queue
+take away the skip button
+---
+-     button "Skip" tap remove c
+===
+@edit style=plain domain=a2_e_poultry_heat ref=a2_poultry_feed
+add a heat map of the eggs
+---
++ heat last 70 days, sum(lay.eggs on it), 90
+===
+@edit style=plain domain=a2_e_gym_plum ref=a2_gym_members
+make it purple
+---
+~ app "Gym" dumbbell ink => app "Gym" dumbbell plum
+===
+@edit style=plain domain=a2_e_cake_margin ref=a2_cake_price
+start the margin at 30 percent
+---
+~ state margin num = 20 => state margin num = 30

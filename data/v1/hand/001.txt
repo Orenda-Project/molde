@@ -1,0 +1,414 @@
+@create style=custom_ui domain=tip_calc
+a tip calculator where I type the bill, slide the tip percent and say how many people are splitting it
+---
+app "Tip" calc mint
+state bill num = 0
+state pct num = 15
+state people num = 2
+field bill "Bill"
+slider pct 0..30
+field people "People"
+let tip = bill * pct / 100
+"Tip" tip big
+"Total" bill + tip faint
+"Each pays" round((bill + tip) / max(people, 1)) bold
+===
+@create style=short domain=bmi
+bmi calculator
+---
+app "BMI" scale ocean
+state kg num = 70
+state cm num = 170
+field kg "Weight (kg)"
+field cm "Height (cm)"
+let bmi = round(kg * 10000 / (cm * cm) * 10) / 10
+"Your BMI" bmi big
+if bmi < 18.5
+  "Underweight" color warn
+else
+  if bmi < 25
+    "Healthy range" color good
+  else
+    "Above the healthy range" color warn
+===
+@create style=detailed domain=unit_convert
+Convert kilometres to miles and kilograms to pounds. I type a number and see both answers.
+---
+app "Convert" calc slate
+state km num = 0
+state kg num = 0
+field km "Kilometres"
+"Miles" round(km * 0.6214 * 100) / 100 big
+field kg "Kilograms"
+"Pounds" round(kg * 2.2046 * 100) / 100 big
+===
+@create style=custom_ui domain=dice
+a dice roller for board games, I tap and it shows a big number from 1 to 6
+---
+app "Dice" dice plum
+state roll num = 1
+draw 100, 100 width 160 tap set roll = random(6)
+  rect 4, 4, 92, 92 radius 16 fill surface stroke ink thick 2
+  label 50, 54, roll big
+button "Roll again" tap set roll = random(6)
+===
+@create style=custom_ui domain=coin_flip
+coin flip, tap the coin and it says heads or tails and keeps count of each
+---
+app "Coin flip" coin ink
+table flip side pick Heads|Tails
+state last num = 1
+draw 100, 100 width 160 tap set last = random(2) then add flip side = if(last = 1, Heads, Tails)
+  circle 46 fill accent
+  label 50, 54, if(last = 1, "H", "T") big
+row gap 2
+  "Heads" count(flip where side = Heads) bold
+  "Tails" count(flip where side = Tails) bold
+button "Clear" tap remove all flip
+===
+@create style=detailed domain=countdown
+Countdown to my exam day. I set the date and it shows how many days are left, plus a weekly study counter.
+---
+app "Exam countdown" school ocean
+setting exam date = today "Exam date"
+table study mins num 5..600
+text exam - today "days to go" big
+"Studied this week" sum(study.mins week) "min" faint
+quick study, mins, [30, 60, 90]
+form study
+list study
+===
+@create style=multi_feature domain=weekly_plan
+weekly workout plan: pick what I do on each weekday, show today's workout at the top and tick it when done
+---
+app "Workout plan" dumbbell ink
+table plan day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, what text
+table done plan ref plan
+"Today" head
+each plan where day = dayname(today) as p
+  row card gap 2
+    p.what bold grow
+    toggle p.done
+"Week" head
+each options plan.day as dd
+  stack gap 1
+    text dd faint
+    each plan where day = dd as p
+      row card tap edit p swipe remove p
+        p.what grow
+form plan
+===
+@create style=custom_ui domain=savings_jar
+a savings jar that fills up as I add money towards a goal for a new phone
+---
+app "Phone fund" coin mint
+table saved amount money
+setting goal money = 60000 "Phone price"
+let have = sum(saved.amount all)
+let p = clamp(have / goal, 0, 1)
+row gap 3
+  draw 56, 108 width 56
+    rect 8, 104 - 100 * p, 40, 100 * p fill good
+    rect 8, 4, 40, 100 stroke ink thick 2
+  stack grow
+    text have big
+    "of" goal faint tap edit goal
+    round(p * 100) "% there" bold
+quick saved, amount, [500, 1000, 5000]
+form saved
+log saved
+===
+@create style=detailed domain=flashcards
+flashcards for learning vocabulary: front and back, show one card, tap to flip, next card button
+---
+app "Cards" book plum
+table flash front text, back text
+state i num = 0
+state flipped bool
+if count(flash) > 0
+  each flash sort at top 1 as c
+    stack card gap 2 tap set flipped = not flipped
+      if flipped
+        c.back big
+      else
+        c.front big
+form flash
+===
+@create style=short domain=attendance
+class attendance sheet
+---
+app "Attendance" users slate
+table kid name text
+table here kid ref kid
+"Present today" count(here today) "of" count(kid) head
+each kid sort name
+  row card
+    it.name grow
+    toggle it.here
+form kid, "Add student"
+===
+@create style=multi_feature domain=expense_split
+split expenses with friends on a trip: who paid, how much, and show what each person owes in the end
+---
+app "Trip split" users ocean
+table friend name text
+table pay who ref friend, amount money, what text?
+let total = sum(pay.amount all)
+let share = total / max(count(friend), 1)
+"Total spent" total big
+"Each share" share faint
+each friend as f
+  row card
+    f.name bold grow
+    "paid" sum(f.pay.amount) faint
+    if(sum(f.pay.amount) >= share, "gets back", "owes") abs(sum(f.pay.amount) - share) bold
+form friend, "Add friend"
+form pay, "Add payment"
+log pay
+===
+@create style=typos domain=grocery
+grocry list wiht prices so i can see the total before i go
+---
+app "Grocery" cart mint
+table item name text, price money?, got bool
+"Total" sum(item.price where got = no) big
+each item where got = no as g
+  row card gap 2 tap edit g swipe remove g
+    toggle g.got
+    g.name grow
+    g.price faint
+form item
+"In the basket" faint
+list item where got = yes
+===
+@create style=vague domain=daily_diary
+i want to write something every night before bed
+---
+app "Night diary" moon ink
+table entry text long, mood pick Great|Good|Okay|Low = Good
+remind "Write your diary" at 21:30
+"Entries" count(entry) "| streak" streak(entry) head
+form entry, "Write"
+log entry
+===
+@create style=detailed domain=pomodoro_tasks
+Pomodoro timer where I write what I am working on, 25 minutes focus, 5 minute break, and see how many I finished today
+---
+app "Pomodoro" timer ink
+table pomo task text
+setting work dur = 25m "Focus length"
+timer work, "Focus", notify "Focus done, take a break"
+timer 5m, "Break"
+count(pomo today) "pomodoros today" head
+form pomo, "Log a finished one"
+list pomo today
+===
+@create style=custom_ui domain=glass_water
+Water tracker with 8 glasses. Each glass on screen fills in when I drink one.
+---
+app "8 glasses" drop ocean
+table glass
+let n = count(glass today)
+grid 4 gap 1
+  each 1..8
+    box pad 3 radius 12 fill if(it <= n, accent, soft)
+row gap 2
+  button "I drank one" tap add glass
+  button "Undo" tap remove last(glass today)
+===
+@create style=detailed domain=reading_goal
+I want to read 20 books this year. Add a book when I finish it and show how many I have left and what pace I need.
+---
+app "Books 2026" book mint
+table finished title text, author text?
+setting goal num = 20 "Books this year"
+let n = count(finished year)
+text n "of" goal "books" big
+goal n, goal, "this year"
+"Books left" max(goal - n, 0) faint
+form finished, "Add finished book"
+list finished year
+===
+@create style=short domain=pet_feeding
+cat feeding log
+---
+app "Cat feeding" paw ocean
+table meal what pick Dry|Wet|Treat = Dry
+"Last fed" since(meal) "days ago" faint
+button "Fed the cat" tap add meal what = Dry
+form meal
+log meal
+===
+@create style=multi_feature domain=gym_bests
+gym log with exercise, weight and reps, and show my best weight for each exercise
+---
+app "Gym" dumbbell slate
+table lift exercise text, kg num 0..500, reps num 1..100
+each lift by exercise as g
+  row card
+    text g.key bold grow
+    "best" max(g.kg) "kg" faint
+form lift
+log lift
+===
+@create style=custom_ui domain=tally
+tally counter with plus and minus and a reset, big numbers, for counting people at the door
+---
+app "Door count" users slate
+table in
+table out
+let inside = count(in today) - count(out today)
+text inside big
+row gap 2
+  button "+ In" fill good tap add in
+  button "- Out" fill bad tap add out
+"Total in today" count(in today) faint
+button "Reset" tap remove all in today then remove all out today
+===
+@create style=detailed domain=emi
+Loan calculator with simple interest: I type the loan amount, interest rate per year and number of months, and it shows the monthly payment and the total interest.
+---
+app "Loan" calc slate
+state amount num = 100000
+state rate num = 12
+state months num = 12
+field amount "Loan amount"
+field rate "Yearly interest %"
+field months "Months"
+let interest = amount * rate / 100 * months / 12
+"Monthly payment" round((amount + interest) / max(months, 1)) big
+"Total interest" round(interest) faint
+===
+@create style=vague domain=shop_sales
+I run a small tea stall and I want to know how much I sell every day
+---
+app "Tea stall" cup mint
+table sale item pick Chai|Coffee|Biscuit|Other = Chai, amount money
+"Today" sum(sale.amount today) big
+"This month" sum(sale.amount month) faint
+form sale, "Add sale"
+daybars last 7 days, sum(sale.amount on it)
+log sale
+===
+@create style=detailed domain=meal_log
+Log what I eat: meal type, what it was, and calories. Show total calories today against a limit I can set.
+---
+app "Meals" food mint
+table meal kind pick Breakfast|Lunch|Dinner|Snack = Lunch, what text, kcal num 0..3000
+setting limit num = 2000 "Calorie limit"
+goal sum(meal.kcal today), limit, "today", "kcal"
+form meal
+log meal
+===
+@create style=short domain=plant_water
+plant watering reminder
+---
+app "Plants" plant mint
+table plant name text, every num 1..30 = 3
+table watered plant ref plant
+remind "Water the plants" at 8:00
+each plant sort name
+  row card gap 2 tap edit it swipe remove it
+    stack grow
+      it.name bold
+      "last watered" since(it.watered) "days ago, every" it.every "days" faint
+    toggle it.watered
+form plant
+===
+@create style=multi_feature domain=kids_pocket
+pocket money jar for my son: add money, add spending, show balance and what he spent it on
+---
+app "Pocket jar" coin plum
+table money kind pick In|Out, amount money, what text?
+let bal = sum(money.amount where kind = In) - sum(money.amount where kind = Out)
+"Balance" bal big color if(bal < 0, bad, good)
+form money
+log money
+===
+@create style=custom_ui domain=quiz
+a quick maths quiz: show a question 7 x something, I type the answer and it says right or wrong and keeps score
+---
+app "Times table" brain ocean
+state a num = 7
+state b num = 1
+state guess num = 0
+table score right bool
+button "New question" tap set b = random(12) then set guess = 0
+"7 x" b "=" head
+field guess "Your answer"
+if guess = 7 * b
+  "Right!" color good
+  button "Count it" tap add score right = yes
+"Correct today" count(score today) faint
+===
+@create style=detailed domain=study_timetable
+Weekly study timetable. Subject, day of week, start time, how long. Show today's classes first.
+---
+app "Timetable" school plum
+table slot subject text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, start time, mins num 15..240 = 60
+"Today" head
+each slot where day = dayname(today) sort start as s
+  row card
+    s.start s.subject grow
+    s.mins "min" faint
+form slot
+"All" head
+log slot
+===
+@create style=short domain=temp_baby
+baby fever log
+---
+app "Fever" baby mint
+table temp degrees num 34..42 unit "C", note text?
+"Last" last(temp.degrees) "C" big color if(last(temp.degrees) >= 38, bad, good)
+form temp
+trend temp last 7 days sort at, it.degrees
+log temp
+===
+@create style=multi_feature domain=trip_packing
+trip packing list with categories and a count of what is still not packed
+---
+app "Packing" bag ocean
+table pack item text, kind pick Clothes|Papers|Tech|Care = Clothes, packed bool
+count(pack where packed = no) "left to pack" head
+each pack where packed = no sort kind as p
+  row card gap 2 tap edit p swipe remove p
+    toggle p.packed
+    p.item grow
+    p.kind faint
+form pack
+list pack where packed = yes
+===
+@create style=custom_ui domain=progress_bar_course
+course progress: I add lessons I finish out of 30 and see a progress bar and percent
+---
+app "Course" school mint
+table lesson title text?
+setting total num = 30 "Lessons in the course"
+let n = count(lesson all)
+round(n * 100 / total) "%" big
+goal n, total, "lessons", "done"
+button "Lesson done" tap add lesson
+button "Undo" tap remove last(lesson)
+===
+@create style=detailed domain=sleep_dur
+Sleep log with the time I went to bed and woke up, and the hours slept for each night
+---
+app "Sleep" bed ink
+table night bed time, woke time
+form night
+each night sort at desc top 7 as n
+  row card
+    n.bed "to" n.woke grow
+    (n.woke - n.bed) bold
+===
+@create style=short domain=milk_delivery
+milk delivery daily record
+---
+app "Milk" milk mint
+table delivery litres num 0.5..20 = 1
+"This month" sum(delivery.litres month) "L" big
+"Bill" sum(delivery.litres month) * 200 faint
+quick delivery, litres, [1, 2]
+calendar delivery
+log delivery

@@ -1,0 +1,145 @@
+@create style=detailed domain=b5_radio_ads
+local FM station ad log. clients buy spots with a length in seconds on a day. we charge by the 10 seconds at a rate that is a setting. show money billed this month per client and total
+---
+app "Ad Log" music plum
+table advertiser name text
+table spot advertiser ref advertiser, day date, secs num 10..120 = 30
+setting rate_10s money = 400 "Rate per 10 seconds"
+let cost(s spot) = s.secs / 10 * rate_10s
+"Billed this month" sum(spot month, cost(it)) big
+each advertiser sort name as a
+  row card tap edit a
+    a.name bold grow
+    count(a.spot month) "spots" faint
+    sum(a.spot month, cost(it)) bold
+form spot, "Book a spot"
+form advertiser, "Add client"
+===
+@create style=custom_ui domain=b5_toll_booth
+bridge toll booth. every vehicle that passes is logged as bike, car or truck, fees 20, 50 and 150. one big button for each type, and a chart of vehicles by hour of the day
+---
+app "Toll Booth" bus slate
+table passage kind pick Bike|Car|Truck = Car
+let fee(k text) = if(k = Bike, 20, if(k = Car, 50, 150))
+row gap 1
+  each options passage.kind as k
+    button k tap add passage kind = k
+"Collected today" sum(passage today, fee(it.kind)) big
+plot 0..24, 0..max(1..24, count(passage today where hour(at) = it)) axes
+  each 0..23
+    rect it + 0.1, 0, 0.8, count(passage today where hour(at) = it) fill accent radius 2
+    tick it + 0.5, it
+===
+@create style=multi_feature domain=b5_vaccine_fridge
+pharmacy vaccine fridges, I write the temperature twice a day for each fridge. anything outside 2 to 8 degrees is bad. draw the line with the safe range as gridlines and count bad readings this week
+---
+app "Cold Chain" snow ocean
+table fridge name text
+table reading fridge ref fridge, celsius num -10..30
+each fridge sort name as f
+  stack card gap 1
+    row
+      f.name bold grow
+      last(f.reading.celsius) "C" bold color if(last(f.reading.celsius) < 2 or last(f.reading.celsius) > 8, bad, good)
+    "Out of range this week" count(f.reading week where celsius < 2 or celsius > 8) faint
+    plot 0..max(count(f.reading), 2), -2..12 axes
+      poly stroke accent thick 2
+        each f.reading sort at
+          pt index, it.celsius
+form reading, "Add reading"
+form fridge, "Add fridge"
+===
+@create style=typos domain=b5_commute_times
+my commute to work by different routes, minutes it took each day. which route is fastest on average and a line of recent trips
+---
+app "Commute" bus ocean
+table route name text
+table trip route ref route, mins num 5..240
+bars route sort name, avg(it.trip.mins), it.name
+each route sort avg(it.trip.mins) as r
+  row card tap edit r
+    r.name bold grow
+    round(avg(r.trip.mins)) "min avg" bold
+    count(r.trip) "trips" faint
+form trip, "Add trip"
+form route, "Add route"
+===
+@create style=vague domain=b5_assembly_duty
+which class does morning assembly each week, rotating
+---
+app "Assembly Rota" school mint
+table klass name text
+table duty klass ref klass
+each klass sort name as k
+  row card
+    k.name bold grow
+    if(due(k.duty, 28), "due", join(plural(since(k.duty), "day"), " ago")) color if(due(k.duty, 28), warn, muted)
+    button "Did it" tap add duty klass = k
+form klass, "Add class"
+===
+@create style=short domain=b5_piece_tempo
+guitar pieces with a target bpm and the bpm I reached each practice
+---
+app "Tempo Goals" music plum
+table piece name text, target num 40..240 = 100
+table practice piece ref piece, bpm num 30..240
+each piece sort name as p
+  stack card gap 1
+    p.name bold
+    goal max(p.practice.bpm), p.target, "best bpm", "bpm"
+form practice, "Log practice"
+form piece, "Add piece"
+===
+@create style=typos domain=b5_cuttings
+plant cuttings i started, which plant and date. when it has roots i tick rooted. show how many are ready to pot and the oldest one still not rooted
+---
+app "Cuttings" plant mint
+table plantname name text
+table cutting plantname ref plantname, started date, rooted bool
+"Ready to pot" count(cutting where rooted = yes) big
+each cutting where rooted = no sort started as c
+  row card tap edit c
+    c.plantname.name bold grow
+    (today - c.started) "days" faint
+    toggle c.rooted
+form cutting, "Start a cutting"
+form plantname, "Add plant"
+===
+@create style=detailed domain=b5_price_compare
+price check across markets. items i buy often (rice, oil, sugar...) and the price I saw in different markets. show the cheapest market for each item and how much I save compared to the most expensive
+---
+app "Price Check" tag slate
+table item name text
+table seen item ref item, market text, price money
+each item sort name as i
+  stack card gap 1
+    row
+      i.name bold grow
+      min(i.seen.price) "cheapest" bold color good
+    "Save" max(i.seen.price) - min(i.seen.price) "vs the dearest" faint
+    each i.seen sort price as s
+      row
+        s.market grow
+        s.price faint
+form seen, "Add price"
+form item, "Add item"
+===
+@edit style=plain domain=b5_radio_discount ref=b5_radio_ads
+give 10 percent off when a client books more than 5 spots in a month, make the percent a setting
+---
+~ setting rate_10s money = 400 => setting rate_10s money = 400\nsetting bulk_discount num = 10 "Bulk discount %"
+~ sum(a.spot month, cost(it)) bold => sum(a.spot month, cost(it)) * if(count(a.spot month) > 5, 100 - bulk_discount, 100) / 100 bold
+===
+@edit style=plain domain=b5_toll_fees ref=b5_toll_booth
+make the fees settings so I can change them: bike, car, truck
+---
+~ let fee(k text) => setting fee_bike money = 20 "Bike fee"\nsetting fee_car money = 50 "Car fee"\nsetting fee_truck money = 150 "Truck fee"\nlet fee(k text)
+~ if(k = Bike, 20, if(k = Car, 50, 150)) => if(k = Bike, fee_bike, if(k = Car, fee_car, fee_truck))
+===
+@edit style=plain domain=b5_fridge_limits ref=b5_vaccine_fridge
+safe range should be settings, low 2 and high 8
+---
+~ table fridge name text => setting safe_low num = 2 "Safe low (C)"\nsetting safe_high num = 8 "Safe high (C)"\ntable fridge name text
+~ last(f.reading.celsius) < 2 or last(f.reading.celsius) > 8 => last(f.reading.celsius) < safe_low or last(f.reading.celsius) > safe_high
+~ celsius < 2 or celsius > 8 => celsius < safe_low or celsius > safe_high
+===

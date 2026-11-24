@@ -1,0 +1,465 @@
+@create style=vague domain=a1_thyroid
+my mother must take her thyroid pill every morning before breakfast and she forgets
+---
+app "Thyroid Pill" pill mint
+table pill
+remind "Thyroid pill, before breakfast" at 6:30
+remind "Did you take the pill?" at 7:30 if count(pill today) = 0
+button if(count(pill today) > 0, "Taken today", "Pill taken") tap toggle pill
+stat streak(pill), "days in a row"
+calendar pill
+===
+@create style=detailed domain=a1_insulin
+Insulin log: how many units, which injection site (belly, arm, thigh, hip), and tell me the site to use next time so I rotate them.
+---
+app "Insulin" drop ocean
+table shot units num 1..80 unit "units", site pick Belly|Arm|Thigh|Hip = Belly
+let nextsite = if(last(shot.site) = Belly, "Arm", if(last(shot.site) = Arm, "Thigh", if(last(shot.site) = Thigh, "Hip", "Belly")))
+"Use next" nextsite big
+"Today" sum(shot.units today) "units in" count(shot today) "shots" faint
+form shot
+log shot last 7 days
+===
+@create style=short domain=a1_blood_donation
+blood donation tracker
+---
+app "Blood Donor" heart plum
+table donate day date, place text?
+let eligible = last(donate.day) + 90
+"Next donation possible on" eligible big
+if eligible > today
+  text eligible - today "days to wait" faint
+else
+  "You can donate now" color good
+"Total donations" count(donate) faint
+form donate
+list donate
+===
+@create style=multi_feature domain=a1_vitamins
+vitamins and supplements: name, when to take it, how many are left, tick when taken today, and warn when fewer than 7 are left
+---
+app "Supplements" pill mint
+table supp name text, part pick Morning|Evening, left num 0..365
+table took supp ref supp
+count(took today) "of" count(supp) "taken today" head
+each supp sort part as s
+  row card gap 1 tap edit s swipe remove s
+    stack grow
+      text s.name bold
+      s.part faint
+    s.left "left" color if(s.left < 7, bad, muted)
+    toggle s.took
+form supp, "Add supplement"
+===
+@create style=custom_ui domain=a1_brush_teeth
+two big tiles for brushing teeth, morning and night, they turn green when ticked today, and a streak of days with both
+---
+app "Brush" tooth mint
+table brush part pick Morning|Night
+grid 2 gap 2
+  each options brush.part
+    stack card pad 3 radius 12 fill if(count(brush today where part = it) > 0, good, soft) tap toggle brush today where part = it
+      text it head align center
+      icon tooth
+"Days with both brushings in the last 30" countof(days last 30 days, count(brush on it) = 2) faint
+===
+@create style=detailed domain=a1_nursing_side
+Breastfeeding log: left or right side and how many minutes. Show me which side to start with next time and how many feeds today.
+---
+app "Nursing" baby plum
+table nurse side pick Left|Right, mins num 1..90 = 10
+let nextside = if(last(nurse.side) = Left, "Right", "Left")
+"Start with" nextside big
+count(nurse today) "feeds today," sum(nurse.mins today) "minutes" faint
+"Last feed" hour(now - last(nurse.at)) "h" minute(now - last(nurse.at)) "min ago" faint
+row gap 1
+  each options nurse.side
+    button it grow tap add nurse side = it
+log nurse last 3 days
+===
+@create style=short domain=a1_diapers
+diaper counter
+---
+app "Diapers" baby mint
+table diaper kind pick Wet|Dirty|Both
+text count(diaper today) "diapers today" big
+row gap 1
+  each options diaper.kind
+    button it grow tap add diaper kind = it
+daybars last 7 days, count(diaper on it)
+===
+@create style=multi_feature domain=a1_hospital_bag
+before the baby comes: a page for antenatal doctor visits with reminders and a page for the hospital bag checklist
+---
+app "Baby Coming" baby plum
+table visit doctor text, day date, notes text?
+table bag item text, packed bool
+remind "Antenatal visit tomorrow" at visit.day - 1d at 9:00
+screen visits "Visits" calendar
+  each visit where day >= today sort day as v
+    row card tap edit v swipe remove v
+      text v.day bold
+      text v.doctor grow
+  form visit, "Add visit"
+screen bagp "Bag" box
+  "Packed" count(bag where packed = yes) "of" count(bag) head
+  each bag sort item as b
+    row tap edit b swipe remove b
+      text b.item grow
+      toggle b.packed
+  form bag, "Add to the bag"
+===
+@create style=detailed domain=a1_baby_milestones
+Baby milestones: I set the birth date, write each first (smiled, rolled over, first word) with the date, and it shows his age in weeks.
+---
+app "Milestones" star plum
+setting born date "Birth date"
+table milestone what text, day date
+"Age" floor((today - born) / 7) "weeks" big
+form milestone, "Add a first"
+each milestone sort day desc as m
+  row card tap edit m swipe remove m
+    text m.what bold grow
+    floor((m.day - born) / 7) "weeks old" faint
+===
+@create style=custom_ui domain=a1_recipe_scaler
+recipe scaler: I enter ingredients with amounts for 4 people, slide how many people I am cooking for and it shows the new amounts
+---
+app "Scaler" food mint
+table ingredient item text, base num 0..10000, unit text = "g"
+setting base_serves num = 4 "Recipe is for"
+state want num = 4
+"Cooking for" want "people" head
+slider want 1..20
+each ingredient sort item as i
+  row card
+    text i.item grow
+    round(i.base * want / base_serves * 10) / 10 i.unit bold
+form ingredient, "Add ingredient"
+===
+@create style=vague domain=a1_what_to_cook
+every day I don't know what to cook, just decide for me
+---
+app "What to Cook" food ocean
+table dish name text
+state chosen num = 0
+button "Decide for me" tap set chosen = random(count(dish))
+if chosen = 0
+  "Tap the button and I will pick." faint
+each dish sort at as d
+  if index + 1 = chosen
+    stack card pad 3
+      text d.name big align center
+form dish, "Add a dish I can cook"
+list dish
+===
+@create style=custom_ui domain=a1_grocery_aisles
+grocery list grouped by aisle: vegetables, dairy, meat, dry goods, other, each item has a tick, a clear button at the bottom
+---
+app "Shopping" cart mint
+table item name text, aisle pick Vegetables|Dairy|Meat|Dry_goods|Other = Vegetables, got bool
+form item
+each options item.aisle as a
+  if count(item where aisle = a and got = no) > 0
+    stack card gap 0
+      text a bold
+      each item where aisle = a and got = no sort name as i
+        row
+          text i.name grow
+          toggle i.got
+button "Clear ticked items" tap remove all item where got = yes
+===
+@create style=short domain=a1_flour_use
+monthly flour use
+---
+app "Atta" bread slate
+table flour kg num 1..100 unit "kg"
+text sum(flour.kg month) "kg this month" big
+"Last month" sum(flour.kg prev month) "kg" faint
+daybars last 14 days, sum(flour.kg on it)
+form flour
+log flour
+===
+@create style=custom_ui domain=a1_chore_wheel
+a chore wheel for the family: I add names, tap spin and it picks who does the dishes today
+---
+app "Chore Wheel" users plum
+table member name text
+state who num = 0
+button "Spin" tap set who = random(count(member))
+each member sort at as m
+  if index + 1 = who
+    stack card pad 3
+      text m.name big align center
+      "does the dishes today" faint align center
+"Last spin picked number" who faint
+form member, "Add person"
+list member
+===
+@create style=multi_feature domain=a1_star_bank
+star bank for the kids: each child earns stars with a button, can spend 5 stars on a treat, balance shown for each, and a second page with the history
+---
+app "Star Bank" star plum
+table kid name text
+table earn kid ref kid, stars num 1..10 = 1, why text?
+table spend kid ref kid, stars num 1..100, what text?
+screen bank "Bank" star
+  each kid sort name as k
+    let bal = sum(k.earn.stars) - sum(k.spend.stars)
+    stack card gap 1
+      row
+        text k.name head grow
+        text bal big
+      row gap 1
+        button "+1 star" tap add earn kid = k
+        button "Treat (5)" tap add spend kid = k, stars = 5, what = "Treat"
+  form kid, "Add child"
+screen hist "History" list
+  log earn
+  log spend
+===
+@create style=short domain=a1_birthdays
+family birthdays this month
+---
+app "Birthdays" gift plum
+table person name text, birthday date
+"This month" head
+each person where month(birthday) = month(today) sort monthday(birthday) as p
+  row card
+    text p.name bold grow
+    "turns" year(today) - year(p.birthday) "on the" monthday(p.birthday) faint
+if count(person where month(birthday) = month(today)) = 0
+  "No birthdays this month." faint
+form person
+===
+@create style=detailed domain=a1_exam_marks
+School marks for my son: subject, marks out of 100 and which exam. Average for each subject with a bar and a line for how his marks are going.
+---
+app "Marks" school ocean
+table mark subject pick Maths|English|Urdu|Science|Islamiat|Social_studies, score num 0..100, exam pick Monthly|Midterm|Final = Monthly
+"Overall average" round(avg(mark.score)) big
+each options mark.subject as s
+  stack gap 0
+    row
+      text s grow
+      round(avg(mark.score where subject = s)) bold
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, avg(mark.score where subject = s), 3 fill accent radius 1
+trend mark sort at, it.score
+form mark
+===
+@create style=custom_ui domain=a1_elder_visits
+which sibling visits grandma on which day: a grid with the 7 weekdays, I pick the person for each day, today highlighted
+---
+app "Visit Rota" users ocean
+table slot day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, who pick Ahmed|Sana|Bilal|Hina|Nobody = Nobody
+table went slot ref slot
+grid 2 gap 1
+  each options slot.day as d
+    stack card gap 0 fill if(d = dayname(today), soft, surface)
+      text d bold
+      each slot where day = d as s
+        row tap edit s
+          text s.who grow
+          toggle s.went
+form slot, "Set a visit"
+===
+@create style=multi_feature domain=a1_dog_food
+dog food stock: I add each bag in kg, set how many grams he eats a day, tick fed today, and see how many days of food are left
+---
+app "Dog Food" paw ocean
+table bag kg num 1..50 unit "kg"
+table fedd
+setting daily num = 300 "Grams a day"
+let left = floor(sum(bag.kg) * 1000 / daily) - count(fedd)
+text left "days of food left" big color if(left < 5, bad, ink)
+button if(count(fedd today) > 0, "Fed today", "Fed him today") tap toggle fedd
+form bag, "Add a bag"
+list bag
+===
+@create style=custom_ui domain=a1_puppy_commands
+puppy training: list of commands like sit, stay, come, each with a level chip learning good or perfect, and how many are perfect
+---
+app "Puppy School" paw mint
+table cmd name text, level pick Learning|Good|Perfect = Learning
+"Perfect commands" count(cmd where level = Perfect) "of" count(cmd) big
+each cmd sort name as c
+  stack card gap 1 swipe remove c
+    text c.name bold
+    choice c.level
+form cmd, "Add command"
+===
+@create style=short domain=a1_rain_gauge
+rainfall log for my farm
+---
+app "Rainfall" cloud ocean
+table rain mm num 0.5..500 unit "mm"
+text sum(rain.mm month) "mm this month" big
+"This year" sum(rain.mm year) "mm" faint
+daybars last 14 days, sum(rain.mm on it)
+form rain
+log rain
+===
+@create style=multi_feature domain=a1_plant_growth
+plant growth journal: each plant has a height in cm measured every week, show a growth line for each plant and the last height
+---
+app "Growth Journal" plant mint
+table plant name text
+table measure plant ref plant, cm num 0.5..400 unit "cm"
+each plant sort name as p
+  stack card gap 1
+    row
+      text p.name head grow
+      last(p.measure.cm) "cm" bold
+    trend p.measure sort at, it.cm
+form plant, "Add plant"
+form measure, "Add height"
+===
+@create style=detailed domain=a1_beehive
+My beehives: each hive has a name, I log inspections with strength from 1 to 5, whether I saw the queen, and honey taken in kg. Show honey total per hive.
+---
+app "Bee Yard" bolt plum
+table hive name text
+table inspect hive ref hive, strength num 1..5 = 3, queen bool, honey num? 0..100 unit "kg"
+each hive sort name as h
+  stack card gap 0
+    row
+      text h.name head grow
+      sum(h.inspect.honey) "kg honey" bold
+    "Last strength" last(h.inspect.strength) "of 5. Inspections" count(h.inspect) faint
+form hive, "Add hive"
+form inspect, "Log inspection"
+===
+@create style=short domain=a1_cage_clean
+bird cage cleaning
+---
+app "Bird Cage" paw mint
+table cleaned
+remind "Clean the bird cage" at 10:00 on sat
+"Last cleaned" since(cleaned) "days ago" big
+button "Cleaned today" tap add cleaned
+===
+@create style=detailed domain=a1_orchard
+Mango and guava trees in my orchard: tree name, fruit picked in kg each season, and which tree gave the most this year.
+---
+app "Orchard" tree mint
+table tree name text, kind pick Mango|Guava|Citrus|Other = Mango
+table pick_ tree ref tree, kg num 0.5..500 unit "kg"
+"Fruit this year" sum(pick_.kg year) "kg" big
+each tree sort name as t
+  row card tap edit t
+    text t.name bold grow
+    sum(t.pick_.kg year) "kg" bold
+form tree, "Add tree"
+form pick_, "Log picking"
+===
+@oos style=detailed domain=a1_print_oos oos=print
+Make a health report of my blood pressure and sugar that I can print as a PDF and give to the doctor
+---
+app "Health Chart" heart ocean
+table bp sys num 60..250, dia num 30..150
+table sugar level num 30..600 unit "mg/dl"
+screen bpp "Pressure" heart
+  text last(bp.sys) "/" last(bp.dia) big
+  trend bp last 30 days sort at, it.sys
+  form bp
+screen sug "Sugar" drop
+  text last(sugar.level) "mg/dl" big
+  trend sugar last 30 days sort at, it.level
+  form sugar
+===
+@oos style=short domain=a1_sms_pills_oos oos=messaging
+sms my mother every morning to take her tablets and tick when she did
+---
+app "Mother Tablets" pill plum
+table took
+remind "Take your tablets" at 8:00
+button if(count(took today) > 0, "She took them", "Tablets taken") tap toggle took
+calendar took
+===
+@oos style=detailed domain=a1_hospital_loc_oos oos=location
+Find the nearest hospital and pharmacy to me and keep the phone numbers of our family doctor and emergency contacts
+---
+app "Emergency" shield slate
+table contact name text, role pick Doctor|Hospital|Pharmacy|Family|Other = Family, phone text
+each contact sort name as c
+  row card tap edit c swipe remove c
+    stack grow
+      text c.name bold
+      c.role faint
+    c.phone bold
+form contact, "Add contact"
+===
+@create style=multi_feature domain=a1_child_fever
+fever diary for my child with two pages: temperature with a line chart and a page for paracetamol doses that tells me when the next one is safe
+---
+app "Child Fever" heart ocean
+table temp c num 35..42 unit "C"
+table dose mg num 50..1000 unit "mg"
+screen temps "Temperature" heart
+  text last(temp.c) "C" big color if(last(temp.c) >= 38, bad, good)
+  trend temp last 3 days sort at, it.c
+  form temp
+screen meds "Medicine" pill
+  "Last dose" last(dose.mg) "mg" faint
+  "Next dose not before" last(dose.at) + 6h big
+  form dose
+  log dose
+===
+@create style=short domain=a1_bedtime_story
+bedtime stories read to the kids
+---
+app "Bedtime Stories" book plum
+table story title text
+stat streak(story), "nights in a row"
+stat count(story month), "stories this month"
+form story, "Today's story"
+log story
+===
+@edit style=plain domain=a1_e_thyroid_time ref=a1_thyroid
+move the first reminder to 6 am
+---
+~ at 6:30 => at 6:00
+===
+@edit style=plain domain=a1_e_dog_note ref=a1_dog_food
+add the price of each bag
+---
+~ table bag kg num 1..50 unit "kg" => table bag kg num 1..50 unit "kg", price money?
+===
+@edit style=plain domain=a1_e_diaper_goal ref=a1_diapers
+add a bar chart for last 14 days instead of 7
+---
+~ daybars last 7 days => daybars last 14 days
+===
+@edit style=plain domain=a1_e_birthday_note ref=a1_birthdays
+add a gift idea for each person
+---
+~ birthday date => birthday date, gift text?
+===
+@edit style=plain domain=a1_e_wheel_remind ref=a1_chore_wheel
+remind everyone at 5 pm to spin the wheel
+---
++ remind "Spin the chore wheel" at 17:00
+===
+@edit style=plain domain=a1_e_rain_goal ref=a1_rain_gauge
+show a heat map of rainy days
+---
++ heat last 70 days, sum(rain.mm on it), 20
+===
+@edit style=plain domain=a1_e_milestone_note ref=a1_baby_milestones
+add a note for each first
+---
+~ what text, day date => what text, day date, note text?
+===
+@edit style=plain domain=a1_e_visit_tab ref=a1_hospital_bag
+add a page with contacts of doctors
+---
++ table doc name text, phone text
++ screen docs "Doctors" phone
++   each doc as d
++     row card
++       text d.name grow
++       d.phone bold
++   form doc, "Add doctor"
+===

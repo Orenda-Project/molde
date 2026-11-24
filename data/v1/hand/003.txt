@@ -1,0 +1,224 @@
+@create style=detailed domain=m_barber_queue
+Barber shop queue: I write the customer name and the service, tick when done, and see how many are waiting and how much I earned today.
+---
+app "Barber" user slate
+table cut name text, service pick Haircut|Shave|Beard|Both = Haircut, price money, done bool
+count(cut where done = no) "waiting" head
+each cut where done = no sort at as c
+  row card gap 2 tap edit c swipe remove c
+    toggle c.done
+    stack grow
+      c.name bold
+      c.service faint
+    c.price bold
+"Earned today" sum(cut.price today where done = yes) big
+form cut, "Add customer"
+===
+@create style=short domain=m_hostel_mess
+hostel mess bill tracker
+---
+app "Mess" food ocean
+table meal kind pick Breakfast|Lunch|Dinner, guests num 0..10 = 0
+setting rate money = 150 "Price per meal"
+let meals = count(meal month) + sum(meal.guests month)
+"Meals this month" meals big
+"Bill so far" meals * rate bold
+form meal
+calendar meal
+===
+@create style=custom_ui domain=m_seat_chart
+a seating chart with 12 tables in a grid, tap a table to mark it taken, free tables are green
+---
+app "Tables" users mint
+table taken seat num 1..12
+grid 4 gap 1
+  each 1..12
+    stack card align center tap toggle taken where seat = it
+      text it bold
+      if count(taken where seat = it) > 0
+        "Taken" size tiny color bad
+      else
+        "Free" size tiny color good
+"Free tables" 12 - count(taken) head
+button "Clear all" tap remove all taken
+===
+@create style=typos domain=m_car_pool
+carpool who drove wich day and how much petrol we split
+---
+app "Carpool" car ocean
+table ride driver pick Ali|Sara|Hamid|Noor, litres num 1..60, cost money
+each options ride.driver as dd
+  row card
+    text dd bold grow
+    count(ride where driver = dd) "rides" faint
+    sum(ride.cost where driver = dd) bold
+"Total petrol" sum(ride.cost month) head
+form ride
+log ride
+===
+@create style=vague domain=m_less_phone
+my phone is eating my day
+---
+app "Phone time" phone ink
+table scroll mins num 1..600
+setting limit num = 120 "Daily limit (min)"
+goal sum(scroll.mins today), limit, "today", "min"
+quick scroll, mins, [15, 30, 60]
+form scroll
+daybars last 7 days, sum(scroll.mins on it)
+list scroll today
+===
+@create style=multi_feature domain=m_wedding_guests
+wedding guest list: name, side of family, number of people, RSVP yes or no, and a total head count
+---
+app "Guests" gift plum
+table guest name text, side pick Bride|Groom|Friends, people num 1..10 = 1, coming bool
+"Coming" sum(guest.people where coming = yes) "of" sum(guest.people) head
+each guest sort name as g
+  row card gap 2 tap edit g swipe remove g
+    toggle g.coming
+    stack grow
+      g.name bold
+      g.side faint
+    g.people bold
+form guest
+===
+@create style=detailed domain=m_two_screens_fuel
+Fuel diary on two tabs. First tab adds a fill-up with litres, price and odometer. Second tab shows litres per month and a list of all fill-ups.
+---
+app "Fuel diary" car slate
+table fill litres num 1..120, price money, km num 0..1000000 "Odometer"
+screen add "Add" plus
+  form fill
+screen past "History" list
+  stat sum(fill.litres month), "litres this month"
+  bars days last 14 days, sum(fill.litres on it)
+  log fill
+===
+@create style=short domain=m_mood_calendar
+mood calendar
+---
+app "Mood" smile plum
+table mood score num 1..5
+calendar mood
+trend mood last 30 days sort at, it.score
+row gap 1
+  each [1, 2, 3, 4, 5]
+    button it tap add mood score = it
+===
+@create style=custom_ui domain=m_thermo_steps
+a weekly steps meter that fills as I add my steps, target 50000
+---
+app "Weekly steps" walk mint
+table walk steps num 100..100000
+setting goal num = 50000 "Weekly target"
+let p = clamp(sum(walk.steps week) / goal, 0, 1)
+draw 100, 30 height 30
+  rect 0, 0, 100, 30 radius 6 fill soft
+  rect 0, 0, 100 * p, 30 radius 6 fill good
+  label 50, 17, round(p * 100) "%"
+sum(walk.steps week) "of" goal faint
+quick walk, steps, [1000, 2500, 5000]
+form walk
+log walk
+===
+@create style=detailed domain=m_exam_marks
+Exam marks tracker: subject, marks got and total marks. Show the percentage for each exam and the average percentage per subject.
+---
+app "Marks" school ocean
+table exam subject text, got num 0..1000, total num 1..1000 = 100
+each exam sort at desc as e
+  row card tap edit e swipe remove e
+    e.subject bold grow
+    e.got "/" e.total faint
+    round(e.got * 100 / e.total) "%" bold
+"Average" round(sumof(exam, it.got * 100 / it.total) / max(count(exam), 1)) "%" head
+form exam
+===
+@create style=short domain=m_tailor
+tailor orders
+---
+app "Tailor" bag plum
+table order client text, item text, due date, ready bool, price money?
+count(order where ready = no) "orders pending" head
+remind "An order is due" at order.due - 1d at 9:00
+each order where ready = no sort due as o
+  row card gap 2 tap edit o swipe remove o
+    toggle o.ready
+    stack grow
+      o.client bold
+      o.item o.due faint color if(o.due < today, bad, muted)
+form order
+===
+@create style=multi_feature domain=m_recipe_scaler
+recipe scaler: type how many people the recipe is for and how many I am cooking for, and it shows the multiplier and the amounts for rice 2 cups, oil 3 spoons, salt 1 spoon
+---
+app "Recipe scaler" food mint
+state orig num = 4
+state cook num = 6
+field orig "Recipe is for"
+field cook "I am cooking for"
+let k = cook / max(orig, 1)
+"Multiply by" round(k * 100) / 100 big
+"Rice" round(2 * k * 10) / 10 "cups" bold
+"Oil" round(3 * k * 10) / 10 "spoons" bold
+"Salt" round(1 * k * 10) / 10 "spoon" bold
+===
+@create style=detailed domain=m_job_apps
+Job application tracker with company, role, status (applied, interview, offer or rejected) and the date. Show how many are in each status.
+---
+app "Jobs" bag slate
+table application company text, role text, status pick Applied|Interview|Offer|Rejected = Applied, sent date = today
+each options application.status as s
+  row card
+    text s bold grow
+    count(application where status = s) head
+form application
+each application sort sent desc as a
+  row card tap edit a swipe remove a
+    stack grow
+      a.company bold
+      a.role faint
+    a.status
+===
+@create style=custom_ui domain=m_battery_study
+a battery that charges up as I study, 4 hours is full
+---
+app "Study battery" school mint
+table study hours num 0.25..8
+let p = clamp(sum(study.hours today) / 4, 0, 1)
+draw 100, 50 width 200
+  rect 2, 10, 86, 30 radius 6 stroke ink thick 2
+  rect 88, 20, 8, 10 fill ink
+  rect 4, 12, 82 * p, 26 radius 4 fill if(p >= 1, good, accent)
+sum(study.hours today) "hours of 4" faint
+quick study, hours, [0.5, 1, 2]
+form study
+===
+@create style=typos domain=m_shop_sales_two
+dailey sales of my shop with item and price and total for the day and month
+---
+app "Shop sales" bag mint
+table sale item text, price money
+"Today" sum(sale.price today) big
+"This month" sum(sale.price month) faint
+form sale
+daybars last 7 days, sum(sale.price on it)
+log sale
+===
+@create style=multi_feature domain=m_reading_screens
+reading app with two tabs, one for what I'm reading now with pages done and total, one for finished books
+---
+app "Reading" book plum
+table book title text, total num 1..3000, done num 0..3000 = 0, finished bool
+screen current "Reading" book
+  each book where finished = no as b
+    stack card gap 1 tap edit b swipe remove b
+      b.title bold
+      goal b.done, b.total, "pages"
+      button "+10 pages" tap set b.done = b.done + 10
+      toggle b.finished
+  form book
+screen fin "Finished" check
+  count(book where finished = yes) "books finished" head
+  list book where finished = yes

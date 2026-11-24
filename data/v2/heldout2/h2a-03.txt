@@ -1,0 +1,286 @@
+@create style=detailed domain=h2a_meter
+electricity meter reading every month, I want to see how many units I used between readings and the trend
+---
+app "Meter" bolt slate
+table reading units num 0..
+stat last(reading.units) - first(reading.units), "units used since the first reading"
+trend reading, it.units
+form reading
+list reading by day
+===
+@create style=vague domain=h2a_packing
+packing list for trip
+---
+app "Packing" bag mint
+table item name text, packed bool
+stat count(item where packed = no), "still to pack"
+form item
+each item sort it.packed empty "Add what you need to take"
+  row card
+    toggle it.packed
+    text it.name grow
+===
+@create style=typos domain=h2a_grocery
+grocery lst, items and tick when bought, qty too
+---
+app "Groceries" cart mint
+table buy item text, qty num 1..99 = 1, got bool
+form buy
+each buy where got = no empty "Nothing to buy"
+  row card swipe remove it
+    toggle it.got
+    text it.item grow
+    text it.qty bold
+===
+@create style=short domain=h2a_pushups
+pushups, quick buttons 10 20 30
+---
+app "Pushups" dumbbell ink
+table set reps num 1..500
+stat sum(set.reps today), "pushups today"
+quick set, reps, [10, 20, 30]
+daybars last 7 days, sum(set.reps on it)
+===
+@create style=short domain=h2a_study
+study hours per subject
+---
+app "Study" school mint
+table study subject pick Math|Physics|Chemistry|English = Math, hours num 0.5..12
+share study month by subject, sum(it.hours), it.key
+form study
+list study by day
+===
+@create style=detailed domain=h2a_gifts
+gift ideas for birthdays: whose birthday, the idea, price and the date. remind me 3 days before
+---
+app "Gifts" gift plum
+table gift person text, idea text, price money?, bday date
+form gift
+list gift
+remind "Birthday soon, get the gift" at gift.bday - 3d at 10:00
+===
+@create style=detailed domain=h2a_carservice
+car service record: what was done, km on the meter, cost. show days since the last service
+---
+app "Car Service" car slate
+table service work text, km num 0.., cost money
+stat since(service), "days since last service"
+form service
+list service
+===
+@create style=vague domain=h2a_fees
+school fee payments of my kids
+---
+app "School Fees" school ocean
+table fee child text, month pick Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec = Jan, amount money, paid bool
+stat sum(fee.amount where paid = no), "fees pending"
+form fee
+list fee
+===
+@create style=custom_ui domain=h2a_dice
+a dice roller, big number, tap to roll
+---
+app "Dice" dice ink
+state roll num = 1
+text roll huge align center
+button "Roll" tap set roll = random(6)
+===
+@create style=short domain=h2a_tip
+tip calculator split between people
+---
+app "Tip" calc mint
+setting bill money = 2000 "Bill"
+setting tip num 0..100 = 10 "Tip %"
+setting people num 1..50 = 2 "People"
+let total = bill * (1 + tip / 100)
+stat total, "total with tip"
+stat total / people, "each person pays"
+===
+@create style=multi_feature domain=h2a_salon
+hair salon till. services I offer with prices (haircut, shave, facial). tap a service when a customer pays. show today's takings and a count of each service today
+---
+app "Salon" tool plum
+table service name text, price money
+table sale service ref service
+form service
+each service
+  button it.name it.price tap add sale service = it
+stat sum(sale today, it.service.price), "takings today"
+each service
+  row
+    text it.name grow
+    text count(it.sale today) bold
+===
+@create style=custom_ui domain=h2a_mathquiz
+times tables practice for my son. show a random multiplication, he types the answer and it says right or wrong, with a score
+---
+app "Times Tables" calc ocean
+state a num = 7
+state b num = 8
+state ans num = 0
+table try ok bool
+text a "x" b head
+field ans "Answer"
+button "Check" tap add try ok = (ans = a * b) then set a = random(12) then set b = random(12) then set ans = 0
+text "Last answer:" if(count(try, yes) = 0, "-", if(last(try.ok), "right", "wrong")) bold
+text "Score" count(try where ok = yes) bold
+===
+@create style=multi_feature domain=h2a_exams
+exam countdown, subject and date, nearest first with days left, and nudge me the day before
+---
+app "Exams" alarm ink
+table exam subject text, on date
+form exam
+each exam sort it.on empty "No exams yet"
+  row card
+    text it.subject grow
+    text it.on - today "days left" bold
+remind "Exam tomorrow" at exam.on - 1d at 18:00
+===
+@create style=custom_ui domain=h2a_emi
+loan installment calculator, amount, yearly interest rate and months, shows monthly payment and total
+---
+app "Loan" coin slate
+setting amount money = 500000 "Loan amount"
+setting rate num 0..100 = 12 "Yearly rate %"
+setting months num 1..360 = 24 "Months"
+let r = rate / 1200
+let emi = if(r = 0, amount / months, amount * r * pow(1 + r, months) / (pow(1 + r, months) - 1))
+stat emi, "per month"
+stat emi * months, "total to pay"
+stat emi * months - amount, "interest"
+===
+@create style=custom_ui domain=h2a_seats
+classroom seat plan, 12 desks in 4 columns, I type a student name for a desk number and it shows on the grid
+---
+app "Seats" seat mint
+table student name text, desk num 1..12
+form student
+grid 4 gap 1
+  each 1..12
+    box card pad 1 ratio 1 tap edit last(student where desk = it)
+      text it faint tiny
+      text last(student.name where desk = it) small
+===
+@create style=multi_feature domain=h2a_pantry
+kitchen pantry: item, quantity and expiry date. things expiring within 3 days should be highlighted and I want a count of those at the top
+---
+app "Pantry" food mint
+table food name text, qty num 0.. = 1, expiry date
+stat count(food where expiry - today <= 3), "expiring soon"
+form food
+each food sort it.expiry
+  row card fill if(it.expiry - today <= 3, warn, soft) tap edit it swipe remove it
+    text it.name grow
+    text it.qty bold
+    text it.expiry faint
+===
+@create style=custom_ui domain=h2a_heat
+heat map of the days I worked out in the last 12 weeks, plus my streak
+---
+app "Workout Map" flame mint
+table workout
+toggle workout today
+stat streak(workout), "day streak"
+heat last 84 days, count(workout on it), 1
+===
+@edit style=plain domain=h2a_ed_monthly_remind
+remind me on the 1st of every month
+--- before
+app "Bills" bell slate
+table bill name text, amount money, paid bool
+stat sum(bill.amount where paid = no), "unpaid"
+form bill
+list bill
+--- after
+app "Bills" bell slate
+table bill name text, amount money, paid bool
+stat sum(bill.amount where paid = no), "unpaid"
+form bill
+list bill
+remind "Pay the bills" monthly on 1 at 10:00
+===
+@edit style=plain domain=h2a_ed_stars
+let me give each book stars out of 5
+--- before
+app "Books" book plum
+table read title text, author text?
+stat count(read year), "books this year"
+form read
+list read
+--- after
+app "Books" book plum
+table read title text, author text?, stars num? 1..5
+stat count(read year), "books this year"
+form read
+list read
+===
+@edit style=plain domain=h2a_ed_30days
+chart should show a month not just a week
+--- before
+app "Spending" wallet mint
+table spend amount money, note text?
+daybars last 7 days, sum(spend.amount on it)
+form spend
+list spend by day
+--- after
+app "Spending" wallet mint
+table spend amount money, note text?
+daybars last 30 days, sum(spend.amount on it)
+form spend
+list spend by day
+===
+@edit style=plain domain=h2a_ed_table_rename
+call them expenses not spends everywhere
+--- before
+app "Money" wallet slate
+table spend what text, amount money
+stat sum(spend.amount month), "this month"
+form spend
+list spend by day
+--- after
+app "Money" wallet slate
+table expense was spend what text, amount money
+stat sum(expense.amount month), "this month"
+form expense
+list expense by day
+===
+@edit style=plain domain=h2a_ed_price
+each item needs a price, most are 100
+--- before
+app "Menu" food mint
+table dish name text
+form dish
+list dish
+--- after
+app "Menu" food mint
+table dish name text, price money = 100
+form dish
+list dish
+===
+@ask style=ask domain=h2a_ask5
+calculate something for me
+---
+ask "What do you want to calculate?" "A loan payment" "Splitting a bill" "Profit on sales" "Something else"
+===
+@oos style=detailed domain=h2a_oos_loc oos=location
+I ride deliveries. I want to log each delivery with customer, address and fee, and use GPS to track the route I rode each day. totals of fee per day too
+---
+app "Rider Log" bike slate
+table delivery customer text, address text, fee money
+stat sum(delivery.fee today), "fees today"
+form delivery
+daybars last 7 days, sum(delivery.fee on it)
+list delivery by day
+===
+@create style=multi_feature domain=h2a_sleep
+sleep tracker. bedtime and wake time each night, hours slept shown as a line, and a goal of 8 hours with average on a second tab. remind me at 22:00 to go to bed
+---
+app "Sleep" bed ocean
+table night bed time, wake time
+setting goal num = 8 "Sleep goal (h)"
+form night
+trend night, (it.wake - it.bed) / 1h
+screen stats "Stats" chart
+  goal sum(night last 7 days, it.wake - it.bed) / 1h / max(count(night last 7 days), 1), goal, "avg hours this week", "h"
+remind "Time to go to bed" at 22:00

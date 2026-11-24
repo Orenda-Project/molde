@@ -1,0 +1,376 @@
+@create style=detailed domain=b4_food_truck_events
+my food truck goes to different events, each event charges a stall fee, and I note sales amount per event. show profit per event after the fee and the best event so far
+---
+app "Food Truck" car slate
+table fevent name text, day date, fee money
+table fsale fevent ref fevent, amount money
+each fevent sort day desc as e
+  let profit = sum(e.fsale.amount) - e.fee
+  row card tap edit e
+    stack grow
+      e.name bold
+      text e.day faint
+    text profit bold color if(profit >= 0, good, bad)
+text "Best event" max(fevent, sum(it.fsale.amount) - it.fee) big
+form fsale, "Sale at event"
+form fevent, "New event"
+===
+@edit style=plain domain=b4_truck_notes ref=b4_food_truck_events
+add a note box for each event like rainy or crowded
+---
+~ fee money => fee money, note text?
+~ e.day faint => e.day e.note faint
+===
+@create style=multi_feature domain=b4_home_chef
+i cook food at home for pre orders. customers order dishes for a delivery day, each order has dish type (biryani, korma, pulao, kheer), portions and day. on top show how many portions of each dish i must cook tomorrow
+---
+app "Home Chef" food plum
+table custo name text, phone text?
+table horder custo ref custo, dish pick Biryani|Korma|Pulao|Kheer = Biryani, portions num 1..50 = 1, day date
+"Cook tomorrow" head
+each options horder.dish as d
+  row card
+    d bold grow
+    text sum(horder.portions where day = today + 1 and dish = d) "portions" bold
+each horder where day >= today sort day as o
+  row card tap edit o swipe remove o
+    stack grow
+      o.custo.name bold
+      text o.dish o.portions faint
+    text o.day
+form horder, "Take order"
+form custo, "Add customer"
+===
+@edit style=plain domain=b4_chef_rush ref=b4_home_chef
+mark rush orders and put them first in the order list
+---
+~ portions num 1..50 = 1, day date => portions num 1..50 = 1, day date, rush bool
+~ each horder where day >= today sort day as o => each horder where day >= today sort if(it.rush, 0, 1) * 1000 + (it.day - today) as o
+===
+@create style=custom_ui domain=b4_reservations
+small restaurant reservations: name, guests, time, which table (we have 8). show today's bookings in time order with the number of seats booked and tables still free at this hour
+---
+app "Reservations" food ocean
+table rtable label text, seats num 1..20
+table booking_r name text, guests num 1..30, slot time, rtable ref rtable, day date
+text "Seats booked today" sum(booking_r.guests where day = today) big
+each booking_r where day = today sort slot as b
+  row card tap edit b swipe remove b
+    b.slot bold
+    stack grow
+      b.name
+      text b.rtable.label "for" b.guests faint
+form booking_r, "Book table"
+form rtable, "Add table"
+===
+@edit style=plain domain=b4_reserve_party ref=b4_reservations
+rename the guests column to party size
+---
+~ guests num 1..30, slot => party num 1..30 was guests, slot
+~ sum(booking_r.guests where => sum(booking_r.party where
+~ b.rtable.label "for" b.guests faint => b.rtable.label "for" b.party faint
+===
+@create style=short domain=b4_cafe_tips
+tips box shared by the cafe staff in proportion to hours worked
+---
+app "Cafe Tips" cup mint
+table staff name text
+table hours staff ref staff, h num 1..14
+table tips amount money
+let pool = sum(tips.amount week)
+let total_h = sum(hours.h week)
+text "Tips this week" pool big
+each staff sort name as s
+  row card tap edit s
+    s.name bold grow
+    text sum(s.hours.h week) "h"
+    text round(pool * sum(s.hours.h week) / total_h) bold
+form hours, "Hours worked"
+form tips, "Tips added"
+form staff, "Add staff"
+===
+@edit style=plain domain=b4_tips_pool ref=b4_cafe_tips
+only 90 percent of tips go in the pool, the rest is for the kitchen
+---
+~ let pool = sum(tips.amount week) => setting pool_share num 0..100 = 90 "Share of tips in pool %"\nlet pool = sum(tips.amount week) * pool_share / 100
+===
+@create style=detailed domain=b4_vet_clinic
+veterinary clinic. pet owners have pets (cats, dogs, goats), each pet gets vaccinations and checkups and the next vaccine is due after a year. show pets due for vaccine and the fee income of the week
+---
+app "Vet Clinic" paw mint
+table owner name text, phone text?
+table pet owner ref owner, name text, kind pick Dog|Cat|Goat|Bird|Other = Dog
+table vet_visit pet ref pet, work pick Vaccine|Checkup|Surgery|Other = Checkup, fee money
+text count(pet, due(it.vet_visit where work = Vaccine, 365)) "pets due for vaccine" head color warn
+text "Income this week" sum(vet_visit.fee week) big
+each pet sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      text p.owner.name p.kind faint
+    if due(p.vet_visit where work = Vaccine, 365)
+      text "Vaccine due" color warn
+form vet_visit, "New visit"
+form pet, "Add pet"
+form owner, "Add owner"
+===
+@edit style=plain domain=b4_vet_remind ref=b4_vet_clinic
+remind me every monday morning to call the owners of pets due
+---
++ remind "Call owners of pets due for vaccine" at 9:00 on mon if count(pet, due(it.vet_visit where work = Vaccine, 365)) > 0
+===
+@create style=custom_ui domain=b4_home_exercise
+physio gave my mother exercises to do at home, each with sets and reps per day. tick them one by one and show total reps done today and a weekly streak
+---
+app "Home Exercise" run mint
+table exercise name text, reps num 1..100 = 10
+table did_ex exercise ref exercise
+each exercise sort name as e
+  row card tap edit e
+    stack grow
+      e.name bold
+      text e.reps "reps" faint
+    text streak(e.did_ex) "days" faint
+    toggle e.did_ex
+text "Reps today" sum(exercise, it.reps * count(it.did_ex today)) big
+heat last 28 days, count(did_ex on it), count(exercise)
+form exercise, "Add exercise"
+===
+@create style=short domain=b4_dars_circle
+weekly dars attendance of our study circle members
+---
+app "Dars Circle" book mint
+table dmember name text
+table dpresent dmember ref dmember
+each dmember sort name as m
+  row card tap edit m
+    m.name bold grow
+    text count(m.dpresent month) "this month"
+    toggle m.dpresent week
+text "This week" count(dpresent week) "of" count(dmember) head
+form dmember, "Add member"
+===
+@create style=custom_ui domain=b4_wake_for_fajr
+i want to wake up before fajr every day. i set fajr time myself as it changes, and each morning i enter my wake time. show the days i woke on time as green squares for the last 30 days
+---
+app "Wake for Fajr" sun ocean
+table wake at_time time
+setting fajr time = 5:15 "Fajr time"
+text "On time this month" count(wake month where at_time <= fajr) big color good
+grid 7 gap 1
+  each days last 28 days
+    box height 14 radius 3 fill if(count(wake on it where at_time <= fajr) > 0, good, if(count(wake on it) > 0, bad, soft))
+form wake, "Woke at"
+===
+@create style=multi_feature domain=b4_salon_products
+hair salon products like shampoo, colour, wax: stock count for each, and every time a client uses some i note the quantity. show the products running low below the level i set for each
+---
+app "Salon Stock" smile plum
+table product name text, stock num 0..500, low_at num 0..100 = 3
+table used product ref product, qty num 1..50 = 1
+each product sort name as p
+  let left = p.stock - sum(p.used.qty)
+  row card tap edit p
+    p.name bold grow
+    text left color if(left <= p.low_at, warn, ink)
+    button "Used 1" tap add used product = p
+text "Running low" count(product, it.stock - sum(it.used.qty) <= it.low_at) head color warn
+form product, "Add product"
+===
+@create style=detailed domain=b4_uniform_orders
+we stitch school uniforms in bulk. each school order has the school name, price per piece and then size counts: small, medium, large, extra large. show total pieces and money for each school and which is not yet delivered
+---
+app "Uniform Orders" pen slate
+table uschool name text, price money, delivered bool
+table usize uschool ref uschool, size pick S|M|L|XL = M, pieces num 1..500
+each uschool sort name as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      text sum(s.usize.pieces) "pieces" faint
+    text sum(s.usize.pieces) * s.price bold
+    toggle s.delivered
+each options usize.size as z
+  row
+    z bold grow
+    text sum(usize.pieces where size = z)
+text "Not yet delivered" count(uschool where delivered = no) head
+form usize, "Add sizes"
+form uschool, "New school order"
+===
+@create style=typos domain=b4_recharge_shop
+mobile load shop, i sell jazz zong telenor ufone, each sale has amount and my commision is 3 percent, tell me the profit today
+---
+app "Load Shop" phone ocean
+table load network pick Jazz|Zong|Telenor|Ufone = Jazz, amount money
+setting commission num 0..20 = 3 "Commission %"
+each options load.network as n
+  row card tap add load network = n, amount = 100
+    n bold grow
+    text sum(load.amount today where network = n)
+text "Sold today" sum(load.amount today) big
+text "My profit" round(sum(load.amount today) * commission / 100) head color good
+form load, "Load sale"
+===
+@edit style=plain domain=b4_recharge_expense ref=b4_recharge_shop
+add shop expenses like rent and electricity and show net profit
+---
+~ form load, "Load sale" => table expense_l what text, amount money\nform load, "Load sale"\nform expense_l, "Shop expense"
++ "Net this month" round(sum(load.amount month) * commission / 100) - sum(expense_l.amount month) head
+===
+@create style=multi_feature domain=b4_dispatch_riders
+courier company with 6 riders, each parcel delivered pays the rider a fixed rate that depends on delivered or returned. show per rider deliveries and pay today, and a bar chart of deliveries per rider this week
+---
+app "Dispatch" bike slate
+table rider name text
+table parcel_d rider ref rider, result pick Delivered|Returned = Delivered
+setting rate money = 60 "Pay per delivered parcel"
+setting return_rate money = 20 "Pay per returned parcel"
+each rider sort name as r
+  row card tap edit r
+    r.name bold grow
+    text count(r.parcel_d today where result = Delivered) "delivered"
+    text count(r.parcel_d today where result = Delivered) * rate + count(r.parcel_d today where result = Returned) * return_rate bold
+bars rider sort name, count(it.parcel_d week), it.name
+form parcel_d, "Add parcel"
+form rider, "Add rider"
+===
+@edit style=plain domain=b4_dispatch_nochart ref=b4_dispatch_riders
+remove the bar chart
+---
+- bars rider sort name, count(it.parcel_d week), it.name
+===
+@create style=short domain=b4_airport_pickups
+airport pickups with flight number time and fare, paid or not
+---
+app "Airport Taxi" plane slate
+table pickup flight text, arrival time, fare money, paid bool
+text "To collect" sum(pickup.fare where paid = no) big color warn
+each pickup sort at desc as p
+  row card tap edit p swipe remove p
+    stack grow
+      p.flight bold
+      text p.arrival faint
+    text p.fare
+    toggle p.paid
+text "Today" sum(pickup.fare today) head
+form pickup, "New pickup"
+===
+@create style=detailed domain=b4_ngo_targets
+our NGO reports monthly to donors. activities are counted by type: trainings, home visits, health camps, distributions. targets for each are set at the start of the year and I log each activity as it happens. show progress for each type
+---
+app "NGO Progress" users mint
+table activity kind pick Training|Home_visit|Health_camp|Distribution = Training, people num 1..2000 = 1
+setting t_training num = 24 "Trainings target"
+setting t_visits num = 600 "Home visits target"
+setting t_camps num = 12 "Health camps target"
+setting t_dist num = 10 "Distributions target"
+goal count(activity year where kind = Training), t_training, "trainings"
+goal count(activity year where kind = Home_visit), t_visits, "home visits"
+goal count(activity year where kind = Health_camp), t_camps, "health camps"
+goal count(activity year where kind = Distribution), t_dist, "distributions"
+text "People reached" sum(activity.people year) big
+form activity, "Log activity"
+===
+@create style=detailed domain=b4_sponsor_walk
+charity walk: walkers cover km, and each walker has sponsors who pledge an amount for every km. total raised is km times pledge per km, add all walkers. show leaderboard by money raised
+---
+app "Sponsor Walk" run mint
+table walker name text
+table sponsor walker ref walker, name text, per_km money
+table lap walker ref walker, km num 0.5..42
+each walker sort sum(it.lap.km) * sum(it.sponsor.per_km) desc as w
+  let raised = sum(w.lap.km) * sum(w.sponsor.per_km)
+  row card tap edit w
+    stack grow
+      w.name bold
+      text sum(w.lap.km) "km," count(w.sponsor) "sponsors" faint
+    text raised bold
+text "Total raised" sum(walker, sum(it.lap.km) * sum(it.sponsor.per_km)) big
+form lap, "Add km"
+form sponsor, "Add sponsor"
+form walker, "Add walker"
+===
+@create style=multi_feature domain=b4_garden_plots
+community garden with 12 plots rented to families for 500 a month. each family waters in turns, tick duty done. show who has not paid this month and how many duties each did
+---
+app "Community Garden" leaf mint
+table plot_f family text, plot_no num 1..30
+table rent_p plot_f ref plot_f, amount money
+table duty plot_f ref plot_f
+setting plot_rent money = 500 "Monthly rent"
+each plot_f sort plot_no as p
+  row card tap edit p
+    text p.plot_no bold
+    stack grow
+      p.family
+      text count(p.duty month) "duties" faint
+    text if(sum(p.rent_p.amount month) >= plot_rent, "Paid", "Due") color if(sum(p.rent_p.amount month) >= plot_rent, good, bad)
+    button "Duty" tap add duty plot_f = p
+text "Collected" sum(rent_p.amount month) "of" count(plot_f) * plot_rent big
+form rent_p, "Rent"
+form plot_f, "Add plot"
+===
+@create style=short domain=b4_orchard_sprays
+spray records per block, safe days before picking is 14
+---
+app "Orchard Sprays" leaf mint
+table block name text, trees num 1..500
+table sprayed block ref block, product text
+each block sort name as b
+  row card tap edit b
+    stack grow
+      b.name bold
+      text "last sprayed" since(b.sprayed) "days ago" faint
+    if since(b.sprayed) < 14
+      text "Do not pick" color bad
+    else
+      text "Safe" color good
+    button "Sprayed" tap add sprayed block = b, product = "Spray"
+form block, "Add block"
+===
+@create style=custom_ui domain=b4_rain_tank_fill
+rooftop rain harvesting: roof is 1200 square feet, each rain I note mm and litres collected is about 0.6 per sq ft per inch... just use roof area times mm times 0.8 factor. show litres collected this month and a drawing of the tank filling for a 5000 litre tank
+---
+app "Rain Harvest" rain ocean
+table shower mm num 1..300
+setting roof_area num = 1200 "Roof area (sq ft)"
+setting tank num = 5000 "Tank size (litres)"
+let litres = sum(shower.mm month) * roof_area * 0.8 / 10
+let fill = clamp(litres / tank, 0, 1)
+text round(litres) "litres this month" big
+draw 60, 100 width 90
+  rect 5, 5, 50, 90 stroke ink thick 2
+  rect 6, 94 - 88 * fill, 48, 88 * fill fill accent
+form shower, "Rain today"
+===
+@edit style=plain domain=b4_rain_tank_year ref=b4_rain_tank_fill
+show the whole year total too and a bar per month
+---
++ "This year" round(sum(shower.mm year) * roof_area * 0.8 / 10) "litres" head
++ bars shower last 6 months by month, sum(it.mm) * roof_area * 0.8 / 10, it.key
+===
+@create style=multi_feature domain=b4_festival_stall
+eid stall: bangles, mehndi cones, glass sets. each item has the cost and the selling price, i tap each time one is sold. show profit per item and total, and a chart of profit per item
+---
+app "Eid Stall" gift plum
+table sitem name text, cost money, price money
+table sold_s sitem ref sitem
+each sitem sort name as s
+  let n = count(s.sold_s)
+  row card tap edit s
+    stack grow
+      s.name bold
+      text n "sold" faint
+    text n * (s.price - s.cost) bold color good
+    button "Sold" tap add sold_s sitem = s
+text "Total profit" sum(sitem, count(it.sold_s) * (it.price - it.cost)) big
+bars sitem sort name, count(it.sold_s) * (it.price - it.cost), it.name
+form sitem, "Add item"
+===
+@edit style=plain domain=b4_stall_cat ref=b4_festival_stall
+add a category to each item, jewellery or beauty or home, and show profit by category
+---
+~ name text, cost money => name text, category pick Jewellery|Beauty|Home = Home, cost money
++ "By category" head
++ each options sitem.category as c\n  row\n    text c grow\n    sum(sitem, if(it.category = c, count(it.sold_s) * (it.price - it.cost), 0))

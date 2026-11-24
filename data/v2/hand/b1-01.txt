@@ -1,0 +1,412 @@
+@create style=detailed domain=b1_shop_credit
+my grocery shop gives stuff on credit to regular customers. I need to see how much each one owes me, and when they pay something it should bring the number down. cash sales should not count as owed
+---
+app "Shop Khata" wallet slate
+table customer name text, phone text?
+table sale customer ref customer, amount money, kind pick Credit|Cash = Credit, item text?
+table payment customer ref customer, amount money
+let owed = sum(sale.amount where kind = Credit) - sum(payment.amount)
+"Total owed to the shop" owed big
+each customer sort name as c
+  let balance = sum(c.sale.amount where kind = Credit) - sum(c.payment.amount)
+  row card tap edit c
+    c.name bold grow
+    balance bold color if(balance > 0, bad, good)
+form customer, "Add customer"
+form sale, "Record sale"
+form payment, "Record payment"
+===
+@create style=multi_feature domain=b1_dairy_cows
+dairy farm: list of my cows, log milk in litres for each cow morning or evening, show today's total with the money it is worth at a price I can change, and a chart of the last week
+---
+app "Dairy" milk mint
+table cow name text, breed pick Sahiwal|Cholistani|Cross = Cross
+table milking cow ref cow, litres num 0..60, shift pick Morning|Evening = Morning
+setting rate money = 120 "Price per litre"
+let litres_today = sum(milking.litres today)
+litres_today "litres today" big
+"Worth" litres_today * rate "today" faint
+daybars last 7 days, sum(milking.litres on it)
+each cow sort name as c
+  row card tap edit c
+    c.name bold grow
+    sum(c.milking.litres today) "L today"
+    "avg" round(avg(c.milking.litres)) faint
+form milking, "Log milking"
+form cow, "Add cow"
+===
+@create style=detailed domain=b1_rent_flats
+i own 4 flats and collect rent monthly. for each flat I want to see this month's paid versus agreed rent and whether it is pending, and be able to go to last month
+---
+app "Rent Book" home slate
+table flat name text, rent money, tenant text?
+table rentpay flat ref flat, amount money
+state m date = today
+monthnav m
+"Collected" sum(rentpay.amount month of m) "of" sum(flat.rent) big
+each flat sort name as f
+  let paid = sum(f.rentpay.amount month of m)
+  let left = f.rent - paid
+  row card tap edit f
+    stack grow
+      f.name bold
+      f.tenant faint
+    stack align end
+      text paid "of" f.rent
+      if(left > 0, "pending", "paid") color if(left > 0, bad, good)
+form flat, "Add flat"
+form rentpay, "Record rent"
+===
+@create style=vague domain=b1_committee_pot
+our mohalla committee, monthly installment, whose turn it is to get the pot
+---
+app "Committee" users plum
+table member name text, slot num 1..40
+table deposit member ref member, amount money
+setting installment money = 5000 "Monthly installment"
+state turn_no num = 1
+let pot = installment * count(member)
+let receiver = nth(member sort slot, turn_no).name
+"Pot this month" pot big
+goal sum(deposit.amount month), pot, "collected this month"
+"Receives:" receiver head
+row gap 1
+  button "<" tap set turn_no = max(turn_no - 1, 1)
+  button ">" tap set turn_no = turn_no + 1
+each member sort slot as m
+  row card
+    m.slot bold
+    m.name grow
+    sum(m.deposit.amount month) "paid" color if(sum(m.deposit.amount month) >= installment, good, warn)
+form member, "Add member"
+form deposit, "Record deposit"
+===
+@create style=typos domain=b1_poultry_batch
+poltry farm chiks batches, how many died each day and eggs colected, show total mortality per batch
+---
+app "Poultry" egg plum
+table batch name text, chicks num 1..20000, started date = today
+table loss batch ref batch, birds num 1..500, cause pick Disease|Heat|Predator|Unknown = Unknown
+table eggs batch ref batch, count num 0..20000
+each batch as b
+  let dead = sum(b.loss.birds)
+  stack card gap 1 tap edit b
+    b.name bold
+    row gap 2
+      text "Alive" b.chicks - dead big
+      text "Lost" dead "(" round(dead * 100 / b.chicks) "%)" color if(dead * 100 / b.chicks > 5, bad, ink)
+    "Eggs this week" sum(b.eggs.count week) faint
+daybars last 7 days, sum(eggs.count on it)
+form loss, "Log deaths"
+form eggs, "Log eggs"
+form batch, "New batch"
+===
+@create style=short domain=b1_tea_stall
+chai stall daily takings
+---
+app "Chai Stall" cup slate
+table sale item pick Chai|Biscuit|Samosa|Cold_drink = Chai, qty num 1..100 = 1, price money = 30
+let takings = sum(sale, it.qty * it.price)
+"Today" takings big
+quick sale, item, [Chai, Biscuit]
+form sale
+daybars last 7 days, sum(sale.price on it)
+list sale by day
+===
+@create style=custom_ui domain=b1_tailor_orders
+tailor shop: customers and their suit orders, each order has a status (cutting, stitching, ready, delivered) and a delivery date. ready ones should show green, and show how much is left to collect after advances
+---
+app "Tailor Orders" tag plum
+table client name text, phone text?
+table job client ref client, kind pick Shalwar_kameez|Waistcoat|Coat|Kurta = Shalwar_kameez, state_of pick Cutting|Stitching|Ready|Delivered = Cutting, due date, price money, advance money = 0
+let to_collect = sum(job, it.price - it.advance)
+"Left to collect" sum(job where state_of != Delivered, it.price - it.advance) big
+"Ready now" count(job where state_of = Ready) head color good
+each job where state_of != Delivered sort due as j
+  row card tap edit j fill if(j.state_of = Ready, good, surface)
+    stack grow
+      text j.client.name bold
+      j.kind faint
+    j.due
+    choice j.state_of
+form job, "New order"
+form client, "New client"
+===
+@create style=multi_feature domain=b1_crop_fields
+wheat and rice fields. each field has an acre size. I add expenses (seed, diesel, labour, fertilizer) against a field and later the sale of the crop. want profit per field and per acre
+---
+app "Farm Accounts" leaf mint
+table plot name text, acres num 0.5..500
+table expense plot ref plot, cost money, kind pick Seed|Diesel|Labour|Fertilizer|Spray = Seed
+table harvest plot ref plot, income money, maunds num 0..100000
+each plot sort name as p
+  let spent = sum(p.expense.cost)
+  let earned = sum(p.harvest.income)
+  stack card gap 1 tap edit p
+    row
+      p.name bold grow
+      p.acres "acres" faint
+    row gap 2
+      text "Spent" spent
+      text "Sold" earned
+      text "Profit" earned - spent bold color if(earned - spent >= 0, good, bad)
+    "Per acre" round((earned - spent) / p.acres) faint
+bars plot, sum(it.harvest.income) - sum(it.expense.cost), it.name
+form expense, "Add expense"
+form harvest, "Add sale"
+form plot, "Add field"
+===
+@create style=detailed domain=b1_lender_loans
+I lend small amounts to neighbours. for each borrower show how much I gave in total, what came back, and what is still pending. highlight those pending more than 20000
+---
+app "Lending" coin ink
+table borrower name text, phone text?
+table lent borrower ref borrower, amount money, note text?
+table repaid borrower ref borrower, amount money
+let pending = sum(lent.amount) - sum(repaid.amount)
+"Pending in the market" pending big
+each borrower sort name as b
+  let left = sum(b.lent.amount) - sum(b.repaid.amount)
+  row card tap edit b
+    b.name bold grow
+    text "gave" sum(b.lent.amount) faint
+    text "back" sum(b.repaid.amount) faint
+    left bold color if(left > 20000, bad, ink)
+form lent, "Gave money"
+form repaid, "Got money back"
+form borrower, "New borrower"
+===
+@create style=vague domain=b1_goat_herd
+goats weights and vaccination
+---
+app "Goat Herd" paw mint
+table goat tag text, sex pick Doe|Buck|Kid = Doe
+table weighing goat ref goat, kg num 1..120
+table vaccine goat ref goat, name text
+each goat sort tag as g
+  row card tap edit g
+    g.tag bold
+    g.sex faint grow
+    last(g.weighing.kg) "kg"
+    if due(g.vaccine, 180)
+      "vaccine due" color warn
+form goat, "Add goat"
+form weighing, "Weigh"
+form vaccine, "Vaccinate"
+===
+@create style=custom_ui domain=b1_cash_envelopes
+three envelopes of cash: rent, school fees and groceries, each has a target amount and I put money in or take out, show a bar for each envelope
+---
+app "Envelopes" wallet mint
+table envelope name text, target money
+table move envelope ref envelope, amount money, kind pick Put_in|Take_out = Put_in
+each envelope as e
+  let held = sum(e.move.amount where kind = Put_in) - sum(e.move.amount where kind = Take_out)
+  stack card gap 1 tap edit e
+    row
+      e.name bold grow
+      held "of" e.target
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(held / e.target, 0, 1), 4 fill accent radius 2
+form move, "Put in or take out"
+form envelope, "New envelope"
+===
+@create style=multi_feature domain=b1_bakery_orders
+home bakery. customers order cakes and cookies for a date. show orders due today first, total income this month, and a chart of income per day last 2 weeks
+---
+app "Bakery" bread plum
+table buyer name text, phone text?
+table cake_order buyer ref buyer, what text, price money, due date, done bool
+"Due today" count(cake_order where due = today and done = no) head
+"This month" sum(cake_order.price month where done = yes) big
+daybars last 14 days, sum(cake_order.price on it where done = yes)
+each cake_order where done = no sort due as o
+  row card tap edit o
+    stack grow
+      o.what bold
+      text o.buyer.name faint
+    o.due
+    o.price bold
+    toggle o.done
+form cake_order, "New order"
+form buyer, "New customer"
+===
+@create style=typos domain=b1_wholesale_stok
+wholesaler stok: items with how many packs we have, price per pack, and each day I note packs sold. tell me which items are less than the minimum
+---
+app "Wholesale Stock" package slate
+table product name text, packs num 0.., minimum num 0.. = 10, rate money
+table sold product ref product, packs num 1..5000
+let short = count(product, it.packs <= it.minimum)
+short "items below minimum" head color if(short > 0, warn, good)
+each product sort packs as p
+  row card tap edit p
+    p.name bold grow color if(p.packs <= p.minimum, warn, ink)
+    text "left" p.packs - sum(p.sold.packs)
+    "sold today" sum(p.sold.packs today) faint
+"Stock worth" sum(product, it.packs * it.rate) faint
+form product
+form sold, "Sold packs"
+===
+@create style=short domain=b1_rickshaw_day
+rickshaw earnings and petrol each day
+---
+app "Rickshaw" car ink
+table fare amount money, note text?
+table fuel cost money, litres num 0.5..20
+let earned = sum(fare.amount today)
+let spent = sum(fuel.cost today)
+"Earned today" earned big
+"After petrol" earned - spent head color if(earned - spent >= 0, good, bad)
+quick fare, amount, [100, 200, 500]
+form fuel, "Petrol"
+daybars last 7 days, sum(fare.amount on it) - sum(fuel.cost on it)
+===
+@create style=detailed domain=b1_school_van
+I run a small school van. each child has a monthly fee. I mark who paid this month and see who is still left and the total I should get in total vs got
+---
+app "School Van" bus ocean
+table child name text, fee money, area text?
+table feepaid child ref child, amount money
+let expected = sum(child.fee)
+goal sum(feepaid.amount month), expected, "collected this month"
+"Not paid yet" count(child, sum(it.feepaid.amount month) < it.fee) head
+each child sort name as c
+  row card tap edit c
+    c.name bold grow
+    c.area faint
+    if sum(c.feepaid.amount month) >= c.fee
+      "paid" color good
+    else
+      text "owes" c.fee - sum(c.feepaid.amount month) color bad
+form child, "Add child"
+form feepaid, "Fee received"
+===
+@create style=vague domain=b1_mobile_load
+mobile load shop, easy load sold and profit
+---
+app "Load Shop" phone ocean
+table recharge network pick Jazz|Zong|Ufone|Telenor = Jazz, amount money, profit money
+let day_profit = sum(recharge.profit today)
+day_profit "profit today" big
+"Sold" sum(recharge.amount today) faint
+each options recharge.network
+  row
+    it grow
+    sum(recharge.amount today where network = it)
+form recharge
+list recharge by day
+===
+@create style=custom_ui domain=b1_fish_pond
+fish farm ponds: each pond gets feed bags daily, a chart of feed per day for pond I select, and the fish count. 
+---
+app "Fish Ponds" fish ocean
+table pond name text, fish num 0..
+table feeding pond ref pond, bags num 0.5..20
+state chosen text = ""
+each pond as p
+  row card tap set chosen = p.name fill if(chosen = p.name, accent, surface)
+    p.name bold grow
+    text p.fish "fish" faint
+    sum(p.feeding.bags week) "bags this week"
+daybars last 7 days, sum(feeding.bags on it where pond.name = chosen)
+form feeding, "Feed"
+form pond, "Add pond"
+===
+@create style=multi_feature domain=b1_vegetable_cart
+sabzi cart: i buy vegetables from mandi in the morning with a cost per kg, then sell kilos in the day. need profit per vegetable and the total profit today
+---
+app "Sabzi Cart" apple mint
+table veg name text
+table buy veg ref veg, kg num 0.5..500, cost money
+table sell veg ref veg, kg num 0.5..500, price money
+let profit_today = sum(sell, it.kg * it.price) - sum(buy.cost today)
+"Profit today" profit_today big color if(profit_today >= 0, good, bad)
+each veg sort name as v
+  row card tap edit v
+    v.name bold grow
+    text "bought" sum(v.buy.kg today) "kg" faint
+    text "sold" sum(v.sell.kg today) "kg" faint
+form buy, "Morning purchase"
+form sell, "Sale"
+form veg, "New vegetable"
+===
+@oos style=detailed domain=b1_shop_sms oos=messaging
+udhar khata for my shop and it should SMS each customer automatically when their balance crosses 5000
+---
+app "Udhar" wallet slate
+table customer name text, phone text?
+table udhar customer ref customer, amount money, kind pick Gave|Got = Gave
+each customer sort name as c
+  let bal = sum(c.udhar.amount where kind = Gave) - sum(c.udhar.amount where kind = Got)
+  row card tap edit c
+    c.name bold grow
+    bal bold color if(bal > 5000, bad, ink)
+form customer, "Add customer"
+form udhar, "Add entry"
+===
+@create style=typos domain=b1_buffalo_calving
+buffalo calving record, I note each service date and each birth, and for every animal I want to see how many calfs so far and when the next calving should be
+---
+app "Buffalo" paw mint
+table animal tag text, name text?
+table calving animal ref animal, born date, sex pick Male|Female = Female
+table served animal ref animal, bull text?
+each animal sort tag as a
+  row card tap edit a
+    a.tag bold
+    a.name faint grow
+    text count(a.calving) "calves"
+    if count(a.served) > 0
+      text "due" last(a.served.at) + 310
+form served, "Record service"
+form calving, "Record birth"
+form animal, "Add buffalo"
+===
+@edit style=plain domain=b1_shop_credit_due ref=b1_shop_credit
+also record a promised date for credit sales and tell me how many credit sales are past that date
+---
+~ item text? => item text?, promised date?
++after "Total owed to the shop" owed big :: "Credit sales past promised date" count(sale where kind = Credit and promised < today) faint
+===
+@edit style=plain domain=b1_dairy_rename ref=b1_dairy_cows
+rename morning to dawn
+---
+~ shift pick Morning|Evening = Morning => shift pick Dawn was Morning|Evening = Dawn
+===
+@edit style=plain domain=b1_rent_rename ref=b1_rent_flats
+call the rent column monthly rent
+---
+~ rent money => monthly_rent money was rent
+~ f.rent - paid => f.monthly_rent - paid
+~ paid "of" f.rent => paid "of" f.monthly_rent
+~ sum(flat.rent) => sum(flat.monthly_rent)
+===
+@edit style=plain domain=b1_committee_remind ref=b1_committee_pot
+remind everyone on the 5th of each month to pay
+---
++ remind "Committee installment due" monthly on 5 at 10:00
+===
+@edit style=plain domain=b1_tea_chart ref=b1_tea_stall
+show a chart of how much of each thing I sold today
+---
++ bars options sale.item, sum(sale.qty today where item = it), it
+===
+@edit style=plain domain=b1_tailor_note ref=b1_tailor_orders
+add a note box for measurements on every order
+---
+~ advance money = 0 => advance money = 0, measures long?
++after       j.kind faint ::       j.measures faint
+===
+@edit style=plain domain=b1_crop_season ref=b1_crop_fields
+add a season (Rabi or Kharif) to each expense and show only Rabi spending in a total line
+---
+~ kind pick Seed|Diesel|Labour|Fertilizer|Spray = Seed => kind pick Seed|Diesel|Labour|Fertilizer|Spray = Seed, season pick Rabi|Kharif = Rabi
++after bars plot, sum(it.harvest.income) - sum(it.expense.cost), it.name :: "Rabi spending" sum(expense.cost where season = Rabi) faint
+===
+@edit style=plain domain=b1_lender_limit ref=b1_lender_loans
+make the red limit a setting instead of 20000
+---
+~ let pending => setting limit money = 20000 "Red limit"\nlet pending
+~ left > 20000 => left > limit

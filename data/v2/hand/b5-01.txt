@@ -1,0 +1,313 @@
+@create style=detailed domain=b5_library_lend
+we run a tiny neighbourhood library out of a cupboard. need to know which books are out, who has them, and which are late. members borrow, bring back later
+---
+app "Cupboard Library" book mint
+table book title text, author text?
+table member name text
+table loan book ref book, member ref member, due date, returned bool
+let overdue = count(loan where returned = no and due < today)
+overdue "overdue" big color if(overdue > 0, bad, good)
+each book sort title as b
+  let out = count(b.loan where returned = no)
+  row card tap edit b
+    b.title bold grow
+    if(out > 0, "Out", "In shelf") color if(out > 0, warn, good)
+form loan, "Lend a book"
+form book, "Add book"
+form member, "Add member"
+===
+@edit style=plain domain=b5_library_lend_fine ref=b5_library_lend
+add a fine of so much per day late and show the total fines
+---
+~ let overdue => setting fine_per_day money = 10 "Fine per late day"\nlet overdue
++after overdue "overdue" big color if(overdue > 0, bad, good) :: "Fines owed" sum(loan, if(it.returned = no and it.due < today, (today - it.due) * fine_per_day, 0)) faint
+===
+@create style=short domain=b5_mosque_fund
+mosque roof fund, donors and what they gave, progress bar to 500000
+---
+app "Roof Fund" mosque mint
+table donor name text, phone text?
+table gift donor ref donor, amount money
+setting target money = 500000 "Fund target"
+goal sum(gift.amount), target, "raised so far"
+each donor sort name as d
+  row card tap edit d
+    d.name bold grow
+    sum(d.gift.amount) bold
+    count(d.gift) "gifts" faint
+form gift, "Record gift"
+form donor, "Add donor"
+===
+@create style=vague domain=b5_hostel_rooms
+hostel rooms and who sleeps where, rent paid or not
+---
+app "Hostel" bed slate
+table room number text, beds num 1..8 = 2
+table boarder name text, room ref room, rent money
+table rentpaid boarder ref boarder, amount money
+state m date = today
+monthnav m
+each room sort number as r
+  stack card gap 1
+    row
+      "Room" r.number bold grow
+      count(r.boarder) "of" r.beds faint color if(count(r.boarder) > r.beds, bad, ink)
+    each r.boarder as b
+      row
+        b.name grow
+        if(sum(b.rentpaid.amount month of m) >= b.rent, "paid", "due") color if(sum(b.rentpaid.amount month of m) >= b.rent, good, bad)
+form room, "Add room"
+form boarder, "Add boarder"
+form rentpaid, "Record rent"
+===
+@create style=detailed domain=b5_bee_hives
+I keep bees in about 12 boxes. each box has a name and I check them every couple weeks (strong, ok or weak) and take honey in kg. want to see which box gave most honey and the one I havent checked for 3 weeks
+---
+app "Bee Yard" bolt mint
+table hive name text, queen_year num? 2015..2035
+table inspection hive ref hive, strength pick Strong|Okay|Weak = Okay, note text?
+table harvest hive ref hive, kg num 0.1..60
+"Honey this year" sum(harvest.kg year) "kg" big
+bars hive sort name, sum(it.harvest.kg), it.name
+each hive sort name as h
+  row card tap edit h
+    h.name bold grow
+    last(h.inspection.strength) color if(last(h.inspection.strength) = Weak, bad, ink)
+    if(due(h.inspection, 21), "check now", plural(since(h.inspection), "day")) faint color if(due(h.inspection, 21), warn, muted)
+form inspection, "Log inspection"
+form harvest, "Log honey"
+form hive, "Add hive"
+===
+@create style=typos domain=b5_fish_tank
+fish tank log. i test the water ph and ammonia every few days, plus when i did water change. show a line of ph and warning if ammonia high
+---
+app "Tank Log" fish ocean
+table tank name text, litres num 5..2000
+table watertest tank ref tank, ph num 4..10, ammonia num 0..8 = 0
+table waterchange tank ref tank, percent num 5..100 = 25
+each tank as t
+  stack card gap 1
+    t.name head
+    "pH" last(t.watertest.ph) "| ammonia" last(t.watertest.ammonia) "ppm" color if(last(t.watertest.ammonia) > 0.5, bad, good)
+    "Water changed" plural(since(t.waterchange), "day") "ago" faint
+    trend t.watertest, it.ph
+form watertest, "Add test"
+form waterchange, "Water changed"
+form tank, "Add tank"
+===
+@edit style=plain domain=b5_fish_tank_alert ref=b5_fish_tank
+change warning limit of ammonia into a setting I can change, default 0.25
+---
+~ table tank name text, litres num 5..2000 => setting ammonia_limit num = 0.25 "Ammonia warning (ppm)"\ntable tank name text, litres num 5..2000
+~ last(t.watertest.ammonia) > 0.5 => last(t.watertest.ammonia) > ammonia_limit
+===
+@create style=custom_ui domain=b5_drone_batteries
+drone battery packs, each pack has a cycle count and every flight adds one. draw a battery icon for each pack filled by health = 100 minus cycles over 3 (min 0)
+---
+app "Drone Packs" bolt ink
+table pack label text, cells num 1..8 = 4
+table flight pack ref pack, minutes num 1..40
+each pack sort label as p
+  let health = max(100 - count(p.flight) / 3, 0)
+  row card tap edit p
+    draw 60, 30 width 60
+      rect 2, 6, 48, 20 stroke ink radius 3
+      rect 50, 12, 6, 8 fill ink
+      rect 4, 8, 44 * health / 100, 16 fill if(health < 30, bad, good) radius 2
+    stack grow gap 0
+      p.label bold
+      count(p.flight) "flights" round(sum(p.flight.minutes)) "min" faint
+    round(health) "%" bold
+form flight, "Log flight"
+form pack, "Add pack"
+===
+@create style=multi_feature domain=b5_band_gigs
+our band plays weddings and cafes. keep a list of gigs with fee, who in the band played, and what each member earns after we split equal. chart of money per month
+---
+app "Band Book" music plum
+table member name text, instrument text?
+table gig venue text, fee money, played date
+table share gig ref gig, member ref member
+let total = sum(gig.fee)
+total "earned in total" big
+daybars last 30 days, sum(gig.fee on it)
+each member sort name as m
+  let cut = sum(m.share, it.gig.fee / count(it.gig.share))
+  row card
+    m.name bold grow
+    count(m.share) "gigs" faint
+    round(cut) bold
+form gig, "Add gig"
+form share, "Who played"
+form member, "Add member"
+===
+@create style=short domain=b5_film_crew
+shoot days with crew and their day rate, total cost
+---
+app "Crew Sheet" star ink
+table crew name text, role text, rate money
+table callsheet crew ref crew, day date
+let cost(r crew) = r.rate * count(r.callsheet)
+"Crew cost" sum(crew, cost(it)) big
+each crew sort name as c
+  row card tap edit c
+    stack grow gap 0
+      c.name bold
+      c.role faint
+    count(c.callsheet) "days" faint
+    c.rate * count(c.callsheet) bold
+form callsheet, "Book a day"
+form crew, "Add crew"
+===
+@create style=detailed domain=b5_startup_runway
+tracking cash for our startup: money in and money out, how many months of runway left at last 3 months average burn. each expense belongs to a category
+---
+app "Runway" bag slate
+table category name text
+table cashin from_who text, amount money
+table cashout category ref category, amount money, what text?
+let burn = sum(cashout.amount last 3 months) / 3
+let cash = sum(cashin.amount) - sum(cashout.amount)
+cash "cash in bank" big
+"Runway" round(cash / burn) "months at" round(burn) "a month" head color if(cash / burn < 6, warn, good)
+each category sort name as c
+  row card
+    c.name grow
+    sum(c.cashout.amount last 3 months) faint
+form cashin, "Money in"
+form cashout, "Money out"
+form category, "Add category"
+===
+@create style=custom_ui domain=b5_exam_centre
+exam centre seating: halls with a number of seats, candidates assigned to a hall, a little block of squares per hall that fill up as I add candidates, tick off who is absent today
+---
+app "Exam Centre" school ocean
+table hall name text, seats num 1..120
+table candidate name text, roll num 1.., hall ref hall
+table absent candidate ref candidate
+each hall sort name as h
+  stack card gap 1
+    row
+      h.name bold grow
+      count(h.candidate) "of" h.seats faint color if(count(h.candidate) > h.seats, bad, muted)
+    grid 10 gap 1
+      each 1..h.seats as n
+        box height 10 radius 3 fill if(n <= count(h.candidate), accent, soft)
+    each h.candidate sort roll as c
+      row
+        c.roll c.name grow
+        toggle c.absent
+"Absent today" count(absent today) head
+form candidate, "Add candidate"
+form hall, "Add hall"
+===
+@create style=vague domain=b5_courier_hub
+parcels coming into our courier point, which rider takes which, delivered or not
+---
+app "Courier Point" package slate
+table rider name text, phone text?
+table parcel tracking text, city text, status pick Received|Out|Delivered|Returned = Received, rider ref rider
+each options parcel.status as st
+  stack card gap 1
+    row
+      st bold grow
+      count(parcel where status = st) big
+each rider sort name as r
+  row card tap edit r
+    r.name bold grow
+    count(r.parcel where status = Out) "out" faint
+    count(r.parcel where status = Delivered) "delivered" color good
+form parcel, "Receive parcel"
+form rider, "Add rider"
+===
+@create style=detailed domain=b5_lab_curves
+chemistry lab: several experiments, each with temperature readings over minutes. draw a chart per experiment with temperature on the y axis and minutes along the bottom, with gridlines
+---
+app "Lab Curves" tool ink
+table experiment title text, goal text?
+table reading experiment ref experiment, minute num 0..180, temp num -20..300
+each experiment sort title as e
+  stack card gap 1
+    e.title head
+    "Peak" max(e.reading.temp) "C after" count(e.reading) "readings" faint
+    plot 0..60, 0..100 axes gridlines
+      poly stroke accent thick 2
+        each e.reading sort minute
+          pt it.minute, it.temp
+form reading, "Add reading"
+form experiment, "New experiment"
+===
+@create style=multi_feature domain=b5_photo_jobs
+wedding photographer: clients, each shoot with fee and what stage it is in (booked, shot, editing, delivered), what the client paid so far, and how much is still pending overall
+---
+app "Studio Jobs" star plum
+table client name text, phone text?
+table shoot client ref client, day date, fee money, stage pick Booked|Shot|Editing|Delivered = Booked
+table paid client ref client, amount money
+let pending = sum(shoot.fee) - sum(paid.amount)
+"Pending money" pending big color if(pending > 0, warn, good)
+row gap 1
+  each options shoot.stage as st
+    stack grow align center
+      count(shoot where stage = st) bold
+      st tiny faint
+each client sort name as c
+  row card tap edit c
+    c.name bold grow
+    sum(c.shoot.fee) - sum(c.paid.amount) "due" color if(sum(c.shoot.fee) > sum(c.paid.amount), bad, good)
+form shoot, "Add shoot"
+form paid, "Record payment"
+form client, "Add client"
+===
+@create style=short domain=b5_quran_class
+quran class pupils and their daily lessons with a grade
+---
+app "Quran Class" book mint
+table pupil name text, para num 1..30 = 1
+table lesson pupil ref pupil, pages num 1..10 = 1, grade pick Good|Okay|Repeat = Good
+each pupil sort name as p
+  row card tap edit p
+    stack grow gap 0
+      p.name bold
+      "Para" p.para faint
+    count(p.lesson where grade = Repeat) "repeat" color warn
+    last(p.lesson.grade) bold
+form lesson, "Add lesson"
+form pupil, "Add pupil"
+===
+@create style=typos domain=b5_topup_shop
+mobile load shop. i sell jazz zong ufone telenor load, my commision is 2 percent. also note when i buy load balance for wallet so i know what is left in wallet
+---
+app "Load Shop" phone slate
+table topup operator pick Jazz|Zong|Ufone|Telenor = Jazz, amount money, number text?
+table walletload operator pick Jazz|Zong|Ufone|Telenor = Jazz, amount money
+setting commission num = 2 "Commission %"
+let wallet = sum(walletload.amount) - sum(topup.amount)
+"Wallet left" wallet big color if(wallet < 2000, warn, good)
+"Earned today" round(sum(topup.amount today) * commission / 100) bold
+each options topup.operator as op
+  row card
+    op bold grow
+    sum(topup.amount today where operator = op) faint
+form topup, "Sell load"
+form walletload, "Buy wallet load"
+list topup by day
+===
+@oos style=detailed domain=b5_topup_sms oos=messaging
+when I sell load to a customer send them an sms receipt automatically, and show how much I sold today per operator
+---
+app "Load Receipts" phone slate
+table topup operator pick Jazz|Zong|Ufone|Telenor = Jazz, amount money, number text?
+each options topup.operator as op
+  row card
+    op bold grow
+    sum(topup.amount today where operator = op)
+form topup, "Sell load"
+list topup by day
+===
+@edit style=plain domain=b5_courier_hub_cod ref=b5_courier_hub
+add cash on delivery amount to parcels and show how much cash each rider must hand over
+---
+~ status pick Received|Out|Delivered|Returned = Received, rider ref rider => status pick Received|Out|Delivered|Returned = Received, rider ref rider, cod money = 0
+~ count(r.parcel where status = Delivered) "delivered" color good => count(r.parcel where status = Delivered) "delivered" color good\n    sum(r.parcel.cod where status = Delivered) "cash" bold
+===

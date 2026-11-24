@@ -1,0 +1,326 @@
+@create style=short domain=b2_formula_scoops
+formula milk calculator, 30 ml per scoop, I type how many ml the baby needs
+---
+app "Formula" baby mint
+table bottle
+state ml num = 120
+field ml "Baby needs (ml)"
+let scoops = ml / 30
+"Add" fixed(scoops, 1) "scoops" big
+"to" round(ml) "ml of water" faint
+"Fed today" count(bottle today) faint
+button "Made a bottle" tap add bottle
+===
+@create style=detailed domain=b2_math_olympiad
+Math olympiad prep group: each student solves problems from topics (algebra, geometry, number theory, combinatorics). I log how many problems were solved on which topic and want a leaderboard plus each student's weakest topic.
+---
+app "Olympiad prep" brain plum
+table student name text
+table solved student ref student, topic pick Algebra|Geometry|Number_theory|Combinatorics = Algebra, count num 1..50
+each student sort sum(it.solved.count) desc as s
+  stack card gap 1
+    row
+      s.name bold grow
+      sum(s.solved.count) "solved" big
+    each options solved.topic as t
+      row gap 1
+        text t grow faint
+        sum(s.solved.count where topic = t) small
+form student, "Add student"
+form solved, "Log problems"
+===
+@create style=custom_ui domain=b2_bag_checklist
+morning school bag checklist for my son, different items for each day of the week, tick them as I pack, show a green message when everything is in
+---
+app "School bag" bag mint
+table item what text, day pick Mon|Tue|Wed|Thu|Fri = Mon
+table packed item ref item
+let todays = dayname(today)
+each item where day = todays sort at as i
+  row card
+    toggle i.packed
+    i.what grow
+if count(item where day = todays) > 0 and count(item, it.day = todays and count(it.packed today) = 0) = 0
+  "Bag is ready!" big color good
+form item, "Add item"
+===
+@create style=multi_feature domain=b2_teacher_notes
+teacher notes about each student with date, I want the latest note under the name and a warning for students I haven't written about in a month
+---
+app "Student notes" pen slate
+table student name text
+table note student ref student, text text
+each student sort name as s
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      if due(s.note, 30)
+        "No note in a month" color warn small
+    last(s.note.text) faint
+    count(s.note) "notes" tiny faint
+form student, "Add student"
+form note, "Add note"
+===
+@create style=vague domain=b2_lab_equipment
+science lab equipment lent to groups
+---
+app "Lab kit" tool ocean
+table groupname name text
+table issue groupname ref groupname, item text, broken bool, returned bool
+count(issue where returned = no) "items out" big
+each issue where returned = no sort at as i
+  row card
+    toggle i.returned
+    i.item bold grow
+    i.groupname.name faint
+    toggle i.broken
+form groupname, "Add group"
+form issue, "Issue item"
+===
+@create style=typos domain=b2_bike_service
+family bycycles, each one needs a service every 3 months, show the ones overdue
+---
+app "Bike service" bike mint
+table bike name text, owner text
+table service bike ref bike, note text?
+count(bike, due(it.service, 90)) "bikes overdue" big
+each bike as b
+  row card tap edit b
+    stack grow
+      b.name bold
+      b.owner faint
+    if due(b.service, 90)
+      "Overdue" color bad
+    else
+      90 - since(b.service) "days left" color muted
+    button "Serviced" tap add service bike = b
+form bike, "Add bike"
+===
+@create style=detailed domain=b2_academy_batches
+Cricket academy with a morning batch and an evening batch. Each student belongs to a batch and pays a monthly fee that depends on the batch. Show for every batch how many students, how much is due and how much I collected this month.
+---
+app "Academy" ball mint
+table batch name text, fee money
+table student name text, batch ref batch
+table payment student ref student, amount money
+each batch as b
+  stack card gap 1
+    row
+      b.name head grow
+      count(student where batch = b) "students" faint
+    "Due" count(student where batch = b) * b.fee faint
+    "Collected" sum(payment.amount month where student.batch = b) bold color good
+form batch, "Add batch"
+form student, "Add student"
+form payment, "Record payment"
+===
+@create style=multi_feature domain=b2_photo_bookings
+wedding photographer bookings: client, event date, package price, advance paid. show balance still due per booking and total balance, upcoming events first
+---
+app "Shoot bookings" gift plum
+table booking client text, day date, price money, advance money
+let balance = sum(booking, it.price - it.advance)
+"Balance to collect" balance big
+each booking where day >= today sort day as b
+  row card tap edit b swipe remove b
+    stack grow
+      b.client bold
+      b.day faint
+    text b.price - b.advance bold color warn
+form booking, "Add booking"
+===
+@create style=vague domain=b2_driving_lessons
+learners for my driving school
+---
+app "Driving school" car slate
+table learner name text, test date?
+table lesson learner ref learner, minutes num 15..180 = 60
+each learner sort name as l
+  row card tap edit l
+    stack grow
+      l.name bold
+      if l.test > today
+        "test in" l.test - today "days" faint
+    sum(l.lesson.minutes) / 60 "hours" bold
+form learner, "Add learner"
+form lesson, "Log lesson"
+===
+@create style=short domain=b2_madrasa_roll
+madrasa roll call, tap to mark absent
+---
+app "Madrasa roll" mosque mint
+table student name text
+table absent student ref student
+count(student) - count(absent today) "present" big
+grid 3 gap 1
+  each student sort name as s
+    stack radius 8 pad 1 fill if(count(s.absent today) > 0, bad, good) tap toggle s.absent today
+      s.name small bold align center color bg
+each student sort count(it.absent month) desc top 3 as s
+  row
+    s.name grow
+    count(s.absent month) "absent this month" faint
+form student, "Add student"
+===
+@create style=custom_ui domain=b2_vitamin_d
+did everyone take their vitamin today, a big tick button per person, and show how many days in a row each has done
+---
+app "Vitamins" pill mint
+table person name text
+table dose person ref person
+each person as p
+  row card
+    p.name bold grow
+    streak(p.dose) "days" faint
+    toggle p.dose
+count(dose today) "of" count(person) "done today" head
+form person, "Add person"
+===
+@create style=detailed domain=b2_pet_vaccine_course
+Puppies need shots at 6, 9 and 12 weeks and then yearly. I keep the puppy name and record each shot. Remind me when the next one is due: 21 days after the last, until three shots are done.
+---
+app "Puppy shots" paw mint
+table puppy name text, owner text?
+table shot puppy ref puppy, label text
+each puppy sort name as p
+  stack card gap 1
+    row
+      p.name head grow
+      count(p.shot) "of 3 shots" bold
+    if count(p.shot) < 3
+      if due(p.shot, 21)
+        "Next shot is due now" color bad
+      else
+        "Next in" 21 - since(p.shot) "days" faint
+    else
+      "Course complete" color good
+    button "Gave a shot" tap add shot puppy = p, label = "Shot"
+form puppy, "Add puppy"
+===
+@create style=multi_feature domain=b2_pet_meds
+my cat is on two tablets daily, one in the morning and one at night, remind me at 8 and 8 pm, tick when given and show a streak
+---
+app "Cat meds" pill plum
+table tablet name text, slot pick Morning|Night = Morning
+table given tablet ref tablet
+remind "Cat tablets, morning" at 8:00
+remind "Cat tablets, night" at 20:00
+each tablet sort slot as t
+  row card
+    toggle t.given
+    stack grow
+      t.name bold
+      t.slot faint
+    streak(t.given) "days" faint
+form tablet, "Add tablet"
+===
+@create style=detailed domain=b2_cover_teachers
+When a teacher is absent another teacher covers the class. I note the date, the absent teacher and who covered. At the end of the month I want to see how many covers each teacher did.
+---
+app "Cover log" school ocean
+table teacher name text
+table cover day date, absent ref teacher, cover_by ref teacher
+"Covers this month" count(cover month) big
+each teacher sort name as t
+  row card
+    t.name bold grow
+    count(cover month where cover_by = t) "covered" bold
+    count(cover month where absent = t) "absent" faint
+form teacher, "Add teacher"
+form cover, "Log cover"
+===
+@create style=vague domain=b2_wound_photos
+photos of my healing wound
+---
+app "Healing" heart plum
+table photo pic image, note text?, pain num 0..10 = 0
+"Days since first photo" today - first(photo.at) big
+scroll
+  each photo sort at
+    stack gap 1
+      image it.pic
+      it.at faint
+trend photo, it.pain
+form photo
+===
+@create style=custom_ui domain=b2_night_wakings
+heat map of the nights my baby woke up, tap a button every time, count last night's wakings
+---
+app "Night wakings" moon plum
+table waking
+count(waking today) "wakings today" big
+button "She woke up" tap add waking
+"Last 8 weeks" head
+heat last 56 days, count(waking on it), 4
+"Average per night this week" fixed(count(waking week) / weekday(today), 1) faint
+===
+@create style=multi_feature domain=b2_revision_traffic
+exam revision planner: every topic gets red amber or green for how well I know it, tap chips to change it, count of each colour and the red topics listed first
+---
+app "Revision" school ocean
+table topic name text, subject text, confidence pick Red|Amber|Green = Red
+row gap 2
+  stat count(topic where confidence = Red), "red"
+  stat count(topic where confidence = Amber), "amber"
+  stat count(topic where confidence = Green), "green"
+each topic sort confidence as t
+  stack card gap 1
+    row
+      t.name bold grow
+      t.subject faint
+    choice t.confidence
+form topic, "Add topic"
+===
+@oos style=short domain=b2_oos_cloud_share oos=sync
+sync my kids' marks with the school portal and keep a list of tests
+---
+app "Test marks" school ocean
+table kid name text
+table test kid ref kid, subject text, marks num 0..100
+each kid as k
+  row card
+    k.name bold grow
+    round(avg(k.test.marks)) bold
+form kid, "Add kid"
+form test, "Add test"
+===
+@edit style=plain domain=b2_e_olympiad_top ref=b2_math_olympiad
+show only the top 3 students
+---
+~ each student sort sum(it.solved.count) desc as s => each student sort sum(it.solved.count) desc top 3 as s
+===
+@edit style=plain domain=b2_e_bag_extra ref=b2_bag_checklist
+add a category to items like Books or Sports kit
+---
+~ table item what text, day pick Mon|Tue|Wed|Thu|Fri = Mon => table item what text, kind pick Books|Sports_kit|Lunch|Other = Books, day pick Mon|Tue|Wed|Thu|Fri = Mon
+~ i.what grow => i.what i.kind faint grow
+===
+@edit style=plain domain=b2_e_notes_tag ref=b2_teacher_notes
+add a mood tag to notes: Positive, Neutral or Concern, and count the concerns
+---
+~ note student ref student, text text => note student ref student, text text, tone pick Positive|Neutral|Concern = Neutral
++ "Concerns" count(note where tone = Concern) color warn
+===
+@edit style=plain domain=b2_e_bike_gap ref=b2_bike_service
+every 6 months instead
+---
+~ due(it.service, 90) => due(it.service, 180)
+~ due(b.service, 90) => due(b.service, 180)
+~ 90 - since(b.service) => 180 - since(b.service)
+===
+@edit style=plain domain=b2_e_academy_discount ref=b2_academy_batches
+add a sibling discount tick to students
+---
+~ batch ref batch => batch ref batch, sibling bool
+~ "Due" count(student where batch = b) * b.fee faint => "Due" count(student where batch = b and sibling = no) * b.fee + count(student where batch = b and sibling = yes) * b.fee * 0.9 faint
+===
+@edit style=plain domain=b2_e_madrasa_streak ref=b2_madrasa_roll
+add a parent phone to each student
+---
+~ table student name text => table student name text, phone text?
+===
+@edit style=plain domain=b2_e_pup_extra ref=b2_pet_vaccine_course
+rename label to vaccine name
+---
+~ label text => vaccine text was label
+~ label = "Shot" => vaccine = "Shot"

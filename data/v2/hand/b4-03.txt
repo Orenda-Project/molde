@@ -1,0 +1,377 @@
+@create style=detailed domain=b4_butcher_counter
+halal meat shop: beef, mutton and chicken have different rates per kg that change every week. weigh and sell, show money per meat today, and a second tab for the rates and the week summary
+---
+app "Meat Shop" food slate
+table sale meat pick Beef|Mutton|Chicken = Beef, kg num 0.1..50, amount money
+setting beef_rate money = 1100 "Beef per kg"
+setting mutton_rate money = 2200 "Mutton per kg"
+setting chicken_rate money = 550 "Chicken per kg"
+state meat_pick pick Beef|Mutton|Chicken = Beef
+state weight num = 1
+let rate = if(meat_pick = Beef, beef_rate, if(meat_pick = Mutton, mutton_rate, chicken_rate))
+screen counter "Counter" food
+  choice meat_pick
+  field weight "Weight (kg)"
+  text "Price" round(rate * weight) big
+  button "Sell" tap add sale meat = meat_pick, kg = weight, amount = rate * weight
+  each options sale.meat as m
+    row card
+      m bold grow
+      sum(sale.kg today where meat = m) "kg"
+      sum(sale.amount today where meat = m) bold
+screen week "Week" chart
+  "This week" sum(sale.amount week) big
+  daybars last 7 days, sum(sale.amount on it)
+  field beef_rate
+  field mutton_rate
+  field chicken_rate
+===
+@edit style=plain domain=b4_butcher_bone ref=b4_butcher_counter
+add a bone and fat waste weight to each sale so i can see waste percent for the week
+---
+~ kg num 0.1..50, amount money => kg num 0.1..50, amount money, waste_kg num 0..20 = 0
++after   "This week" sum(sale.amount week) big ::   "Waste" round(100 * sum(sale.waste_kg week) / sum(sale.kg week)) "% of weight" faint
+===
+@create style=custom_ui domain=b4_juice_corner
+juice stall with two screens: one with big flavour buttons that add a glass (small or large), and one to see sales per flavour this week with bars
+---
+app "Juice Corner" cup mint
+table glass flavour pick Mango|Orange|Sugarcane|Banana|Mixed = Mango, size pick Small|Large = Small
+setting small_price money = 80 "Small glass"
+setting large_price money = 140 "Large glass"
+state big_size pick Small|Large = Small
+screen sell "Sell" cup
+  choice big_size
+  grid 2 gap 1
+    each options glass.flavour as f
+      stack card middle gap 1 tap add glass flavour = f, size = big_size
+        f head align center
+        text count(glass today where flavour = f) faint align center
+  "Today" sum(glass today, if(it.size = Small, small_price, large_price)) big
+screen stats "Week" chart
+  share glass week by flavour, count(it), it.key
+  daybars last 7 days, count(glass on it)
+===
+@create style=multi_feature domain=b4_biryani_pots
+roadside biryani. every morning i cook some pots, each pot gives about 40 plates. during the day plates sold are tapped, at night the app tells me leftover plates and the cash vs cost. cost of a pot is 9000
+---
+app "Biryani Pots" food mint
+table pot count num 1..10
+table plate qty num 1..10 = 1
+setting plates_per_pot num = 40 "Plates per pot"
+setting pot_cost money = 9000 "Cost of one pot"
+setting plate_price money = 350 "Plate price"
+let cooked = sum(pot.count today) * plates_per_pot
+let sold = sum(plate.qty today)
+goal sold, cooked, "plates sold today"
+text "Left" cooked - sold big color if(cooked - sold < 0, bad, ink)
+text "Profit" sold * plate_price - sum(pot.count today) * pot_cost head color if(sold * plate_price >= sum(pot.count today) * pot_cost, good, bad)
+button "Plate sold" tap add plate qty = 1
+button "Another pot" tap add pot count = 1
+===
+@create style=short domain=b4_kitchen_timers
+rice dal chicken timers
+---
+app "Kitchen Timers" timer ocean
+timer 15m, "Rice", notify "Rice is ready"
+timer 40m, "Dal", notify "Dal is ready"
+timer 25m, "Chicken", notify "Check the chicken"
+===
+@edit style=plain domain=b4_timers_egg ref=b4_kitchen_timers
+add an egg boil timer for 9 minutes
+---
++ timer 9m, "Eggs", notify "Eggs are done"
+===
+@create style=detailed domain=b4_ramadan_times
+for ramadan remind me for sehri at 4:15 and iftar at 18:40, plus every day tap a button when I fasted, and show the count out of 30
+---
+app "Ramadan" moon plum
+table fast
+remind "Wake up for sehri" at 4:15
+remind "Iftar time is near" at 18:40
+toggle fast
+"Fasts kept" count(fast month) "of 30" big
+goal count(fast month), 30, "fasts kept this month"
+calendar fast
+===
+@create style=multi_feature domain=b4_parent_pills
+my mother takes 4 medicines at different times and my father 2. i want each person's list, a tick when taken today, a reminder at each time, and how many doses were missed yesterday
+---
+app "Parents Meds" pill plum
+table person name text
+table dose person ref person, med text, at_time time
+table taken dose ref dose
+remind "Time for medicine" at dose.at_time
+let missed = count(dose, count(it.taken yesterday) = 0)
+"Missed yesterday" missed head color if(missed > 0, warn, good)
+each person sort name as p
+  stack card gap 1
+    p.name head
+    each p.dose sort at_time as d
+      row
+        d.at_time bold
+        d.med grow
+        toggle d.taken
+form dose, "Add medicine"
+form person, "Add person"
+===
+@edit style=plain domain=b4_parent_pills_edit ref=b4_parent_pills
+add a column for the strength like 500mg in each medicine
+---
+~ med text, at_time time => med text, strength text?, at_time time
+~ d.med grow => d.med d.strength grow
+===
+@create style=vague domain=b4_bp_log
+dad's blood pressure morning and evening
+---
+app "BP Log" heart ocean
+table reading top num 70..260, bottom num 40..160, when_of pick Morning|Evening = Morning
+setting high_top num = 140 "Top number is high above"
+let last_top = last(reading.top)
+text last_top "/" last(reading.bottom) big color if(last_top > high_top, bad, good)
+text "Average this week" round(avg(reading.top week)) "/" round(avg(reading.bottom week)) faint
+trend reading last 14 days sort at, it.top
+form reading, "Add reading"
+list reading by day
+===
+@create style=detailed domain=b4_sugar_readings
+i am diabetic and test sugar before breakfast and 2 hours after meals. each test has the number and which time of day. show the average per time of day and warn me when last one is over 180
+---
+app "Sugar" drop plum
+table test mgdl num 30..600, moment pick Fasting|After_meal|Bedtime = Fasting, note text?
+let latest = last(test.mgdl)
+text latest "mg/dl" big color if(latest > 180, bad, good)
+if latest > 180
+  "Last reading is high. Drink water and call your doctor if it stays high." color bad
+each options test.moment as m
+  row card
+    m bold grow
+    text "avg" round(avg(test.mgdl where moment = m)) faint
+    text "max" max(test.mgdl where moment = m)
+trend test last 20 days sort at, it.mgdl
+form test, "Add test"
+===
+@edit style=plain domain=b4_sugar_limit ref=b4_sugar_readings
+let me change the 180 warning level myself
+---
+~ table test mgdl num 30..600, moment => setting warn_level num 100..400 = 180 "Warn above"\ntable test mgdl num 30..600, moment
+~ if latest > 180 => if latest > warn_level
+~ color if(latest > 180, bad, good) => color if(latest > warn_level, bad, good)
+===
+@create style=custom_ui domain=b4_durood_ring
+durood counter, tap the big circle, 100 per round, show rounds done and total for the week
+---
+app "Durood" beads mint
+table count_log
+setting round_size num 10..1000 = 100 "Count per round"
+let n = count(count_log today)
+draw width 240 tap add count_log
+  circle 44 stroke soft thick 8
+  arc 44, 0, 360 * (n % round_size) / round_size stroke accent thick 8
+  label 50, 46, n % round_size big
+  label 50, 64, "Round" floor(n / round_size) + 1 faint
+text "Total this week" count(count_log week) head
+daybars last 7 days, count(count_log on it)
+===
+@create style=detailed domain=b4_mehndi_book
+mehndi artist, brides and guests book a date, each booking has hands only or full arms and the price. show the bookings of the month and the money still to collect
+---
+app "Mehndi Book" pen plum
+table booking client text, day date, design pick Hands|Full_arms|Bridal = Hands, price money, advance money = 0
+state m date = today
+monthnav m
+"Bookings" count(booking where month(day) = month(m)) head
+"Still to collect" sum(booking where month(day) = month(m), it.price - it.advance) big
+each booking where month(day) = month(m) sort day as b
+  row card tap edit b swipe remove b
+    b.day bold
+    stack grow
+      b.client
+      b.design faint
+    text b.price - b.advance "due" color if(b.price > b.advance, warn, good)
+form booking, "New booking"
+===
+@create style=typos domain=b4_dry_cleaner
+dry cleaning shop, customers drop clothes, i give a ticket, they pickup later. need list of ready ones and money for each ticket, with colours for how long its been sitting
+---
+app "Dry Cleaner" bag ocean
+table ticket number num 1..9999, customer text, items num 1..30, price money, status pick Dropped|Ready|Picked_up = Dropped
+let ready = count(ticket where status = Ready)
+ready "ready for pickup" head
+each ticket where status != Picked_up sort at as t
+  row card tap edit t
+    stack grow
+      text "#" t.number t.customer bold
+      text t.items "pieces," (today - t.at) "days ago" faint
+    text t.price bold
+    choice t.status fill if((today - t.at) > 7, warn, soft)
+form ticket, "New ticket"
+===
+@create style=multi_feature domain=b4_bus_conductor
+i am a conductor on a city bus. each trip has a route and a count of passengers at fixed fare, and some days there are student passes. show the day's collection and which route earns the most
+---
+app "Bus Conductor" bus slate
+table route name text
+table trip route ref route, passengers num 1..80, students num 0..80 = 0
+setting fare money = 40 "Fare"
+setting student_fare money = 20 "Student fare"
+let income = sum(trip, it.passengers * fare + it.students * student_fare)
+"Collection today" sum(trip today, it.passengers * fare + it.students * student_fare) big
+bars route, sum(it.trip, it.passengers * fare + it.students * student_fare), it.name
+each route sort name as r
+  row card tap edit r
+    r.name bold grow
+    text count(r.trip today) "trips"
+    text sum(r.trip.passengers) + sum(r.trip.students) "riders" faint
+form trip, "Add trip"
+form route, "Add route"
+===
+@edit style=plain domain=b4_bus_fuel ref=b4_bus_conductor
+add diesel cost per trip and show the profit for today
+---
+~ students num 0..80 = 0 => students num 0..80 = 0, diesel money = 0
++after "Collection today" sum(trip today, it.passengers * fare + it.students * student_fare) big :: "Profit today" sum(trip today, it.passengers * fare + it.students * student_fare - it.diesel) head
+===
+@create style=multi_feature domain=b4_ambulance_calls
+volunteer ambulance service log: each call has the area, how long it took us to reach the caller in minutes and seconds, and whether the patient went to hospital. show the average response time and calls per area
+---
+app "Ambulance" heart ocean
+table area name text
+table call area ref area, response dur, hospital bool
+text "Average response" avg(call.response) big
+text "Calls this month" count(call month) head
+each area sort name as a
+  row card tap edit a
+    a.name bold grow
+    text count(a.call) "calls"
+    text "avg" avg(a.call.response) faint
+text "Slowest" max(call.response) faint
+form call, "Log call"
+form area, "Add area"
+===
+@create style=detailed domain=b4_stall_fees
+a market committee collects stall rent from vendors each month, rent is different for each vendor, collected in cash. let me flip months and see who paid and who has not
+---
+app "Stall Rent" home slate
+table vendor name text, stall text, rent money
+table rentin vendor ref vendor, amount money
+state m date = today
+monthnav m
+"Collected" sum(rentin.amount month of m) "of" sum(vendor.rent) big
+each vendor sort stall as v
+  let paid = sum(v.rentin.amount month of m)
+  row card tap edit v
+    stack grow
+      v.name bold
+      v.stall faint
+    text if(paid >= v.rent, "Paid", "Due") color if(paid >= v.rent, good, bad)
+    text v.rent - paid faint
+form rentin, "Rent received"
+form vendor, "Add vendor"
+===
+@create style=multi_feature domain=b4_pledge_book
+for our fundraiser, donors promise an amount and pay in parts. i want each donor's pledge and what they have paid, total pledged vs received with a bar
+---
+app "Pledges" gift ocean
+table donor name text, pledge money
+table gift donor ref donor, amount money
+goal sum(gift.amount), sum(donor.pledge), "received of pledged"
+each donor sort name as d
+  let paid = sum(d.gift.amount)
+  row card tap edit d
+    d.name bold grow
+    text paid "of" d.pledge
+    text if(paid >= d.pledge, "Done", "Pending") color if(paid >= d.pledge, good, warn)
+form gift, "Money received"
+form donor, "Add pledge"
+===
+@edit style=plain domain=b4_pledge_pick ref=b4_pledge_book
+add a campaign for each donor like Flood or School and show total received per campaign
+---
+~ pledge money => pledge money, campaign pick Flood|School|Health|General = General
++ "By campaign" head
++ each options donor.campaign\n  row\n    text it grow\n    sum(donor.pledge where campaign = it)
+===
+@create style=short domain=b4_night_school
+evening school for workers, attendance of each student each day
+---
+app "Night School" school mint
+table student name text, level pick Beginner|Middle|Advanced = Beginner
+table present student ref student
+each student sort name as s
+  row card tap edit s
+    s.name bold grow
+    s.level faint
+    text count(s.present month) "days"
+    toggle s.present
+text "Present today" count(present today) "of" count(student) head
+form student, "Add student"
+===
+@create style=detailed domain=b4_compost_bins
+i keep 3 compost bins. i turn each bin every few days and check the temperature in degrees. show which bin needs turning (more than 4 days) and the last temperature
+---
+app "Compost" leaf mint
+table bin name text
+table turn bin ref bin, temp num? 10..80
+each bin sort name as b
+  row card tap edit b
+    stack grow
+      b.name bold
+      text "last temp" last(b.turn.temp) faint
+    if due(b.turn, 4)
+      text "Turn it" color warn
+    button "Turned" tap add turn bin = b
+form turn, "Log turn"
+form bin, "Add bin"
+===
+@create style=custom_ui domain=b4_kitchen_garden
+kitchen garden harvest by crop in kg, with a bar chart of kg per crop this season and a list of the last harvests
+---
+app "Harvest" plant mint
+table crop name text, planted date?
+table harvest crop ref crop, kg num 0.1..100
+bars crop sort name, sum(it.harvest.kg), it.name
+"Total" sum(harvest.kg) "kg" big
+each harvest top 5 as h
+  row card
+    h.crop.name grow
+    text h.kg "kg" bold
+form harvest, "Harvested"
+form crop, "New crop"
+===
+@create style=vague domain=b4_water_or_not
+should I water the garden today, depends on rain
+---
+app "Water Today" rain ocean
+table rainfall mm num 0..300
+table watered
+let rain2 = sum(rainfall.mm last 2 days)
+if rain2 >= 5
+  "No need. It rained" rain2 "mm" big color good
+else
+  "Water today" big color warn
+button "I watered" tap add watered
+"Last watered" since(watered) "days ago" faint
+form rainfall, "Rain in mm"
+===
+@oos style=detailed domain=b4_forecast_log oos=internet
+get tomorrow's weather forecast from the internet and note whether I irrigated my field each day, with the water hours
+---
+app "Irrigation" rain ocean
+table irrigate hours num 0.5..24
+text "This week" sum(irrigate.hours week) "hours" big
+daybars last 7 days, sum(irrigate.hours on it)
+form irrigate, "Irrigated"
+list irrigate by day
+===
+@oos style=custom_ui domain=b4_print_receipt oos=print
+print a receipt for every sale on a bluetooth printer. sales have item, qty and price and show the day total
+---
+app "Counter Sales" bag slate
+table sale item text, qty num 1..100 = 1, price money
+"Today" sum(sale today, it.qty * it.price) big
+each sale today as s
+  row card tap edit s swipe remove s
+    s.item grow
+    text s.qty "x" s.price
+form sale, "New sale"

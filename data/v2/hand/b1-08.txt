@@ -1,0 +1,328 @@
+@create style=detailed domain=b1_rusk_dispatch
+I supply rusks and cakes to 8 shops. every morning I dispatch packs, next day unsold packs come back. show for each shop packs dispatched, returned and net sold with money at a rate I set
+---
+app "Rusk Supply" bread ocean
+table shop name text, area text?
+table dispatch shop ref shop, packs num 1..500
+table returned shop ref shop, packs num 1..500
+setting pack_rate money = 90 "Rate per pack"
+each shop sort name as s
+  let net = sum(s.dispatch.packs month) - sum(s.returned.packs month)
+  row card tap edit s
+    s.name bold grow
+    text sum(s.dispatch.packs month) "out"
+    text sum(s.returned.packs month) "back"
+    text net * pack_rate bold
+"Net packs this month" sum(dispatch.packs month) - sum(returned.packs month) big
+form dispatch, "Dispatch"
+form returned, "Returned"
+form shop, "Add shop"
+===
+@create style=multi_feature domain=b1_newspaper_hawker
+newspaper hawker with about 60 homes, each home takes a paper and pays monthly. I tick the holiday when a home skipped and the bill is days delivered times the price of that paper
+---
+app "Hawker" note slate
+table homepaper name text, paper pick Dawn|Jang|Express|Business = Dawn, price money = 60
+table skipped homepaper ref homepaper
+table paidmonth homepaper ref homepaper, amount money
+state m date = today
+monthnav m
+each homepaper sort name as h
+  let days_taken = monthdays(m) - count(h.skipped month of m)
+  let bill = days_taken * h.price
+  row card tap edit h
+    stack grow
+      h.name bold
+      text h.paper faint
+    text days_taken "days"
+    bill bold color if(sum(h.paidmonth.amount month of m) >= bill, good, ink)
+    toggle h.skipped on m
+form paidmonth, "Paid"
+form homepaper, "Add home"
+===
+@create style=short domain=b1_motor_winding
+motor winding jobs with copper used
+---
+app "Winding" bolt ink
+table wjob customer text, hp num 0.25..100, copper_kg num 0.1..60, charge money
+"Jobs this month" count(wjob month) big
+text sum(wjob.copper_kg month) "kg copper used" faint
+"Earned" sum(wjob.charge month) head
+form wjob
+list wjob by day
+===
+@create style=detailed domain=b1_ro_plant
+RO water plant: 19 litre bottles go out to customers and empty bottles come back. each customer pays per bottle monthly. show bottles with each customer right now and the month bill
+---
+app "RO Plant" drop ocean
+table wcustomer name text, per_bottle money = 80, phone text?
+table bottle_out wcustomer ref wcustomer, count num 1..20
+table bottle_back wcustomer ref wcustomer, count num 1..20
+each wcustomer sort name as c
+  row card tap edit c
+    c.name bold grow
+    text sum(c.bottle_out.count) - sum(c.bottle_back.count) "bottles with them"
+    text sum(c.bottle_out.count month) * c.per_bottle bold
+"Bottles delivered today" sum(bottle_out.count today) big
+form bottle_out, "Delivered"
+form bottle_back, "Empties back"
+form wcustomer, "Add customer"
+===
+@create style=custom_ui domain=b1_borewell_driller
+borewell drilling: each job has the client, feet drilled and a rate per foot that changes with soil, pipe used in feet at its own price. show profit per job as drilling charge minus pipe cost
+---
+app "Borewell" drop slate
+table bwjob client text, feet num 10..1500, per_foot money, pipe_feet num 0..1500 = 0, pipe_cost_ft money = 0
+each bwjob sort at desc as j
+  let charge = j.feet * j.per_foot
+  let pipe = j.pipe_feet * j.pipe_cost_ft
+  stack card gap 1 tap edit j
+    row
+      j.client bold grow
+      text j.feet "ft"
+    text "Charge" charge "| Pipe" pipe faint
+    text "Profit" charge - pipe bold color if(charge >= pipe, good, bad)
+"Jobs this year" count(bwjob year) head
+form bwjob, "New job"
+===
+@create style=vague domain=b1_car_hire_days
+rent a car bookings
+---
+app "Car Hire" car ocean
+table hirecar plate text, per_day money
+table hire hirecar ref hirecar, client text, days num 1..60
+each hirecar sort plate as c
+  row card tap edit c
+    c.plate bold grow
+    text sum(c.hire.days month) "days this month"
+    text sum(c.hire.days month) * c.per_day bold
+"Income this month" sum(hire month, it.days * it.hirecar.per_day) big
+form hire, "New hire"
+form hirecar, "Add car"
+===
+@create style=detailed domain=b1_bid_committee
+our committee uses bidding: every month members bid and the lowest bidder takes the pot. I record who won each month and their bid. show each member's total paid in and received, and the month's pot
+---
+app "Bid Committee" users plum
+table bmember name text
+table bwin bmember ref bmember, bid money
+table bpay bmember ref bmember, amount money
+setting pot money = 100000 "Monthly pot"
+each bmember sort name as m
+  row card tap edit m
+    m.name bold grow
+    text "paid" sum(m.bpay.amount)
+    text "got" sum(m.bwin, pot - it.bid) bold
+"Months run" count(bwin) head
+"Total collected" sum(bpay.amount) big
+form bpay, "Installment paid"
+form bwin, "This month's winner"
+form bmember, "Add member"
+===
+@create style=multi_feature domain=b1_iftar_stall
+Ramadan iftar stall: samosa, pakora, jalebi, dahi baray. each has a cost to make and a selling price per plate. count plates made and sold each day, show profit and how many plates are left unsold
+---
+app "Iftar Stall" food mint
+table snack name text, cost money, price money
+table made snack ref snack, plates num 1..500
+table plate_sold snack ref snack, plates num 1..500
+each snack sort name as s
+  let left = sum(s.made.plates today) - sum(s.plate_sold.plates today)
+  row card tap edit s
+    s.name bold grow
+    text left "left" color if(left < 0, bad, ink)
+    text sum(s.plate_sold.plates today) * s.price - sum(s.made.plates today) * s.cost bold
+"Profit today" sum(plate_sold today, it.plates * it.snack.price) - sum(made today, it.plates * it.snack.cost) big
+form made, "Made plates"
+form plate_sold, "Sold plates"
+form snack, "Add item"
+===
+@create style=detailed domain=b1_fruit_mandi_agent
+I sit in the fruit mandi. growers send crates, I sell them in the auction and take 6 percent commission. for each grower show crates received, sale value, my commission and net payable
+---
+app "Mandi Agent" apple mint
+table fgrower name text
+table crates_in fgrower ref fgrower, crates num 1..2000
+table auction fgrower ref fgrower, amount money
+setting cut num = 6 "Commission %"
+each fgrower sort name as g
+  let sale = sum(g.auction.amount)
+  row card tap edit g
+    stack grow
+      g.name bold
+      text sum(g.crates_in.crates) "crates" faint
+    text "sale" sale
+    text "net" sale - sale * cut / 100 bold
+"My commission today" round(sum(auction.amount today) * cut / 100) big
+form crates_in, "Crates received"
+form auction, "Auction sale"
+form fgrower, "Add grower"
+===
+@create style=typos domain=b1_handloom_weavers
+handloom weavres are paid per meter woven, each weaver has own rate, i write meters done and cash advance, show what to pay
+---
+app "Weavers" tag plum
+table weaver name text, per_meter money
+table woven weaver ref weaver, meters num 1..200
+table weaver_adv weaver ref weaver, amount money
+each weaver sort name as w
+  let pay = sum(w.woven.meters) * w.per_meter - sum(w.weaver_adv.amount)
+  row card tap edit w
+    w.name bold grow
+    text sum(w.woven.meters) "m"
+    pay bold color if(pay < 0, bad, ink)
+form woven, "Meters woven"
+form weaver_adv, "Advance"
+form weaver, "Add weaver"
+===
+@create style=detailed domain=b1_plaza_shops
+I manage a small plaza with 10 shops. each shop has monthly rent, maintenance and electricity share. I record what each shop paid and show the pending total this month with the shop that owes most
+---
+app "Plaza" home slate
+table pshop name text, rent money, maintenance money = 0, electricity money = 0
+table pshop_pay pshop ref pshop, amount money
+state m date = today
+monthnav m
+each pshop sort name as s
+  let due_now = s.rent + s.maintenance + s.electricity
+  let left = due_now - sum(s.pshop_pay.amount month of m)
+  row card tap edit s
+    s.name bold grow
+    text "due" due_now
+    text left bold color if(left > 0, bad, good)
+"Pending" sum(pshop, it.rent + it.maintenance + it.electricity) - sum(pshop_pay.amount month of m) big
+form pshop_pay, "Payment"
+form pshop, "Add shop"
+===
+@create style=custom_ui domain=b1_fishing_boat
+fishing boat trips: each trip has the catch in kg, price per kg, ice and fuel costs. crew gets 40 percent of profit. show trip profit and the crew's share, and chart of catch over the trips
+---
+app "Fishing Trips" fish ocean
+table fishtrip catch num 10..5000, per_kg money, ice money, fuel money
+each fishtrip sort at desc top 8 as t
+  let profit = t.catch * t.per_kg - t.ice - t.fuel
+  row card tap edit t
+    t.at grow
+    text "profit" profit bold color if(profit >= 0, good, bad)
+    text "crew" round(profit * 0.4) faint
+trend fishtrip sort at, it.catch
+form fishtrip, "Trip"
+===
+@create style=short domain=b1_dry_clean_tags
+dry cleaning tickets pending pickup
+---
+app "Dry Clean" bag ink
+table ticket customer text, pieces num 1..40, price money, picked bool
+each ticket where picked = no sort at as t
+  row card tap edit t
+    t.customer bold grow
+    t.pieces "pcs"
+    t.price
+    toggle t.picked
+"Waiting pickup" count(ticket where picked = no) head
+"Due money" sum(ticket.price where picked = no) big
+form ticket
+===
+@create style=detailed domain=b1_hostel_beds
+I run a girls hostel with 20 beds. each bed holder has a monthly rent and a security deposit. I mark rent received each month, show empty beds and which girls are late
+---
+app "Hostel Beds" bed plum
+table resident name text, bed text, rent money, deposit money = 0
+table rent_in resident ref resident, amount money
+let occupied = count(resident)
+"Occupied" occupied "of 20 beds" big
+"Empty" 20 - occupied head
+each resident sort bed as r
+  row card tap edit r
+    r.bed bold
+    r.name grow
+    if sum(r.rent_in.amount month) >= r.rent
+      "paid" color good
+    else
+      text "late" r.rent - sum(r.rent_in.amount month) color bad
+form rent_in, "Rent received"
+form resident, "New resident"
+===
+@oos style=detailed domain=b1_qr_collect oos=camera
+shop customers pay by showing qr code and I want to scan their qr with camera to record the payment. keep a list of payments with amount and customer name and daily total
+---
+app "Payments" money mint
+table pay customer text, amount money
+"Today" sum(pay.amount today) big
+form pay, "Record payment"
+list pay by day
+===
+@oos style=typos domain=b1_bank_sync oos=sync
+i want my shop sales to backup and sync with my bank account app automaticly and show daily sales
+---
+app "Daily Sales" wallet slate
+table dsale amount money, note text?
+"Today" sum(dsale.amount today) big
+daybars last 7 days, sum(dsale.amount on it)
+form dsale
+===
+@edit style=plain domain=b1_rusk_chart ref=b1_rusk_dispatch
+show a chart of packs dispatched per day this week
+---
++ daybars last 7 days, sum(dispatch.packs on it)
+===
+@edit style=plain domain=b1_hawker_rename_paper ref=b1_newspaper_hawker
+rename Business to Business_Recorder
+---
+~ Express|Business = Dawn => Express|Business_Recorder was Business = Dawn
+===
+@edit style=plain domain=b1_hawker_second ref=b1_newspaper_hawker
+add an area to each home and count how many homes are in each area
+---
+~ table homepaper name text => table homepaper name text, area text?
++ "Homes served" count(homepaper) faint
+===
+@edit style=plain domain=b1_winding_priority ref=b1_motor_winding
+add a status of Waiting or Done for each job and show waiting count
+---
+~ charge money => charge money, status pick Waiting|Done = Waiting
++after "Jobs this month" count(wjob month) big :: "Waiting" count(wjob where status = Waiting) head
+===
+@edit style=plain domain=b1_ro_limit ref=b1_ro_plant
+make the price per bottle 70 for new customers
+---
+~ per_bottle money = 80 => per_bottle money = 70
+===
+@edit style=plain domain=b1_borewell_note ref=b1_borewell_driller
+add a note box for the soil type or water depth
+---
+~ pipe_cost_ft money = 0 => pipe_cost_ft money = 0, soil_note long?
++after     "Charge" charge "| Pipe" pipe faint ::     j.soil_note faint
+===
+@edit style=plain domain=b1_hire_setting ref=b1_car_hire_days
+add a damage deposit for each hire and show total deposits held
+---
+~ days num 1..60 => days num 1..60, deposit money = 0
++ "Deposits held" sum(hire.deposit month) faint
+===
+@edit style=plain domain=b1_iftar_weekly ref=b1_iftar_stall
+make profit show for this week not today
+---
+~ sum(plate_sold today, it.plates * it.snack.price) - sum(made today, it.plates * it.snack.cost) => sum(plate_sold week, it.plates * it.snack.price) - sum(made week, it.plates * it.snack.cost)
+~ "Profit today" => "Profit this week"
+===
+@edit style=plain domain=b1_mandi_cut_default ref=b1_fruit_mandi_agent
+make commission 5 percent
+---
+~ = 6 "Commission %" => = 5 "Commission %" set
+===
+@edit style=plain domain=b1_plaza_remind ref=b1_plaza_shops
+remind me on the 3rd of every month to chase rent
+---
++ remind "Chase plaza rent" monthly on 3 at 11:00
+===
+@edit style=plain domain=b1_fishing_chart_off ref=b1_fishing_boat
+remove the chart
+---
+- trend fishtrip sort at, it.catch
+===
+@edit style=plain domain=b1_ticket_phone ref=b1_dry_clean_tags
+add a phone number and show it small under the name
+---
+~ customer text, => customer text, phone text?,
+~ t.customer bold grow => stack grow\n      t.customer bold\n      t.phone faint

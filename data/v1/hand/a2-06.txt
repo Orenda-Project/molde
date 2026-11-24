@@ -1,0 +1,487 @@
+@create style=detailed domain=a2_compound_savings
+I want to see what happens if I save a fixed amount every month for some years at a yearly return. Let me change the amount, the percent and the years, and show the final amount with a bar for each year.
+---
+app "Growth" chart mint
+state pay money = 5000
+state rate num = 10
+state years num = 10
+field pay "Saving each month"
+"Yearly return %" rate faint
+slider rate 0..30
+"Years" years faint
+slider years 1..30
+let fv(y num) = if(rate = 0, pay * 12 * y, pay * (pow(1 + rate / 1200, 12 * y) - 1) / (rate / 1200))
+"After" years "years" faint
+compact(fv(years)) big
+"You put in" compact(pay * 12 * years) faint
+plot 0..years, 0..fv(years) axes
+  each 1..years
+    rect index + 0.15, 0, 0.7, fv(it) fill accent radius 2
+    tick index + 0.5, it
+===
+@create style=custom_ui domain=a2_card_draw
+flash cards where I press draw and it picks a random card, tap the card to see the other side
+---
+app "Quick cards" brain plum
+table card front text, back text
+state cur ref card
+state flip bool = no
+count(card) "cards" faint
+stack card gap 2 tap set flip = not flip
+  if flip
+    cur.back big
+  else
+    cur.front big
+button "Draw a card" tap set cur = random(card) then set flip = no
+form card, "New card"
+===
+@create style=multi_feature domain=a2_machine_service
+workshop machines, each with a service interval in days, a button when serviced, and a clear sign when service is due or how many days ago it was done
+---
+app "Machine service" tool slate
+table machine name text, every num 1..365 = 90 "Service every (days)"
+table service machine ref machine, note text?
+each machine sort name as m empty "Add your machines first"
+  row card gap 2 tap edit m
+    stack grow
+      m.name bold
+      "Last serviced" plural(since(m.service), "day") "ago" faint
+    if due(m.service, m.every)
+      button "Serviced" tap add service machine = m
+    else
+      "OK" color good
+form machine, "Add machine"
+===
+@create style=custom_ui domain=a2_marks_plot
+a line chart of my exam marks with the 0 to 100 axis and grid lines, plus my average
+---
+app "My marks" chart ocean
+table exam subject text, score num 0..100
+plot 0..max(count(exam) - 1, 1), 0..100 axes gridlines
+  poly stroke accent thick 2
+    each exam sort at as e
+      pt index, e.score
+"Average" fixed(avg(exam.score), 1) big
+"Best" max(exam.score) faint
+form exam, "Add mark"
+list exam
+===
+@create style=custom_ui domain=a2_sales_plot
+shop sales for the last 7 days as bars with the day names under them and lines behind, and the week's total as a short number like 81.5k
+---
+app "Weekly sales" chart slate
+table sale amount money
+"This week" compact(sum(sale.amount week)) big
+plot 0..7, 0..max(maxof(days last 7 days, sum(sale.amount on it)), 1) axes gridlines
+  each days last 7 days
+    rect index + 0.15, 0, 0.7, sum(sale.amount on it) fill accent radius 2
+    tick index + 0.5, dayname(it)
+quick sale, amount, [100, 500, 1000]
+form sale
+===
+@create style=multi_feature domain=a2_emi_calc
+loan EMI calculator with the real compound interest formula: loan amount, yearly interest percent, months with a slider, shows the monthly instalment, total paid and total interest
+---
+app "EMI" calc ocean
+state loan money = 0
+state rate num = 12
+state months num = 24
+field loan "Loan amount"
+field rate "Yearly interest %"
+"Months" months faint
+slider months 6..120
+let r = rate / 1200
+let emi = if(r = 0, loan / max(months, 1), loan * r * pow(1 + r, months) / (pow(1 + r, months) - 1))
+"Monthly instalment" round(emi) big
+"Total paid" grouped(round(emi * months)) faint
+"Interest" grouped(round(emi * months - loan)) faint
+===
+@create style=typos domain=a2_tea_counter
+chai counter big button for one cup sold it should say added for a second then go away and show cups today
+---
+app "Chai counter" cup ocean
+table sale amount money
+setting price money = 40 "Price of a cup"
+state msg text = ""
+count(sale today) "cups today" big
+"Money" sum(sale.amount today) faint
+button "One cup sold" tap add sale amount = price then set msg = "Added" then after 2s set msg = ""
+text msg color good
+daybars last 7 days, count(sale on it)
+===
+@create style=multi_feature domain=a2_class_quiz
+quiz for my class: I add questions with two answers and say which is right, then the quiz shows one question at a time with two buttons, keeps score and says finished at the end
+---
+app "Class quiz" school plum
+table q question text, a text, b text, right pick A|B = A
+state i num = 1
+state score num = 0
+if i > count(q)
+  "Finished" head
+  "Score" score "of" count(q) big
+  button "Start again" tap set i = 1 then set score = 0
+else
+  "Question" i "of" count(q) faint
+  let cq = nth(q sort at, i)
+  cq.question big
+  button cq.a tap set score = score + if(cq.right = A, 1, 0) then set i = i + 1
+  button cq.b tap set score = score + if(cq.right = B, 1, 0) then set i = i + 1
+form q, "Add question"
+===
+@create style=custom_ui domain=a2_shelf_map
+a map of my shelf as square tiles, one per product, green when plenty, orange when low and red when finished, tap a tile to change the count
+---
+app "Shelf map" box slate
+table product name text, qty num 0.., low num 0.. = 5
+grid 3 gap 1
+  each product sort name as p empty "No products yet"
+    stack ratio 1 radius 8 pad 1 middle fill if(p.qty = 0, bad, if(p.qty <= p.low, warn, good)) tap edit p
+      p.name bold align center
+      p.qty big align center
+form product, "Add product"
+===
+@create style=custom_ui domain=a2_door_counter
+event door counter, the whole screen is one big number and I tap anywhere to count a person in, with a count for adults, children and staff
+---
+app "Door count" users ink
+table entry kind pick Adult|Child|Staff = Adult
+stack full middle gap 2 tap add entry
+  count(entry today) big
+  "people in today" faint
+row gap 2
+  each options entry.kind as k
+    stack grow align center
+      count(entry today where kind = k) bold
+      text k size tiny color muted
+button "Undo last" tap remove last(entry today)
+===
+@create style=detailed domain=a2_property_deals
+I am a property dealer. I note each place and its price, tick when sold, and my commission is a percent I can change. Show sold value in short form and the commission I earned.
+---
+app "Property deals" home slate
+table deal place text, price money, sold bool
+setting commission num = 2 "Commission %"
+"Sold" compact(sum(deal.price where sold = yes)) big
+"My commission" grouped(round(sum(deal.price where sold = yes) * commission / 100)) bold
+each deal sort at desc as d empty "No deals yet"
+  row card gap 2 tap edit d swipe remove d
+    stack grow
+      d.place bold
+      compact(d.price) faint
+    toggle d.sold
+form deal, "Add deal"
+===
+@create style=short domain=a2_class_list
+class list with roll numbers
+---
+app "Class list" users ocean
+table kid roll num 1..99, name text, parent text?
+count(kid) "children" faint
+each kid sort roll as k empty "Add the first child"
+  row card gap 2 tap edit k swipe remove k
+    join(k.roll, ". ", k.name) bold grow
+    k.parent faint
+form kid, "Add child"
+===
+@create style=custom_ui domain=a2_year_expenses
+bars for each month of the year showing how much I spent, with short month names under them
+---
+app "Year expenses" calendar slate
+table spend amount money, note text?
+"This year" grouped(sum(spend.amount year)) big
+plot 0..12, 0..max(maxof(1..12, sum(spend.amount where month(at) = it and year(at) = year(today))), 1) axes
+  each 1..12 as mo
+    rect index + 0.15, 0, 0.7, sum(spend.amount where month(at) = mo and year(at) = year(today)) fill accent radius 2
+    tick index + 0.5, monthshort(addmonths(today, mo - month(today)))
+form spend
+===
+@create style=detailed domain=a2_dry_clean
+Dry cleaning shop tickets. Name, number of pieces, the date it will be ready, tick when the customer collected. It should say ready or in how many days.
+---
+app "Dry clean" box ocean
+table ticket name text, pieces num 1..40, ready date, collected bool
+each ticket where collected = no sort ready as t empty "No tickets waiting"
+  row card gap 2 tap edit t
+    toggle t.collected
+    stack grow
+      t.name bold
+      t.pieces "pieces" faint
+    if t.ready <= today
+      "Ready" color good
+    else
+      "in" plural(t.ready - today, "day") faint
+form ticket, "New ticket"
+===
+@create style=custom_ui domain=a2_salary_growth
+if my salary goes up by some percent every year what will it be for the next 5 years, I type my salary and the raise with a slider
+---
+app "Salary growth" money mint
+state salary money = 50000
+state raise num = 10
+field salary "Current salary"
+"Yearly raise %" raise faint
+slider raise 0..30
+each 1..5 as y
+  row
+    "In year" y grow
+    grouped(round(salary * pow(1 + raise / 100, y))) bold
+===
+@create style=short domain=a2_classes_today
+what classes do I have today
+---
+app "Today's classes" school ocean
+table period day pick Mon|Tue|Wed|Thu|Fri = Mon, slot num 1..8, subject text, room text?
+"Today is" dayname(today) head
+each period where day = dayname(today) sort slot as p empty "No classes today"
+  row card gap 2 tap edit p
+    p.slot bold
+    p.subject grow
+    p.room faint
+form period, "Add period"
+===
+@create style=multi_feature domain=a2_books_year
+reading goal for the year: books I finished, a ring against my goal, and bars of books finished in each month with short month names
+---
+app "Books this year" book plum
+table finished title text, author text?
+setting goal num = 24 "Books a year"
+ring count(finished year), goal, "books read"
+plot 0..12, 0..max(maxof(1..12, count(finished where month(at) = it and year(at) = year(today))), 1) axes
+  each 1..12 as mo
+    rect index + 0.15, 0, 0.7, count(finished where month(at) = mo and year(at) = year(today)) fill accent radius 2
+    tick index + 0.5, monthshort(addmonths(today, mo - month(today)))
+form finished, "Finished a book"
+===
+@create style=custom_ui domain=a2_time_plot
+line chart of the minutes I worked each of the last 7 days, with gridlines and day names
+---
+app "Time chart" clock ink
+table entry task text, mins num 1..600
+plot 0..6, 0..max(maxof(days last 7 days, sum(entry.mins on it)), 1) axes gridlines
+  poly stroke accent thick 2
+    each days last 7 days
+      pt index, sum(entry.mins on it)
+  each days last 7 days
+    tick index, dayname(it)
+form entry, "Add work"
+===
+@create style=custom_ui domain=a2_month_gauge
+half circle gauge of how much of my monthly budget I used, red when over
+---
+app "Month gauge" wallet mint
+table spend amount money
+setting budget money = 50000 "Monthly budget"
+let p = clamp(sum(spend.amount month) / budget, 0, 1)
+draw 100, 60 width 240
+  arc 50, 55, 40, -90, 90 stroke soft thick 10
+  arc 50, 55, 40, -90, -90 + 180 * p stroke if(sum(spend.amount month) > budget, bad, accent) thick 10
+  label 50, 50, round(p * 100) "%" big
+sum(spend.amount month) "of" budget faint
+form spend
+===
+@create style=short domain=a2_lucky_draw
+committee lucky draw picker
+---
+app "Lucky draw" dice plum
+table member name text
+state winner text = ""
+button "Draw the winner" tap set winner = "Drawing..." then after 2s set winner = random(member).name
+text winner big
+form member, "Add member"
+list member
+===
+@create style=multi_feature domain=a2_tuition_batches
+tuition academy with two tabs: batches with their time and how many students and the fees expected, and students with their batch and fee
+---
+app "Batches" school ocean
+table batch name text, time time
+table kid name text, batch ref batch, fee money
+screen batches "Batches" school
+  each batch sort time as b empty "No batches yet"
+    stack card gap 1 tap edit b
+      row
+        b.name bold grow
+        b.time faint
+      count(b.kid) "students" faint
+      "Monthly fees" sum(b.kid.fee) bold
+  form batch, "Add batch"
+screen kids "Students" users
+  each kid sort name as k empty "No students yet"
+    row card gap 2 tap edit k swipe remove k
+      k.name bold grow
+      k.batch.name faint
+      k.fee
+  form kid, "Add student"
+===
+@create style=multi_feature domain=a2_homework_tabs
+homework planner with three tabs: due soon (today or tomorrow), everything not done, and finished, each with a friendly message when empty
+---
+app "Homework plan" pencil mint
+table hw task text, subject text, due date, done bool
+screen soon "Due soon" alarm
+  each hw where done = no and due <= today + 1 sort due as h empty "Nothing due soon"
+    row card gap 2
+      toggle h.done
+      h.task bold grow
+      h.due faint
+screen all "All" list
+  each hw where done = no sort due as h empty "All caught up"
+    row card gap 2 tap edit h swipe remove h
+      toggle h.done
+      stack grow
+        h.task bold
+        h.subject faint
+      h.due
+  form hw, "Add homework"
+screen finished "Done" check
+  each hw where done = yes sort at desc as h empty "Nothing finished yet"
+    row card gap 2
+      toggle h.done
+      h.task grow faint
+===
+@create style=multi_feature domain=a2_freelance_hours
+freelance hours with two tabs: one to log hours for each client with plus one and plus two buttons, and one showing what each client should be billed this month from their hourly rate
+---
+app "Hours" clock ink
+table client name text, rate money
+table entry client ref client, hours num 0.. = 1
+screen log "Log" clock
+  each client sort name as c empty "Add a client first"
+    row card gap 2
+      c.name bold grow
+      sum(c.entry.hours week) "h this week" faint
+      button "+1 h" tap add entry client = c, hours = 1
+      button "+2 h" tap add entry client = c, hours = 2
+  form client, "Add client"
+  form entry, "Log hours"
+screen bill "Invoices" money
+  each client sort name as c
+    row card gap 2
+      stack grow
+        c.name bold
+        sum(c.entry.hours month) "h" faint
+      sum(c.entry.hours month) * c.rate bold
+  "Total to bill" sumof(client, sum(it.entry.hours month) * it.rate) big
+===
+@create style=vague domain=a2_language_daily
+I want to practise a language every day and not break the chain
+---
+app "Language streak" book mint
+table practice mins num 5..240 = 15, kind pick Words|Listening|Speaking|Reading = Words
+if due(practice, 1)
+  "No practice yet today" head color warn
+else
+  "Done for today" head color good
+"Streak" streak(practice) "days" big
+quick practice, mins, [10, 15, 30]
+heat last 70 days, sum(practice.mins on it), 30
+remind "Time for your language practice" at 19:00 if due(practice, 1)
+===
+@create style=detailed domain=a2_khata_chase
+Shop credit book. Each customer has what they owe from before, and payments they make. Warn me on anyone who still owes money and has not paid anything for 30 days.
+---
+app "Khata chase" wallet slate
+table customer name text, phone text?, owes money
+table pay customer ref customer, amount money
+each customer sort name as c empty "No customers yet"
+  let bal = c.owes - sum(c.pay.amount)
+  stack card gap 1 tap edit c
+    row
+      c.name bold grow
+      text bal bold
+    if bal > 0 and due(c.pay, 30)
+      "No payment for 30 days" size small color warn
+    button "Got payment" tap add pay customer = c, amount = 500
+form customer, "Add customer"
+form pay, "Record payment"
+===
+@create style=short domain=a2_interview_prep
+job interview question picker
+---
+app "Interview prep" bag ink
+table question prompt text, tag pick Behavioural|Technical|HR = Behavioural, note long?
+state cur ref question
+button "Ask me one" tap set cur = random(question)
+cur.prompt big
+cur.note faint
+form question, "Add question"
+list question
+===
+@create style=short domain=a2_fuel_economy
+fuel economy of my car
+---
+app "Fuel economy" car slate
+table fill litres num 1..80, km num 1..2000, cost money
+"km per litre" fixed(sum(fill.km) / max(sum(fill.litres), 1), 1) big
+"Cost per km" fixed(sum(fill.cost) / max(sum(fill.km), 1), 2) faint
+"Last fill was" plural(since(fill), "day") "ago" faint
+form fill, "Add fill"
+list fill
+===
+@create style=custom_ui domain=a2_target_pie
+a pie that fills up as I earn towards my monthly target as a freelancer
+---
+app "Monthly pie" coin plum
+table earn amount money, client text?
+setting target money = 120000 "Monthly target"
+let p = clamp(sum(earn.amount month) / target, 0, 1)
+draw 100, 100 width 200
+  circle 44 stroke soft thick 2
+  arc 44, 0, 360 * p fill accent
+  label 50, 50, round(p * 100) "%" big
+sum(earn.amount month) "of" target faint
+form earn, "Add income"
+log earn
+===
+@oos style=detailed domain=a2_oos_receipt_scan oos=camera
+Take a photo of each receipt with the camera and read the amount automatically, then show my spending by category for the month.
+---
+app "Receipts" wallet slate
+table spend amount money, category pick Food|Bills|Travel|Fun|Other = Food, note text?
+"This month" sum(spend.amount month) big
+share spend month by category, sum(it.amount), it.key
+form spend, "Add receipt"
+log spend
+===
+@edit style=plain domain=a2_e_door_volunteer ref=a2_door_counter
+call the staff group volunteers
+---
+~ Child|Staff = Adult => Child|Volunteer was Staff = Adult
+===
+@edit style=plain domain=a2_e_tea_price ref=a2_tea_counter
+rename the price setting to cup price
+---
+~ setting price money = 40 "Price of a cup" => setting cup_price money was price = 40 "Price of a cup"
+~ amount = price => amount = cup_price
+===
+@edit style=plain domain=a2_e_emi_remind ref=a2_emi_calc
+remind me on the 1st of every month to pay the instalment
+---
++ remind "Pay the instalment" monthly on 1 at 9:00
+===
+@edit style=plain domain=a2_e_growth_15 ref=a2_compound_savings
+start with 15 years
+---
+~ state years num = 10 => state years num = 15
+===
+@edit style=plain domain=a2_e_salary_8 ref=a2_salary_growth
+show eight years instead of five
+---
+~ each 1..5 as y => each 1..8 as y
+===
+@edit style=plain domain=a2_e_dryclean_phone ref=a2_dry_clean
+add the customer's phone number
+---
+~ name text, pieces => name text, phone text?, pieces
+===
+@edit style=plain domain=a2_e_roll_number ref=a2_class_list
+rename roll to number
+---
+~ table kid roll num 1..99 => table kid number num 1..99 was roll
+~ each kid sort roll as k => each kid sort number as k
+~ join(k.roll, => join(k.number,
+===
+@edit style=plain domain=a2_e_machine_60 ref=a2_machine_service
+service every 60 days by default
+---
+~ = 90 => = 60

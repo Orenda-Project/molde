@@ -1,0 +1,340 @@
+@create style=detailed domain=b4_food_waste
+hotel kitchen throws away too much food. log what was wasted with kg and reason (spoiled, overcooked, plate waste, expired) and the approx cost. show this month's waste by reason so the chef sees the biggest problem
+---
+app "Food Waste" food slate
+table waste item text, kg num 0.1..100, reason pick Spoiled|Overcooked|Plate_waste|Expired = Spoiled, cost money
+"Wasted this month" sum(waste.kg month) "kg" big
+"Cost" sum(waste.cost month) head color bad
+bars options waste.reason, sum(waste.kg month where reason = it), it
+each waste sort cost desc top 5 as w
+  row card tap edit w
+    w.item grow
+    text w.kg "kg"
+    text w.cost bold
+form waste, "Log waste"
+===
+@edit style=plain domain=b4_waste_shift ref=b4_food_waste
+add which shift it happened in, lunch or dinner, and show the cost of each shift
+---
+~ cost money => cost money, shift pick Lunch|Dinner = Lunch
++ "By shift" head
++ each options waste.shift\n  row\n    text it grow\n    sum(waste.cost month where shift = it)
+===
+@create style=short domain=b4_weekly_menu
+my tiffin menu for each weekday, show today's dish on top
+---
+app "Weekly Menu" food mint
+table menu day pick Mon|Tue|Wed|Thu|Fri|Sat = Mon, dish text, cost money?
+"Today" head
+each menu where day = dayname(today)
+  text it.dish big
+each options menu.day as d
+  stack card gap 1
+    d bold
+    each menu where day = d as m
+      row tap edit m
+        m.dish grow
+        m.cost faint
+form menu, "Add dish"
+===
+@create style=detailed domain=b4_spice_scale
+spice and dry fruit shop. sell by weight in grams but the price is per 100 grams for each item. each sale takes item and grams and the bill is calculated. also stock in grams per item
+---
+app "Spice Shop" bag mint
+table spice name text, per100 money, stock_g num 0..100000
+table sale_g spice ref spice, grams num 10..5000
+each spice sort name as s
+  let left = s.stock_g - sum(s.sale_g.grams)
+  row card tap edit s
+    stack grow
+      s.name bold
+      text left "g left" faint color if(left < 500, warn, ink)
+    text s.per100 "per 100g"
+    button "100g" tap add sale_g spice = s, grams = 100
+text "Sales today" sum(sale_g today, it.grams / 100 * it.spice.per100) big
+form sale_g, "Sale"
+form spice, "Add spice"
+===
+@edit style=plain domain=b4_spice_cost ref=b4_spice_scale
+i also want to know my profit so add what I paid per 100 grams
+---
+~ per100 money, stock_g => per100 money, cost100 money = 0, stock_g
+~ form sale_g, "Sale" => "Profit today" sum(sale_g today, it.grams / 100 * (it.spice.per100 - it.spice.cost100)) head\nform sale_g, "Sale"
+===
+@create style=custom_ui domain=b4_clinic_queue
+doctor's waiting room: patients take a token, the receptionist taps next to call the next number. show the number being served big and how many are waiting
+---
+app "Waiting Room" heart ocean
+table token patient text?
+state serving num = 0
+let issued = count(token today)
+text "Now serving" huge faint
+text serving huge big
+text issued - serving "waiting" head
+row gap 1
+  button "Next" fill good tap set serving = min(serving + 1, issued)
+  button "New token" tap add token
+  button "Reset" tap set serving = 0
+===
+@create style=multi_feature domain=b4_first_aid_kit
+first aid kits in our school buses and workshop. each kit has a location, items inside have a count and expiry date. list the items expired or expiring in 30 days
+---
+app "First Aid" heart ocean
+table kit place text
+table fa_item kit ref kit, name text, qty num 0..100, expires date
+text count(fa_item where expires <= today + 30) "items to replace" head color warn
+each kit sort place as k
+  stack card gap 1 tap edit k
+    k.place head
+    each k.fa_item sort expires as i
+      row
+        i.name grow
+        text i.qty
+        text i.expires color if(i.expires <= today, bad, if(i.expires <= today + 30, warn, muted))
+form fa_item, "Add item"
+form kit, "Add kit"
+===
+@create style=detailed domain=b4_peak_flow
+my son has asthma. morning and evening he blows into a peak flow meter, the number goes in. his personal best is 350. above 80 percent of it is green, 50 to 80 yellow, below 50 red. show the colour of the last reading and a line for the week
+---
+app "Peak Flow" heart ocean
+table blow pf num 50..800, moment pick Morning|Evening = Morning
+setting best num 100..800 = 350 "Personal best"
+let pct = 100 * last(blow.pf) / best
+text last(blow.pf) big color if(pct >= 80, good, if(pct >= 50, warn, bad))
+text round(pct) "% of best" faint
+text if(pct >= 80, "Green zone", if(pct >= 50, "Yellow zone: use the reliever", "Red zone: get help now")) head
+trend blow last 7 days sort at, it.pf
+form blow, "Add reading"
+===
+@edit style=plain domain=b4_peak_symptom ref=b4_peak_flow
+note if he coughed at night
+---
+~ moment pick Morning|Evening = Morning => moment pick Morning|Evening = Morning, night_cough bool
++ "Coughing nights this week" count(blow week where night_cough = yes) faint
+===
+@create style=short domain=b4_dua_journal
+duas I am asking for and which got answered
+---
+app "Dua Journal" mosque plum
+table dua what long, answered bool
+text count(dua where answered = yes) "answered of" count(dua) big
+each dua sort at desc as d
+  row card tap edit d swipe remove d
+    d.what grow
+    toggle d.answered
+form dua, "Add dua"
+===
+@create style=detailed domain=b4_fitrana
+sadqa fitr for our big joint family: people in each house, and the rate per person is set by the masjid every year. show what each house owes and mark when paid
+---
+app "Fitrana" gift mint
+table house name text, people num 1..30, paid bool
+setting rate money = 300 "Fitrana per person"
+each house sort name as h
+  row card tap edit h
+    stack grow
+      h.name bold
+      text h.people "people" faint
+    text h.people * rate
+    toggle h.paid
+text "Total due" sum(house, it.people * rate) big
+text "Still unpaid" sum(house.people where paid = no) * rate head color warn
+form house, "Add house"
+===
+@create style=multi_feature domain=b4_sunnah_checks
+a few sunnah habits like miswak, duha prayer, morning adhkar and fasting monday, tick each day. show streak of each and a week view with seven dots
+---
+app "Sunnah" mosque mint
+table sunnah name text
+table sdone sunnah ref sunnah
+each sunnah sort name as s
+  stack card gap 1 tap edit s swipe remove s
+    row
+      s.name bold grow
+      text streak(s.sdone) "days" faint
+      toggle s.sdone
+    row gap 1
+      each days last 7 days
+        box grow height 10 radius 5 fill if(count(s.sdone on it) > 0, accent, soft)
+form sunnah, "Add habit"
+===
+@create style=custom_ui domain=b4_nail_bar
+nail studio with 3 girls. choose the girl at top, then add services she did today with price. show her total and commission at 30 percent, and everyone's totals under it
+---
+app "Nail Bar" smile plum
+table girl name text
+table nservice girl ref girl, kind pick Manicure|Pedicure|Gel|Extension|Removal = Manicure, price money
+setting commission num 0..100 = 30 "Commission %"
+state who ref girl
+choice who
+each options nservice.kind as k
+  button k tap add nservice girl = who, kind = k, price = if(k = Manicure, 1500, if(k = Pedicure, 2000, if(k = Gel, 2500, if(k = Extension, 4000, 500))))
+each girl sort name as g
+  row card
+    g.name bold grow
+    text sum(g.nservice.price today)
+    text "share" sum(g.nservice.price today) * commission / 100 faint
+form girl, "Add girl"
+===
+@create style=detailed domain=b4_piece_rate_tailors
+garment factory with piece rate. each worker stitches shirts, trousers and kurtas with a different rate per piece: 40, 60, 55. each day I enter pieces by worker and type, show the weekly pay per worker
+---
+app "Piece Rate" pen slate
+table sworker name text
+table stitched sworker ref sworker, kind pick Shirt|Trouser|Kurta = Shirt, pieces num 1..300
+setting shirt_rate money = 40 "Shirt rate"
+setting trouser_rate money = 60 "Trouser rate"
+setting kurta_rate money = 55 "Kurta rate"
+let pay(w sworker) = sum(w.stitched.pieces week where kind = Shirt) * shirt_rate + sum(w.stitched.pieces week where kind = Trouser) * trouser_rate + sum(w.stitched.pieces week where kind = Kurta) * kurta_rate
+each sworker sort name as w
+  row card tap edit w
+    w.name bold grow
+    text sum(w.stitched.pieces week) "pieces"
+    text pay(w) bold
+text "Weekly payroll" sum(sworker, pay(it)) big
+form stitched, "Pieces done"
+form sworker, "Add worker"
+===
+@create style=multi_feature domain=b4_ev_rickshaw
+electric rickshaw charging log: each charge has units in kWh and cost, and I note the km reading. show cost per km and the money I spend on charging this month
+---
+app "EV Rickshaw" bolt ocean
+table charge kwh num 1..60, cost money, odo num 0..200000
+text "Charging this month" sum(charge.cost month) big
+text "Cost per km" fixed(sum(charge.cost) / (last(charge.odo) - first(charge.odo)), 2) head
+text "km per kWh" fixed((last(charge.odo) - first(charge.odo)) / sum(charge.kwh), 1) faint
+daybars last 14 days, sum(charge.cost on it)
+form charge, "Charged"
+===
+@create style=typos domain=b4_ferry_boat
+boat ferry tickts, adult 50 child 20, count by trip and total money, show which trip had most people
+---
+app "Ferry" plane ocean
+table ticket trip num 1..40, kind pick Adult|Child = Adult
+setting adult_fare money = 50 "Adult"
+setting child_fare money = 20 "Child"
+state cur_trip num = 1
+row gap 1
+  button "Trip -" tap set cur_trip = max(cur_trip - 1, 1)
+  text "Trip" cur_trip head grow align center
+  button "Trip +" tap set cur_trip = cur_trip + 1
+row gap 1
+  button "Adult" tap add ticket trip = cur_trip, kind = Adult
+  button "Child" tap add ticket trip = cur_trip, kind = Child
+text "This trip" count(ticket where trip = cur_trip) "people," count(ticket where trip = cur_trip and kind = Adult) * adult_fare + count(ticket where trip = cur_trip and kind = Child) * child_fare big
+text "Day total" count(ticket today where kind = Adult) * adult_fare + count(ticket today where kind = Child) * child_fare head
+===
+@create style=multi_feature domain=b4_awareness_sessions
+our NGO runs awareness sessions on hygiene, nutrition, and child marriage in villages. each session has the topic, village, number of women and men. show attendance per topic with bars
+---
+app "Awareness" users mint
+table village name text
+table session village ref village, topic pick Hygiene|Nutrition|Child_marriage|Health = Hygiene, women num 0..500, men num 0..500
+text "Sessions held" count(session) big
+text "People reached" sum(session.women) + sum(session.men) head
+bars options session.topic, sum(session.women where topic = it) + sum(session.men where topic = it), it
+each village sort name as v
+  row card tap edit v
+    v.name bold grow
+    text count(v.session) "sessions"
+form session, "Log session"
+form village, "Add village"
+===
+@edit style=plain domain=b4_awareness_chart ref=b4_awareness_sessions
+only show this year in the totals
+---
+~ "Sessions held" count(session) big => "Sessions held" count(session year) big
+~ sum(session.women) + sum(session.men) head => sum(session.women year) + sum(session.men year) head
+===
+@create style=detailed domain=b4_school_supplies
+school supplies campaign: for each item (notebooks, bags, shoes, pencils) we set how many we need, donors give some, and I show progress per item with a bar and what is still needed
+---
+app "Supplies Drive" school mint
+table supply name text, needed num 1..10000
+table pledge_s supply ref supply, donor text, qty num 1..2000
+each supply sort name as s
+  let got = sum(s.pledge_s.qty)
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      text got "of" s.needed
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(got / s.needed, 0, 1), 4 fill accent radius 2
+    text "Still needed" max(s.needed - got, 0) faint
+form pledge_s, "Donation"
+form supply, "Add item"
+===
+@create style=short domain=b4_canal_turns
+water turns from the canal for my fields, each has a weekday and minutes, show today's
+---
+app "Canal Turns" drop ocean
+table field_c name text, acres num 0.5..200
+table turn field_c ref field_c, weekday pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, minutes num 5..600, start time
+text "Today" head
+each turn where weekday = dayname(today) sort start as t
+  row card tap edit t
+    t.start bold
+    t.field_c.name grow
+    text t.minutes "min"
+text "Weekly minutes" sum(turn.minutes) faint
+form turn, "Add turn"
+form field_c, "Add field"
+===
+@edit style=plain domain=b4_canal_remind ref=b4_canal_turns
+remind me at the start time of each turn
+---
++ remind "Canal water turn" at turn.start
+===
+@create style=detailed domain=b4_lawn_service
+gardener with 15 houses: each has a monthly fee, i visit weekly to cut grass and trim. tick when visited this week, show fee collected and who has not been visited this week
+---
+app "Lawn Visits" leaf mint
+table home name text, fee money, street text?
+table gvisit home ref home
+table fee_got home ref home, amount money
+text "Houses left this week" count(home, count(it.gvisit week) = 0) head
+each home sort street as h
+  row card tap edit h
+    stack grow
+      h.name bold
+      h.street faint
+    text sum(h.fee_got.amount month) "of" h.fee color if(sum(h.fee_got.amount month) >= h.fee, good, ink)
+    toggle h.gvisit week
+form fee_got, "Fee received"
+form home, "Add house"
+===
+@create style=custom_ui domain=b4_what_to_wear
+what to wear for my kid's school, i type today's temperature and it tells jacket, sweater or light clothes. I set the cold limits
+---
+app "What to Wear" cloud ocean
+setting cold num -5..30 = 12 "Jacket below"
+setting cool num 0..35 = 20 "Sweater below"
+state temp num = 18
+field temp "Temperature today"
+slider temp -5..45
+text if(temp < cold, "Jacket and cap", if(temp < cool, "Sweater", "Light clothes")) huge big
+if temp > 35
+  "Send water bottle and a hat" color warn
+===
+@edit style=plain domain=b4_wear_rain ref=b4_what_to_wear
+add rain: a toggle that says take umbrella
+---
+~ state temp num = 18 => state temp num = 18\nstate rainy bool = no
++ toggle rainy
++ if rainy\n  "Take an umbrella" head color accent
+===
+@oos style=detailed domain=b4_group_broadcast oos=messaging
+send a whatsapp message to all our village volunteers about the next meeting and keep the list of volunteers with phone and area
+---
+app "Volunteers" users mint
+table vol name text, phone text, area text?
+text count(vol) "volunteers" big
+each vol sort name as v
+  row card tap edit v swipe remove v
+    stack grow
+      v.name bold
+      v.area faint
+    text v.phone
+form vol, "Add volunteer"

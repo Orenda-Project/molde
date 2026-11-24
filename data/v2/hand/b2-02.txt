@@ -1,0 +1,376 @@
+@create style=detailed domain=b2_running_shoes
+I run 5 days a week and I keep killing shoes. Log each run with km and which pair I wore, add up the km on each pair, and warn me when a pair passes 600 km.
+---
+app "Run log" run mint
+table shoe brand text, retire_at num 100..1500 = 600 "Retire at (km)"
+table run shoe ref shoe, km num 0.5..100, minutes num 1..600
+sum(run.km week) "km this week" big
+each shoe as s
+  stack card gap 1 tap edit s
+    row
+      s.brand bold grow
+      sum(s.run.km) "km" bold color if(sum(s.run.km) >= s.retire_at, bad, ink)
+    if sum(s.run.km) >= s.retire_at
+      "Time for new shoes" color bad small
+    "Average pace" round(sum(s.run.minutes) / max(sum(s.run.km), 1)) "min per km" faint
+form shoe, "Add shoes"
+form run, "Log run"
+===
+@create style=custom_ui domain=b2_kabaddi_board
+kabaddi scoreboard, two teams, big plus buttons for a raid point and a tackle point, reset at the end of the match
+---
+app "Kabaddi" game ink
+state home num = 0
+state away num = 0
+row gap 2
+  stack grow align center
+    "Home" faint
+    text home big
+    button "Raid +1" tap set home = home + 1
+    button "Tackle +2" tap set home = home + 2
+  stack grow align center
+    "Away" faint
+    text away big
+    button "Raid +1" tap set away = away + 1
+    button "Tackle +2" tap set away = away + 2
+if home != away
+  if(home > away, "Home leads by", "Away leads by") abs(home - away) head
+button "New match" fill bad tap set home = 0 then set away = 0
+===
+@create style=multi_feature domain=b2_yoga_studio
+I run a small yoga studio. Members buy 10-class packs, each visit uses one class. Show how many classes each member has left and flag the ones with 2 or less so I can call them.
+---
+app "Yoga packs" heart plum
+table member name text, phone text?
+table pack member ref member, classes num 1..60 = 10, paid money
+table visit member ref member, style pick Vinyasa|Hatha|Yin = Vinyasa
+count(member, sum(it.pack.classes) - count(it.visit) <= 2) "members to call" head color warn
+each member sort name as m
+  let left = sum(m.pack.classes) - count(m.visit)
+  row card tap edit m
+    stack grow
+      m.name bold
+      m.phone faint
+    text left big color if(left <= 2, bad, ink)
+form member, "Add member"
+form pack, "Sell pack"
+form visit, "Check in"
+===
+@create style=short domain=b2_badminton_ladder
+badminton club win loss table
+---
+app "Club ladder" ball ocean
+table player name text
+table game player ref player, result pick Won|Lost
+each player sort count(it.game where result = Won) desc as p
+  row card
+    p.name bold grow
+    count(p.game where result = Won) "wins" color good
+    count(p.game where result = Lost) "losses" faint
+form player, "Add player"
+form game, "Add result"
+===
+@create style=vague domain=b2_pushup_month
+push ups every day for 30 days
+---
+app "Push-up month" dumbbell slate
+table pushup reps num 1..300
+setting target num 1.. = 50 "Daily target"
+goal sum(pushup.reps today), target, "reps today"
+"Streak" streak(pushup) "days" faint
+heat last 30 days, sum(pushup.reps on it), target
+quick pushup, reps, [10, 20, 30]
+form pushup
+===
+@create style=custom_ui domain=b2_interval_rounds
+interval timer for boxing, 3 minute rounds, a button to count rounds done, save each finished workout
+---
+app "Boxing rounds" timer ink
+table workout rounds num 1..20
+state rounds num = 0
+timer 3m, "Round", set rounds = rounds + 1
+text rounds "rounds done" big
+button "Finish workout" tap add workout rounds = rounds then set rounds = 0
+"This week" sum(workout.rounds week) "rounds" faint
+list workout by day
+===
+@create style=multi_feature domain=b2_diet_macros
+meal diary with calories and protein for each meal type, daily calorie limit as a setting, and the protein total, bar chart for the week
+---
+app "Meal diary" food mint
+table meal what text, type pick Breakfast|Lunch|Dinner|Snack = Lunch, kcal num 0..3000, protein num 0..200 = 0
+setting limit num 800..5000 = 2000 "Calorie limit"
+goal sum(meal.kcal today), limit, "kcal today"
+"Protein today" sum(meal.protein today) "g" bold
+each options meal.type as ty
+  row gap 1
+    text ty grow
+    sum(meal.kcal today where type = ty) "kcal" faint
+daybars last 7 days, sum(meal.kcal on it)
+form meal
+list meal today
+===
+@create style=typos domain=b2_weight_goal
+weigth loss: my starting wieght, todays weight, how many kg to go and a line chart
+---
+app "Weight" scale ocean
+table weigh kg num 20..300
+setting goal_kg num 20..200 = 70 "Goal (kg)"
+let start_kg = first(weigh.kg)
+let now_kg = last(weigh.kg)
+text now_kg "kg now" big
+"Lost so far" fixed(start_kg - now_kg, 1) "kg" bold
+"To go" fixed(max(now_kg - goal_kg, 0), 1) "kg" faint
+trend weigh, it.kg
+form weigh
+===
+@create style=detailed domain=b2_family_water
+Everyone at home should drink 8 glasses. A card per family member showing glasses today out of 8 with a plus button, so the kids compete.
+---
+app "Glasses" cup ocean
+table member name text
+table glass member ref member
+each member as m
+  stack card gap 1
+    row
+      m.name head grow
+      count(m.glass today) "of 8" big color if(count(m.glass today) >= 8, good, ink)
+    button "+1 glass" tap add glass member = m
+    streak(m.glass) "day streak" faint
+form member, "Add person"
+===
+@create style=multi_feature domain=b2_school_van
+school van: list of kids with their stop, monthly fee, and who paid this month. total collected vs total due
+---
+app "School van" bus slate
+table kid name text, stop text, fee money
+table paid kid ref kid, amount money
+"Collected" sum(paid.amount month) "of" sum(kid.fee) big
+each kid sort stop as k
+  row card tap edit k
+    stack grow
+      k.name bold
+      k.stop faint
+    if(sum(k.paid.amount month) >= k.fee, "Paid", "Owes") k.fee - sum(k.paid.amount month) color if(sum(k.paid.amount month) >= k.fee, good, bad)
+form kid, "Add kid"
+form paid, "Record fee"
+===
+@create style=detailed domain=b2_spelling_bee
+My daughter is practising for a spelling bee. We enter each word and then tick whether she got it right each time we practise. I want to see which words she still gets wrong most often and her overall accuracy.
+---
+app "Spelling bee" pencil plum
+table word text text
+table attempt word ref word, correct bool
+"Accuracy" round(100 * count(attempt where correct = yes) / max(count(attempt), 1)) "%" big
+"Tricky words" head
+each word sort count(it.attempt where correct = no) desc top 5 as w
+  row card
+    w.text bold grow
+    count(w.attempt where correct = no) "misses" color bad
+    count(w.attempt) "tries" faint
+form word, "Add word"
+form attempt, "Practice result"
+===
+@create style=short domain=b2_chess_club
+chess club points, win is 1, draw half
+---
+app "Chess club" game ink
+table member name text
+table game member ref member, result pick Win|Draw|Loss = Win
+each member sort count(it.game where result = Win) + count(it.game where result = Draw) / 2 desc as m
+  let pts = count(m.game where result = Win) + count(m.game where result = Draw) / 2
+  row card
+    m.name bold grow
+    text pts big
+    count(m.game) "games" faint
+form member, "Add member"
+form game, "Add game"
+===
+@create style=custom_ui domain=b2_kids_chore_stars
+chart for my kids chores, each chore gives stars, a big star total per child this week and a button to give a star
+---
+app "Chore stars" star mint
+table child name text
+table chore what text, stars num 1..5 = 1
+table done child ref child, chore ref chore
+each child as c
+  stack card gap 1
+    row
+      c.name head grow
+      sum(c.done.chore.stars week) "stars" big color accent
+    scroll
+      each chore as ch
+        button ch.what tap add done child = c, chore = ch
+form child, "Add child"
+form chore, "Add chore"
+===
+@create style=vague domain=b2_asthma_diary
+my sons asthma, when he has an attack and what started it
+---
+app "Asthma diary" heart plum
+table attack trigger pick Dust|Cold|Exercise|Smoke|Unknown = Unknown, puffs num 1..10 = 2, note text?
+count(attack month) "attacks this month" big
+"Days since the last attack" since(attack) faint
+each options attack.trigger as tr
+  row gap 1
+    text tr grow
+    count(attack where trigger = tr) faint
+form attack
+list attack by day
+===
+@create style=typos domain=b2_kick_count
+pregnent kick count, i press a button each kick and it shows how many in the last hour, thx
+---
+app "Kick counter" baby plum
+table kick
+count(kick last 1 days) "kicks today" big
+"Last kick" since(kick) "days ago" faint
+button "Kick!" fill accent tap add kick
+daybars last 7 days, count(kick on it)
+list kick today
+===
+@create style=multi_feature domain=b2_dog_walks
+dog walking log for two dogs: minutes per walk, a weekly total for each dog and a reminder at 7 am and 6 pm
+---
+app "Dog walks" paw mint
+table dog name text
+table walk dog ref dog, minutes num 5..240 = 30
+remind "Walk the dogs" at 7:00, 18:00
+each dog as d
+  stack card gap 1
+    row
+      d.name head grow
+      sum(d.walk.minutes week) "min this week" bold
+    "Walks today" count(d.walk today) faint
+    button "Walked 30 min" tap add walk dog = d, minutes = 30
+form dog, "Add dog"
+form walk, "Add walk"
+===
+@create style=detailed domain=b2_sports_kit
+We lend out team kits and balls to players for matches. I need to know who has what, tick when returned, and which items are still out.
+---
+app "Kit room" ball slate
+table player name text
+table loan player ref player, item text, returned bool
+count(loan where returned = no) "items still out" big
+each loan where returned = no sort at as l
+  row card tap edit l
+    toggle l.returned
+    stack grow
+      l.item bold
+      l.player.name faint
+    text today - l.at "days" faint color if(today - l.at > 7, bad, muted)
+form player, "Add player"
+form loan, "Lend item"
+===
+@create style=custom_ui domain=b2_penalty_shootout
+penalty shootout between two teams, 5 kicks each, buttons for scored and missed, show the dots as green or red circles
+---
+app "Shootout" ball ink
+table kick team pick Red|Blue = Red, scored bool
+row gap 2
+  each options kick.team as tm
+    stack grow align center
+      text tm bold
+      count(kick where team = tm and scored = yes) big
+      row gap 1
+        each kick where team = tm sort at top 5 as k
+          draw width 20
+            circle 50, 50, 40 fill if(k.scored, good, bad)
+      button "Scored" tap add kick team = tm, scored = yes
+      button "Missed" tap add kick team = tm, scored = no
+button "Clear" tap remove all kick
+===
+@oos style=detailed domain=b2_oos_share_trainer oos=sync
+I want my personal trainer to see my workouts live on his own phone and comment on them. Also log my sets with weight and reps and show the total lifted this week.
+---
+app "Workout log" dumbbell slate
+table lift exercise text, kg num 0..300, reps num 1..100
+sum(lift, it.kg * it.reps) "kg lifted in total" faint
+sum(lift week, it.kg * it.reps) "kg lifted this week" big
+form lift, "Add set"
+list lift by day
+===
+@oos style=short domain=b2_oos_live_scores oos=internet
+pull live IPL scores from the internet and keep my own bets tally of wins
+---
+app "Bets tally" ball ocean
+table bet match text, won bool
+count(bet where won = yes) "bets won" big
+count(bet where won = no) "bets lost" faint
+form bet, "Add bet"
+list bet by day
+===
+@create style=vague domain=b2_playground_roster
+playground duty roster
+---
+app "Duty roster" school ocean
+table teacher name text
+table duty teacher ref teacher, place pick Gate|Field|Canteen|Corridor = Gate, day date
+each duty where day >= today sort day as d
+  row card tap edit d swipe remove d
+    d.day bold
+    d.place grow
+    d.teacher.name faint
+each teacher as t
+  row
+    t.name grow
+    count(t.duty month) "duties this month" faint
+form teacher, "Add teacher"
+form duty, "Add duty"
+===
+@edit style=plain domain=b2_e_shoes_note ref=b2_running_shoes
+add a route name to each run and a chart of km per day
+---
+~ minutes num 1..600 => minutes num 1..600, route text?
++ daybars last 14 days, sum(run.km on it)
+===
+@edit style=plain domain=b2_e_kabaddi_names ref=b2_kabaddi_board
+let me type the team names instead of Home and Away
+---
+~ state home num = 0 => state home_name text = "Home"\nstate away_name text = "Away"\nstate home num = 0
+~ "Home" faint => text home_name faint
+~ "Away" faint => text away_name faint
+~ "Home leads by" => join(home_name, " leads by")
+~ "Away leads by" => join(away_name, " leads by")
++after state away num = 0 :: field home_name "Home team"\nfield away_name "Away team"
+===
+@edit style=plain domain=b2_e_yoga_style ref=b2_yoga_studio
+show how many visits per class style this month
+---
++ "Visits by style" head
++ each options visit.style as st
++   row gap 1
++     text st grow
++     count(visit month where style = st) bold
+===
+@edit style=plain domain=b2_e_pushup_goal ref=b2_pushup_month
+make the daily target 60 and remind me at 6 pm
+---
+~ setting target num 1.. = 50 "Daily target" => setting target num 1.. = 60 "Daily target" set
++ remind "Do your push-ups" at 18:00
+===
+@edit style=plain domain=b2_e_meal_rename ref=b2_diet_macros
+rename Snack to Munchies
+---
+~ Dinner|Snack = Lunch => Dinner|Munchies was Snack = Lunch
+===
+@edit style=plain domain=b2_e_weight_price ref=b2_weight_goal
+rename the kg column to weight
+---
+~ table weigh kg num 20..300 => table weigh weight num 20..300 was kg
+~ let start_kg = first(weigh.kg) => let start_kg = first(weigh.weight)
+~ let now_kg = last(weigh.kg) => let now_kg = last(weigh.weight)
+~ trend weigh, it.kg => trend weigh, it.weight
+===
+@edit style=plain domain=b2_e_spell_note ref=b2_spelling_bee
+add a level to each word, easy medium or hard, and only show hard tricky words
+---
+~ table word text text => table word text text, level pick Easy|Medium|Hard = Easy
+~ each word sort => each word where level = Hard sort
+===
+@edit style=plain domain=b2_e_chess_noheader ref=b2_chess_club
+add a note box for the venue at the top
+---
+~ app "Chess club" game ink => app "Chess club" game ink\nsetting venue text = "Club room" "Venue"
++after setting venue text = "Club room" "Venue" :: text venue faint

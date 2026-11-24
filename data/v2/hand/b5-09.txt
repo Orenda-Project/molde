@@ -1,0 +1,439 @@
+@create style=custom_ui domain=b5_hospital_beds
+small private hospital wards with a number of beds each. admissions list the patient and a discharged tick. draw each ward as a row of bed squares, filled for occupied beds, and say how many beds are free
+---
+app "Bed Board" bed ocean
+table ward name text, beds num 1..40
+table admission ward ref ward, patient text, discharged bool
+each ward sort name as w
+  let used = count(w.admission where discharged = no)
+  stack card gap 1
+    row
+      w.name bold grow
+      w.beds - used "free" bold color if(used >= w.beds, bad, good)
+    grid 10 gap 1
+      each 1..w.beds as n
+        box height 14 radius 3 fill if(n <= used, accent, soft)
+    each w.admission where discharged = no as a
+      row
+        a.patient grow
+        toggle a.discharged
+form admission, "Admit patient"
+form ward, "Add ward"
+===
+@create style=vague domain=b5_blood_bags
+blood bank bags by group and expiry, which expire soon
+---
+app "Blood Bank" heart plum
+table bag group pick Apos|Aneg|Bpos|Bneg|ABpos|ABneg|Opos|Oneg = Opos, expiry date, used bool
+each options bag.group as g
+  row card
+    g bold grow
+    count(bag where group = g and used = no) "units" bold
+"Expiring in 7 days" head color warn
+each bag where used = no and expiry - today <= 7 sort expiry as b
+  row card tap edit b
+    b.group bold
+    b.expiry grow
+    toggle b.used
+form bag, "Add bag"
+===
+@create style=detailed domain=b5_scrap_dealer
+I buy scrap (iron, copper, paper, plastic) by the kg and sell to the big dealer. each material has a buy rate. I log kg bought and kg sold with the selling rate. profit per material and total
+---
+app "Kabari" box slate
+table material name text, buy_rate money
+table bought material ref material, kg num 0.5..2000
+table sold material ref material, kg num 1..5000, rate money
+let profit(m material) = sum(m.sold, it.kg * it.rate) - sum(m.bought.kg) * m.buy_rate
+"Total profit" sum(material, profit(it)) big
+each material sort name as m
+  row card tap edit m
+    stack grow gap 0
+      m.name bold
+      sum(m.bought.kg) - sum(m.sold.kg) "kg in godown" faint
+    profit(m) bold color if(profit(m) < 0, bad, good)
+form bought, "Bought scrap"
+form sold, "Sold scrap"
+form material, "Add material"
+===
+@create style=detailed domain=b5_seed_germination
+germination test: for each seed lot I plant 50 seeds and count how many sprouted on day 3, 5, 7. draw a line per lot of sprouted count against the day, and show the final percent
+---
+app "Germination" plant mint
+table lot name text
+table counting lot ref lot, day num 1..14, sprouted num 0..50
+each lot sort name as l
+  stack card gap 1
+    row
+      l.name bold grow
+      round(max(l.counting.sprouted) * 2) "% germinated" bold
+    plot 0..14, 0..50 axes gridlines
+      poly stroke accent thick 2
+        each l.counting sort day
+          pt it.day, it.sprouted
+form counting, "Add count"
+form lot, "New seed lot"
+===
+@create style=multi_feature domain=b5_marathon_plan
+16 week marathon plan. every week has a target of km and I log my runs with the week number. show each week as a progress bar and highlight the current week which starts from a date I set
+---
+app "Marathon Plan" run ocean
+table week wknum num 1..16, target num 5..200
+table run week ref week, km num 1..50
+setting start date = today "Plan starts"
+let current = floor((today - start) / 7) + 1
+each week sort wknum as w
+  stack card gap 1 fill if(w.wknum = current, soft, surface)
+    row
+      "Week" w.wknum bold grow
+      w.target "km target" faint
+    goal sum(w.run.km), w.target, "km done", "km"
+form run, "Log run"
+form week, "Add week"
+===
+@create style=short domain=b5_trek_club
+trekking club trips with fee, people sign up and tick paid, seat limit 20
+---
+app "Trek Club" flag mint
+table trip name text, day date, fee money
+table signup trip ref trip, person text, paid bool
+each trip sort day as t
+  row card tap edit t
+    stack grow gap 0
+      t.name bold
+      t.day faint
+    count(t.signup) "of 20" color if(count(t.signup) > 20, bad, ink)
+    sum(t.signup, if(it.paid = yes, t.fee, 0)) "paid" faint
+form signup, "Sign up"
+form trip, "New trip"
+===
+@create style=typos domain=b5_cat_feeding
+feeding stray cats at 4 spots in the colony, who fed and how many kg and when. spots not fed today should show on top
+---
+app "Cat Spots" paw mint
+table spot place text
+table fed spot ref spot, kg num 0.1..10 = 0.5, by_who text?
+each spot sort place as s
+  if count(s.fed today) = 0
+    row card tap edit s
+      s.place bold grow
+      "not fed today" color warn
+each spot sort place as s
+  row
+    s.place grow
+    fixed(sum(s.fed.kg week), 1) "kg this week" faint
+    button "Fed" tap add fed spot = s
+form spot, "Add spot"
+===
+@create style=multi_feature domain=b5_vehicle_docs
+transport company papers. each vehicle has documents (fitness, route permit, insurance, tax) with an expiry date. remind me 14 days before expiry and show the ones expiring in 30 days
+---
+app "Fleet Papers" bus slate
+table vehicle plate text
+table paper vehicle ref vehicle, kind pick Fitness|Permit|Insurance|Tax = Fitness, expires date
+remind "A vehicle paper expires in 2 weeks" at paper.expires - 14d at 9:00
+"Expiring in 30 days" head color warn
+each paper where expires - today <= 30 sort expires as p
+  row card tap edit p
+    p.vehicle.plate bold
+    p.kind grow
+    p.expires color if(p.expires < today, bad, warn)
+each vehicle sort plate as v
+  row
+    v.plate grow
+    count(v.paper) "papers" faint
+form paper, "Add paper"
+form vehicle, "Add vehicle"
+===
+@create style=detailed domain=b5_fertilizer_trial
+fertilizer trial on small plots. each plot is treated A, B or nothing (control) and at harvest I weigh the yield in kg. compare the average yield per treatment in a bar chart
+---
+app "Trial Plots" plant mint
+table patch name text, treatment pick A|B|Control = Control
+table yield patch ref patch, kg num 0.1..500
+plot 0..3, 0..max(max(yield.kg), 10) axes
+  each options patch.treatment as tr
+    rect index + 0.15, 0, 0.7, avg(yield.kg where patch.treatment = tr) fill accent radius 2
+    tick index + 0.5, tr
+each patch sort name as p
+  row card tap edit p
+    p.name bold grow
+    p.treatment faint
+    sum(p.yield.kg) "kg" bold
+form yield, "Weigh yield"
+form patch, "Add plot"
+===
+@create style=vague domain=b5_waste_rounds
+garbage collection streets, which ones got missed today
+---
+app "Waste Rounds" cart slate
+table street name text
+table pickup street ref street, missed bool
+each street sort name as s
+  row card tap edit s
+    s.name bold grow
+    if(count(s.pickup today) = 0, "pending", if(count(s.pickup today where missed = yes) > 0, "missed", "done")) bold
+    button "Done" tap add pickup street = s
+"Pending" count(street) - count(pickup today) head
+form street, "Add street"
+===
+@create style=short domain=b5_challans
+fleet traffic challans per vehicle, paid or not
+---
+app "Challans" car slate
+table vehicle plate text
+table challan vehicle ref vehicle, amount money, paid bool
+"Unpaid fines" sum(challan where paid = no, it.amount) big
+each vehicle sort plate as v
+  row card tap edit v
+    v.plate bold grow
+    count(v.challan where paid = no) "unpaid" faint
+    sum(v.challan.amount) bold
+form challan, "Add challan"
+form vehicle, "Add vehicle"
+===
+@create style=custom_ui domain=b5_piano_streaks
+my kids piano practice. each kid, minutes practised each day. show the streak of days, a week row of 7 squares filled when practised, and total minutes this week
+---
+app "Piano Practice" music plum
+table kid name text
+table practice kid ref kid, mins num 5..180 = 20
+each kid sort name as k
+  stack card gap 1
+    row
+      k.name bold grow
+      streak(k.practice) "day streak" bold
+    row gap 1
+      each days last 7 days
+        stack grow align center
+          box height 12 radius 6 fill if(count(k.practice on it) > 0, accent, soft)
+          dayname(it) tiny faint
+    sum(k.practice.mins week) "min this week" faint
+    button "20 min" tap add practice kid = k, mins = 20
+form kid, "Add child"
+===
+@create style=typos domain=b5_cube_solves
+rubiks cube solve times, show best, my average this week, and a line chart of my times
+---
+app "Cube Times" game ink
+table solve time dur
+let best = min(solve.time)
+best "best" big
+"Average this week" avg(solve.time week) faint
+trend solve sort at, it.time / 1s
+form solve, "Add time"
+list solve by day
+===
+@create style=custom_ui domain=b5_court_booking
+tennis club courts. each court has bookings by hour from 6 to 21 with the player name. draw a row of hour boxes per court, red when booked, tap a free hour to book it for the name typed in
+---
+app "Court Book" ball mint
+table court name text
+table slot court ref court, hour num 6..21, player text
+state who text = "Player"
+field who "Book for"
+each court sort name as c
+  stack card gap 1
+    c.name bold
+    grid 8 gap 1
+      each 6..21 as h
+        if count(c.slot where hour = h) > 0
+          box height 28 radius 4 fill bad
+            h tiny align center color bg
+        else
+          box height 28 radius 4 fill soft tap add slot court = c, hour = h, player = who
+            h tiny align center
+form court, "Add court"
+===
+@create style=multi_feature domain=b5_news_hawker
+newspaper hawker with 60 houses. each house takes some paper at a monthly price. I tick the days delivered. show each house's bill this month based on days delivered, and total expected
+---
+app "Paper Route" book slate
+table house name text, paper text, daily money
+table delivered house ref house
+let bill(h house) = count(h.delivered month) * h.daily
+"Expected this month" sum(house, bill(it)) big
+each house sort name as h
+  row card tap edit h
+    stack grow gap 0
+      h.name bold
+      h.paper faint
+    toggle h.delivered
+    bill(h) bold
+form house, "Add house"
+===
+@create style=vague domain=b5_chanda_streets
+fund drive for the mosque by street, how much each street gave and target
+---
+app "Chanda Drive" mosque mint
+table street name text, target money
+table collect street ref street, amount money, donor text?
+goal sum(collect.amount), sum(street.target), "collected"
+each street sort name as s
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      sum(s.collect.amount) "of" s.target faint
+    goal sum(s.collect.amount), s.target, "collected"
+form collect, "Add donation"
+form street, "Add street"
+===
+@create style=detailed domain=b5_vet_camp
+free vaccination camp in villages. each farmer registers how many animals, and the vet logs how many were vaccinated. show coverage percent per village and overall
+---
+app "Vet Camp" paw ocean
+table village name text
+table farmer village ref village, name text, animals num 1..200
+table vaccinated farmer ref farmer, n num 1..200
+each village sort name as v
+  row card tap edit v
+    v.name bold grow
+    sum(v.farmer.animals) "registered" faint
+    "farmers" count(v.farmer) faint
+"Overall coverage" round(sum(vaccinated.n) * 100 / sum(farmer.animals)) "%" big
+each farmer sort name as f
+  row
+    f.name grow
+    sum(f.vaccinated.n) "of" f.animals faint
+form vaccinated, "Vaccinated"
+form farmer, "Register farmer"
+form village, "Add village"
+===
+@create style=detailed domain=b5_grain_trader
+grain trader (aarti): I buy wheat, rice and maize in maunds with rate per maund, and sell later at another rate. show stock in maunds and profit for each grain
+---
+app "Grain Book" bag slate
+table grain kind pick Wheat|Rice|Maize = Wheat
+table purchase grain ref grain, maunds num 1..2000, rate money
+table sale grain ref grain, maunds num 1..2000, rate money
+each grain sort kind as g
+  let profit = sum(g.sale, it.maunds * it.rate) - sum(g.purchase, it.maunds * it.rate)
+  row card tap edit g
+    g.kind bold grow
+    sum(g.purchase.maunds) - sum(g.sale.maunds) "maunds in stock" faint
+    profit "cash so far" bold color if(profit < 0, warn, good)
+form purchase, "Bought"
+form sale, "Sold"
+form grain, "Add grain"
+===
+@create style=typos domain=b5_tent_house
+tent house stock: items like chairs tables pots, how many in total and how many are out on rent right now with customer name, returned tick
+---
+app "Tent House" home slate
+table item name text, total num 1..2000
+table rental item ref item, customer text, qty num 1..1000, returned bool
+each item sort name as i
+  let out = sum(i.rental.qty where returned = no)
+  row card tap edit i
+    i.name bold grow
+    out "out" faint
+    i.total - out "available" bold color if(i.total - out < 0, bad, good)
+each rental where returned = no sort at as r
+  row
+    r.customer grow
+    r.item.name r.qty faint
+    toggle r.returned
+form rental, "Rent out"
+form item, "Add item"
+===
+@create style=vague domain=b5_nest_boxes
+sparrow nest boxes on our roof, number of eggs I saw on each visit
+---
+app "Nest Boxes" egg mint
+table nestbox code text
+table visit nestbox ref nestbox, eggs num 0..12
+"Eggs now" sum(nestbox, last(it.visit.eggs)) big
+each nestbox sort code as b
+  row card tap edit b
+    b.code bold grow
+    last(b.visit.eggs) "eggs" bold
+    plural(since(b.visit), "day") "since visit" faint
+form visit, "Add visit"
+form nestbox, "Add box"
+===
+@create style=detailed domain=b5_ration_drive
+ration drive for flood families. each family with number of members, and bags handed out with a collected tick. one bag per 5 members. show how many bags are still due and the families who have not collected
+---
+app "Ration Drive" bag mint
+table family head text, members num 1..30
+table packet family ref family, bags num 1..10, collected bool
+let due(f family) = floor((f.members + 4) / 5)
+"Families not collected" count(family) - count(family, count(it.packet where collected = yes) > 0) big
+each family sort head as f
+  row card tap edit f
+    f.head bold grow
+    f.members "members" faint
+    sum(f.packet.bags) "of" due(f) "bags" bold
+form packet, "Hand out"
+form family, "Add family"
+===
+@oos style=detailed domain=b5_scrap_barcode oos=camera
+scan the barcode on each bag of scrap and weigh it, and tell me the kg bought per material
+---
+app "Scrap Weigh" box slate
+table material name text
+table bought material ref material, kg num 0.5..2000
+each material sort name as m
+  row card
+    m.name bold grow
+    sum(m.bought.kg) "kg" bold
+form bought, "Bought scrap"
+form material, "Add material"
+===
+@create style=short domain=b5_speaker_slots
+conference day speakers with start time and minutes, total talk time
+---
+app "Speaker Slots" music plum
+table speaker name text, topic text?
+table slot speaker ref speaker, start time, mins num 5..90 = 20
+"Talk time" sum(slot.mins) "min" big
+each slot sort start as s
+  row card tap edit s
+    s.start bold
+    s.speaker.name grow
+    s.mins "min" faint
+form slot, "Add slot"
+form speaker, "Add speaker"
+===
+@edit style=plain domain=b5_beds_rate ref=b5_hospital_beds
+add a daily charge per ward and show today's bed income for occupied beds
+---
+~ table ward name text, beds num 1..40 => table ward name text, beds num 1..40, daily money = 3000
+~ w.beds - used "free" bold color if(used >= w.beds, bad, good) => w.beds - used "free" bold color if(used >= w.beds, bad, good)\n      used * w.daily "a day" faint
+===
+@edit style=plain domain=b5_germ_seeds ref=b5_seed_germination
+seeds per test is not always 50, make it a setting
+---
+~ app "Germination" plant mint => app "Germination" plant mint\nsetting seeds_per_lot num = 50 "Seeds per test"
+~ round(max(l.counting.sprouted) * 2) "% germinated" bold => round(max(l.counting.sprouted) * 100 / seeds_per_lot) "% germinated" bold
+~ 0..50 axes => 0..seeds_per_lot axes
+~ sprouted num 0..50 => sprouted num 0..200
+===
+@edit style=plain domain=b5_trek_limit ref=b5_trek_club
+seat limit as a setting
+---
+~ app "Trek Club" flag mint => app "Trek Club" flag mint\nsetting seat_limit num = 20 "Seat limit"
+~ count(t.signup) "of 20" color if(count(t.signup) > 20, bad, ink) => count(t.signup) "of" seat_limit color if(count(t.signup) > seat_limit, bad, ink)
+===
+@edit style=plain domain=b5_fleet_permit ref=b5_vehicle_docs
+rename Permit to Route_permit
+---
+~ Fitness|Permit|Insurance|Tax = Fitness => Fitness|Route_permit was Permit|Insurance|Tax = Fitness
+===
+@edit style=plain domain=b5_piano_goal ref=b5_piano_streaks
+add a weekly minutes goal setting of 140 and show a progress bar for each kid
+---
+~ app "Piano Practice" music plum => app "Piano Practice" music plum\nsetting weekly_goal num = 140 "Weekly minutes goal"
++after     sum(k.practice.mins week) "min this week" faint ::     goal sum(k.practice.mins week), weekly_goal, "of weekly goal", "min"
+===
+@edit style=plain domain=b5_courts_late ref=b5_court_booking
+courts are open until 11 pm now, not 9
+---
+~ hour num 6..21 => hour num 6..23
+~ each 6..21 as h => each 6..23 as h
+===
+@edit style=plain domain=b5_scrap_nototal ref=b5_scrap_dealer
+take the total profit line off the top
+---
+- "Total profit" sum(material, profit(it)) big
+===

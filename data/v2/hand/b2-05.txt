@@ -1,0 +1,332 @@
+@create style=detailed domain=b2_hive_checks
+I keep eight beehives on the roof. Each week I open them and note the strength (weak, ok, strong). Honey harvest is in kg per hive. Show the strong hives count, the honey total this year and honey per hive.
+---
+app "Hive log" leaf mint
+table hive label text, queen_year num 2015..2030
+table inspection hive ref hive, strength pick Weak|Ok|Strong = Ok, note text?
+table harvest hive ref hive, kg num 0.1..60
+"Honey this year" sum(harvest.kg year) "kg" big
+count(hive, last(it.inspection.strength) = Strong) "strong hives" faint
+each hive sort label as h
+  row card tap edit h
+    h.label bold grow
+    last(h.inspection.strength) color if(last(h.inspection.strength) = Weak, bad, ink)
+    sum(h.harvest.kg) "kg" faint
+form hive, "Add hive"
+form inspection, "Inspection"
+form harvest, "Harvest"
+===
+@create style=short domain=b2_teacher_leave
+teachers leave balance, 12 days a year
+---
+app "Leave" school slate
+table teacher name text
+table leave teacher ref teacher, days num 0.5..30 = 1, reason pick Sick|Casual|Other = Casual
+setting allowance num 1..60 = 12 "Days per year"
+each teacher sort name as t
+  row card
+    t.name bold grow
+    allowance - sum(t.leave.days year) "left" bold color if(allowance - sum(t.leave.days year) <= 2, bad, ink)
+form teacher, "Add teacher"
+form leave, "Record leave"
+===
+@create style=custom_ui domain=b2_kids_jars
+every child has a savings goal and a jar, a card with a progress bar and plus buttons for 50 and 100 rupees
+---
+app "Kids jars" coin mint
+table child name text, goal money = 2000
+table saving child ref child, amount money
+each child as c
+  stack card gap 1
+    row
+      c.name head grow
+      sum(c.saving.amount) "of" c.goal faint
+    draw 100, 5
+      rect 0, 0, 100, 5 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(c.saving.amount) / max(c.goal, 1), 0, 1), 5 fill accent radius 2
+    row gap 1
+      button "+50" tap add saving child = c, amount = 50
+      button "+100" tap add saving child = c, amount = 100
+form child, "Add child"
+===
+@create style=multi_feature domain=b2_junior_stats
+under 12 football: for each match I note goals and assists for every kid who played. Rank by goals plus assists and show games played
+---
+app "Junior stats" ball mint
+table kid name text, shirt num 1..99
+table appearance kid ref kid, goals num 0..10 = 0, assists num 0..10 = 0
+"Matches logged" count(appearance) big
+each kid sort sum(it.appearance.goals) + sum(it.appearance.assists) desc as k
+  row card tap edit k
+    k.shirt faint
+    k.name bold grow
+    sum(k.appearance.goals) "G" bold
+    sum(k.appearance.assists) "A" bold
+    count(k.appearance) "games" faint
+form kid, "Add kid"
+form appearance, "Add match line"
+===
+@create style=detailed domain=b2_marathon_weeks
+Marathon plan: I decide a target distance for every week (week number and km). Show actual distance run in that week next to the target, and a green tick when I reached it. I log runs with date and km.
+---
+app "Marathon plan" run ocean
+table plan_week starts date, target num 5..200
+table run km num 0.5..60
+each plan_week sort starts as w
+  row card tap edit w
+    w.starts bold
+    stack grow
+      sum(run.km week of w.starts) "of" w.target "km" faint
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * clamp(sum(run.km week of w.starts) / max(w.target, 1), 0, 1), 3 fill accent radius 1
+    if sum(run.km week of w.starts) >= w.target
+      icon check
+form plan_week, "Add week"
+form run, "Log run"
+===
+@create style=vague domain=b2_elder_water
+reminders so grandpa drinks water
+---
+app "Grandpa water" cup ocean
+table glass
+remind "Time for a glass of water" every 2h from 8:00 to 20:00
+count(glass today) "glasses today" big
+button "He drank" tap add glass
+daybars last 7 days, count(glass on it)
+===
+@create style=multi_feature domain=b2_insulin_doses
+insulin dose log: units, which time of day, and note. show last dose time, total units today and a weekly bar chart
+---
+app "Insulin" pill plum
+table dose units num 1..80, slot pick Morning|Lunch|Night = Morning, note text?
+sum(dose.units today) "units today" big
+"Last dose" last(dose.units) "units," since(dose) "days ago" faint
+each options dose.slot as sl
+  row gap 1
+    text sl grow
+    sum(dose.units today where slot = sl) "units" bold
+daybars last 7 days, sum(dose.units on it)
+form dose
+list dose by day
+===
+@create style=typos domain=b2_pregnancy_weeks
+pregancy tracker: due date, how many weeks i am now, checkup appointments with remind
+---
+app "Pregnancy" baby plum
+setting due date = 2027-03-15 "Due date"
+table checkup day date, what text
+let weeks = floor((today - (due - 280)) / 7)
+text weeks "weeks" big
+"Days to go" due - today faint
+remind "Checkup tomorrow" at checkup.day - 1d at 9:00
+each checkup where day >= today sort day as c
+  row card tap edit c swipe remove c
+    c.day bold
+    c.what grow
+form checkup, "Add checkup"
+===
+@create style=detailed domain=b2_baby_milestones
+Baby milestone book: first smile, first roll, first tooth, crawling and so on. I add the milestone name and when it happened if it did. Show how many are done and the age in months when each happened.
+---
+app "Milestones" star plum
+table baby name text, born date
+table milestone baby ref baby, what text, happened date?
+each baby as b
+  stack card gap 1
+    row
+      b.name head grow
+      count(b.milestone where happened > b.born) "done" big
+    each b.milestone sort happened as m
+      row gap 1
+        m.what grow
+        if(m.happened > b.born, join(floor((m.happened - b.born) / 30), " mo"), "not yet") faint
+form baby, "Add baby"
+form milestone, "Add milestone"
+===
+@create style=short domain=b2_sprint_times
+100m sprint times per runner, best time
+---
+app "Sprint" run mint
+table runner name text
+table race runner ref runner, secs num 9..30
+each runner sort min(it.race.secs) as r
+  row card
+    r.name bold grow
+    min(r.race.secs) "s best" bold
+    last(r.race.secs) "s last" faint
+form runner, "Add runner"
+form race, "Add time"
+===
+@create style=custom_ui domain=b2_vet_queue
+tiny vet clinic token queue. big number for who is being served, a button for next, list of waiting pets with their owner
+---
+app "Vet queue" paw ocean
+table visitor token num 1..999, pet text, owner text
+state serving num = 1
+"Now serving" faint
+text serving big
+button "Next" tap set serving = serving + 1
+"Waiting" head
+each visitor where token >= serving sort token as v
+  row card
+    v.token bold
+    v.pet grow
+    v.owner faint
+form visitor, "Add to queue"
+===
+@create style=multi_feature domain=b2_court_booking
+two badminton courts in our building, residents book one hour slots from 6 to 10 pm, show which slots are taken for today for each court
+---
+app "Court booking" ball ocean
+table booking resident text, court pick Court_1|Court_2 = Court_1, hour num 18..21, day date = today
+each options booking.court as ct
+  stack card gap 1
+    text ct head
+    each 18..21 as hr
+      row gap 1
+        hr ":00" bold
+        if count(booking where court = ct and hour = hr and day = today) > 0
+          last(booking.resident where court = ct and hour = hr and day = today) color bad grow
+        else
+          "free" color good grow
+form booking, "Book a slot"
+===
+@create style=custom_ui domain=b2_times_table_quiz
+times tables quiz for my son, show two random numbers, he types the answer, tell him right or wrong and keep the score
+---
+app "Times tables" brain ocean
+table answer right bool
+state a num = 7
+state b num = 8
+state guess num = 0
+state msg text = ""
+"What is" a "x" b big
+field guess "Your answer"
+button "Check" tap set msg = if(guess = a * b, "Right!", "Not quite") then add answer right = (guess = a * b)
+button "New question" tap set a = random(12) then set b = random(12) then set guess = 0 then set msg = ""
+text msg head
+"Score" count(answer where right = yes) "of" count(answer) faint
+===
+@create style=vague domain=b2_tables_practised
+which times tables my daughter has practised
+---
+app "Tables practised" school mint
+table practised factor num 2..12
+count(practised) "of 11 tables done" big
+grid 4 gap 1
+  each 2..12 as n
+    stack radius 8 pad 1 fill if(count(practised where factor = n) > 0, good, soft) tap toggle practised all where factor = n
+      text n bold align center
+===
+@create style=typos domain=b2_calorie_burn
+workout calories burnt, walking is 5 per min, running 11 per min and cycling 8, plus minutes
+---
+app "Calories burnt" fire mint
+table workout kind pick Walking|Running|Cycling = Walking, minutes num 1..300 = 30
+let burnt(k text, m num) = m * if(k = Walking, 5, if(k = Running, 11, 8))
+sum(workout today, burnt(it.kind, it.minutes)) "kcal today" big
+sum(workout week, burnt(it.kind, it.minutes)) "kcal this week" faint
+form workout
+list workout by day
+===
+@create style=detailed domain=b2_shelter_adoption
+Small animal shelter: I list every animal that comes in with the kind and age, and when someone adopts one I want to record the adopter. Show how many animals are still waiting and how many were adopted this month.
+---
+app "Shelter" paw plum
+table animal name text, kind pick Dog|Cat|Rabbit|Other = Dog, age num 0..30 = 1 unit "yrs"
+table adoption animal ref animal, adopter text, phone text?
+count(animal, count(it.adoption) = 0) "waiting for a home" big
+count(adoption month) "adopted this month" faint
+each animal sort name as a
+  if count(a.adoption) = 0
+    row card tap edit a
+      a.name bold grow
+      a.kind a.age "yrs" faint
+form animal, "Add animal"
+form adoption, "Record adoption"
+===
+@create style=short domain=b2_dental_checks
+family dental checkups every 6 months
+---
+app "Dental" tooth ocean
+table person name text
+table visit person ref person, note text?
+each person as p
+  row card
+    p.name bold grow
+    if due(p.visit, 180)
+      "Overdue" color bad
+    else
+      "ok" color good
+    button "Went today" tap add visit person = p
+form person, "Add person"
+===
+@oos style=detailed domain=b2_oos_ai_diet oos=ai
+Write me a weekly diet plan with AI based on my weight and goal and then let me log what I actually ate and the calories against a daily limit.
+---
+app "Calorie log" food mint
+table meal what text, kcal num 0..3000
+setting limit num 800..5000 = 1800 "Daily calories"
+goal sum(meal.kcal today), limit, "kcal today"
+form meal
+list meal today
+===
+@oos style=short domain=b2_oos_sms_absent oos=messaging
+text the parents automatically when a child is marked absent, class attendance
+---
+app "Attendance" school ocean
+table student name text
+table absent student ref student
+count(student) - count(absent today) "present today" big
+each student sort name as s
+  stack radius 8 pad 1 fill if(count(s.absent today) > 0, bad, good) tap toggle s.absent today
+    s.name bold align center color bg
+===
+@edit style=plain domain=b2_e_hive_weather ref=b2_hive_checks
+add a weather field to inspections and show how many were done in the last 30 days
+---
+~ strength pick Weak|Ok|Strong = Ok, note text? => strength pick Weak|Ok|Strong = Ok, weather pick Sunny|Cloudy|Windy = Sunny, note text?
++ "Inspections in 30 days" count(inspection last 30 days) faint
+===
+@edit style=plain domain=b2_e_leave_medical ref=b2_teacher_leave
+add Medical as a leave reason and show sick leave taken in total
+---
+~ pick Sick|Casual|Other = Casual => pick Sick|Casual|Medical|Other = Casual
++ "Sick days taken" sum(leave.days where reason = Sick) faint
+===
+@edit style=plain domain=b2_e_jars_cap ref=b2_kids_jars
+change the buttons to 100 and 500 and add a note on each saving
+---
+~ amount money => amount money, note text?
+~ button "+50" tap add saving child = c, amount = 50 => button "+100" tap add saving child = c, amount = 100
+~ button "+100" tap add saving child = c, amount = 100 => button "+500" tap add saving child = c, amount = 500
+===
+@edit style=plain domain=b2_e_junior_motm ref=b2_junior_stats
+add a man of the match tick and show how many each kid won
+---
+~ assists num 0..10 = 0 => assists num 0..10 = 0, motm bool
+~ count(k.appearance) "games" faint => count(k.appearance) "games" count(k.appearance where motm = yes) "MOTM" faint
+===
+@edit style=plain domain=b2_e_sprint_unit ref=b2_sprint_times
+rename the secs column to seconds
+---
+~ secs num 9..30 => seconds num 9..30 was secs
+~ min(it.race.secs) => min(it.race.seconds)
+~ min(r.race.secs) => min(r.race.seconds)
+~ last(r.race.secs) => last(r.race.seconds)
+===
+@edit style=plain domain=b2_e_queue_reset ref=b2_vet_queue
+add a reset button that goes back to token 1
+---
++ button "Reset queue" tap set serving = 1
+===
+@edit style=plain domain=b2_e_dental_gap ref=b2_dental_checks
+make it every 12 months not 6
+---
+~ due(p.visit, 180) => due(p.visit, 365)
+===
+@edit style=plain domain=b2_e_adoption_chart ref=b2_shelter_adoption
+add a chart of animals by kind
+---
++ bars options animal.kind, count(animal where kind = it), it

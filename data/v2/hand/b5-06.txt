@@ -1,0 +1,395 @@
+@create style=detailed domain=b5_barber_chairs
+barber shop with 3 chairs. each haircut has the barber, price and tip. barbers keep 40 percent, shop keeps the rest, 40 is a setting. show what each barber earned this week and the shop's share
+---
+app "Barber Shop" tool slate
+table barber name text
+table cut barber ref barber, price money, tip money = 0
+setting barber_share num = 40 "Barber share %"
+"Shop share this week" round(sum(cut.price week) * (100 - barber_share) / 100) big
+each barber sort name as b
+  row card tap edit b
+    b.name bold grow
+    count(b.cut week) "cuts" faint
+    round(sum(b.cut.price week) * barber_share / 100 + sum(b.cut.tip week)) bold
+form cut, "Add haircut"
+form barber, "Add barber"
+===
+@create style=vague domain=b5_dhobi_bundles
+ironing man bundles, how many pieces, rate, paid or pending
+---
+app "Dhobi" cloud slate
+table customer name text, rate money = 15
+table bundle customer ref customer, pieces num 1..200, paid bool
+each customer sort name as c
+  let owed = sum(c.bundle, if(it.paid = no, it.pieces * c.rate, 0))
+  row card tap edit c
+    c.name bold grow
+    sum(c.bundle.pieces) "pieces" faint
+    owed "pending" bold color if(owed > 0, warn, good)
+form bundle, "New bundle"
+form customer, "Add customer"
+===
+@create style=typos domain=b5_ro_plant
+our RO water plant has 5 filter stages. each stage has to be changed after some months. i log when i changed them and want to know whitch are due
+---
+app "RO Plant" drop ocean
+table stage name text, months num 1..36 = 6
+table swap stage ref stage, cost money?
+each stage sort name as s
+  row card tap edit s
+    s.name bold grow
+    if(since(s.swap) >= s.months * 30, "change now", "ok") color if(since(s.swap) >= s.months * 30, bad, good)
+    plural(since(s.swap), "day") faint
+    button "Changed" tap add swap stage = s
+"Spent on filters" sum(swap.cost year) faint
+form stage, "Add stage"
+===
+@create style=custom_ui domain=b5_bus_seats
+intercity bus: trips by route and day, 40 seats shown as a grid per trip, taken seats coloured, tap a free seat to sell it to a name
+---
+app "Bus Seats" bus ocean
+table trip route text, day date
+table ticket trip ref trip, seat num 1..40, passenger text
+state who text = "Passenger"
+field who "Sell to"
+each trip sort day as t
+  stack card gap 1
+    row
+      t.route bold grow
+      t.day faint
+      count(t.ticket) "of 40" faint
+    grid 8 gap 1
+      each 1..40 as n
+        if count(t.ticket where seat = n) > 0
+          box height 30 radius 4 fill bad
+            n tiny align center color bg
+        else
+          box height 30 radius 4 fill soft tap add ticket trip = t, seat = n, passenger = who
+            n tiny align center
+form trip, "Add trip"
+===
+@create style=multi_feature domain=b5_house_cup
+school house cup. four houses red blue green yellow. teachers award points with a reason. big bars comparing houses and a list of latest awards
+---
+app "House Cup" trophy plum
+table award house pick Red|Blue|Green|Yellow = Red, points num 1..50 = 5, reason text
+plot 0..4, 0..max(sum(award.points), 10) axes
+  each options award.house as h
+    rect index + 0.15, 0, 0.7, sum(award.points where house = h) fill if(h = Red, bad, if(h = Green, good, if(h = Yellow, warn, accent))) radius 2
+    tick index + 0.5, h
+"Leading score" max(options award.house, sum(award.points where house = it)) head
+each award sort at desc top 8 as a
+  row card tap edit a
+    a.house bold
+    a.reason grow
+    "+" a.points bold
+form award, "Award points"
+===
+@create style=detailed domain=b5_vocab_box
+learning english words. each word has a meaning and a box: New, Learning or Known. show a random word from Learning to quiz myself, tap to see meaning, and counts per box
+---
+app "Word Box" brain mint
+table word spelling text, meaning text, box pick New|Learning|Known = New
+state shown bool
+each word where box = Learning shuffle top 1 as w
+  stack card gap 1 tap set shown = not shown
+    w.spelling big
+    if shown
+      w.meaning head
+      row gap 1
+        button "Knew it" tap set w.box = Known
+        button "Again" tap set shown = no
+row gap 2
+  each options word.box as b
+    stat count(word where box = b), b
+form word, "Add word"
+===
+@create style=short domain=b5_knitting_rows
+knitting projects with a row goal and how many rows I did each evening
+---
+app "Knit Rows" star plum
+table project name text, rows_goal num 10..5000
+table evening project ref project, rows num 1..300
+each project sort name as p
+  stack card gap 1 tap edit p
+    p.name bold
+    goal sum(p.evening.rows), p.rows_goal, "rows done", "rows"
+form evening, "Add rows"
+form project, "New project"
+===
+@create style=detailed domain=b5_print3d_jobs
+3d printing side business. printers, and jobs with grams of filament, print hours and price charged. filament costs 3 rupees a gram (setting). profit per job and per printer
+---
+app "Print Farm" box ink
+table printer name text
+table job printer ref printer, what text, grams num 1..2000, hours num 0.2..100, price money
+setting gram_cost money = 3 "Filament cost per gram"
+"Profit" sum(job.price) - sum(job.grams) * gram_cost big
+each printer sort name as p
+  row card tap edit p
+    stack grow gap 0
+      p.name bold
+      round(sum(p.job.hours)) "print hours" faint
+    sum(p.job.price) - sum(p.job.grams) * gram_cost bold
+each job sort at desc top 5 as j
+  row
+    j.what grow
+    j.price - j.grams * gram_cost faint
+form job, "Add job"
+form printer, "Add printer"
+===
+@create style=typos domain=b5_car_wash
+car wash with 4 workers. bike 100 car 300 van 500, worker gets 20% of each wash. who washed what and how much each worker earned today
+---
+app "Car Wash" car ocean
+table worker name text
+table wash worker ref worker, kind pick Bike|Car|Van = Car
+let price(k text) = if(k = Bike, 100, if(k = Car, 300, 500))
+"Takings today" sum(wash today, price(it.kind)) big
+each worker sort name as w
+  row card
+    w.name bold grow
+    count(w.wash today) "washes" faint
+    sum(w.wash today, price(it.kind)) * 0.2 "cut" bold
+    button "+ Car" tap add wash worker = w
+form wash, "Add wash"
+form worker, "Add worker"
+===
+@create style=multi_feature domain=b5_langar_kitchen
+free langar kitchen. each day we note plates served, and expenses (rice, oil, gas ...) as we buy. donors give money. show cost per plate this month and money left
+---
+app "Langar" food mint
+table meal day date, plates num 1..3000
+table spend what text, amount money
+table donation donor text, amount money
+let plates = sum(meal.plates month)
+"Cost per plate" round(sum(spend.amount month) / plates) big
+"Money left" sum(donation.amount) - sum(spend.amount) head color if(sum(donation.amount) >= sum(spend.amount), good, bad)
+daybars last 14 days, sum(meal.plates on it)
+form meal, "Plates served"
+form spend, "Add expense"
+form donation, "Add donation"
+===
+@create style=vague domain=b5_hotspot_data
+family sharing one internet package, who used how many gb
+---
+app "Data Share" cloud ocean
+table person name text
+table usage person ref person, gb num 0.1..100
+setting package num = 100 "Monthly package (GB)"
+goal sum(usage.gb month), package, "GB used", "GB"
+each person sort name as p
+  row card
+    p.name bold grow
+    fixed(sum(p.usage.gb month), 1) "GB" bold
+form usage, "Add usage"
+form person, "Add person"
+===
+@create style=detailed domain=b5_inverter_battery
+inverter batteries: I write the voltage reading morning and evening. draw the voltage line for each battery with a gridline, red text if latest reading is under 11.8
+---
+app "Battery Watch" bolt ink
+table battery name text
+table volts battery ref battery, v num 9..15
+each battery sort name as b
+  stack card gap 1
+    row
+      b.name bold grow
+      last(b.volts.v) "V" bold color if(last(b.volts.v) < 11.8, bad, good)
+    plot 0..max(count(b.volts), 2), 10..14 axes gridlines
+      poly stroke accent thick 2
+        each b.volts sort at
+          pt index, it.v
+form volts, "Add reading"
+form battery, "Add battery"
+===
+@create style=short domain=b5_chicken_shop
+chicken shop: birds bought, sold kg, loss. daily profit
+---
+app "Chicken Shop" food slate
+table bought birds num 1..500, cost money
+table soldkg kg num 0.5..300, price money
+let profit(w date) = sum(soldkg on w, it.kg * it.price) - sum(bought.cost on w)
+"Today" profit(today) big color if(profit(today) >= 0, good, bad)
+daybars last 7 days, profit(it)
+form bought, "Bought birds"
+form soldkg, "Sold chicken"
+===
+@create style=detailed domain=b5_ac_service
+I service air conditioners in houses. customers, each of their ACs, and every service visit. servicing is due every 6 months, show due ACs first with the customer name
+---
+app "AC Service" cloud ocean
+table customer name text, area text?
+table unit customer ref customer, brand text
+table visit unit ref unit, work pick Cleaning|Gas|Repair = Cleaning, price money
+each unit sort at as u
+  if due(u.visit, 180)
+    row card tap edit u
+      stack grow gap 0
+        u.customer.name bold
+        u.brand faint
+      "due" color warn
+"All units" head
+each unit sort at as u
+  row
+    u.customer.name u.brand grow
+    sum(u.visit.price) faint
+form visit, "Add visit"
+form unit, "Add AC"
+form customer, "Add customer"
+===
+@create style=vague domain=b5_facial_package
+parlour facial packages, 6 sessions each, who has how many left
+---
+app "Parlour Packages" smile plum
+table client name text, sessions num 1..20 = 6
+table visit client ref client
+each client sort name as c
+  row card tap edit c
+    c.name bold grow
+    c.sessions - count(c.visit) "left" bold color if(c.sessions - count(c.visit) <= 0, bad, ink)
+    button "Used" tap add visit client = c
+form client, "New package"
+===
+@create style=detailed domain=b5_school_play
+school play tickets sold by each class. every class has a number of tickets handed out, tickets sold are logged. hall holds 300 so show a bar for how full it is, and which class sold most
+---
+app "Play Tickets" star plum
+table klass name text, handed num 1..100
+table sold klass ref klass, n num 1..50
+goal sum(sold.n), 300, "tickets sold", "of 300"
+bars klass sort name, sum(it.sold.n), it.name
+each klass sort sum(it.sold.n) desc as k
+  row card tap edit k
+    k.name bold grow
+    sum(k.sold.n) "of" k.handed faint
+form sold, "Tickets sold"
+form klass, "Add class"
+===
+@create style=multi_feature domain=b5_lawyer_hearings
+lawyer: cases with court name and hearings with date and what happened. remind me a day before each hearing. next hearing on top
+---
+app "Case Diary" key slate
+table case title text, court text
+table hearing case ref case, day date, note text?
+remind "Hearing tomorrow" at hearing.day - 1d at 9:00
+"Next hearings" head
+each hearing where day >= today sort day top 5 as h
+  row card tap edit h
+    h.day bold
+    h.case.title grow
+    h.case.court faint
+each case sort title as c
+  row
+    c.title grow
+    count(c.hearing) "hearings" faint
+form hearing, "Add hearing"
+form case, "Add case"
+===
+@create style=typos domain=b5_paper_marking
+exam papers to mark, each bundle has some pages and i log how many i marked each evening. show bundles with progress and total left
+---
+app "Marking" pencil slate
+table bundle name text, pages num 1..500
+table marked bundle ref bundle, n num 1..200
+"Left to mark" sum(bundle.pages) - sum(marked.n) big
+each bundle sort name as b
+  stack card gap 1
+    b.name bold
+    goal sum(b.marked.n), b.pages, "marked"
+form marked, "Marked today"
+form bundle, "Add bundle"
+===
+@create style=short domain=b5_brick_kiln
+brick moulders, thousands of bricks made each, rate per thousand
+---
+app "Brick Kiln" home slate
+table moulder name text
+table made moulder ref moulder, thousands num 0.1..10
+setting rate money = 1200 "Rate per 1000"
+each moulder sort name as m
+  row card tap edit m
+    m.name bold grow
+    fixed(sum(m.made.thousands week), 1) "k this week" faint
+    round(sum(m.made.thousands week) * rate) bold
+form made, "Add bricks"
+form moulder, "Add moulder"
+===
+@oos style=detailed domain=b5_bus_whatsapp oos=messaging
+after I sell a seat, send the passenger a whatsapp with the seat number. also keep the seat grid of the trip
+---
+app "Bus Seat Grid" bus ocean
+table trip route text, day date
+table ticket trip ref trip, seat num 1..40, passenger text
+each trip sort day as t
+  stack card gap 1
+    t.route bold
+    grid 8 gap 1
+      each 1..40 as n
+        box height 28 radius 4 fill if(count(t.ticket where seat = n) > 0, bad, soft)
+          n tiny align center
+form ticket, "Sell seat"
+form trip, "Add trip"
+===
+@edit style=plain domain=b5_barber_method ref=b5_barber_chairs
+add how the customer paid, cash or card, and show cash taken today
+---
+~ price money, tip money = 0 => price money, tip money = 0, method pick Cash|Card = Cash
++after "Shop share this week" round(sum(cut.price week) * (100 - barber_share) / 100) big :: "Cash today" sum(cut.price today where method = Cash) faint
+===
+@edit style=plain domain=b5_dhobi_items ref=b5_dhobi_bundles
+rename pieces to items
+---
+~ pieces num 1..200 => items num was pieces 1..200
+~ it.pieces * c.rate => it.items * c.rate
+~ sum(c.bundle.pieces) "pieces" => sum(c.bundle.items) "items"
+===
+@edit style=plain domain=b5_chicken_nochart ref=b5_chicken_shop
+remove the chart
+---
+- daybars last 7 days, profit(it)
+===
+@edit style=plain domain=b5_bus_fare ref=b5_bus_seats
+add a fare per seat setting and show the money collected for each trip
+---
+~ table trip route text, day date => setting seat_fare money = 1800 "Seat fare"\ntable trip route text, day date
+~ count(t.ticket) "of 40" faint => count(t.ticket) "of 40" faint\n      count(t.ticket) * seat_fare bold
+===
+@edit style=plain domain=b5_house_sky ref=b5_house_cup
+rename the Blue house to Sky
+---
+~ Red|Blue|Green|Yellow = Red => Red|Sky was Blue|Green|Yellow = Red
+===
+@edit style=plain domain=b5_vocab_example ref=b5_vocab_box
+add an example sentence for each word and show it under the meaning
+---
+~ meaning text, box => meaning text, example long?, box
+~ w.meaning head => w.meaning head\n      w.example faint
+===
+@edit style=plain domain=b5_print3d_status ref=b5_print3d_jobs
+add a status for each job (queued, printing, done) and show how many are still queued
+---
+~ price money => price money, status pick Queued|Printing|Done = Queued
++ "Queued" count(job where status = Queued) head
+===
+@edit style=plain domain=b5_carwash_cut ref=b5_car_wash
+the worker percentage should be a setting, 20 by default
+---
+~ let price(k text) => setting worker_cut num = 20 "Worker cut %"\nlet price(k text)
+~ * 0.2 "cut" => * worker_cut / 100 "cut"
+===
+@edit style=plain domain=b5_langar_purchases ref=b5_langar_kitchen
+call the expenses table purchases
+---
+~ table spend what text, amount money => table purchases was spend what text, amount money
+~ sum(spend.amount month) => sum(purchases.amount month)
+~ sum(spend.amount) => sum(purchases.amount)
+~ sum(spend.amount) => sum(purchases.amount)
+~ form spend, "Add expense" => form purchases, "Add expense"
+===
+@edit style=plain domain=b5_hotspot_cap ref=b5_hotspot_data
+anyone using more than 30 gb should be red
+---
+~ setting package num = 100 => setting person_cap num = 30 "Red above (GB)"\nsetting package num = 100
+~ "GB" bold => "GB" bold color if(sum(p.usage.gb month) > person_cap, bad, ink)
+===

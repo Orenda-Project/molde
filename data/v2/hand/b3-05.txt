@@ -1,0 +1,397 @@
+@create style=custom_ui domain=b3_antakshari
+antakshari teams, tap a team's card to give it 10 points, big totals, undo button
+---
+app "Antakshari" music plum
+table team name text
+table point team ref team, pts num 1..50 = 10
+each team sort sum(it.point.pts) desc as t
+  stack card gap 1 tap add point team = t
+    row
+      t.name head grow
+      sum(t.point.pts) huge
+    "Tap the card for 10 points" faint
+button "Undo last point" tap remove last(point)
+form team, "Add team"
+===
+@create style=custom_ui domain=b3_penalty_shootout
+penalty shootout between red and blue, buttons for scores and misses for each side, big goal counts and a dot for every kick (green goal, red miss), new shootout button
+---
+app "Penalty Shootout" ball ink
+table kick team pick Red|Blue = Red, scored bool
+let red_goals = count(kick where team = Red and scored = yes)
+let blue_goals = count(kick where team = Blue and scored = yes)
+row gap 2 align center
+  stack grow align center
+    "Red" faint
+    red_goals huge
+  stack grow align center
+    "Blue" faint
+    blue_goals huge
+row gap 1
+  button "Red scores" fill red tap add kick team = Red, scored = yes
+  button "Red misses" tap add kick team = Red, scored = no
+row gap 1
+  button "Blue scores" fill blue tap add kick team = Blue, scored = yes
+  button "Blue misses" tap add kick team = Blue, scored = no
+row gap 1
+  each kick sort at as k
+    box width 20 height 20 radius 10 fill if(k.scored, good, bad)
+button "New shootout" tap remove all kick
+===
+@create style=detailed domain=b3_poker_night
+Home poker with friends. Each player has buy-ins and cash-outs recorded separately, and I want to see each player's net win or loss in green or red, and whether the money in and money out match.
+---
+app "Poker Night" cards slate
+table player name text
+table buyin player ref player, amount money
+table cashout player ref player, amount money
+each player sort name as p
+  let net = sum(p.cashout.amount) - sum(p.buyin.amount)
+  row card
+    stack grow
+      p.name bold
+      "In" sum(p.buyin.amount) "| out" sum(p.cashout.amount) faint
+    net big color if(net >= 0, good, bad)
+"Still on the table" sum(buyin.amount) - sum(cashout.amount) faint
+form player, "Add player"
+form buyin, "Add buy-in"
+form cashout, "Add cash-out"
+===
+@create style=vague domain=b3_sports_day
+school sports day with four houses, points for every event, who is winning
+---
+app "Sports Day" trophy ocean
+table house name text
+table result house ref house, event text, points num 1..10
+each house sort sum(it.result.points) desc as h
+  row card
+    h.name bold grow
+    count(h.result) "events" faint
+    sum(h.result.points) big
+bars house, sum(it.result.points), it.name
+"Recent results" head
+each result sort at desc top 5 as r
+  row
+    r.event grow
+    r.house.name faint
+    r.points
+form house, "Add house"
+form result, "Add result"
+===
+@create style=multi_feature domain=b3_show_tickets
+selling tickets for our school play, gold and silver seats with different prices and limits that i can change, tell me seats left in each, money collected and a bar for how full the hall is
+---
+app "Show Tickets" tag plum
+setting gold_seats num = 40 "Gold seats"
+setting silver_seats num = 100 "Silver seats"
+setting gold_price money = 3000 "Gold price"
+setting silver_price money = 1500 "Silver price"
+table sale buyer text, tier pick Gold|Silver = Silver
+let gold_sold = count(sale where tier = Gold)
+let silver_sold = count(sale where tier = Silver)
+row gap 2
+  stat gold_seats - gold_sold, "gold left"
+  stat silver_seats - silver_sold, "silver left"
+"Takings" gold_sold * gold_price + silver_sold * silver_price big
+goal gold_sold + silver_sold, gold_seats + silver_seats, "seats sold"
+form sale, "Sell ticket"
+list sale by day
+===
+@create style=detailed domain=b3_decor_rental
+We rent out chairs, tables and stage decor for weddings. Each item has the number we own. Bookings say which item, how many and the event date. For each item show how many are booked for upcoming events and how many are still free.
+---
+app "Decor Rental" box plum
+table item name text, stock num 0..
+table booking item ref item, qty num 1..500, event_date date
+each item sort name as i
+  let out = sum(i.booking.qty where event_date >= today)
+  row card tap edit i
+    stack grow
+      i.name bold
+      "Booked ahead" out faint
+    "Free" i.stock - out bold color if(i.stock - out < 0, bad, good)
+form item, "Add item"
+form booking, "Add booking"
+===
+@create style=typos domain=b3_taxi_takings
+i drive for uber careem and also take my own customers, apps cut some percent, what do i actually take home today
+---
+app "Taxi Takings" car slate
+setting commission num = 20 "App commission %"
+table ride fare money, platform pick Own|Uber|Careem|InDrive = Own
+let own_fares = sum(ride.fare today where platform = Own)
+let app_fares = sum(ride.fare today where platform != Own)
+"Take-home today" own_fares + app_fares * (100 - commission) / 100 big
+"Lost to commission" app_fares * commission / 100 faint
+share ride week by platform, sum(it.fare), it.key
+list ride today
+form ride, "Add ride"
+===
+@create style=detailed domain=b3_bus_counter
+I am a bus conductor on three routes. Each route has a fare and number of seats. I tap a button every time I sell a seat on a route. For each route show seats sold today out of total and the cash I should have.
+---
+app "Bus Counter" bus ocean
+table route name text, fare money, seats num 10..60
+table sold route ref route, seats num 1..10 = 1
+each route sort name as r
+  let taken = sum(r.sold.seats today)
+  stack card gap 1
+    row
+      r.name head grow
+      taken "of" r.seats "seats" faint
+    "Cash today" taken * r.fare bold
+    button "Sell a seat" tap add sold route = r
+form route, "Add route"
+===
+@create style=vague domain=b3_travel_papers
+passports and visas for the whole family, tell me before anything runs out
+---
+app "Travel Papers" plane slate
+table passport person text, expires date
+table visa passport ref passport, country text, valid_until date
+remind "Passport expiring" at passport.expires - 90d at 9:00
+remind "Visa ending soon" at visa.valid_until - 14d at 9:00
+each passport sort expires as p
+  stack card gap 1
+    row
+      p.person bold grow
+      p.expires color if(p.expires - today < 180, warn, ink)
+    each p.visa sort valid_until as v
+      row tap edit v
+        v.country grow
+        v.valid_until faint
+form passport, "Add passport"
+form visa, "Add visa"
+===
+@create style=short domain=b3_solar_units
+solar panel units per day and what we save at the unit price
+---
+app "Solar Panels" sun mint
+setting rate money = 45 "Price per unit"
+table reading units num 0..300
+"Saved this month" sum(reading.units month) * rate big
+"Units today" sum(reading.units today) faint
+daybars last 14 days, sum(reading.units on it)
+"Best day" max(days last 30 days, sum(reading.units on it)) "units" faint
+list reading by day
+form reading
+===
+@create style=multi_feature domain=b3_tyre_log
+tyres for each of our cars: position, brand and the odometer when fitted, plus odometer readings for the car, show km run on each tyre and warn after 40000
+---
+app "Tyre Log" car slate
+table car name text
+table km_reading car ref car, odo num 0..
+table tyre car ref car, position pick Front_left|Front_right|Rear_left|Rear_right|Spare = Front_left, brand text, fitted_km num 0..
+each car sort name as c
+  stack card gap 1
+    c.name head
+    each c.tyre sort position as t
+      row tap edit t
+        t.position grow
+        t.brand faint
+        last(t.car.km_reading.odo) - t.fitted_km "km" bold color if(last(t.car.km_reading.odo) - t.fitted_km > 40000, warn, ink)
+form car, "Add car"
+form km_reading, "Odometer"
+form tyre, "Fit a tyre"
+===
+@create style=typos domain=b3_zikr_circle
+our group wants to recite 1 million durood together, everyone adds what they did and we see the total
+---
+app "Zikr Circle" beads mint
+setting target num = 1000000 "Group target"
+table person name text
+table recited person ref person, n num 1..100000 = 100
+goal sum(recited.n), target, "recited together"
+each person sort sum(it.recited.n) desc as p
+  row card
+    p.name bold grow
+    sum(p.recited.n) bold
+    button "+100" tap add recited person = p, n = 100
+    button "+1000" tap add recited person = p, n = 1000
+form person, "Add person"
+===
+@create style=detailed domain=b3_charity_boxes
+Our welfare group keeps charity boxes in shops around the market. Each box has a place, and every time we empty one we record the amount. Show which boxes have not been emptied for a month and the total collected this year.
+---
+app "Charity Boxes" coin mint
+table box place text
+table emptied box ref box, amount money
+"Collected this year" sum(emptied.amount year) big
+each box sort place as b
+  let late = due(b.emptied, 30)
+  row card tap edit b
+    stack grow
+      b.place bold
+      "Last emptied" since(b.emptied) "days ago" faint
+    sum(b.emptied.amount) bold
+    if(late, "Empty it", "Fine") color if(late, warn, good)
+form box, "Add box"
+form emptied, "Emptied a box"
+===
+@create style=short domain=b3_iftar_roster
+who hosts iftar on which day, remind them the day before
+---
+app "Iftar Roster" food plum
+table iftar family text, host_date date, people num 1..300 = 30
+remind "You host iftar tomorrow" at iftar.host_date - 1d at 12:00
+"Days hosted so far" count(iftar where host_date < today) big
+each iftar where host_date >= today sort host_date as i
+  row card tap edit i
+    i.host_date bold
+    i.family grow
+    i.people "people" faint
+form iftar, "Add a day"
+===
+@create style=multi_feature domain=b3_podcast_pipeline
+podcast episodes moving through idea, recorded, edited and published, a bar for how many are at each stage, list of unpublished ones by planned date
+---
+app "Podcast Pipeline" music plum
+table episode title text, stage pick Idea|Recorded|Edited|Published = Idea, plan_date date?
+bars options episode.stage, count(episode where stage = it), it
+each episode where stage != Published sort plan_date as e
+  row card tap edit e
+    e.title bold grow
+    e.stage faint
+    e.plan_date faint
+"Published so far" count(episode where stage = Published) faint
+form episode, "New episode"
+===
+@create style=custom_ui domain=b3_calligraphy
+20 minute practice timer for calligraphy, when it finishes it logs a practice and says take a break, show pages written this week and the streak
+---
+app "Calligraphy" pen ink
+table practice pages num 1..50 = 2
+timer 20m, "Practice", add practice then notify "Good work, take a break"
+"Pages this week" sum(practice.pages week) big
+"Streak" streak(practice) "days" faint
+daybars last 7 days, sum(practice.pages on it)
+form practice, "Log pages"
+===
+@create style=typos domain=b3_thread_box
+embroidery threads, i buy skeins of a colour code and use them up, tell me which are almost finished
+---
+app "Thread Box" heart plum
+table thread code text, shade text, skeins num 0..50
+table used thread ref thread, n num 1..20 = 1
+each thread sort code as t
+  let left = t.skeins - sum(t.used.n)
+  row card tap edit t
+    stack grow
+      t.code bold
+      t.shade faint
+    left "left" bold color if(left <= 1, warn, ink)
+    button "Used one" tap add used thread = t
+form thread, "Add thread"
+===
+@create style=multi_feature domain=b3_pipeline
+sales pipeline for my consulting: proposals with client, value and stage sent negotiating won lost, show open pipeline value, win rate and value by stage
+---
+app "Pipeline" bag ocean
+table proposal client text, value money, stage pick Sent|Negotiating|Won|Lost = Sent
+let closed = count(proposal where stage = Won or stage = Lost)
+"Open pipeline" sum(proposal.value where stage = Sent or stage = Negotiating) big
+"Win rate" round(count(proposal where stage = Won) * 100 / closed) "%" faint
+share proposal by stage, sum(it.value), it.key
+each proposal where stage = Sent or stage = Negotiating sort value desc as p
+  row card tap edit p
+    p.client bold grow
+    p.stage faint
+    p.value bold
+form proposal, "New proposal"
+===
+@create style=custom_ui domain=b3_site_visits
+month calendar of the days i visited client sites with arrows to change month, and a list of this month's visits under it
+---
+app "Site Visits" map slate
+table visit client text, place text
+state m date = today
+monthnav m
+calendar visit, m
+"Visits this month" count(visit month of m) big
+each visit month of m sort at as v
+  row card tap edit v
+    v.at bold
+    v.client grow
+    v.place faint
+form visit, "Add visit"
+===
+@oos style=short domain=b3_door_scanner oos=camera
+scan the qr code on each guest's ticket at the door and count how many came in
+---
+app "Door Count" users ocean
+table guest name text, tickets num 1..10 = 1, arrived bool
+"Came in" sum(guest.tickets where arrived = yes) "of" sum(guest.tickets) big
+each guest sort name as g
+  row card
+    g.name grow
+    g.tickets faint
+    toggle g.arrived
+form guest, "Add guest"
+===
+@oos style=detailed domain=b3_invoice_pdf oos=print
+make a pdf of each invoice, print it and email it to the client, and keep a list of what is paid
+---
+app "Invoices" bag slate
+table client name text, email text?
+table invoice client ref client, ref_no text, amount money, paid bool
+"Unpaid" sum(invoice.amount where paid = no) big
+each invoice sort at desc as i
+  row card tap edit i
+    stack grow
+      i.ref_no bold
+      i.client.name faint
+    i.amount bold
+    toggle i.paid
+form client, "Add client"
+form invoice, "New invoice"
+===
+@edit style=plain domain=b3_antakshari_e1 ref=b3_antakshari
+a tap should give 5 points not 10
+---
+~ add point team = t => add point team = t, pts = 5
+~ "Tap the card for 10 points" => "Tap the card for 5 points"
+===
+@edit style=plain domain=b3_poker_e1 ref=b3_poker_night
+add a note box to every cash out
+---
+~ table cashout player ref player, amount money => table cashout player ref player, amount money, note text?
+===
+@edit style=plain domain=b3_sports_e1 ref=b3_sports_day
+give each house a colour, red blue green or yellow, and colour its row
+---
+~ table house name text => table house name text, colour pick Red|Blue|Green|Yellow = Red
+~ row card => row card fill if(h.colour = Red, red, if(h.colour = Blue, blue, if(h.colour = Green, green, yellow)))
+===
+@edit style=plain domain=b3_tickets_e1 ref=b3_show_tickets
+gold is 3500 now
+---
+~ setting gold_price money = 3000 => setting gold_price money = 3500 set
+===
+@edit style=plain domain=b3_decor_e1 ref=b3_decor_rental
+take a deposit on each booking and show deposits held under the item
+---
+~ event_date date => event_date date, deposit money?
++after       "Booked ahead" out faint ::       "Deposits held" sum(i.booking.deposit where event_date >= today) faint
+===
+@edit style=plain domain=b3_taxi_e1 ref=b3_taxi_takings
+commission went up to 25
+---
+~ setting commission num = 20 "App commission %" => setting commission num = 25 "App commission %" set
+===
+@edit style=plain domain=b3_pipeline_e1 ref=b3_pipeline
+add a chance percent to each proposal and show the weighted pipeline
+---
+~ value money, => value money, chance num 0..100 = 50,
++after "Open pipeline" sum(proposal.value where stage = Sent or stage = Negotiating) big :: "Weighted" round(sum(proposal where stage = Sent or stage = Negotiating, it.value * it.chance / 100)) faint
+===
+@edit style=plain domain=b3_visits_e1 ref=b3_site_visits
+remind me every monday at 8 to plan the week's visits
+---
++ remind "Plan the week's visits" at 8:00 on mon
+===
+@edit style=plain domain=b3_podcast_e1 ref=b3_podcast_pipeline
+add a guest name and show it next to the stage
+---
+~ plan_date date? => plan_date date?, guest text?
+~ e.stage faint => e.stage e.guest faint

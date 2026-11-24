@@ -1,0 +1,425 @@
+@create style=multi_feature domain=a3_utility_dash
+utility bills app with three tabs for electricity, water and gas, each tab has a reading box, a trend line and this month's cost
+---
+app "Utilities" bolt slate
+table elec units num 0.., cost money
+table water litres num 0.., cost money
+table gas units num 0.., cost money
+screen e "Electric" bolt
+  "This month" sum(elec.cost month) big
+  trend elec sort at, it.units
+  form elec
+screen w "Water" drop
+  "This month" sum(water.cost month) big
+  trend water sort at, it.litres
+  form water
+screen g "Gas" fire
+  "This month" sum(gas.cost month) big
+  trend gas sort at, it.units
+  form gas
+===
+@edit style=plain domain=a3_e_util1 ref=a3_utility_dash
+remind me on the 25th each month to check the bills
+---
++ remind "Check the utility bills" monthly on 25 at 10:00
+===
+@create style=multi_feature domain=a3_chores_tabs
+household chores in three tabs: Today shows chores due today with a tick, All lists every chore with how often, Add has the form
+---
+app "House chores" home mint
+table chore name text, every num 1..30 = 7
+table done chore ref chore
+screen td "Today" check
+  each chore sort at as c
+    if since(c.done) >= c.every or count(c.done) = 0
+      row card gap 2
+        c.name bold grow
+        toggle c.done
+screen all "All" list
+  each chore sort name as c
+    row card gap 2 tap edit c swipe remove c
+      c.name grow
+      "every" c.every "days" faint
+      "last" since(c.done) "d ago" faint
+screen add "Add" plus
+  form chore, "Save chore"
+===
+@create style=multi_feature domain=a3_event_planner
+party planning app: guests tab, tasks tab with tick boxes, and budget tab with a bar of how much I spent against my limit
+---
+app "Party" gift plum
+setting limit money = 80000 "Budget"
+table guest name text, coming bool
+table todo what text, done bool
+table cost what text, amount money
+screen g "Guests" users
+  "Coming" count(guest where coming = yes) "of" count(guest) big
+  each guest sort name as x
+    row card
+      x.name grow
+      toggle x.coming
+  form guest
+screen t "Tasks" check
+  ring count(todo where done = yes), max(count(todo), 1), "tasks done"
+  each todo as x
+    row card
+      toggle x.done
+      x.what grow
+  form todo
+screen b "Budget" wallet
+  goal sum(cost.amount all), limit, "spent", ""
+  form cost
+  list cost
+===
+@edit style=plain domain=a3_e_party1 ref=a3_event_planner
+add the party date and remind me 2 days before
+---
+~ setting limit money = 80000 "Budget" => setting limit money = 80000 "Budget"\nsetting pdate date = today "Party date"
++ when pdate - today = 2 notify "Party in two days"
+===
+@create style=multi_feature domain=a3_ramadan
+Ramadan tracker with two tabs: Fasting has a calendar where I tap the days I fasted and a count out of 30, Quran has a ring for pages read against 604 pages and quick buttons.
+---
+app "Ramadan" moon mint
+table fast
+table read pages num 1..100
+state m date = today
+screen f "Fasting" moon
+  monthnav m
+  calendar fast, m
+  "Fasts" count(fast month of m) "of 30" big
+screen q "Quran" book
+  ring sum(read.pages all), 604, "pages of the Quran"
+  quick read, pages, [2, 5, 10, 20]
+  daybars last 7 days, sum(read.pages on it)
+===
+@create style=multi_feature domain=a3_pocket_kids
+pocket money for two kids with a jar tab and a history tab: each kid has deposits and spends, balance with a savings goal bar
+---
+app "Pocket money" coin mint
+table kid name text, goal money = 2000
+table move kid ref kid, amount money, why text?
+screen jar "Jars" coin
+  each kid sort name as k
+    stack card gap 1
+      row gap 2
+        k.name head grow
+        sum(k.move.amount) big
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * clamp(sum(k.move.amount) / max(k.goal, 1), 0, 1), 4 fill good radius 2
+      "Goal" k.goal faint
+  form kid, "Add kid"
+screen hist "History" list
+  form move, "Add or spend (use minus)"
+  log move
+===
+@edit style=plain domain=a3_e_pocket1 ref=a3_pocket_kids
+show a small star next to a kid who reached the goal
+---
++after       "Goal" k.goal faint ::       if sum(k.move.amount) >= k.goal\n        icon star color yellow
+===
+@create style=multi_feature domain=a3_fitness_dash
+fitness dashboard with two tabs: Today has a calories ring and quick buttons for workouts, Week has a heat map of workout days and a weight trend
+---
+app "Fit" dumbbell ink
+table burn kcal num 10..2000, what text?
+table wt kg num 20..300
+setting goal num = 500 "Burn goal"
+screen td "Today" flame
+  ring sum(burn.kcal today), goal, "kcal burned"
+  quick burn, kcal, [100, 200, 400]
+  list burn today
+screen week "Week" chart
+  heat last 70 days, count(burn on it), 1
+  trend wt sort at, it.kg
+  form wt, "Log weight"
+===
+@create style=detailed domain=a3_baby_feed
+Baby tracker for night shifts. One tap for feed, one for nap, one for diaper, shows how long since the last feed and a count of each today.
+---
+app "Baby" baby plum
+table ev kind pick Feed|Nap|Diaper
+quick ev, kind, [Feed, Nap, Diaper]
+"Since last feed" hour(now - last(ev.at where kind = Feed)) "h" minute(now - last(ev.at where kind = Feed)) "min" big
+row gap 2
+  "Feeds" count(ev today where kind = Feed) bold
+  "Naps" count(ev today where kind = Nap) bold
+  "Diapers" count(ev today where kind = Diaper) bold
+log ev
+===
+@edit style=plain domain=a3_e_baby1 ref=a3_baby_feed
+add a Bath option
+---
+~ kind pick Feed|Nap|Diaper => kind pick Feed|Nap|Diaper|Bath
+~ [Feed, Nap, Diaper] => [Feed, Nap, Diaper, Bath]
+===
+@create style=short domain=a3_commute
+commute time log
+---
+app "Commute" bus slate
+table trip mins num 1..300, way pick Morning|Evening = Morning
+"Average" round(avg(trip.mins last 30 days)) "min" big
+stat max(trip.mins), "longest ever"
+trend trip sort at, it.mins
+form trip
+log trip
+===
+@create style=multi_feature domain=a3_league
+local cricket league table: add teams, record each match with home team, away team and runs, wins are counted automatically and teams are ranked by wins
+---
+app "League" trophy ocean
+table team name text
+table game home ref team, away ref team, hr num 0..500, ar num 0..500
+each team sort name as t
+  row card gap 2
+    t.name bold grow
+    "W" count(game where home = t and hr > ar) + count(game where away = t and ar > hr) big
+    "P" count(game where home = t) + count(game where away = t) faint
+form team, "Add team"
+form game, "Record match"
+log game
+===
+@create style=custom_ui domain=a3_goal_bars
+my goals for this year with a progress number from 0 to 100 that I update, each goal drawn as a bar, finished goals turn green
+---
+app "Year goals" target plum
+table goal name text, pct num 0..100 = 0
+each goal sort pct desc as g
+  stack card gap 1 tap edit g
+    row gap 2
+      g.name bold grow
+      g.pct "%" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, g.pct, 4 fill if(g.pct >= 100, good, accent) radius 2
+    row gap 1
+      button "+10" tap set g.pct = g.pct + 10
+      button "-10" tap set g.pct = g.pct - 10
+"Average progress" round(avg(goal.pct)) "%" bold
+form goal
+===
+@create style=multi_feature domain=a3_watchlist
+movies and shows watchlist with status Want, Watching, Done as tap chips filter, search box, and how many I finished this year
+---
+app "Watchlist" star plum
+table show title text, status pick Want|Watching|Done = Want, kind pick Movie|Series = Movie
+state tab text = Want
+state q text = ""
+row gap 1
+  each options show.status
+    button it fill if(tab = it, accent, soft) tap set tab = it
+field q "Search"
+each show where status = tab and has(title, q) sort title as s
+  row card gap 2 tap edit s swipe remove s
+    stack grow
+      s.title bold
+      s.kind faint
+    choice s.status
+stat count(show year where status = Done), "finished this year"
+form show
+===
+@create style=custom_ui domain=a3_wardrobe
+my wardrobe: clothes with colour type, a bar chart of colours, and a button that picks a random outfit item for today
+---
+app "Wardrobe" tag plum
+table cloth name text, color pick Black|White|Blue|Red|Green|Other = Black
+state pk num = 1
+let n = max(count(cloth), 1)
+button "Pick for today" tap set pk = random(n)
+each cloth sort at as c
+  if index = pk - 1
+    stack card
+      c.name head
+      c.color faint
+bars options cloth.color, count(cloth where color = it), it
+form cloth
+list cloth
+===
+@create style=short domain=a3_bike_rides
+cycling distance tracker
+---
+app "Cycling" bike mint
+table ride km num 0.5..300
+setting goal num = 50 "Weekly km"
+ring sum(ride.km week), goal, "km this week"
+quick ride, km, [5, 10, 20]
+trend ride sort at, it.km
+log ride
+===
+@create style=multi_feature domain=a3_meal_week
+weekly meal planner with two tabs: a plan grid with a row per weekday for lunch and dinner, and a shopping list tab where I tick what I bought
+---
+app "Meal plan" food mint
+table meal day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, slot pick Lunch|Dinner, dish text
+table buy item text, got bool
+screen plan "Plan" calendar
+  each options meal.day as dd
+    row gap 2
+      text dd bold
+      stack grow
+        each meal where day = dd sort slot as m
+          row gap 1 tap edit m swipe remove m
+            m.slot faint
+            m.dish grow
+  form meal, "Add dish"
+screen shop "Shop" cart
+  each buy sort got as b
+    row card
+      toggle b.got
+      b.item grow
+  form buy, "Add item"
+===
+@create style=detailed domain=a3_leitner
+Flashcards with three boxes. New cards start in box 1, when I know a card I tap Know and it moves up a box, Miss sends it back to box 1. I choose which box to study.
+---
+app "Box cards" brain plum
+table card front text, back text, box num 1..3 = 1
+state lvl num = 1
+state flip bool = no
+row gap 1
+  each [1, 2, 3]
+    button "Box" it fill if(lvl = it, accent, soft) tap set lvl = it
+"Cards in this box" count(card where box = lvl) faint
+each card where box = lvl sort at top 1 as c
+  stack card gap 2 tap set flip = not flip
+    if flip
+      c.back big
+    else
+      c.front big
+  row gap 1
+    button "Know" tap set c.box = min(c.box + 1, 3) then set flip = no
+    button "Miss" tap set c.box = 1 then set flip = no
+form card, "Add card"
+===
+@create style=multi_feature domain=a3_exam_topics
+exams and their topics: each exam has topics with a done tick, a ring per exam showing progress, and a reminder the day before the exam
+---
+app "Exam prep" school ocean
+table exam subject text, day date
+table topic of ref exam, name text, done bool
+remind "Exam tomorrow" at exam.day - 1d at 18:00
+each exam sort day as e
+  stack card gap 1
+    row gap 2
+      e.subject head grow
+      e.day - today "days" faint
+    ring count(e.topic where done = yes), max(count(e.topic), 1), "topics done"
+    each e.topic as t
+      row gap 2
+        toggle t.done
+        t.name grow
+form exam, "Add exam"
+form topic, "Add topic"
+===
+@create style=short domain=a3_snack_tally
+snack counter for the kids
+---
+app "Snacks" apple mint
+table snack kid pick Ali|Zara|Hamza
+quick snack, kid, [Ali, Zara, Hamza]
+share snack today by kid, count(it), it.key
+"Today" count(snack today) big
+daybars last 7 days, count(snack on it)
+===
+@create style=custom_ui domain=a3_rpg_sheet
+character sheet for our tabletop game with hit points bar, plus and minus buttons for hp, and a d20 button that remembers the last 5 rolls
+---
+app "Character" shield plum
+table rollx v num 1..20
+setting maxhp num = 20 "Max HP"
+state hp num = 20
+text hp "/" maxhp big color if(hp <= maxhp / 4, bad, ink)
+draw 100, 6
+  rect 0, 0, 100, 6 fill soft radius 3
+  rect 0, 0, 100 * clamp(hp / maxhp, 0, 1), 6 fill if(hp <= maxhp / 4, bad, good) radius 3
+row gap 1
+  button "-1" tap set hp = max(hp - 1, 0)
+  button "+1" tap set hp = min(hp + 1, maxhp)
+  button "Heal full" tap set hp = maxhp
+button "Roll d20" tap add rollx v = random(20)
+row gap 1
+  each rollx sort at desc top 5 as r
+    draw width 36
+      circle 50, 50, 44 fill if(r.v = 20, good, if(r.v = 1, bad, soft))
+      label 50, 52, r.v bold
+===
+@edit style=plain domain=a3_e_rpg1 ref=a3_rpg_sheet
+make it dark with the ink theme
+---
+~ app "Character" shield plum => app "Character" shield ink
+===
+@create style=multi_feature domain=a3_cash_count
+cash drawer counter for my shop: tap each note value to count it, shows how many of each note and the total cash, clear button for a new count
+---
+app "Cash count" money slate
+table cashnote value num 10..5000
+let total = sum(cashnote.value all)
+text total big
+"notes counted:" count(cashnote) faint
+quick cashnote, value, [10, 50, 100, 500, 1000, 5000]
+each [5000, 1000, 500, 100, 50, 10] as v
+  row gap 2
+    text v bold
+    "x" count(cashnote where value = v) grow
+    count(cashnote where value = v) * v faint
+button "New count" tap remove all cashnote
+===
+@edit style=plain domain=a3_e_cash1 ref=a3_cash_count
+my shop also takes 20 rupee notes
+---
+~ [10, 50, 100, 500, 1000, 5000] => [10, 20, 50, 100, 500, 1000, 5000]
+~ [5000, 1000, 500, 100, 50, 10] => [5000, 1000, 500, 100, 50, 20, 10]
+===
+@create style=custom_ui domain=a3_drops8
+eight water drops in a row that fill in blue as I drink glasses, tap the plus to add a glass, resets each day automatically
+---
+app "8 glasses" drop ocean
+table glass
+let n = count(glass today)
+row gap 1
+  each 1..8
+    icon drop color if(it <= n, blue, soft)
+"Glasses" n "of 8" big
+button "+1 glass" tap add glass
+button "Undo" tap remove last(glass today)
+heat last 70 days, count(glass on it), 8
+===
+@create style=short domain=a3_dua_streak
+daily dua streak
+---
+app "Dua" mosque mint
+table dua
+toggle dua
+"Streak" streak(dua) "days" big
+"Best" best(dua) "days" faint
+heat last 70 days, count(dua on it), 1
+===
+@create style=custom_ui domain=a3_sunday_chore_wheel
+chore wheel for the family, names on a table, a spinner arrow that points at a random family member after I tap, with the name shown below
+---
+app "Chore wheel" home mint
+table fam name text
+state ang num = 0
+state pk num = 1
+let n = max(count(fam), 1)
+draw 100, 100 width 220 tap set pk = random(n) then set ang = (pk - 1) * 360 / n + 180 / n
+  circle 50, 50, 44 stroke soft thick 4
+  each 1..n
+    arc 50, 50, 44, (it - 1) * 360 / n, it * 360 / n stroke hue(it * 360 / n) thick 6
+  line 50, 50, 50 + 38 * sin(ang), 50 - 38 * cos(ang) stroke ink thick 3
+each fam sort at as f
+  if index = pk - 1
+    f.name big
+form fam, "Add family member"
+===
+@oos style=detailed domain=a3_oos_watch oos=other
+Connect to my smartwatch and pull my steps and heart rate automatically, show a weekly chart.
+---
+app "Steps" walk mint
+table walk steps num 1..50000, bpm num? 40..200
+quick walk, steps, [1000, 2000, 5000]
+daybars last 7 days, sum(walk.steps on it)
+"Resting heart rate" avg(walk.bpm last 7 days) faint
+form walk
+===

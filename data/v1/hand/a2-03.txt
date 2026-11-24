@@ -1,0 +1,514 @@
+@create style=custom_ui domain=a2_timetable_week
+weekly class timetable with a column for each day, periods listed in order, and today's column should stand out
+---
+app "Timetable" school ocean
+table period day pick Mon|Tue|Wed|Thu|Fri = Mon, slot num 1..8, subject text, room text?
+grid 5 gap 1
+  each options period.day as dd
+    stack gap 1
+      text dd bold align center color if(dd = dayname(today), accent, muted)
+      each period where day = dd sort slot as p
+        stack radius 6 pad 1 fill if(dd = dayname(today), accent, soft) tap edit p
+          p.slot p.subject size small bold
+          p.room size tiny
+form period, "Add period"
+===
+@create style=detailed domain=a2_homework
+Homework list for my son. Each item has the subject, what to do, the due date and a tick when finished. Show how many are left and how many are late, and remind in the evening before it is due.
+---
+app "Homework" pencil mint
+table hw subject pick Maths|English|Science|Urdu|Islamiat|Other = Maths, task text, due date, done bool
+count(hw where done = no) "to do" big
+count(hw where done = no and due < today) "overdue" faint color warn
+each hw where done = no sort due as h
+  row card gap 2 tap edit h swipe remove h
+    toggle h.done
+    stack grow
+      h.task bold
+      h.subject "due" h.due faint color if(h.due < today, bad, muted)
+remind "Homework due tomorrow" at hw.due - 1d at 18:00
+form hw
+===
+@create style=short domain=a2_exam_marks
+my exam marks and overall percentage
+---
+app "Exam marks" pen ocean
+table exam subject text, score num 0.., outof num 1.. = 100
+"Overall" round(sum(exam.score) * 100 / max(sum(exam.outof), 1)) "%" big
+trend exam, it.score * 100 / it.outof
+each exam sort at desc top 8 as e
+  row gap 2
+    e.subject grow
+    e.score "/" e.outof bold
+form exam, "Add result"
+===
+@create style=multi_feature domain=a2_gpa
+gpa calculator for university: course name, credit hours, grade from A to F, show total GPA out of 4 and total credits
+---
+app "GPA" trophy plum
+table course name text, credits num 1..6 = 3, grade pick A|B|C|D|F = A
+let pts = sumof(course, it.credits * if(it.grade = A, 4, if(it.grade = B, 3, if(it.grade = C, 2, if(it.grade = D, 1, 0)))))
+"GPA" round(pts / max(sum(course.credits), 1) * 100) / 100 big
+sum(course.credits) "credits" faint
+each course sort name as c
+  row card gap 2 tap edit c swipe remove c
+    c.name bold grow
+    c.credits "cr" faint
+    choice c.grade
+form course, "Add course"
+===
+@create style=custom_ui domain=a2_bunk_counter
+for each subject show attendance percent with a bar that goes red below my minimum, and buttons for went and bunked
+---
+app "Attendance" users slate
+table lecture subject pick Maths|Physics|Chemistry|English = Maths, went bool = yes
+setting minimum num = 75 "Minimum attendance %"
+each options lecture.subject as s
+  let pct = count(lecture where subject = s and went = yes) * 100 / max(count(lecture where subject = s), 1)
+  stack card gap 1
+    row
+      text s bold grow
+      round(pct) "%" bold color if(pct < minimum, bad, good)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, pct, 4 fill if(pct < minimum, bad, good) radius 2
+    row gap 1
+      button "Went" tap add lecture subject = s, went = yes
+      button "Bunked" tap add lecture subject = s, went = no
+===
+@create style=multi_feature domain=a2_study_timer
+study timer: pick the subject, 25 minute countdown, when done it saves the session, minutes studied today, and a bar per subject this week
+---
+app "Study timer" timer ink
+table study subject pick Maths|Physics|Chemistry|English = Maths, mins num 1..300
+state subj pick Maths|Physics|Chemistry|English = Maths
+choice subj
+timer 25m, "Study", add study subject = subj, mins = 25 then notify "Session done, take a break"
+"Today" sum(study.mins today) "min" big
+bars options study.subject, sum(study.mins week where subject = it), it
+list study today
+===
+@create style=custom_ui domain=a2_leitner_cards
+flash cards where tapping the card flips it, and I say got it or again, the cards I get wrong come back first
+---
+app "Cards" brain plum
+table card front text, back text, level num 0..3 = 0
+state flip bool = no
+count(card where level < 3) "still to learn" big
+each card sort level top 1 as c
+  stack card gap 2 tap set flip = not flip
+    if flip
+      c.back big
+    else
+      c.front big
+    "Tap the card to flip" faint
+  row gap 1
+    button "Got it" tap set c.level = c.level + 1 then set flip = no
+    button "Again" tap set c.level = 0 then set flip = no
+form card, "New card"
+===
+@create style=detailed domain=a2_spanish_words
+I am learning Spanish. I save words with the English meaning, and each time I remember one I tap a button. After three times it should say learned.
+---
+app "Spanish words" book mint
+table word spanish text, english text
+table review word ref word
+countof(word, count(it.review) >= 3) "words learned" big
+each word sort spanish as w
+  row card gap 2 tap edit w swipe remove w
+    stack grow
+      w.spanish bold
+      w.english faint
+    if count(w.review) >= 3
+      "Learned" color good
+    else
+      count(w.review) "of 3" faint
+      button "I knew it" tap add review word = w
+form word, "Add word"
+===
+@create style=multi_feature domain=a2_reading_list
+reading list: books with author and pages, status want or reading or done, a progress bar for the one I am reading and a +10 pages button
+---
+app "Reading" book plum
+table book title text, author text?, pages num 1.., status pick Want|Reading|Done = Want
+table readlog book ref book, pages num 1..
+each book where status = Reading as b
+  stack card gap 1
+    b.title bold
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(b.readlog.pages) / b.pages, 0, 1), 4 fill accent radius 2
+    sum(b.readlog.pages) "of" b.pages "pages" faint
+    row gap 1
+      button "+10 pages" tap add readlog book = b, pages = 10
+      button "Finished" tap set b.status = Done
+count(book where status = Done) "books finished" head
+"Want to read" faint
+list book where status = Want
+form book, "Add book"
+===
+@create style=detailed domain=a2_gradebook
+I teach class 7. Keep my students, each test with its title, and the marks every student got. Show each student's average and each test's class average.
+---
+app "Gradebook" school slate
+table student name text
+table test title text, outof num 1.. = 20
+table mark student ref student, test ref test, score num 0..
+each student sort name as s
+  row card gap 2
+    s.name bold grow
+    "Avg" round(avg(s.mark.score)) faint
+    count(s.mark) "tests" faint
+each test as t
+  row
+    t.title grow
+    "class avg" round(avg(t.mark.score)) faint
+form student, "Add student"
+form test, "New test"
+form mark, "Enter mark"
+===
+@create style=short domain=a2_hifz_tracker
+madrasa lesson tracker sabaq sabqi manzil
+---
+app "Hifz" mosque mint
+table hifz part pick Sabaq|Sabqi|Manzil = Sabaq, lines num 1..30 = 5
+"Streak" streak(hifz) "days" big
+row gap 1
+  each options hifz.part as p
+    button p tap add hifz part = p
+"New lines this week" sum(hifz.lines week where part = Sabaq) faint
+heat last 70 days, count(hifz on it), 3
+log hifz
+===
+@create style=multi_feature domain=a2_exam_countdown
+exam dates with days left, hours I plan to study for each, a +30 minutes button and a bar showing how much I have studied, and a reminder the night before
+---
+app "Exams" calendar ocean
+table exam subject text, day date, hours num 1..100 = 10
+table studied exam ref exam, mins num 5..600
+each exam where day >= today sort day as e
+  stack card gap 1 tap edit e
+    row
+      e.subject bold grow
+      e.day - today "days" bold color if(e.day - today <= 3, warn, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(e.studied.mins) / (e.hours * 60), 0, 1), 4 fill accent radius 2
+    sum(e.studied.mins) "of" e.hours * 60 "min studied" faint
+    button "+30 min" tap add studied exam = e, mins = 30
+remind "Exam tomorrow, rest well" at exam.day - 1d at 20:00
+form exam, "Add exam"
+===
+@create style=custom_ui domain=a2_assignment_board
+board of assignments in three columns todo doing done, each card shows title and due date, tap a card to change it
+---
+app "Assignments" list ink
+table work title text, course text?, due date, status pick Todo|Doing|Done = Todo
+grid 3 gap 1
+  each options work.status as st
+    stack gap 1
+      text st bold
+      count(work where status = st) faint
+      each work where status = st sort due as w
+        stack card gap 0 tap edit w
+          w.title size small bold
+          w.due size tiny
+form work, "New assignment"
+===
+@create style=custom_ui domain=a2_times_tables
+times tables practice for my kid, shows a random multiplication, he types the answer, I want a score
+---
+app "Times tables" calc mint
+table attempt ok bool
+state a num = 3
+state b num = 4
+state ans num = 0
+"What is" a "x" b "?" big
+field ans "Your answer"
+button "Check" tap add attempt ok = if(ans = a * b, yes, no) then set a = random(12) then set b = random(12) then set ans = 0
+if count(attempt) > 0
+  if(last(attempt.ok), "Last one: right", "Last one: try again") faint
+count(attempt where ok = yes) "right of" count(attempt) big
+===
+@create style=custom_ui domain=a2_reading_stars
+sticker chart for my daughter's reading, seven little day slots that get a star when she reads enough minutes
+---
+app "Reading stars" star mint
+table read mins num 1..120 = 15
+setting goal num = 15 "Minutes for a star"
+row gap 1
+  each days last 7 days
+    stack grow align center gap 0
+      icon if(sum(read.mins on it) >= goal, "star", "plus")
+      text dayname(it) size tiny color muted
+countof(days last 7 days, sum(read.mins on it) >= goal) "stars this week" big
+quick read, mins, [10, 15, 20]
+form read
+===
+@create style=detailed domain=a2_tutor_hours
+I give home tuition to a few kids. Each child has an hourly fee. I add the hours I taught and want to see how much each family owes me this month and the total.
+---
+app "Tutor" pen slate
+table pupil name text, rate money
+table lesson pupil ref pupil, hours num 0.. = 1
+"Total this month" sumof(pupil, sum(it.lesson.hours month) * it.rate) big
+each pupil sort name as p
+  let hrs = sum(p.lesson.hours month)
+  row card gap 2
+    stack grow
+      p.name bold
+      text hrs "h this month" faint
+    text hrs * p.rate bold
+    button "+1 h" tap add lesson pupil = p
+form pupil, "Add pupil"
+===
+@create style=multi_feature domain=a2_lecture_notes
+lecture notes with course, topic and the long note text, a search box that filters by topic or course, newest first
+---
+app "Notes" note plum
+table note course text, topic text, body long
+state q text = ""
+field q "Search"
+each note where has(topic, q) or has(course, q) sort at desc as n
+  stack card gap 1 tap edit n swipe remove n
+    row
+      n.topic bold grow
+      n.course faint
+    n.body size small
+form note, "New note"
+===
+@create style=detailed domain=a2_syllabus
+Syllabus tracker for my exams. Each subject has topics, I tick a topic when I have finished it, and I want a progress ring for every subject.
+---
+app "Syllabus" check ocean
+table subject name text
+table topic subject ref subject, title text, done bool
+each subject sort name as s
+  stack card gap 1
+    ring countof(s.topic, it.done), max(count(s.topic), 1), s.name
+    each s.topic as t
+      row gap 1
+        toggle t.done
+        t.title grow
+form subject, "Add subject"
+form topic, "Add topic"
+===
+@create style=custom_ui domain=a2_house_points
+school house points for red blue green and yellow, a plus 10 button for each house and a coloured bar that grows
+---
+app "House points" trophy ink
+table pts house pick Red|Blue|Green|Yellow = Red, n num 1..100 = 10
+each options pts.house as h
+  stack gap 0
+    row gap 1
+      text h bold grow
+      text sum(pts.n where house = h) big
+      button "+10" tap add pts house = h, n = 10
+    draw 100, 4
+      rect 0, 0, 100 * sum(pts.n where house = h) / max(sum(pts.n), 1), 4 fill hue(index * 90) radius 2
+===
+@create style=short domain=a2_mock_tests
+mock test scores for entry test prep
+---
+app "Mock tests" target slate
+table test name text, score num 0.., total num 1.. = 100
+"Best" max(test.score) big
+"Latest" last(test.score) "/" last(test.total) faint
+"Average" round(sum(test.score) * 100 / max(sum(test.total), 1)) "%" faint
+trend test, it.score * 100 / it.total
+form test, "Add test"
+list test
+===
+@create style=typos domain=a2_school_bag
+checklist to pack my school bag for tomorrow by subject day tick when packed and remind me at 8 pm
+---
+app "School bag" bag ocean
+table item name text, day pick Mon|Tue|Wed|Thu|Fri = Mon
+table packed item ref item
+"Pack for" dayname(today + 1) head
+each item where day = dayname(today + 1) sort name as i
+  row card gap 2
+    toggle i.packed
+    i.name grow
+remind "Pack the school bag" at 20:00 on sun mon tue wed thu
+form item, "Add to checklist"
+===
+@create style=short domain=a2_typing_speed
+typing speed practice log
+---
+app "Typing" pen slate
+table run wpm num 1..250, accuracy num 0..100 = 95
+"Best" max(run.wpm) "wpm" big
+"Average this week" round(avg(run.wpm week)) faint
+trend run, it.wpm
+form run
+list run
+===
+@create style=multi_feature domain=a2_essays
+essay planner: title, target words and optional due date, a progress bar for words written so far, quick +100 and +250 word buttons
+---
+app "Essays" pencil plum
+table essay title text, target num 100..5000 = 1000, due date?
+table writing essay ref essay, words num 1..
+each essay sort due as e
+  let w = sum(e.writing.words)
+  stack card gap 1 tap edit e
+    row
+      e.title bold grow
+      e.due faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(w / e.target, 0, 1), 4 fill accent radius 2
+    text w "of" e.target "words" faint
+    row gap 1
+      button "+100" tap add writing essay = e, words = 100
+      button "+250" tap add writing essay = e, words = 250
+form essay, "New essay"
+===
+@create style=detailed domain=a2_group_project
+Group project for four friends. List who is in the group and the tasks, each task has an owner and a done tick. Show tasks left for every person.
+---
+app "Group project" users mint
+table member name text
+table task what text, owner ref member, done bool
+count(task where done = no) "tasks left" big
+each member sort name as m
+  stack card gap 1
+    row
+      m.name bold grow
+      count(m.task where done = no) "open" faint
+    each m.task where done = no as t
+      row gap 1
+        toggle t.done
+        t.what grow
+form member, "Add friend"
+form task, "Add task"
+===
+@create style=custom_ui domain=a2_seating_plan
+classroom seating plan with 24 desks in 6 columns, each desk shows the child's name and empty ones are grey
+---
+app "Seating" board slate
+table seat desk num 1..24, name text
+grid 6 gap 1
+  each 1..24 as d
+    box height 56 radius 8 fill if(count(seat where desk = d) > 0, accent, soft)
+      text d size tiny align center
+      last(seat.name where desk = d) size small bold align center
+form seat, "Put a child at a desk"
+===
+@create style=multi_feature domain=a2_past_papers
+past paper practice: subject, year, my mark out of 100, show average mark per subject as bars and my best paper
+---
+app "Past papers" pen ocean
+table paper subject pick Maths|English|Physics|Chemistry|Biology = Maths, year num 2010..2030, mark num 0..100
+"Best paper" max(paper.mark) big
+bars options paper.subject, avg(paper.mark where subject = it), it
+form paper, "Add paper"
+log paper
+===
+@create style=vague domain=a2_learn_weekly
+I want to learn something new every week and not forget it
+---
+app "Learning" brain mint
+table learn topic text, hours num 0.. = 1, note text?
+remind "What did you learn this week?" at 19:00 on sun
+"This week" sum(learn.hours week) "hours" big
+count(learn month) "topics this month" faint
+form learn, "Add what I learned"
+log learn
+===
+@create style=short domain=a2_urdu_practice
+daily urdu writing practice
+---
+app "Urdu writing" pen plum
+table practice pages num 1..20 = 1
+"Streak" streak(practice) "days" big
+"Best" best(practice) "days" faint
+quick practice, pages, [1, 2, 3]
+heat last 70 days, sum(practice.pages on it), 3
+log practice
+===
+@oos style=detailed domain=a2_oos_read_aloud oos=voice
+My child reads aloud and the app should listen with the microphone and mark the words she got wrong. Also keep a log of reading minutes each day with a star chart.
+---
+app "Reading log" book mint
+table read mins num 1..120 = 15, book text?
+setting goal num = 15 "Minutes for a star"
+countof(days last 7 days, sum(read.mins on it) >= goal) "stars this week" big
+quick read, mins, [10, 15, 20]
+form read
+daybars last 7 days, sum(read.mins on it)
+log read
+===
+@oos style=short domain=a2_oos_scan_hw oos=camera
+scan my homework page with the camera and save it with the due date
+---
+app "Homework" pencil ocean
+table hw subject text, task text, due date, done bool
+each hw where done = no sort due as h
+  row card gap 2 tap edit h swipe remove h
+    toggle h.done
+    stack grow
+      h.task bold
+      h.subject "due" h.due faint
+form hw, "Add homework"
+===
+@oos style=detailed domain=a2_oos_ai_tutor oos=ai
+I want an AI tutor that explains my wrong answers in simple words, and also a place to write down questions I got wrong with the right answer so I can revise them.
+---
+app "Revision" brain plum
+table miss question text, right text, subject text?
+state flip bool = no
+count(miss) "questions to revise" big
+each miss sort at desc top 1 as m
+  stack card gap 2 tap set flip = not flip
+    if flip
+      m.right big
+    else
+      m.question big
+    "Tap to see the answer" faint
+form miss, "Add a question"
+list miss
+===
+@edit style=plain domain=a2_e_hw_priority ref=a2_homework
+add a priority for each homework, high medium or low
+---
+~ , done bool => , done bool, priority pick Low|Medium|High = Medium
+===
+@edit style=plain domain=a2_e_marks_goal ref=a2_exam_marks
+I want to aim for 80 percent, show a bar for it
+---
+~ app "Exam marks" pen ocean => app "Exam marks" pen ocean\nsetting aim num = 80 "Target percent"
++after "Overall" round(sum(exam.score) * 100 / max(sum(exam.outof), 1)) "%" big :: goal round(sum(exam.score) * 100 / max(sum(exam.outof), 1)), aim, "average so far", "%"
+===
+@edit style=plain domain=a2_e_cards_green ref=a2_leitner_cards
+make it green
+---
+~ app "Cards" brain plum => app "Cards" brain mint
+===
+@edit style=plain domain=a2_e_reading_remind ref=a2_reading_list
+remind me every evening at 9 to read
+---
++ remind "Read a few pages" at 21:00
+===
+@edit style=plain domain=a2_e_timer_50 ref=a2_study_timer
+make the study session 50 minutes
+---
+~ timer 25m, "Study", add study subject = subj, mins = 25 => timer 50m, "Study", add study subject = subj, mins = 50
+===
+@edit style=plain domain=a2_e_gradebook_name ref=a2_gradebook
+call it marks book
+---
+~ app "Gradebook" school slate => app "Marks book" school slate
+===
+@edit style=plain domain=a2_e_syllabus_exam ref=a2_syllabus
+add exam dates with a reminder the day before
+---
++ table exam subject text, day date
++ form exam, "Add exam date"
++ remind "Exam tomorrow" at exam.day - 1d at 9:00
+===
+@edit style=plain domain=a2_e_timetable_remind ref=a2_timetable_week
+remind me at 7 am on school days
+---
++ remind "Pack your bag, check today's timetable" at 7:00 on mon tue wed thu fri

@@ -1,0 +1,367 @@
+@create style=typos domain=a3_t_gst
+calcuator for discount and gst on my shop items
+---
+app "Price calc" calc slate
+setting gst num = 17 "GST %"
+state mrp money = 0
+state disc num = 0
+field mrp "Price"
+field disc "Discount %"
+let after = mrp * (1 - disc / 100)
+"After discount" round(after) head
+"With GST" round(after * (1 + gst / 100)) big
+===
+@create style=typos domain=a3_t_billitems
+bill splitter where evryone adds what they ate and it shows who owes how much
+---
+app "Who owes" users mint
+table person name text
+table ate who ref person, what text, price money
+each person sort name as p
+  row card gap 2
+    p.name bold grow
+    sum(p.ate.price) big
+"Table total" sum(ate.price all) faint
+form person, "Add person"
+form ate, "Add item eaten"
+===
+@create style=typos domain=a3_t_water
+water remindr and glass counter plz
+---
+app "Water" drop ocean
+table sip ml num 50..1500
+setting goal num = 2000 "Daily goal (ml)"
+remind "Drink water" every 2h from 9:00 to 21:00
+ring sum(sip.ml today), goal, "ml today"
+quick sip, ml, [250, 500]
+list sip today
+===
+@create style=typos domain=a3_t_situps
+situp counter with ring for 50 a day
+---
+app "Situps" dumbbell ink
+table su reps num 1..200
+ring sum(su.reps today), 50, "situps today"
+quick su, reps, [5, 10, 20]
+"Streak" streak(su) "days" big
+"Best streak" best(su) "days" faint
+===
+@create style=typos domain=a3_t_cricket
+cricket scorebord for tape ball match 6 overs
+---
+app "Tape ball" ball mint
+table ball runs num 0..6 = 0, wide bool, out bool
+let legal = count(ball where wide = no)
+let runs = sum(ball.runs all) + count(ball where wide = yes)
+text runs "/" count(ball where out = yes) big
+"Overs" floor(legal / 6) "." legal % 6 "of 6" faint
+row gap 1
+  each [0, 1, 2, 4, 6]
+    button it tap add ball runs = it
+row gap 1
+  button "Wide" tap add ball wide = yes
+  button "Out" fill bad tap add ball out = yes
+if legal >= 36
+  "Innings over" head color warn
+button "New match" tap remove all ball
+===
+@edit style=plain domain=a3_e_tcricket1 ref=a3_t_cricket
+add undo last ball button
+---
++after   button "Out" fill bad tap add ball out = yes :: button "Undo" tap remove last(ball)
+===
+@create style=typos domain=a3_t_bday
+remind me birthdys of my frends and show how many days left
+---
+app "Birthdays" gift plum
+table fr name text, day date
+remind "It's a birthday today" at fr.day
+each fr sort day as f
+  row card gap 2 tap edit f swipe remove f
+    f.name bold grow
+    f.day faint
+form fr
+===
+@edit style=plain domain=a3_e_tbday1 ref=a3_t_bday
+add a phone number box
+---
+~ day date => day date, phone text?
+===
+@create style=typos domain=a3_t_oilchange
+car oil change tracker and when its due nxt
+---
+app "Oil change" car slate
+table oil odo num 0.., cost money?
+setting every num = 5000 "Change every (km)"
+text last(oil.odo) + every big
+"is the next due reading" faint
+"Last change" last(oil.odo) "km" faint
+form oil
+log oil
+===
+@create style=typos domain=a3_t_umra
+packng list for umra with tick boxes
+---
+app "Umra pack" mosque mint
+table it_ name text, ok bool
+ring count(it_ where ok = yes), max(count(it_), 1), "packed"
+each it_ sort at as i
+  row card
+    i.name grow
+    toggle i.ok
+form it_
+===
+@edit style=plain domain=a3_e_tumra1 ref=a3_t_umra
+make it plum
+---
+~ app "Umra pack" mosque mint => app "Umra pack" mosque plum
+===
+@create style=vague domain=a3_v_bike
+help me save for a bike
+---
+app "Bike fund" bike mint
+table put amount money
+setting goal money = 30000 "Bike price"
+goal sum(put.amount all), goal, "saved"
+quick put, amount, [100, 500, 1000]
+log put
+===
+@edit style=plain domain=a3_e_vbike1 ref=a3_v_bike
+show how many weeks I have been saving
+---
++ "Weeks saving" floor((today - first(put.at)) / 7) faint
+===
+@create style=vague domain=a3_v_clean
+keep my room clean
+---
+app "Tidy room" home mint
+table job name text, every num 1..30 = 7
+table cleaned job ref job
+each job sort name as j
+  row card gap 2
+    j.name bold grow
+    since(j.cleaned) "days ago" color if(since(j.cleaned) >= j.every, bad, muted)
+    button "Done" tap add cleaned job = j
+form job, "Add job"
+===
+@create style=vague domain=a3_v_kidsgame
+a fun game for my kids
+---
+app "Tap the star" star plum
+table caught n num 1..9
+state spot num = 5
+let score = count(caught all)
+text score "stars caught" big
+grid 3 gap 1
+  each 1..9 as c
+    box height 70 radius 12 fill if(c = spot, accent, soft) tap add caught n = c
+button "Move the star" tap set spot = random(9)
+button "Start over" tap remove all caught
+===
+@create style=vague domain=a3_v_walk
+my daily walk
+---
+app "Walks" walk mint
+table walk km num 0.1..50 = 2
+setting goal num = 20 "Weekly km"
+goal sum(walk.km week), goal, "km this week", "km"
+quick walk, km, [1, 2, 5]
+heat last 70 days, count(walk on it), 1
+===
+@create style=vague domain=a3_v_shopcouple
+shopping with my wife
+---
+app "Our shopping" cart mint
+table item name text, who pick Me|Wife = Me, got bool
+each options item.who as w
+  text w head
+  each item where who = w and got = no sort at as i
+    row card gap 2 swipe remove i
+      toggle i.got
+      i.name grow
+form item
+"Bought" count(item where got = yes) faint
+===
+@create style=vague domain=a3_v_murree
+trip to murree next month
+---
+app "Murree trip" tree ocean
+setting go date = today "Trip date"
+table todo what text, done bool
+table cost what text, amount money
+text go - today "days to go" big
+"Budget so far" sum(cost.amount all) head
+each todo as t
+  row card
+    toggle t.done
+    t.what grow
+form todo, "Add to do"
+form cost, "Add cost"
+===
+@create style=vague domain=a3_v_laps
+counting laps
+---
+app "Laps" run ocean
+table lap
+text count(lap today) big
+"laps today" faint
+button "Lap" tap add lap
+button "Undo" tap remove last(lap today)
+daybars last 7 days, count(lap on it)
+===
+@create style=vague domain=a3_v_dicefun
+fun with dice
+---
+app "Dice fun" dice plum
+state d1 num = 1
+state d2 num = 1
+state d3 num = 1
+row gap 2
+  each [d1, d2, d3]
+    draw 100, 100 width 90
+      rect 4, 4, 92, 92 radius 14 fill surface stroke ink thick 2
+      label 50, 54, it big
+button "Roll three dice" tap set d1 = random(6) then set d2 = random(6) then set d3 = random(6)
+"Total" d1 + d2 + d3 head
+===
+@create style=detailed domain=a3_recipe_cost
+Recipe cost per serving. I list the ingredients with what I paid, set how many servings the recipe makes, and see the cost for each portion.
+---
+app "Recipe cost" food mint
+setting servings num = 4 "Servings"
+table ing name text, cost money
+"Total cost" sum(ing.cost all) head
+"Per serving" round(sum(ing.cost all) / max(servings, 1)) big
+each ing sort cost desc as i
+  row card gap 2 tap edit i swipe remove i
+    i.name grow
+    i.cost bold
+form ing, "Add ingredient"
+===
+@edit style=plain domain=a3_e_rcost1 ref=a3_recipe_cost
+add a quantity text like 2 kg to each ingredient
+---
+~ table ing name text, cost money => table ing name text, qty text?, cost money
+~ i.name grow => i.name grow\n    i.qty faint
+===
+@create style=multi_feature domain=a3_fish_tank
+fish tank care: log water changes and pH readings, show days since last water change, remind every Sunday, and a line chart of pH
+---
+app "Fish tank" fish ocean
+table wchange litres num 1..200
+table ph val num 4..10
+remind "Check the tank" at 10:00 on sun
+"Days since water change" since(wchange) big
+trend ph sort at, it.val
+form ph, "Log pH"
+form wchange, "Log water change"
+log wchange
+===
+@edit style=plain domain=a3_e_fish1 ref=a3_fish_tank
+warn me when pH goes above 8
+---
++ when last(ph.val) > 8 notify "pH is too high"
+===
+@create style=multi_feature domain=a3_trip_days
+daily travel spending: trip budget and number of days as settings, daily allowance shown, today's spend against allowance as a ring, bars for each day
+---
+app "Trip spend" wallet ocean
+setting budget money = 100000 "Trip budget"
+setting days num = 7 "Trip days"
+table spend amount money, what text?
+let allow = budget / max(days, 1)
+ring sum(spend.amount today), allow, "of today's allowance"
+"Left in budget" budget - sum(spend.amount all) big
+daybars last 7 days, sum(spend.amount on it)
+form spend
+log spend
+===
+@edit style=plain domain=a3_e_tripdays1 ref=a3_trip_days
+we are staying 10 days now and the budget is 150000
+---
+~ setting budget money = 100000 => setting budget money = 150000
+~ setting days num = 7 => setting days num = 10
+===
+@create style=multi_feature domain=a3_eidi
+Eidi tracker for my kids, each kid has a list of money received from relatives, totals per kid and a year pick so I can compare last Eid
+---
+app "Eidi" gift mint
+table kid name text
+table eidi to ref kid, from text, amount money, yr pick Y2025|Y2026 = Y2026
+each kid sort name as k
+  stack card gap 1
+    row gap 2
+      k.name head grow
+      sum(k.eidi.amount where yr = Y2026) big
+      "last Eid" sum(k.eidi.amount where yr = Y2025) faint
+    each k.eidi as e
+      row gap 2 swipe remove e
+        e.from grow
+        e.amount faint
+form kid, "Add kid"
+form eidi, "Add eidi"
+===
+@create style=multi_feature domain=a3_gym_pr
+personal records in the gym: list of lifts, each lift has entries with weight, shows the best weight per lift and a progress line
+---
+app "Lift PRs" dumbbell ink
+table lift name text
+table entry lift ref lift, kg num 1..500, reps num 1..30 = 5
+each lift sort name as l
+  stack card gap 1
+    row gap 2
+      l.name bold grow
+      "PR" max(l.entry.kg) "kg" big
+    draw 100, 30
+      poly stroke accent thick 1
+        each l.entry sort at as e
+          pt 100 * index / max(count(l.entry) - 1, 1), 28 - 26 * e.kg / max(max(l.entry.kg), 1)
+form lift, "Add lift"
+form entry, "Log set"
+===
+@edit style=plain domain=a3_e_pr1 ref=a3_gym_pr
+make the colours blue
+---
+~ app "Lift PRs" dumbbell ink => app "Lift PRs" dumbbell ocean
+===
+@create style=short domain=a3_chai_stall
+chai stall cups sold
+---
+app "Chai stall" coffee ink
+table sale cups num 1..20 = 1
+setting price money = 50 "Price per cup"
+"Today" sum(sale.cups today) "cups" big
+"Cash" sum(sale.cups today) * price head
+quick sale, cups, [1, 2, 5]
+daybars last 7 days, sum(sale.cups on it)
+===
+@create style=detailed domain=a3_grocery_stores
+Compare prices of the same item at two shops. I add the item with a price at Shop A and Shop B and the app tells me which is cheaper and how much I save in total if I buy everything at the cheaper one.
+---
+app "Price compare" cart mint
+table cmp item text, a money, b money
+let save = sumof(cmp, abs(it.a - it.b))
+"Savings by picking the cheaper" save big color good
+each cmp sort item as c
+  row card gap 2 tap edit c swipe remove c
+    c.item bold grow
+    "A" c.a color if(c.a <= c.b, good, ink)
+    "B" c.b color if(c.b < c.a, good, ink)
+form cmp, "Add item"
+===
+@create style=multi_feature domain=a3_morning_routine
+morning routine checklist with minutes for each step, tick as I go, total minutes, and the time I need to wake up for leaving at the time I set
+---
+app "Morning" sun mint
+setting leave time = 8:00 "Leave at"
+table step name text, mins num 1..90 = 10, done bool
+let total = sum(step.mins all)
+"Total" total "min" head
+"Wake up at" leave - total * 1m big
+each step sort at as s
+  row card gap 2
+    toggle s.done
+    s.name grow
+    s.mins "min" faint
+form step
+===

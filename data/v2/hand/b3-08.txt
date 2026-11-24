@@ -1,0 +1,427 @@
+@create style=custom_ui domain=b3_snakes_ladders
+snakes and ladders tracker, each player has a roll button that moves them by a random dice number, show their square out of 100 with a bar
+---
+app "Snakes and Ladders" dice plum
+table player name text
+table move player ref player, steps num 1..6
+each player sort name as p
+  let pos = min(sum(p.move.steps), 100)
+  stack card gap 1
+    row
+      p.name head grow
+      pos "of 100" big color if(pos = 100, good, ink)
+    goal pos, 100, "to the top"
+    button "Roll" tap add move player = p, steps = random(6)
+form player, "Add player"
+===
+@create style=detailed domain=b3_golf_scores
+Golf scores. Courses have a par. Each round has the course and total strokes. Show best round, and for each course the number of rounds, best score and my average compared to par, plus a line chart of how many over or under par I was.
+---
+app "Golf Scores" ball mint
+table course name text, par num 54..80 = 72
+table golf_round course ref course, strokes num 40..150
+"Best round" min(golf_round.strokes) big
+each course sort name as c
+  row card
+    stack grow
+      c.name bold
+      count(c.golf_round) "rounds, best" min(c.golf_round.strokes) faint
+    "Average vs par" fixed(sum(c.golf_round.strokes) / count(c.golf_round) - c.par, 1) bold
+trend golf_round, it.strokes - it.course.par
+form course, "Add course"
+form golf_round, "Add round"
+===
+@create style=multi_feature domain=b3_dinner_rsvp
+company dinner rsvp: invitees with diet (any, vegetarian, halal, allergy), reply waiting yes no, plus ones, show how many are coming including plus ones and a plates count for each diet for the caterer
+---
+app "Dinner RSVP" food slate
+table invitee name text, diet pick Any|Vegetarian|Halal|Allergy = Any, rsvp pick Waiting|Yes|No = Waiting, plus_ones num 0..5 = 0
+let coming = sum(invitee.plus_ones where rsvp = Yes) + count(invitee where rsvp = Yes)
+"Coming" coming big
+"Still waiting" count(invitee where rsvp = Waiting) faint
+"For the caterer" head
+each options invitee.diet as d
+  row
+    d grow
+    count(invitee where rsvp = Yes and diet = d) "plates" bold
+each invitee sort name as i
+  row card tap edit i
+    i.name bold grow
+    i.rsvp faint
+form invitee, "Add invitee"
+===
+@create style=typos domain=b3_charity_run
+sponsored charity run, people pledge so much per km, everyone logs their km, show how much we raised and per runner. pledge amount changes
+---
+app "Charity Run" run mint
+setting pledge money = 50 "Pledge per km"
+table runner name text
+table lap runner ref runner, km num 0.5..42
+"Raised so far" sum(lap.km) * pledge big
+"Total distance" sum(lap.km) "km" faint
+each runner sort sum(it.lap.km) desc as r
+  row card
+    r.name bold grow
+    sum(r.lap.km) "km" faint
+    sum(r.lap.km) * pledge bold
+    button "+1 km" tap add lap runner = r, km = 1
+form runner, "Add runner"
+===
+@create style=multi_feature domain=b3_cab_share
+office friends share a cab home, each cab trip has a cost, tick who was in it, split the cost among the people in that cab, and show what each person owes in total
+---
+app "Cab Share" car slate
+table rider name text
+table cab_day cost money
+table seat cab_day ref cab_day, rider ref rider
+"Total cab spend" sum(cab_day.cost) big
+each rider sort name as r
+  row card
+    r.name bold grow
+    count(r.seat) "rides" faint
+    sum(r.seat, it.cab_day.cost / count(it.cab_day.seat)) bold
+form rider, "Add rider"
+form cab_day, "Add a cab trip"
+form seat, "Who was in the cab"
+===
+@create style=detailed domain=b3_meter_readings
+Gas, electricity and water meters at home. I note the reading now and then. Each meter has a name and unit. Show for each meter the last reading and how many units were used this month (last reading this month minus first).
+---
+app "Meter Readings" bolt slate
+table meter name text, unit text
+table meter_reading meter ref meter, value num 0..
+each meter sort name as m
+  let used = last(m.meter_reading.value month) - first(m.meter_reading.value month)
+  row card tap edit m
+    stack grow
+      m.name bold
+      "Last reading" last(m.meter_reading.value) m.unit faint
+    used m.unit "this month" bold
+form meter, "Add meter"
+form meter_reading, "Add reading"
+===
+@create style=vague domain=b3_house_repairs
+things broken in the house, plumber electrician, what is waiting and what i spent
+---
+app "House Repairs" tool slate
+table repair what text, room pick Kitchen|Bathroom|Bedroom|Roof|Garden|Other = Other, status pick Reported|Booked|Fixed = Reported, cost money?
+"Waiting for repair" count(repair where status != Fixed) big
+"Spent on repairs this year" sum(repair.cost year) faint
+each repair where status != Fixed sort at as r
+  row card tap edit r
+    stack grow
+      r.what bold
+      r.room faint
+    r.status faint
+    button "Fixed" tap set r.status = Fixed
+form repair, "Report a problem"
+===
+@create style=multi_feature domain=b3_house_hunt
+we are looking for a rented house, listings with area, rent and bedrooms, each viewing gets a rating out of 5 and a note, show the average rating on each listing or Not seen
+---
+app "House Hunt" home ocean
+table listing area text, rent money, beds num 1..8
+table viewing listing ref listing, rating num 1..5, note text?
+"Best rating so far" max(viewing.rating) big
+each listing sort rent as l
+  row card tap edit l
+    stack grow
+      l.area bold
+      l.beds "beds" faint
+    l.rent bold
+    if(count(l.viewing) > 0, join(fixed(avg(l.viewing.rating), 1), "/5"), "Not seen") faint
+form listing, "Add listing"
+form viewing, "Add a viewing"
+===
+@create style=detailed domain=b3_water_wells
+Our group funds hand pumps and wells in villages. Each well has a place and a cost. Pledges are recorded against a well with the donor. Show how much each well has gathered against its cost with a bar and a quick 5000 button, and total pledged.
+---
+app "Water Wells" drop ocean
+table well place text, cost money
+table pledge well ref well, amount money, donor text?
+"Pledged in total" sum(pledge.amount) big
+each well sort place as w
+  stack card gap 1
+    row
+      w.place head grow
+      sum(w.pledge.amount) "of" w.cost faint
+    goal sum(w.pledge.amount), w.cost, "funded"
+    button "+5000" tap add pledge well = w, amount = 5000
+form well, "Add well"
+form pledge, "Add pledge"
+===
+@create style=custom_ui domain=b3_good_deeds
+kids good deeds chart for ramadan: each child card has buttons for prayed, helped, read and kind, points this week big, children ranked by points
+---
+app "Good Deeds" star mint
+table child name text
+table deed child ref child, kind pick Prayed|Helped|Read|Kind = Prayed, points num 1..10 = 1
+each child sort sum(it.deed.points week) desc as c
+  stack card gap 1
+    row
+      c.name head grow
+      sum(c.deed.points week) "this week" big
+    row gap 1
+      each options deed.kind as k
+        button k tap add deed child = c, kind = k
+form child, "Add child"
+===
+@create style=vague domain=b3_sneaker_shelf
+i buy sneakers and barely wear them, want to see what each pair really cost me per wear
+---
+app "Sneaker Shelf" tag plum
+table sneaker name text, bought money
+table wear sneaker ref sneaker
+"Total spent" sum(sneaker.bought) faint
+each sneaker sort at desc as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      count(s.wear) "wears" faint
+    "Per wear" round(s.bought / count(s.wear)) bold
+    button "Wore today" tap add wear sneaker = s
+form sneaker, "Add sneakers"
+===
+@create style=typos domain=b3_star_log
+telescope nights, where i went and how good the seeing was out of 5, and what i spotted that night
+---
+app "Star Log" moon ink
+table sky_night place text, seeing num 1..5
+table spotted sky_night ref sky_night, thing text
+"Nights out" count(sky_night) big
+"Things spotted" count(spotted) faint
+each sky_night sort at desc as n
+  stack card gap 1
+    row
+      n.place bold grow
+      "Seeing" n.seeing "/5" faint
+    each n.spotted as s
+      s.thing small
+form sky_night, "New night"
+form spotted, "Spotted something"
+===
+@create style=multi_feature domain=b3_diy_projects
+diy projects around the house, each with a shopping list of supplies with cost and a bought tick, show what is still to buy for each project and overall
+---
+app "DIY Projects" tool mint
+table diy name text
+table supply diy ref diy, item text, cost money, bought bool
+"Still to buy overall" sum(supply.cost where bought = no) big
+each diy sort name as d
+  stack card gap 1
+    row
+      d.name head grow
+      "To buy" sum(d.supply.cost where bought = no) bold
+    each d.supply sort bought as s
+      row tap edit s
+        toggle s.bought
+        s.item grow
+        s.cost faint
+form diy, "Add project"
+form supply, "Add supply"
+===
+@create style=detailed domain=b3_field_sales
+I visit shops for a distributor. Each outlet has an area. When I take an order I note its value. Show orders this week, and for every outlet the days since the last order, with a Visit label if it has been two weeks.
+---
+app "Field Sales" bag ocean
+table outlet name text, area text
+table order_taken outlet ref outlet, value money
+"Orders this week" sum(order_taken.value week) big
+each outlet sort name as o
+  let overdue = due(o.order_taken, 14)
+  row card tap edit o
+    stack grow
+      o.name bold
+      o.area faint
+    "Last order" since(o.order_taken) "days ago" faint
+    if(overdue, "Visit", "OK") color if(overdue, warn, good)
+form outlet, "Add outlet"
+form order_taken, "Add order"
+===
+@create style=short domain=b3_grant_deadlines
+grant applications with deadlines, remind a week before
+---
+app "Grant Deadlines" target slate
+table grant name text, due date, amount money, status pick Idea|Drafting|Submitted|Won|Lost = Idea
+remind "Grant deadline in a week" at grant.due - 7d at 9:00
+"In play" sum(grant.amount where status = Drafting or status = Submitted) big
+each grant where status = Idea or status = Drafting sort due as g
+  row card tap edit g
+    stack grow
+      g.name bold
+      g.status faint
+    g.due bold color if(g.due - today < 14, bad, ink)
+form grant, "Add grant"
+===
+@create style=typos domain=b3_translation_jobs
+i translate documents, paid per 1000 words, jobs with word count and rate, what i still have to earn and what i earned this month
+---
+app "Translation Jobs" pen mint
+table tr_job client text, words num 100..200000, per_1000 money, delivered bool
+"To earn" sum(tr_job where delivered = no, it.words * it.per_1000 / 1000) big
+"Earned this month" sum(tr_job month where delivered = yes, it.words * it.per_1000 / 1000) faint
+each tr_job sort at desc as j
+  row card tap edit j
+    stack grow
+      j.client bold
+      j.words "words" faint
+    j.words * j.per_1000 / 1000 bold
+    toggle j.delivered
+form tr_job, "New job"
+===
+@create style=multi_feature domain=b3_project_phases
+projects split into phases with percent complete, a +10 button on each phase, show average completion per project with a bar
+---
+app "Project Phases" list ocean
+table project name text, budget money
+table phase project ref project, label text, pct num 0..100 = 0
+each project sort name as p
+  stack card gap 1
+    row
+      p.name head grow
+      round(avg(p.phase.pct)) "% done" bold
+    goal round(avg(p.phase.pct)), 100, "complete"
+    each p.phase as f
+      row tap edit f
+        f.label grow
+        f.pct "%" faint
+        button "+10" tap set f.pct = f.pct + 10
+form project, "Add project"
+form phase, "Add phase"
+===
+@create style=short domain=b3_bowling_night
+bowling league scores, best and average per bowler
+---
+app "Bowling Night" ball plum
+table player name text
+table game player ref player, score num 0..300
+each player sort max(it.game, it.score) desc as p
+  row card
+    p.name bold grow
+    "Best" max(p.game.score) faint
+    "Avg" round(sum(p.game.score) / count(p.game)) bold
+trend game, it.score
+form player, "Add bowler"
+form game, "Add score"
+===
+@create style=vague domain=b3_wedding_cards
+a few hundred wedding cards to hand out family by family
+---
+app "Wedding Cards" gift plum
+table card_family name text, cards num 1..10 = 1, delivered bool
+"Cards left to deliver" sum(card_family.cards where delivered = no) big
+goal sum(card_family.cards where delivered = yes), sum(card_family.cards), "delivered"
+each card_family where delivered = no sort name as f
+  row card tap edit f
+    f.name bold grow
+    f.cards "cards" faint
+    toggle f.delivered
+form card_family, "Add family"
+===
+@create style=detailed domain=b3_sangeet_rehearsals
+We are rehearsing five dance songs for the sangeet. Each song has a number of dancers, and every rehearsal is logged with minutes. Show the songs with the least practice first, total minutes and days since the last rehearsal, and a button for practised today.
+---
+app "Sangeet Rehearsals" music plum
+table song name text, dancers num 1..30 = 4
+table rehearsal song ref song, mins num 10..240 = 60
+"Least practised first" faint
+each song sort sum(it.rehearsal.mins) as s
+  row card
+    stack grow
+      s.name bold
+      s.dancers "dancers" faint
+    sum(s.rehearsal.mins) "min" bold
+    "Last" since(s.rehearsal) "days ago" faint
+    button "Practised" tap add rehearsal song = s
+form song, "Add song"
+===
+@create style=typos domain=b3_traffic_fines
+challans on our cars and bikes, date issued, amount, tick when paid, remind me 20 days after issue, total unpaid
+---
+app "Traffic Fines" shield slate
+table vehicle plate text
+table challan vehicle ref vehicle, fine money, issued date = today, paid bool
+remind "Pay the fine soon" at challan.issued + 20d at 9:00
+"Unpaid fines" sum(challan.fine where paid = no) big
+each vehicle sort plate as v
+  stack card gap 1
+    row
+      v.plate head grow
+      sum(v.challan.fine where paid = no) bold color if(sum(v.challan.fine where paid = no) > 0, bad, ink)
+    each v.challan where paid = no sort issued as c
+      row tap edit c
+        c.issued grow
+        c.fine bold
+        toggle c.paid
+form vehicle, "Add vehicle"
+form challan, "Add fine"
+===
+@create style=custom_ui domain=b3_chai_stall
+chai stall counter: two big buttons chai and coffee that add a cup at the price i set, cups and sales today, undo, last week's sales bars
+---
+app "Chai Stall" coffee mint
+setting chai_price money = 40 "Chai price"
+setting coffee_price money = 80 "Coffee price"
+table cup kind pick Chai|Coffee = Chai, price money
+"Cups today" count(cup today) big
+"Sales today" sum(cup.price today) faint
+row gap 2
+  button "Chai" fill accent tap add cup kind = Chai, price = chai_price
+  button "Coffee" tap add cup kind = Coffee, price = coffee_price
+button "Undo" tap remove last(cup today)
+daybars last 7 days, sum(cup.price on it)
+===
+@oos style=detailed domain=b3_car_unlock oos=other
+unlock my car doors and start the engine from the app, and keep a fuel log with litres and cost
+---
+app "Fuel Log" car slate
+table refuel litres num 1..120, cost money, odo num 0..
+"Spent this month" sum(refuel.cost month) big
+"Last fill" last(refuel.litres) "litres" faint
+trend refuel, it.cost / it.litres
+list refuel by day
+form refuel, "Add fuel"
+===
+@edit style=plain domain=b3_snakes_e1 ref=b3_snakes_ladders
+make the board 50 squares not 100
+---
+~ min(sum(p.move.steps), 100) => min(sum(p.move.steps), 50)
+~ pos "of 100" => pos "of 50"
+~ pos = 100 => pos = 50
+~ goal pos, 100 => goal pos, 50
+===
+@edit style=plain domain=b3_dinner_e1 ref=b3_dinner_rsvp
+call vegetarian veg
+---
+~ Any|Vegetarian|Halal => Any|Veg was Vegetarian|Halal
+===
+@edit style=plain domain=b3_run_e1 ref=b3_charity_run
+pledge is 75 per km now
+---
+~ setting pledge money = 50 "Pledge per km" => setting pledge money = 75 "Pledge per km" set
+===
+@edit style=plain domain=b3_meters_e1 ref=b3_meter_readings
+add a price per unit to each meter and show the bill for this month
+---
+~ unit text => unit text, price money?
+~ used m.unit "this month" bold => used m.unit "this month" bold\n    "Bill" used * m.price faint
+===
+@edit style=plain domain=b3_phases_e1 ref=b3_project_phases
+add a due date to each phase and turn it red when it is late and not finished
+---
+~ pct num 0..100 = 0 => pct num 0..100 = 0, due_on date?
+~ f.label grow => f.label grow color if(f.due_on < today and f.pct < 100, bad, ink)
+===
+@edit style=plain domain=b3_sneakers_e1 ref=b3_sneaker_shelf
+rename bought to price
+---
+~ bought money => price money was bought
+~ sum(sneaker.bought) => sum(sneaker.price)
+~ s.bought / => s.price /
+===
+@edit style=plain domain=b3_field_e1 ref=b3_field_sales
+add a visit button for calls with no order and use the last visit date
+---
++after table order_taken outlet ref outlet, value money :: table visit_log outlet ref outlet
+~ "Last order" since(o.order_taken) "days ago" faint => "Last visit" since(o.visit_log) "days ago" faint
++after     "Last visit" since(o.visit_log) "days ago" faint ::     button "Visited" tap add visit_log outlet = o

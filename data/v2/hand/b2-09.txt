@@ -1,0 +1,326 @@
+@create style=detailed domain=b2_nurse_shifts
+I'm a staff nurse doing rotating shifts at three wards. I log each shift with the ward and whether it was day or night, hours worked. At month end I need the hours per ward and the number of night shifts.
+---
+app "Nurse shifts" heart plum
+table ward name text
+table shift ward ref ward, kind pick Day|Night = Day, hours num 1..16 = 8
+"Hours this month" sum(shift.hours month) big
+"Night shifts" count(shift month where kind = Night) faint
+each ward sort name as w
+  row card
+    w.name bold grow
+    sum(w.shift.hours month) "h" bold
+    count(w.shift month where kind = Night) "nights" faint
+form ward, "Add ward"
+form shift, "Log shift"
+===
+@create style=short domain=b2_milk_run
+buffalo milk liters morning evening, price per liter
+---
+app "Milk" milk mint
+table milking liters num 0.5..60, time pick Morning|Evening = Morning
+setting price money = 180 "Price per liter"
+"Liters today" sum(milking.liters today) big
+"Income this month" sum(milking.liters month) * price bold
+daybars last 7 days, sum(milking.liters on it)
+form milking
+===
+@create style=vague domain=b2_kid_pocket_wishlist
+my kids wishlist and saving for it
+---
+app "Wishlist" gift plum
+table kid name text
+table wish kid ref kid, what text, price money
+table saved wish ref wish, amount money
+each kid as k
+  stack card gap 1
+    k.name head
+    each k.wish as w
+      stack gap 0
+        row gap 1
+          w.what bold grow
+          sum(w.saved.amount) "of" w.price faint
+        draw 100, 3
+          rect 0, 0, 100, 3 fill soft radius 1
+          rect 0, 0, 100 * clamp(sum(w.saved.amount) / max(w.price, 1), 0, 1), 3 fill accent radius 1
+form kid, "Add kid"
+form wish, "Add wish"
+form saved, "Add savings"
+===
+@create style=multi_feature domain=b2_auto_repair
+small car workshop: customers with cars, each job has parts cost and labour, mark paid when they collect, show money still pending and jobs done this week
+---
+app "Workshop" tool slate
+table customer name text, car text
+table job customer ref customer, work text, parts money, labour money, paid bool
+"Pending money" sum(job where paid = no, it.parts + it.labour) big color warn
+count(job week) "jobs this week" faint
+each job where paid = no sort at desc as j
+  row card tap edit j
+    stack grow
+      j.customer.name bold
+      j.work faint
+    text j.parts + j.labour bold
+    toggle j.paid
+form customer, "Add customer"
+form job, "Add job"
+===
+@create style=typos domain=b2_tailor_orders
+ladies tailor, each customer has orders with a delivery date and an advance, i forget who is pending and how much balence
+---
+app "Tailor orders" bag plum
+table customer name text, phone text?
+table order customer ref customer, item text, price money, advance money, due date, delivered bool
+each order where delivered = no sort due as o
+  row card tap edit o
+    stack grow
+      o.customer.name bold
+      o.item faint
+    stack
+      text o.price - o.advance bold
+      o.due small color if(o.due < today, bad, muted)
+    toggle o.delivered
+"Balance pending" sum(order where delivered = no, it.price - it.advance) big
+form customer, "Add customer"
+form order, "Add order"
+===
+@create style=detailed domain=b2_gym_attendance
+Gym owner: each member scans in at the door but I have no machine, so I tap their name when they arrive. I want today's count, who came most this month, and members absent for 2 weeks to phone them.
+---
+app "Gym door" dumbbell slate
+table member name text, phone text?
+table visit member ref member
+count(visit today) "in the gym today" big
+each member sort count(it.visit month) desc as m
+  row card tap toggle m.visit today
+    m.name bold grow
+    count(m.visit month) "visits" faint
+    if(since(m.visit) >= 14, "call", "") color warn
+form member, "Add member"
+===
+@create style=custom_ui domain=b2_flashcard_leitner
+flashcards in three boxes, new cards start in box 1, I tap right to move up and wrong to go back to box 1, show how many in each box
+---
+app "Leitner" brain ocean
+table card front text, back text, box num 1..3 = 1
+state flip bool = no
+row gap 2
+  each 1..3 as b
+    stat count(card where box = b), join("Box ", b)
+each card where box < 3 shuffle top 1 empty "Nothing left in boxes 1 and 2"
+  stack card gap 2 tap set flip = not flip
+    it.front big
+    if flip
+      it.back head color accent
+      row gap 1
+        button "Right" tap set it.box = it.box + 1 then set flip = no
+        button "Wrong" tap set it.box = 1 then set flip = no
+form card, "Add card"
+===
+@create style=short domain=b2_water_plants_school
+school garden watering rota
+---
+app "School garden" plant mint
+table bed name text
+table watering bed ref bed, by text?
+each bed as b
+  row card
+    b.name bold grow
+    if due(b.watering, 2)
+      "Needs water" color warn
+    else
+      "Watered" since(b.watering) "d ago" faint
+    button "Watered" tap add watering bed = b
+form bed, "Add bed"
+===
+@create style=detailed domain=b2_monthly_school_budget
+Parents' school budget: fees, books, uniform, transport, tuition for each child. Show the total per child this term and per category, with a monthly limit setting.
+---
+app "School costs" school slate
+table child name text
+table cost child ref child, what pick Fees|Books|Uniform|Transport|Tuition = Fees, amount money
+setting limit money = 40000 "Monthly limit"
+goal sum(cost.amount month), limit, "spent this month"
+each child as c
+  row card
+    c.name bold grow
+    sum(c.cost.amount year) "this year" bold
+share options cost.what, sum(cost.amount year where what = it), it
+form child, "Add child"
+form cost, "Add cost"
+===
+@create style=vague domain=b2_calm_corner
+a feelings jar for my toddler
+---
+app "Feelings" smile ocean
+table feeling kind pick Happy|Sad|Cross|Tired|Excited = Happy
+row gap 1
+  each options feeling.kind
+    button it tap add feeling kind = it
+"Today she felt" last(feeling.kind) big
+each options feeling.kind as k
+  row
+    text k grow
+    count(feeling last 30 days where kind = k) faint
+===
+@create style=multi_feature domain=b2_cricket_season
+season stats for our cricket team: players, each innings gives runs and balls faced and out or not out, show batting average and strike rate
+---
+app "Batting stats" ball ocean
+table player name text
+table innings player ref player, runs num 0..300, balls num 1..300, out bool = yes
+each player sort sum(it.innings.runs) desc as p
+  row card tap edit p
+    p.name bold grow
+    sum(p.innings.runs) "runs" bold
+    round(sum(p.innings.runs) / max(count(p.innings where out = yes), 1)) "avg" faint
+    round(100 * sum(p.innings.runs) / max(sum(p.innings.balls), 1)) "SR" faint
+form player, "Add player"
+form innings, "Add innings"
+===
+@create style=detailed domain=b2_bread_orders
+Home bakery, customers order bread loaves for the next morning delivery with a quantity. Show tomorrow's total loaves to bake, the list by customer, and a tick when delivered.
+---
+app "Bread orders" bread mint
+table customer name text, area text?
+table order customer ref customer, loaves num 1..100, day date, delivered bool
+setting price money = 120 "Price per loaf"
+"To bake tomorrow" sum(order.loaves where day = today + 1) big
+each order where day = today + 1 sort at as o
+  row card
+    toggle o.delivered
+    o.customer.name bold grow
+    o.loaves "loaves" faint
+"Value" sum(order.loaves where day = today + 1) * price faint
+form customer, "Add customer"
+form order, "Add order"
+===
+@create style=custom_ui domain=b2_rep_counter
+a rep counter for push ups with one giant tap area, shows the count, resets and saves the set when I press done
+---
+app "Rep counter" dumbbell ink
+table set reps num 1..500
+state reps num = 0
+draw width 260 tap set reps = reps + 1
+  circle 50, 50, 46 fill accent
+  label 50, 50, reps huge
+button "Done" tap add set reps = reps then set reps = 0
+button "Reset" tap set reps = 0
+"Today" sum(set.reps today) "reps in" count(set today) "sets" faint
+===
+@create style=typos domain=b2_shop_udhaar_kids
+kids pocket money ledger what each kid owes me for advances
+---
+app "Pocket advances" coin plum
+table kid name text
+table advance kid ref kid, amount money, repaid bool
+each kid as k
+  row card
+    k.name bold grow
+    sum(k.advance.amount where repaid = no) bold color if(sum(k.advance.amount where repaid = no) > 0, warn, good)
+form kid, "Add kid"
+form advance, "Add advance"
+list advance
+===
+@create style=detailed domain=b2_hospital_visitors
+I am the receptionist at a small hospital. Visitors sign in with the patient they visit and the time, and I tick when they leave. I need to see who is inside right now and how many visitors each patient has today.
+---
+app "Visitors" users ocean
+table patient name text, room text
+table visit patient ref patient, visitor text, left bool
+count(visit where left = no) "visitors inside" big
+each visit where left = no sort at as v
+  row card
+    toggle v.left
+    stack grow
+      v.visitor bold
+      v.patient.name v.patient.room faint
+each patient as p
+  row
+    p.name grow
+    count(p.visit today) "today" faint
+form patient, "Add patient"
+form visit, "Sign in visitor"
+===
+@create style=short domain=b2_sibling_chores_split
+who did the dishes this week, 3 siblings
+---
+app "Dish duty" home slate
+table sibling name text
+table dishes sibling ref sibling
+each sibling sort count(it.dishes week) as s
+  row card
+    s.name bold grow
+    count(s.dishes week) "times" bold
+    button "Did it" tap add dishes sibling = s
+form sibling, "Add sibling"
+===
+@create style=multi_feature domain=b2_school_events_rsvp
+school annual day: events with a date and a venue, parents say yes or no, show for each event how many are coming and the total headcount of guests
+---
+app "Annual day" star plum
+table event name text, day date
+table rsvp event ref event, family text, coming pick Yes|No|Maybe = Yes, guests num 1..10 = 2
+each event sort day as e
+  stack card gap 1
+    row
+      e.name bold grow
+      e.day faint
+    "Coming:" count(e.rsvp where coming = Yes) "families," sum(e.rsvp.guests where coming = Yes) "guests" bold
+    "Maybe:" count(e.rsvp where coming = Maybe) faint
+form event, "Add event"
+form rsvp, "Add RSVP"
+===
+@oos style=detailed domain=b2_oos_email_invoice oos=messaging
+My tuition centre: record the fee each child paid and then email a receipt to the parent automatically with the amount. Also show the total I collected this month.
+---
+app "Fee receipts" school slate
+table child name text
+table paid child ref child, amount money
+"Collected this month" sum(paid.amount month) big
+each child sort name as c
+  row card
+    c.name bold grow
+    sum(c.paid.amount month) bold
+form child, "Add child"
+form paid, "Record fee"
+===
+@edit style=plain domain=b2_e_nurse_rate ref=b2_nurse_shifts
+add an overtime tick and a total of overtime hours
+---
+~ hours num 1..16 = 8 => hours num 1..16 = 8, overtime bool
++ "Overtime hours" sum(shift.hours month where overtime = yes) faint
+===
+@edit style=plain domain=b2_e_milk_buyers ref=b2_milk_run
+the price is 200 now
+---
+~ setting price money = 180 "Price per liter" => setting price money = 200 "Price per liter" set
+===
+@edit style=plain domain=b2_e_wish_limit ref=b2_kid_pocket_wishlist
+add a priority choice to wishes and show high ones in bold
+---
+~ what text, price money => what text, price money, priority pick Low|High = Low
+~ w.what bold grow => w.what bold grow color if(w.priority = High, accent, ink)
+===
+@edit style=plain domain=b2_e_repair_type ref=b2_auto_repair
+add a type of job Service Repair Tyres and show repairs only in the list
+---
+~ work text, => work text, type pick Service|Repair|Tyres = Service,
+~ each job where paid = no => each job where paid = no and type = Repair
+===
+@edit style=plain domain=b2_e_tailor_rename ref=b2_tailor_orders
+rename advance to deposit
+---
+~ advance money => deposit money was advance
+~ o.price - o.advance bold => o.price - o.deposit bold
+~ it.price - it.advance => it.price - it.deposit
+===
+@edit style=plain domain=b2_e_gym_remove_call ref=b2_gym_attendance
+remove the call word
+---
+-     if(since(m.visit) >= 14, "call", "") color warn
+===
+@edit style=plain domain=b2_e_budget_cap ref=b2_monthly_school_budget
+rename Tuition to Coaching
+---
+~ pick Fees|Books|Uniform|Transport|Tuition = Fees => pick Fees|Books|Uniform|Transport|Coaching was Tuition = Fees

@@ -1,0 +1,509 @@
+@create style=multi_feature domain=a2_task_board
+task list with a status I can change between todo, doing, blocked and done, an optional due date, and chips on top to filter by status
+---
+app "Tasks" list ink
+table task title text, status pick Todo|Doing|Blocked|Done = Todo, due date?
+state show pick All|Todo|Doing|Blocked|Done = All
+choice show
+each task where show = All or status = show sort due as t
+  stack card gap 1 tap edit t swipe remove t
+    row gap 1
+      t.title bold grow
+      t.due faint color if(t.due < today, bad, muted)
+    choice t.status
+count(task where status != Done) "open tasks" faint
+form task
+===
+@create style=custom_ui domain=a2_work_timer
+a work timer with a start button and a stop button, I write what I am working on, and when I stop it saves the minutes
+---
+app "Work timer" clock ink
+table entry task text, mins num 1..
+state what text = ""
+state going bool = no
+state began when = now
+field what "Working on"
+if going
+  "Working on" what head
+  button "Stop" tap add entry task = what, mins = max(round((now - began) / 1m), 1) then set going = no
+else
+  button "Start" tap set began = now then set going = yes
+"Today" sum(entry.mins today) "min" big
+daybars last 7 days, sum(entry.mins on it)
+log entry
+===
+@create style=detailed domain=a2_meeting_notes
+Meeting notes app with two tabs. One tab keeps each meeting with its title, date and notes. The other lists action items with who is doing it and a done tick.
+---
+app "Meetings" users slate
+table meeting title text, day date, notes long
+table action meeting ref meeting, what text, who text?, done bool
+screen meet "Meetings" users
+  each meeting sort day desc as m
+    stack card gap 1 tap edit m swipe remove m
+      row
+        m.title bold grow
+        m.day faint
+      m.notes size small
+      count(m.action where done = no) "open actions" faint
+  form meeting, "Add meeting"
+screen todo "Actions" check
+  count(action where done = no) "open" big
+  each action where done = no as a
+    row card gap 2
+      toggle a.done
+      stack grow
+        a.what bold
+        a.meeting.title a.who faint
+  form action, "Add action"
+===
+@create style=multi_feature domain=a2_project_tracker
+project tracker with tabs: projects with deadline and status and a progress bar from finished steps, and a steps tab to tick things off
+---
+app "Projects" board plum
+table project name text, due date, status pick Planning|Active|On_hold|Done = Active
+table step project ref project, what text, done bool
+screen home "Projects" board
+  each project where status != Done sort due as p
+    stack card gap 1 tap edit p
+      row
+        p.name bold grow
+        p.due faint color if(p.due < today, bad, muted)
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, 100 * countof(p.step, it.done) / max(count(p.step), 1), 4 fill good radius 2
+      countof(p.step, it.done) "of" count(p.step) "steps done" faint
+  form project, "New project"
+screen steps "Steps" check
+  each step where done = no sort at as s
+    row card gap 2
+      toggle s.done
+      stack grow
+        s.what bold
+        s.project.name faint
+  form step, "Add step"
+===
+@create style=detailed domain=a2_job_hunt
+I am applying for jobs. For each application I want the company, the role, the stage from applied to offer, the date I sent it, and a follow up date with a reminder. Show how many are at each stage.
+---
+app "Job hunt" bag mint
+table application company text, role text, stage pick Applied|Interview|Offer|Rejected = Applied, sent date, follow date?
+remind "Follow up on an application" at application.follow
+row gap 1
+  each options application.stage as s
+    stack grow align center card
+      count(application where stage = s) big
+      text s size tiny color muted
+each application where stage != Rejected sort sent desc as a
+  row card gap 2 tap edit a swipe remove a
+    stack grow
+      a.company bold
+      a.role faint
+    choice a.stage
+form application, "Add application"
+===
+@create style=multi_feature domain=a2_client_followup
+clients with phone and next call date, log each call, show how many days since I last talked to them and highlight the ones gone quiet
+---
+app "Clients" phone slate
+table client name text, phone text?, next date?
+table contact client ref client, note text
+remind "Call a client today" at client.next
+each client sort since(it.contact) desc as c
+  stack card gap 1 tap edit c
+    row
+      c.name bold grow
+      since(c.contact) "days ago" faint color if(since(c.contact) > 14, warn, muted)
+    c.phone "next:" c.next faint
+    button "Talked today" tap add contact client = c, note = "Called"
+form client, "Add client"
+form contact, "Log a call"
+===
+@create style=multi_feature domain=a2_office_supplies
+office supplies on two tabs, one with stock counts and plus minus buttons, and one that shows only the items below the number I need to keep
+---
+app "Supplies" box slate
+table item name text, qty num 0.., need num 0.. = 3
+screen stock "Stock" box
+  each item sort name as i
+    row card gap 1 tap edit i swipe remove i
+      i.name bold grow color if(i.qty < i.need, warn, ink)
+      button "-" tap set i.qty = i.qty - 1
+      i.qty bold
+      button "+" tap set i.qty = i.qty + 1
+  form item, "Add item"
+screen buy "To buy" cart
+  count(item where qty < need) "things to buy" big
+  each item where qty < need sort name as i
+    row card
+      i.name grow
+      i.need - i.qty "more" bold
+      button "Bought" tap set i.qty = i.need
+===
+@create style=short domain=a2_quote_book
+quotes I sent and win rate
+---
+app "Quotes" pen ink
+table quote client text, amount money, status pick Sent|Won|Lost = Sent
+let won = count(quote where status = Won)
+let lost = count(quote where status = Lost)
+"Win rate" round(won * 100 / max(won + lost, 1)) "%" big
+"Waiting for answer" sum(quote.amount where status = Sent) faint
+share quote by status, sum(it.amount), it.key
+each quote where status = Sent sort at as q
+  row card gap 2 tap edit q
+    q.client bold grow
+    q.amount
+    button "Won" tap set q.status = Won
+    button "Lost" tap set q.status = Lost
+form quote, "New quote"
+===
+@create style=vague domain=a2_standup
+daily standup notes for my team job
+---
+app "Standup" note ink
+table standup did text, plan text, blocker text?
+"Streak" streak(standup) "days" big
+form standup, "Today's standup"
+log standup
+===
+@create style=custom_ui domain=a2_key_results
+key results with a slider for each one from 0 to 100 percent and an overall percent on top
+---
+app "Key results" target plum
+table kr title text, pct num 0..100 = 0
+"Overall" round(avg(kr.pct)) "%" big
+each kr sort title as k
+  stack card gap 1
+    row
+      k.title bold grow
+      k.pct "%" faint
+    slider k.pct 0..100
+form kr, "Add key result"
+===
+@create style=custom_ui domain=a2_shift_roster
+staff roster grid for the week, a column for each day, staff names in boxes coloured by morning or evening shift, tap a box to take it off
+---
+app "Roster" users ocean
+table staff name text
+table shift staff ref staff, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, slot pick Morning|Evening = Morning
+grid 7 gap 1
+  each options shift.day as dd
+    stack gap 1
+      text dd bold align center size small
+      each shift where day = dd sort slot as s
+        box pad 1 radius 6 fill if(s.slot = Morning, accent, soft) tap remove s
+          s.staff.name size tiny bold
+          s.slot size tiny
+form staff, "Add staff"
+form shift, "Put on shift"
+===
+@create style=short domain=a2_expense_claims
+expense claims by status
+---
+app "Claims" money slate
+table claim what text, amount money, status pick Draft|Submitted|Paid = Draft
+row gap 2
+  each options claim.status as s
+    stack grow
+      sum(claim.amount where status = s) bold
+      text s size tiny color muted
+each claim where status != Paid sort at desc as c
+  row card gap 2 tap edit c
+    c.what bold grow
+    c.amount
+    choice c.status
+form claim, "New claim"
+===
+@create style=detailed domain=a2_mileage
+Mileage log for work trips. I put the kilometres and the purpose of each trip, the company pays me a rate per km, and I want to see my claim for the month.
+---
+app "Mileage" car mint
+table trip km num 1..2000, purpose pick Client|Supplier|Bank|Other = Client
+setting rate money = 25 "Rate per km"
+"Claim this month" sum(trip.km month) * rate big
+sum(trip.km month) "km" faint
+share trip month by purpose, sum(it.km), it.key
+form trip
+log trip
+===
+@create style=custom_ui domain=a2_focus_hours
+nine boxes for the working hours 9 to 5, tap a box to mark that hour as deep focus today, and count how many I got
+---
+app "Focus hours" clock ink
+table focus hour num 9..17
+count(focus today) "of 9 hours" big
+grid 3 gap 1
+  each 9..17 as h
+    box height 48 radius 8 fill if(count(focus today where hour = h) > 0, accent, soft) tap toggle focus where hour = h
+      text h ":00" size small align center
+===
+@create style=multi_feature domain=a2_sales_pipeline
+sales pipeline: deals with client, value and stage lead, quote, won or lost, four boxes showing the count and value of each stage, and the open deals below
+---
+app "Pipeline" chart plum
+table deal client text, value money, stage pick Lead|Quote|Won|Lost = Lead
+grid 4 gap 1
+  each options deal.stage as s
+    stack card gap 0 align center
+      text s size tiny color muted
+      count(deal where stage = s) big
+      sum(deal.value where stage = s) size tiny
+"Open value" sum(deal.value where stage = Lead or stage = Quote) head
+each deal where stage = Lead or stage = Quote sort value desc as d
+  row card gap 2 tap edit d
+    d.client bold grow
+    d.value
+    choice d.stage
+form deal, "New deal"
+===
+@create style=short domain=a2_support_desk
+support tickets, urgent ones first
+---
+app "Support desk" bell slate
+table ticket subject text, prio pick Low|High|Urgent = Low, open bool = yes
+count(ticket where open = yes and prio = Urgent) "urgent" big color if(count(ticket where open = yes and prio = Urgent) > 0, bad, ink)
+each ticket where open = yes and prio = Urgent as t
+  row card gap 2 tap edit t
+    toggle t.open
+    t.subject bold grow
+each ticket where open = yes and prio != Urgent sort at as t
+  row card gap 2 tap edit t
+    toggle t.open
+    t.subject grow
+    t.prio faint
+form ticket, "New ticket"
+===
+@create style=detailed domain=a2_office_days
+Our company wants three office days a week, so eight or so a month. I want to tap the days I went to the office on a calendar and see how close I am to the target.
+---
+app "Office days" home mint
+table office
+setting need num = 8 "Office days a month"
+state m date = today
+monthnav m
+calendar office, m
+goal count(office month of m), need, "office days this month"
+===
+@create style=custom_ui domain=a2_leave_balance
+leave balance with a bar for each type casual, sick and annual, the same allowance for each, so I see how many days I have used this year
+---
+app "Leave" plane ocean
+table leave kind pick Casual|Sick|Annual = Annual, days num 1..30 = 1
+setting allowed num = 20 "Days allowed per type"
+each options leave.kind as k
+  let used = sum(leave.days year where kind = k)
+  stack gap 1
+    row
+      text k bold grow
+      text used "of" allowed "days" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(used / allowed, 0, 1), 4 fill if(used >= allowed, bad, accent) radius 2
+form leave, "Take leave"
+log leave
+===
+@create style=multi_feature domain=a2_site_reports
+construction site daily reports: one tab with each site and how many workers today and the progress bar, another tab to write the daily report with progress percent and a note
+---
+app "Site reports" tool slate
+table site name text
+table report site ref site, workers num 0..500, progress num 0..100, note long?
+screen sites "Sites" tool
+  each site sort name as s
+    stack card gap 1
+      row
+        s.name bold grow
+        max(s.report.progress) "%" bold
+      draw 100, 4
+        rect 0, 0, 100, 4 fill soft radius 2
+        rect 0, 0, max(s.report.progress), 4 fill accent radius 2
+      "Workers today" sum(s.report.workers today) faint
+  form site, "Add site"
+screen reports "Reports" note
+  form report, "Daily report"
+  log report
+===
+@create style=vague domain=a2_weekly_review
+I want to think about how my work week went
+---
+app "Weekly review" smile mint
+table review energy num 1..10 = 5, focus num 1..10 = 5, win text
+remind "Weekly review time" at 17:00 on fri
+"Focus last week" last(review.focus) big
+trend review, it.focus
+form review, "Review my week"
+list review
+===
+@create style=typos domain=a2_cold_calls
+cold calling counter ring for 20 calls a day buttons for answered voicemail no answer and booked
+---
+app "Cold calls" phone ink
+table call who text?, result pick Answered|Voicemail|No_answer|Booked = No_answer
+setting daily num = 20 "Calls a day"
+ring count(call today), daily, "calls today"
+row gap 1
+  each options call.result as r
+    button r tap add call result = r
+count(call today where result = Booked) "meetings booked today" head
+"Answer rate" round(count(call week where result = Answered or result = Booked) * 100 / max(count(call week), 1)) "%" faint
+===
+@create style=multi_feature domain=a2_event_vendors
+event planner with two tabs: events with date and budget and how much is booked, and vendors with cost and a paid tick; remind me the day before an event
+---
+app "Events" calendar plum
+table event name text, day date, budget money
+table vendor event ref event, name text, cost money, paid bool
+remind "Event tomorrow" at event.day - 1d at 9:00
+screen events "Events" calendar
+  each event where day >= today sort day as e
+    stack card gap 1 tap edit e
+      row
+        e.name bold grow
+        e.day - today "days" faint
+      goal sum(e.vendor.cost), e.budget, "booked"
+  form event, "New event"
+screen vendors "Vendors" users
+  "Still to pay" sum(vendor.cost where paid = no) big
+  each vendor sort at desc as v
+    row card gap 2 tap edit v
+      stack grow
+        v.name bold
+        v.event.name faint
+      v.cost
+      toggle v.paid
+  form vendor, "Add vendor"
+===
+@create style=custom_ui domain=a2_job_quote_calc
+quote calculator for my painting jobs: area, labour rate per square foot, material cost, and a markup slider, shows my cost and the price to quote
+---
+app "Job quote" calc slate
+state area num = 0
+state rate money = 0
+state material money = 0
+state markup num = 15
+field area "Area (sq ft)"
+field rate "Labour rate per sq ft"
+field material "Material cost"
+"Markup" markup "%" faint
+slider markup 0..50
+let cost = area * rate + material
+"Cost" cost head
+"Quote" round(cost * (1 + markup / 100)) big
+===
+@create style=detailed domain=a2_lunch_rota
+In our office each person pays for team lunch in turn. Keep the names and tap when someone pays, and show who has paid the fewest times so we know who is next.
+---
+app "Lunch rota" food mint
+table person name text
+table treat person ref person
+"Next to pay" head
+each person sort count(it.treat) top 1 as p
+  stack card gap 1
+    p.name big
+    button "Paid today" tap add treat person = p
+each person sort name as p
+  row
+    p.name grow
+    count(p.treat) "times" faint
+form person, "Add colleague"
+===
+@create style=short domain=a2_deadlines
+work deadlines with days left
+---
+app "Deadlines" flag ocean
+table deadline what text, due date, done bool
+remind "Deadline tomorrow" at deadline.due - 1d at 9:00
+each deadline where done = no sort due as d
+  row card gap 2 tap edit d swipe remove d
+    toggle d.done
+    d.what bold grow
+    d.due - today "days" bold color if(d.due - today <= 2, bad, ink)
+form deadline
+===
+@create style=typos domain=a2_bug_log
+bug list for our app title and how bad low medium high and tick when fixed
+---
+app "Bug log" bolt slate
+table bug title text, sev pick Low|Medium|High = Medium, fixed bool
+count(bug where fixed = no) "open bugs" big
+count(bug where fixed = no and sev = High) "high" faint color bad
+each bug where fixed = no sort at as b
+  row card gap 2 tap edit b swipe remove b
+    toggle b.fixed
+    b.title bold grow
+    b.sev faint
+"Fixed this week" count(bug week where fixed = yes) faint
+form bug, "Add bug"
+===
+@oos style=detailed domain=a2_oos_slack_standup oos=messaging
+Daily standup notes for my team. At the end it should post my update to our Slack channel by itself. I also want a streak of days I wrote one.
+---
+app "Standup" note ink
+table standup did text, plan text, blocker text?
+"Streak" streak(standup) "days" big
+remind "Write your standup" at 9:30 on mon tue wed thu fri
+form standup, "Today's standup"
+log standup
+===
+@oos style=short domain=a2_oos_gps_mileage oos=location
+mileage tracker that records my trips automatically with GPS and gives the km for the month
+---
+app "Mileage" car mint
+table trip km num 1..2000, purpose pick Client|Supplier|Bank|Other = Client
+sum(trip.km month) "km this month" big
+form trip, "Add trip"
+log trip
+===
+@oos style=detailed domain=a2_oos_import_tasks oos=other_apps
+Import my tasks from Google Calendar and my Excel sheet, then show what is due this week. Also let me tick them off.
+---
+app "Tasks" list ink
+table task title text, due date, done bool
+count(task where done = no and due <= today + 7) "due in 7 days" big
+each task where done = no sort due as t
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    t.title bold grow
+    t.due faint color if(t.due < today, bad, muted)
+form task, "Add task"
+===
+@edit style=plain domain=a2_e_task_note ref=a2_task_board
+add a note to each task
+---
+~ due date? => due date?, note text?
+===
+@edit style=plain domain=a2_e_job_salary ref=a2_job_hunt
+I want to write the salary they offered
+---
+~ follow date? => follow date?, salary money?
+===
+@edit style=plain domain=a2_e_client_30 ref=a2_client_followup
+mark a client as quiet after 30 days, not 14
+---
+~ since(c.contact) > 14 => since(c.contact) > 30
+===
+@edit style=plain domain=a2_e_standup_remind ref=a2_standup
+remind me at 9:30 on weekdays to write it
+---
++ remind "Write your standup" at 9:30 on mon tue wed thu fri
+===
+@edit style=plain domain=a2_e_supplies_ink ref=a2_office_supplies
+make the colours darker
+---
+~ app "Supplies" box slate => app "Supplies" box ink
+===
+@edit style=plain domain=a2_e_leave_24 ref=a2_leave_balance
+we get 24 days now
+---
+~ setting allowed num = 20 => setting allowed num = 24
+===
+@edit style=plain domain=a2_e_ticket_note ref=a2_support_desk
+add a long note for each ticket
+---
+~ open bool = yes => open bool = yes, note long?
+===
+@edit style=plain domain=a2_e_mileage_rate ref=a2_mileage
+the company pays 30 per km now
+---
+~ setting rate money = 25 => setting rate money = 30

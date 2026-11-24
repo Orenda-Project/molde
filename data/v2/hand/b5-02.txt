@@ -1,0 +1,412 @@
+@create style=short domain=b5_tea_stall
+tea stall: menu with prices, log cups sold, today's takings and which item sells most
+---
+app "Chai Stall" cup ocean
+table menu name text, price money
+table sale item ref menu, qty num 1..50 = 1
+"Takings today" sum(sale today, it.qty * it.item.price) big
+bars menu sort name, sum(it.sale.qty today), it.name
+each menu sort name as m
+  row card tap edit m
+    m.name bold grow
+    m.price faint
+    button "+1" tap add sale item = m
+form menu, "Add item"
+list sale by day
+===
+@create style=detailed domain=b5_pigeon_loft
+racing pigeons. each bird has a ring number and sex. we fly races and I note each bird's position. I want every bird's best position and how many races it flew
+---
+app "Loft Book" paw ink
+table bird ring text, sex pick Cock|Hen = Cock
+table race name text, day date
+table result race ref race, bird ref bird, position num 1..500
+each bird sort ring as b
+  row card tap edit b
+    b.ring bold grow
+    b.sex faint
+    "best" min(b.result.position) faint
+    count(b.result) "races" bold
+each race sort day desc as r
+  row card
+    r.name bold grow
+    "winner position 1:" count(r.result where position = 1) faint
+form result, "Record result"
+form race, "Add race"
+form bird, "Add bird"
+===
+@create style=vague domain=b5_tool_share
+tools we lend in the colony, who has what
+---
+app "Tool Share" tool slate
+table tool name text, note text?
+table borrow tool ref tool, who text, returned bool
+let out = count(borrow where returned = no)
+out "tools out" big
+each tool sort name as t
+  row card tap edit t
+    t.name bold grow
+    if(count(t.borrow where returned = no) > 0, last(t.borrow.who), "available") color if(count(t.borrow where returned = no) > 0, warn, good)
+form borrow, "Lend tool"
+form tool, "Add tool"
+===
+@create style=detailed domain=b5_community_fridge
+community fridge in our street, people leave food with an expiry date and others take it. show what expires in 2 days and how many items are sitting in there
+---
+app "Street Fridge" milk mint
+table food name text, qty num 1..50 = 1, expiry date
+table taken food ref food, qty num 1..50 = 1
+let inside = sum(food.qty) - sum(taken.qty)
+inside "portions inside" big
+"Expiring soon" head color warn
+each food where expiry - today <= 2 sort expiry as f
+  row card
+    f.name bold grow
+    f.expiry faint
+    f.qty - sum(f.taken.qty) "left"
+form food, "Leave food"
+form taken, "Took some"
+===
+@create style=typos domain=b5_water_tanker
+water tanker business: customers, each delivery small medium or large tank and prices differ, show whom i should bill this month
+---
+app "Tanker Run" drop ocean
+table customer name text, area text?
+table delivery customer ref customer, size pick Small|Medium|Large = Medium
+setting price_small money = 1500 "Small tank price"
+setting price_medium money = 2500 "Medium tank price"
+setting price_large money = 4000 "Large tank price"
+let cost(sz text) = if(sz = Small, price_small, if(sz = Medium, price_medium, price_large))
+"Billing this month" sum(delivery month, cost(it.size)) big
+each customer sort name as c
+  row card tap edit c
+    c.name bold grow
+    count(c.delivery month) "trips" faint
+    sum(c.delivery month, cost(it.size)) bold
+form delivery, "Log delivery"
+form customer, "Add customer"
+===
+@create style=custom_ui domain=b5_kite_shop
+kite shop stock by design with a bar chart of how many left of each, and a plus and minus button on each row to change count
+---
+app "Kite Stock" flag ocean
+table kite design text, qty num 0.., price money
+bars kite sort design, it.qty, it.design
+each kite sort design as k
+  row card gap 1
+    k.design bold grow
+    button "-" tap set k.qty = k.qty - 1
+    k.qty bold
+    button "+" tap set k.qty = k.qty + 1
+"Stock worth" sum(kite, it.qty * it.price) faint
+form kite, "New design"
+===
+@create style=multi_feature domain=b5_school_van
+school van for 14 kids: each kid's stop, tick who rode today, monthly fee is a setting, show who still owes this month
+---
+app "School Van" bus ocean
+table kid name text, stop text
+table ride kid ref kid
+table feepaid kid ref kid, amount money
+setting monthly_fee money = 4000 "Monthly fee"
+"Riding today" count(ride today) "of" count(kid) big
+each kid sort stop as k
+  row card
+    stack grow gap 0
+      k.name bold
+      k.stop faint
+    toggle k.ride
+    if(sum(k.feepaid.amount month) < monthly_fee, "owes", "paid") color if(sum(k.feepaid.amount month) < monthly_fee, bad, good)
+form kid, "Add kid"
+form feepaid, "Fee received"
+===
+@create style=detailed domain=b5_orchard_blocks
+my orchard is split into blocks (name, number of trees). per block I log crates picked and sprays. show crates per tree for each block as a bar chart
+---
+app "Orchard" tree mint
+table block name text, trees num 1..5000
+table picking block ref block, crates num 1..500
+table spray block ref block, product text
+bars block sort name, sum(it.picking.crates) / it.trees, it.name
+each block sort name as b
+  stack card gap 1 tap edit b
+    row
+      b.name bold grow
+      b.trees "trees" faint
+    "Crates" sum(b.picking.crates) "| sprays" count(b.spray) faint
+    "Last spray" last(b.spray.product) faint
+form picking, "Log picking"
+form spray, "Log spray"
+form block, "Add block"
+===
+@create style=multi_feature domain=b5_poultry_sheds
+poultry farm with 3 sheds. birds in each shed, log eggs daily and losses. I want laying percentage per shed today and a 7 day egg chart
+---
+app "Poultry" egg mint
+table shed name text, birds num 1..20000
+table eggs shed ref shed, n num 0..20000
+table loss shed ref shed, n num 1..2000
+daybars last 7 days, sum(eggs.n on it)
+each shed sort name as s
+  let live = s.birds - sum(s.loss.n)
+  stack card gap 1
+    row
+      s.name bold grow
+      live "birds" faint
+    "Laying today" round(sum(s.eggs.n today) * 100 / live) "%" big
+form eggs, "Log eggs"
+form loss, "Log loss"
+form shed, "Add shed"
+===
+@create style=short domain=b5_blood_donors
+blood donor group list, group, last donation, who can donate again
+---
+app "Blood Group" heart plum
+table donor name text, phone text?, group pick Apos|Aneg|Bpos|Bneg|ABpos|ABneg|Opos|Oneg = Opos
+table donation donor ref donor
+each donor sort name as d
+  row card tap edit d
+    d.name bold grow
+    d.group bold
+    if(due(d.donation, 90), "can donate", join(90 - since(d.donation), " days left")) color if(due(d.donation, 90), good, muted)
+form donation, "Record donation"
+form donor, "Add donor"
+===
+@create style=vague domain=b5_scout_badges
+scout troop badges, which scout earned which
+---
+app "Troop" flag mint
+table scout name text
+table badge name text
+table earned scout ref scout, badge ref badge
+each scout sort name as s
+  row card tap edit s
+    s.name bold grow
+    count(s.earned) "badges" bold
+each badge sort name as b
+  row card
+    b.name grow
+    count(b.earned) "scouts" faint
+form earned, "Award badge"
+form scout, "Add scout"
+form badge, "Add badge"
+===
+@create style=detailed domain=b5_driving_school
+driving school. learners, each lesson is logged with minutes, they pay in parts. a learner needs 20 lessons so show a progress bar for each and what balance they still owe. course fee is 30000
+---
+app "Driving School" car ocean
+table learner name text
+table lesson learner ref learner, minutes num 15..120 = 60
+table fee learner ref learner, amount money
+setting course_fee money = 30000 "Course fee"
+each learner sort name as l
+  stack card gap 1 tap edit l
+    row
+      l.name bold grow
+      "owes" course_fee - sum(l.fee.amount) color if(sum(l.fee.amount) < course_fee, bad, good)
+    goal count(l.lesson), 20, "lessons done"
+form lesson, "Log lesson"
+form fee, "Take payment"
+form learner, "Add learner"
+===
+@create style=short domain=b5_rickshaw_routes
+rickshaw rides by route with fare, which route pays best
+---
+app "Rickshaw" car slate
+table route name text
+table ride route ref route, fare money = 150
+"Earned today" sum(ride.fare today) big
+bars route sort name, sum(it.ride.fare), it.name
+each route sort name as r
+  row card
+    r.name bold grow
+    count(r.ride today) "rides" faint
+    button "Ride" tap add ride route = r
+form route, "Add route"
+===
+@create style=multi_feature domain=b5_mehndi_bookings
+mehndi artist: two tabs, one for today's appointments and one for all clients. each booking has a design (bridal party simple), price and advance paid and balance
+---
+app "Mehndi Book" pen plum
+table client name text, phone text?
+table booking client ref client, day date, design pick Bridal|Party|Simple = Party, price money, advance money = 0
+screen day_view "Today" calendar
+  "Today's bookings" count(booking where day = today) head
+  each booking where day = today sort at as b
+    row card tap edit b
+      stack grow gap 0
+        b.client.name bold
+        b.design faint
+      b.price - b.advance "to collect" bold
+  form booking, "New booking"
+screen people "Clients" users
+  each client sort name as c
+    row card tap edit c
+      c.name bold grow
+      sum(c.booking.price) - sum(c.booking.advance) "balance" faint
+  form client, "Add client"
+===
+@create style=detailed domain=b5_tuition_centre
+tuition centre with batches (each has a monthly fee), students in a batch, fees they paid. I need to see for each batch how many students and how much is pending this month. two screens please, batches and students
+---
+app "Tuition Centre" school slate
+table batch name text, fee money
+table student name text, batch ref batch
+table feepaid student ref student, amount money
+screen batches "Batches" school
+  each batch sort name as b
+    let pending = b.fee * count(b.student) - sum(feepaid month, if(it.student.batch = b, it.amount, 0))
+    row card tap edit b
+      stack grow gap 0
+        b.name bold
+        count(b.student) "students" faint
+      pending "pending" bold color if(pending > 0, warn, good)
+  form batch, "Add batch"
+screen students "Students" users
+  each student sort name as s
+    row card tap edit s
+      s.name bold grow
+      s.batch.name faint
+  form student, "Add student"
+  form feepaid, "Record fee"
+===
+@create style=custom_ui domain=b5_gym_lockers
+40 gym lockers shown as a grid of squares, red when rented, tap a free one to rent it to a name, tap a red one to free it
+---
+app "Lockers" lock ink
+table rental number num 1..40, member text
+state who text = "Guest"
+field who "Rent to"
+grid 8 gap 1
+  each 1..40 as n
+    if count(rental where number = n) > 0
+      box height 40 radius 6 fill bad tap remove last(rental where number = n)
+        n small bold align center color bg
+    else
+      box height 40 radius 6 fill soft tap add rental number = n, member = who
+        n small align center
+"Rented" count(rental) "of 40" faint
+===
+@create style=multi_feature domain=b5_mock_exams
+mock exam practice: timer for 3 hours, after that I note the subject and score. show the score trend line and best score per subject
+---
+app "Mock Exams" school plum
+table mock subject pick Maths|Physics|Chemistry|English|Urdu = Maths, score num 0..100
+timer 3h, "Paper time"
+trend mock sort at, it.score
+each options mock.subject as sb
+  row
+    sb grow
+    "best" max(mock.score where subject = sb) bold
+form mock, "Add score"
+===
+@create style=detailed domain=b5_wedding_catering
+wedding catering planner. dishes, each with ingredients and grams needed per guest and price per kg. I type the guest count and it tells kg of each ingredient and the total cost
+---
+app "Catering" food mint
+table dish name text
+table ingredient dish ref dish, name text, grams_per_guest num 1..2000, price_per_kg money
+setting guests num = 200 "Guests"
+let kg(i ingredient) = i.grams_per_guest * guests / 1000
+"Total cost" sum(ingredient, kg(it) * it.price_per_kg) big
+each dish sort name as d
+  stack card gap 1
+    row
+      d.name head grow
+      sum(d.ingredient, kg(it) * it.price_per_kg) bold
+    each d.ingredient as i
+      row
+        i.name grow
+        fixed(kg(i), 1) "kg" faint
+form ingredient, "Add ingredient"
+form dish, "Add dish"
+===
+@create style=typos domain=b5_phone_repair
+phone repair shop jobs: customer, phone model, problem, status (received fixing ready collected), price quoted, and parts i used with cost so i see profit on each job
+---
+app "Repair Desk" phone slate
+table job customer text, model text, problem text, status pick Received|Fixing|Ready|Collected = Received, price money
+table part job ref job, what text, cost money
+"Profit this month" sum(job.price month) - sum(part.cost month) big
+each options job.status as st
+  row
+    st bold grow
+    count(job where status = st) faint
+each job where status != Collected sort at as j
+  row card tap edit j
+    stack grow gap 0
+      j.customer bold
+      j.model j.problem faint
+    j.price - sum(j.part.cost) "profit" bold
+form job, "New job"
+form part, "Add part"
+===
+@edit style=plain domain=b5_tea_stall_kind ref=b5_tea_stall
+put hot, cold and snack on each menu item and show how many of each kind I sold today
+---
+~ table menu name text, price money => table menu name text, price money, kind pick Hot|Cold|Snack = Hot
++ "Sold today by kind" head
++ each options menu.kind as k
++   row card\n    k grow\n    sum(sale today where item.kind = k, it.qty) bold
+===
+@edit style=plain domain=b5_pigeon_band ref=b5_pigeon_loft
+we call it band not ring, rename that
+---
+~ table bird ring text => table bird band text was ring
+~ each bird sort ring as b => each bird sort band as b
+~ b.ring bold grow => b.band bold grow
+===
+@edit style=plain domain=b5_poultry_feed ref=b5_poultry_sheds
+add feed in kg per shed and show grams of feed per egg
+---
+~ table loss shed ref shed, n num 1..2000 => table loss shed ref shed, n num 1..2000\ntable feed shed ref shed, kg num 0.1..500
++after     "Laying today" round(sum(s.eggs.n today) * 100 / live) "%" big ::     "Feed per egg" round(sum(s.feed.kg) * 1000 / sum(s.eggs.n)) "g" faint
++ form feed, "Log feed"
+===
+@edit style=plain domain=b5_blood_gap ref=b5_blood_donors
+make the 90 days a setting i can change
+---
+~ app "Blood Group" heart plum => app "Blood Group" heart plum\nsetting gap_days num = 90 "Days between donations"
+~ due(d.donation, 90) => due(d.donation, gap_days)
+~ join(90 - since => join(gap_days - since
+~ due(d.donation, 90) => due(d.donation, gap_days)
+===
+@edit style=plain domain=b5_driving_lessons ref=b5_driving_school
+number of lessons needed should be a setting, some courses need 30
+---
+~ setting course_fee money = 30000 => setting course_fee money = 30000\nsetting lessons_needed num = 20 "Lessons needed"
+~ goal count(l.lesson), 20, => goal count(l.lesson), lessons_needed,
+===
+@edit style=plain domain=b5_repair_done ref=b5_phone_repair
+rename the Ready status to Done
+---
+~ Fixing|Ready|Collected = Received => Fixing|Done was Ready|Collected = Received
+===
+@edit style=plain domain=b5_kite_nochart ref=b5_kite_shop
+remove the chart
+---
+- bars kite sort design, it.qty, it.design
+===
+@edit style=plain domain=b5_tuition_discount ref=b5_tuition_centre
+some students get a discount percent, show what they actually pay in the students tab
+---
+~ table student name text, batch ref batch => table student name text, batch ref batch, discount num 0..100 = 0 "Discount %"
+~ s.batch.name faint => s.batch.name faint\n      "pays" s.batch.fee * (100 - s.discount) / 100 bold
+===
+@edit style=plain domain=b5_van_fee ref=b5_school_van
+fee is 4500 from now
+---
+~ monthly_fee money = 4000 => monthly_fee money = 4500 set
+===
+@edit style=plain domain=b5_orchard_kg ref=b5_orchard_blocks
+a crate holds about 18 kg, show total kilos per block
+---
+~ table spray block ref block, product text => table spray block ref block, product text\nsetting kg_per_crate num = 18 "Kg per crate"
+~ "Crates" sum(b.picking.crates) => "Kilos" sum(b.picking.crates) * kg_per_crate "kg, crates" sum(b.picking.crates)
+===
+@edit style=plain domain=b5_locker_fee ref=b5_gym_lockers
+each locker has a monthly fee, add it to the rent form and show the total monthly income
+---
+~ table rental number num 1..40, member text => table rental number num 1..40, member text, fee money = 500
+~ "Rented" count(rental) "of 40" faint => "Rented" count(rental) "of 40" faint\n"Monthly income" sum(rental.fee) bold
+===

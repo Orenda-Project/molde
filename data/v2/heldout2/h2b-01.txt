@@ -1,0 +1,309 @@
+@create style=short domain=h2b_electrician_jobs
+jobs i did, customer, work done, money received. monthly total
+---
+app "Jobs" tool slate
+table job customer text, work text, paid money
+stat sum(job.paid month), "earned this month"
+form job
+list job
+===
+@create style=detailed domain=h2b_pharmacy_expiry
+I run a small pharmacy and need to watch expiry. For each medicine I want the name, batch number if there is one, and the expiry date. Show me how many expire in the next 60 days and list those first.
+---
+app "Expiry" pill mint
+table med name text, batch text?, expires date
+stat count(med where expires <= today + 60), "expiring in 60 days"
+each med where expires <= today + 60 sort expires
+  row card
+    it.name grow
+    it.expires faint
+form med
+list med
+===
+@create style=vague domain=h2b_wedding_guests
+guest list for my wedding
+---
+app "Wedding guests" gift plum
+table guest name text, side pick Bride|Groom, rsvp pick Yes|No|Maybe = Maybe, people num 1..10 = 1
+stat sum(guest.people where rsvp = Yes), "people coming"
+form guest
+list guest
+===
+@create style=detailed domain=h2b_cricket_innings
+cricket coach here. after every match i note the batter name, runs and balls faced. want to see who is scoring the most overall in a bar comparison
+---
+app "Innings" ball ocean
+table innings player text, runs num 0.., balls num 1..
+share innings by player, sum(it.runs), it.key
+form innings
+list innings
+===
+@create style=short domain=h2b_bp_log
+bp readings top bottom pulse, show if its going up
+---
+app "BP" heart ocean
+table reading top num 60..250, bottom num 40..150, pulse num? 30..200
+trend reading, it.top
+form reading
+list reading
+===
+@create style=typos domain=h2b_call_outcomes
+need to count my calls today by how they ended resolved escalatd or callback, one tap each
+---
+app "Calls" phone slate
+table call outcome pick Resolved|Escalated|Callback
+quick call, outcome, options call.outcome
+stat count(call today), "calls today"
+each options call.outcome as o
+  "o" count(call today where outcome = o)
+list call
+===
+@create style=detailed domain=h2b_dough_calc
+bread dough calculator. I type the flour weight in grams and the hydration percent, it tells me water, salt (2 percent) and yeast (1 percent) in grams
+---
+app "Dough" bread mint
+setting flour num 1..50000 = 1000 "Flour (g)"
+setting hydration num 40..120 = 70 "Hydration (%)"
+field flour
+field hydration
+"Water" round(flour * hydration / 100) "g" big
+"Salt" round(flour * 0.02) "g"
+"Yeast" round(flour * 0.01) "g"
+===
+@create style=short domain=h2b_tailor_orders
+tailor orders - customer, what to stitch, due date, price, delivered or not
+---
+app "Orders" pencil plum
+table order customer text, item text, due date, price money, delivered bool
+stat count(order where delivered = no), "still to deliver"
+list order sort due
+form order
+===
+@create style=vague domain=h2b_ranked_games
+win loss record for my ranked games
+---
+app "Ranked" game ink
+table match game text, result pick Win|Loss, kills num 0..
+stat round(100 * count(match where result = Win) / count(match)), "win rate %"
+form match
+list match by day
+===
+@create style=short domain=h2b_hostel_late
+hostel late entry register: student, room number, reason
+---
+app "Late entries" home slate
+table late student text, room num 1..999, reason text?
+stat count(late today), "late tonight"
+form late
+list late by day
+===
+@create style=multi_feature domain=h2b_gym_sets
+gym log: I have a list of exercises, and for each one I log sets with kg and reps. one tab for logging, another tab showing total volume (kg x reps) per exercise this week as bars
+---
+app "Lifts" dumbbell ink
+table exercise name text
+table set exercise ref exercise, kg num 0.., reps num 1..
+state pickex ref exercise
+screen log "Log" dumbbell
+  form exercise, "Add exercise"
+  each exercise
+    row card
+      it.name bold grow
+      count(it.set today) "sets today"
+  form set, "Log set"
+screen stats "Volume" chart
+  bars exercise, sum(it.set week, it.kg * it.reps), it.name
+===
+@create style=multi_feature domain=h2b_rent_flats
+i own a building with flats. each flat has a tenant name and monthly rent. i record payments as they come in. show for each flat whether this months rent is fully paid, green if yes and red if not, and the total still due
+---
+app "Rent" home ocean
+table flat tenant text, rent money
+table payment flat ref flat, amount money
+let due = sum(flat, max(it.rent - sum(it.payment.amount month), 0))
+stat due, "still due this month"
+each flat
+  row card fill if(sum(it.payment.amount month) >= it.rent, good, bad)
+    it.tenant bold grow
+    sum(it.payment.amount month) "/" it.rent
+form flat, "Add flat"
+form payment, "Record payment"
+===
+@create style=custom_ui domain=h2b_study_timer
+pomodoro for exams: 25 minute countdown, and every time it finishes it adds a session. show how many sessions today and this week, and a bar chart for the last 7 days
+---
+app "Focus" timer plum
+table session subject text = "General"
+timer 25m, "Focus", add session then notify "Session done, take 5"
+stat count(session today), "sessions today"
+stat count(session week), "this week"
+daybars last 7 days, count(session on it)
+===
+@create style=custom_ui domain=h2b_carrom_score
+carrom scoreboard for two players with big tap buttons, +1 for a coin and +3 for the queen, a reset button, and a bar that shows who is ahead
+---
+app "Carrom" board mint
+state a num = 0
+state b num = 0
+row gap 2
+  stack grow card align center
+    "Player A" faint
+    a huge
+    button "+1" tap set a = a + 1
+    button "Queen +3" tap set a = a + 3
+  stack grow card align center
+    "Player B" faint
+    b huge
+    button "+1" tap set b = b + 1
+    button "Queen +3" tap set b = b + 3
+draw 100, 6
+  rect 0, 0, 100, 6 fill soft radius 3
+  rect 0, 0, 100 * a / max(a + b, 1), 6 fill accent radius 3
+button "Reset" tap set a = 0 then set b = 0
+===
+@create style=detailed domain=h2b_loan_emi
+loan EMI calculator: loan amount, yearly interest percent and number of months, shows the monthly payment, total I will pay and total interest
+---
+app "EMI" calc slate
+setting amount num 1000.. = 500000 "Loan amount"
+setting rate num 0..60 = 12 "Interest per year (%)"
+setting months num 1..360 = 24 "Months"
+field amount
+field rate
+field months
+let r = rate / 1200
+let emi = if(r = 0, amount / months, amount * r * pow(1 + r, months) / (pow(1 + r, months) - 1))
+stat round(emi), "per month"
+"Total" round(emi * months) "Interest" round(emi * months - amount)
+===
+@create style=multi_feature domain=h2b_dairy_cows
+small dairy farm. keep my cows by name, record the litres from each cow at morning and evening, and show a bar for each cow of how much milk this week
+---
+app "Dairy" milk mint
+table cow name text
+table milking cow ref cow, litres num 0..60, shift pick Morning|Evening
+form cow, "Add cow"
+form milking, "Record milk"
+bars cow, sum(it.milking.litres week), it.name
+stat sum(milking.litres today), "litres today"
+===
+@create style=multi_feature domain=h2b_trip_packing
+going on a trip: want a packing checklist (item, tick when packed) and a second tab to track what i spend with a category and a total
+---
+app "Trip" plane ocean
+table item name text, packed bool
+table spend what text, amount money, kind pick Food|Transport|Stay|Other
+screen pack "Packing" check
+  stat count(item where packed = no), "still to pack"
+  each item
+    row card
+      toggle it.packed
+      it.name grow
+  form item, "Add item"
+screen money "Spending" wallet
+  stat sum(spend.amount), "spent so far"
+  form spend
+  list spend
+===
+@edit style=plain domain=h2b_dairy_notes
+can you add a place to write notes on each entry, like if a cow was sick
+--- before
+app "Milk" milk mint
+table milk litres num 0..100
+stat sum(milk.litres today), "litres today"
+form milk
+daybars last 7 days, sum(milk.litres on it)
+list milk
+--- after
+app "Milk" milk mint
+table milk litres num 0..100, note long?
+stat sum(milk.litres today), "litres today"
+form milk
+daybars last 7 days, sum(milk.litres on it)
+list milk
+===
+@edit style=plain domain=h2b_pushup_goal
+make it a weekly goal instead, 300 a week
+--- before
+app "Pushups" dumbbell ink
+table pushups reps num 1..500
+setting target num = 50 "Daily goal"
+goal sum(pushups.reps today), target, "today", "reps"
+quick pushups, reps, [10, 20]
+list pushups
+--- after
+app "Pushups" dumbbell ink
+table pushups reps num 1..500
+setting target num = 300 "Weekly goal" set
+goal sum(pushups.reps week), target, "this week", "reps"
+quick pushups, reps, [10, 20]
+list pushups
+===
+@edit style=plain domain=h2b_canteen_meals
+rename Food to Meals
+--- before
+app "Spending" wallet mint
+table spend what text, amount money, kind pick Food|Travel|Other
+stat sum(spend.amount month), "this month"
+share spend month by kind, sum(it.amount), it.key
+form spend
+list spend
+--- after
+app "Spending" wallet mint
+table spend what text, amount money, kind pick Meals was Food|Travel|Other
+stat sum(spend.amount month), "this month"
+share spend month by kind, sum(it.amount), it.key
+form spend
+list spend
+===
+@edit style=plain domain=h2b_sugar_chart
+remove the chart, just the list please
+--- before
+app "Sugar" drop ocean
+table reading mgdl num 20..600 unit "mg/dl"
+stat last(reading.mgdl), "latest"
+trend reading, it.mgdl
+form reading
+list reading
+--- after
+app "Sugar" drop ocean
+table reading mgdl num 20..600 unit "mg/dl"
+stat last(reading.mgdl), "latest"
+form reading
+list reading
+===
+@edit style=plain domain=h2b_medicine_reminder
+remind me every evening at 8 to take it
+--- before
+app "Tablets" pill mint
+table dose taken bool
+stat count(dose today), "taken today"
+quick dose, taken, [yes]
+list dose
+--- after
+app "Tablets" pill mint
+table dose taken bool
+stat count(dose today), "taken today"
+quick dose, taken, [yes]
+list dose
+remind "Time for your tablet" at 20:00
+===
+@ask style=ask domain=h2b_shop_app
+need an app for my shop
+---
+ask "What should the app help with in your shop?" "Stock and what is running low" "Sales and daily takings" "Customers who owe me money"
+===
+@oos style=detailed domain=h2b_gold_price oos=internet
+I buy and sell gold. Show me the live gold rate from the internet and let me note each purchase with weight in grams and price paid, and total weight I hold
+---
+app "Gold" coin ink
+table buy grams num 0.., paid money, day date = today
+stat sum(buy.grams), "grams held"
+stat sum(buy.paid), "total paid"
+form buy
+list buy
+===
+@ask style=ask domain=h2b_family_app
+something for my family
+---
+ask "What would your family use it for?" "Chores and who did them" "Shared shopping list" "Pocket money for the kids"

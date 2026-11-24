@@ -1,0 +1,272 @@
+@create style=multi_feature domain=a1_plant_due
+plants with how often to water, show on top the ones that are due today, a water button for each, and a friendly message when nothing is due
+---
+app "Plant Due" plant mint
+table plant name text, every num 1..60 = 4 unit "days"
+table watered plant ref plant
+"Due today" head
+if countof(plant, due(it.watered, it.every)) = 0
+  "Nothing needs water today" faint
+each plant sort name as p
+  if due(p.watered, p.every)
+    row card
+      text p.name bold grow
+      button "Watered" tap add watered plant = p
+"All plants" head
+each plant sort name as p empty "Add your first plant below"
+  row tap edit p swipe remove p
+    text p.name grow
+    "every" plural(p.every, "day") faint
+form plant, "Add plant"
+===
+@create style=detailed domain=a1_pet_shots
+Yearly shots for my pets. I add each pet, tap when it gets its vaccine, and the app shows which pets are overdue after one year.
+---
+app "Pet Shots" paw ocean
+table pet name text, kind pick Dog|Cat|Rabbit|Bird = Dog
+table shot pet ref pet
+each pet sort name as p empty "No pets added yet"
+  row card gap 1
+    stack grow
+      text p.name bold
+      if due(p.shot, 365)
+        "Vaccine due" color bad
+      else
+        "Last shot" last(p.shot.at) faint
+    button "Had shot" tap add shot pet = p
+form pet, "Add pet"
+===
+@create style=custom_ui domain=a1_weight_plot
+weight chart for the last 30 days with grid lines and axes, and the latest weight in big numbers above it
+---
+app "Weight Chart" scale mint
+table weigh kg num 20..300 unit "kg"
+text last(weigh.kg) "kg" big
+plot 0..countof(weigh last 30 days, yes) - 1, 40..120 axes gridlines
+  poly stroke accent thick 2
+    each weigh last 30 days sort at
+      pt index, it.kg
+form weigh
+log weigh last 14 days
+===
+@create style=custom_ui domain=a1_bp_two_lines
+chart of my blood pressure with two lines, top number in red and bottom number in blue, for the last 20 readings
+---
+app "BP Chart" heart ocean
+table bp sys num 60..250, dia num 30..150
+text last(bp.sys) "/" last(bp.dia) big
+plot 0..19, 40..200 axes gridlines
+  poly stroke red thick 2
+    each bp sort at desc top 20 as r
+      pt 19 - index, r.sys
+  poly stroke blue thick 2
+    each bp sort at desc top 20 as r
+      pt 19 - index, r.dia
+form bp
+===
+@create style=short domain=a1_yoga_days_plural
+yoga streak in days
+---
+app "Yoga Streak" leaf mint
+table yoga
+text plural(streak(yoga), "day") big
+"Best" plural(best(yoga), "day") faint
+button if(count(yoga today) > 0, "Done today", "Did yoga") tap toggle yoga
+calendar yoga
+===
+@create style=custom_ui domain=a1_saved_flash
+a water counter whose button shows Saved for two seconds after I tap it
+---
+app "Water" drop ocean
+table drink ml num 1..2000
+state flash bool = no
+setting goal num = 2000 "Daily goal (ml)"
+ring sum(drink.ml today), goal, "ml today"
+button if(flash, "Saved", "Drank 250 ml") tap add drink ml = 250 then set flash = yes then after 2s set flash = no
+daybars last 7 days, sum(drink.ml on it)
+===
+@create style=custom_ui domain=a1_square_habits
+a square board of 28 cells for the last 4 weeks, cells are square, I tap a day to mark that I did my exercise, today has a coloured edge
+---
+app "Exercise Board" dumbbell ink
+table did
+grid 7 gap 1
+  each days last 28 days
+    box ratio 1 radius 6 fill if(count(did on it) > 0, accent, soft) stroke if(it = today, ink, edge) tap toggle did on it
+      text monthday(it) size tiny align center color if(count(did on it) > 0, bg, ink)
+"Days done" count(did last 28 days) "of 28" faint
+===
+@create style=custom_ui domain=a1_big_counter
+one huge counter in the middle of the screen for counting anything, plus minus buttons and reset
+---
+app "Counter" calc ink
+state n num = 0
+stack middle align center gap 2
+  text n big size huge
+  row gap 2
+    button "-" tap set n = max(n - 1, 0)
+    button "+" tap set n = n + 1
+  button "Reset" tap set n = 0
+===
+@create style=detailed domain=a1_month_water_plot
+Show how much water I drank each month of the year as a bar chart with the month names under the bars, and the yearly total with thousands separators.
+---
+app "Water Year" drop ocean
+table drink ml num 1..3000 unit "ml"
+text grouped(sum(drink.ml year)) "ml this year" big
+plot 0..12, 0..maxof(1..12, sum(drink.ml month of addmonths(today, it - 12))) axes
+  each 1..12
+    rect index + 0.15, 0, 0.7, sum(drink.ml month of addmonths(today, it - 12)) fill accent radius 2
+    tick index + 0.5, monthshort(addmonths(today, it - 12))
+form drink
+===
+@create style=short domain=a1_steps_total
+total steps this year
+---
+app "Steps Year" walk mint
+table walk steps num 100..60000
+text compact(sum(walk.steps year)) "steps this year" big
+"Today" grouped(sum(walk.steps today)) faint
+form walk
+log walk last 7 days
+===
+@create style=detailed domain=a1_sleep_fixed
+Hours of sleep with one decimal, show my average for the last 7 nights as hours like 7.4 and a message if it is under 7.
+---
+app "Sleep Hours" bed ink
+table sleep hours num 1..16 unit "h"
+let avg7 = avg(sleep.hours last 7 days)
+text fixed(avg7, 1) "h average" big color if(avg7 < 7, warn, good)
+if avg7 < 7
+  "Try to go to bed earlier this week." faint
+daybars last 7 days, sum(sleep.hours on it)
+form sleep
+===
+@create style=multi_feature domain=a1_medicine_empty
+medicine list for dad: name, dose, time of day, tick when taken, shows a message when the list is empty, and reminder at the time of each medicine
+---
+app "Dad Medicine" pill plum
+table med name text, dose text, at_time time
+table taken med ref med
+remind "Time for your medicine" at med.at_time
+count(taken today) "of" count(med) "taken today" head
+each med sort at_time as m empty "No medicines yet. Add the first one."
+  row card gap 2 tap edit m swipe remove m
+    stack grow
+      text m.name bold
+      join(m.dose, " at ", m.at_time) faint
+    toggle m.taken
+form med, "Add medicine"
+===
+@create style=vague domain=a1_random_dua
+show me a different dua every time I open it
+---
+app "Dua Cards" heart plum
+table dua title text, words long
+state shown num = 1
+button "Another dua" tap set shown = random(count(dua))
+each dua sort at as d empty "Add a dua first"
+  if index + 1 = shown
+    stack card gap 1
+      text d.title head
+      d.words
+form dua, "Add dua"
+===
+@create style=multi_feature domain=a1_revise_next
+surahs I know: name and the date I last revised it, show the one I should revise next (oldest first) and a list of all with days since revision
+---
+app "Revise Next" book mint
+table surah name text, last date
+"Revise next" head
+if count(surah) > 0
+  stack card
+    "Next:" nth(surah sort last, 1).name big
+    "last revised" plural(today - nth(surah sort last, 1).last, "day") "ago" faint
+each surah sort last as s empty "No surahs yet"
+  row tap edit s swipe remove s
+    text s.name grow
+    plural(today - s.last, "day") faint
+form surah
+===
+@create style=custom_ui domain=a1_chore_random
+add family members, tap the button and it picks one at random to wash dishes tonight, and shows the name big
+---
+app "Dish Duty" users plum
+table member name text
+state winner text = ""
+button "Who washes tonight?" tap set winner = random(member).name
+if winner != ""
+  stack card pad 3 gap 1
+    text winner big align center
+    "washes the dishes tonight" faint align center
+form member, "Add person"
+list member
+===
+@create style=short domain=a1_quiz_shuffle
+shuffled quiz cards for kids learning tables
+---
+app "Quiz Cards" school ocean
+table flash front text, back text
+state flip bool = no
+each flash shuffle top 1 as c empty "Add cards first"
+  stack card pad 3 gap 1 tap set flip = not flip
+    if flip
+      text c.back big align center
+    else
+      text c.front big align center
+form flash
+===
+@create style=detailed domain=a1_baby_feed_plot
+Baby feeds: ml each time, and a chart with a bar for each of the last 7 days that has axes, and the total and number of feeds today.
+---
+app "Feed Chart" baby plum
+table feed ml num 10..400 unit "ml"
+"Today" sum(feed.ml today) "ml in" plural(count(feed today), "feed") big
+plot 0..7, 0..max(maxof(days last 7 days, sum(feed.ml on it)), 100) axes gridlines
+  each days last 7 days
+    rect index + 0.15, 0, 0.7, sum(feed.ml on it) fill accent radius 2
+    tick index + 0.5, dayname(it)
+quick feed, ml, [60, 90, 120]
+form feed
+===
+@create style=multi_feature domain=a1_gym_sessions_empty
+gym sessions with exercise, sets and reps, a list that says something nice when empty, weekly count with the word sessions pluralised
+---
+app "Gym Sessions" dumbbell slate
+table session exercise text, sets num 1..10 = 3, reps num 1..50 = 10
+plural(count(session week), "session") "this week" big
+each session week sort at desc as s empty "No sessions yet this week. Time to start!"
+  row card tap edit s swipe remove s
+    text s.exercise bold grow
+    join(s.sets, " x ", s.reps) faint
+form session
+===
+@create style=custom_ui domain=a1_mood_year
+a mood year in pixels: one small square for each day of the last 12 weeks, green for good days, red for bad, grey when I did not log, with rating buttons on top
+---
+app "Mood Pixels" smile plum
+table mood score num 1..5
+row gap 1
+  each 1..5
+    button it grow tap add mood score = it
+grid 7 gap 1
+  each days last 84 days
+    box ratio 1 radius 3 fill if(count(mood on it) = 0, soft, hue(avg(mood.score on it) * 30))
+"Logged" count(mood last 84 days by day) "days" faint
+===
+@edit style=plain domain=a1_e_plantdue_note ref=a1_plant_due
+add a note for each plant
+---
+~ every num 1..60 = 4 unit "days" => every num 1..60 = 4 unit "days", note text?
+===
+@edit style=plain domain=a1_e_square_remind ref=a1_square_habits
+remind me every day at 6 pm
+---
++ remind "Did you exercise today?" at 18:00
+===
+@edit style=plain domain=a1_e_weightplot_goal ref=a1_weight_plot
+add a target weight setting of 70 and show how far I am
+---
+~ table weigh kg num 20..300 unit "kg" => table weigh kg num 20..300 unit "kg"\nsetting target num = 70 "Target (kg)"
++after last(weigh.kg) "kg" big :: "To go" fixed(abs(last(weigh.kg) - target), 1) "kg" faint
+===

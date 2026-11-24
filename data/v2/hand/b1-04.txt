@@ -1,0 +1,321 @@
+@create style=detailed domain=b1_sugarcane_trolleys
+sugarcane growers: each trolley I send to the mill is weighed there. I enter the weight in maunds and the mill rate per 40 kg is a setting. show payment expected per grower for the season
+---
+app "Cane Weigh" leaf mint
+table grower name text, village text?
+table trolley grower ref grower, maunds num 10..400
+setting mill_rate money = 400 "Mill rate per maund"
+each grower sort name as g
+  row card tap edit g
+    stack grow
+      g.name bold
+      g.village faint
+    text count(g.trolley year) "trolleys"
+    sum(g.trolley.maunds year) * mill_rate bold
+"Total maunds" sum(trolley.maunds year) big
+form trolley, "Weighed trolley"
+form grower, "Add grower"
+===
+@create style=multi_feature domain=b1_milkman_homes
+I am a milkman. each home takes a different litres per day at its own rate. I tap deliver for a home each morning, and at the month end I need the bill of every home
+---
+app "Milkman" milk ocean
+table home name text, litres num 0.5..20 = 1, rate money = 190
+table delivery home ref home, litres num 0.5..20
+state m date = today
+monthnav m
+each home sort name as h
+  row card tap edit h
+    stack grow
+      h.name bold
+      text h.litres "L daily at" h.rate faint
+    text sum(h.delivery.litres month of m) "L"
+    button "Deliver" tap add delivery home = h, litres = h.litres
+"Month bill" sum(delivery month of m, it.litres * it.home.rate) big
+form home, "New home"
+===
+@create style=short domain=b1_egg_cost
+cost of one egg
+---
+app "Egg Cost" egg mint
+table feedbuy amount money
+table collected eggs num 1..20000
+let cost_each = sum(feedbuy.amount month) / max(sum(collected.eggs month), 1)
+"Cost per egg" fixed(cost_each, 1) big
+"Eggs this month" sum(collected.eggs month) faint
+form feedbuy, "Feed bought"
+form collected, "Eggs"
+===
+@create style=detailed domain=b1_rickshaw_rental
+I own 5 rickshaws and rent them to drivers for a daily rent. every driver has their own daily rent. I tick a driver when they paid today, and see who skipped how many days this month
+---
+app "Rickshaw Rent" car slate
+table driver name text, vehicle text?, daily_rent money
+table rentday driver ref driver
+"Collected today" sum(driver, it.daily_rent * count(it.rentday today)) big
+each driver sort name as d
+  row card tap edit d
+    stack grow
+      d.name bold
+      d.vehicle faint
+    text count(d.rentday month) "days paid"
+    text "missed" monthday(today) - count(d.rentday month) color warn
+    toggle d.rentday
+form driver, "Add driver"
+===
+@create style=custom_ui domain=b1_landlord_upkeep
+I own two houses. income is the rent I receive; expenses are repairs, tax and maintenance. for each house show a bar of income vs expenses this year and the net
+---
+app "Property" home ink
+table house name text
+table income house ref house, amount money
+table upkeep house ref house, amount money, kind pick Repair|Tax|Maintenance = Repair
+each house sort name as h
+  let inc = sum(h.income.amount year)
+  let exp = sum(h.upkeep.amount year)
+  stack card gap 1 tap edit h
+    row
+      h.name bold grow
+      text "Net" inc - exp bold color if(inc >= exp, good, bad)
+    draw 100, 8
+      rect 0, 0, 100 * inc / max(max(inc, exp), 1), 3 fill good radius 1
+      rect 0, 5, 100 * exp / max(max(inc, exp), 1), 3 fill bad radius 1
+    text "Income" inc "| Expenses" exp faint
+form income, "Rent received"
+form upkeep, "Expense"
+form house, "Add house"
+===
+@create style=vague domain=b1_ration_stock
+ration depot stock sugar flour ghee
+---
+app "Ration Depot" bag slate
+table commodity name text, unit text = "kg"
+table received commodity ref commodity, qty num 1..10000
+table issued commodity ref commodity, qty num 1..1000
+each commodity sort name as c
+  row card tap edit c
+    c.name bold grow
+    text sum(c.received.qty) - sum(c.issued.qty) c.unit bold
+    text "issued today" sum(c.issued.qty today) faint
+form received, "Stock received"
+form issued, "Issued"
+form commodity, "Add commodity"
+===
+@create style=multi_feature domain=b1_exchange_counter
+small currency exchange booth. i keep my dollar buy and sell rate as settings, log each trade with currency (dollar, riyal or pound), amount and whether I bought or sold, and show my spread profit today
+---
+app "Exchange" coin ocean
+setting usd_buy money = 278 "USD buy"
+setting usd_sell money = 281 "USD sell"
+table trade currency pick USD|SAR|GBP = USD, amount num 1..100000, side pick Bought|Sold = Sold, rate money
+let sold_value = sum(trade today where side = Sold, it.amount * it.rate)
+let bought_value = sum(trade today where side = Bought, it.amount * it.rate)
+"Trades today" count(trade today) big
+"Sold" sold_value "Bought" bought_value faint
+form trade
+list trade by day
+===
+@create style=detailed domain=b1_mosque_fund
+masjid fund: donors give money for a purpose (construction, imam salary, electricity, charity). show collected and spent for each purpose and a balance for the fund
+---
+app "Masjid Fund" mosque mint
+table gift donor text, amount money, purpose pick Construction|Imam_salary|Electricity|Charity = Construction
+table spent purpose pick Construction|Imam_salary|Electricity|Charity = Construction, amount money, note text?
+"Fund balance" sum(gift.amount) - sum(spent.amount) big
+each options gift.purpose
+  row card
+    it bold grow
+    text "in" sum(gift.amount where purpose = it)
+    text "out" sum(spent.amount where purpose = it) color muted
+form gift, "Donation"
+form spent, "Expense"
+===
+@create style=typos domain=b1_credit_limit
+shop customers have a credit limit, when they go over limit show them in red, i enter sales on credit and payments
+---
+app "Credit Limit" wallet ocean
+table buyer name text, credit_limit money = 10000
+table credit_sale buyer ref buyer, amount money
+table buyer_payment buyer ref buyer, amount money
+each buyer sort name as b
+  let owed = sum(b.credit_sale.amount) - sum(b.buyer_payment.amount)
+  row card tap edit b fill if(owed > b.credit_limit, bad, surface)
+    b.name bold grow
+    text owed "of" b.credit_limit
+    if owed > b.credit_limit
+      "over limit" bold
+form credit_sale, "Credit sale"
+form buyer_payment, "Payment"
+form buyer, "New customer"
+===
+@create style=multi_feature domain=b1_mango_orchard
+mango orchard, each tree variety has a number of trees. I write the crates sold at each picking and the spray costs. per tree profit by variety please
+---
+app "Orchard" apple mint
+table variety name text, trees num 1..2000
+table crop variety ref variety, crates num 1..5000, income money
+table spray variety ref variety, cost money
+each variety sort name as v
+  let profit = sum(v.crop.income) - sum(v.spray.cost)
+  row card tap edit v
+    stack grow
+      v.name bold
+      text v.trees "trees" faint
+    text "profit" profit
+    text "per tree" round(profit / v.trees) bold color if(profit >= 0, good, bad)
+bars variety, sum(it.crop.crates), it.name
+form crop, "Picking sold"
+form spray, "Spray cost"
+form variety, "Add variety"
+===
+@create style=custom_ui domain=b1_petrol_pump
+petrol pump shift sheet: each shift has attendant, litres sold and cash handed over. the expected cash is litres times a price setting, show difference in red if short
+---
+app "Pump Shifts" bolt ink
+table shift attendant text, litres num 0..20000, cash_handed money
+setting price money = 275 "Petrol price"
+each shift sort at desc top 10 as s
+  let expected = s.litres * price
+  row card tap edit s
+    s.attendant bold grow
+    text s.litres "L"
+    text s.cash_handed - expected bold color if(s.cash_handed >= expected, good, bad)
+"Total litres this week" sum(shift.litres week) head
+form shift, "Close shift"
+===
+@create style=detailed domain=b1_truck_trips
+I own two trucks. every trip has a route, the freight I received and the truck has expenses like diesel, toll and driver food that I enter against the truck. show profit for each truck this month and its trips
+---
+app "Truck Trips" bus slate
+table truck plate text, driver text?
+table trip truck ref truck, route text, freight money
+table trip_cost truck ref truck, kind pick Diesel|Toll|Food|Repair = Diesel, amount money
+each truck sort plate as t
+  stack card gap 1 tap edit t
+    row
+      t.plate bold grow
+      text sum(t.trip.freight month) - sum(t.trip_cost.amount month) bold
+    each t.trip month sort at desc as r
+      row gap 1
+        r.route grow
+        r.freight faint
+form trip, "New trip"
+form trip_cost, "Truck expense"
+form truck, "Add truck"
+===
+@create style=short domain=b1_tandoor_roti
+roti count daily and flour used
+---
+app "Tandoor" bread slate
+table roti count num 1..1000
+table atta kg num 1..100
+"Rotis today" sum(roti.count today) big
+text sum(atta.kg today) "kg flour" faint
+text "per kg" round(sum(roti.count today) / max(sum(atta.kg today), 1)) faint
+quick roti, count, [50, 100, 200]
+form atta, "Flour used"
+===
+@create style=detailed domain=b1_brick_kiln
+brick kiln: each day workers make bricks, paid per 1000 bricks. I enter the worker and the bricks made, rate per thousand is a setting. the weekly payable per worker and total bricks
+---
+app "Brick Kiln" box ink
+table moulder name text
+table bricks moulder ref moulder, made num 100..5000
+setting rate_thousand money = 1100 "Pay per 1000 bricks"
+each moulder sort name as m
+  row card tap edit m
+    m.name bold grow
+    text sum(m.bricks.made week) "bricks"
+    text sum(m.bricks.made week) * rate_thousand / 1000 bold
+"Bricks this week" sum(bricks.made week) big
+daybars last 7 days, sum(bricks.made on it)
+form bricks, "Bricks made"
+form moulder, "Add worker"
+===
+@create style=vague domain=b1_stall_rents
+bazaar stalls rent
+---
+app "Bazaar Rents" tag plum
+table stall number text, holder text, rent money
+table rentin stall ref stall, amount money
+state m date = today
+monthnav m
+each stall sort number as s
+  row card tap edit s
+    s.number bold
+    s.holder grow
+    if sum(s.rentin.amount month of m) >= s.rent
+      "paid" color good
+    else
+      text s.rent - sum(s.rentin.amount month of m) color bad
+form rentin, "Rent received"
+form stall, "Add stall"
+===
+@create style=custom_ui domain=b1_snooker_tables
+snooker club with 4 tables. start a table with a button and stop it when done, charge is per minute. I log the minutes played and see the earning of each table today
+---
+app "Snooker" game ink
+table cuetable name text, per_min money = 8
+table game cuetable ref cuetable, minutes num 1..600
+state starts when = now
+state running bool = no
+row gap 1
+  if running
+    button "Stop timer" tap set running = no
+  else
+    button "Start timer" tap set starts = now then set running = yes
+  text if(running, now - starts, 0m) big
+each cuetable sort name as c
+  row card tap edit c
+    c.name bold grow
+    text sum(c.game.minutes today) "min"
+    sum(c.game.minutes today) * c.per_min bold
+form game, "Add played minutes"
+form cuetable, "Add table"
+===
+@oos style=detailed domain=b1_delivery_boy_gps oos=location
+I have 3 delivery boys on bikes. show me live on a map where each boy is, and also how many parcels each delivered today and the cod cash they owe me
+---
+app "Delivery Boys" bike ocean
+table rider name text
+table parcel rider ref rider, cod money, delivered bool
+each rider sort name as r
+  row card tap edit r
+    r.name bold grow
+    text count(r.parcel today where delivered = yes) "delivered"
+    text sum(r.parcel.cod today where delivered = yes) bold
+form parcel, "Parcel"
+form rider, "Add rider"
+===
+@oos style=short domain=b1_ai_forecast oos=ai
+predict next month's sales of my cloth shop using AI and keep daily sales record
+---
+app "Cloth Shop" tag plum
+table daysale amount money, note text?
+"This month" sum(daysale.amount month) big
+trend days last 30 days, sum(daysale.amount on it)
+form daysale
+===
+@oos style=detailed domain=b1_barcode_stock oos=camera
+scan the barcode on products with the phone camera to add to stock, each product has quantity and price and I also want the stock value
+---
+app "Barcode Stock" package slate
+table product name text, code text?, qty num 0.., price money
+"Stock value" sum(product, it.qty * it.price) big
+each product sort name as p
+  row card tap edit p
+    p.name bold grow
+    p.qty
+form product, "Add product"
+===
+@edit style=plain domain=b1_cane_growers_note ref=b1_sugarcane_trolleys
+add the rate per maund each grower got paid and a note
+---
+~ village text? => village text?, paid_rate money?, remark long?
+===
+@edit style=plain domain=b1_milkman_remove ref=b1_milkman_homes
+remove the month navigation, only this month matters
+---
+- monthnav m
+~ month of m => month
+~ month of m => month

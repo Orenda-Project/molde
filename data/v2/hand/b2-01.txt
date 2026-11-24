@@ -1,0 +1,396 @@
+@create style=detailed domain=b2_class_marks
+I teach three sections and give a quiz every Friday. I need each student's marks against their name, the class average, and a red flag on anyone averaging under 40.
+---
+app "Class marks" school ocean
+table student name text, section pick Red|Blue|Green = Red
+table mark student ref student, subject pick Maths|Science|English = Maths, score num 0..100
+"Class average" round(avg(mark.score)) big
+count(student, avg(it.mark.score) < 40) "students under 40" faint
+each student sort name as s
+  row card tap edit s swipe remove s
+    s.name bold grow
+    s.section faint
+    round(avg(s.mark.score)) bold color if(avg(s.mark.score) < 40, bad, ink)
+form student, "Add student"
+form mark, "Add mark"
+===
+@create style=vague domain=b2_pet_vet
+keep track of my dog and cat vet stuff
+---
+app "Pet health" paw mint
+table pet name text, kind pick Dog|Cat|Bird|Other = Dog
+table vaccine pet ref pet, shot text, due date
+table visit pet ref pet, reason text, cost money
+remind "Vaccine due" at vaccine.due
+each pet as p
+  stack card gap 1
+    row
+      p.name head grow
+      p.kind faint
+    "Vet spend" sum(p.visit.cost) faint
+    "Days since last visit" since(p.visit) faint
+    each p.vaccine as v
+      v.shot "due" v.due small color if(v.due < today, bad, muted)
+form pet, "Add pet"
+form vaccine, "Add vaccine"
+form visit, "Add visit"
+===
+@create style=short domain=b2_baby_feeds
+baby feeds, how much milk today
+---
+app "Baby feeds" baby mint
+table feed kind pick Milk|Water|Solid = Milk, ml num 5..400 = 90
+sum(feed.ml today where kind = Milk) "ml of milk today" big
+count(feed today) "feeds so far" faint
+"Hours since last feed" since(feed) faint
+quick feed, ml, [60, 90, 120, 150]
+daybars last 7 days, sum(feed.ml on it)
+list feed today
+===
+@create style=multi_feature domain=b2_bp_family
+my mother and father both have blood pressure readings twice a day. I want a card for each with the latest top and bottom number in red when top is over 140, and a chart for the week
+---
+app "Blood pressure" heart plum
+table person name text
+table reading person ref person, top num 60..250, bottom num 40..150, slot pick Morning|Evening = Morning
+each person as p
+  stack card gap 1 tap edit p
+    p.name head
+    row gap 1
+      last(p.reading.top) "/" last(p.reading.bottom) big color if(last(p.reading.top) > 140, bad, good)
+      "average top" round(avg(p.reading.top last 7 days)) faint
+    trend p.reading last 7 days, it.top
+form person, "Add person"
+form reading, "Add reading"
+===
+@create style=typos domain=b2_tuition_fees
+tution fees, i have like 12 kids come to my house, each one pays monthly. show who has not payed this month and how much i got total
+---
+app "Tuition" school slate
+table kid name text, fee money
+table payment kid ref kid, amount money
+"Collected this month" sum(payment.amount month) big
+count(kid, count(it.payment month) = 0) "kids not paid yet" faint color warn
+each kid sort name as k
+  row card tap edit k
+    k.name bold grow
+    if(count(k.payment month) > 0, "paid", "due") color if(count(k.payment month) > 0, good, bad)
+    k.fee faint
+form kid, "Add kid"
+form payment, "Record payment"
+===
+@create style=detailed domain=b2_football_squad
+Sunday football squad: list of players, log every goal with who scored, and a top scorers table so we can settle who buys the tea.
+---
+app "Sunday football" ball mint
+table player name text, position pick Goalie|Defender|Mid|Striker = Mid
+table goal player ref player, minute num 1..120
+count(goal) "goals this season" big
+"Top scorers" head
+each player sort count(it.goal) desc top 5 as p
+  row card
+    p.name bold grow
+    count(p.goal) bold
+    p.position faint
+form player, "Add player"
+form goal, "Log goal"
+list goal
+===
+@create style=typos domain=b2_swim_laps
+swiming laps, i do about 20 a day, wnat to see weekly total and my best day
+---
+app "Laps" drop ocean
+table swim laps num 1..100 = 20
+sum(swim.laps week) "laps this week" big
+"Best day" max(days last 30 days, sum(swim.laps on it)) faint
+daybars last 7 days, sum(swim.laps on it)
+form swim
+list swim by day
+===
+@create style=multi_feature domain=b2_kids_homework
+two kids, each has homework with a due date and a subject. Show what is due first, tick when done, and how many pending per kid
+---
+app "Homework" book plum
+table child name text
+table homework child ref child, subject pick Maths|Urdu|English|Science|Other = Maths, what text, due date, done bool
+each child as c
+  row card
+    c.name bold grow
+    count(c.homework where done = no) "pending" color if(count(c.homework where done = no) > 0, warn, good)
+"Due soonest" head
+each homework where done = no sort due as h
+  row card gap 1 tap edit h
+    toggle h.done
+    stack grow
+      h.what bold
+      h.child.name h.subject faint
+    h.due color if(h.due < today, bad, muted)
+form child, "Add child"
+form homework, "Add homework"
+===
+@create style=vague domain=b2_baby_vaccines
+baby shots schedule
+---
+app "Baby shots" baby mint
+table baby name text, born date
+table shot baby ref baby, vaccine text, due date, given bool
+remind "Baby vaccine due" at shot.due - 1d at 9:00
+each baby as b
+  stack card gap 1
+    row
+      b.name head grow
+      "Age" floor((today - b.born) / 30) "months" faint
+    each b.shot sort due as s
+      row gap 1
+        toggle s.given
+        s.vaccine grow
+        s.due faint color if(s.given, good, if(s.due < today, bad, muted))
+form baby, "Add baby"
+form shot, "Add shot"
+===
+@create style=short domain=b2_exam_days
+days left to each exam
+---
+app "Exams" school ocean
+table exam subject text, day date, hours num 0..10 = 2
+table prep exam ref exam, hours num 0.25..10
+each exam sort day as e
+  stack card gap 1 tap edit e
+    row
+      e.subject bold grow
+      e.day - today "days left" color if(e.day - today < 7, warn, muted)
+    "Studied" sum(e.prep.hours) "of" e.hours * 10 "hours" faint
+form exam, "Add exam"
+form prep, "Log study time"
+===
+@create style=detailed domain=b2_sugar_log
+My father is diabetic. We note his sugar before breakfast and after dinner. Show the latest reading, the week's average for each time, and a line chart so the doctor can see the trend.
+---
+app "Sugar log" heart plum
+table sugar level num 40..600, moment pick Fasting|After_meal = Fasting
+"Latest" last(sugar.level) big color if(last(sugar.level) > 180, bad, good)
+row gap 2
+  stat round(avg(sugar.level last 7 days where moment = Fasting)), "fasting average"
+  stat round(avg(sugar.level last 7 days where moment = After_meal)), "after meal average"
+trend sugar last 14 days, it.level
+form sugar
+list sugar by day
+===
+@create style=custom_ui domain=b2_coach_attendance
+coach here. grid of my players, tap a name to mark them present today, show how many came and how many sessions each has missed this month
+---
+app "Practice" ball ocean
+table player name text
+table present player ref player
+count(present today) "of" count(player) "here today" big
+grid 3 gap 1
+  each player sort name as p
+    stack radius 8 pad 1 fill if(count(p.present today) > 0, good, soft) tap toggle p.present today
+      p.name bold align center
+      count(p.present month) "days" tiny align center
+form player, "Add player"
+===
+@create style=multi_feature domain=b2_gym_sets
+gym log with exercises and sets (kg and reps), total weight lifted today, and my heaviest set for each exercise
+---
+app "Lifts" dumbbell slate
+table exercise name text, muscle pick Chest|Back|Legs|Arms|Core = Chest
+table set exercise ref exercise, kg num 0..300, reps num 1..100
+sum(set, it.kg * it.reps) "kg lifted in total" faint
+sum(set today, it.kg * it.reps) "kg lifted today" big
+each exercise as ex
+  row card
+    stack grow
+      ex.name bold
+      ex.muscle faint
+    "Best" max(ex.set.kg) "kg" bold
+    count(ex.set today) "sets today" faint
+form exercise, "Add exercise"
+form set, "Add set"
+===
+@create style=vague domain=b2_pet_feeding
+feed the cat
+---
+app "Cat food" paw mint
+table pet name text
+table meal pet ref pet, grams num 5..300 = 50, kind pick Dry|Wet|Treat = Dry
+each pet as p
+  stack card gap 1
+    p.name head
+    "Today" sum(p.meal.grams today) "g" big
+    "Last fed" since(p.meal) "days ago" faint
+    button "Feed dry" tap add meal pet = p, grams = 50, kind = Dry
+    button "Feed wet" tap add meal pet = p, grams = 80, kind = Wet
+form pet, "Add pet"
+===
+@create style=detailed domain=b2_elder_care
+I look after my grandmother who lives alone. Family members take turns to visit her. I want to see who visited when, how many days since anyone came, and a reminder if nobody has gone for 3 days.
+---
+app "Grandma visits" heart plum
+table relative name text, phone text?
+table visit relative ref relative, note text?
+"Days since the last visit" since(visit) big color if(since(visit) >= 3, bad, good)
+if due(visit, 3)
+  "Nobody has gone for 3 days. Please call someone." color warn
+each relative as r
+  row card tap edit r
+    r.name bold grow
+    count(r.visit month) "visits this month" faint
+form relative, "Add relative"
+form visit, "Add visit"
+list visit by day
+===
+@create style=short domain=b2_child_reading
+kids reading minutes
+---
+app "Reading time" book ocean
+table kid name text
+table session kid ref kid, minutes num 1..240 = 20, title text?
+each kid as k
+  row card
+    k.name bold grow
+    sum(k.session.minutes week) "min this week" bold
+    streak(k.session) "day streak" faint
+daybars last 7 days, sum(session.minutes on it)
+form kid, "Add kid"
+form session, "Log reading"
+===
+@create style=custom_ui domain=b2_teacher_planner
+class planner for a teacher, one tab for the week's lessons by day and another tab for pending marking with a tick
+---
+app "Teacher planner" school ocean
+table lesson topic text, day pick Mon|Tue|Wed|Thu|Fri = Mon, grade num 1..12
+table marking lesson ref lesson, pile text, done bool
+screen week "Week" calendar
+  each options lesson.day as dd
+    "" dd head
+    each lesson where day = dd as l
+      row card tap edit l
+        l.topic grow
+        "Grade" l.grade faint
+  form lesson, "Add lesson"
+screen todo "Marking" pen
+  count(marking where done = no) "piles to mark" big
+  each marking where done = no as m
+    row card
+      toggle m.done
+      m.pile grow
+      m.lesson.topic faint
+  form marking, "Add pile"
+===
+@create style=multi_feature domain=b2_cricket_nets
+net practice: each bowler has spells, I note overs and wickets and runs given, show economy and a bar per bowler
+---
+app "Net bowling" ball mint
+table bowler name text
+table spell bowler ref bowler, overs num 1..20, runs num 0..200, wickets num 0..10 = 0
+each bowler as b
+  row card
+    b.name bold grow
+    sum(b.spell.wickets) "wkts" bold
+    round(sum(b.spell.runs) / max(sum(b.spell.overs), 1)) "runs/over" faint
+bars bowler, sum(it.spell.wickets), it.name
+form bowler, "Add bowler"
+form spell, "Add spell"
+===
+@create style=typos domain=b2_baby_sleep
+baby sleep, nap and night, how many hours she slept today
+---
+app "Baby sleep" moon plum
+table sleep kind pick Nap|Night = Nap, length dur
+sum(sleep.length today) "slept today" big
+"Naps today" count(sleep today where kind = Nap) faint
+daybars last 7 days, sum(sleep.length on it) / 1h
+form sleep
+list sleep by day
+===
+@oos style=detailed domain=b2_oos_report_cards oos=messaging
+Marks for my class, with the average for each student. At the end of the term it should email each report card to the parents automatically.
+---
+app "Report cards" school ocean
+table student name text
+table mark student ref student, subject text, score num 0..100
+each student sort name as s
+  row card tap edit s
+    s.name bold grow
+    round(avg(s.mark.score)) bold
+form student, "Add student"
+form mark, "Add mark"
+===
+@oos style=short domain=b2_oos_barcode_baby oos=camera
+scan the barcode on baby formula tins and count how many are left
+---
+app "Formula tins" baby mint
+table tin brand text, left num 0..10 = 1
+count(tin where left > 0) "tins in stock" big
+each tin as t
+  row card
+    t.brand bold grow
+    button "-" tap set t.left = t.left - 1
+    t.left bold
+    button "+" tap set t.left = t.left + 1
+form tin, "Add tin by hand"
+===
+@create style=detailed domain=b2_science_fair
+Science fair groups: each group has 3 or 4 members and a project, judges give scores out of 10 for idea, model and talk. Show the ranking by total score.
+---
+app "Science fair" school plum
+table team project text, members text
+table score team ref team, part pick Idea|Model|Talk = Idea, points num 0..10
+"Ranking" head
+each team sort sum(it.score.points) desc as t
+  row card tap edit t
+    text index + 1 big
+    stack grow
+      t.project bold
+      t.members faint
+    sum(t.score.points) bold
+form team, "Add team"
+form score, "Add score"
+===
+@edit style=plain domain=b2_e_marks_prio ref=b2_class_marks
+add a note field to each mark and show only the weak marks below 40 in a list at the bottom
+---
+~ score num 0..100 => score num 0..100, note text?
++ "Weak marks" head
++ each mark where score < 40 sort score as m
++   row card
++     m.student.name bold grow
++     m.score bold color bad
+===
+@edit style=plain domain=b2_e_vet_cost ref=b2_pet_vet
+show a bar chart of cost per pet
+---
++ bars pet, sum(it.visit.cost), it.name
+===
+@edit style=plain domain=b2_e_feeds_rename ref=b2_baby_feeds
+rename the Solid option to Puree
+---
+~ pick Milk|Water|Solid = Milk => pick Milk|Water|Puree was Solid = Milk
+===
+@edit style=plain domain=b2_e_laps_goal ref=b2_swim_laps
+add a daily lap goal setting of 30 and show progress
+---
++after sum(swim.laps week) "laps this week" big :: setting goal num 1.. = 30 "Daily lap goal"\ngoal sum(swim.laps today), goal, "laps today"
+===
+@edit style=plain domain=b2_e_hw_priority ref=b2_kids_homework
+add a priority to homework and show only the urgent ones in the due soonest list
+---
+~ what text, due date => what text, due date, priority pick Normal|Urgent = Normal
+~ each homework where done = no sort due as h => each homework where done = no and priority = Urgent sort due as h
+===
+@edit style=plain domain=b2_e_exam_weekly ref=b2_exam_days
+rename hours column to target hours
+---
+~ hours num 0..10 = 2 => target_hours num 0..10 = 2 was hours
+~ e.hours * 10 => e.target_hours * 10
+===
+@edit style=plain domain=b2_e_gym_nochart ref=b2_gym_sets
+add a chart of total weight per day for the week
+---
++ daybars last 7 days, sum(set on it, it.kg * it.reps)
+===
+@edit style=plain domain=b2_e_sleep_daily ref=b2_baby_sleep
+remove the naps today line
+---
+- "Naps today" count(sleep today where kind = Nap) faint

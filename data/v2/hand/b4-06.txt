@@ -1,0 +1,334 @@
+@create style=short domain=b4_tandoor_rotis
+tandoor roti count by kind plus flour used
+---
+app "Tandoor" bread mint
+table roti kind pick Plain|Naan|Paratha = Plain, qty num 1..100 = 1
+table flour kg num 1..100
+setting roti_price money = 15 "Price per roti"
+each options roti.kind as k
+  row card
+    k bold grow
+    text sum(roti.qty today where kind = k)
+    button "+10" tap add roti kind = k, qty = 10
+text "Sales today" sum(roti.qty today) * roti_price big
+text "Flour used today" sum(flour.kg today) "kg" faint
+form flour, "Flour opened"
+===
+@edit style=plain domain=b4_tandoor_nochart ref=b4_tandoor_rotis
+show how many rotis we get from each kg of flour
+---
++ "Rotis per kg" round(sum(roti.qty today) / sum(flour.kg today)) head
+===
+@create style=detailed domain=b4_pizza_slices
+pizza point sells slices and whole pizzas. a slice is 150, a small is 800, medium 1200, large 1600. each sale i tap the size and the app should add the right price. end of day total and how many of each size
+---
+app "Pizza Point" food slate
+table psale size pick Slice|Small|Medium|Large = Slice, price money
+each options psale.size as s
+  row card tap add psale size = s, price = if(s = Slice, 150, if(s = Small, 800, if(s = Medium, 1200, 1600)))
+    s bold grow
+    text count(psale today where size = s)
+    text sum(psale.price today where size = s) faint
+text "Today" sum(psale.price today) big
+daybars last 7 days, count(psale on it)
+===
+@create style=multi_feature domain=b4_kitchen_staff
+restaurant kitchen has 5 staff with hourly wage. each shift has start and end time, total hours is the difference. show the weekly wage per person and for the whole kitchen
+---
+app "Kitchen Staff" users slate
+table cook name text, hourly money
+table shift cook ref cook, day date, start time, end time
+each cook sort name as c
+  let hrs = sum(c.shift week, (it.end - it.start) / 1h)
+  row card tap edit c
+    stack grow
+      c.name bold
+      text fixed(hrs, 1) "hours this week" faint
+    text round(hrs * c.hourly) bold
+text "Kitchen wages this week" round(sum(shift week, (it.end - it.start) / 1h * it.cook.hourly)) big
+form shift, "Add shift"
+form cook, "Add cook"
+===
+@edit style=plain domain=b4_staff_overtime ref=b4_kitchen_staff
+overtime after 40 hours a week is paid one and a half
+---
+~ round(hrs * c.hourly) bold => text round(min(hrs, 40) * c.hourly + max(hrs - 40, 0) * c.hourly * 1.5) bold
+===
+@create style=vague domain=b4_repeat_prescriptions
+repeat prescriptions, who needs to come back for refill
+---
+app "Refills" pill ocean
+table patient name text, phone text?
+table rx patient ref patient, drug text, days_supply num 7..90 = 30
+each patient sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      text last(p.rx.drug) faint
+    if since(p.rx) >= last(p.rx.days_supply) - 3
+      text "Refill due" color warn
+form rx, "New prescription"
+form patient, "Add patient"
+===
+@create style=custom_ui domain=b4_newborn_feeds
+newborn log for me and my wife at night: tap a button for breast, bottle or diaper, show how long since the last feed in hours and how many feeds today
+---
+app "Newborn" baby plum
+table feed kind pick Breast|Bottle|Diaper = Breast, ml num? 0..300
+text hour(now - last(feed.at where kind != Diaper)) "hours since last feed" big
+row gap 1
+  button "Breast" tap add feed kind = Breast
+  button "Bottle 90ml" tap add feed kind = Bottle, ml = 90
+  button "Diaper" tap add feed kind = Diaper
+text count(feed today where kind != Diaper) "feeds today," count(feed today where kind = Diaper) "diapers" head
+daybars last 7 days, count(feed on it where kind != Diaper)
+===
+@create style=detailed domain=b4_antenatal_visits
+my sister is pregnant. each checkup visit has the week of pregnancy, weight in kg, blood pressure top number, and the next appointment date. remind her 2 days before the next appointment and show weight gain
+---
+app "Antenatal" heart plum
+table checkup week num 4..42, weight num 30..150, bp num 70..200, next_visit date
+remind "Checkup coming up" at checkup.next_visit - 2d at 9:00
+text "Week" last(checkup.week) big
+text "Weight gain" last(checkup.weight) - first(checkup.weight) "kg" head
+trend checkup sort week, it.weight
+each checkup sort at desc as c
+  row card tap edit c swipe remove c
+    text "Week" c.week bold grow
+    text c.weight "kg"
+    text "next" c.next_visit faint
+form checkup, "Add checkup"
+===
+@create style=multi_feature domain=b4_caregiver_log
+i look after my father at home. each day tasks like medicine, walk, bath, physio exercises and meals are ticked, and i note his mood in the evening as good okay or low. show the mood of the last 7 days
+---
+app "Caregiver" heart ocean
+table task name text
+table done_task task ref task
+table mood level pick Good|Okay|Low = Okay
+each task sort name as t
+  row card tap edit t
+    t.name bold grow
+    toggle t.done_task
+text count(done_task today) "of" count(task) "tasks done" head
+text "Mood today" last(mood.level) big
+row gap 1
+  each options mood.level
+    button it tap add mood level = it
+each days last 7 days
+  row
+    dayname(it) grow
+    text count(mood on it where level = Good) "good" color good
+    text count(mood on it where level = Low) "low" color bad
+form task, "Add task"
+===
+@edit style=plain domain=b4_caregiver_note ref=b4_caregiver_log
+add a note box to the mood
+---
+~ level pick Good|Okay|Low = Okay => level pick Good|Okay|Low = Okay, note long?
++ list mood
+===
+@create style=detailed domain=b4_bottle_water
+water bottle supplier, 19 litre bottles. customers get full bottles and return empties. i must know how many empty bottles each customer still holds and their bill at 120 per bottle
+---
+app "Bottle Supply" drop ocean
+table cust name text, area text?
+table delivery cust ref cust, full num 0..50, empties_back num 0..50 = 0
+setting price money = 120 "Price per bottle"
+each cust sort name as c
+  let held = sum(c.delivery.full) - sum(c.delivery.empties_back)
+  row card tap edit c
+    stack grow
+      c.name bold
+      text c.area faint
+    text held "bottles held" color if(held > 5, warn, ink)
+    text sum(c.delivery.full) * price faint
+text "Bottles out in total" sum(delivery.full) - sum(delivery.empties_back) big
+form delivery, "Delivery"
+form cust, "New customer"
+===
+@create style=typos domain=b4_gas_cylinders
+gass cylinder shop 11kg and 45kg, i sell new and refill, customer pay cash, count by size today and money
+---
+app "Gas Shop" fire slate
+table gsale size pick Kg11|Kg45 = Kg11, kind pick Refill|New = Refill, price money = 3500
+quick gsale, size, [Kg11, Kg45]
+text "Today" sum(gsale.price today) big
+each options gsale.size as s
+  row card
+    s bold grow
+    text count(gsale today where size = s) "sold"
+    text count(gsale today where size = s and kind = New) "new" faint
+list gsale today
+===
+@create style=multi_feature domain=b4_bike_taxi
+bike taxi rides: every ride has the km and a fare at 25 per km, i also fill petrol. i want to see how much i make per km after petrol this week
+---
+app "Bike Taxi" bike slate
+table ride km num 0.5..80, tip money = 0
+table petrol amount money, litres num 1..20
+setting per_km money = 25 "Fare per km"
+let earned = sum(ride.km week) * per_km + sum(ride.tip week)
+"Earned this week" earned big
+"After petrol" earned - sum(petrol.amount week) head color if(earned > sum(petrol.amount week), good, bad)
+text "Per km" fixed((earned - sum(petrol.amount week)) / sum(ride.km week), 1) faint
+daybars last 7 days, sum(ride.km on it) * per_km
+form ride, "Add ride"
+form petrol, "Petrol"
+===
+@edit style=plain domain=b4_taxi_weekly ref=b4_bike_taxi
+make the chart weekly
+---
+~ daybars last 7 days, sum(ride.km on it) * per_km => bars ride last 6 weeks by week, sum(it.km) * per_km, it.key
+===
+@create style=detailed domain=b4_masjid_fund
+our masjid committee. Friday collections come in by amount, and expenses are like electricity, imam salary, repair, cleaning. show balance now and the expenses by category this month
+---
+app "Masjid Fund" mosque mint
+table collection amount money, source pick Friday|Donation|Zakat = Friday
+table expense amount money, category pick Electricity|Salary|Repair|Cleaning|Other = Electricity
+let balance = sum(collection.amount) - sum(expense.amount)
+"Balance" balance big color if(balance >= 0, good, bad)
+row gap 2
+  stat sum(collection.amount month), "collected this month"
+  stat sum(expense.amount month), "spent this month"
+share expense month by category, sum(it.amount), it.key
+form collection, "Collection"
+form expense, "Expense"
+===
+@edit style=plain domain=b4_masjid_option ref=b4_masjid_fund
+call the Repair category Maintenance
+---
+~ Electricity|Salary|Repair|Cleaning|Other => Electricity|Salary|Maintenance was Repair|Cleaning|Other
+===
+@create style=multi_feature domain=b4_vaccine_camp
+NGO polio and measles camp. we visit villages, each visit records doses given by type and how many children refused. show doses per village and refusals for the whole drive
+---
+app "Vaccine Camp" heart mint
+table village name text, children num 10..5000
+table camp village ref village, vaccine pick Polio|Measles|Both = Polio, doses num 0..500, refused num 0..100 = 0
+each village sort name as v
+  let given = sum(v.camp.doses)
+  row card tap edit v
+    stack grow
+      v.name bold
+      goal given, v.children, "doses given"
+    text sum(v.camp.refused) "refused" faint
+text "Total doses" sum(camp.doses) big
+text "Refusals" sum(camp.refused) head color warn
+form camp, "Camp visit"
+form village, "Add village"
+===
+@create style=short domain=b4_skills_centre
+women tailoring course, attendance per trainee, certificate after 20 classes
+---
+app "Skills Centre" pen plum
+table trainee name text, phone text?
+table attend trainee ref trainee
+each trainee sort name as t
+  let n = count(t.attend)
+  row card tap edit t
+    t.name bold grow
+    text n "of 20" color if(n >= 20, good, ink)
+    if n >= 20
+      text "Certificate" color good
+    toggle t.attend
+text "Present today" count(attend today) head
+form trainee, "Add trainee"
+===
+@create style=detailed domain=b4_scholarship_fund
+we give scholarships to poor students. each student has a monthly scholarship amount, and we pay out every month. donors give money into the fund. show fund balance and who has not been paid this month
+---
+app "Scholarships" school ocean
+table student name text, school text?, monthly money
+table payout student ref student, amount money
+table fund_in donor text, amount money
+let balance = sum(fund_in.amount) - sum(payout.amount)
+"Fund balance" balance big color if(balance < sum(student.monthly), warn, good)
+each student sort name as s
+  let paid = sum(s.payout.amount month)
+  row card tap edit s
+    stack grow
+      s.name bold
+      s.school faint
+    if paid >= s.monthly
+      text "Paid" color good
+    else
+      button "Pay" tap add payout student = s, amount = s.monthly
+form fund_in, "Donation in"
+form student, "Add student"
+===
+@edit style=plain domain=b4_scholar_months ref=b4_scholarship_fund
+how many months of payouts can the fund cover
+---
++ "Months covered" if(sum(student.monthly) > 0, floor(max(sum(fund_in.amount) - sum(payout.amount), 0) / sum(student.monthly)), 0) head
+===
+@create style=custom_ui domain=b4_seed_sowing
+vegetable sowing diary, i enter the crop, bed, date sown and days to harvest. show the expected harvest date for each and what is ready this week
+---
+app "Sowing Diary" plant mint
+table sow crop text, bed text, sown date, days_to_harvest num 10..200
+"Ready this week" count(sow where sown + days_to_harvest <= today + 7 and sown + days_to_harvest >= today) head
+each sow sort sown desc as s
+  row card tap edit s swipe remove s
+    stack grow
+      s.crop bold
+      text "Bed" s.bed faint
+    text s.sown + s.days_to_harvest
+    if s.sown + s.days_to_harvest <= today
+      text "Ready" color good
+form sow, "New sowing"
+===
+@create style=multi_feature domain=b4_weather_station
+my own weather notes: each day max temperature, min temperature, rain in mm, and wind as calm, breezy or stormy. show this month rain total, hottest day, and a line of daily max
+---
+app "Weather" cloud ocean
+table day_w max_t num -10..55, min_t num -10..45, rain num 0..400 = 0, wind pick Calm|Breezy|Stormy = Calm
+text "Rain this month" sum(day_w.rain month) "mm" big
+row gap 2
+  stat max(day_w.max_t month), "hottest"
+  stat min(day_w.min_t month), "coldest"
+text "Stormy days" count(day_w month where wind = Stormy) faint
+trend day_w last 30 days sort at, it.max_t
+form day_w, "Today's weather"
+===
+@edit style=plain domain=b4_weather_humidity ref=b4_weather_station
+add humidity percent and show the average this month
+---
+~ rain num 0..400 = 0, wind => rain num 0..400 = 0, humidity num? 0..100, wind
++ "Average humidity" round(avg(day_w.humidity month)) "%" head
+===
+@create style=short domain=b4_house_repairs
+roof leak and other repair jobs in my house, who is doing them and how much I paid
+---
+app "Home Repairs" tool slate
+table room name text
+table rjob room ref room, what text, worker text?, status pick Todo|Doing|Done = Todo
+table rpay rjob ref rjob, amount money
+each room sort name as r
+  stack card gap 1 tap edit r
+    r.name head
+    each r.rjob as j
+      row
+        j.what grow
+        choice j.status
+        text sum(j.rpay.amount) faint
+text "Spent so far" sum(rpay.amount) big
+form rjob, "New job"
+form rpay, "Payment"
+===
+@oos style=detailed domain=b4_customer_calls oos=voice
+my tea shop regulars: remember each one's usual order, and let me say it by voice and get the app to speak the total bill
+---
+app "Regulars" cup mint
+table regular name text, usual text, price money
+table taken regular ref regular
+each regular sort name as r
+  row card tap edit r
+    stack grow
+      r.name bold
+      r.usual faint
+    text r.price
+    button "Served" tap add taken regular = r
+text "Cups today" count(taken today) big
+form regular, "Add regular"

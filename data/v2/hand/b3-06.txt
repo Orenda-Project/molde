@@ -1,0 +1,379 @@
+@create style=custom_ui domain=b3_kite_day
+basant kite flying: each flyer has two buttons, i cut one and mine got cut, show cut and lost counts for each flyer in green and red
+---
+app "Kite Day" star ocean
+table flyer name text
+table kite flyer ref flyer, result pick Cut|Lost = Cut
+each flyer sort count(it.kite where result = Cut) desc as f
+  stack card gap 1
+    row
+      f.name head grow
+      count(f.kite where result = Cut) "cut" bold color good
+      count(f.kite where result = Lost) "lost" bold color bad
+    row gap 1
+      button "I cut one" fill good tap add kite flyer = f, result = Cut
+      button "Mine got cut" tap add kite flyer = f, result = Lost
+form flyer, "Add flyer"
+===
+@create style=detailed domain=b3_pool_hall
+I run a snooker and pool hall with six tables. I enter how many minutes a table was used, the hourly rate is something I can change, and I want to see total earned today and per table.
+---
+app "Pool Hall" ball slate
+setting hourly_rate money = 600 "Rate per hour"
+table pool_table label text
+table session pool_table ref pool_table, mins num 15..600 = 60
+"Earned today" sum(session.mins today) * hourly_rate / 60 big
+each pool_table sort label as t
+  row card
+    t.label bold grow
+    sum(t.session.mins today) "min today" faint
+    sum(t.session.mins today) * hourly_rate / 60 bold
+    button "+1 hour" tap add session pool_table = t, mins = 60
+form pool_table, "Add table"
+form session, "Add session"
+===
+@create style=multi_feature domain=b3_wedding_day
+minute by minute schedule for the wedding day, time, what happens, who is responsible, tick when done, reminder at each time, and how many done out of total
+---
+app "Wedding Day" gift plum
+table cue at_time time, what text, who text?, done bool
+remind "Next on the wedding schedule" at cue.at_time
+"Done" count(cue where done = yes) "of" count(cue) big
+each cue sort at_time as c
+  row card tap edit c
+    toggle c.done
+    c.at_time bold
+    stack grow
+      c.what bold
+      c.who faint
+form cue, "Add to schedule"
+===
+@create style=detailed domain=b3_catering_bookings
+Home catering business. A booking has the client, event date, number of guests, price per head and advance taken. Show only upcoming events by date with the balance still to collect for each, the total advance in hand and the total value booked ahead.
+---
+app "Catering Bookings" food mint
+table booking client text, event_date date, guests num 10..2000, per_head money, advance money = 0
+"Booked ahead" sum(booking where event_date >= today, it.guests * it.per_head) big
+"Advance in hand" sum(booking.advance where event_date >= today) faint
+each booking where event_date >= today sort event_date as b
+  row card tap edit b
+    b.event_date bold
+    stack grow
+      b.client bold
+      b.guests "guests" faint
+    "Balance" b.guests * b.per_head - b.advance bold
+form booking, "New booking"
+===
+@create style=short domain=b3_trek_log
+treks i did, km and climb, who came along
+---
+app "Trek Log" map ocean
+table trek name text, km num 1..300, climb num 0..9000, days num 1..30 = 1
+table joined trek ref trek, hiker text
+"Total distance" sum(trek.km) "km" big
+"Total climb" sum(trek.climb) "m" faint
+each trek sort at desc as t
+  row card tap edit t
+    stack grow
+      t.name bold
+      t.km "km," t.climb "m up," t.days "days" faint
+    count(t.joined) "hikers" bold
+form trek, "Add trek"
+form joined, "Add hiker to a trek"
+===
+@create style=vague domain=b3_airport_pickups
+relatives keep landing at weird hours and i am the one who goes to the airport
+---
+app "Airport Pickups" plane ocean
+table pickup who text, flight text, arrival time, done bool
+remind "Airport pickup soon" at pickup.arrival
+"Waiting" count(pickup where done = no) faint
+each pickup where done = no sort arrival as p
+  row card tap edit p
+    p.arrival bold
+    stack grow
+      p.who bold
+      p.flight faint
+    toggle p.done
+form pickup, "Add pickup"
+===
+@create style=typos domain=b3_carpool_rota
+4 families share the school run, whose turn is it next, the one who has driven the least
+---
+app "Carpool Rota" car mint
+table family name text
+table run family ref family, kids num 1..6 = 3
+"Next to drive" head
+each family sort count(it.run) top 1 as f
+  row card
+    f.name bold grow
+    count(f.run) "runs so far" faint
+"All families" head
+each family sort count(it.run) desc as g
+  row
+    g.name grow
+    count(g.run) bold
+    button "Drove today" tap add run family = g
+form family, "Add family"
+===
+@create style=custom_ui domain=b3_wash_card
+car wash loyalty card with ten circles, one fills for every wash, the tenth is free, show free washes earned
+---
+app "Wash Card" star mint
+table wash
+let stamps = count(wash) % 10
+"Every 10th wash is free" faint
+grid 5 gap 1
+  each 1..10 as n
+    draw 20, 20
+      circle 10, 10, 8 fill if(n <= stamps, accent, soft)
+button "Add a wash" tap add wash
+"Free washes earned" floor(count(wash) / 10) big
+===
+@create style=custom_ui domain=b3_emi_calc
+car loan calculator, price, down payment percent, years with a slider and yearly interest, shows monthly instalment, total paid and total interest
+---
+app "Loan Calc" calc slate
+state price num = 3000000
+state down num = 20
+state years num = 5
+state yearly_rate num = 18
+let loan = price * (100 - down) / 100
+let r = yearly_rate / 1200
+let n = years * 12
+let emi = loan * r * pow(1 + r, n) / (pow(1 + r, n) - 1)
+field price "Price"
+field down "Down payment %"
+slider years 1..10
+field yearly_rate "Yearly rate %"
+"Monthly instalment" round(emi) big
+"Total paid" round(emi * n + price * down / 100) faint
+"Interest paid" round(emi * n - loan) faint
+===
+@create style=multi_feature domain=b3_masjid_accounts
+masjid accounts: collections from the donation box, jummah and donors, spending under heads like electricity, imam and repairs each with a yearly budget, show balance and a bar for each head against its budget
+---
+app "Masjid Accounts" mosque mint
+table head name text, budget money
+table spending head ref head, amount money
+table collection amount money, source pick Box|Jumma|Donor = Box
+"Balance" sum(collection.amount) - sum(spending.amount) big
+share collection month by source, sum(it.amount), it.key
+each head sort name as h
+  stack card gap 1
+    row
+      h.name bold grow
+      sum(h.spending.amount) "of" h.budget faint
+    goal sum(h.spending.amount), h.budget, "of budget"
+form head, "Add expense head"
+form spending, "Add spending"
+form collection, "Add collection"
+===
+@create style=detailed domain=b3_ration_drive
+We give ration packs to needy families once a month. Keep the families with the number of members, a button to record that a pack was given, show how many packs went out this month and which families have not been helped yet this month.
+---
+app "Ration Drive" bag mint
+table family name text, members num 1..20
+table pack family ref family, items text?
+"Packs given this month" count(pack month) big
+"Families not helped this month" count(family, count(it.pack month) = 0) faint
+each family sort name as f
+  row card tap edit f
+    stack grow
+      f.name bold
+      f.members "members" faint
+    if(count(f.pack month) > 0, "Given", "Pending") color if(count(f.pack month) > 0, good, warn)
+    button "Gave pack" tap add pack family = f
+form family, "Add family"
+===
+@create style=short domain=b3_jigsaw
+jigsaw puzzles in progress, how many pieces are placed
+---
+app "Jigsaw" board plum
+table puzzle name text, pieces num 100..5000
+table sitting puzzle ref puzzle, placed num 1..5000
+each puzzle sort at desc as p
+  stack card gap 1
+    row
+      p.name bold grow
+      sum(p.sitting.placed) "of" p.pieces faint
+    goal sum(p.sitting.placed), p.pieces, "pieces placed"
+    button "+50 pieces" tap add sitting puzzle = p, placed = 50
+form puzzle, "New puzzle"
+===
+@create style=multi_feature domain=b3_bee_yard
+my beehives: each hive has harvests in kg and inspections with a tick if the queen was seen, show honey this year, days since last inspection and whether the queen was seen last time, a button for inspected today
+---
+app "Bee Yard" leaf mint
+table hive name text
+table harvest hive ref hive, kg num 0.5..100
+table inspection hive ref hive, queen_seen bool, notes text?
+"Honey this year" sum(harvest.kg year) "kg" big
+each hive sort name as h
+  stack card gap 1
+    row
+      h.name head grow
+      sum(h.harvest.kg) "kg ever" bold
+    "Last inspected" since(h.inspection) "days ago" faint
+    "Queen seen last time" if(last(h.inspection.queen_seen), "yes", "no") faint
+    button "Inspected today" tap add inspection hive = h
+form hive, "Add hive"
+form harvest, "Log harvest"
+===
+@create style=typos domain=b3_aquarium
+fish tanks, i test the ph and temprature, make ph red if its off and draw its line
+---
+app "Aquarium" fish ocean
+table tank name text
+table test tank ref tank, ph num 4..10, temp num 15..35
+each tank sort name as t
+  let ph_now = last(t.test.ph)
+  stack card gap 1
+    row
+      t.name head grow
+      ph_now big color if(ph_now < 6.5 or ph_now > 8, bad, good)
+    "Temperature" last(t.test.temp) "C" faint
+    trend t.test, it.ph
+form tank, "Add tank"
+form test, "Log water test"
+===
+@create style=detailed domain=b3_quotation
+Quotation helper for my workshop: I add lines with description, quantity and price, there is a markup percent and a tax percent I can change, and I see the subtotal, the amount after markup and the final total. A button clears the lines for the next quote.
+---
+app "Quotation" calc slate
+setting markup num = 15 "Markup %"
+setting tax num = 16 "Tax %"
+table quote_line description text, qty num 1..10000, price money
+let subtotal = sum(quote_line, it.qty * it.price)
+let with_markup = subtotal * (100 + markup) / 100
+"Subtotal" subtotal faint
+"With markup" with_markup faint
+"Total with tax" with_markup * (100 + tax) / 100 big
+list quote_line
+form quote_line, "Add line"
+button "Start a new quote" tap remove all quote_line
+===
+@create style=custom_ui domain=b3_meeting_agenda
+agenda for a meeting, each topic gets its own countdown timer for its minutes, show total planned minutes
+---
+app "Meeting Agenda" timer ink
+table agenda topic text, mins num 1..90 = 10
+"Planned" sum(agenda.mins) "minutes" big
+each agenda sort at as a
+  timer 1m * a.mins, a.topic
+form agenda, "Add topic"
+===
+@create style=multi_feature domain=b3_content_calendar
+content calendar: posts with channel (instagram, linkedin, youtube), publish date and status idea draft scheduled posted, reminder on the day, a breakdown of posts per channel this month and the upcoming ones by date
+---
+app "Content Calendar" calendar plum
+table post title text, channel pick Instagram|LinkedIn|YouTube = Instagram, publish_on date, status pick Idea|Draft|Scheduled|Posted = Idea
+remind "Post goes live today" at post.publish_on
+share post month by channel, count(it), it.key
+each post where status != Posted sort publish_on as p
+  row card tap edit p
+    p.publish_on bold
+    stack grow
+      p.title bold
+      p.channel faint
+    p.status faint
+form post, "Plan a post"
+===
+@create style=custom_ui domain=b3_coin_flip
+a coin flip button that shows heads or tails huge and keeps the count of each
+---
+app "Coin Flip" coin ink
+table flip side pick Heads|Tails = Heads
+state shown pick Heads|Tails = Heads
+button "Flip the coin" tap set shown = if(random(2) = 1, Heads, Tails) then add flip side = shown
+shown huge align center
+"Heads" count(flip where side = Heads) "| Tails" count(flip where side = Tails) faint
+===
+@create style=short domain=b3_hifz_log
+hifz sabaq sabqi manzil lines done each day, streak
+---
+app "Hifz Log" book mint
+table recital kind pick Sabaq|Sabqi|Manzil = Sabaq, lines num 1..40 = 5
+"Streak" streak(recital) "days" big
+share recital week by kind, sum(it.lines), it.key
+daybars last 14 days, sum(recital.lines on it)
+row gap 1
+  each options recital.kind as k
+    button k tap add recital kind = k
+list recital by day
+===
+@oos style=vague domain=b3_menu_ai oos=ai
+have the app come up with a wedding menu on its own for my budget and guest count
+---
+app "Menu Planner" food plum
+setting guests num = 200 "Guests"
+setting budget money = 400000 "Budget"
+table dish name text, per_head money
+"Menu per head" sum(dish.per_head) big
+"Total" sum(dish.per_head) * guests big
+"Left of budget" budget - sum(dish.per_head) * guests faint
+list dish
+form dish, "Add dish"
+===
+@oos style=typos domain=b3_voice_diary oos=voice
+i want to speak my diary and it types it out, also keep entries by day with a mood
+---
+app "Diary" note ink
+table entry mood pick Happy|Okay|Sad = Okay, body long
+"Entries this month" count(entry month) big
+share entry month by mood, count(it), it.key
+list entry by day
+form entry, "Write an entry"
+===
+@edit style=plain domain=b3_kite_e1 ref=b3_kite_day
+show how many kites i cut today overall
+---
++ "Cuts today" count(kite today where result = Cut) big
+===
+@edit style=plain domain=b3_pool_e1 ref=b3_pool_hall
+the rate is 700 an hour now
+---
+~ setting hourly_rate money = 600 "Rate per hour" => setting hourly_rate money = 700 "Rate per hour" set
+===
+@edit style=plain domain=b3_wedding_day_e1 ref=b3_wedding_day
+tag each item as food, photo, rituals or logistics and show the tag
+---
+~ who text?, done bool => who text?, done bool, area pick Food|Photo|Rituals|Logistics = Rituals
+~ c.who faint => c.who c.area faint
+===
+@edit style=plain domain=b3_catering_e1 ref=b3_catering_bookings
+call advance deposit instead
+---
+~ advance money = 0 => deposit money = 0 was advance
+~ booking.advance where => booking.deposit where
+~ - b.advance => - b.deposit
+~ "Advance in hand" => "Deposit in hand"
+===
+@edit style=plain domain=b3_trek_e1 ref=b3_trek_log
+add easy, moderate or hard for each trek and show it
+---
+~ days num 1..30 = 1 => days num 1..30 = 1, grade pick Easy|Moderate|Hard = Moderate
+~ count(t.joined) "hikers" bold => count(t.joined) "hikers" t.grade bold
+===
+@edit style=plain domain=b3_emi_e1 ref=b3_emi_calc
+the bank charges a processing fee as percent of the loan, add it to total paid
+---
++after state years num = 5 :: state fee num = 1
++after field yearly_rate "Yearly rate %" :: field fee "Processing fee %"
+~ round(emi * n + price * down / 100) => round(emi * n + price * down / 100 + loan * fee / 100)
+===
+@edit style=plain domain=b3_ration_e1 ref=b3_ration_drive
+add an area for each family, north south east or west, and show it
+---
+~ members num 1..20 => members num 1..20, area pick North|South|East|West = North
+~ f.members "members" faint => f.members "members," f.area faint
+===
+@edit style=plain domain=b3_aquarium_e1 ref=b3_aquarium
+remove the chart
+---
+-     trend t.test, it.ph
+===
+@edit style=plain domain=b3_content_e1 ref=b3_content_calendar
+add facebook as a channel
+---
+~ channel pick Instagram|LinkedIn|YouTube = Instagram => channel pick Instagram|LinkedIn|YouTube|Facebook = Instagram

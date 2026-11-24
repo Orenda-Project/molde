@@ -1,0 +1,369 @@
+@create style=detailed domain=b4_catering_events
+we do catering for weddings and parties. each event has a date, number of guests, price per head and an advance. dishes for each event are listed with the quantity of rice kg or chicken kg. show upcoming events and the money still to get
+---
+app "Catering" food plum
+table event name text, day date, guests num 10..2000, per_head money, advance money = 0
+table dish_line event ref event, dish text, kg num 0.5..500
+let total_due = sum(event where day >= today, it.guests * it.per_head - it.advance)
+"To collect from upcoming" total_due big
+each event where day >= today sort day as e
+  stack card gap 1 tap edit e
+    row
+      e.name bold grow
+      text e.day faint
+    text e.guests "guests, total" e.guests * e.per_head
+    text "kg of food" sum(e.dish_line.kg) faint
+form event, "New event"
+form dish_line, "Add dish"
+===
+@edit style=plain domain=b4_catering_rename ref=b4_catering_events
+rename the per head column to rate
+---
+~ per_head money, advance => rate money was per_head, advance
+~ it.per_head => it.rate
+~ e.per_head => e.rate
+===
+@create style=custom_ui domain=b4_burger_cart
+street burger cart. big buttons for burger, fries, cola and a combo. tap adds to the current bill, a clear button, and a button that saves the bill as a sale. show total sold today
+---
+app "Burger Cart" food slate
+table salesb total money
+state bill money = 0
+setting burger money = 250 "Burger"
+setting fries money = 120 "Fries"
+setting cola money = 80 "Cola"
+grid 2 gap 1
+  button "Burger" tap set bill = bill + burger
+  button "Fries" tap set bill = bill + fries
+  button "Cola" tap set bill = bill + cola
+  button "Combo" tap set bill = bill + burger + fries + cola - 50
+text "Bill" bill huge big
+row gap 1
+  button "Save sale" fill good tap add salesb total = bill then set bill = 0
+  button "Clear" tap set bill = 0
+text "Sold today" sum(salesb.total today) head
+===
+@create style=multi_feature domain=b4_grocery_runs
+online grocery shop with 3 delivery boys. every order has the customer, amount and which boy took it, and delivered or not. show per boy how many deliveries today and the pending ones
+---
+app "Grocery Runs" cart ocean
+table boy name text
+table gorder customer text, amount money, boy ref boy, delivered bool
+each boy sort name as b
+  row card tap edit b
+    b.name bold grow
+    text count(b.gorder today where delivered = yes) "done"
+    text count(b.gorder where delivered = no) "pending" color if(count(b.gorder where delivered = no) > 0, warn, good)
+text "Pending orders" count(gorder where delivered = no) head
+each gorder where delivered = no sort at as o
+  row card tap edit o
+    o.customer bold grow
+    text o.boy.name faint
+    text o.amount
+    toggle o.delivered
+form gorder, "New order"
+form boy, "Add delivery boy"
+===
+@edit style=plain domain=b4_grocery_tip ref=b4_grocery_runs
+add a tip column and show each boy's tips today
+---
+~ amount money, boy ref boy => amount money, tip money = 0, boy ref boy
+~ count(b.gorder today where delivered = yes) "done" => count(b.gorder today where delivered = yes) "done"\n    text sum(b.gorder.tip today) "tips" faint
+===
+@create style=detailed domain=b4_lab_reports
+diagnostic lab. each patient gets tests (blood count, sugar, urine, x-ray, thyroid), every test has a price and the report is marked ready when done. show reports waiting and the income of today
+---
+app "Lab Desk" pill ocean
+table patient name text, phone text?
+table test patient ref patient, kind pick Blood|Sugar|Urine|Xray|Thyroid = Blood, price money, ready bool
+"Reports waiting" count(test where ready = no) big
+"Income today" sum(test.price today) head
+each patient sort name as p
+  let pending = count(p.test where ready = no)
+  row card tap edit p
+    stack grow
+      p.name bold
+      text count(p.test) "tests" faint
+    if pending > 0
+      text pending "waiting" color warn
+    else
+      text "All ready" color good
+form test, "Add test"
+form patient, "New patient"
+===
+@create style=short domain=b4_nurse_visits
+home nursing visits and pulse for each patient
+---
+app "Nurse Rounds" heart mint
+table patient name text, address text?
+table nvisit patient ref patient, pulse num 30..200, note text?
+each patient sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      text "Last pulse" last(p.nvisit.pulse) faint
+    text count(p.nvisit month) "visits"
+trend nvisit last 14 days sort at, it.pulse
+form nvisit, "Add visit"
+form patient, "Add patient"
+===
+@create style=custom_ui domain=b4_hospital_beds
+small hospital beds by ward. show every bed as a tile green when free red when taken, tap a tile to flip it, and how many beds are free in total
+---
+app "Beds" bed ocean
+table bed label text, ward pick General|Maternity|Children|Emergency = General, taken bool
+text count(bed where taken = no) "beds free of" count(bed) big
+each options bed.ward as w
+  text w head
+  grid 4 gap 1
+    each bed where ward = w sort label as b
+      box radius 8 pad 1 fill if(b.taken, bad, good) tap set b.taken = not b.taken
+        text b.label bold align center color bg
+form bed, "Add bed"
+===
+@create style=multi_feature domain=b4_missed_prayers
+i have many missed prayers to make up. i set how many of each prayer I owe, and each time I pray one qaza I tap that prayer. show what is left for each and the total
+---
+app "Qaza" mosque mint
+table qaza prayer pick Fajr|Zuhr|Asr|Maghrib|Isha|Witr = Fajr
+setting owed_fajr num 0.. = 100 "Fajr owed"
+setting owed_zuhr num 0.. = 100 "Zuhr owed"
+setting owed_asr num 0.. = 100 "Asr owed"
+setting owed_maghrib num 0.. = 100 "Maghrib owed"
+setting owed_isha num 0.. = 100 "Isha owed"
+setting owed_witr num 0.. = 100 "Witr owed"
+let left_fajr = owed_fajr - count(qaza where prayer = Fajr)
+let left_zuhr = owed_zuhr - count(qaza where prayer = Zuhr)
+let left_asr = owed_asr - count(qaza where prayer = Asr)
+let left_maghrib = owed_maghrib - count(qaza where prayer = Maghrib)
+let left_isha = owed_isha - count(qaza where prayer = Isha)
+let left_witr = owed_witr - count(qaza where prayer = Witr)
+text left_fajr + left_zuhr + left_asr + left_maghrib + left_isha + left_witr "left in total" big
+row card tap add qaza prayer = Fajr
+  text "Fajr" grow
+  text left_fajr bold
+row card tap add qaza prayer = Zuhr
+  text "Zuhr" grow
+  text left_zuhr bold
+row card tap add qaza prayer = Asr
+  text "Asr" grow
+  text left_asr bold
+===
+@create style=short domain=b4_sadaqah_log
+daily sadaqah i give, by type
+---
+app "Sadaqah" gift mint
+table give kind pick Cash|Food|Clothes|Masjid|Other = Cash, amount money
+text "This month" sum(give.amount month) big
+share give month by kind, sum(it.amount), it.key
+form give, "Gave"
+list give by day
+===
+@edit style=plain domain=b4_sadaqah_target ref=b4_sadaqah_log
+i want a monthly giving target with a bar
+---
+~ "This month" sum(give.amount month) big => setting give_target money = 10000 "Monthly giving target"\n"This month" sum(give.amount month) big\ngoal sum(give.amount month), give_target, "given this month"
+===
+@create style=detailed domain=b4_hajj_fund
+saving for hajj, target 8 lakh. every month I put some money. show how much saved, how much to go, months remaining at the average of my last 6 months deposits
+---
+app "Hajj Fund" mosque mint
+table deposit amount money
+setting target money = 800000 "Hajj target"
+let saved = sum(deposit.amount)
+let avg_month = sum(deposit.amount last 6 months) / 6
+goal saved, target, "saved"
+text "To go" max(target - saved, 0) head
+text "About" if(avg_month > 0, floor(max(target - saved, 0) / avg_month) + 1, 0) "months at this pace" faint
+daybars last 30 days, sum(deposit.amount on it)
+form deposit, "Add deposit"
+===
+@create style=detailed domain=b4_loyalty_cuts
+barber shop loyalty: every customer has a card, tenth haircut free. count their cuts and show who is on 9 so I give the free one next
+---
+app "Loyalty" star slate
+table cust name text, phone text?
+table cutl cust ref cust, free bool
+each cust sort name as c
+  let paid_cuts = count(c.cutl where free = no)
+  row card tap edit c
+    stack grow
+      c.name bold
+      text paid_cuts % 10 "of 10" faint
+    if paid_cuts % 10 = 9
+      text "Next is free" color good
+    button "Cut" tap add cutl cust = c
+form cust, "Add customer"
+===
+@create style=vague domain=b4_bridal_makeup
+bridal makeup bookings, trial and wedding day with advance
+---
+app "Bridal Book" smile plum
+table bride name text, phone text?
+table appt bride ref bride, kind pick Trial|Wedding_day|Engagement = Trial, day date, price money, deposit money = 0
+each appt where day >= today sort day as a
+  row card tap edit a swipe remove a
+    stack grow
+      a.bride.name bold
+      text a.kind faint
+    text a.day
+    text a.price - a.deposit "due" color warn
+text "Deposits taken" sum(appt.deposit) big
+form appt, "Book"
+form bride, "Add bride"
+===
+@create style=detailed domain=b4_carpenter_orders
+furniture carpenter. each order has a customer, the agreed price and the wood and fittings I buy for it. i want profit per order and which orders are still being made
+---
+app "Carpenter" tool slate
+table corder customer text, item text, price money, stage pick Cutting|Joining|Polish|Delivered = Cutting
+table material corder ref corder, what text, cost money
+each corder where stage != Delivered sort at as o
+  let profit = o.price - sum(o.material.cost)
+  stack card gap 1 tap edit o
+    row
+      text o.customer o.item bold grow
+      text profit color if(profit > 0, good, bad)
+    choice o.stage
+text "Orders in work" count(corder where stage != Delivered) head
+form corder, "New order"
+form material, "Bought material"
+===
+@edit style=plain domain=b4_carpenter_chart ref=b4_carpenter_orders
+add a bar chart of material cost for each order
+---
++ bars corder sort at, sum(it.material.cost), it.customer
+===
+@create style=multi_feature domain=b4_truck_trips
+i own two trucks. each trip has the truck, driver, freight money, diesel and toll cost. show profit per truck this month and the best trip
+---
+app "Truck Trips" car slate
+table truck plate text
+table trip truck ref truck, driver text, freight money, diesel money, toll money = 0
+each truck sort plate as t
+  let net = sum(t.trip.freight month) - sum(t.trip.diesel month) - sum(t.trip.toll month)
+  row card tap edit t
+    t.plate bold grow
+    text count(t.trip month) "trips"
+    text net bold color if(net >= 0, good, bad)
+text "Best trip" max(trip, it.freight - it.diesel - it.toll) big
+bars truck sort plate, sum(it.trip.freight month), it.plate
+form trip, "Add trip"
+form truck, "Add truck"
+===
+@create style=custom_ui domain=b4_cycle_rental
+bicycle rental on the beach, 100 rupees per hour. tap rent on a bike to start the clock, tap return to stop it. show bikes out now and the money earned from finished rentals today
+---
+app "Cycle Rental" bike mint
+table bike name text
+table rental bike ref bike, start when, back when?
+setting hourly money = 100 "Per hour"
+let out_now = count(rental) - count(rental where back > start)
+text out_now "bikes out now" head
+each bike sort name as b
+  let busy = count(b.rental) - count(b.rental where back > start) > 0
+  row card
+    b.name bold grow
+    if busy
+      button "Return" tap set all rental.back = now where bike = b and not (back > start)
+    else
+      button "Rent" tap add rental bike = b, start = now
+text "Earned today" round(sum(rental today, (it.back - it.start) / 1h * hourly)) big
+form bike, "Add bike"
+===
+@create style=detailed domain=b4_free_kitchen
+we run a free langar kitchen for daily wage workers. each day we note how many people ate, and rice and flour donations in kg come from donors. show stock left if we use 40 kg a day
+---
+app "Free Kitchen" food mint
+table meals people num 1..2000
+table stock_in item pick Rice|Flour|Lentils|Oil = Rice, kg num 0.5..2000
+text "Fed today" sum(meals.people today) big
+text "Fed this week" sum(meals.people week) head
+each options stock_in.item as i
+  row card
+    i bold grow
+    text sum(stock_in.kg where item = i) "kg received"
+daybars last 7 days, sum(meals.people on it)
+form meals, "People fed"
+form stock_in, "Donation received"
+===
+@create style=multi_feature domain=b4_orphan_sponsors
+orphan support programme. each child has a sponsor who gives a fixed amount monthly. show for the month whose sponsorship has been received and the total missing
+---
+app "Sponsors" users plum
+table sponsor name text, phone text?
+table child name text, school text?, sponsor ref sponsor, monthly money
+table received child ref child, amount money
+state m date = today
+monthnav m
+each child sort name as c
+  let got = sum(c.received.amount month of m)
+  row card tap edit c
+    stack grow
+      c.name bold
+      text c.sponsor.name faint
+    text got "of" c.monthly color if(got >= c.monthly, good, warn)
+text "Missing this month" sum(child, it.monthly - sum(it.received.amount month of m)) big
+form received, "Money received"
+form child, "Add child"
+form sponsor, "Add sponsor"
+===
+@create style=short domain=b4_pest_spots
+which plant has pests and when I sprayed
+---
+app "Pest Watch" leaf mint
+table plant name text
+table pest plant ref plant, kind pick Aphids|Whitefly|Mealybug|Mites|Other = Aphids
+table spray plant ref plant
+each plant sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      text count(p.pest month) "sightings, last sprayed" since(p.spray) "days ago" faint
+    button "Spotted" tap add pest plant = p
+    button "Sprayed" tap add spray plant = p
+form plant, "Add plant"
+===
+@create style=detailed domain=b4_orchard_pickers
+orchard owner: pickers are paid per crate. every picker brings crates each day, pay rate is 80 per crate. show each picker's crates today and the pay due, and total crates this season
+---
+app "Orchard Pickers" apple mint
+table picker name text
+table crates picker ref picker, qty num 1..200
+setting rate money = 80 "Pay per crate"
+each picker sort name as p
+  row card tap edit p
+    p.name bold grow
+    text sum(p.crates.qty today) "crates today"
+    text sum(p.crates.qty today) * rate bold
+text "Season total" sum(crates.qty) "crates" big
+form crates, "Crates brought"
+form picker, "Add picker"
+===
+@edit style=plain domain=b4_orchard_week ref=b4_orchard_pickers
+show weekly pay as well as todays
+---
+~ sum(p.crates.qty today) * rate bold => sum(p.crates.qty today) * rate bold\n    text sum(p.crates.qty week) * rate "this week" faint
+===
+@oos style=detailed domain=b4_fridge_ai oos=ai
+tell me with AI what to cook from the things in my fridge, and keep a list of items with quantity and expiry date
+---
+app "Fridge" food mint
+table fitem name text, qty num 1..50 = 1, expires date?
+each fitem sort expires as f
+  row card tap edit f swipe remove f
+    f.name bold grow
+    text f.qty
+    if f.expires < today + 2
+      text "Use soon" color warn
+form fitem, "Add item"
+===
+@oos style=short domain=b4_bank_import oos=other
+pull my bank sms messages in automatically as expenses, with category and a monthly total
+---
+app "Expenses" wallet slate
+table spend amount money, category pick Food|Transport|Bills|Medical|Other = Food
+text "This month" sum(spend.amount month) big
+share spend month by category, sum(it.amount), it.key
+form spend, "Add expense"
+list spend by day

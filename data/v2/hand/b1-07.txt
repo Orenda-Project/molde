@@ -1,0 +1,368 @@
+@create style=detailed domain=b1_rice_mill
+rice mill: farmers bring paddy in maunds and later I give back milled rice and keep a share as my charge. for each farmer show paddy brought, rice returned and the balance still with me
+---
+app "Rice Mill" bread slate
+table farmer name text, village text?
+table paddy farmer ref farmer, maunds num 1..500
+table rice_back farmer ref farmer, maunds num 1..500
+each farmer sort name as f
+  let held = sum(f.paddy.maunds) - sum(f.rice_back.maunds)
+  row card tap edit f
+    f.name bold grow
+    text sum(f.paddy.maunds) "in"
+    text sum(f.rice_back.maunds) "out"
+    held bold color if(held > 0, warn, good)
+"Paddy in the mill" sum(paddy.maunds) - sum(rice_back.maunds) big
+form paddy, "Paddy received"
+form rice_back, "Rice returned"
+form farmer, "Add farmer"
+===
+@create style=multi_feature domain=b1_cloth_rolls
+cloth wholesale: each design has a number of rolls and meters in a roll. I note meters sold with the buyer's name and price per meter. need meters left per design and money earned
+---
+app "Cloth Rolls" tag plum
+table design name text, meters_in num 1..20000
+table cloth_sale design ref design, buyer text, meters num 1..2000, per_meter money
+each design sort name as d
+  let left = d.meters_in - sum(d.cloth_sale.meters)
+  row card tap edit d
+    d.name bold grow
+    text left "m left" color if(left < 50, warn, ink)
+    text sum(d.cloth_sale, it.meters * it.per_meter) bold
+"Earned this month" sum(cloth_sale month, it.meters * it.per_meter) big
+bars design, sum(it.cloth_sale.meters), it.name
+form cloth_sale, "Sale"
+form design, "New design"
+===
+@create style=short domain=b1_icecream_cart
+ice cream cart scoops by flavour
+---
+app "Ice Cream" cup ocean
+table scoop flavour pick Vanilla|Chocolate|Mango|Pistachio = Vanilla, price money = 100
+quick scoop, flavour, [Vanilla, Chocolate, Mango]
+"Today" sum(scoop.price today) big
+text count(scoop today) "scoops" faint
+bars options scoop.flavour, count(scoop today where flavour = it), it
+===
+@create style=detailed domain=b1_pharmacy_cash_count
+at the end of the day I count the cash in the drawer. I enter that and my software sales total for the day, show the difference as short or extra, and a list of the last 10 days
+---
+app "Cash Check" pill ocean
+table closing counted money, system_total money
+each closing sort at desc top 10 as c
+  let diff = c.counted - c.system_total
+  row card tap edit c
+    c.at grow
+    text "counted" c.counted
+    text if(diff = 0, "tally", if(diff > 0, "extra", "short")) abs(diff) bold color if(diff < 0, bad, good)
+"Total short this month" sum(closing month, min(it.counted - it.system_total, 0)) big color bad
+form closing, "Close the day"
+===
+@create style=detailed domain=b1_cattle_fattening
+I fatten bulls for sale. each bull has a tag and the buy price. I weigh them every week and note daily feed cost. show weight gain since first weighing and the total feed cost per bull
+---
+app "Fattening" paw mint
+table bull tag text, bought money
+table bullweigh bull ref bull, kg num 50..1200
+table bullfeed bull ref bull, cost money
+each bull sort tag as b
+  row card tap edit b
+    b.tag bold grow
+    text "gain" last(b.bullweigh.kg) - first(b.bullweigh.kg) "kg"
+    text "feed" sum(b.bullfeed.cost) color muted
+    text "in" b.bought + sum(b.bullfeed.cost) bold
+form bullweigh, "Weigh"
+form bullfeed, "Feed cost"
+form bull, "Add bull"
+===
+@create style=custom_ui domain=b1_warranty_shop
+electronics shop: I note each sale with the customer, item and warranty months. show the sales whose warranty ends in the next 30 days in warn colour. no need for the total
+---
+app "Warranty" bolt slate
+table esale customer text, item text, price money, warranty num 0..60 = 12
+let ends(r esale) = r.at + r.warranty * 30
+each esale sort at desc as s
+  row card tap edit s fill if(ends(s) <= today + 30 and ends(s) >= today, warn, surface)
+    stack grow
+      s.item bold
+      s.customer faint
+    text "ends" ends(s)
+form esale, "New sale"
+===
+@create style=multi_feature domain=b1_egg_sheds
+my farm has 3 sheds of layers. each shed has number of hens. record eggs and broken eggs daily per shed. show laying percent today and broken count for each shed
+---
+app "Egg Sheds" egg mint
+table shed name text, hens num 100..20000
+table eggday shed ref shed, eggs num 0..20000, broken num 0..2000 = 0
+each shed sort name as s
+  let laid = sum(s.eggday.eggs today)
+  row card tap edit s
+    s.name bold grow
+    text round(laid * 100 / s.hens) "% laying" color if(laid * 100 / s.hens < 70, warn, good)
+    text sum(s.eggday.broken today) "broken" faint
+"Eggs today" sum(eggday.eggs today) big
+daybars last 7 days, sum(eggday.eggs on it)
+form eggday, "Eggs collected"
+form shed, "Add shed"
+===
+@create style=vague domain=b1_mobile_repair
+mobile repair shop jobs
+---
+app "Mobile Repair" phone slate
+table fix customer text, model text, issue text, charge money, state_now pick Received|Fixing|Ready|Collected = Received
+each fix where state_now != Collected sort at as f
+  row card tap edit f
+    stack grow
+      f.model bold
+      f.customer faint
+    f.charge
+    choice f.state_now
+"Ready to collect" count(fix where state_now = Ready) head
+"Earned today" sum(fix.charge today where state_now = Collected) big
+form fix, "New job"
+===
+@create style=detailed domain=b1_taxi_share
+I own 3 taxis, drivers keep half of the daily income and the other half is mine. each driver reports income for the day and the fuel they used. show my share per driver this month after fuel
+---
+app "Taxi Share" car ink
+table taxidriver name text, plate text
+table taxiday taxidriver ref taxidriver, income money, fuel money
+each taxidriver sort name as d
+  let net = sum(d.taxiday.income month) - sum(d.taxiday.fuel month)
+  row card tap edit d
+    stack grow
+      d.name bold
+      d.plate faint
+    text "net" net
+    text "my half" net / 2 bold color if(net >= 0, good, bad)
+"My total share" sum(taxiday.income month) / 2 - sum(taxiday.fuel month) / 2 big
+form taxiday, "Daily report"
+form taxidriver, "Add driver"
+===
+@create style=detailed domain=b1_arhti_ledger
+I am a commission agent in the grain market. farmers take advance from me and I sell their crop and cut 2 percent commission. for each farmer show advance, crop sale amount, my commission and what I must pay or take
+---
+app "Arhti Ledger" money slate
+table grower name text
+table advance_given grower ref grower, amount money
+table crop_sold grower ref grower, amount money
+setting commission num = 2 "Commission %"
+each grower sort name as g
+  let sold = sum(g.crop_sold.amount)
+  let comm = sold * commission / 100
+  let net = sold - comm - sum(g.advance_given.amount)
+  stack card gap 1 tap edit g
+    row
+      g.name bold grow
+      text if(net >= 0, "I pay", "He pays") abs(net) bold color if(net >= 0, good, bad)
+    text "Sold" sold "| Commission" comm "| Advance" sum(g.advance_given.amount) faint
+form advance_given, "Advance"
+form crop_sold, "Crop sold"
+form grower, "Add farmer"
+===
+@create style=typos domain=b1_salami_ledger
+wedding gifts i gave and recived from families so i can return same amount when their time comes
+---
+app "Gift Ledger" gift plum
+table family name text
+table gift_out family ref family, amount money, occasion text?
+table gift_in family ref family, amount money, occasion text?
+each family sort name as f
+  let diff = sum(f.gift_in.amount) - sum(f.gift_out.amount)
+  row card tap edit f
+    f.name bold grow
+    text "gave" sum(f.gift_out.amount) faint
+    text "got" sum(f.gift_in.amount) faint
+    text if(diff > 0, "I owe back", "They owe") abs(diff) bold
+form gift_out, "I gave"
+form gift_in, "I received"
+form family, "Add family"
+===
+@create style=custom_ui domain=b1_closing_notes
+counting the shop cash at night: I type how many notes of 5000, 1000, 500, 100 I have, and the app adds up the total, then I compare with sales of the day I enter
+---
+app "Note Count" coin ink
+state n5000 num = 0
+state n1000 num = 0
+state n500 num = 0
+state n100 num = 0
+state sales money = 0
+let counted = n5000 * 5000 + n1000 * 1000 + n500 * 500 + n100 * 100
+field n5000 "Notes of 5000"
+field n1000 "Notes of 1000"
+field n500 "Notes of 500"
+field n100 "Notes of 100"
+field sales "Sales of the day"
+"Counted" counted big
+"Difference" counted - sales head color if(counted >= sales, good, bad)
+===
+@create style=detailed domain=b1_tubewell_share
+we share a tubewell between 5 farmers. each time it runs I note hours and the diesel cost; everyone pays according to their hours. show each farmer's hours and cost share this month
+---
+app "Tubewell" drop ocean
+table partner name text
+table run partner ref partner, hours num 0.5..24
+table diesel cost money, litres num 1..200
+let total_hours = sum(run.hours month)
+let total_cost = sum(diesel.cost month)
+"Diesel this month" total_cost big
+each partner sort name as p
+  row card tap edit p
+    p.name bold grow
+    text sum(p.run.hours month) "hours"
+    text round(total_cost * sum(p.run.hours month) / max(total_hours, 1)) bold
+form run, "Hours run"
+form diesel, "Diesel bought"
+form partner, "Add farmer"
+===
+@create style=multi_feature domain=b1_fertilizer_dealer
+fertilizer dealer: each product (urea, dap, potash) has stock in bags that I receive and sell. farmers buy on credit sometimes. show stock per product and the total pending credit
+---
+app "Fertilizer" package mint
+table fert name text, rate money
+table fert_in fert ref fert, bags num 1..2000
+table fert_out fert ref fert, bags num 1..500, credit bool
+each fert sort name as f
+  row card tap edit f
+    f.name bold grow
+    text sum(f.fert_in.bags) - sum(f.fert_out.bags) "bags"
+    text sum(f.fert_out.bags where credit = yes) * f.rate "on credit" faint color warn
+"Pending credit" sum(fert_out where credit = yes, it.bags * it.fert.rate) big
+form fert_out, "Sold bags"
+form fert_in, "Received bags"
+form fert, "Add product"
+===
+@create style=custom_ui domain=b1_dhaba_tables
+roadside dhaba with 6 tables. select a table, tap dishes to add to its bill, and see the bill of the selected table, and a button to clear the table when it pays
+---
+app "Dhaba Bills" food ocean
+table dish_order tableno num 1..6, dish pick Karahi|Daal|Naan|Chai|Raita = Karahi, price money
+state sel num = 1
+row gap 1
+  each 1..6
+    button it fill if(sel = it, accent, soft) tap set sel = it
+row gap 1
+  button "Karahi 1200" tap add dish_order tableno = sel, dish = Karahi, price = 1200
+  button "Daal 400" tap add dish_order tableno = sel, dish = Daal, price = 400
+  button "Naan 40" tap add dish_order tableno = sel, dish = Naan, price = 40
+  button "Chai 80" tap add dish_order tableno = sel, dish = Chai, price = 80
+"Table" sel "bill" sum(dish_order.price where tableno = sel) big
+button "Table paid" fill good tap remove all dish_order where tableno = sel
+each dish_order where tableno = sel sort at
+  row
+    it.dish grow
+    it.price
+===
+@create style=short domain=b1_roadside_tyres
+tyre puncture shop day income
+---
+app "Puncture Shop" car slate
+table puncture kind pick Bike|Car|Truck = Bike, charge money = 100
+quick puncture, kind, [Bike, Car]
+"Today" sum(puncture.charge today) big
+daybars last 7 days, sum(puncture.charge on it)
+===
+@create style=detailed domain=b1_mehfil_chanda
+every month our street collects chanda for the guard. each house promised an amount, I mark amounts received and see which houses are pending, plus guard salary paid so the leftover is shown
+---
+app "Street Chanda" shield mint
+table hh name text, promised money
+table chanda hh ref hh, amount money
+table guard_salary amount money
+state m date = today
+monthnav m
+"Collected" sum(chanda.amount month of m) big
+"Salary paid" sum(guard_salary.amount month of m) head
+"Left" sum(chanda.amount month of m) - sum(guard_salary.amount month of m) head
+each hh sort name as h
+  row card tap edit h
+    h.name bold grow
+    if sum(h.chanda.amount month of m) < h.promised
+      "pending" color warn
+form chanda, "Received"
+form guard_salary, "Salary paid"
+form hh, "Add house"
+===
+@oos style=detailed domain=b1_group_chat_collect oos=messaging
+our committee has 12 members and I want the app to message everyone in the group when somebody has not paid their installment, and show who has paid this month
+---
+app "Committee Paid" users plum
+table cm name text
+table cpay cm ref cm, amount money
+each cm sort name as m
+  row card tap edit m
+    m.name bold grow
+    if count(m.cpay month) > 0
+      "paid" color good
+    else
+      "not paid" color bad
+form cpay, "Payment"
+form cm, "Add member"
+===
+@oos style=short domain=b1_share_pdf oos=print
+rent receipts for tenants as pdf
+---
+app "Rent Receipts" home slate
+table tenant name text, rent money
+table rentreceipt tenant ref tenant, amount money
+each tenant sort name as t
+  row card tap edit t
+    t.name bold grow
+    text sum(t.rentreceipt.amount month) "this month"
+form rentreceipt, "Rent received"
+form tenant, "Add tenant"
+===
+@edit style=plain domain=b1_ricemill_rate ref=b1_rice_mill
+add a milling rate setting of 3 percent and show how many maunds I keep as charge
+---
++ setting mill_charge num = 3 "Milling charge %"
++ "My charge" round(sum(paddy.maunds) * mill_charge / 100) "maunds" faint
+===
+@edit style=plain domain=b1_cloth_priority ref=b1_cloth_rolls
+add a field to mark the design as Running or Clearance and show clearance designs first
+---
+~ meters_in num 1..20000 => meters_in num 1..20000, tag pick Running|Clearance = Running
+~ each design sort name as d => each design sort tag desc as d
+===
+@edit style=plain domain=b1_icecream_price ref=b1_icecream_cart
+a cone now costs 120 and add a Strawberry flavour
+---
+~ flavour pick Vanilla|Chocolate|Mango|Pistachio = Vanilla, price money = 100 => flavour pick Vanilla|Chocolate|Mango|Pistachio|Strawberry = Vanilla, price money = 120
+~ [Vanilla, Chocolate, Mango] => [Vanilla, Chocolate, Mango, Strawberry]
+===
+@edit style=plain domain=b1_attendance_rename ref=b1_egg_sheds
+rename the broken column to cracked
+---
+~ broken num 0..2000 = 0 => cracked num 0..2000 = 0 was broken
+~ s.eggday.broken => s.eggday.cracked
+~ "broken" faint => "cracked" faint
+===
+@edit style=plain domain=b1_taxi_remove ref=b1_taxi_share
+make the share a setting so it can be 40 percent for some time
+---
+~ table taxidriver => setting my_share num = 50 "My share %"\ntable taxidriver
+~ net / 2 bold => net * my_share / 100 bold
+~ sum(taxiday.income month) / 2 - sum(taxiday.fuel month) / 2 => (sum(taxiday.income month) - sum(taxiday.fuel month)) * my_share / 100
+===
+@edit style=plain domain=b1_dhaba_tab ref=b1_dhaba_tables
+add a tab that shows today's total sales of every dish
+---
++ screen totals "Totals" chart
++   bars options dish_order.dish, sum(dish_order.price today where dish = it), it
+===
+@edit style=plain domain=b1_chanda_weekly ref=b1_mehfil_chanda
+add a reminder on the 1st of every month to collect
+---
++ remind "Collect the guard chanda" monthly on 1 at 17:00
+===
+@edit style=plain domain=b1_tubewell_note ref=b1_tubewell_share
+add a notes field to each run for problems like engine broke
+---
+~ hours num 0.5..24 => hours num 0.5..24, problem text?
+===
+@edit style=plain domain=b1_closing_second ref=b1_pharmacy_cash_count
+add a note on each closing for the reason of difference
+---
+~ system_total money => system_total money, reason text?
++after     if(diff = 0, "tally", if(diff > 0, "extra", "short")) abs(diff) bold color if(diff < 0, bad, good) ::     c.reason faint

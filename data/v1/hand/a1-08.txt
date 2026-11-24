@@ -1,0 +1,217 @@
+@create style=multi_feature domain=a1_walk_club
+walking club log: km walked, a chart of the last 8 weeks with axes, total this month, and a message when the list is empty
+---
+app "Walking Club" walk mint
+table walk km num 0.2..60 unit "km"
+text fixed(sum(walk.km month), 1) "km this month" big
+plot 0..8, 0..max(maxof(1..8, sum(walk.km week of (today - 7 * (8 - it)))), 10) axes gridlines
+  each 1..8
+    rect index + 0.15, 0, 0.7, sum(walk.km week of (today - 7 * (8 - it))) fill accent radius 2
+    tick index + 0.5, "w" it
+form walk
+each walk sort at desc top 5 as w empty "No walks yet"
+  row card tap edit w swipe remove w
+    w.km "km" bold grow
+    w.at faint
+===
+@create style=detailed domain=a1_cal_week_plot
+Calories per day for the week as a chart with a gridline, and my daily limit setting. Show today's number big and turn it orange if I am over.
+---
+app "Calorie Week" apple ocean
+table meal item text, kcal num 0..3000
+setting limit num = 2000 "Daily limit"
+let t = sum(meal.kcal today)
+text grouped(t) "kcal" big color if(t > limit, warn, good)
+plot 0..7, 0..max(limit, maxof(days last 7 days, sum(meal.kcal on it))) axes gridlines
+  each days last 7 days
+    rect index + 0.15, 0, 0.7, sum(meal.kcal on it) fill if(sum(meal.kcal on it) > limit, warn, accent) radius 2
+    tick index + 0.5, dayname(it)
+form meal
+===
+@create style=short domain=a1_toddler_words
+my toddler's new words
+---
+app "First Words" baby plum
+table word term text, lang pick English|Urdu|Punjabi|Other = Urdu
+text plural(count(word), "word") "so far" big
+each word sort at desc as w empty "No words yet. The first one is coming!"
+  row card tap edit w swipe remove w
+    text w.term bold grow
+    w.lang faint
+form word
+===
+@create style=multi_feature domain=a1_eye_drops
+eye drops three times a day: morning, afternoon and night tiles that turn green when ticked, a reminder for each time, and how many days in a row I did all three
+---
+app "Eye Drops" eye ocean
+table drops slot pick Morning|Afternoon|Night
+remind "Eye drops, morning" at 8:00
+remind "Eye drops, afternoon" at 14:00
+remind "Eye drops, night" at 21:00
+row gap 1
+  each options drops.slot
+    stack card grow pad 2 fill if(count(drops today where slot = it) > 0, good, soft) tap toggle drops today where slot = it
+      text it bold align center
+"Perfect days in the last 30" countof(days last 30 days, count(drops on it) = 3) faint
+===
+@create style=vague domain=a1_dinner_idea
+what should I cook for dinner tonight, pick for me from my list
+---
+app "Dinner Idea" food mint
+table dish name text, mins num 5..180 unit "min"
+state idea text = ""
+button "Pick a dinner" tap set idea = random(dish).name
+if idea != ""
+  stack card pad 3
+    text idea big align center
+each dish sort name as d empty "Add the dishes you can cook"
+  row tap edit d swipe remove d
+    text d.name grow
+    d.mins faint
+form dish
+===
+@create style=custom_ui domain=a1_coin_jar
+a reward jar for my daughter: every time she does a good deed I tap a button and a coin drops into the jar, drawn as a pile of circles, and 20 coins means a toy
+---
+app "Coin Jar" coin plum
+table coin why text?
+let n = count(coin)
+draw 100, 100 width 200
+  rect 20, 10, 60, 84 stroke ink thick 2 radius 6
+  each 1..min(n % 20, 20)
+    circle 30 + 10 * (index % 5), 86 - 8 * floor(index / 5), 4 fill warn
+  label 50, 50, n % 20 big
+"Toys earned" floor(n / 20) faint
+button "Good deed" tap add coin
+===
+@create style=custom_ui domain=a1_juz_grid
+30 juz boxes in square cells, I tap one when I finish reading it, count of finished juz and a khatam message when all 30 are done
+---
+app "Juz Tracker" book mint
+table juz n num 1..30
+"Finished" count(juz year) "of 30" big
+if count(juz year) = 30
+  "Khatam complete" big color good
+grid 6 gap 1
+  each 1..30
+    box ratio 1 radius 6 fill if(count(juz year where n = it) > 0, accent, soft) tap toggle juz year where n = it
+      text it align center color if(count(juz year where n = it) > 0, bg, ink)
+===
+@create style=multi_feature domain=a1_azkar
+morning and evening azkar checklist, two pages, each zikr with its count to read, a tick when I finish it, resets every day
+---
+app "Azkar" beads mint
+table zikr name text, times num 1..100 = 1, part pick Morning|Evening
+table read zikr ref zikr
+screen am "Morning" sun
+  each zikr where part = Morning sort name as z empty "Add your morning azkar"
+    row card
+      text z.name grow
+      z.times "x" faint
+      toggle z.read
+  form zikr, "Add zikr"
+screen pm "Evening" moon
+  each zikr where part = Evening sort name as z empty "Add your evening azkar"
+    row card
+      text z.name grow
+      z.times "x" faint
+      toggle z.read
+===
+@create style=custom_ui domain=a1_thanks_jar
+a gratitude jar: each thing I am thankful for adds a dot in a jar drawn on screen, the dots stack up, and I can read the last five below
+---
+app "Thanks Jar" heart plum
+table thanks note text
+let n = count(thanks)
+draw 100, 100 width 220
+  rect 22, 10, 56, 84 stroke ink thick 2 radius 8
+  each 1..min(n, 24)
+    circle 30 + 8 * (index % 6), 86 - 8 * floor(index / 6), 3 fill hue(index * 25)
+form thanks, "I am thankful for"
+each thanks sort at desc top 5 as t empty "Your jar is empty"
+  row card
+    text t.note grow
+===
+@create style=detailed domain=a1_pregnancy_weight
+Pregnancy weight gain: I enter my weight each week and the weight before pregnancy. Show how much I gained and a line of my weight.
+---
+app "Pregnancy Weight" baby plum
+setting start_kg num = 60 "Weight before pregnancy (kg)"
+table weigh kg num 30..200 unit "kg"
+text fixed(last(weigh.kg) - start_kg, 1) "kg gained" big
+plot 0..countof(weigh, yes) - 1, start_kg - 2..max(maxof(weigh, it.kg), start_kg) + 2 axes
+  poly stroke accent thick 2
+    each weigh sort at
+      pt index, it.kg
+form weigh
+log weigh
+===
+@create style=detailed domain=a1_tantrum_log
+Tantrum diary for my 3 year old: what happened before, where, how long in minutes, and what helped, then which time of day is the worst.
+---
+app "Tantrums" smile slate
+table tantrum before text, place pick Home|Shop|Car|Outside = Home, mins num 1..90, helped text?, part pick Morning|Afternoon|Evening = Evening
+"This month" plural(count(tantrum month), "tantrum") big
+share tantrum month by part, count(it), it.key
+form tantrum
+each tantrum sort at desc top 5 as t empty "None logged"
+  row card tap edit t swipe remove t
+    text t.before grow
+    t.mins "min" faint
+===
+@create style=custom_ui domain=a1_puppy_plot
+puppy weight growth chart with a line and axes, and a big number for the current weight, grams not kg
+---
+app "Puppy Growth" paw mint
+table pw g num 100..60000 unit "g"
+text grouped(last(pw.g)) "g" big
+plot 0..countof(pw, yes) - 1, 0..maxof(pw, it.g) axes gridlines
+  poly stroke accent thick 2
+    each pw sort at
+      pt index, it.g
+form pw, "Weigh puppy"
+===
+@create style=multi_feature domain=a1_harvest_months
+garden harvest by month: crop and kg, bars for each month of this year with month names, total for the year, and the best crop
+---
+app "Harvest Year" leaf mint
+table harvest crop pick Tomato|Chilli|Okra|Spinach|Mint|Other, kg num 0.1..200 unit "kg"
+text fixed(sum(harvest.kg year), 1) "kg this year" big
+plot 0..12, 0..max(maxof(1..12, sum(harvest.kg month of addmonths(today, it - 12))), 1) axes
+  each 1..12
+    rect index + 0.15, 0, 0.7, sum(harvest.kg month of addmonths(today, it - 12)) fill good radius 2
+    tick index + 0.5, monthshort(addmonths(today, it - 12))
+form harvest
+===
+@create style=custom_ui domain=a1_reading_timer
+reading timer for 20 minutes, when it ends it logs a session, shows minutes read this week and a heat map
+---
+app "Read 20" book ocean
+table sit
+timer 20m, "Read", add sit then notify "Nice, 20 minutes done"
+text count(sit week) * 20 "minutes this week" big
+heat last 28 days, count(sit on it), 1
+stat streak(sit), "day streak"
+===
+@create style=vague domain=a1_hydrate_elder
+my grandmother never drinks enough water
+---
+app "Dadi Water" cup mint
+table glass
+remind "Time for a glass of water" every 2h from 9:00 to 19:00
+ring count(glass today), 6, "glasses today"
+button "She drank a glass" tap add glass
+daybars last 7 days, count(glass on it)
+===
+@edit style=plain domain=a1_e_firstwords_note ref=a1_toddler_words
+add the date she said it and who was there
+---
+~ lang pick English|Urdu|Punjabi|Other = Urdu => lang pick English|Urdu|Punjabi|Other = Urdu, heard_by text?
+===
+@edit style=plain domain=a1_e_coinjar_target ref=a1_coin_jar
+make it 10 coins for a toy
+---
+~ n % 20 => n % 10
+~ min(n % 10, 20) => min(n % 10, 10)
+~ floor(n / 20) => floor(n / 10)
+===

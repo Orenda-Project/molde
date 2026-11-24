@@ -1,0 +1,196 @@
+@create style=detailed domain=n_compound
+Compound growth calculator: I type my starting money, the yearly profit percent and the number of years, and it shows what I will have at the end.
+---
+app "Growth" coin mint
+state start num = 100000
+state rate num = 10
+state years num = 5
+field start "Starting money"
+field rate "Yearly profit %"
+slider years 1..30
+let end = start * pow(1 + rate / 100, years)
+"After" years "years" faint
+"You will have" round(end) big
+"Profit" round(end - start) bold
+===
+@create style=custom_ui domain=n_flash_shuffle
+flashcards in random order, show the front, tap to see the answer, a button for the next card
+---
+app "Quiz cards" brain plum
+table card front text, back text
+state shown bool
+state pos num = 1
+each card shuffle top 1 empty "Add some cards below"
+  stack card gap 2 tap set shown = not shown
+    it.front big
+    if shown
+      it.back head color accent
+button "Next card" tap set shown = no then set pos = pos + 1
+form card, "Add card"
+===
+@create style=custom_ui domain=n_flash_wrong
+a button that flashes red for two seconds when I log a bad habit and counts them
+---
+app "Slip counter" fire ink
+table slip
+state flash bool
+button "I slipped" fill if(flash, bad, soft) tap add slip then set flash = yes then after 2s set flash = no
+"Slips today" count(slip today) big
+"Total" count(slip) faint
+===
+@create style=multi_feature domain=n_weight_plot
+weight tracker with a line chart that has axes and gridlines, my target as a setting, and the change since the first weigh-in
+---
+app "Weight" scale mint
+table weigh kg num 20..300
+setting target num = 70 "Target (kg)"
+let first_kg = first(weigh.kg)
+let now_kg = last(weigh.kg)
+text now_kg "kg" big
+"Change since start" fixed(now_kg - first_kg, 1) "kg" faint
+plot 0..max(count(weigh), 2), 40..120 axes gridlines
+  poly stroke accent thick 2
+    each weigh sort at
+      pt index, it.kg
+form weigh
+===
+@create style=custom_ui domain=n_bar_plot
+bar chart of my study hours for each subject with the subject names under the bars
+---
+app "Study bars" school ocean
+table study subject pick Maths|Physics|Chemistry|English, hours num 0.25..10
+plot 0..4, 0..max(sum(study.hours where subject = Maths), 5) axes
+  each options study.subject
+    rect index + 0.15, 0, 0.7, sum(study.hours where subject = it) fill accent
+    tick index + 0.5, it
+form study
+===
+@create style=short domain=n_random_picker
+who does the dishes tonight, pick a random family member
+---
+app "Dishes" home slate
+table member name text
+state chosen text = ""
+button "Pick someone" tap set chosen = random(member).name
+"Tonight:" chosen big
+each member empty "Add the family first"
+  row card tap edit it swipe remove it
+    it.name grow
+form member
+===
+@create style=custom_ui domain=n_square_board
+a 3 by 3 grid of big square tiles, tap a tile to colour it, a clear button
+---
+app "Tiles" game ink
+table lit cell num 1..9
+grid 3 gap 1
+  each 1..9
+    box ratio 1 middle radius 8 fill if(count(lit where cell = it) > 0, accent, soft) tap toggle lit where cell = it
+      text it faint
+button "Clear" tap remove all lit
+===
+@create style=detailed domain=n_days_since
+Show how many days since my last haircut and how many days since I last watered the plant, with a button to log each.
+---
+app "Days since" calendar slate
+table cut
+table water
+text plural(since(cut), "day") "since the last haircut" big
+button "Got a haircut" tap add cut
+text plural(since(water), "day") "since I watered the plant" big
+button "Watered" tap add water
+if due(water, 3)
+  "Water the plant today" color warn
+===
+@create style=multi_feature domain=n_savings_join
+savings log with a big total shown like 81.5k, the number of deposits as '12 deposits' and the biggest deposit
+---
+app "Savings" coin mint
+table deposit amount money
+compact(sum(deposit.amount all)) big
+plural(count(deposit), "deposit") faint
+"Biggest" grouped(max(deposit.amount all)) bold
+quick deposit, amount, [500, 1000, 5000]
+form deposit
+list deposit
+===
+@create style=custom_ui domain=n_score_join
+cricket scorer that shows the score like 120/3 and the overs, buttons for runs and a wicket
+---
+app "Scorer" ball ocean
+table ball runs num 0..6, out bool
+let r = sum(ball.runs all)
+let w = count(ball where out = yes)
+join(r, "/", w) big
+"Overs" floor(count(ball) / 6) "." count(ball) % 6 faint
+row gap 1
+  each [0, 1, 2, 3, 4, 6]
+    button it tap add ball runs = it
+button "Wicket" fill bad tap add ball runs = 0, out = yes
+button "Undo" tap remove last(ball)
+===
+@create style=detailed domain=n_nth_lesson
+Show the next lesson from my list in order, with a done button that moves to the following one.
+---
+app "Lessons" school mint
+table lesson title text, done bool
+"Next up" faint
+each lesson where done = no sort at top 1 empty "All lessons done"
+  row card gap 2
+    it.title big grow
+    button "Done" tap set it.done = yes
+"Left" count(lesson where done = no) faint
+form lesson
+===
+@create style=multi_feature domain=n_month_names
+monthly expenses chart for the last 6 months with the month names under the bars
+---
+app "Spend months" wallet slate
+table spend amount money, what text?
+plot 0..6, 0..max(sum(spend.amount month), 1000) axes
+  each 0..5
+    rect index + 0.15, 0, 0.7, sum(spend.amount month of addmonths(today, index - 5)) fill accent radius 2
+    tick index + 0.5, monthshort(addmonths(today, index - 5))
+form spend
+log spend
+===
+@edit style=plain domain=n_ed_was_table ref=n_savings_join
+rename deposits to savings entries but keep what I saved
+---
+~ table deposit amount money => table entry was deposit amount money
+~ compact(sum(deposit.amount all)) => compact(sum(entry.amount all))
+~ plural(count(deposit), "deposit") => plural(count(entry), "entry")
+~ max(deposit.amount all) => max(entry.amount all)
+~ quick deposit, => quick entry,
+~ form deposit => form entry
+~ list deposit => list entry
+===
+@edit style=plain domain=n_ed_was_field ref=n_weight_plot
+call the kg column weight instead
+---
+~ weigh kg num 20..300 => weigh weight num 20..300 was kg
+~ last(weigh.kg) => last(weigh.weight)
+~ first(weigh.kg) => first(weigh.weight)
+~ pt index, it.kg => pt index, it.weight
+===
+@edit style=plain domain=n_ed_was_option ref=n_bar_plot
+rename Chemistry to Chem
+---
+~ Chemistry => Chem was Chemistry
+===
+@edit style=plain domain=n_ed_was_setting ref=n_weight_plot
+change the setting name from target to goal weight
+---
+~ setting target num = 70 "Target (kg)" => setting goal_kg num = 70 "Target (kg)" was target
+===
+@edit style=plain domain=n_ed_plot_add ref=n_days_since
+add a third one for when I last cleaned the room
+---
++ table clean
++ text plural(since(clean), "day") "since the room was cleaned" big
++ button "Cleaned" tap add clean
+===
+@edit style=plain domain=n_ed_after ref=n_random_picker
+show the name for a few seconds then clear it
+---
+~ tap set chosen = random(member).name => tap set chosen = random(member).name then after 5s set chosen = ""

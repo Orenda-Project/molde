@@ -1,0 +1,370 @@
+@create style=detailed domain=b5_stable_horses
+small horse stable. each horse has a feed amount in kg a day, farrier visits and vet visits are logged. farrier is due every 60 days and I want the horses that are due on top
+---
+app "Stable" paw slate
+table horse name text, feed_kg num 1..20 = 6
+table farrier horse ref horse, cost money?
+table vetvisit horse ref horse, reason text
+"Feed per day" sum(horse.feed_kg) "kg" big
+each horse sort name as h
+  if due(h.farrier, 60)
+    row card tap edit h
+      h.name bold grow
+      "farrier due" color warn
+each horse sort name as h
+  row card tap edit h
+    h.name bold grow
+    plural(since(h.farrier), "day") "since farrier" faint
+    count(h.vetvisit) "vet" faint
+form farrier, "Farrier came"
+form vetvisit, "Vet visit"
+form horse, "Add horse"
+===
+@create style=short domain=b5_lab_chemicals
+school lab chemicals stock and what each class used
+---
+app "Lab Stock" tool slate
+table chemical name text, qty num 0.. unit "g", low num 0.. = 50
+table usage chemical ref chemical, amount num 1..2000
+each chemical sort name as c
+  let left = c.qty - sum(c.usage.amount)
+  row card tap edit c
+    c.name bold grow
+    left "g left" color if(left <= c.low, bad, ink)
+    button "-10 g" tap add usage chemical = c, amount = 10
+form chemical, "Add chemical"
+===
+@create style=custom_ui domain=b5_hall_bookings
+marriage hall bookings on a calendar, tap a day to book or free it. below, list the bookings with name and advance money
+---
+app "Hall Calendar" calendar plum
+table booking family text, advance money = 0
+calendar booking
+"Booked this month" count(booking month) big
+"Advance held" sum(booking.advance month) faint
+list booking by day
+form booking, "Booking details"
+===
+@create style=multi_feature domain=b5_hotel_rooms
+small hotel: rooms, tick when cleaned today and note maintenance problems. top shows how many rooms still need cleaning. grid of rooms coloured by clean or not
+---
+app "Housekeeping" bed ocean
+table room number text, kind pick Single|Double|Suite = Double
+table clean room ref room
+table issue room ref room, what text, fixed bool
+"Still to clean" count(room) - count(clean today) big
+grid 4 gap 1
+  each room sort number as r
+    stack radius 8 pad 1 fill if(count(r.clean today) > 0, good, warn) tap toggle r.clean
+      r.number bold align center color bg
+      r.kind tiny align center color bg
+"Open issues" count(issue where fixed = no) head
+each issue where fixed = no as i
+  row card
+    i.room.number bold
+    i.what grow
+    toggle i.fixed
+form issue, "Report issue"
+form room, "Add room"
+===
+@create style=detailed domain=b5_tutor_topics
+I tutor 6 kids. each has topics to cover; I tick which topics each kid covered. show a progress bar per kid and the topics nobody has covered yet
+---
+app "Tutor Map" school mint
+table kid name text
+table topic name text
+table covered kid ref kid, topic ref topic
+each kid sort name as k
+  stack card gap 1
+    k.name bold
+    goal count(k.covered), count(topic), "topics covered"
+each topic sort name as t
+  row
+    t.name grow
+    if(count(t.covered) = 0, "nobody yet", join(count(t.covered), " kids")) faint color if(count(t.covered) = 0, warn, muted)
+form covered, "Mark covered"
+form kid, "Add kid"
+form topic, "Add topic"
+===
+@create style=vague domain=b5_karate_belts
+karate dojo students, belt colours and how many classes they attended
+---
+app "Dojo" shield ink
+table student name text, belt pick White|Yellow|Orange|Green|Blue|Brown|Black = White
+table attended student ref student
+each options student.belt as b
+  stack card gap 1
+    row
+      b bold grow
+      count(student where belt = b) faint
+    each student where belt = b sort name as s
+      row tap edit s
+        s.name grow
+        count(s.attended) "classes" faint
+form attended, "Mark attendance"
+form student, "Add student"
+===
+@create style=multi_feature domain=b5_camping_gear
+camping trip packing: trips, each has gear items with weight in grams and a packed tick. show total weight carried for each trip and warn if heavier than 12 kg
+---
+app "Pack Weight" bag ocean
+table trip name text, day date?
+table gear trip ref trip, name text, grams num 1..20000, packed bool
+each trip sort at desc as t
+  let carried = sum(t.gear.grams where packed = yes)
+  stack card gap 1
+    row
+      t.name head grow
+      fixed(carried / 1000, 1) "kg" bold color if(carried > 12000, bad, good)
+    each t.gear sort grams desc as g
+      row
+        g.name grow
+        g.grams "g" faint
+        toggle g.packed
+form gear, "Add gear"
+form trip, "New trip"
+===
+@create style=detailed domain=b5_family_bp
+blood pressure for my parents. each reading has the top and bottom number. draw both numbers as two lines for each person and mark the person red if the latest top number is above 140
+---
+app "BP Parents" heart plum
+table person name text
+table reading person ref person, top num 70..260, bottom num 40..160
+each person sort name as p
+  stack card gap 1
+    row
+      p.name head grow
+      last(p.reading.top) "/" last(p.reading.bottom) bold color if(last(p.reading.top) > 140, bad, good)
+    plot 0..max(count(p.reading), 2), 40..200 axes gridlines
+      poly stroke bad thick 2
+        each p.reading sort at
+          pt index, it.top
+      poly stroke accent thick 2
+        each p.reading sort at
+          pt index, it.bottom
+form reading, "Add reading"
+form person, "Add person"
+===
+@create style=typos domain=b5_twins_log
+twins feeding and sleep. each baby gets feeds in ml and naps in minutes. show todays ml and sleep for each baby, and last feed time
+---
+app "Twins" baby mint
+table baby name text
+table feed baby ref baby, ml num 10..300 = 120
+table nap baby ref baby, mins num 5..300 = 60
+each baby sort name as b
+  stack card gap 1
+    b.name head
+    sum(b.feed.ml today) "ml today" big
+    "Sleep" sum(b.nap.mins today) "min" faint
+    "Last feed" last(b.feed.at) faint
+    row gap 1
+      button "Feed" tap add feed baby = b
+      button "Nap" tap add nap baby = b
+===
+@create style=multi_feature domain=b5_freelance_hours
+freelance hours per project with an hourly rate on each project. a timer I can run while working, then add the hours. show invoice amount per project this month
+---
+app "Hours" timer slate
+table project name text, rate money
+table hours project ref project, h num 0.25..24
+timer 1h, "Working", notify "An hour passed"
+each project sort name as p
+  row card tap edit p
+    stack grow gap 0
+      p.name bold
+      sum(p.hours.h month) "h this month" faint
+    sum(p.hours.h month) * p.rate bold
+    button "+1h" tap add hours project = p, h = 1
+"Invoices this month" sum(hours month, it.h * it.project.rate) head
+form hours, "Add hours"
+form project, "Add project"
+===
+@create style=detailed domain=b5_airbnb_rooms
+two rooms on airbnb and one flat. for every stay I put room, nights and price per night. show occupancy this month (nights over days in month) and money for each place
+---
+app "Stays" home ocean
+table place name text
+table stay place ref place, nights num 1..30, rate money
+each place sort name as p
+  stack card gap 1
+    row
+      p.name head grow
+      sum(p.stay, it.nights * it.rate) bold
+    goal sum(p.stay.nights month), monthdays(today), "nights booked this month"
+form stay, "Add stay"
+form place, "Add place"
+===
+@create style=custom_ui domain=b5_crop_rotation
+field crop rotation. each field has a season record: year and crop (wheat, rice, maize, cotton, fallow). show each field as a row of squares one per year coloured by crop
+---
+app "Rotation" leaf mint
+table field name text, acres num 1..500
+table season field ref field, year num 2018..2035, crop pick Wheat|Rice|Maize|Cotton|Fallow = Wheat
+each field sort name as f
+  stack card gap 1
+    row
+      f.name bold grow
+      f.acres "acres" faint
+    row gap 1
+      each f.season sort year as s
+        stack grow align center radius 6 pad 1 tap edit s fill if(s.crop = Wheat, warn, if(s.crop = Rice, good, if(s.crop = Cotton, accent, soft)))
+          s.year tiny
+          s.crop tiny bold
+form season, "Add season"
+form field, "Add field"
+===
+@create style=vague domain=b5_canal_turns
+canal water turns for farmers, who gets water when and for how long
+---
+app "Water Turns" drop ocean
+table farmer name text, acres num 1..200
+table turn farmer ref farmer, start time, hours num 0.5..24 = 2, day date
+each turn where day >= today sort day as t
+  row card tap edit t swipe remove t
+    t.day bold
+    t.farmer.name grow
+    t.start "for" t.hours "h" faint
+each farmer sort name as f
+  row
+    f.name grow
+    sum(f.turn.hours month) "h this month" faint
+form turn, "Add turn"
+form farmer, "Add farmer"
+===
+@create style=detailed domain=b5_typing_practice
+typing practice with 3 lessons (home row, top row, numbers). each session I log words per minute and mistakes. show the trend line of wpm for the selected lesson and best so far
+---
+app "Typing" pen ink
+table lesson name text
+table session lesson ref lesson, wpm num 5..200, mistakes num 0..100 = 0
+state pick_lesson ref lesson
+choice pick_lesson
+trend session where lesson = pick_lesson sort at, it.wpm
+"Best" max(session.wpm where lesson = pick_lesson) "wpm" big
+"Fewest mistakes" min(session.mistakes where lesson = pick_lesson) faint
+form session, "Log session"
+form lesson, "Add lesson"
+===
+@create style=short domain=b5_iftar_invites
+who invited us for iftar and who we invited
+---
+app "Iftar Plans" moon plum
+table host name text
+table invite host ref host, day date, direction pick They_invited|We_invited = They_invited
+each host sort name as h
+  row card tap edit h
+    h.name bold grow
+    count(h.invite where direction = They_invited) "to us" faint
+    count(h.invite where direction = We_invited) "from us" faint
+form invite, "Add invite"
+form host, "Add host"
+===
+@create style=typos domain=b5_spice_weights
+spice shop, price per kg for each spice, i sell in grams so it works the money. todays sale
+---
+app "Spice Shop" food slate
+table spice name text, price_kg money
+table sale spice ref spice, grams num 10..5000 = 250
+"Sales today" sum(sale today, it.grams * it.spice.price_kg / 1000) big
+each spice sort name as s
+  row card tap edit s
+    s.name bold grow
+    s.price_kg "per kg" faint
+    sum(s.sale.grams today) "g today" bold
+    button "250 g" tap add sale spice = s, grams = 250
+form spice, "Add spice"
+===
+@oos style=vague domain=b5_tutor_sync oos=sync
+my sister is also a tutor, keep both our phones in sync with the same kids list
+---
+app "Tutor Kids" school mint
+table kid name text
+table covered kid ref kid, topic text
+each kid sort name as k
+  row card tap edit k
+    k.name bold grow
+    count(k.covered) "topics" faint
+form covered, "Mark covered"
+form kid, "Add kid"
+===
+@oos style=detailed domain=b5_bp_bank oos=other_apps
+pull my fathers readings from the omron health app automatically and plot them, also let me type my own
+---
+app "BP Typed" heart plum
+table reading top num 70..260, bottom num 40..160
+trend reading sort at, it.top
+form reading, "Add reading"
+list reading by day
+===
+@edit style=plain domain=b5_stable_daily ref=b5_stable_horses
+call the feed column daily kg
+---
+~ feed_kg num 1..20 = 6 => daily_kg num was feed_kg 1..20 = 6
+~ sum(horse.feed_kg) => sum(horse.daily_kg)
+===
+@edit style=plain domain=b5_lab_expiry ref=b5_lab_chemicals
+add an expiry date to chemicals and show it in red when it has passed
+---
+~ low num 0.. = 50 => low num 0.. = 50, expiry date?
+~ c.name bold grow => c.name bold grow color if(c.expiry < today, bad, ink)
+===
+@edit style=plain domain=b5_hall_which ref=b5_hall_bookings
+we have two halls, main and garden. add which hall to each booking and count bookings per hall this month
+---
+~ table booking family text, advance money = 0 => table booking family text, hall pick Main|Garden = Main, advance money = 0
+~ "Advance held" sum(booking.advance month) faint => "Advance held" sum(booking.advance month) faint\neach options booking.hall as hl\n  row\n    hl grow\n    count(booking month where hall = hl) bold
+===
+@edit style=plain domain=b5_hotel_level ref=b5_hotel_rooms
+add which floor each room is on and order the grid by floor
+---
+~ table room number text, kind pick Single|Double|Suite = Double => table room number text, level num 0..20 = 1, kind pick Single|Double|Suite = Double
+~ each room sort number as r => each room sort level as r
+===
+@edit style=plain domain=b5_tutor_chart ref=b5_tutor_topics
+add a bar chart showing how many kids covered each topic
+---
++after form covered, "Mark covered" :: bars topic sort name, count(it.covered), it.name
+===
+@edit style=plain domain=b5_karate_ready ref=b5_karate_belts
+add a setting for classes needed per belt (30) and mark a student ready for the belt test when they reach it
+---
+~ app "Dojo" shield ink => app "Dojo" shield ink\nsetting classes_per_belt num = 30 "Classes per belt"
+~ count(s.attended) "classes" faint => count(s.attended) "classes" faint\n        if(count(s.attended) >= classes_per_belt, "ready for test", "") color good
+===
+@edit style=plain domain=b5_camping_limit ref=b5_camping_gear
+the weight limit should be a setting, default 12 kg
+---
+~ table trip name text, day date? => setting limit_kg num = 12 "Weight limit (kg)"\ntable trip name text, day date?
+~ carried > 12000 => carried > limit_kg * 1000
+===
+@edit style=plain domain=b5_bp_pulse ref=b5_family_bp
+also record the pulse and show the latest pulse next to the name
+---
+~ bottom num 40..160 => bottom num 40..160, pulse num? 30..220
+~ p.name head grow => p.name head grow\n      "pulse" last(p.reading.pulse) faint
+===
+@edit style=plain domain=b5_hours_paid ref=b5_freelance_hours
+add a paid tick on every hours entry and show how much is still unpaid
+---
+~ h num 0.25..24 => h num 0.25..24, paid bool
+~ "Invoices this month" => "Unpaid" sum(hours where paid = no, it.h * it.project.rate) head\n"Invoices this month"
+===
+@edit style=plain domain=b5_airbnb_nightly ref=b5_airbnb_rooms
+rename the rate column to nightly
+---
+~ nights num 1..30, rate money => nights num 1..30, nightly money was rate
+~ it.nights * it.rate => it.nights * it.nightly
+===
+@edit style=plain domain=b5_rotation_cane ref=b5_crop_rotation
+add sugarcane as a crop option and colour it green too
+---
+~ Wheat|Rice|Maize|Cotton|Fallow = Wheat => Wheat|Rice|Maize|Cotton|Sugarcane|Fallow = Wheat
+~ if(s.crop = Rice, good, => if(s.crop = Rice or s.crop = Sugarcane, good,
+===
+@edit style=plain domain=b5_typing_goal ref=b5_typing_practice
+add a speed goal setting of 40 words per minute with a progress bar for my best
+---
+~ trend session => setting wpm_goal num = 40 "Speed goal (wpm)"\ntrend session
++after "Best" max(session.wpm where lesson = pick_lesson) "wpm" big :: goal max(session.wpm where lesson = pick_lesson), wpm_goal, "of goal", "wpm"
+===

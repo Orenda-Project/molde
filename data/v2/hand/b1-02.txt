@@ -1,0 +1,369 @@
+@create style=detailed domain=b1_cattle_feed
+cattle feed bags: I buy feed bags and every day I note how many bags the animals eat. tell me how many bags are left and how many days they will last at this week's usage
+---
+app "Feed Stock" package mint
+table bought bags num 1..500, cost money
+table eaten bags num 0.25..20
+let in_stock = sum(bought.bags) - sum(eaten.bags)
+let daily_use = sum(eaten.bags last 7 days) / 7
+in_stock "bags left" big color if(in_stock < 5, warn, ink)
+"Lasts about" if(daily_use > 0, floor(in_stock / daily_use), 0) "days" head
+daybars last 7 days, sum(eaten.bags on it)
+quick eaten, bags, [1, 2, 3]
+form bought, "Bought bags"
+list bought by day
+===
+@create style=multi_feature domain=b1_cycle_repair
+cycle and bike repair shop. each job has the customer, what was fixed, the labour charge and parts used with their cost. i want to see profit per job and today's profit
+---
+app "Repair Shop" tool slate
+table repair customer text, bike text?, problem text, labour money, status pick Waiting|Working|Done = Waiting
+table part repair ref repair, name text, cost money, price money
+let profit_today = sum(repair.labour today) + sum(part.price today) - sum(part.cost today)
+"Profit today" profit_today big
+each repair where status != Done sort at desc as r
+  let margin = r.labour + sum(r.part.price) - sum(r.part.cost)
+  stack card gap 1 tap edit r
+    row
+      r.customer bold grow
+      choice r.status
+    r.problem faint
+    text "Profit on this job" margin color if(margin >= 0, good, bad)
+form repair, "New job"
+form part, "Add part"
+===
+@create style=short domain=b1_hostel_mess
+hostel mess bill per boarder
+---
+app "Mess Bill" food ocean
+table boarder name text, room text?
+table meal boarder ref boarder, kind pick Breakfast|Lunch|Dinner = Dinner, price money = 120
+state m date = today
+monthnav m
+each boarder sort name as b
+  row card tap edit b
+    b.name bold grow
+    count(b.meal month of m) "meals"
+    sum(b.meal.price month of m) bold
+"Total" sum(meal.price month of m) big
+form meal, "Meal taken"
+form boarder, "Add boarder"
+===
+@create style=typos domain=b1_tractor_hire
+tracter on rent to farmers, i write hours worked for each farmer and the rate per hour is 1800, show what each farmer owes
+---
+app "Tractor Hire" car mint
+table farmer name text, village text?
+table work farmer ref farmer, hours num 0.5..24, job pick Ploughing|Cultivator|Trolley|Thresher = Ploughing
+table cash farmer ref farmer, amount money
+setting rate money = 1800 "Rate per hour"
+each farmer sort name as f
+  let bill = sum(f.work.hours) * rate
+  let rest = bill - sum(f.cash.amount)
+  row card tap edit f
+    stack grow
+      f.name bold
+      text sum(f.work.hours) "hours" faint
+    rest bold color if(rest > 0, bad, good)
+"Hours this month" sum(work.hours month) big
+form work, "Log hours"
+form cash, "Cash received"
+form farmer, "Add farmer"
+===
+@create style=custom_ui domain=b1_tomato_tunnels
+tomato tunnels. i pick crates from each tunnel, show a bar chart of crates per tunnel this week and a big number for crates picked today, plus the average price i get per crate
+---
+app "Tunnels" apple plum
+table tunnel name text
+table picking tunnel ref tunnel, crates num 1..300, price money
+"Crates today" sum(picking.crates today) big
+"Avg price per crate" round(sum(picking, it.crates * it.price) / max(sum(picking.crates), 1)) faint
+bars tunnel, sum(it.picking.crates week), it.name
+each tunnel sort name as t
+  row card tap edit t
+    t.name bold grow
+    text sum(t.picking.crates) "crates"
+form picking, "Crates picked"
+form tunnel, "Add tunnel"
+===
+@create style=multi_feature domain=b1_juice_corner
+juice stand with two tabs, one for sales (juice type and glasses, price per glass) and one for costs like fruit, ice and rent. show profit this month on a third small screen
+---
+app "Juice Stand" cup mint
+table sale flavour pick Orange|Mango|Sugarcane|Mixed = Orange, glasses num 1..50 = 1, price money = 150
+table cost kind pick Fruit|Ice|Sugar|Rent|Other = Fruit, amount money
+screen sales "Sales" cup
+  "Today" sum(sale, it.glasses * it.price) big
+  quick sale, flavour, [Orange, Mango, Sugarcane]
+  form sale
+  list sale by day
+screen costs "Costs" wallet
+  "Costs this month" sum(cost.amount month) big
+  form cost
+  list cost
+screen profit "Profit" chart
+  let income = sum(sale.price month)
+  "Profit" income - sum(cost.amount month) big
+  daybars last 14 days, sum(sale.price on it)
+===
+@create style=detailed domain=b1_water_tanker
+water tanker business: each delivery has the customer, how many gallons and the charge. some customers pay later. show unpaid total and each customer's pending amount
+---
+app "Tanker" drop ocean
+table client name text, area text?
+table delivery client ref client, gallons num 100..5000, charge money, paid bool
+let unpaid = sum(delivery.charge where paid = no)
+"Unpaid" unpaid big
+each client sort name as c
+  let pending = sum(c.delivery.charge where paid = no)
+  row card tap edit c
+    c.name bold grow
+    count(c.delivery where paid = no) "deliveries" faint
+    pending bold color if(pending > 0, warn, good)
+form delivery, "Add delivery"
+form client, "Add customer"
+===
+@create style=vague domain=b1_barber_chair
+barber shop haircuts and tips
+---
+app "Barber" user slate
+table cut kind pick Haircut|Shave|Both|Kids = Haircut, price money = 300, tip money = 0
+let cash_today = sum(cut.price today) + sum(cut.tip today)
+cash_today "today" big
+"Tips" sum(cut.tip today) faint
+"Customers" count(cut today) faint
+quick cut, kind, [Haircut, Shave]
+form cut
+daybars last 7 days, count(cut on it)
+===
+@create style=detailed domain=b1_tenant_meters
+I rent rooms and charge electricity by units. for each room I type the meter reading at month end, units used is the difference from the last reading, and the unit rate is a setting
+---
+app "Meter Reading" bolt ink
+table room name text, tenant text?
+table reading room ref room, units num 0..
+setting unit_rate money = 45 "Rate per unit"
+each room sort name as r
+  let latest = last(r.reading.units)
+  let used = latest - nth(r.reading sort at desc, 2).units
+  stack card gap 1 tap edit r
+    row
+      r.name bold grow
+      r.tenant faint
+    text "Last reading" latest
+    text "Units used" used "Bill" used * unit_rate bold
+form reading, "New reading"
+form room, "Add room"
+===
+@create style=short domain=b1_egg_route
+daily egg delivery customers, trays each
+---
+app "Egg Route" egg slate
+table home name text, street text?
+table drop home ref home, trays num 1..20 = 1
+state d date = today
+row align center
+  button "<" tap set d = d - 1
+  dayname(d) head grow align center
+  button ">" tap set d = d + 1
+"Trays" sum(drop.trays on d) big
+each home sort name as h
+  row card
+    h.name bold grow
+    sum(h.drop.trays on d) "trays"
+    toggle h.drop on d
+form home, "Add home"
+===
+@create style=multi_feature domain=b1_medical_store_expiry
+medical store, items with expiry date and stock count. list the ones expiring in next 60 days at the top in warn colour and show the count of expired
+---
+app "Expiry Watch" pill ocean
+table medicine name text, qty num 0.., expiry date, shelf pick Front|Back|Fridge = Front
+let expired = count(medicine, it.expiry < today and it.qty > 0)
+expired "expired items" big color if(expired > 0, bad, good)
+"Expiring within 60 days" count(medicine, it.expiry >= today and it.expiry <= today + 60 and it.qty > 0) head
+each medicine sort expiry as m
+  row card tap edit m fill if(m.expiry < today + 60, warn, surface)
+    m.name bold grow
+    m.expiry
+    m.qty "pcs" faint
+    m.shelf faint
+form medicine
+===
+@create style=detailed domain=b1_farm_labour
+I hire daily workers on the farm. each has a daily wage; I mark the days they worked and also note advances I gave. show what I owe each at month end after cutting advances
+---
+app "Farm Labour" users mint
+table worker name text, wage money
+table workday worker ref worker
+table advance worker ref worker, amount money
+each worker sort name as w
+  let earned = count(w.workday month) * w.wage
+  let net = earned - sum(w.advance.amount month)
+  stack card gap 1 tap edit w
+    row
+      w.name bold grow
+      toggle w.workday
+    text count(w.workday month) "days" "= " earned faint
+    text "Advance" sum(w.advance.amount month) "Pay" net bold color if(net < 0, bad, ink)
+form advance, "Give advance"
+form worker, "Add worker"
+===
+@create style=custom_ui domain=b1_bee_hives
+bee hives: each hive has a name and I note honey in kg when I harvest, with the date. biggest harvest hive in head text and a chart of kg per hive
+---
+app "Bee Yard" leaf plum
+table hive name text, queen_year num? 2015..2035
+table honey hive ref hive, kg num 0.1..60
+let best = max(hive, sum(it.honey.kg))
+"Total honey" sum(honey.kg year) "kg this year" big
+"Best hive" best "kg" head
+bars hive, sum(it.honey.kg), it.name
+form honey, "Harvest"
+form hive, "Add hive"
+===
+@create style=detailed domain=b1_hall_bookings
+we have a small marriage hall. bookings have the family name, event date, number of guests and a rate per head. I take advance and balance later. show upcoming events sorted by date and what is pending from each
+---
+app "Marriage Hall" gift plum
+table booking family text, event date, guests num 50..1500, per_head money, status pick Tentative|Confirmed|Done = Tentative
+table taken booking ref booking, amount money
+each booking where event >= today sort event as b
+  let total = b.guests * b.per_head
+  let pending = total - sum(b.taken.amount)
+  stack card gap 1 tap edit b
+    row
+      b.family bold grow
+      b.event
+    row gap 2
+      text "Total" total
+      text "Pending" pending color if(pending > 0, warn, good)
+    choice b.status
+"Booked dates this month" count(booking month where status != Tentative) faint
+form booking, "New booking"
+form taken, "Payment received"
+===
+@create style=vague domain=b1_scrap_dealer
+kabari: buying scrap by kg and selling
+---
+app "Scrap" box ink
+table scrap_type name text, buy_rate money, sell_rate money
+table purchase scrap_type ref scrap_type, kg num 0.5..5000
+table dispatch scrap_type ref scrap_type, kg num 0.5..5000
+each scrap_type sort name as s
+  let stock = sum(s.purchase.kg) - sum(s.dispatch.kg)
+  row card tap edit s
+    s.name bold grow
+    text stock "kg in godown"
+    text "margin" stock * (s.sell_rate - s.buy_rate) faint
+form purchase, "Bought"
+form dispatch, "Sold"
+form scrap_type, "Add scrap type"
+===
+@create style=multi_feature domain=b1_piecework_stitch
+home stitching factory with workers paid per piece. each worker has a rate per piece, I note pieces done each day, show weekly earning of each worker and total pieces today with a chart of the week
+---
+app "Piece Rate" tag plum
+table stitcher name text, per_piece money
+table pieces stitcher ref stitcher, count num 1..500
+"Pieces today" sum(pieces.count today) big
+daybars last 7 days, sum(pieces.count on it)
+each stitcher sort name as s
+  row card tap edit s
+    s.name bold grow
+    text sum(s.pieces.count week) "pieces"
+    text sum(s.pieces.count week) * s.per_piece bold
+form pieces, "Pieces done"
+form stitcher, "Add worker"
+===
+@create style=custom_ui domain=b1_savings_group
+village savings group: members put in a fixed amount weekly, there is a loan box where members borrow and return. show the cash in the box right now
+---
+app "Savings Group" users mint
+table member name text
+table deposit member ref member, amount money
+table loan member ref member, amount money
+table loanback member ref member, amount money
+let cash_box = sum(deposit.amount) - sum(loan.amount) + sum(loanback.amount)
+"Cash in the box" cash_box big
+row gap 2
+  stat sum(deposit.amount), "saved"
+  stat sum(loan.amount) - sum(loanback.amount), "out on loan"
+each member sort name as m
+  row card tap edit m
+    m.name bold grow
+    text sum(m.deposit.amount) faint
+    text "owes" sum(m.loan.amount) - sum(m.loanback.amount) color warn
+form deposit, "Weekly deposit"
+form loan, "Give loan"
+form loanback, "Loan returned"
+form member, "Add member"
+===
+@oos style=detailed domain=b1_rate_lookup oos=internet
+show today's wheat rate from the mandi website and then multiply by the maunds I hold to tell me what my stock is worth
+---
+app "Wheat Stock" leaf mint
+setting rate money = 4000 "Rate per maund"
+table lot maunds num 0.5..10000, where_kept text?
+"Stock worth" sum(lot.maunds) * rate big
+"Maunds held" sum(lot.maunds) faint
+form lot, "Add lot"
+list lot
+===
+@create style=custom_ui domain=b1_water_turn
+canal water turn: my turn is 45 minutes. a countdown timer that starts the turn, a note of each turn with which field was watered
+---
+app "Water Turn" drop ocean
+table turn field_name text, minutes num 5..240
+timer 45m, "Water turn", add turn field_name = "Main field", minutes = 45 then notify "Turn finished, close the cut"
+"Turns this month" count(turn month) head
+list turn by day
+===
+@create style=short domain=b1_fruit_cart
+fruit cart sales per fruit today
+---
+app "Fruit Cart" apple mint
+table fruitsale fruit pick Apple|Banana|Grapes|Mango|Orange = Banana, kg num 0.25..50, amount money
+each options fruitsale.fruit
+  row
+    it grow
+    sum(fruitsale.kg today where fruit = it) "kg"
+    sum(fruitsale.amount today where fruit = it) bold
+"Total today" sum(fruitsale.amount today) big
+form fruitsale
+===
+@edit style=plain domain=b1_cattle_feed_low ref=b1_cattle_feed
+let me set the low-stock warning level myself instead of 5 bags
+---
+~ let in_stock => setting low_bags num = 5 "Warn below (bags)"\nlet in_stock
+~ in_stock < 5 => in_stock < low_bags
+===
+@edit style=plain domain=b1_repair_phone ref=b1_cycle_repair
+add the customer's phone number
+---
+~ customer text, bike => customer text, phone text?, bike
+===
+@edit style=plain domain=b1_mess_meal_names ref=b1_hostel_mess
+rename Dinner to Supper and make breakfast cheaper
+---
+~ kind pick Breakfast|Lunch|Dinner = Dinner, price money = 120 => kind pick Breakfast|Lunch|Supper was Dinner = Supper, price money = 100
+===
+@edit style=plain domain=b1_tractor_chart ref=b1_tractor_hire
+add a chart of hours worked per day for the last 2 weeks
+---
++ daybars last 14 days, sum(work.hours on it)
+===
+@edit style=plain domain=b1_juice_ratings ref=b1_juice_corner
+on the sales tab let me flip the glasses count between today and this month
+---
+~ screen sales "Sales" cup => state span pick Today|Month = Today\nscreen sales "Sales" cup
+~ "Today" sum(sale, it.glasses * it.price) big => "Glasses" if(span = Today, sum(sale.glasses today), sum(sale.glasses month)) big
++after   quick sale, flavour, [Orange, Mango, Sugarcane] ::   choice span
+===
+@edit style=plain domain=b1_tanker_tabs ref=b1_water_tanker
+rename the paid tick to settled
+---
+~ paid bool => settled bool was paid
+~ where paid = no) => where settled = no)
+~ where paid = no) => where settled = no)
+~ where paid = no) => where settled = no)

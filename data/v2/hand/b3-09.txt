@@ -1,0 +1,388 @@
+@create style=detailed domain=b3_volleyball
+Volleyball matches with a home and away team name. Each match has sets with the points each side scored. Show sets won by each side as the match result and list the set scores under each match.
+---
+app "Volleyball" ball ocean
+table vmatch home text, away text
+table vset vmatch ref vmatch, home_pts num 0..40, away_pts num 0..40
+each vmatch sort at desc as m
+  let home_sets = count(m.vset where home_pts > away_pts)
+  let away_sets = count(m.vset where away_pts > home_pts)
+  stack card gap 1
+    row
+      m.home bold grow
+      home_sets "-" away_sets big
+      m.away bold grow align end
+    each m.vset as s
+      "Set" index + 1 ":" s.home_pts "-" s.away_pts faint
+form vmatch, "New match"
+form vset, "Add set score"
+===
+@create style=custom_ui domain=b3_team_draw
+random draw for 8 teams, shows them in a random order and the first four are group A and the rest group B
+---
+app "Team Draw" users plum
+table team name text
+each team shuffle as t
+  row card
+    t.name bold grow
+    if(index < 4, "Group A", "Group B") faint
+form team, "Add team"
+===
+@create style=multi_feature domain=b3_naat_contest
+naat competition: contestants with age, three judges each give a score out of 10, show total score and how many judge scores are in, ranking and a bar chart
+---
+app "Naat Contest" mosque plum
+table contestant name text, age num 5..60
+table judge_score contestant ref contestant, judge pick Judge_1|Judge_2|Judge_3 = Judge_1, score num 1..10
+"Leaderboard" head
+each contestant sort sum(it.judge_score.score) desc as c
+  row card
+    c.name bold grow
+    count(c.judge_score) "of 3 scores" faint
+    sum(c.judge_score.score) big
+bars contestant, sum(it.judge_score.score), it.name
+form contestant, "Add contestant"
+form judge_score, "Add judge score"
+===
+@oos style=detailed domain=b3_exhibition_booths oos=messaging
+exhibition booths: each exhibitor has a booth and a fee, payments are logged, and the app should email every exhibitor who has not paid
+---
+app "Exhibition Booths" tag slate
+table exhibitor name text, booth text, fee money
+table fee_paid exhibitor ref exhibitor, amount money
+"Still to collect" sum(exhibitor.fee) - sum(fee_paid.amount) big
+each exhibitor sort booth as e
+  let balance = e.fee - sum(e.fee_paid.amount)
+  row card tap edit e
+    stack grow
+      e.name bold
+      e.booth faint
+    if(balance <= 0, "Paid", "Owes") max(balance, 0) color if(balance <= 0, good, warn)
+form exhibitor, "Add exhibitor"
+form fee_paid, "Record payment"
+===
+@create style=vague domain=b3_rest_stops
+we drive lahore karachi often and i want to remember which highway stops are decent
+---
+app "Highway Stops" map ocean
+table rest_stop name text, highway text
+table stop_review rest_stop ref rest_stop, food num 1..5, washroom num 1..5, note text?
+each rest_stop sort name as s
+  row card tap edit s
+    stack grow
+      s.name bold
+      s.highway faint
+    "Food" fixed(avg(s.stop_review.food), 1) faint
+    "Washroom" fixed(avg(s.stop_review.washroom), 1) faint
+form rest_stop, "Add stop"
+form stop_review, "Add review"
+===
+@create style=typos domain=b3_train_delays
+my commuter train is always late, log minutes late each day and show average and how many times it was over 15 minutes
+---
+app "Train Delays" bus slate
+table train_trip line pick Morning|Evening|Intercity = Morning, delay num 0..300 unit "min"
+"Average delay" round(avg(train_trip.delay)) "min" big
+"Later than 15 minutes" count(train_trip where delay > 15) "times" faint
+"Minutes lost by line" head
+share train_trip month by line, sum(it.delay), it.key
+quick train_trip, delay, [0, 10, 30]
+list train_trip by day
+===
+@create style=short domain=b3_garage_sale
+garage sale items, asking price, sold or not and what they went for
+---
+app "Garage Sale" tag mint
+table sale_item name text, asking money, sold bool, sold_for money?
+"Earned" sum(sale_item.sold_for) big
+"Left on the table" sum(sale_item.asking where sold = no) faint
+each sale_item where sold = no sort asking desc as i
+  row card tap edit i
+    i.name bold grow
+    i.asking faint
+    button "Sold at asking" tap set i.sold = yes then set i.sold_for = i.asking
+form sale_item, "Add item"
+===
+@create style=multi_feature domain=b3_car_hunt
+looking for a used car: ads with model, year, km and price, test drives with a score out of 10 and note, list by price with average test drive score or a dash if not driven
+---
+app "Car Hunt" car ocean
+table car_ad model text, year num 2000..2027, km num 0.., price money
+table test_drive car_ad ref car_ad, score num 1..10, note text?
+each car_ad sort price as a
+  row card tap edit a
+    stack grow
+      a.model bold
+      a.year a.km "km" faint
+    a.price bold
+    "Drive score" if(count(a.test_drive) > 0, fixed(avg(a.test_drive.score), 1), "-") faint
+form car_ad, "Add a car"
+form test_drive, "Add a test drive"
+===
+@create style=custom_ui domain=b3_fitrana
+fitrana calculator, number of family members with a slider, amount per person i can change, shows total to pay
+---
+app "Fitrana" calc mint
+setting rate_per_person money = 300 "Fitrana per person"
+state people num = 5
+field people "Family members"
+slider people 1..30
+"Fitrana due" people * rate_per_person big
+"Per person" rate_per_person faint
+===
+@create style=detailed domain=b3_welfare_fund
+Our street has a small welfare fund. Every household pays a monthly amount which can be changed. Show how much came in this month out of what is expected, and for each household whether they paid with a button to record their payment.
+---
+app "Welfare Fund" users mint
+setting monthly_due money = 500 "Monthly contribution"
+table household name text
+table contribution household ref household, amount money
+"Collected this month" sum(contribution.amount month) "of" count(household) * monthly_due big
+each household sort name as h
+  let paid = sum(h.contribution.amount month)
+  row card
+    h.name bold grow
+    if(paid >= monthly_due, "Paid", "Due") color if(paid >= monthly_due, good, warn)
+    button "Paid" tap add contribution household = h, amount = monthly_due
+form household, "Add household"
+===
+@create style=short domain=b3_cutting_list
+cutting list for woodwork, length width and how many, total square feet with waste
+---
+app "Cutting List" tool slate
+table wood_piece part text, length num 1..240, width num 1..48, qty num 1..100 = 1
+let sq_ft = sum(wood_piece, it.length * it.width * it.qty) / 144
+"Wood needed" fixed(sq_ft, 1) "sq ft" big
+"With 15 percent waste" fixed(sq_ft * 1.15, 1) faint
+list wood_piece
+form wood_piece, "Add piece"
+===
+@create style=typos domain=b3_band_gigs
+we are a 4 piece band, gigs and what they paid, split equally between members
+---
+app "Band Gigs" music ink
+table band_member name text
+table gig venue text, fee money
+let per_head = sum(gig.fee) / count(band_member)
+"Earned together" sum(gig.fee) big
+"Each member gets" round(per_head) faint
+each band_member sort name as m
+  row card
+    m.name bold grow
+    round(per_head) bold
+list gig by day
+form band_member, "Add member"
+form gig, "Add gig"
+===
+@create style=custom_ui domain=b3_bonsai
+bonsai trees, for each tree four small columns water prune repot feed each showing days since and a done button
+---
+app "Bonsai" leaf mint
+table tree name text
+table care tree ref tree, task pick Water|Prune|Repot|Feed = Water
+each tree sort name as t
+  stack card gap 1
+    t.name head
+    row gap 1
+      each options care.task as k
+        stack grow align center gap 1
+          k tiny faint
+          since(t.care where task = k) "days" bold
+          button "Done" tap add care tree = t, task = k
+form tree, "Add tree"
+===
+@create style=multi_feature domain=b3_pitch_tracker
+freelance pitches by platform (upwork, fiverr, linkedin, direct) with outcome sent replied hired ignored, show for each platform how many sent and the reply rate counting hired as replied, and buttons to log a new pitch per platform
+---
+app "Pitch Tracker" bag ocean
+table pitch platform pick Upwork|Fiverr|LinkedIn|Direct = Upwork, outcome pick Sent|Replied|Hired|Ignored = Sent
+"Pitches sent" count(pitch) big
+each options pitch.platform as p
+  let sent = count(pitch where platform = p)
+  let replied = count(pitch where platform = p and (outcome = Replied or outcome = Hired))
+  row card
+    p bold grow
+    sent "sent" faint
+    round(replied * 100 / sent) "% replied" bold
+row gap 1
+  each options pitch.platform as q
+    button q tap add pitch platform = q
+===
+@create style=detailed domain=b3_case_hearings
+I am a lawyer. Each case has a title and client, and hearings are added with a date and court. Remind me the day before at 8, and list upcoming hearings by date with the case title.
+---
+app "Case Hearings" shield slate
+table legal_case title text, client text
+table hearing legal_case ref legal_case, hearing_date date, court text?
+remind "Hearing tomorrow" at hearing.hearing_date - 1d at 8:00
+"Upcoming hearings" count(hearing where hearing_date >= today) big
+each hearing where hearing_date >= today sort hearing_date as h
+  row card tap edit h
+    h.hearing_date bold
+    stack grow
+      h.legal_case.title bold
+      h.court faint
+form legal_case, "Add case"
+form hearing, "Add hearing"
+===
+@create style=multi_feature domain=b3_site_materials
+construction site materials: what was ordered with quantity and unit, deliveries logged against it, show received against ordered with a bar and a short-by line when something is still missing
+---
+app "Site Materials" box slate
+table material_item name text, ordered num 1..100000, unit text
+table received material_item ref material_item, qty num 1..100000
+each material_item sort name as m
+  let got = sum(m.received.qty)
+  stack card gap 1
+    row
+      m.name bold grow
+      got "of" m.ordered m.unit faint
+    goal got, m.ordered, "received"
+    if got < m.ordered
+      "Short by" m.ordered - got m.unit color warn
+form material_item, "Add material"
+form received, "Log delivery"
+===
+@create style=vague domain=b3_open_mic
+organising an open mic night, i need to keep it under two hours
+---
+app "Open Mic" music plum
+table act name text, kind pick Song|Poem|Joke|Dance = Song, mins num 1..30 = 5
+"Show length" sum(act.mins) "min" big
+if sum(act.mins) > 120
+  "Over the two hour limit" color bad
+each act sort at as a
+  row card tap edit a
+    a.name bold grow
+    a.kind faint
+    a.mins "min" bold
+form act, "Add an act"
+===
+@create style=typos domain=b3_water_tanks
+we have 2 overhead tanks and a cellar one, clean every 3 months, which one is due
+---
+app "Water Tanks" drop slate
+table tank name text
+table tank_clean tank ref tank, note text?
+each tank sort name as t
+  let late = due(t.tank_clean, 90)
+  row card
+    stack grow
+      t.name bold
+      "Cleaned" since(t.tank_clean) "days ago" faint
+    if(late, "Clean it", "Fine") color if(late, warn, good)
+    button "Cleaned today" tap add tank_clean tank = t
+form tank, "Add tank"
+===
+@create style=vague domain=b3_neighbour_favours
+my neighbours lend me things and i help them, i lose track of who owes whom
+---
+app "Neighbour Favours" users mint
+table neighbour name text
+table favour neighbour ref neighbour, kind pick Gave|Got = Gave, what text
+each neighbour sort name as n
+  let bal = count(n.favour where kind = Gave) - count(n.favour where kind = Got)
+  row card
+    stack grow
+      n.name bold
+      last(n.favour.what) faint
+    if(bal >= 0, "owes me", "I owe") abs(bal) color if(bal >= 0, good, warn)
+form neighbour, "Add neighbour"
+form favour, "Add favour"
+===
+@create style=detailed domain=b3_handyman_jobs
+I am a plumber. For every job I note the client and what I charged them, then add the materials I bought for it. Show profit overall and for each job what the materials cost.
+---
+app "Handyman Jobs" tool slate
+table hjob client text, charged money
+table hmaterial hjob ref hjob, item text, cost money
+"Profit" sum(hjob.charged) - sum(hmaterial.cost) big
+each hjob sort at desc as j
+  row card tap edit j
+    stack grow
+      j.client bold
+      "Materials" sum(j.hmaterial.cost) faint
+    j.charged bold
+form hjob, "New job"
+form hmaterial, "Add material cost"
+===
+@create style=custom_ui domain=b3_bike_commute
+how much i save by cycling to work instead of driving, tap a calendar day when i cycled, saving per ride is a setting, show streak
+---
+app "Bike Commute" bike mint
+setting saved_per_ride money = 350 "Saved per ride"
+table cycled
+"Saved this month" count(cycled month) * saved_per_ride big
+"Rides this month" count(cycled month) faint
+calendar cycled
+"Streak" streak(cycled) "days" faint
+===
+@create style=short domain=b3_volunteer_hours
+volunteers at the tournament and hours they worked
+---
+app "Volunteer Hours" users mint
+table volunteer name text
+table shift_done volunteer ref volunteer, hrs num 0.5..12
+"Total hours" sum(shift_done.hrs) big
+bars volunteer, sum(it.shift_done.hrs), it.name
+each volunteer sort sum(it.shift_done.hrs) desc as v
+  row card
+    v.name bold grow
+    sum(v.shift_done.hrs) "h" bold
+    button "+2h" tap add shift_done volunteer = v, hrs = 2
+form volunteer, "Add volunteer"
+===
+@create style=multi_feature domain=b3_squash_ladder
+squash club ladder: players, a Won and a Lost button on each player's row, show wins, games played and win percentage, ranked by wins
+---
+app "Squash Ladder" ball ink
+table player name text
+table challenge player ref player, won bool, opponent text?
+each player sort count(it.challenge where won = yes) desc as p
+  let played = count(p.challenge)
+  row card
+    p.name bold grow
+    count(p.challenge where won = yes) "wins of" played faint
+    round(count(p.challenge where won = yes) * 100 / played) "%" bold
+    button "Won" tap add challenge player = p, won = yes
+    button "Lost" tap add challenge player = p
+form player, "Add player"
+===
+@edit style=plain domain=b3_volleyball_e1 ref=b3_volleyball
+rename away to guest
+---
+~ away text => guest text was away
+~ m.away bold => m.guest bold
+===
+@edit style=plain domain=b3_garage_e1 ref=b3_garage_sale
+give every item a category, books, clothes, tools or toys, and show what each category earned
+---
+~ asking money, => asking money, category pick Books|Clothes|Tools|Toys = Books,
++after "Left on the table" sum(sale_item.asking where sold = no) faint :: share sale_item by category, sum(it.sold_for), it.key
+===
+@edit style=plain domain=b3_welfare_e1 ref=b3_welfare_fund
+the monthly amount is 700 now
+---
+~ setting monthly_due money = 500 "Monthly contribution" => setting monthly_due money = 700 "Monthly contribution" set
+===
+@edit style=plain domain=b3_hearings_e1 ref=b3_case_hearings
+also remind me a week before a hearing
+---
++ remind "Hearing next week" at hearing.hearing_date - 7d at 9:00
+===
+@edit style=plain domain=b3_carhunt_e1 ref=b3_car_hunt
+call km odometer
+---
+~ km num 0.. => odometer num 0.. was km
+~ a.km "km" => a.odometer "km"
+===
+@edit style=plain domain=b3_pitch_e1 ref=b3_pitch_tracker
+add the bid amount for each pitch and show total bids sent
+---
+~ outcome pick Sent|Replied|Hired|Ignored = Sent => outcome pick Sent|Replied|Hired|Ignored = Sent, bid money?
+~ "Pitches sent" count(pitch) big => "Pitches sent" count(pitch) "| bids" sum(pitch.bid) big
+===
+@edit style=plain domain=b3_bonsai_e1 ref=b3_bonsai
+add a wire option for wiring the branches
+---
+~ Water|Prune|Repot|Feed => Water|Prune|Repot|Feed|Wire

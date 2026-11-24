@@ -1,0 +1,318 @@
+@create style=detailed domain=b1_broiler_cycle
+broiler cycle accounting: I put chicks, feed, medicine and labour costs against a flock, and then record sales of birds with kg and rate. show cost, income and profit for each flock
+---
+app "Broiler Cycle" egg mint
+table flock name text, birds num 100..20000
+table cost flock ref flock, kind pick Chicks|Feed|Medicine|Labour|Electricity = Feed, amount money
+table birdsale flock ref flock, kg num 1..5000, rate money
+each flock sort at desc as f
+  let spent = sum(f.cost.amount)
+  let earned = sum(f.birdsale, it.kg * it.rate)
+  stack card gap 1 tap edit f
+    row
+      f.name bold grow
+      text f.birds "birds" faint
+    row gap 2
+      text "Cost" spent
+      text "Income" earned
+      text "Profit" earned - spent bold color if(earned >= spent, good, bad)
+    "Cost per bird" round(spent / f.birds) faint
+form cost, "Add cost"
+form birdsale, "Birds sold"
+form flock, "New flock"
+===
+@create style=multi_feature domain=b1_kiryana_orders
+I supply grocery packs to small kiryana shops. each shop orders, I deliver and collect payment later. show what each shop owes, which orders are not delivered yet, and total sales this month
+---
+app "Supply Orders" package slate
+table retailer name text, area text?
+table supply_order retailer ref retailer, amount money, delivered bool
+table collect retailer ref retailer, amount money
+"Sales this month" sum(supply_order.amount month) big
+"To deliver" count(supply_order where delivered = no) head color warn
+each retailer sort name as r
+  let owes = sum(r.supply_order.amount) - sum(r.collect.amount)
+  row card tap edit r
+    r.name bold grow
+    text count(r.supply_order where delivered = no) "to deliver" faint
+    owes bold color if(owes > 0, bad, good)
+form supply_order, "New order"
+form collect, "Collected"
+form retailer, "Add shop"
+===
+@create style=detailed domain=b1_site_contractor
+I am a building contractor with a few sites. each site has labourers whose attendance I mark daily with their daily wage, and I give them cash advances. show weekly wages due for each site
+---
+app "Site Wages" tool ink
+table site name text, owner text?
+table labourer name text, site ref site, wage money
+table attend labourer ref labourer
+table advance_paid labourer ref labourer, amount money
+each site sort name as s
+  let wages = sum(labourer.wage where site = s) 
+  stack card gap 1 tap edit s
+    s.name bold
+    each labourer where site = s sort name as l
+      row gap 1
+        l.name grow
+        text count(l.attend week) "days"
+        text count(l.attend week) * l.wage - sum(l.advance_paid.amount week) bold
+        toggle l.attend
+form advance_paid, "Advance"
+form labourer, "Add labourer"
+form site, "Add site"
+===
+@create style=short domain=b1_flower_orders
+flower shop orders for dates
+---
+app "Flowers" plant plum
+table florder name text, what text, due date, price money, paid bool
+each florder where paid = no sort due as o
+  row card tap edit o
+    o.name bold
+    o.what grow
+    o.due
+    o.price
+    toggle o.paid
+"Pending money" sum(florder.price where paid = no) big
+form florder
+===
+@create style=typos domain=b1_carwash_staff
+car wash, washers get 30 percent commision on every car, i enter car type and the washer, show what each washer earned this week
+---
+app "Car Wash" car ocean
+table washer name text
+table wash washer ref washer, kind pick Car|Jeep|Van|Bike = Car, price money
+setting commission num = 30 "Washer commission %"
+"Washes today" count(wash today) big
+"Income today" sum(wash.price today) head
+each washer sort name as w
+  row card tap edit w
+    w.name bold grow
+    text count(w.wash week) "washes"
+    text sum(w.wash.price week) * commission / 100 bold
+form wash, "New wash"
+form washer, "Add washer"
+===
+@create style=custom_ui domain=b1_street_float
+street food cart: in the morning I set the float (cash I start with), tap buttons for items sold at set prices, and at night it shows what my cash should be
+---
+app "Cart Cash" food slate
+table sale item pick Roll|Chai|Fries|Soda = Roll, price money
+setting float money = 2000 "Morning float"
+row gap 1
+  button "Roll 150" tap add sale item = Roll, price = 150
+  button "Chai 50" tap add sale item = Chai, price = 50
+  button "Fries 100" tap add sale item = Fries, price = 100
+  button "Soda 80" tap add sale item = Soda, price = 80
+"Cash should be" float + sum(sale.price today) big
+text count(sale today) "sales so far" faint
+list sale today
+===
+@create style=detailed domain=b1_coop_shares
+village cooperative: members buy shares at a fixed price, I note each purchase. at year end profit is divided in proportion to shares. show each member's share count and their cut of the profit that I type as a setting
+---
+app "Cooperative" users plum
+table coopmember name text
+table sharebuy coopmember ref coopmember, shares num 1..500
+setting profit money = 0 "Year profit to divide"
+let all_shares = sum(sharebuy.shares)
+"Total shares" all_shares big
+each coopmember sort name as m
+  row card tap edit m
+    m.name bold grow
+    text sum(m.sharebuy.shares) "shares"
+    text "cut" round(profit * sum(m.sharebuy.shares) / max(all_shares, 1)) bold
+form sharebuy, "Buy shares"
+form coopmember, "Add member"
+===
+@create style=multi_feature domain=b1_land_lease
+leased out land: each lease has the farmer, acres, yearly rent and a date the rent is due. record payments, remind me 3 days before the due date, and show the lease with unpaid rent first
+---
+app "Land Lease" leaf mint
+table lease farmer text, acres num 0.5..500, yearly money, due date
+table lease_pay lease ref lease, amount money
+remind "Lease rent due soon" at lease.due - 3d at 9:00
+each lease sort due as l
+  let left = l.yearly - sum(l.lease_pay.amount)
+  row card tap edit l
+    stack grow
+      l.farmer bold
+      text l.acres "acres due" l.due faint
+    left bold color if(left > 0, warn, good)
+form lease_pay, "Rent received"
+form lease, "New lease"
+===
+@create style=detailed domain=b1_grain_godown
+godown for wheat, rice and maize bags. I record bags in with the owner's name and bags out, and each crop shows the bags in stock. also show total bags and the stock of each owner
+---
+app "Godown" bag slate
+table crop name text
+table gin crop ref crop, bags num 1..2000, owner text
+table gout crop ref crop, bags num 1..2000
+each crop sort name as c
+  row card tap edit c
+    c.name bold grow
+    text sum(c.gin.bags) - sum(c.gout.bags) "bags"
+"Total in" sum(gin.bags) "out" sum(gout.bags) head
+form gin, "Bags in"
+form gout, "Bags out"
+form crop, "Add crop"
+===
+@create style=vague domain=b1_furniture_orders
+carpenter orders with advance
+---
+app "Carpenter" tool plum
+table fcustomer name text, phone text?
+table forder fcustomer ref fcustomer, item text, price money, advance money = 0, ready date
+each forder sort ready as o
+  row card tap edit o
+    o.item bold
+    text o.fcustomer.name faint grow
+    o.ready
+    text "left" o.price - o.advance bold
+"To collect" sum(forder, it.price - it.advance) big
+form forder, "New order"
+form fcustomer, "New customer"
+===
+@create style=multi_feature domain=b1_sweet_eid
+sweet shop in Eid rush. each sweet has a price per kg, I add kg sold and kg pre-ordered with the pickup day. show kg sold and money per sweet and the pre-orders for today
+---
+app "Sweet Shop" gift plum
+table sweet name text, per_kg money
+table sweet_sold sweet ref sweet, kg num 0.25..100
+table preorder sweet ref sweet, kg num 0.5..100, name text, pickup date
+"Pre-orders today" count(preorder where pickup = today) head
+each sweet sort name as s
+  row card tap edit s
+    s.name bold grow
+    text sum(s.sweet_sold.kg) "kg"
+    sum(s.sweet_sold.kg) * s.per_kg bold
+bars sweet, sum(it.sweet_sold.kg), it.name
+form sweet_sold, "Sold"
+form preorder, "Pre-order"
+form sweet, "Add sweet"
+===
+@create style=custom_ui domain=b1_cart_loads
+donkey cart loads: each trip I carry bricks, sand or gravel with a rate by type, I tap the load type and it adds a trip with the right rate. show today's earning and a bar chart for the week
+---
+app "Cart Loads" box slate
+table load kind pick Bricks|Sand|Gravel = Sand, rate money
+row gap 1
+  button "Bricks 1500" tap add load kind = Bricks, rate = 1500
+  button "Sand 1200" tap add load kind = Sand, rate = 1200
+  button "Gravel 1400" tap add load kind = Gravel, rate = 1400
+"Today" sum(load.rate today) big
+text count(load today) "trips" faint
+daybars last 7 days, sum(load.rate on it)
+list load by day
+===
+@create style=detailed domain=b1_curd_maker
+I buy milk, make curd and sell it in pots. record milk bought in litres with cost, pots of curd made each day, and pots sold with price. show profit this week and unsold pots in hand
+---
+app "Curd Maker" milk mint
+table milkbuy litres num 1..500, cost money
+table made pots num 1..500
+table potsale pots num 1..500, price money
+let in_hand = sum(made.pots) - sum(potsale.pots)
+in_hand "pots in hand" big
+"Profit this week" sum(potsale week, it.pots * it.price) - sum(milkbuy.cost week) head
+daybars last 7 days, sum(potsale.pots on it)
+form milkbuy, "Milk bought"
+form made, "Pots made"
+form potsale, "Pots sold"
+===
+@oos style=detailed domain=b1_invoice_whatsapp oos=other_apps
+I make invoices for my printing customers and want a button to send each invoice to the customer on whatsapp. keep jobs with amount and paid or not
+---
+app "Print Jobs" note ink
+table pclient name text, phone text?
+table pjob pclient ref pclient, what text, amount money, paid bool
+"Unpaid" sum(pjob.amount where paid = no) big
+each pjob where paid = no as j
+  row card tap edit j
+    text j.pclient.name bold grow
+    j.what
+    j.amount
+    toggle j.paid
+form pjob, "New job"
+form pclient, "Add customer"
+===
+@oos style=typos domain=b1_gold_rate_live oos=internet
+my gold shop needs live gold rate from internet and then show weight in tola times rate as value of each ornament i enter
+---
+app "Gold Items" star plum
+table ornament name text, tola num 0.1..100
+setting rate money = 250000 "Rate per tola"
+"Total value" sum(ornament.tola) * rate big
+each ornament sort name as o
+  row card tap edit o
+    o.name bold grow
+    text o.tola * rate
+form ornament, "Add ornament"
+===
+@create style=short domain=b1_loan_to_friend
+how much my friends owe me
+---
+app "Owed to Me" users slate
+table friend name text
+table lend friend ref friend, amount money, back bool
+each friend sort name as f
+  row card tap edit f
+    f.name bold grow
+    text sum(f.lend.amount where back = no) bold
+"Total" sum(lend.amount where back = no) big
+form lend
+form friend
+===
+@edit style=plain domain=b1_broiler_note ref=b1_broiler_cycle
+add a box for notes to each flock like what disease came
+---
+~ birds num 100..20000 => birds num 100..20000, notes long?
+~ f.birds "birds" faint => f.birds "birds" faint\n    f.notes faint
+===
+@edit style=plain domain=b1_broiler_rename ref=b1_broiler_cycle
+rename Chicks to Day_old_chicks in the cost kinds
+---
+~ kind pick Chicks|Feed => kind pick Day_old_chicks was Chicks|Feed
+===
+@edit style=plain domain=b1_broiler_chart ref=b1_broiler_cycle
+show a chart of cost per category over all flocks
+---
++ bars options cost.kind, sum(cost.amount where kind = it), it
+===
+@edit style=plain domain=b1_kiryana_payments ref=b1_kiryana_orders
+show only shops that owe me something
+--- before
+app "Supply Orders" package slate
+table retailer name text, area text?
+table supply_order retailer ref retailer, amount money, delivered bool
+table collect retailer ref retailer, amount money
+"Sales this month" sum(supply_order.amount month) big
+"To deliver" count(supply_order where delivered = no) head color warn
+each retailer sort name as r
+  let owes = sum(r.supply_order.amount) - sum(r.collect.amount)
+  row card tap edit r
+    r.name bold grow
+    text count(r.supply_order where delivered = no) "to deliver" faint
+    owes bold color if(owes > 0, bad, good)
+form supply_order, "New order"
+form collect, "Collected"
+form retailer, "Add shop"
+--- after
+app "Supply Orders" package slate
+table retailer name text, area text?
+table supply_order retailer ref retailer, amount money, delivered bool
+table collect retailer ref retailer, amount money
+"Sales this month" sum(supply_order.amount month) big
+"To deliver" count(supply_order where delivered = no) head color warn
+each retailer sort name as r
+  let owes = sum(r.supply_order.amount) - sum(r.collect.amount)
+  if owes > 0
+    row card tap edit r
+      r.name bold grow
+      text count(r.supply_order where delivered = no) "to deliver" faint
+      owes bold color bad
+form supply_order, "New order"
+form collect, "Collected"
+form retailer, "Add shop"

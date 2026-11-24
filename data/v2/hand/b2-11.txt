@@ -1,0 +1,347 @@
+@create style=detailed domain=b2_mother_tabs
+Mum's family board with two tabs: the first tab for the kids' chores today with ticks, the second tab for the doctor and school appointments with dates. Kids and appointments are linked by the kid's name.
+---
+app "Family board" home plum
+table kid name text
+table chore kid ref kid, what text
+table done chore ref chore
+table appointment kid ref kid, what text, day date
+screen chores "Today" check
+  each chore as c
+    row card
+      toggle c.done
+      c.what grow
+      c.kid.name faint
+  form chore, "Add chore"
+screen dates "Dates" calendar
+  each appointment where day >= today sort day as a
+    row card tap edit a
+      a.day bold
+      a.what grow
+      a.kid.name faint
+  form appointment, "Add appointment"
+  form kid, "Add kid"
+===
+@create style=short domain=b2_toy_library
+toy library lending
+---
+app "Toy library" game mint
+table family name text
+table toy name text
+table lend family ref family, toy ref toy, back bool
+count(lend where back = no) "toys out" big
+each lend where back = no sort at as l
+  row card
+    toggle l.back
+    l.toy.name bold grow
+    l.family.name faint
+form family, "Add family"
+form toy, "Add toy"
+form lend, "Lend toy"
+===
+@create style=vague domain=b2_swim_class_roster
+swimming class roster with levels and who paid
+---
+app "Swim class" drop ocean
+table swimmer name text, level pick Float|Kick|Stroke|Race = Float
+table fee swimmer ref swimmer, amount money
+each swimmer sort level as s
+  row card tap edit s
+    s.name bold grow
+    s.level faint
+    if(count(s.fee month) > 0, "paid", "due") color if(count(s.fee month) > 0, good, bad)
+form swimmer, "Add swimmer"
+form fee, "Record fee"
+===
+@create style=multi_feature domain=b2_diet_family_plan
+weekly dinner plan for the family: day, dish, who cooks, and each person's rating out of 5. Show the average rating per dish and how many dishes each cook has
+---
+app "Dinner plan" food mint
+table cook name text
+table dish name text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, cook ref cook
+table rating dish ref dish, stars num 1..5 = 4
+each dish sort day as d
+  row card tap edit d
+    d.day bold
+    stack grow
+      d.name bold
+      d.cook.name faint
+    fixed(avg(d.rating.stars), 1) "stars" bold
+"Cooks" head
+each cook sort count(it.dish) desc as c
+  row card
+    c.name bold grow
+    count(c.dish) "dishes" faint
+form cook, "Add cook"
+form dish, "Add dish"
+form rating, "Rate dish"
+===
+@create style=typos domain=b2_sports_hall_hire
+we rent out our sports hall by the hour, the clubs book it, i need hours per club this month and the money, rate is 2500 an hour
+---
+app "Hall hire" ball slate
+table club name text, contact text?
+table booking club ref club, hours num 1..12
+setting rate money = 2500 "Rate per hour"
+"Hours booked this month" sum(booking.hours month) big
+"Income" sum(booking.hours month) * rate bold
+each club sort name as c
+  row card
+    c.name bold grow
+    sum(c.booking.hours month) "h" bold
+    sum(c.booking.hours month) * rate faint
+form club, "Add club"
+form booking, "Add booking"
+===
+@create style=detailed domain=b2_remedial_class
+After exams I pick students for remedial class. They get a test at the start and another at the end. I want to see each student's start mark, end mark and improvement, and the class average improvement.
+---
+app "Remedial" school ocean
+table student name text
+table remedial student ref student, start num 0..100, finish num 0..100
+"Average gain" round(sum(remedial, it.finish - it.start) / max(count(remedial), 1)) big
+each student sort name as s
+  row card
+    s.name bold grow
+    last(s.remedial.start) "to" last(s.remedial.finish) faint
+    last(s.remedial.finish) - last(s.remedial.start) bold color if(last(s.remedial.finish) > last(s.remedial.start), good, bad)
+form student, "Add student"
+form remedial, "Add results"
+===
+@create style=custom_ui domain=b2_baby_tabs
+baby tracker with 3 tabs, feeds, sleep and diapers, each with a quick button and a count for today
+---
+app "Baby day" baby mint
+table feed ml num 10..300 = 100
+table sleep length dur
+table diaper kind pick Wet|Dirty = Wet
+screen feeds "Feeds" milk
+  count(feed today) "feeds" big
+  sum(feed.ml today) "ml" faint
+  quick feed, ml, [60, 100, 150]
+screen sleeps "Sleep" moon
+  sum(sleep.length today) "slept" big
+  form sleep, "Add sleep"
+screen diapers "Diapers" baby
+  count(diaper today) "today" big
+  quick diaper, kind, [Wet, Dirty]
+===
+@create style=short domain=b2_fitness_buddies
+who worked out this week, my 4 friends
+---
+app "Gym buddies" users mint
+table buddy name text
+table workout buddy ref buddy
+each buddy sort count(it.workout week) desc as b
+  row card
+    b.name bold grow
+    count(b.workout week) "this week" bold
+    button "+1" tap add workout buddy = b
+form buddy, "Add buddy"
+===
+@create style=multi_feature domain=b2_cow_vet
+cows vet record: tag number, treatment, withdrawal days for milk after medicine, show which cows cannot be milked for sale today
+---
+app "Cow vet" paw mint
+table cow tag text
+table treatment cow ref cow, drug text, withdrawal num 0..30 = 3
+count(treatment where at + withdrawal >= today) "treatments still in withdrawal" big color warn
+each cow sort tag as c
+  row card tap edit c
+    c.tag bold grow
+    if(since(c.treatment) < last(c.treatment.withdrawal), "No milk for sale", "Ok") color if(since(c.treatment) < last(c.treatment.withdrawal), bad, good)
+form cow, "Add cow"
+form treatment, "Add treatment"
+===
+@create style=detailed domain=b2_arabic_class
+I teach Arabic to adults in the evening. Students attend on Tuesday and Thursday, I tick attendance by date, and I record which lesson number each student has reached. Show attendance percent for each student.
+---
+app "Arabic class" book plum
+table student name text, lesson num 1..60 = 1 "Lesson reached"
+table attended student ref student
+state d date = today
+row align center
+  button "<" tap set d = d - 1
+  dayname(d) monthday(d) head grow align center
+  button ">" tap set d = d + 1
+each student sort name as s
+  row card
+    toggle s.attended on d
+    s.name bold grow
+    "Lesson" s.lesson faint
+    round(100 * count(s.attended) / max(count(attended by day), 1)) "%" faint
+form student, "Add student"
+===
+@create style=vague domain=b2_yoga_streak
+daily yoga streak
+---
+app "Yoga streak" heart mint
+table practice minutes num 5..120 = 20
+"Streak" streak(practice) "days" big
+"Best" best(practice) "days" faint
+heat last 70 days, count(practice on it)
+quick practice, minutes, [10, 20, 30]
+===
+@create style=custom_ui domain=b2_kids_reward_wheel
+reward wheel for good behaviour, my kids tap spin and it picks a random reward from my list, and I list the rewards myself
+---
+app "Reward wheel" gift plum
+table reward text text
+state picked text = ""
+button "Spin" tap set picked = random(reward).text
+"You won" faint
+text picked big
+each reward as r
+  row card swipe remove r
+    r.text grow
+form reward, "Add reward"
+===
+@create style=multi_feature domain=b2_hostel_mess_rating
+hostel mess: each day lunch and dinner get a rating by students from 1 to 5, show the average per meal and a line chart of the last 14 days
+---
+app "Mess ratings" food ocean
+table rating meal pick Lunch|Dinner = Lunch, stars num 1..5 = 3
+each options rating.meal as ml
+  row card
+    text ml bold grow
+    fixed(avg(rating.stars where meal = ml), 1) "stars" big
+    count(rating where meal = ml) "votes" faint
+trend days last 14 days, avg(rating.stars on it)
+form rating, "Add rating"
+===
+@create style=typos domain=b2_tutor_homework_chase
+my pupils homwork - who has not handed it in this week, i want the list of names at the top
+---
+app "Homework chase" school slate
+table pupil name text
+table handed pupil ref pupil
+count(pupil, count(it.handed week) = 0) "have not handed in" big color warn
+each pupil sort name as p
+  row card tap toggle p.handed week
+    p.name bold grow
+    if(count(p.handed week) > 0, "done", "missing") color if(count(p.handed week) > 0, good, bad)
+form pupil, "Add pupil"
+===
+@create style=detailed domain=b2_mile_club
+Our school runs a mile club: kids earn a sticker for every mile they cover at lunch time. Each child's laps are logged (4 laps is a mile). Show total miles for each class and the top 5 children.
+---
+app "Mile club" run mint
+table class name text
+table child name text, class ref class
+table lap child ref child, count num 1..20 = 4
+each class as c
+  row card
+    c.name bold grow
+    sum(lap.count where child.class = c) / 4 "miles" bold
+"Top 5" head
+each child sort sum(it.lap.count) desc top 5 as k
+  row card
+    text index + 1 faint
+    k.name bold grow
+    sum(k.lap.count) / 4 "miles" bold
+form class, "Add class"
+form child, "Add child"
+form lap, "Log laps"
+===
+@create style=short domain=b2_cat_litter_days
+cat litter change reminder every 4 days
+---
+app "Litter" paw mint
+table change
+if due(change, 4)
+  "Change the litter today" big color bad
+else
+  "Next change in" 4 - since(change) "days" big
+button "Changed it" tap add change
+remind "Check the cat litter" at 9:00
+===
+@create style=multi_feature domain=b2_math_homework_speed
+speed practice: I choose addition or multiplication, the app shows two random numbers and I enter answers, score per type and total right answers today
+---
+app "Speed maths" calc ocean
+table attempt kind pick Add|Multiply = Add, right bool
+state kind_now pick Add|Multiply = Add
+state a num = 6
+state b num = 7
+state guess num = 0
+choice kind_now
+"What is" a if(kind_now = Add, "+", "x") b big
+field guess "Answer"
+button "Check" tap add attempt kind = kind_now, right = (guess = if(kind_now = Add, a + b, a * b))
+button "Next" tap set a = random(12) then set b = random(12) then set guess = 0
+each options attempt.kind as k
+  row
+    text k grow
+    count(attempt today where kind = k and right = yes) "right" faint
+===
+@create style=detailed domain=b2_physio_clinic
+Physio clinic: patients come for sessions and each session has a pain score before and after. I want to see the average drop in pain per patient and how many sessions each has had so I know when to discharge.
+---
+app "Physio" heart ocean
+table patient name text, plan num 1..30 = 6 "Planned sessions"
+table session patient ref patient, before num 0..10, after num 0..10
+each patient sort name as p
+  stack card gap 1 tap edit p
+    row
+      p.name bold grow
+      count(p.session) "of" p.plan faint
+    "Average drop" fixed(sum(p.session, it.before - it.after) / max(count(p.session), 1), 1) bold
+    if count(p.session) >= p.plan
+      "Ready for review" color good small
+form patient, "Add patient"
+form session, "Add session"
+===
+@create style=vague domain=b2_school_lunch_orders
+lunch orders for the class
+---
+app "Lunch orders" food ocean
+table student name text
+table lunch student ref student, choice pick Chicken|Veg|Sandwich = Chicken
+count(lunch today) "orders today" big
+each options lunch.choice as c
+  row
+    text c grow
+    count(lunch today where choice = c) bold
+each student sort name as s
+  row card
+    s.name bold grow
+    last(s.lunch.choice) faint
+form student, "Add student"
+form lunch, "Add order"
+===
+@edit style=plain domain=b2_e_board_chore_stars ref=b2_mother_tabs
+add a reward points field to chores and show total points per kid on the first tab
+---
+~ table chore kid ref kid, what text => table chore kid ref kid, what text, points num 0..10 = 1
+~ screen chores "Today" check => screen chores "Today" check\n  each kid as k\n    row\n      k.name bold grow\n      sum(k.chore.points) "points" faint
+===
+@edit style=plain domain=b2_e_toy_condition ref=b2_toy_library
+add a note on toy condition and a count of lost toys
+---
+~ table toy name text => table toy name text, condition pick Good|Worn|Lost = Good
++ "Lost toys" count(toy where condition = Lost) color bad
+===
+@edit style=plain domain=b2_e_hall_remove ref=b2_sports_hall_hire
+remove the income line
+---
+- "Income" sum(booking.hours month) * rate bold
+===
+@edit style=plain domain=b2_e_baby_water ref=b2_baby_tabs
+add a fourth tab for weight with a chart
+---
+~ table diaper kind pick Wet|Dirty = Wet => table diaper kind pick Wet|Dirty = Wet\ntable weight kg num 1..30
++ screen growth "Weight" scale
++   form weight, "Add weight"
++   trend weight, it.kg
+===
+@edit style=plain domain=b2_e_buddies_chart ref=b2_fitness_buddies
+a bar chart comparing everyone this week
+---
++ bars buddy, count(it.workout week), it.name
+===
+@edit style=plain domain=b2_e_physio_rename ref=b2_physio_clinic
+rename planned sessions to visits allowed
+---
+~ plan num 1..30 = 6 "Planned sessions" => allowed num 1..30 = 6 "Visits allowed" was plan
+~ "of" p.plan faint => "of" p.allowed faint
+~ >= p.plan => >= p.allowed

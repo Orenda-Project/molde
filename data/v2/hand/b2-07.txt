@@ -1,0 +1,334 @@
+@create style=detailed domain=b2_pharmacy_batches
+I run a small pharmacy. Medicines come in batches with different expiry dates. Show me for each medicine the quantity in stock, the batch that expires first, and a red flag for any batch past its date.
+---
+app "Pharmacy" pill ocean
+table medicine name text, reorder num 0.. = 10
+table batch medicine ref medicine, qty num 0.., expiry date
+table sold medicine ref medicine, qty num 1..500
+"Expired batches" count(batch where expiry < today) big color if(count(batch where expiry < today) > 0, bad, good)
+each medicine sort name as m
+  row card tap edit m
+    m.name bold grow
+    text sum(m.batch.qty) - sum(m.sold.qty) bold color if(sum(m.batch.qty) - sum(m.sold.qty) <= m.reorder, warn, ink)
+    "first expiry" first(m.batch.expiry) faint
+form medicine, "Add medicine"
+form batch, "Receive batch"
+form sold, "Record sale"
+===
+@create style=vague domain=b2_rickshaw_earnings
+rickshaw earnings and petrol
+---
+app "Rickshaw" car slate
+table trip fare money, km num 0..200 = 5
+table petrol litres num 0.5..20, cost money
+"Earned this week" sum(trip.fare week) big
+"Petrol this week" sum(petrol.cost week) faint
+"Profit" sum(trip.fare week) - sum(petrol.cost week) bold color if(sum(trip.fare week) > sum(petrol.cost week), good, bad)
+daybars last 7 days, sum(trip.fare on it)
+form trip, "Add trip"
+form petrol, "Add petrol"
+===
+@create style=multi_feature domain=b2_egg_coops
+we have 3 chicken coops, I count eggs every evening for each coop and note the feed cost, so I want eggs per coop this week and the feed cost per egg
+---
+app "Eggs" egg mint
+table coop name text, hens num 1..500
+table eggs coop ref coop, count num 0..500
+table feed coop ref coop, cost money
+"Eggs this week" sum(eggs.count week) big
+"Feed cost per egg" round(sum(feed.cost week) / max(sum(eggs.count week), 1)) faint
+each coop sort name as c
+  row card tap edit c
+    c.name bold grow
+    sum(c.eggs.count week) "eggs" bold
+    round(100 * sum(c.eggs.count week) / max(c.hens * 7, 1)) "% lay rate" faint
+form coop, "Add coop"
+form eggs, "Count eggs"
+form feed, "Add feed cost"
+===
+@create style=typos domain=b2_study_groups
+study groups for our class, who is in whitch group, and how many meetings each group had
+---
+app "Study groups" users plum
+table student name text
+table group name text
+table member student ref student, group ref group
+table meeting group ref group, topic text
+each group as g
+  stack card gap 1
+    row
+      g.name head grow
+      count(g.member) "members" faint
+      count(g.meeting) "meetings" bold
+    each g.member as m
+      m.student.name small
+form student, "Add student"
+form group, "Add group"
+form member, "Join group"
+form meeting, "Log meeting"
+===
+@create style=detailed domain=b2_target_grades
+For each subject I set the percentage I am aiming for. I enter every test mark out of its total. Show my average per subject against the target, and highlight subjects where I'm behind.
+---
+app "Grade targets" target ocean
+table subject name text, aim num 30..100 = 80 "Target %"
+table test subject ref subject, got num 0..200, out_of num 1..200 = 100
+each subject sort name as s
+  let pct = round(100 * sum(s.test.got) / max(sum(s.test.out_of), 1))
+  stack card gap 1 tap edit s
+    row
+      s.name bold grow
+      text pct "%" big color if(pct < s.aim, warn, good)
+    "Target" s.aim "%" faint
+    if count(s.test) > 0 and pct < s.aim
+      "Behind by" s.aim - pct "points" color bad small
+form subject, "Add subject"
+form test, "Add test"
+===
+@create style=custom_ui domain=b2_mock_trend
+mock test scores for physics and chemistry as two lines on one chart with axes, newest on the right
+---
+app "Mock tests" chart ocean
+table mock subject pick Physics|Chemistry = Physics, score num 0..100
+plot 0..max(max(count(mock where subject = Physics), count(mock where subject = Chemistry)), 2), 0..100 axes gridlines
+  poly stroke accent thick 2
+    each mock where subject = Physics sort at
+      pt index, it.score
+  poly stroke warn thick 2
+    each mock where subject = Chemistry sort at
+      pt index, it.score
+"Blue is Physics, orange is Chemistry" faint
+form mock
+===
+@create style=short domain=b2_gpa_calc
+semester gpa with credits
+---
+app "GPA" school plum
+table course name text, credits num 1..6 = 3, grade pick A|B|C|D|F = A
+let points(g text) = if(g = A, 4, if(g = B, 3, if(g = C, 2, if(g = D, 1, 0))))
+let gpa = sum(course, it.credits * points(it.grade)) / max(sum(course.credits), 1)
+text fixed(gpa, 2) big
+"Credits" sum(course.credits) faint
+list course
+form course
+===
+@create style=multi_feature domain=b2_assignment_board
+university assignments per course with due dates; remind me the day before; show overdue ones in red and count how many are left this week
+---
+app "Assignments" pen slate
+table course name text, code text?
+table assignment course ref course, title text, due date, done bool
+remind "Assignment due tomorrow" at assignment.due - 1d at 18:00
+count(assignment where done = no and due >= today and due <= today + 7) "due in 7 days" big
+count(assignment where done = no and due < today) "overdue" color bad
+each course as c
+  stack card gap 1
+    c.name bold
+    each c.assignment where done = no sort due as a
+      row gap 1
+        toggle a.done
+        a.title grow
+        a.due color if(a.due < today, bad, muted)
+form course, "Add course"
+form assignment, "Add assignment"
+===
+@create style=detailed domain=b2_class_booking
+Fitness classes have limited places, each class has a capacity, members book and I need to see how many seats are left and a FULL label when nothing is left.
+---
+app "Class booking" dumbbell mint
+table fclass name text, day pick Mon|Tue|Wed|Thu|Fri|Sat = Mon, capacity num 1..60 = 15
+table booking fclass ref fclass, member text
+each fclass sort day as c
+  row card tap edit c
+    stack grow
+      c.name bold
+      c.day faint
+    if count(c.booking) >= c.capacity
+      "FULL" color bad bold
+    else
+      c.capacity - count(c.booking) "left" color good
+form fclass, "Add class"
+form booking, "Book a place"
+===
+@create style=vague domain=b2_kids_week_activities
+kids after school activities for the week
+---
+app "Activities" school ocean
+table kid name text
+table activity kid ref kid, what text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, start time
+each kid as k
+  stack card gap 1
+    k.name head
+    each options activity.day as dd
+      each k.activity where day = dd sort start as a
+        row gap 1
+          dd bold
+          a.what grow
+          a.start faint
+form kid, "Add kid"
+form activity, "Add activity"
+===
+@create style=short domain=b2_inhaler_puffs
+inhaler has 200 puffs, count what is left
+---
+app "Inhaler" heart plum
+table puff
+setting capacity num 20..400 = 200 "Puffs in a new inhaler"
+text capacity - count(puff) "puffs left" big color if(capacity - count(puff) < 20, bad, ink)
+button "Took a puff" tap add puff
+"Today" count(puff today) faint
+button "New inhaler" tap remove all puff
+===
+@create style=multi_feature domain=b2_family_medical_costs
+doctor visits for each family member with what it cost, a card per person with total spent this year, and the most expensive visit
+---
+app "Medical costs" heart slate
+table member name text
+table visit member ref member, doctor text, cost money, note text?
+"Family total this year" sum(visit.cost year) big
+each member as m
+  stack card gap 1
+    row
+      m.name head grow
+      sum(m.visit.cost year) bold
+    "Most expensive" max(m.visit.cost) faint
+    "Visits" count(m.visit year) faint
+form member, "Add person"
+form visit, "Add visit"
+===
+@create style=custom_ui domain=b2_swim_meet
+swim meet: athletes, events, each athlete's time in seconds for the event, show each event as a ranked list with fastest first and a gold dot for the winner
+---
+app "Swim meet" drop ocean
+table athlete name text
+table event name text
+table result athlete ref athlete, event ref event, secs num 15..600
+each event as ev
+  stack card gap 1
+    ev.name head
+    each ev.result sort secs as r
+      row gap 1
+        draw width 16
+          circle 50, 50, 40 fill if(index = 0, warn, soft)
+        r.athlete.name grow
+        r.secs "s" bold
+form athlete, "Add athlete"
+form event, "Add event"
+form result, "Add result"
+===
+@create style=detailed domain=b2_school_pickup
+Kindergarten pickup: each child has two or three people allowed to collect them. When someone collects a child, I log who. Show today's pickups and which children are still here.
+---
+app "Pickup" school mint
+table child name text
+table allowed child ref child, person text
+table pickup child ref child, by text
+count(child, count(it.pickup today) = 0) "children still here" big
+each child sort name as c
+  row card
+    c.name bold grow
+    if count(c.pickup today) > 0
+      "collected by" last(c.pickup.by) color good
+    else
+      "waiting" color warn
+form child, "Add child"
+form allowed, "Add authorised person"
+form pickup, "Log pickup"
+===
+@create style=typos domain=b2_class_birthdays
+class birthdays, name and date of birth, sorted by month so i can bring cake
+---
+app "Birthdays" gift plum
+table kid name text, born date
+each kid sort month(born) * 100 + monthday(born) as k
+  row card tap edit k
+    k.name bold grow
+    monthday(k.born) monthname(k.born) faint
+    "turns" year(today) - year(k.born) bold
+count(kid where month(born) = month(today)) "birthdays this month" faint
+form kid, "Add kid"
+===
+@create style=multi_feature domain=b2_sports_injuries
+team injury log: player, body part, expected days out. show who is injured right now, how many days until back and the most common body part
+---
+app "Injuries" shield slate
+table player name text
+table injury player ref player, part pick Knee|Ankle|Hamstring|Shoulder|Head|Other = Knee, days num 1..200, hurt date = today
+count(injury where hurt + days >= today) "injured now" big
+each injury where hurt + days >= today sort hurt as i
+  row card
+    i.player.name bold grow
+    i.part faint
+    i.hurt + i.days - today "days to go" color warn
+share options injury.part, count(injury where part = it), it
+form player, "Add player"
+form injury, "Log injury"
+===
+@create style=vague domain=b2_uniform_stock
+school uniform stock by size
+---
+app "Uniforms" bag slate
+table uniform item pick Shirt|Trouser|Skirt|Tie = Shirt, size num 20..44, qty num 0.. = 5
+count(uniform where qty = 0) "sizes out of stock" big color warn
+each options uniform.item as it2
+  stack card gap 1
+    text it2 bold
+    each uniform where item = it2 sort size as u
+      row gap 1
+        "Size" u.size grow
+        button "-" tap set u.qty = u.qty - 1
+        u.qty bold
+        button "+" tap set u.qty = u.qty + 1
+form uniform, "Add size"
+===
+@oos style=detailed domain=b2_oos_bus_gps oos=location
+Tell me on my phone when my son's school bus is five minutes away using its GPS, and keep a list of days he missed the bus.
+---
+app "Missed bus" bus slate
+table missed reason text?
+count(missed month) "missed this month" big
+button "He missed it" tap add missed
+list missed by day
+===
+@edit style=plain domain=b2_e_pharm_price ref=b2_pharmacy_batches
+add a selling price to each medicine and show the value of sales today
+---
+~ reorder num 0.. = 10 => reorder num 0.. = 10, price money = 0
++ "Sales today" sum(sold today, it.qty * it.medicine.price) big
+===
+@edit style=plain domain=b2_e_rickshaw_name ref=b2_rickshaw_earnings
+add a cng and petrol choice to fuel
+---
+~ table petrol litres num 0.5..20, cost money => table petrol litres num 0.5..20, cost money, fuel pick Petrol|CNG = Petrol
++ "Petrol spend" sum(petrol.cost week where fuel = Petrol) faint
++ "CNG spend" sum(petrol.cost week where fuel = CNG) faint
+===
+@edit style=plain domain=b2_e_egg_broken ref=b2_egg_coops
+track broken eggs too
+---
+~ count num 0..500 => count num 0..500, broken num 0..100 = 0
++ "Broken this week" sum(eggs.broken week) color bad
+===
+@edit style=plain domain=b2_e_gpa_scale ref=b2_gpa_calc
+add a B plus grade worth 3.5 points
+---
+~ pick A|B|C|D|F = A => pick A|B_plus|B|C|D|F = A
+~ if(g = A, 4, if(g = B, 3 => if(g = A, 4, if(g = B_plus, 3.5, if(g = B, 3
+~ 0)))) => 0)))))
+===
+@edit style=plain domain=b2_e_assign_priority ref=b2_assignment_board
+add a weight percent for each assignment and a notes box
+---
+~ title text, due date, done bool => title text, due date, weight num 0..100 = 10 "Weight %", done bool
+~ a.title grow => a.title a.weight "%" faint grow
+===
+@edit style=plain domain=b2_e_class_remove ref=b2_class_booking
+add a coach name to each class
+---
+~ capacity num 1..60 = 15 => capacity num 1..60 = 15, coach text?
+~ c.day faint => c.day c.coach faint
+===
+@edit style=plain domain=b2_e_inhaler_smaller ref=b2_inhaler_puffs
+remove the new inhaler button
+---
+- button "New inhaler" tap remove all puff

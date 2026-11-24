@@ -1,0 +1,379 @@
+@create style=custom_ui domain=b3_lucky_draw
+raffle for the school fair, enter name and ticket number, a button that picks a random winner and shows the winning ticket big with the name
+---
+app "Lucky Draw" gift plum
+table entry name text, ticket_no num 1..9999
+state winner_no num = 0
+button "Draw a winner" tap set winner_no = random(entry).ticket_no
+if winner_no > 0
+  "Winning ticket" faint
+  winner_no huge align center
+  last(entry.name where ticket_no = winner_no) head align center
+"Tickets sold" count(entry) faint
+list entry
+form entry, "Sell a ticket"
+===
+@create style=vague domain=b3_game_backlog
+way too many video games i bought and never finished
+---
+app "Game Backlog" game ink
+table vgame name text, status pick Backlog|Playing|Done|Dropped = Backlog, hours num 0..500 = 0
+"Hours played" sum(vgame.hours) big
+bars options vgame.status, count(vgame where status = it), it
+"Playing now" head
+each vgame where status = Playing as g
+  row card tap edit g
+    g.name bold grow
+    g.hours "h" faint
+    button "Finished" tap set g.status = Done
+"Backlog" head
+each vgame where status = Backlog sort at as b
+  row tap edit b
+    b.name grow
+    button "Start" tap set b.status = Playing
+form vgame, "Add game"
+===
+@create style=multi_feature domain=b3_treasure_hunt
+kids treasure hunt party with 20 clues, a board of 20 squares that turn green when a clue is found, teams with a button to say they found the next clue and how many each team has
+---
+app "Treasure Hunt" map plum
+table team name text
+table found team ref team, clue_no num 1..20
+grid 10 gap 1
+  each 1..20 as c
+    box height 24 radius 6 fill if(count(found where clue_no = c) > 0, good, soft)
+      c tiny align center
+each team sort count(it.found) desc as t
+  row card
+    t.name bold grow
+    count(t.found) "clues" big
+    button "Found next clue" tap add found team = t, clue_no = count(t.found) + 1
+form team, "Add team"
+===
+@create style=detailed domain=b3_gift_registry
+Our wedding wish list. Each wish has what it is, the price and a tick when somebody has taken it, plus who. Show how many wishes are still free and the value of those, most expensive first.
+---
+app "Gift Registry" gift plum
+table wish what text, price money, taken bool, taken_by text?
+"Still wanted" count(wish where taken = no) big
+"Value still wanted" sum(wish.price where taken = no) faint
+each wish sort price desc as w
+  row card tap edit w
+    toggle w.taken
+    stack grow
+      w.what bold
+      w.taken_by faint
+    w.price bold
+form wish, "Add wish"
+===
+@create style=typos domain=b3_fair_stall
+we run a stall at the school fair, products with price and stock, tap sold one each sale, how much we made, whats left and which product sells best
+---
+app "School Fair Stall" bag mint
+table product name text, price money, stock num 0..
+table sold product ref product, qty num 1..50 = 1
+"Takings" sum(sold, it.qty * it.product.price) big
+each product sort name as p
+  row card
+    stack grow
+      p.name bold
+      "Left" p.stock - sum(p.sold.qty) faint
+    sum(p.sold.qty) "sold" bold
+    button "Sold one" tap add sold product = p
+bars product, sum(it.sold.qty), it.name
+form product, "Add product"
+===
+@create style=short domain=b3_mileage_claim
+office pays per km for my client visits, monthly claim
+---
+app "Mileage Claim" car slate
+setting per_km money = 25 "Rate per km"
+table claim_trip purpose text, km num 1..2000, client text?
+"Claim this month" sum(claim_trip.km month) * per_km big
+"Km this month" sum(claim_trip.km month) faint
+"Last month" sum(claim_trip.km prev month) * per_km faint
+list claim_trip by day
+form claim_trip, "Add trip"
+===
+@create style=typos domain=b3_trip_cash
+going abroad, i spend in dollars, show it in rupees with the rate i set and a budget bar
+---
+app "Trip Cash" money ocean
+setting rate num = 280 "Rupees per dollar"
+setting budget_usd num = 1500 "Budget (USD)"
+table spend_abroad what text, usd num 0.5..5000
+"Spent so far" sum(spend_abroad.usd) "USD" big
+"In rupees" round(sum(spend_abroad.usd) * rate) faint
+goal sum(spend_abroad.usd), budget_usd, "of budget", "USD"
+list spend_abroad by day
+form spend_abroad, "Add spending"
+===
+@create style=multi_feature domain=b3_oil_change
+each car's oil change: odometer and cost at each service, odometer readings any time, the interval in km is a setting, show where the next change is due and say Due now when the car passed it
+---
+app "Oil Change" car slate
+setting interval num = 5000 "Oil change every (km)"
+table car name text
+table oil_service car ref car, odo num 0.., cost money
+table km_log car ref car, odo num 0..
+each car sort name as c
+  let next_due = last(c.oil_service.odo) + interval
+  row card
+    stack grow
+      c.name bold
+      "Next at" next_due "km" faint
+    if(last(c.km_log.odo) >= next_due, "Due now", "OK") color if(last(c.km_log.odo) >= next_due, bad, good)
+form car, "Add car"
+form oil_service, "Log an oil change"
+form km_log, "Odometer reading"
+===
+@create style=vague domain=b3_moving_boxes
+moving to a new house next week, boxes everywhere and i do not know which are fragile or for which room
+---
+app "Moving Boxes" box mint
+table box label text, room pick Kitchen|Bedroom|Living|Kids|Store = Kitchen, fragile bool, unpacked bool
+"Boxes still to unpack" count(box where unpacked = no) big
+share box by room, count(it), it.key
+each box where unpacked = no sort room as b
+  row card tap edit b
+    b.label bold grow
+    b.room faint
+    if(b.fragile, "Fragile", "") color bad
+    toggle b.unpacked
+form box, "Add box"
+===
+@create style=short domain=b3_dua_list
+people i promised to make dua for, tick when answered
+---
+app "Dua List" heart plum
+table request person text, topic pick Health|Exam|Job|Marriage|Travel|Other = Health, answered bool
+"Still praying for" count(request where answered = no) big
+each request where answered = no sort at as r
+  row card tap edit r
+    stack grow
+      r.person bold
+      r.topic faint
+    toggle r.answered
+"Answered" count(request where answered = yes) "duas" faint
+form request, "Add a dua"
+===
+@create style=detailed domain=b3_madrasa_stipends
+At our madrasa each teacher has a monthly stipend. I record each payment. Show what is still unpaid this month in total, and for every teacher whether they are paid or pending with a button that pays the rest.
+---
+app "Madrasa Stipends" school mint
+table teacher name text, stipend money
+table paid teacher ref teacher, amount money
+"Still to pay this month" sum(teacher.stipend) - sum(paid.amount month) big
+each teacher sort name as t
+  let pending = t.stipend - sum(t.paid.amount month)
+  row card
+    stack grow
+      t.name bold
+      "Stipend" t.stipend faint
+    if(pending <= 0, "Paid", "Pending") max(pending, 0) color if(pending <= 0, good, warn)
+    button "Pay the rest" tap add paid teacher = t, amount = max(pending, 0)
+form teacher, "Add teacher"
+===
+@create style=typos domain=b3_ferment_shelf
+kombucha and pickle jars fermenting, started date and how many days it needs, tell me how many days left or ready
+---
+app "Ferment Shelf" cup mint
+table batch name text, started date = today, days num 3..60 = 10
+"Batches brewing" count(batch where started + days >= today) big
+each batch sort started as b
+  let left = b.started + b.days - today
+  row card tap edit b
+    stack grow
+      b.name bold
+      "Started" b.started faint
+    if(left > 0, join(left, " days left"), "Ready") color if(left > 0, ink, good)
+form batch, "Start a batch"
+===
+@create style=multi_feature domain=b3_late_payers
+which clients pay late: each client has invoices with amount, date sent, paid tick and date paid, show unpaid amount per client in orange and the average days they take to pay
+---
+app "Late Payers" clock ocean
+table client name text
+table invoice client ref client, amount money, sent date, paid bool, paid_on date?
+each client sort name as c
+  stack card gap 1
+    row
+      c.name head grow
+      "Unpaid" sum(c.invoice.amount where paid = no) bold color if(sum(c.invoice.amount where paid = no) > 0, warn, ink)
+    "Average days to pay" round(sum(c.invoice, it.paid_on - it.sent) / count(c.invoice where paid = yes)) faint
+form client, "Add client"
+form invoice, "Add invoice"
+===
+@create style=short domain=b3_hiring_funnel
+candidates by stage, how many at each stage
+---
+app "Hiring Funnel" users ocean
+table candidate name text, role text, stage pick Applied|Screened|Interview|Offer|Hired|Rejected = Applied
+bars options candidate.stage, count(candidate where stage = it), it
+"Open candidates" count(candidate where stage != Hired and stage != Rejected) big
+each candidate where stage != Hired and stage != Rejected sort at as c
+  row card tap edit c
+    stack grow
+      c.name bold
+      c.role faint
+    c.stage faint
+form candidate, "Add candidate"
+===
+@create style=multi_feature domain=b3_support_desk
+small support desk: customers, tickets with issue, priority low normal urgent and status open waiting solved, count of open tickets turns red if an urgent one is open, a Solved button on each
+---
+app "Support Desk" shield ink
+table customer name text
+table ticket customer ref customer, issue text, priority pick Low|Normal|Urgent = Normal, status pick Open|Waiting|Solved = Open
+"Open tickets" count(ticket where status != Solved) big color if(count(ticket where status = Open and priority = Urgent) > 0, bad, ink)
+each ticket where status != Solved sort priority desc as t
+  row card tap edit t
+    stack grow
+      t.issue bold
+      t.customer.name faint
+    t.priority t.status faint
+    button "Solved" tap set t.status = Solved
+form customer, "Add customer"
+form ticket, "New ticket"
+===
+@create style=detailed domain=b3_court_bookings
+Pickleball courts by the hour. Every court has a rate per hour. Bookings have the court, the player and the hours. Show income today overall, and for each court the hours booked today and what it earned.
+---
+app "Court Bookings" ball mint
+table court label text, rate money
+table booking court ref court, hours num 1..6 = 1, player text
+"Income today" sum(booking today, it.hours * it.court.rate) big
+each court sort label as c
+  row card
+    stack grow
+      c.label bold
+      sum(c.booking.hours today) "hours booked today" faint
+    sum(c.booking.hours today) * c.rate bold
+form court, "Add court"
+form booking, "Add booking"
+===
+@create style=vague domain=b3_graduation_party
+planning my brother's graduation party and i do not want to overspend
+---
+app "Graduation Party" star plum
+setting budget money = 150000 "Budget"
+table category name text
+table cost category ref category, item text, amount money
+goal sum(cost.amount), budget, "spent"
+bars category, sum(it.cost.amount), it.name
+each category sort name as c
+  row card
+    c.name bold grow
+    count(c.cost) "items" faint
+    sum(c.cost.amount) bold
+form category, "Add category"
+form cost, "Add cost"
+===
+@create style=short domain=b3_ukulele
+chords i have learned and minutes practising each
+---
+app "Ukulele" music mint
+table chord name text, level pick Easy|Medium|Hard = Easy, learned bool
+table practice chord ref chord, mins num 1..120 = 10
+"Chords learned" count(chord where learned = yes) "of" count(chord) big
+each chord sort level as c
+  row card
+    toggle c.learned
+    c.name bold grow
+    sum(c.practice.mins) "min" faint
+    button "+10 min" tap add practice chord = c
+daybars last 7 days, sum(practice.mins on it)
+form chord, "Add chord"
+===
+@create style=typos domain=b3_trailer_hire
+i hire out 3 trailers by the day, each has its own daily rate, log who took it and for how many days, income this month and for each trailer
+---
+app "Trailer Hire" car slate
+table trailer name text, daily_rate money
+table hire trailer ref trailer, days num 1..60, customer text
+"Income this month" sum(hire month, it.days * it.trailer.daily_rate) big
+each trailer sort name as t
+  row card
+    t.name bold grow
+    count(t.hire month) "hires this month" faint
+    sum(t.hire.days month) * t.daily_rate bold
+form trailer, "Add trailer"
+form hire, "Log hire"
+===
+@create style=custom_ui domain=b3_hall_calendar
+marriage hall booking calendar, month view with arrows, days with a booking are coloured, tap a day to add, list of this month's bookings below
+---
+app "Hall Calendar" home plum
+table hall_booking family text, occasion pick Wedding|Birthday|Meeting|Other = Wedding, advance money?
+state m date = today
+monthnav m
+calendar hall_booking, m
+"Bookings this month" count(hall_booking month of m) big
+each hall_booking month of m sort at as b
+  row card tap edit b
+    b.at bold
+    b.family grow
+    b.occasion faint
+form hall_booking, "Add booking"
+===
+@oos style=short domain=b3_walk_steps oos=other_apps
+pull my steps from google fit each day and show them against 8000
+---
+app "Steps" walk mint
+table walk_log steps num 0..100000
+setting goal num = 8000 "Daily steps"
+goal sum(walk_log.steps today), goal, "steps today"
+daybars last 7 days, sum(walk_log.steps on it)
+quick walk_log, steps, [1000, 2000, 5000]
+list walk_log by day
+===
+@edit style=plain domain=b3_raffle_e1 ref=b3_lucky_draw
+each ticket should have a prize and show the prize under the winner
+---
+~ ticket_no num 1..9999 => ticket_no num 1..9999, prize text?
+~ last(entry.name where ticket_no = winner_no) head align center => last(entry.name where ticket_no = winner_no) head align center\n  last(entry.prize where ticket_no = winner_no) faint align center
+===
+@edit style=plain domain=b3_backlog_e1 ref=b3_game_backlog
+call dropped quit and add a rating out of 10
+---
+~ Backlog|Playing|Done|Dropped = Backlog => Backlog|Playing|Done|Quit was Dropped = Backlog
+~ hours num 0..500 = 0 => hours num 0..500 = 0, rating num? 1..10
+===
+@edit style=plain domain=b3_registry_e1 ref=b3_gift_registry
+add the shop where each thing can be bought
+---
+~ taken_by text? => taken_by text?, shop text?
+~ w.what bold => w.what bold\n      w.shop faint
+===
+@edit style=plain domain=b3_stall_e1 ref=b3_fair_stall
+add a discount percent i can set and apply it to the takings
+---
++after app "School Fair Stall" bag mint :: setting discount num = 0 "Discount %"
+~ sum(sold, it.qty * it.product.price) big => sum(sold, it.qty * it.product.price) * (100 - discount) / 100 big
+===
+@edit style=plain domain=b3_mileage_e1 ref=b3_mileage_claim
+the company rate went to 30
+---
+~ setting per_km money = 25 "Rate per km" => setting per_km money = 30 "Rate per km" set
+===
+@edit style=plain domain=b3_boxes_e1 ref=b3_moving_boxes
+rename store to garage
+---
+~ Kids|Store = Kitchen => Kids|Garage was Store = Kitchen
+===
+@edit style=plain domain=b3_ferment_e1 ref=b3_ferment_shelf
+add a flavour field and show it
+---
+~ days num 3..60 = 10 => days num 3..60 = 10, flavour text?
+~ b.name bold => b.name b.flavour bold
+===
+@edit style=plain domain=b3_support_e1 ref=b3_support_desk
+tickets come by phone, email or walk in, add that and count the phone ones
+---
+~ status pick Open|Waiting|Solved = Open => status pick Open|Waiting|Solved = Open, channel pick Phone|Email|Walk_in = Phone
++ "Phone tickets" count(ticket where channel = Phone) faint
+===
+@edit style=plain domain=b3_ukulele_e1 ref=b3_ukulele
+remove the chart
+---
+- daybars last 7 days, sum(practice.mins on it)

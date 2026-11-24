@@ -1,0 +1,351 @@
+@create style=short domain=b4_ice_cream_cart
+ice cream cart, cones sold by flavour each day
+---
+app "Ice Cream Cart" cup plum
+table cone flavour pick Vanilla|Chocolate|Mango|Pista = Vanilla, price money
+setting cone_price money = 60 "Price of a cone"
+each options cone.flavour as f
+  row card tap add cone flavour = f, price = cone_price
+    f bold grow
+    text count(cone today where flavour = f)
+"Today" sum(cone.price today) big
+daybars last 7 days, sum(cone.price on it)
+===
+@edit style=plain domain=b4_cone_weekly ref=b4_ice_cream_cart
+i want to see weeks instead of days in the chart
+---
+~ daybars last 7 days, sum(cone.price on it) => bars cone last 8 weeks by week, sum(it.price), it.key
+===
+@create style=multi_feature domain=b4_fish_market
+fish seller at the market. each morning i buy fish by kg from the boat at one rate and sell at another, some spoils. per fish type show kg bought, sold, spoiled and the profit
+---
+app "Fish Stall" fish ocean
+table fish name text, buy_rate money, sell_rate money
+table bought fish ref fish, kg num 1..500
+table soldf fish ref fish, kg num 0.2..100
+table spoiled fish ref fish, kg num 0.2..100
+each fish sort name as f
+  let gain = sum(f.soldf.kg) * f.sell_rate - sum(f.bought.kg) * f.buy_rate
+  stack card gap 1 tap edit f
+    row
+      f.name head grow
+      text gain bold color if(gain >= 0, good, bad)
+    text "in stock" sum(f.bought.kg) - sum(f.soldf.kg) - sum(f.spoiled.kg) "kg" faint
+    text "spoiled" sum(f.spoiled.kg) "kg" tiny color warn
+bars fish sort name, sum(it.spoiled.kg), it.name
+form bought, "Bought"
+form soldf, "Sold"
+form spoiled, "Spoiled"
+form fish, "New fish"
+===
+@edit style=plain domain=b4_fish_nochart ref=b4_fish_market
+remove the chart
+---
+- bars fish sort name, sum(it.spoiled.kg), it.name
+===
+@create style=detailed domain=b4_flower_orders
+florist: bouquets orders with the delivery date and the flowers used from stock (roses, lilies, tulips). show what stock is left of each flower and today's deliveries
+---
+app "Florist" leaf plum
+table flower name text, stock num 0..5000
+table bouquet customer text, price money, deliver_on date, delivered bool
+table used bouquet ref bouquet, flower ref flower, stems num 1..100
+"Deliveries today" count(bouquet where deliver_on = today and delivered = no) head
+each bouquet where deliver_on = today and delivered = no as b
+  row card tap edit b
+    b.customer bold grow
+    text b.price
+    toggle b.delivered
+"Stock left" head
+each flower sort name as f
+  let left = f.stock - sum(f.used.stems)
+  row card tap edit f
+    f.name grow
+    text left bold color if(left < 20, warn, ink)
+form bouquet, "New bouquet"
+form used, "Flowers used"
+form flower, "Add flower"
+===
+@create style=custom_ui domain=b4_mithai_boxes
+sweet shop takes orders for gift boxes before Eid. each order has a box size, count, delivery day and an advance. show orders on the board by day and what I still collect
+---
+app "Mithai Orders" gift plum
+table box_order customer text, size pick Half_kg|One_kg|Two_kg = One_kg, boxes num 1..200, day date, advance money = 0, price money
+"Still to collect" sum(box_order, it.price - it.advance) big
+each box_order where day >= today sort day as o
+  row card tap edit o swipe remove o
+    stack grow
+      o.customer bold
+      text o.boxes "x" o.size faint
+    text o.day
+    text o.price - o.advance color warn
+form box_order, "Take order"
+===
+@edit style=plain domain=b4_mithai_status ref=b4_mithai_boxes
+add a status for each order: Pending, Packed, Delivered, and show only the ones not delivered
+---
+~ advance money = 0, price money => advance money = 0, price money, status pick Pending|Packed|Delivered = Pending
+~ each box_order where day >= today sort day as o => each box_order where status != Delivered sort day as o
++after     o.day ::     choice o.status
+===
+@create style=detailed domain=b4_guest_house
+i manage a guest house with 6 rooms. each stay has the room, nights and rate per night. guests pay advance and the rest at checkout. show total booked this month and the amount pending from guests
+---
+app "Guest House" home ocean
+table room name text, rate money
+table stay room ref room, guest text, nights num 1..60 = 1, checkin date
+table advance_pay stay ref stay, amount money
+let booked = sum(stay month, it.nights * it.room.rate)
+"Booked this month" booked big
+each stay sort checkin desc as s
+  let owes = s.nights * s.room.rate - sum(s.advance_pay.amount)
+  row card tap edit s
+    stack grow
+      s.guest bold
+      text s.room.name "," s.nights "nights" faint
+    text if(owes > 0, "owes", "paid") color if(owes > 0, bad, good)
+    text owes faint
+form stay, "New stay"
+form advance_pay, "Advance"
+form room, "Add room"
+===
+@edit style=plain domain=b4_guest_pay ref=b4_guest_house
+add a second payment table for the checkout payment and use both for the balance
+---
+~ table advance_pay stay ref stay, amount money => table advance_pay stay ref stay, amount money\ntable checkout_pay stay ref stay, amount money
+~ sum(s.advance_pay.amount) => sum(s.advance_pay.amount) - sum(s.checkout_pay.amount)
++ form checkout_pay, "Checkout payment"
+===
+@create style=detailed domain=b4_eye_camp
+free eye camp run by our trust in different villages. each person screened is noted with age, whether they need glasses, cataract surgery or nothing. at the top show the totals and for each village the numbers
+---
+app "Eye Camp" eye mint
+table village name text
+table screened village ref village, age num 1..110, result pick Fine|Glasses|Cataract|Referred = Fine
+count(screened) "people screened" big
+row gap 2
+  stat count(screened where result = Glasses), "need glasses"
+  stat count(screened where result = Cataract), "cataract cases"
+each village sort name as v
+  row card tap edit v
+    v.name bold grow
+    text count(v.screened) "seen"
+    text count(v.screened where result = Cataract) "cataract" faint
+form screened, "Add person"
+form village, "Add village"
+===
+@create style=custom_ui domain=b4_neighbour_help
+neighbourhood help board: a person posts a need like groceries or a doctor visit, a volunteer takes it, and it is marked done. show open needs first with who took it
+---
+app "Help Board" users mint
+table volunteer name text, phone text?
+table need what text, kind pick Groceries|Medical|Transport|Other = Groceries, status pick Open|Taken|Done = Open, taken_by ref volunteer?
+"Open needs" count(need where status = Open) big
+each need where status != Done sort status as n
+  row card tap edit n swipe remove n
+    stack grow
+      n.what bold
+      text n.kind faint
+    text n.taken_by.name color good
+    choice n.status
+form need, "Post a need"
+form volunteer, "Add volunteer"
+===
+@edit style=plain domain=b4_help_priority ref=b4_neighbour_help
+add an urgent flag and show the urgent ones in their own list on top
+---
+~ taken_by ref volunteer? => taken_by ref volunteer?, urgent bool
+~ "Open needs" count(need where status = Open) big => "Open needs" count(need where status = Open) big\n"Urgent" head color bad\neach need where status != Done and urgent = yes as u\n  row card tap edit u\n    u.what bold grow
+===
+@create style=detailed domain=b4_quran_pages
+i want to finish reading the Quran, 604 pages. each day i note how many pages i read, show total pages, how many are left, and the days it will take at my average of the last 7 days
+---
+app "Quran Reading" book mint
+table readp pages num 1..120
+setting total_pages num = 604 "Pages in the Quran"
+let done = sum(readp.pages)
+let per_day = sum(readp.pages last 7 days) / 7
+goal done, total_pages, "pages read"
+"Left" total_pages - done "pages" head
+text "At this pace" if(per_day > 0, floor((total_pages - done) / per_day) + 1, 0) "days to finish" faint
+daybars last 7 days, sum(readp.pages on it)
+form readp, "Pages today"
+===
+@create style=vague domain=b4_morning_routine
+morning routine tick boxes, wake early, walk, quran, no phone
+---
+app "Morning" sun mint
+table step name text
+table did step ref step
+each step as s
+  row card tap edit s swipe remove s
+    s.name bold grow
+    text streak(s.did) "days" faint
+    toggle s.did
+text count(did today) "of" count(step) "done" big
+heat last 70 days, count(did on it), 4
+form step, "Add step"
+===
+@create style=multi_feature domain=b4_quit_smoking
+trying to quit cigarettes. each day i note how many i smoked, a packet of 20 costs 450 so show money saved compared to my old 15 a day and a chart of last 14 days
+---
+app "Quit" flame slate
+table smoked count num 0..60
+setting old_habit num = 15 "Cigarettes a day before"
+setting pack_price money = 450 "Price of a pack of 20"
+let fewer = old_habit * 30 - sum(smoked.count last 30 days)
+"Saved in 30 days" fewer * pack_price / 20 big color good
+text "Smoke free days" count(days last 30 days, count(smoked on it) > 0 and sum(smoked.count on it) = 0) head
+daybars last 14 days, sum(smoked.count on it)
+form smoked, "Smoked today"
+===
+@create style=short domain=b4_wheelchair_loans
+wheelchairs and walkers lent to patients by the trust, who has what and was it returned
+---
+app "Equipment Loans" heart ocean
+table equipment name text, kind pick Wheelchair|Walker|Crutches|Oxygen_machine = Wheelchair
+table loan equipment ref equipment, borrower text, phone text?, returned bool
+each equipment sort name as e
+  row card tap edit e
+    e.name bold grow
+    text e.kind faint
+    text if(count(e.loan where returned = no) > 0, "Out", "In") color if(count(e.loan where returned = no) > 0, warn, good)
+text "Out now" count(loan where returned = no) head
+list loan
+form loan, "Lend"
+form equipment, "Add item"
+===
+@create style=detailed domain=b4_ac_service
+i service air conditioners. each customer has a few ACs, each service visit is logged with what was done and the fee. an AC is due again 90 days after the last service, so remind me and list who is due
+---
+app "AC Service" tool ocean
+table customer name text, phone text?
+table unit customer ref customer, brand text, room text?
+table visit unit ref unit, work text, fee money
+text count(unit, due(it.visit, 90)) "units due for service" head color warn
+each unit as u
+  if due(u.visit, 90)
+    row card tap edit u
+      stack grow
+        text u.customer.name bold
+        text u.brand u.room faint
+      text since(u.visit) "days" color warn
+      button "Serviced" tap add visit unit = u, work = "Service", fee = 0
+text "Earned this month" sum(visit.fee month) big
+form visit, "Log service"
+form unit, "Add AC"
+form customer, "Add customer"
+===
+@edit style=plain domain=b4_ac_remind ref=b4_ac_service
+remind me every morning at 9 if any AC is due
+---
++ remind "ACs are due for service" at 9:00 if count(unit, due(it.visit, 90)) > 0
+===
+@create style=custom_ui domain=b4_alterations
+alterations counter at a boutique. fixed prices: hem 200, take in 350, zip 250, sleeves 300. tap a job to add it to today with the customer name typed in the box, show today's total
+---
+app "Alterations" pen plum
+table alt customer text, job pick Hem|Take_in|Zip|Sleeves = Hem, price money
+state who text = ""
+field who "Customer name"
+row gap 1
+  each options alt.job as j
+    button j tap add alt customer = who, job = j, price = if(j = Hem, 200, if(j = Take_in, 350, if(j = Zip, 250, 300)))
+text "Today" sum(alt.price today) big
+list alt today
+===
+@create style=detailed domain=b4_fabric_rolls
+boutique fabric: each roll has the metres bought and cost per metre. when a customer buys or i cut for an outfit i log metres cut from that roll. show metres left in each roll and the value of stock
+---
+app "Fabric Rolls" pen mint
+table roll name text, metres num 1..500, cost_per_m money
+table cutm roll ref roll, metres num 0.25..20
+let stock_value = sum(roll, (it.metres - sum(it.cutm.metres)) * it.cost_per_m)
+text "Stock value" round(stock_value) big
+each roll sort name as r
+  let left = r.metres - sum(r.cutm.metres)
+  row card tap edit r
+    r.name bold grow
+    text left "m left" color if(left < 3, warn, ink)
+form cutm, "Cut metres"
+form roll, "Add roll"
+===
+@create style=multi_feature domain=b4_plant_nursery
+plant nursery: plants for sale with the price and how many in stock, sales every day, show total sold this month, what is low and a chart of sales per plant
+---
+app "Nursery" plant mint
+table plantn name text, price money, stock num 0..2000, low_at num 0.. = 10
+table soldn plantn ref plantn, qty num 1..100 = 1
+let left_in(p plantn) = p.stock - sum(p.soldn.qty)
+"Sold this month" sum(soldn.qty month) "plants" big
+bars plantn sort name, sum(it.soldn.qty), it.name
+each plantn sort name as p
+  row card tap edit p
+    p.name bold grow
+    text left_in(p) "left" color if(left_in(p) <= p.low_at, warn, ink)
+    button "Sold" tap add soldn plantn = p
+form plantn, "New plant"
+===
+@create style=custom_ui domain=b4_greenhouse_climate
+greenhouse check twice a day, temperature and humidity percent. a small chart of the last week and today's min and max
+---
+app "Greenhouse" leaf mint
+table climate temp num 0..60, humidity num 0..100
+text "Today" min(climate.temp today) "to" max(climate.temp today) "C" big
+text "Humidity now" last(climate.humidity) "%" head
+trend climate last 7 days sort at, it.temp
+===
+@create style=custom_ui domain=b4_water_tank
+overhead water tank, i tap the level I see (quarter steps) and the app draws the tank and tells how long it lasts at 300 litres a day
+---
+app "Tank Level" drop ocean
+table level quarters num 0..4
+setting tank_litres num = 1000 "Tank size (litres)"
+let q = last(level.quarters)
+draw 60, 100 width 90
+  rect 5, 5, 50, 90 stroke ink thick 2
+  rect 6, 94 - 88 * q / 4, 48, 88 * q / 4 fill accent
+text q * tank_litres / 4 "litres" big
+text "About" floor(q * tank_litres / 4 / 300) "days left" faint
+row gap 1
+  each [0, 1, 2, 3, 4]
+    button it tap add level quarters = it
+===
+@create style=typos domain=b4_bike_service
+motor cycle service reminder, i enter odometer km every fuel fill, oil change is every 3000km, tell me km left
+---
+app "Bike Care" bike slate
+table fill odo num 0..300000, litres num 1..30
+table oil odo num 0..300000
+setting gap num = 3000 "Oil change every (km)"
+let since_oil = last(fill.odo) - last(oil.odo)
+text gap - since_oil "km to oil change" big color if(since_oil >= gap, bad, ink)
+text "Mileage" round((last(fill.odo) - first(fill.odo)) / sum(fill.litres)) "km per litre" faint
+form fill, "Fuel fill"
+form oil, "Oil changed at"
+===
+@oos style=detailed domain=b4_patient_voice oos=voice
+record a voice note for each patient visit with what the doctor said, and keep the visit list with date and fee
+---
+app "Visit Book" heart ocean
+table pat name text
+table visitp pat ref pat, fee money, advice long?
+each visitp sort at desc as v
+  row card tap edit v
+    v.pat.name bold grow
+    text v.fee
+    text v.advice faint
+form visitp, "Add visit"
+form pat, "New patient"
+===
+@oos style=short domain=b4_post_to_fb oos=other_apps
+post my daily dishes with price to my facebook page, and keep the dish list
+---
+app "Menu Today" food mint
+table dishm name text, price money, sold_out bool
+each dishm sort name as d
+  row card tap edit d
+    d.name bold grow
+    text d.price
+    toggle d.sold_out
+form dishm, "Add dish"

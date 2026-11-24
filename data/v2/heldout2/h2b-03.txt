@@ -1,0 +1,295 @@
+@create style=short domain=h2b_kids_stars
+sticker chart for my two kids Ayaan and Zoya, who got a star and for what. stars this week each
+---
+app "Stars" star mint
+table star kid pick Ayaan|Zoya, why text
+each options star.kid as k
+  "k" count(star week where kid = k) "stars this week" big
+form star
+list star by day
+===
+@create style=typos domain=h2b_tuition_fees
+tution fees recieved, student name amount and the date, total for this month on top
+---
+app "Tuition fees" school ocean
+table fee student text, amount money
+stat sum(fee.amount month), "collected this month"
+form fee
+list fee by day
+===
+@create style=detailed domain=h2b_meter_units
+once a week I read the electricity meter. I type the reading and want to see how many units I used this month so far, and a line of the readings
+---
+app "Meter" bolt ink
+table meter reading num 0..
+stat last(meter.reading) - first(meter.reading month), "units this month"
+trend meter, it.reading
+form meter
+list meter
+===
+@create style=vague domain=h2b_lent_books
+people never return my books
+---
+app "Lent books" book plum
+table lent book text, who text, back bool
+stat count(lent where back = no), "still out"
+form lent
+list lent
+===
+@create style=short domain=h2b_roza_calendar
+ramzan roza calendar, tap the days i fasted, total count
+---
+app "Roza" moon mint
+table fast
+state m date = today
+stat count(fast year), "fasts this year"
+monthnav m
+calendar fast, m
+===
+@create style=short domain=h2b_eggs
+eggs from the hens each day, one tap for 1 or a tray (30), weekly chart
+---
+app "Eggs" egg mint
+table lay eggs num 1..100
+quick lay, eggs, [1, 5, 30]
+stat sum(lay.eggs today), "eggs today"
+daybars last 7 days, sum(lay.eggs on it)
+===
+@create style=detailed domain=h2b_overtime
+factory overtime. every day I put the hours. my overtime rate is 250 per hour, I may change it. show hours this month and the money for it
+---
+app "Overtime" clock slate
+table ot hours num 1..16
+setting rate num 0.. = 250 "Rate per hour"
+stat sum(ot.hours month), "hours this month"
+stat sum(ot.hours month) * rate, "overtime pay"
+form ot
+list ot by day
+===
+@create style=vague domain=h2b_books_read
+list of books ive read
+---
+app "Books" book plum
+table book title text, author text?, rating num 1..5
+stat count(book year), "books this year"
+form book
+list book
+===
+@create style=short domain=h2b_oil_change
+bike oil change: remind me on the 1st of every month, and let me log km at each change
+---
+app "Oil" tool slate
+table change km num 0..
+remind "Check the oil, change if due" monthly on 1 at 9:00
+stat last(change.km), "km at last change"
+form change
+list change
+===
+@create style=detailed domain=h2b_mood_diary
+mood diary. one tap for great, okay or low with an optional note. at the end of the month show how many of each
+---
+app "Mood" smile plum
+table mood feeling pick Great|Okay|Low, note long?
+form mood
+share mood month by feeling, count(it), it.key
+list mood by day
+===
+@create style=custom_ui domain=h2b_cricket_scorer
+street cricket scorer. buttons for 1 2 4 6 and wicket and a dot ball. shows runs/wickets and overs like 3.4. reset button
+---
+app "Scorer" ball ink
+state runs num = 0
+state wkts num = 0
+state balls num = 0
+join(runs, "/", wkts) huge align center
+join(floor(balls / 6), ".", balls % 6) "overs" align center
+row gap 1
+  each [1, 2, 4, 6] as r
+    button r tap set runs = runs + r then set balls = balls + 1
+row gap 1
+  button "Dot" tap set balls = balls + 1
+  button "Wicket" tap set wkts = wkts + 1 then set balls = balls + 1
+button "Reset" tap set runs = 0 then set wkts = 0 then set balls = 0
+===
+@create style=custom_ui domain=h2b_kitchen_timers
+three kitchen timers on one screen: eggs 6 min, tea 4 min, rice 15 min
+---
+app "Kitchen" timer mint
+timer 6m, "Eggs", notify "Eggs are done"
+timer 4m, "Tea", notify "Tea is ready"
+timer 15m, "Rice", notify "Rice is done"
+===
+@create style=multi_feature domain=h2b_tuition_centre
+tuition centre: students list, a daily attendance screen where I tick who came today, and a fees screen where I record payments per student and see total paid by each
+---
+app "Centre" school ocean
+table student name text
+table attendance student ref student
+table fee student ref student, amount money
+screen present "Today" check
+  stat count(attendance today), "present today"
+  each student
+    row card
+      toggle it.attendance
+      it.name grow
+  form student, "Add student"
+screen fees "Fees" wallet
+  each student
+    row card
+      it.name grow
+      sum(it.fee.amount) bold
+  form fee, "Record fee"
+===
+@create style=custom_ui domain=h2b_unit_convert
+quick converter with one box for the number and chips to pick km to miles, kg to pounds or celsius to fahrenheit
+---
+app "Convert" calc slate
+state v num = 0
+state mode pick Km_to_miles|Kg_to_pounds|C_to_F = Km_to_miles
+field v "Value"
+choice mode
+let out = if(mode = Km_to_miles, v * 0.621, if(mode = Kg_to_pounds, v * 2.205, v * 9 / 5 + 32))
+stat fixed(out, 2), "result"
+===
+@create style=multi_feature domain=h2b_exam_countdown
+exam dates for each subject, show days left for each one soonest first, and remind me the evening before each exam
+---
+app "Exams" school plum
+table exam subject text, day date
+remind "Exam tomorrow, sleep early" at exam.day - 1d at 18:00
+each exam sort day
+  row card
+    it.subject bold grow
+    plural(it.day - today, "day") faint
+form exam
+===
+@create style=custom_ui domain=h2b_bill_split
+bill splitter: total bill, number of people, tip with a slider up to 30 percent, shows what each person pays
+---
+app "Split" calc mint
+state bill num = 0
+state people num = 2
+state tip num = 10
+field bill "Bill"
+field people "People"
+slider tip 0..30
+"Tip" tip "%" faint
+stat fixed(bill * (1 + tip / 100) / people, 2), "each person pays"
+===
+@edit style=plain domain=h2b_weight_chart
+add a line chart of my weight
+--- before
+app "Weight" scale mint
+table weigh kg num 20..300
+stat last(weigh.kg), "kg now"
+form weigh
+list weigh
+--- after
+app "Weight" scale mint
+table weigh kg num 20..300
+stat last(weigh.kg), "kg now"
+trend weigh, it.kg
+form weigh
+list weigh
+===
+@edit style=plain domain=h2b_vitamin_times
+remind me at 7 am and 9 pm
+--- before
+app "Vitamins" pill mint
+table dose
+stat count(dose today), "taken today"
+quick dose, at, [now]
+list dose
+--- after
+app "Vitamins" pill mint
+table dose
+stat count(dose today), "taken today"
+quick dose, at, [now]
+list dose
+remind "Vitamin time" at 7:00, 21:00
+===
+@edit style=plain domain=h2b_study_goal
+5 hours a day is my new goal
+--- before
+app "Study" book ocean
+table study hours num 1..16
+setting target num = 3 "Hours per day"
+goal sum(study.hours today), target, "today", "h"
+form study
+list study
+--- after
+app "Study" book ocean
+table study hours num 1..16
+setting target num = 5 "Hours per day" set
+goal sum(study.hours today), target, "today", "h"
+form study
+list study
+===
+@edit style=plain domain=h2b_orders_rename
+call these Orders not Jobs
+--- before
+app "Printing" tag slate
+table job customer text, qty num 1.., paid bool
+stat count(job where paid = no), "unpaid jobs"
+form job
+list job
+--- after
+app "Printing" tag slate
+table order was job customer text, qty num 1.., paid bool
+stat count(order where paid = no), "unpaid orders"
+form order
+list order
+===
+@edit style=plain domain=h2b_unpaid_filter
+can i see only the unpaid ones when i want
+--- before
+app "Dues" wallet plum
+table due who text, amount money, paid bool
+form due
+list due
+--- after
+app "Dues" wallet plum
+table due who text, amount money, paid bool
+state only bool = no
+toggle only
+form due
+each due where only = no or paid = no
+  row card tap edit it swipe remove it
+    it.who grow
+    it.amount
+===
+@ask style=ask domain=h2b_reminder_app
+an app to remind me
+---
+ask "What should it remind you about?" "Taking medicine" "Paying bills" "Daily habits or prayers"
+===
+@oos style=detailed domain=h2b_grocery_sync oos=sync
+shared grocery list, when I tick something my wife must see it on her phone straight away. items with quantity and a tick when bought
+---
+app "Groceries" cart mint
+table item name text, qty num 1.. = 1, bought bool
+stat count(item where bought = no), "to buy"
+form item
+each item
+  row card
+    toggle it.bought
+    it.name grow
+    it.qty
+===
+@oos style=short domain=h2b_invoice_print oos=print
+invoices for my clients, amount and paid or not, print them as pdf and send. total unpaid on top
+---
+app "Invoices" note slate
+table invoice client text, amount money, paid bool
+stat sum(invoice.amount where paid = no), "unpaid"
+form invoice
+list invoice
+===
+@oos style=detailed domain=h2b_ride_map oos=location
+log my cycle rides with the route drawn on a map from gps. also distance, time, and a chart of distance per ride
+---
+app "Rides" bike ocean
+table ride km num 0.., time dur
+trend ride, it.km
+form ride
+list ride

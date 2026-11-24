@@ -1,0 +1,390 @@
+@create style=custom_ui domain=b3_dice_night
+dice rolling button, show the number huge, keep all rolls and show a bar for how often each face came up, button to clear
+---
+app "Dice Night" dice plum
+table throw die num 1..6
+state last_roll num = 1
+button "Roll" tap set last_roll = random(6) then add throw die = last_roll
+last_roll huge align center
+"Sixes" count(throw where die = 6) "of" count(throw) "rolls" faint
+bars [1, 2, 3, 4, 5, 6], count(throw where die = it), it
+button "Clear rolls" tap remove all throw
+===
+@create style=multi_feature domain=b3_scrabble
+scrabble night: players, every word they play with its points, running total per player, best play and average, and the top three plays of the night with who played them
+---
+app "Scrabble Scores" board mint
+table player name text
+table play player ref player, word text, points num 1..200
+each player sort sum(it.play.points) desc as p
+  stack card gap 1
+    row
+      p.name head grow
+      sum(p.play.points) big
+    "Best word" max(p.play.points) "points" faint
+    "Average" fixed(sum(p.play.points) / count(p.play), 1) faint
+"Best plays of the night" head
+each play sort points desc top 3 as w
+  row
+    w.word bold grow
+    w.player.name faint
+    w.points
+form player, "Add player"
+form play, "Add word"
+===
+@create style=detailed domain=b3_fantasy_league
+Friends fantasy football league. Every manager has a team name, and each gameweek I enter their points. Rank managers by total points, show a little line chart of each manager's weekly points and their best week.
+---
+app "Fantasy League" trophy slate
+table manager name text, team text
+table gameweek manager ref manager, week_no num 1..38, pts num 0..200
+each manager sort sum(it.gameweek.pts) desc as m
+  stack card gap 1
+    row
+      m.name bold grow
+      m.team faint
+      sum(m.gameweek.pts) big
+    trend m.gameweek, it.pts
+    "Best week" max(m.gameweek.pts) faint
+form manager, "Add manager"
+form gameweek, "Add gameweek points"
+===
+@create style=typos domain=b3_tape_ball
+tape ball tournament, bowlers and runs conceded and wickets in each over, who is bowling best
+---
+app "Overs" ball ocean
+table bowler name text
+table over bowler ref bowler, runs num 0..36, wickets num 0..6 = 0
+"Overs bowled" count(over) big
+each bowler sort sum(it.over.wickets) desc as b
+  row card
+    stack grow
+      b.name bold
+      count(b.over) "overs," sum(b.over.runs) "runs" faint
+    sum(b.over.wickets) "wkts" bold
+    "Econ" fixed(sum(b.over.runs) / count(b.over), 1) faint
+form bowler, "Add bowler"
+form over, "Add over"
+===
+@create style=short domain=b3_milad_programme
+milad programme order: who recites what at which time, and the total length
+---
+app "Milad Programme" mosque plum
+table slot starts time, who text, item pick Naat|Speech|Recital|Dua|Break = Naat, mins num 1..60 = 10
+remind "Programme starts soon" at slot.starts
+"Total programme" sum(slot.mins) "minutes" big
+each slot sort starts as s
+  row card tap edit s
+    s.starts bold
+    stack grow
+      s.who bold
+      s.item faint
+    s.mins "min" faint
+form slot, "Add item"
+===
+@create style=vague domain=b3_birthdays_gifts
+i forget birthdays and then buy the same gifts again
+---
+app "Birthdays" gift plum
+table person name text, birthday date, gift_idea text?
+table gift_given person ref person, what text, cost money
+remind "Birthday coming up" at person.birthday - 3d at 9:00
+"Gifts this year" sum(gift_given.cost year) big
+each person sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      p.gift_idea faint
+    p.birthday faint
+    "Spent" sum(p.gift_given.cost) bold
+form person, "Add person"
+form gift_given, "Add gift"
+===
+@create style=multi_feature domain=b3_walima_menu
+walima menu costing: number of guests with a slider, caterers, dishes with cost per head and which caterer does it, cost per head for the whole menu, total for all guests and what each caterer will bill
+---
+app "Walima Menu" food plum
+state guests num = 300
+table vendor name text, phone text?
+table dish name text, per_head money, vendor ref vendor
+field guests "Guests"
+slider guests 50..1000
+"Menu cost per head" sum(dish.per_head) big
+"Total for all guests" sum(dish.per_head) * guests big
+each vendor sort name as v
+  row card
+    v.name bold grow
+    count(v.dish) "dishes" faint
+    sum(v.dish.per_head) * guests bold
+form vendor, "Add caterer"
+form dish, "Add dish"
+===
+@create style=custom_ui domain=b3_qaza_prayers
+qaza prayers left for each of the five prayers, a button to add one missed and a button when i pray one back
+---
+app "Qaza Prayers" mosque slate
+table missed prayer pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr
+table made_up prayer pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr
+each options missed.prayer as p
+  let owed = count(missed where prayer = p) - count(made_up where prayer = p)
+  row card
+    p bold grow
+    max(owed, 0) "left" big
+    button "Prayed one" tap add made_up prayer = p
+    button "Missed one" tap add missed prayer = p
+===
+@create style=typos domain=b3_garden_plots
+community garden has 12 plots each with a holder, who watered this week. plot goes orange if not watered for 3 days
+---
+app "Community Plots" leaf mint
+table plot number text, holder text
+table watered plot ref plot
+each plot sort number as p
+  let thirsty = due(p.watered, 3)
+  row card fill if(thirsty, warn, soft)
+    stack grow
+      p.number bold
+      p.holder faint
+    "Watered" since(p.watered) "days ago" faint
+    toggle p.watered
+form plot, "Add plot"
+===
+@create style=detailed domain=b3_bird_log
+Birdwatching list. Every species I have spotted is on the list, each sighting records where (park, lake, garden, hills) and how many I saw. Show the number of species on my list, how many I saw this month, and for each bird the total seen and the last place, with a one tap seen again button.
+---
+app "Bird Log" paw mint
+table bird species text
+table sighting bird ref bird, place pick Park|Lake|Garden|Hills = Park, seen num 1..500 = 1
+"Species on my list" count(bird) big
+"Seen this month" count(bird, count(it.sighting month) > 0) faint
+each bird sort species as b
+  row card tap edit b
+    b.species bold grow
+    sum(b.sighting.seen) "seen" faint
+    last(b.sighting.place) faint
+    button "Seen again" tap add sighting bird = b
+form bird, "Add species"
+form sighting, "Add sighting"
+===
+@create style=short domain=b3_stamp_album
+stamp collection by country with condition and what it might be worth
+---
+app "Stamp Album" tag plum
+table stamp country text, issued num 1840..2030, grade pick Mint|Used|Damaged = Mint, worth money?
+"Stamps" count(stamp) big
+"Estimated value" sum(stamp.worth) faint
+share stamp by country, count(it), it.key
+list stamp
+form stamp, "Add stamp"
+===
+@create style=multi_feature domain=b3_resin_studio
+resin art pieces: list of materials with cost per unit, my pieces with the selling price, and which materials and how much of each went into a piece, show material cost and profit on each piece, profit green if positive
+---
+app "Resin Studio" pen plum
+table material name text, unit_cost money
+table piece name text, price money
+table usage piece ref piece, material ref material, qty num 0.1..100
+each piece sort name as p
+  let cost = sum(p.usage, it.qty * it.material.unit_cost)
+  row card tap edit p
+    stack grow
+      p.name bold
+      "Materials" cost faint
+    "Profit" p.price - cost bold color if(p.price - cost > 0, good, bad)
+form material, "Add material"
+form piece, "Add piece"
+form usage, "Add material used"
+===
+@create style=detailed domain=b3_site_costs
+I am a building contractor. Every site has a quote. Workers have a daily wage. I log shifts as which worker worked on which site and for how many days. Show labour cost so far for each site and how much of the quote is left.
+---
+app "Site Costs" tool slate
+table site name text, quote money
+table worker name text, daily_wage money
+table shift site ref site, worker ref worker, days num 0.5..31
+each site sort name as s
+  let labour = sum(s.shift, it.days * it.worker.daily_wage)
+  stack card gap 1 tap edit s
+    row
+      s.name head grow
+      s.quote faint
+    "Labour so far" labour faint
+    "Left of quote" s.quote - labour big color if(s.quote - labour < 0, bad, good)
+form site, "Add site"
+form worker, "Add worker"
+form shift, "Log shift"
+===
+@create style=typos domain=b3_print_shop
+print shop jobs, customer, how many copies, rate per copy, tick when paid, total unpaid and a breakdown by job type this month
+---
+app "Print Shop" tag slate
+table job customer text, copies num 1..100000, rate money, kind pick Flex|Cards|Posters|Stickers = Cards, paid bool
+"Unpaid" sum(job where paid = no, it.copies * it.rate) big
+share job month by kind, sum(it, it.copies * it.rate), it.key
+each job where paid = no sort at as j
+  row card tap edit j
+    stack grow
+      j.customer bold
+      j.kind j.copies "copies" faint
+    j.copies * j.rate bold
+    toggle j.paid
+form job, "New job"
+===
+@create style=multi_feature domain=b3_bug_tracker
+bug tracker for my side projects: projects have bugs with severity low medium high critical and open or fixed, show open count per project (red when a critical one is open), list open bugs with a Fixed button
+---
+app "Bug Tracker" shield ink
+table project name text
+table bug project ref project, title text, severity pick Low|Medium|High|Critical = Medium, status pick Open|Fixed|Wontfix = Open
+each project sort name as p
+  stack card gap 1
+    row
+      p.name head grow
+      count(p.bug where status = Open) "open" bold color if(count(p.bug where status = Open and severity = Critical) > 0, bad, ink)
+    each p.bug where status = Open sort severity desc as b
+      row tap edit b
+        b.title grow
+        b.severity faint
+        button "Fixed" tap set b.status = Fixed
+form project, "Add project"
+form bug, "Report bug"
+===
+@create style=detailed domain=b3_retainers
+Some clients pay me a monthly retainer for a fixed number of hours. Each client has the monthly hours, I log hours worked, and I want a bar per client showing how much of this month's retainer is used.
+---
+app "Retainers" clock ocean
+table client name text, monthly_hours num 1..200
+table logged_hours client ref client, hrs num 0.25..12
+each client sort name as c
+  let used = sum(c.logged_hours.hrs month)
+  stack card gap 1
+    row
+      c.name bold grow
+      used "of" c.monthly_hours "h" faint
+    goal used, c.monthly_hours, "of retainer used", "h"
+form client, "Add client"
+form logged_hours, "Log hours"
+===
+@create style=short domain=b3_fleet_drivers
+truck drivers, km and fuel cost per haul, fuel per km for each driver
+---
+app "Fleet Drivers" bus slate
+table driver name text
+table haul driver ref driver, km num 1..3000, fuel_cost money
+"Fuel spent this month" sum(haul.fuel_cost month) big
+each driver sort name as d
+  row card
+    d.name bold grow
+    stack align end
+      "Fuel per km" fixed(sum(d.haul.fuel_cost) / sum(d.haul.km), 1) bold
+      sum(d.haul.km) "km" faint
+bars driver, sum(it.haul.km), it.name
+form driver, "Add driver"
+form haul, "Log a haul"
+===
+@create style=vague domain=b3_ev_charging
+got an electric car, what is charging costing me compared to petrol
+---
+app "EV Charging" bolt mint
+setting home_rate money = 50 "Home price per kWh"
+table charge kwh num 1..120, place pick Home|Public = Home, price money?
+"Spent this month" sum(charge.kwh month where place = Home) * home_rate + sum(charge.price month where place = Public) big
+"Energy this month" sum(charge.kwh month) "kWh" faint
+daybars last 14 days, sum(charge.kwh on it)
+list charge by day
+form charge, "Add charge"
+===
+@create style=typos domain=b3_ac_care
+we have 4 ACs, show which ones need service, i do it every 6 months
+---
+app "AC Care" cloud slate
+table unit room text
+table ac_service unit ref unit, cost money, gas_refilled bool
+"Spent on AC this year" sum(ac_service.cost year) faint
+each unit sort room as u
+  let late = due(u.ac_service, 180)
+  row card tap edit u
+    stack grow
+      u.room bold
+      "Last service" since(u.ac_service) "days ago" faint
+    if(late, "Service due", "OK") color if(late, warn, good)
+    button "Serviced today" tap add ac_service unit = u, cost = 0
+form unit, "Add AC"
+===
+@create style=custom_ui domain=b3_trip_ring
+a ring that fills up as my trip gets closer, days left in the middle, trip date is something i can change, notify me a week before
+---
+app "Trip Countdown" plane ocean
+setting trip_date date = 2026-12-25 "Trip date"
+let days_left = trip_date - today
+draw width 240
+  circle 44 stroke soft thick 8
+  arc 44, 0, 360 * (1 - clamp(days_left / 60, 0, 1)) stroke accent thick 8
+  label 50, 46, max(days_left, 0) big
+  label 50, 64, "days to go" faint
+when days_left = 7 notify "One week to go"
+===
+@oos style=short domain=b3_chores_sync oos=sync
+weekly chores list that updates live on my wife's phone too, who does what on which day
+---
+app "Weekly Chores" home mint
+table chore what text, who pick Me|Wife = Me, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, done bool
+"Left to do" count(chore where done = no) big
+each chore sort day as c
+  row card tap edit c
+    toggle c.done
+    c.what grow
+    c.who faint
+form chore, "Add chore"
+===
+@edit style=plain domain=b3_dice_e1 ref=b3_dice_night
+call the button throw
+---
+~ button "Roll" => button "Throw"
+===
+@edit style=plain domain=b3_scrabble_e1 ref=b3_scrabble
+add a double word tick and count those plays
+---
+~ points num 1..200 => points num 1..200, double bool
++ "Double word plays" count(play where double = yes) faint
+===
+@edit style=plain domain=b3_fantasy_e1 ref=b3_fantasy_league
+add a chip each week, none wildcard or bench boost, and count wildcards used
+---
+~ pts num 0..200 => pts num 0..200, chip pick None|Wildcard|Bench_boost = None
++after     "Best week" max(m.gameweek.pts) faint ::     "Wildcards used" count(m.gameweek where chip = Wildcard) faint
+===
+@edit style=plain domain=b3_tape_e1 ref=b3_tape_ball
+also keep extras in each over and show total extras at the top
+---
+~ wickets num 0..6 = 0 => wickets num 0..6 = 0, extras num 0..20 = 0
+~ "Overs bowled" count(over) big => "Overs bowled" count(over) "| extras" sum(over.extras) big
+===
+@edit style=plain domain=b3_bird_e1 ref=b3_bird_log
+colour the seen number green once it is above 10
+---
+~ sum(b.sighting.seen) "seen" faint => sum(b.sighting.seen) "seen" faint color if(sum(b.sighting.seen) > 10, good, muted)
+===
+@edit style=plain domain=b3_resin_e1 ref=b3_resin_studio
+pieces should be making, for sale or sold and show how much i have sold
+---
+~ price money => price money, status pick Making|For_sale|Sold = Making
++ "Sold so far" sum(piece.price where status = Sold) big
+===
+@edit style=plain domain=b3_site_e1 ref=b3_site_costs
+add a notes box for each site
+---
+~ quote money => quote money, notes long?
+===
+@edit style=plain domain=b3_bug_e1 ref=b3_bug_tracker
+add developers, assign each bug to one and show open bugs per developer
+---
++after table project name text :: table dev name text
+~ title text, => title text, assignee ref dev?,
++ "Open per developer" head\neach dev sort name as d\n  row\n    d.name grow\n    count(d.bug where status = Open) faint\nform dev, "Add developer"
+===
+@edit style=plain domain=b3_retainers_e1 ref=b3_retainers
+add an hourly rate per client and show how much i can bill this month
+---
+~ monthly_hours num 1..200 => monthly_hours num 1..200, rate money?
++after     goal used, c.monthly_hours, "of retainer used", "h" ::     "To bill" used * c.rate faint
