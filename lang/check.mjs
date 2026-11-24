@@ -88,7 +88,7 @@ class Checker {
     this.errors = errors;
     this.failed = prog.failed || new Map();
     this.reportedFailed = new Set();
-    this.tables = new Map(); this.settings = new Map(); this.states = new Map(); this.screens = new Map(); this.lets = new Map(); this.readonly = new Set();
+    this.tables = new Map(); this.settings = new Map(); this.states = new Map(); this.screens = new Map(); this.lets = new Map(); this.readonly = new Set(); this.content = new Set(); // content: the lesson's read-only tables
     this.options = new Set(); // every pick option word, so a bare option word reads as that option
     this.scopes = []; // {it, names: Map, each: bool, asName}
     this.line = 0; this.via = null; this.inAction = 0;
@@ -157,7 +157,7 @@ class Checker {
           if (!this.tb(s.draft)) {
             if (!this.followOn(s.draft)) this.err('E_UNKNOWN_TABLE', `there is no table "${s.draft}" (tables must be declared above).`, `add "table ${s.draft} ..." above this line.`);
             t = ANY; // keep the name so its uses do not cascade
-          } else t = { t: 'draft', table: s.draft };
+          } else { t = { t: 'draft', table: s.draft }; this.ro(s.draft); }
         } else t = this.fieldType(s.type);
         if (s.init && tname(t) === 'pick' && s.init.k === 'path' && !s.init.parts.length && t.options.includes(s.init.head)) s.init = { k: 'word', v: s.init.head };
         if (s.init) { const it = this.expr(s.init); this.assignable(t, it, `the start value of ${s.name}`, s.init); }
@@ -294,6 +294,7 @@ class Checker {
       if (m.m === 'tap' || m.m === 'swipe') this.actions(m.actions);
       else if (m.m === 'bar' && this.curKind !== 'row') this.err('E_CONTEXT', 'bar marks the app bar row (the title and the main action); it goes on a row.', 'write row bar, with the title and one button inside.');
       else if (['color', 'fill', 'stroke'].includes(m.m)) { const t = this.expr(m.e); if (!isAny(t) && t !== 'color') this.err('E_TYPE', `${m.m} needs a colour (${COLORS.join(', ')} or hue(0..360)), got ${show(t)}.`, `write ${m.m} accent, or ${m.m} if(x > 0, good, bad).`); }
+      else if (m.m === 'alt' && m.e) this.expr(m.e);
       else if (m.e) this.num(m.e, m.m);
     }
   }
@@ -303,7 +304,11 @@ class Checker {
   inEach() { return this.scopes.some(s => s.each); }
   asNames() { return this.scopes.filter(s => s.asName).map(s => s.asName); }
 
+  // the lesson's content tables cannot be changed by the program (LESSON.md)
+  ro(table) { if (table && this.content.has(table)) { this.err('E_READONLY', `${table} is part of the lesson and cannot be changed here.`, 'keep the learner\'s own data in answer, note, seen or a table of your own.'); return true; } return false; }
+  roRow(p) { if (!p || !p.parts || p.parts.length !== 1) return false; const t = p.head === 'it' ? this.curIt() : this.lookup(p.head); return !!t && tname(t) === 'row' && this.ro(t.table); }
   table(s) {
+    if (s.content) this.content.add(s.name);
     if (this.taken(s.name)) return this.err('E_DUP', `the name "${s.name}" is already used.`, 'pick a different table name.');
     if (s.was && s.was === s.name) this.err('E_DUP', `table ${s.name} cannot be renamed from itself.`, 'remove "was".');
     if (s.was && this.tables.has(s.was) && !this.tables.get(s.was).decl.was) this.err('E_DUP', `table ${s.name} says it was ${s.was}, but ${s.was} is still declared (and not renamed itself).`, `remove "table ${s.was}" or the "was ${s.was}"; to swap two names, give both tables a was.`);
@@ -568,6 +573,7 @@ class Checker {
   target(p, allowDraftWhole = false) {
     const t = this.path(p, 'target');
     if (isAny(t)) return t;
+    if (this.roRow(p)) return ANY;
     if (!p.parts.length && p.head !== 'it') {
       if (!this.writable(p.head) && !this.tables.has(p.head)) return this.err('E_TARGET', `"${p.head}" cannot be changed${this.lets.has(p.head) || this.readonly.has(p.head) ? ' (it is a let formula or an each item name)' : ''}.`, 'change a state, a setting, or a row field like it.done.');
     } else {
@@ -583,6 +589,7 @@ class Checker {
     if (isAny(t)) return;
     if (tname(t) === 'rows') {
       if (t.field) return this.err('E_TYPE', 'toggle on a table marks a day; it takes the table, not a column.', `write toggle ${t.table}.`);
+      if (this.ro(t.table)) return;
       this.query({ path: s.target, win: s.win, where: s.where });
       if (s.win && s.win.k === 'last') this.err('E_WINDOW', 'toggle marks one day; use today, yesterday, on DATE, week/month for a once-a-period mark, or all for a mark that does not depend on the day.', 'write toggle X today, toggle X on d or toggle X all.');
       if (s.where) this.whereEq(s.where, t.table);
@@ -603,6 +610,7 @@ class Checker {
     switch (a.a) {
       case 'add': {
         const tb = this.tb(a.table);
+        if (this.ro(a.table)) return;
         if (!tb) { if (this.followOn(a.table)) return; return this.err('E_UNKNOWN_TABLE', `there is no table "${a.table}" declared above.`, `declare table ${a.table} first.`); }
         const set = new Set();
         for (const s of a.assigns) {
@@ -619,24 +627,26 @@ class Checker {
         const t = this.path(a.target, 'rows');
         if (isAny(t)) return;
         if (tname(t) !== 'rows' || !t.field || t.field.includes('.')) return this.err('E_TARGET', 'set all needs a column like item.got.', 'write set all item.got = no.');
+        if (this.ro(t.table)) return;
         this.scopes.push({ it: { t: 'row', table: t.table }, names: new Map(), each: true });
         this.inWhere(t.table, () => { this.assignable(t.ftype, this.expr(a.e), `${t.table}.${t.field}`, a.e); if (a.where) this.bool(a.where, 'the where condition'); });
         this.scopes.pop();
         return;
       }
-      case 'removeall': this.query(a.q, false); return;
+      case 'removeall': { const t = this.query(a.q, false); if (t && !isAny(t) && t.table) this.ro(t.table); return; }
       case 'toggle': return this.toggleT({ target: a.target, win: a.win, where: a.where });
       case 'edit': {
         if (a.e.k === 'path' && !a.e.parts.length && a.e.head !== 'it') {
           const t = this.lookup(a.e.head);
-          if (t && tname(t) === 'row') return;
+          if (t && tname(t) === 'row') { this.ro(t.table); return; }
           if (this.settings.has(a.e.head) || (t && this.writable(a.e.head))) return;
         }
         const t = this.expr(a.e);
+        if (!isAny(t) && tname(t) === 'row' && this.ro(t.table)) return;
         if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `edit needs a row (like it), a setting or a state, got ${show(t)}.`, 'write edit it inside each, or edit goal.');
         return;
       }
-      case 'remove': { const t = this.expr(a.e); if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `remove needs a row (like it), got ${show(t)}.`, 'write remove it inside each, or remove all TABLE where ....'); return; }
+      case 'remove': { const t = this.expr(a.e); if (!isAny(t) && tname(t) === 'row' && this.ro(t.table)) return; if (!isAny(t) && tname(t) !== 'row') this.err('E_TYPE', `remove needs a row (like it), got ${show(t)}.`, 'write remove it inside each, or remove all TABLE where ....'); return; }
       case 'save': { const t = this.lookup(a.name); if (isAny(t) && t) return; if (!t || tname(t) !== 'draft') { if (this.followOn(a.name)) return; this.err('E_TARGET', `save needs a state made with "state ${a.name} new TABLE".`, `add: state ${a.name} new TABLE.`); } return; }
       case 'go': if (!this.screens.has(a.name)) this.err('E_UNKNOWN_NAME', `there is no screen "${a.name}" declared above.`, 'declare the screen first, or remove go (screens already get tabs).'); return;
       case 'notify': return this.parts(a.parts);

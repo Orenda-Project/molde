@@ -7,6 +7,7 @@ import { check } from './check.mjs';
 import { ex as words } from './describe.mjs';
 import { evolve, emptySchema, everOf, FORMAT } from './diff.mjs';
 import { strip } from './format.mjs';
+import { validateLesson, lessonRows } from './lesson.mjs';
 
 const DAY = 86400000;
 const pad2 = n => String(n).padStart(2, '0');
@@ -108,6 +109,7 @@ class App {
     this.clock = opts.now !== undefined ? (typeof opts.now === 'number' ? opts.now : Date.parse(opts.now)) : taken ?? Date.parse('2026-11-23T10:00:00Z');
     this.log = [];
     this.undoStack = [];
+    this.setLessonData(opts.lesson);
     this.seq = 0;
     this.gen = 0; this.stepIds = 0; // the data generation (every write moves it; caches check it) and undo step ids
     this.data = { tables: {}, settings: {}, state: {} };
@@ -281,6 +283,31 @@ class App {
     if (!this.prog.header || this.prog.header.kind !== 'app') return;
     for (const [name] of this.env.tables) this.data.tables[this.tk(name)] ||= [];
     for (const s of this.prog.body) if (s.kind === 'setting' && !(this.sk(s.name) in this.data.settings)) this.w(this.data.settings, this.sk(s.name), s.dflt ? this.litValue(s.dflt, s.type) : this.emptyOf(s.type));
+    this.fillLesson();
+  }
+  // the lesson given to the app (LESSON.md): checked at the boundary; a bad one is reported and not shown
+  setLessonData(L) {
+    this.lessonProblems = [];
+    this.lessonData = null;
+    if (L === undefined || L === null) return;
+    const probs = validateLesson(L);
+    if (probs.length) { this.lessonProblems = probs; return; }
+    try { this.lessonData = lessonRows(L); } catch (e) { this.lessonProblems = [String(e.message || e)]; }
+  }
+  setLesson(L) { this.setLessonData(L); if (this.prog && this.prog.header) { this.fillLesson(); this.gen++; } return this.lessonProblems; }
+  // the content tables hold the lesson's rows, written in place (never a learner change: no journal, no undo)
+  fillLesson() {
+    if (!this.lessonData) return;
+    for (const s of this.prog.body) {
+      if (s.kind !== 'table' || !s.content || !this.lessonData[s.name]) continue;
+      const tb = this.env.tables.get(s.name);
+      this.data.tables[this.tk(s.name)] = this.lessonData[s.name].map(src => {
+        const r = { id: src.id, at: src.at };
+        for (const [name, f] of tb.fields) { const v = src[name]; const u = v === null || v === undefined ? (f.type.t === 'bool' ? false : null) : f.type.t === 'ref' ? v : this.unwrap(v, f.type); r[this.fk(s.name, name)] = u === REJECT ? null : u; }
+        return r;
+      });
+    }
+    this.gen++;
   }
   // name -> storage slot
   tk(table) { return this.map.tables[table] ?? table; }
@@ -744,7 +771,7 @@ class App {
     const handlers = { nodes: new Map(), every: [], when: [] };
     this.H = handlers;
     const h = this.prog.header || {};
-    const root = { id: 'app', t: 'app', name: h.name || '', icon: h.icon || null, theme: h.theme || null, mode: h.mode || null, screens: [], children: [] }; // mode: dark or light chosen by the program (else the phone's setting)
+    const root = { id: 'app', t: 'app', name: h.name || '', icon: h.icon || null, theme: h.theme || null, mode: h.mode || null, size: h.size || null, screens: [], children: [] }; // mode: dark or light chosen by the program (else the phone's setting)
     if (!h || h.kind !== 'app') return { tree: root, handlers };
     const env = this.rootEnv();
     const screens = this.prog.body.filter(s => s.kind === 'screen');
@@ -793,7 +820,7 @@ class App {
   }
   events(mods, env, id, node) {
     const alt = (mods || []).find(m => m.m === 'alt');
-    if (alt) node.a11y = alt.v; // the accessible name the author gave; nodes with their own text use that text
+    if (alt) node.a11y = alt.e ? fmt(this.evalIn(alt.e, env), this) : alt.v; // the accessible name the author gave; nodes with their own text use that text
     if ((mods || []).some(m => m.m === 'bar')) node.bar = true;
     const tap = (mods || []).find(m => m.m === 'tap'), swipe = (mods || []).find(m => m.m === 'swipe');
     if (!tap && !swipe) return;

@@ -14,7 +14,7 @@ const GR = loadGrammar();
 const altNames = r => (GR.map.get(r).items || [GR.map.get(r)]).map(n => n.name);
 // statements other than a component call, and the words that start them
 export const NONCALL = [...altNames('leaf-stmt').filter(n => n !== 'itext-stmt'), ...altNames('block-stmt').filter(n => n !== 'call-stmt')]; // and not a text line
-export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
+export const STMT_WORDS = new Set(['table', 'setting', 'state', 'let', 'remind', 'every', 'when', 'text', 'icon', 'image', 'space', 'divider', 'field', 'toggle', 'choice', 'slider', 'button', 'rect', 'line', 'circle', 'arc', 'path', 'label', 'pt', 'slot', 'lesson', 'def', 'screen', 'each', 'if', 'else', 'stack', 'row', 'box', 'scroll', 'grid', 'draw', 'poly', 'app', 'ask', 'lib']);
 import { lex, join, LexError } from './lex.mjs';
 
 export const MAX_DEPTH = 8;
@@ -252,8 +252,10 @@ const BUILD = {
     const o = { kind: 'app', name: str(child(n, 'string')), icon: child(n, 'ident') ? id(child(n, 'ident')) : null, theme: null };
     if (child(n, 'theme')) o.theme = lits(child(n, 'theme'))[0];
     o.mode = child(n, 'mode') ? lits(child(n, 'mode'))[0] : null;
+    o.size = child(n, 'size') ? lits(child(n, 'size'))[0] : null;
     return o;
   },
+  'lesson-stmt': () => ({ kind: 'lesson' }),
   'ask-stmt': n => {
     const s = children(n, 'string').map(str);
     return { kind: 'ask', question: s[0], options: s.slice(1) };
@@ -394,7 +396,7 @@ function mods(n) {
     if (child(m, 'size')) return { m: 'size', v: lits(child(m, 'size'))[0] }; // tiny, small, large, huge
     const l = lits(m)[0];
     const o = { m: l };
-    if (l === 'alt') o.v = str(child(m, 'string'));
+    if (l === 'alt') { if (child(m, 'string')) o.v = str(child(m, 'string')); else o.e = expr(child(m, 'expr')); } // a text, or a value that holds one (a lesson picture's description)
     else if (l === 'bar') o.v = true;
     else if (l === 'align') o.v = lits(child(m, 'align'))[0];
     else if (['pad', 'gap', 'span'].includes(l)) o.v = +child(m, 'number').v;

@@ -16,16 +16,18 @@ lib-first ::= "lib" sp string
 block-stmt ::= def-stmt | screen-stmt | each-stmt | if-stmt | else-stmt | box-stmt | draw-stmt | plot-stmt | poly-stmt | call-stmt
 leaf-stmt ::= table-stmt | setting-stmt | state-stmt | let-stmt | remind-stmt | every-stmt | when-stmt | text-stmt | itext-stmt | icon-stmt
   | image-stmt | space-stmt | divider-stmt | field-stmt | toggle-stmt | choice-stmt | slider-stmt | button-stmt
-  | shape-stmt | pt-stmt | tick-stmt | slot-stmt
+  | shape-stmt | pt-stmt | tick-stmt | slot-stmt | lesson-stmt
 
-# the app line: name, icon, colour (a theme or an accent colour), and dark or light to override the phone
-app-stmt ::= "app" sp string (sp ident)? (sp theme)? (sp mode)?
+# the app line: name, icon, colour (a theme or an accent colour), dark or light to override the phone, and the text size of the whole app
+app-stmt ::= "app" sp string (sp ident)? (sp theme)? (sp mode)? (sp size)?
 ask-stmt ::= "ask" sp string (sp string)+
 theme ::= "ocean" | "mint" | "slate" | "ink" | "plum"
   | "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey"
 mode ::= "dark" | "light"
 
 # ---------- data ----------
+# the lesson the app is given (LESSON.md): declares its read-only tables and the learner's tables
+lesson-stmt ::= "lesson"
 table-stmt ::= "table" sp ident (sp "was" sp ident)? (sp string)? (sp field ("," sp field)*)?
 setting-stmt ::= "setting" sp field (sp "set")?
 state-stmt ::= "state" sp ident sp state-type (sp "was" sp ident)? (sp "=" sp (expr | word))? (sp "keep")? (sp "was" sp ident)?
@@ -112,7 +114,7 @@ e5 ::= e4 "," sp expr
 mod ::= "big" | "head" | "faint" | "axes" | "gridlines" | "middle" | "full" | "ratio" sp expr | size | "bold" | "card" | "grow" | "color" sp expr | "fill" sp expr | "stroke" sp expr
   | "thick" sp expr | "opacity" sp expr | "width" sp expr | "height" sp expr | "radius" sp expr
   | "pad" sp number | "gap" sp number | "span" sp number | "align" sp align
-  | "alt" sp string | "bar"
+  | "alt" sp (string | expr) | "bar"
   | "tap" sp actions | "swipe" sp actions
 size ::= "tiny" | "small" | "large" | "huge"
 align ::= "start" | "center" | "end"

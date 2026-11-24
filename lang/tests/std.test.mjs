@@ -32,16 +32,27 @@ const SAMPLES = {
   section: 'section "Today", "note"',
   weekdots: 'weekdots count(t on it) > 0',
 };
+// the lesson components read the tables a `lesson` line declares
+const LHEAD = 'app "Lesson test"\nlesson\n';
+const LESSON_SAMPLES = {
+  blocks: 'each section\n  blocks',
+  reader: 'reader',
+  stepper: 'stepper',
+  flashcards: 'flashcards',
+  quiz: 'quiz "Check yourself"',
+  reveal: 'each question as x\n  reveal x.solution',
+  notes: 'each section\n  notes',
+};
 
 test('every std component has a sample here and a describe line', () => {
   const defs = stdDefs();
-  assert.deepEqual([...defs.keys()].sort(), Object.keys(SAMPLES).sort());
+  assert.deepEqual([...defs.keys()].sort(), [...Object.keys(SAMPLES), ...Object.keys(LESSON_SAMPLES)].sort());
   for (const [name, e] of defs) assert.ok(e.doc, `std ${name} has no "# describe:" line`);
 });
 
-for (const [name, line] of Object.entries(SAMPLES)) {
+for (const [name, line, head] of [...Object.entries(SAMPLES), ...Object.entries(LESSON_SAMPLES).map(([n, l]) => [n, l, LHEAD])]) {
   test(`std ${name} expands to level 1 only and the expansion checks on its own`, () => {
-    const src = HEAD + line + '\n';
+    const src = (head || HEAD) + line + '\n';
     const r = check(src);
     assert.deepEqual(r.errors.map(String), []);
     const kinds = new Set();
