@@ -88,7 +88,7 @@ if a.session:
     M1, M2 = map(int, a.session.split(":"))
     for ci, mins in enumerate((M1, M2)):
         nm = "36_train.py" if ci == 0 else "36b_train.py"
-        cmd = f"cd {ROOT}/train && nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
+        cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
         (d / nm).write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
 subprocess.Popen({cmd!r}, shell=True)
