@@ -7,7 +7,7 @@
 
 Rules enforced here:
   * every GGUF must pass local_load_test.py (loads with the laptop llama.cpp, 5 grammar-constrained requests) BEFORE upload; any failure = no upload
-  * the repo must already be private; this script never changes visibility
+  * this script never changes the repo's visibility (it was private for r1 and smoke, public from 2026-11-24)
   * metrics in the card come from local_load_test.py --full on the SAME quantised files that are uploaded (pass them with --metrics)
   * the token is read by huggingface_hub from the local login; it is never printed.
 If a large upload stalls: HF_HUB_DISABLE_XET=1 python3 publish_hf.py ...
@@ -40,8 +40,7 @@ def main():
     from huggingface_hub import HfApi
     api = HfApi()
     info = api.model_info(REPO)
-    if not info.private:
-        sys.exit(f"REFUSED: {REPO} is not private")
+    print(f"repo {REPO} private={info.private} (visibility is never changed by this script)")
     tests = {}
     for g in a.gguf:
         g = pathlib.Path(g)
