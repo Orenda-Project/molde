@@ -2,9 +2,9 @@ app "Quiz" star plum
 table item question text, a text, b text, c text, right pick A|B|C
 table answer item ref item, chose pick A|B|C
 state adding bool = no
-let score = countof(answer, it.chose = it.item.right)
-let todo = countof(item, count(it.answer) = 0)
-row
+let score = count(answer, it.chose = it.item.right)
+let todo = count(item, count(it.answer) = 0)
+row bar
   button if(adding, "Close", "Add question") tap set adding = not adding
 if adding
   form item, "Save question"
@@ -12,7 +12,7 @@ stack gap 1
   if count(answer) = 0
     plural(count(item), "question") "to answer" big
   else
-    text score "of" count(answer) "right" big
+    score "of" count(answer) "right" big
   draw 100, 3
     rect 0, 0, 100, 3 fill soft radius 1.5
     rect 0, 0, 100 * count(answer) / count(item), 3 fill accent radius 1.5

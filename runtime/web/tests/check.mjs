@@ -662,34 +662,6 @@ await scenario('200%: drawing labels stay inside their drawings', 'ex=tasbeeh&vi
 });
 
 // ---------- 6. round 4 checks ----------
-await scenario('no guessed app bar: the bar is the name only; each main action is the first thing under it', 'ex=budget&view=app', async page => {
-  const bad = [];
-  for (const [id, label] of [['budget', 'Previous'], ['habits', 'Add habit'], ['exercise', 'Log exercise'], ['reading', 'Add book'], ['todo', 'Add task'], ['medicine', 'Add medicine'], ['journal', 'Write']]) {
-    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
-    await page.waitForFunction(i => window.__molde.ex === i, id);
-    if (await page.$eval('.mo-head', e => e.querySelectorAll('.mo-head-bar *').length)) bad.push(`${id}: something moved into the app bar`);
-    const first = await page.$eval('.mo-screen > :first-child', (e, l) => !![...e.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.textContent).trim() === l), label);
-    if (!first) bad.push(`${id}: "${label}" is not the first thing under the title`);
-  }
-  expect(!bad.length, bad.join(' | '));
-});
-
-await scenario('no guessed numbers: every text is drawn exactly as the evaluator wrote it', 'ex=water&view=app', async page => {
-  const bad = [];
-  for (const c of CATALOG) {
-    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
-    await page.waitForFunction(i => window.__molde.ex === i, c.id);
-    const miss = await page.evaluate(() => {
-      const norm = x => x.replace(/\s+/g, ' ').trim();
-      const dom = norm(document.querySelector('.mo-app').innerText);
-      const texts = window.__molde.app.findAll(n => n.t === 'text' && !(n.style && n.style.opacity === 0)).map(n => norm(n.text)).filter(Boolean);
-      return texts.filter(t => !dom.includes(t)).slice(0, 3);
-    });
-    for (const m of miss) bad.push(`${c.id}: "${m}" was changed`);
-  }
-  expect(!bad.length, bad.slice(0, 6).join(' | '));
-});
-
 await scenario('S1: a fixed grid keeps its 7 columns at 320, 360 and 412, headers over their days', 'ex=habits&view=app', async page => {
   const bad = [];
   for (const w of [320, 360, 412]) {
@@ -749,6 +721,48 @@ await scenario('S2: Enter saves a sheet; Tab stays inside it', 'ex=water&view=ap
   await page.waitForSelector('.mo-app :text("of 2200 ml today")');
 });
 
+await scenario('app bar: only the row the program marks `bar` sits beside the title', 'ex=budget&view=app', async page => {
+  const bad = [];
+  for (const [id, label] of [['budget', 'Previous'], ['habits', 'Add habit'], ['exercise', 'Log exercise'], ['reading', 'Add book'], ['todo', 'Add task'], ['medicine', 'Add medicine'], ['journal', 'Write'], ['quiz', 'Add question'], ['water', null], ['tasbeeh', null]]) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, id);
+    await page.waitForFunction(i => window.__molde.ex === i, id);
+    const marked = await page.evaluate(() => !!window.__molde.app.find(n => n.bar));
+    const inBar = await page.$$eval('.mo-head .mo-head-bar button', (els) => els.map(b => (b.getAttribute('aria-label') || b.textContent).trim()));
+    if (label && !inBar.includes(label)) bad.push(`${id}: "${label}" not beside the title`);
+    if (!marked && inBar.length) bad.push(`${id}: something unmarked moved into the bar`);
+  }
+  expect(!bad.length, bad.join(' | '));
+});
+
+await scenario('typed parts: numbers and money in the locale, years never grouped, nothing else changed', 'ex=water&view=app', async page => {
+  const bad = [];
+  for (const c of CATALOG) {
+    await page.evaluate(i => { location.hash = 'ex=' + i + '&view=app'; }, c.id);
+    await page.waitForFunction(i => window.__molde.ex === i, c.id);
+    const miss = await page.evaluate(() => {
+      const norm = x => x.replace(/\s+/g, ' ').trim();
+      const dom = norm(document.querySelector('.mo-app').innerText);
+      const g = v => (Math.round(v * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+      const fmt = p => p.t === 'num' ? g(p.v) : p.t === 'money' ? 'Rs ' + (Math.round(p.v * 100) % 100 ? p.v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : g(p.v)) : p.t === 'year' ? String(p.v) : String(p.text ?? '');
+      const join = xs => { let o = ''; for (const x of xs) { if (x === '') continue; if (o && !/^[,.;:!?%)\/]/.test(x) && !/[(\/#]$/.test(o)) o += ' '; o += x; } return o; };
+      const nodes = window.__molde.app.findAll(n => (n.t === 'text' || n.t === 'button') && n.parts && !(n.style && n.style.opacity === 0));
+      return nodes.map(n => norm(join(n.parts.map(fmt)))).filter(t => t && !dom.includes(t)).slice(0, 3);
+    });
+    for (const m of miss) bad.push(`${c.id}: "${m}" not shown as formatted`);
+    if (/\b(19|20)\d\d\b/.test('') || /\b2,0\d\d\b/.test(await page.$eval('.mo-app', e => e.innerText))) bad.push(`${c.id}: a year got a separator`);
+  }
+  expect(!bad.length, bad.slice(0, 6).join(' | '));
+});
+
+await scenario('form: a refused save says why at the form and marks each needed field', 'ex=todo&view=app', async page => {
+  await page.click('button.mo-btn:has-text("Add task")');
+  await page.click('button.mo-btn:has-text("Save task")');
+  await page.waitForSelector('.mo-form-err[role="alert"], .mo-card .mo-err');
+  const msg = await page.$$eval('.mo-app .mo-err', e => e.map(x => x.textContent));
+  expect(msg.some(t => /Needed/.test(t)), `no per-field message: ${JSON.stringify(msg)}`);
+  expect(await page.$('.mo-app input[aria-invalid="true"]'), 'needed field not marked');
+});
+
 // text boxes that overprint each other
 function overlaps() {
   const leaf = [...document.querySelectorAll('.mo-app .mo-text, .mo-app .mo-btn, .mo-app .mo-chip, .mo-app .mo-lbl, .mo-app .mo-plot-x span, .mo-app .mo-plot-y span, .mo-app .mo-title')].filter(e => e.getClientRects().length && e.textContent.trim() && !e.closest('.mo-sr'));
@@ -803,7 +817,7 @@ await scenario('S2: no plural or grammar slips in any app', 'ex=water&view=app',
 
 await scenario('S2: Journal opens on the mood trend and entries; chart words come from the plot, not hand labels', 'ex=journal&view=app', async page => {
   expect(!(await page.$('.mo-plot .mo-plot-lbl')), 'hand-placed labels in the mood chart');
-  expect((await page.$$eval('.mo-plot-y span', e => e.length)) >= 3, 'no y ticks');
+  expect((await page.$$eval('.mo-plot-y span', e => e.map(x => x.textContent))).join(',') === 'Great,Okay,Rough' || (await page.$$eval('.mo-plot-y span', e => e.map(x => x.textContent))).includes('Great'), 'mood axis has no words');
   const inside = await page.$eval('.mo-plot', p => { const b = p.getBoundingClientRect(); return [...p.querySelectorAll('.mo-plot-x span')].every(s => { const r = s.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; }); });
   expect(inside, 'x labels outside the plot');
   const top = await page.$eval('.mo-plot', e => e.getBoundingClientRect().top);

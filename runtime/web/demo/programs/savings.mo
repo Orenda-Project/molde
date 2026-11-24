@@ -12,7 +12,7 @@ row gap 4 align center
     circle 20, 106, 12 fill accent
   stack grow gap 1
     "Saved so far" color muted
-    text total big
+    total big
     round(p * 100) "% of" goal color muted tap edit goal
     if total >= goal
       "Goal reached" bold color good
@@ -31,10 +31,10 @@ stack card gap 2
   row
     "Last 6 months" head grow
     sum(deposit.amount month) "this month" faint
-  plot 0..6, 0..maxof([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it))) axes gridlines
+  plot 0..6, 0..max(1000, max([5, 4, 3, 2, 1, 0], sum(deposit.amount month of addmonths(today, 0 - it)))) axes gridlines
     each [5, 4, 3, 2, 1, 0]
       rect index + 0.15, 0, 0.7, sum(deposit.amount month of addmonths(today, 0 - it)) fill if(it = 0, accent, muted) radius 3
-      tick index + 0.5, monthshort(addmonths(today, 0 - it))
+      tick index + 0.5, monthname(addmonths(today, 0 - it))
   "Rupees saved each month; this month in colour" faint
 "Deposits" head
 each deposit sort at desc top 12 as r empty "Nothing saved yet. Tap + 1,000 to make the first deposit."

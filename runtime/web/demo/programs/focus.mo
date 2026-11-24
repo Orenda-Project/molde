@@ -9,7 +9,7 @@ when going and left <= 0s set going = no then add session task = task, mins = wo
 draw width 260
   circle 44 stroke soft thick 6
   arc 44, 0, 360 * (1 - left / work) stroke accent thick 6
-  label 50, 46, left size huge
+  label 50, 46, left huge
   label 50, 64, if(going, "focusing", "ready") color muted
 row gap 1 align center
   button if(going, "Pause", "Start") fill accent width 140 tap set going = not going
@@ -19,7 +19,7 @@ stack card gap 2
   row
     "Today" head grow
     plural(count(session today), "session") "," sum(session.mins today) "min" faint
-  plot 0..7, 0..max(60, maxof(days last 7 days, sum(session.mins on it))) axes gridlines
+  plot 0..7, 0..max(60, max(days last 7 days, sum(session.mins on it))) axes gridlines
     each days last 7 days
       rect index + 0.15, 0, 0.7, sum(session.mins on it) fill if(it = today, accent, muted) radius 3
       tick index + 0.5, dayname(it)

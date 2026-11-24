@@ -8,7 +8,7 @@ row gap 4 align center
     rect 8, 104 - 100 * p, 40, 100 * p fill accent
     path "M6 4h44l-6 100H12z" stroke ink thick 2
   stack grow gap 1
-    text ml "ml" big
+    ml "ml" big
     "of" goal "ml today" color muted tap edit goal
     if ml >= goal
       "Goal reached" bold color good
@@ -29,8 +29,8 @@ stack card gap 2
 stack card gap 3
   row
     "Last 7 days" head grow
-    "Goal met on" countof(days last 7 days, sum(drink.ml on it) >= goal) "of 7 days" faint
-  plot 0..7, 0..max(goal, maxof(days last 7 days, sum(drink.ml on it))) axes gridlines
+    "Goal met on" count(days last 7 days, sum(drink.ml on it) >= goal) "of 7 days" faint
+  plot 0..7, 0..max(goal, max(days last 7 days, sum(drink.ml on it))) axes gridlines
     line 0, goal, 7, goal stroke ink thick 1
     each days last 7 days
       rect index + 0.15, 0, 0.7, sum(drink.ml on it) fill if(sum(drink.ml on it) >= goal, accent, muted) opacity if(sum(drink.ml on it) >= goal, 1, 0.5) radius 3

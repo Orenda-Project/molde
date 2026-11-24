@@ -43,12 +43,12 @@ Runtime pieces from SPEC section 12: editor sheets for rows and settings (built 
 None of these names an app, a table or a field; each reads only node types and styles from the tree.
 
 1. **Points follow the system text size** (16 points = 1rem), so a drawing grows with its labels.
-2. **No guessed number formats.** Texts are drawn exactly as the evaluator wrote them. The renderer only keeps the runtime's own currency sign (a load option, not a guess) on the same line as its amount, never breaks a number inside, and formats plot tick values (they arrive as numbers).
-3. **No guessed app bar.** The bar is the app's name and, with settings, a settings button. A program's main action is simply its first line, right under the title.
+2. **Numbers from typed parts.** A text or button that shows values carries `parts` with their type; the renderer formats `num` and `money` parts in the runtime's locale (separators from 1,000, money with the runtime's currency sign and cents when there are any), shows a `year` as it is, and keeps every other part exactly as the evaluator wrote it. Nothing is guessed from the words. Plot tick values are numbers too.
+3. **The app bar is the row the program marks `bar`**, drawn beside the title (with the settings button when there are settings). Nothing else moves there.
 4. **`<` and `>` buttons are drawn as chevrons** named Previous and Next.
 5. **Centring comes from the program** (`middle`, used by tic-tac-toe); everything else starts at the top. The screen fills the free height so a `middle` block can centre. A drawing on its own line is centred across.
 6. **Strips and columns**: a row whose children are all growing stacks is a strip and keeps its columns (short labels end in an ellipsis rather than overprint); a growing column beside other things keeps about 8 characters so rows wrap at large text; a grid always draws exactly its N columns, and words in narrow cells wrap.
-7. **Invisible text is read aloud only**: a `text` with `opacity 0` becomes screen-reader text (used to name heat-map cells and board squares).
+7. **Invisible text is read aloud only**: a `text` with `opacity 0` becomes screen-reader text. Kept because `alt` takes only a fixed string, and a heat-map cell or a board square needs a name made from data ("Mon 16 Nov, 4 of 6 done"). Every other node takes its name from the tree's `a11y`.
 8. **Big grids are one tab stop**: a grid with more than 12 tappable cells has one tab stop and arrow keys (roving tabindex).
 9. **`stroke` on a block is an outline ring** (inset, so the layout does not move).
 10. **Labels in drawings** are HTML with real sizes; their colour follows the shape under them.
@@ -74,19 +74,16 @@ Direction: personal tools on a cheap phone; calm, exact, a little warm. Surfaces
 
 ## What still looks weak (honest list)
 
-- **Numbers under 10,000 have no separator** ("Rs 5322", "1480 ml") because the renderer no longer guesses (need 2 below).
-- **The main action sits under the title, not beside it** (need 1 below).
-- **The journal's mood axis shows 1 to 5** with a caption, not the words (need 3 below).
+- **Month ticks are full names** ("June 2026"): ticks carry no typed parts, so the renderer cannot shorten them; it hides every other label when they would touch.
 - **Heat-map cells and board squares are named with invisible text** (rule 7).
 - **Whole-app empty states** (no habits, no medicines) are still `if` blocks because they replace several sections.
 - The heat grid needs 44 px cells to be tappable, so it shows 6 weeks, not 10; at 320 px the cells are 41 px wide.
-- Apps run in the viewer's local time; the demo clock is Thursday 26 November 2026, 15:30 local, so the seeded data looks the same on any machine. The demo keeps every app on the device (localStorage); "Reset demo data" puts the sample back.
+- The chat button keeps its own 80 px strip at the bottom of the phone (round 3's rule that it never covers a row); the round 4 idea of only padding the end of the scroll would put it back over rows mid-scroll, so it was not taken.
+- Apps run in the viewer's local time; the demo clock is Thursday 26 November 2026, 15:30 local. The demo keeps every app on the device (localStorage); "Reset demo data" puts the sample back.
 
-## Language and evaluator needs (round 4)
+## Language and evaluator needs (after round 9)
 
-Merged and used (workarounds removed): `applyEdit`/`revert`, storage slots, public `addRow`, `fields()`/`setField()`, `plot`/`tick` for every chart, `plural()`, `monthshort()`, `middle`, labels on `toggle`/`choice`, `action`, `each ... empty`, `currency`, `tz: 'local'`. Round 4 removed the renderer's two remaining guesses (app bar and number grouping), so these are now needed from the language to get those looks back:
+Merged and used: `bar`, typed `parts`, `a11y`/`alt`, `ytick`, `form.error` and per-field `error`, plus everything from rounds 3 to 9 (`applyEdit`/`revert`, slots, `fields()`/`setField()`, `plot`, `plural()`, `middle`, `action`, `each ... empty`, `currency`, `tz`). Still needed:
 
-1. **An app-bar marker** (for example `bar` on a row) so a program can put its main action or month switcher next to the title. Until then the main action is the first line under the title.
-2. **Typed text parts** in the tree (a text's parts with their type: number, money, date), or **thousands separators from 1,000 by default**, so "Rs 5322" can read "Rs 5,322" without guessing. `grouped()` exists but drops the currency sign from money.
-3. **Named y ticks on `plot`** (`ytick 5, "Great"`) so the journal can show words on its gridlines; today it shows 1 to 5 with a caption.
-4. **An accessible name for any node** (`say "..."`) to replace rule 7 (invisible text) on heat-map cells and board squares.
+1. **`alt` with formula parts** (`alt dayname(it) count(check on it) "done"`), so a cell or square can be named from data without invisible text (rule 7).
+2. **Typed parts on plot ticks** (a `date` part), so month ticks can read "Jun" on a phone and "June 2026" on a wide screen.

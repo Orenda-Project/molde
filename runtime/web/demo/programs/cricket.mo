@@ -6,7 +6,7 @@ let runs = sum(ball.runs today) + count(ball today where wide = yes)
 let wkts = count(ball today where out = yes)
 stack card gap 2 align center
   "Home side batting" color muted
-  text runs "/" wkts size huge
+  runs "/" wkts huge
   floor(legal / 6) + legal % 6 / 10 "of" overs "overs" bold
   "Run rate" round(runs * 60 / legal) / 10 "· needs" overs * 6 - legal "more balls" faint
   row gap 1 align center

@@ -3,7 +3,7 @@ table move game num, cell num 1..9, mark pick X|O
 setting cur num = 1 "Game"
 let n = count(move where game = cur)
 let turn = if(n % 2 = 0, "X", "O")
-let won(m text) = countof([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
+let won(m text) = count([123, 456, 789, 147, 258, 369, 159, 357], count(move where game = cur and mark = m and (cell = floor(it / 100) or cell = floor(it / 10) % 10 or cell = it % 10)) = 3) > 0
 let xw = won(X)
 let ow = won(O)
 stack gap 4 align center middle
@@ -20,6 +20,6 @@ stack gap 4 align center middle
           "Row" floor((c - 1) / 3) + 1 ", column" (c - 1) % 3 + 1 ", empty" opacity 0
       else
         box height 96 radius 12 fill surface
-          last(move.mark where game = cur and cell = c) size huge align center color if(last(move.mark where game = cur and cell = c) = X, accent, ink)
+          last(move.mark where game = cur and cell = c) huge align center color if(last(move.mark where game = cur and cell = c) = X, accent, ink)
           "Row" floor((c - 1) / 3) + 1 ", column" (c - 1) % 3 + 1 "," last(move.mark where game = cur and cell = c) opacity 0
   button "New game" fill accent tap set cur = cur + 1

@@ -19,7 +19,7 @@ else
   stack gap 0
     count(student) - away "of" count(student) "present" big
     if away > 0
-      text away "absent today" color muted
+      away "absent today" color muted
     else
       "Everyone is here" color good
   grid 3 gap 1
@@ -27,7 +27,7 @@ else
       stack radius 10 pad 1 gap 0 fill if(count(s.absent on d) > 0, bad, soft) tap toggle s.absent on d
         s.name bold
         if count(s.absent on d) > 0
-          "Absent" size small
+          "Absent" small
         else
           "Present" faint
   "Tap a name to mark absent. Everyone starts present." faint

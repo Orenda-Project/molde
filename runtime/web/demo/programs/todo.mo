@@ -5,7 +5,7 @@ state showdone bool = no
 state d new task
 let late = count(task where done = no and due < today)
 let open = count(task where done = no)
-row
+row bar
   button if(adding, "Close", "Add task") fill if(adding, soft, accent) tap set adding = not adding
 if adding
   stack card gap 3

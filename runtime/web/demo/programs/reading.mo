@@ -3,7 +3,7 @@ table book title text, author text?, status pick Want|Reading|Done = Want, finis
 state tab text = Reading
 state adding bool = no
 state d new book
-row
+row bar
   button if(adding, "Close", "Add book") fill if(adding, soft, accent) tap set adding = not adding
 if adding
   stack card gap 3

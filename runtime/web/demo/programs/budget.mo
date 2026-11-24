@@ -9,7 +9,7 @@ let spent = sum(spend.amount month of m)
 let now_month = monthname(m) = monthname(today)
 let day = if(now_month, monthday(today), monthdays(m))
 let left = budget - spent
-row align center gap 1
+row align center gap 1 bar
   button "<" tap set m = addmonths(m, -1)
   monthname(m) bold grow align center
   if now_month
@@ -26,7 +26,7 @@ stack card gap 3
     rect 0, 0, 100 * clamp(spent / budget, 0, 1), 4 fill if(spent > budget, bad, accent) radius 2
     rect 100 * day / monthdays(m), 0, 0.6, 4 fill ink
   row
-    text spent "spent" faint grow
+    spent "spent" faint grow
     "Day" day "of" monthdays(m) faint
   if now_month and left > 0
     stack fill soft pad 2 radius 10
@@ -57,7 +57,7 @@ stack card gap 2
     tick 1, "1"
     tick round(monthdays(m) / 2), round(monthdays(m) / 2)
     tick monthdays(m), monthdays(m)
-  text spent "spent by day" day "against an even pace of" round(budget * day / monthdays(m)) faint
+  spent "spent by day" day "against an even pace of" round(budget * day / monthdays(m)) faint
 stack card gap 3
   row
     "By category" head grow

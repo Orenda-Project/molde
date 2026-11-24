@@ -118,8 +118,11 @@ class Renderer {
       this.screenEl.append(Object.assign(h('p', 'mo-error'), { textContent: this.app.errors.join('\n') }));
     } else {
       let kids = this.screenChildren(t);
-      // a screen that is one block (a board, one drawing) sits in the middle of the free height;
-      // anything else starts at the top
+      // the row the program marks `bar` is the app bar: drawn beside the title (UITREE round 4)
+      const bar = kids.find(k => k.bar);
+      if (bar) kids = kids.filter(k => k !== bar);
+      this.patchChildren(this.headTools, bar ? [bar] : [], {});
+      this.head.classList.toggle('mo-head-tools', !!bar);
       this.patchChildren(this.screenEl, kids, { top: true });
     }
     this.renderTabs(t);
@@ -273,6 +276,7 @@ class Renderer {
       case 'draw': el = h('div', 'mo-draw'); break;
       case 'plot': el = h('div', 'mo-plot'); break;
       case 'error': el = h('p', 'mo-error'); break;
+      case 'formerror': el = h('p', 'mo-err'); break;
       default: el = h('div'); el.hidden = true;
     }
     el._t = n.t; el._kind = n.kind || '';
@@ -373,7 +377,7 @@ class Renderer {
           el.innerHTML = iconSvg(tx === '<' ? '_left' : '_right');
           el.classList.add('mo-chev');
           el.setAttribute('aria-label', tx === '<' ? 'Previous' : 'Next');
-        } else { el.textContent = typo(n.text || ''); el.removeAttribute('aria-label'); }
+        } else { el.textContent = partsText(n); el.removeAttribute('aria-label'); }
         break;
       }
       case 'icon': el.innerHTML = iconSvg(n.name, null); break;
@@ -384,14 +388,17 @@ class Renderer {
       case 'choice': this.fillChoice(el, n, n.label ? cap(String(n.label).replace(/_/g, ' ')) : null); break;
       case 'slider': this.fillSlider(el, n); break;
       case 'input': this.fillInput(el, n, cx); break;
-      case 'form': this.patchChildren(el, (n.fields || []).map(f => ({ ...f, inForm: true })), cx); break;
+      case 'form': {
+        this.patchChildren(el, [...(n.fields || []).map(f => ({ ...f, inForm: true })), ...(n.error ? [{ id: n.id + ':error', t: 'formerror', text: n.error }] : [])], cx);
+        break;
+      }
+      case 'formerror': el.textContent = n.text; el.className = 'mo-err mo-form-err'; el.setAttribute('role', 'alert'); break;
     }
     if (n.children && n.t !== 'form') this.patchChildren(el, n.children, cx);
     if (n.t === 'grid') this.rove(el);
-    if (n.tap && el.getAttribute('role') === 'button' && !el.hasAttribute('aria-label')) {
-      const label = (el.textContent || '').trim();
-      if (!label) el.setAttribute('aria-label', 'Open');
-    }
+    if (n.tap && el.getAttribute('role') === 'button' && n.t !== 'text' && n.a11y && !(el.textContent || '').trim()) el.setAttribute('aria-label', n.a11y);
+    if (n.tap && el.getAttribute('role') === 'button' && !el.hasAttribute('aria-label') && !(el.textContent || '').trim()) el.setAttribute('aria-label', 'Open');
+    if (n.t === 'icon' && n.a11y) { el.setAttribute('role', 'img'); el.setAttribute('aria-label', n.a11y); }
   }
 
   // a grid with more than 12 tappable cells is one tab stop; arrow keys move between cells
@@ -407,7 +414,7 @@ class Renderer {
   nearLabel(n) { return null; }
 
   fillText(el, n) {
-    const text = typo(n.text ?? '');
+    const text = partsText(n);
     const big = n.style && (n.style.role === 'big' || n.style.size === 'huge');
     const m = big && /^(-?[\d][\d,.:]*)\s([A-Za-z%]{1,5})$/.exec(text);
     if (n.tap) {
@@ -482,6 +489,10 @@ class Renderer {
       return;
     }
     const l = wrap.firstElementChild, inp = wrap.querySelector('[data-ev]');
+    // a field the refused save needs: marked, and said in words (not colour alone)
+    let need = wrap.querySelector(':scope > .mo-err');
+    if (n.error) { if (!need) { need = h('p', 'mo-err'); wrap.append(need); } need.textContent = n.error === 'needed' ? 'Needed' : String(n.error); inp && inp.setAttribute('aria-invalid', 'true'); }
+    else { if (need) need.remove(); inp && inp.removeAttribute('aria-invalid'); }
     l.innerHTML = esc(labelText) + (optional ? ' <span class="mo-opt">optional</span>' : '');
     inp.setAttribute('data-id', n.id);
     if (fin(n.min)) inp.setAttribute('min', kind === 'dur' ? n.min / 60 : n.min); else inp.removeAttribute('min');
@@ -563,7 +574,7 @@ class Renderer {
       if (st2.bold) d.classList.add('mo-bold');
       d.style.left = (100 * l.x / W) + '%';
       d.style.top = (100 * l.y / H) + '%';
-      d.textContent = typo(l.text ?? '');
+      d.textContent = partsText(l);
       const under = colorClass(st2.color) ? null : underFill(shapes, l.x, l.y);
       const lc = colorClass(st2.color);
       if (lc === 'hue') { d.setAttribute('data-color', 'hue'); d.style.setProperty('--hue', /\d+/.exec(normColor(st2.color))[0]); }
@@ -624,7 +635,7 @@ class Renderer {
         if (cs.role === 'faint' || cs.size === 'tiny' || cs.size === 'small') d.classList.add('mo-faint');
         if (cs.bold || cs.role === 'head') d.classList.add('mo-bold');
         Object.assign(d.style, { left: Math.max(4, Math.min(96, sx(c.x))) + '%', top: sy(c.y) + '%' });
-        d.textContent = typo(c.text ?? '');
+        d.textContent = partsText(c);
         const lc = colorClass(cs.color); if (lc && lc !== 'hue') d.setAttribute('data-color', lc);
         html.push(d);
       }
@@ -939,7 +950,7 @@ class Renderer {
       if (l.kind === 'notify') this.toast(l.text);
       else if (l.kind === 'removed') this.toast(bridge.removedText(this.app, l), true);
       else if (l.kind === 'edit') { this.sheetDepth = this.app.undoStack ? this.app.undoStack.length : undefined; this.sheet = { kind: typeof l.target === 'string' ? 'setting' : 'row', target: l.target }; this.sheetReturn = document.activeElement; }
-      else if (l.kind === 'error' && user) this.toast(friendlyError(l.text));
+      else if (l.kind === 'error' && user && !(this.app.find && this.app.find(n => n.t === 'form' && n.error))) this.toast(friendlyError(l.text));
       else if (l.kind === 'remind') this.toast('Reminder set: ' + l.text);
     }
     this.render();
@@ -957,6 +968,24 @@ function typo(t) {
   if (!CURRENCY) return t;
   const esc2 = CURRENCY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return t.replace(new RegExp(`(^|[^\\w])(${esc2}) (?=-?\\d)`, 'g'), '$1$2\u00a0');
+}
+// a text's parts, formatted for the phone (UITREE round 4: parts carry their type and plain value),
+// joined with the evaluator's spacing rule; without parts, the evaluator's own text
+function partsText(n) {
+  if (!Array.isArray(n.parts) || !n.parts.length) return typo(n.text ?? '');
+  const shown = n.parts.map(p => {
+    if (p.t === 'num' && fin(p.v)) return group(p.v);
+    if (p.t === 'money' && fin(p.v)) return money(p.v);
+    if (p.t === 'year') return String(p.v);
+    return String(p.text ?? '');
+  });
+  let out = '';
+  for (const x of shown) {
+    if (x === '') continue;
+    if (out && !/^[,.;:!?%)\/]/.test(x) && !/[(\/#]$/.test(out)) out += ' ';
+    out += x;
+  }
+  return out;
 }
 function tickText(t) { return fin(t.v) && String(t.label) === String(t.v) ? group(t.v) : String(t.label ?? ''); }
 function hasText(n) { return (n.children || []).some(c => ((c.t === 'text' || c.t === 'button') && /[A-Za-z]{4}/.test(c.text || '')) || hasText(c)); }
@@ -1140,7 +1169,10 @@ export const bridge = {
 // the runtime's number and money formats (SPEC section 12: the runtime formats numbers and
 // money in the user's locale; the demo locale is English, Pakistan)
 export function group(n) { return typeof n === 'number' && isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString(LOCALE, { maximumFractionDigits: 2 }) : String(n); }
-export function money(n) { return (CURRENCY ? CURRENCY + '\u00a0' : '') + group(n); }
+export function money(n) {
+  const s = fin(n) && Math.round(n * 100) % 100 !== 0 ? n.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : group(n);
+  return (CURRENCY ? CURRENCY + '\u00a0' : '') + s;
+}
 function coerce(type, v) {
   if (v === null || v === undefined || v === '') return type.t === 'bool' ? false : null;
   switch (type.t) {
