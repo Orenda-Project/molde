@@ -84,7 +84,7 @@ function rewrite(toks, opts, comps) {
   }
   // implicit text line
   if (out[0] && out[0].t === 'word' && out[0].v === 'text' && out[1] && (out[1].t === 'str' || out[1].t === 'num' || (out[1].t === 'func' && out[1].known) || out[1].v === '('
-    || (out[1].t === 'word' && out[2] && out[2].v === '.')
+    || (out[1].t === 'word' && out[2] && out[2].v === '.' && !STMT_WORDS.has(out[1].v)) // text lesson.title keeps its text: lesson starts a statement
     || (out[1].t === 'word' && /^[a-z][a-z0-9_]*$/.test(out[1].v) && (out[1].v === 'it' || !RESERVED.has(out[1].v)) && !STMT_WORDS.has(out[1].v) && !comps.has(out[1].v)))) out.shift();
   return out;
 }

@@ -7,6 +7,7 @@ import { parse, MoError, asTextLine } from './parse.mjs';
 import { parseText } from './engine.mjs';
 import { lex, join as joinToks } from './lex.mjs';
 import { STD_SOURCES } from './sources.gen.mjs';
+import { LESSON_TABLES, CONTENT_TABLES } from './lesson.mjs';
 export const VALUE_KINDS = new Set(['num', 'money', 'text', 'bool', 'date', 'time', 'dur', 'color', 'icon']);
 
 // Re-create a def's body as text lines relative to the def.
@@ -200,7 +201,17 @@ export function expandProgram(prog) {
   failedNames = prog.failed || new Map();
   const defs = new Map(stdDefs());
   const errors = [];
+  prog.body = prog.body.flatMap(s => s.kind === 'lesson' ? lessonStmts(s) : [s]); // a top-level lesson line: its tables, as if written there
   prog.body = expandList(prog.body, defs, errors);
   prog.body = expandFormulas(prog.body, new Map(), errors);
   return { defs, errors, renamed };
+}
+
+// the statements a `lesson` line stands for (lesson.mjs), on the lesson line; content tables are read-only
+let lessonCache = null;
+function lessonStmts(st) {
+  lessonCache ||= parse('app "x"\n' + LESSON_TABLES + '\n').body;
+  const out = JSON.parse(JSON.stringify(lessonCache));
+  for (const s of out) { s.line = st.line; s.via = 'lesson'; if (s.kind === 'table' && CONTENT_TABLES.includes(s.name)) s.content = true; }
+  return out;
 }

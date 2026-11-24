@@ -10,7 +10,7 @@
 //   node lang/mo.mjs migrate FILE... [--write] rewrite older text into the current spelling
 //   node lang/mo.mjs expand FILE              the program with every component expanded to level 1
 //   node lang/mo.mjs tokens [FILE...]         token counts (runs lang/tokens.py)
-//   node lang/mo.mjs tree FILE [--now=ISO]     the UI tree from the reference evaluator (UITREE.md)
+//   node lang/mo.mjs tree FILE [--now=ISO] [--lesson=JSON]   the UI tree from the reference evaluator (UITREE.md), with a lesson (LESSON.md)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -89,7 +89,7 @@ if (isCli) switch (cmd) {
   }
   case 'tree': {
     const { load } = await import('./eval.mjs');
-    for (const f of files) { const a = load(read(f), { now: args.find(x => x.startsWith('--now='))?.slice(6) }); for (const e of a.errors) console.error(e); console.log(JSON.stringify(a.tree(), null, 1)); }
+    for (const f of files) { const lf = args.find(x => x.startsWith('--lesson='))?.slice(9); const a = load(read(f), { now: args.find(x => x.startsWith('--now='))?.slice(6), lesson: lf ? JSON.parse(read(lf)) : undefined }); for (const e of a.lessonProblems || []) console.error('lesson: ' + e); for (const e of a.errors) console.error(e); console.log(JSON.stringify(a.tree(), null, 1)); }
     break;
   }
   case 'migrate': {
