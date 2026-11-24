@@ -55,6 +55,29 @@ bool looksLikeNewApp(String request, String currentSource) {
   return !_words(r).any(names.contains);
 }
 
+/// "change the goal to 3000", "set budget to 90000": a direct edit of one setting's default, no model needed.
+/// Matches a setting whose name or label holds every word of the target; only plain numbers. Returns the new
+/// program text, or null when the request is not of that shape or names no setting of the app.
+String? settingEditProgram(String request, String source) {
+  final m = RegExp(r'^\s*(?:please\s+)?(?:change|set|make|update|put)\s+(?:the\s+|my\s+)?(.+?)\s+(?:to|=|as|at)\s+(-?[0-9][0-9,]*(?:\.[0-9]+)?)\s*$', caseSensitive: false).firstMatch(request);
+  if (m == null) return null;
+  final target = _words(m.group(1)!).where((w) => !kFiller.contains(w)).toList();
+  if (target.isEmpty) return null;
+  final value = m.group(2)!.replaceAll(',', '');
+  final lines = source.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    final sm = RegExp(r'^(\s*setting\s+)(\w+)(\s+(?:num|money)\b[^=\n]*=\s*)(-?[0-9][0-9.]*)(.*)$').firstMatch(lines[i]);
+    if (sm == null) continue;
+    final words = {..._words(sm.group(2)!), ..._words(lines[i].split('"').length > 1 ? lines[i].split('"')[1] : '')};
+    if (target.every(words.contains)) {
+      if (sm.group(4) == value) return source; // already that value
+      lines[i] = '${sm.group(1)}${sm.group(2)}${sm.group(3)}$value${sm.group(5)}';
+      return lines.join('\n');
+    }
+  }
+  return null;
+}
+
 final RegExp kRemovalWords = RegExp(r'\b(remove|delete|drop|hide|without|get rid)\b', caseSensitive: false);
 
 List<String> programLines(String src) => src.split('\n').map((l) => l.trimRight()).where((l) => l.trim().isNotEmpty).toList();
@@ -287,7 +310,28 @@ class MoldeController extends ChangeNotifier {
       ]);
       return;
     }
+    if (kind == 'edit') {
+      final direct = settingEditProgram(request, current!.source);
+      if (direct != null) { await _direct(request, direct); return; }
+    }
     await _run(kind, request);
+  }
+
+  /// A change worked out by the app itself (a setting value): the same checks and messages as a model change.
+  Future<void> _direct(String request, String program) async {
+    if (busy) return;
+    busy = true;
+    notifyListeners();
+    final live = ChatMsg('bot', 'Changing the setting…', kind: 'progress');
+    chat.add(live);
+    try {
+      await _afterGenerate(live, 'edit', request, {'ok': true, 'program': program, 'stats': {'seconds': 0}});
+    } catch (e) {
+      _finishLive(live, 'Something went wrong: $e. Your app is unchanged.');
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
   }
 
   /// Answers the open question (a tapped option or typed text); the next prompt carries Question and Answer.

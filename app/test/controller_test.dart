@@ -236,6 +236,15 @@ void roundThree() {
       expect(looksLikeNewApp('make it green', waterFull), isFalse);
       expect(looksLikeNewApp('add a note to each drink', waterFull), isFalse);
     });
+    test('settingEditProgram: a number change of a named setting is edited directly', () {
+      final r = settingEditProgram('change the goal to 3000', waterFull)!;
+      expect(r, contains('setting goal num = 3000 "Daily goal (ml)"'));
+      expect(settingEditProgram('set daily goal to 2,500', waterFull), contains('= 2500'));
+      expect(settingEditProgram('make the goal 3000', waterFull), isNull); // no "to": not this shape
+      expect(settingEditProgram('change the colour to 3000', waterFull), isNull); // no such setting
+      expect(settingEditProgram('make it green', waterFull), isNull);
+      expect(settingEditProgram('change the goal to 2000', waterFull), waterFull);
+    });
     test('removedLines counts what the new program lost', () {
       expect(removedLines('a\nb\nc\n', 'a\nc\nd\n'), ['b']);
       expect(removedLines('a\na\nb\n', 'a\nb\n'), ['a']);
@@ -344,6 +353,17 @@ void roundThreeFlows() {
     await c.send('change the goal to 3000');
     expect(c.chat.last.text, contains('Goal is now 3000'));
     expect(c.chat.last.text, isNot(contains('nothing changed')));
+    expect(page.calls, contains('applyEdit'));
+  });
+
+  test('"change the goal to 3000" is applied without the model and reported', () async {
+    c.changeCurrent();
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['Goal is now 3000'], 'warnings': [], 'refused': [], 'settings': [{'name': 'goal', 'text': 'Goal is now 3000'}]};
+    page.handlers['applyEdit'] = (a) { expect(a['source'], contains('= 3000')); return {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []}; };
+    page.handlers['generate'] = (a) => throw StateError('the model must not run');
+    await c.send('change the goal to 3000');
+    expect(page.calls, isNot(contains('generate')));
+    expect(c.chat.last.text, contains('Goal is now 3000'));
     expect(page.calls, contains('applyEdit'));
   });
 

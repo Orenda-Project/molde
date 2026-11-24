@@ -178,7 +178,8 @@ def goal():
     reply = ' | '.join(texts())
     close_chat(); time.sleep(3)
     on_screen = any(re.search(r'3,?000', t) for t in screen_texts())
-    save('goal: "change the goal to 3000" shows 3000 on screen', on_screen, 'reply has Goal is now 3000: %s' % ('Goal is now 3000' in reply))
+    bot = [t for t in reply.split(' | ') if t.startswith(('Done', 'Changed', 'This app', 'I did not', 'Stopped', 'I could not', 'This change'))]
+    save('goal: "change the goal to 3000" shows 3000 on screen', on_screen, 'reply: %s' % (bot[-1][:160] if bot else reply[-160:]))
 
 def green():
     ensure_running()
@@ -190,7 +191,8 @@ def green():
     after = set(re.sub(r'\d+', '#', t) for t in screen_texts())
     lost = sorted(b for b in before if b not in after and len(b) > 3)
     refused = 'did not apply' in reply
-    save('green: "make it green" keeps every section', not lost, f'lost={lost[:6]} refused={refused} applied={"Changed" in reply or "Done" in reply}')
+    bot = [t for t in reply.split(' | ') if t.startswith(('Done', 'Changed', 'This app', 'I did not', 'Stopped', 'I could not', 'This change'))]
+    save('green: "make it green" keeps every section', not lost, f'lost={lost[:6]} refused={refused} reply: {(bot[-1][:160] if bot else reply[-160:])}')
 
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'all'
