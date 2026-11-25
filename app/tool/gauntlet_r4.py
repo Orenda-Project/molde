@@ -54,10 +54,10 @@ def direct():
 def mode():
     ensure_running(); chat_view(); set_mode('change')
     for req, expect_q in [('sleep tracker', True), ('kharcha', True), ('gym log', True), ('add a sleep field', False), ('change the colour of the glass', False), ('remove the chart', False)]:
-        before = sum('That sounds like a new app' in t for t in texts())
         send(req); time.sleep(5)
-        after = sum('That sounds like a new app' in t for t in texts())
-        asked = after > before
+        ts = texts()
+        idx = max([i for i, t in enumerate(ts) if t == req] or [0])
+        asked = any('sounds like a new app' in t for t in ts[idx:])   # a question after this very message
         stop_now()
         save(f'mode: "{req}" {"asks the two-button question" if expect_q else "is a change (no question)"}', asked == expect_q, f'asked={asked}')
         chat_view(); set_mode('change')
