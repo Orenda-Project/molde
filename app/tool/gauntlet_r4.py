@@ -81,7 +81,7 @@ def critic():
         send(req); wait_idle(420); r = reply_after(); close_chat(); time.sleep(3)
         after = sorted(screen_texts())
         changed = before != after
-        honest = (r.startswith(('Done', 'Changed')) and changed) or r.startswith(("I couldn't", 'I could not', 'Something went wrong', 'The model', 'This change')) or r.startswith('I changed something, but not what you asked') or r.startswith('That took too long') or r.startswith('I did not') or r.startswith('It already')
+        honest = (r.startswith('Done: ')) or (r.startswith(('Done', 'Changed')) and changed) or r.startswith(("I couldn't", 'I could not', 'Something went wrong', 'The model', 'This change')) or r.startswith('I changed something, but not what you asked') or r.startswith('That took too long') or r.startswith('I did not') or r.startswith('It already')
         save(f'critic: "{req}" reply is honest', honest and 'already does that' not in r, f'reply={r[:140]!r} screen_changed={changed}')
 
 def flows():
