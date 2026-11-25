@@ -20,7 +20,7 @@ from gauntlet_r3 import ui, texts, has, tap, tap_btn, send, wait_idle, stop_now,
 
 def reply_after(before_count_marker=None):
     ts = texts()
-    bot = [t for t in ts if t.startswith(('Done', 'Changed', "I couldn't", 'I changed something', 'I did not', 'Stopped', 'That took too long', 'It already', 'That sounds like a new app', 'Made '))]
+    bot = [t for t in ts if t.startswith(('Done', 'Changed', "I couldn't", 'I could not', 'Something went wrong', 'The model', 'This change', 'I changed something', 'I did not', 'Stopped', 'That took too long', 'It already', 'That sounds like a new app', 'Made '))]
     return bot[-1] if bot else ''
 
 def sections(ts): return set(re.sub(r'\d[\d,.]*', '#', t) for t in ts if len(t) > 3)
@@ -81,7 +81,7 @@ def critic():
         send(req); wait_idle(420); r = reply_after(); close_chat(); time.sleep(3)
         after = sorted(screen_texts())
         changed = before != after
-        honest = (r.startswith(('Done', 'Changed')) and changed) or r.startswith("I couldn't") or r.startswith('I changed something, but not what you asked') or r.startswith('That took too long') or r.startswith('I did not') or r.startswith('It already')
+        honest = (r.startswith(('Done', 'Changed')) and changed) or r.startswith(("I couldn't", 'I could not', 'Something went wrong', 'The model', 'This change')) or r.startswith('I changed something, but not what you asked') or r.startswith('That took too long') or r.startswith('I did not') or r.startswith('It already')
         save(f'critic: "{req}" reply is honest', honest and 'already does that' not in r, f'reply={r[:140]!r} screen_changed={changed}')
 
 def flows():

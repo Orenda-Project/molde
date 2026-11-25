@@ -125,7 +125,10 @@ def last_bot():
 def load_example(name):
     apps_view()
     ui.adb('shell', 'input', 'swipe', '540', '2346', '540', '2346', '1500'); time.sleep(3)
-    tap(name, miny=1000); time.sleep(8)
+    for n in ui.nodes():   # the chip whose label is exactly the example name (the stats text above may contain the word too)
+        if (n.get('text') or n.get('content-desc') or '').strip() == name:
+            x, y = ui.center(n); adb('shell', 'input', 'tap', str(x), str(y)); break
+    time.sleep(8)
     close_chat()
 def screen_texts():
     close_chat()
