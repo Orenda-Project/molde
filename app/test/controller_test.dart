@@ -218,13 +218,14 @@ const waterFull = 'app "Water" drop ocean\ntable drink ml num, kind text\nsettin
 
 void roundThree() {
   group('round 3 rules', () {
-    test('namesAThing: 1 to 3 words with a real noun build at once; vague or long requests may ask', () {
+    test('namesAThing: any request that names something builds at once; only contentless ones may ask', () {
       for (final r in ['todo', 'water', 'budget', 'notes', 'medicine', 'reminders', 'counter', 'habits', 'expenses', 'workout', 'a todo list', 'budget app']) {
         expect(namesAThing(r), isTrue, reason: r);
       }
       expect(namesAThing('make me an app'), isFalse);
       expect(namesAThing('something please'), isFalse);
-      expect(namesAThing('I want a thing that helps me keep track of my days'), isFalse);
+      expect(namesAThing('I want a thing that helps me keep track of my days'), isTrue); // names something: no question
+      expect(namesAThing('i want to build something please'), isFalse);
       expect(namesAThing(''), isFalse);
     });
     test('looksLikeNewApp: new-app wording without a name of the current app', () {
