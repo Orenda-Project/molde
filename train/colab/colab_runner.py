@@ -135,6 +135,20 @@ try:
                                                timeout=(600 if f.name.endswith(".json") else 3000), access_token=token, endpoint=assignment["endpoint"])
             except Exception as e:  # keep the runtime alive across a failed job
                 out, err, rc = "", f"{type(e).__name__}: {e}", 1
+            # a dropped laptop connection (websocket / SSL) must not kill the work: the training process is detached on the VM.
+            # Reconnect with a NEW kernel session and run the same job again (jobs are idempotent: they attach to a running process).
+            for _try in range(6):
+                if rc == 0 or not re.search(r"WebSocket|SSL|Connection|Broken pipe|404", str(err)) or (jobs / "STOP").exists():
+                    break
+                status(f"{f.name}: connection lost ({str(err)[:80]}), reconnect try {_try + 1}/6")
+                time.sleep(60)
+                try:
+                    token = cr.get_credentials().token
+                    kernel = cr.create_session(assignment["proxy_url"], assignment["proxy_token"])
+                    out, err, rc = cr.execute_code(assignment["proxy_url"], assignment["proxy_token"], kernel, code,
+                                                   timeout=(600 if f.name.endswith(".json") else 3000), access_token=token, endpoint=assignment["endpoint"])
+                except Exception as e2:
+                    out, err, rc = "", f"{type(e2).__name__}: {e2}", 1
             if rc != 0 and "Timed out" in str(err) and "DONE" in str(out)[-600:]:
                 status(f"{f.name}: connector timeout after DONE marker, treating as success"); rc = 0
             b64 = srv._extract_artifact_b64(out)

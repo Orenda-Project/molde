@@ -94,7 +94,8 @@ if a.session and a.save_between:
         cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
         (d / f"36{k}_train.py").write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
-subprocess.Popen({cmd!r}, shell=True)
+if subprocess.run(["pgrep", "-f", "train.py --config"], capture_output=True).returncode != 0 and not (os.path.exists("{RUN}/DONE") and "SFT_DONE" in open("{RUN}.train.log").read() if os.path.exists("{RUN}.train.log") else False):
+    subprocess.Popen({cmd!r}, shell=True)
 log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
 print(log[-1200:])
 assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
@@ -125,7 +126,8 @@ if a.session:
         cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} max_minutes={mins} > {RUN}.train.log 2>&1 &"
         (d / nm).write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
-subprocess.Popen({cmd!r}, shell=True)
+if subprocess.run(["pgrep", "-f", "train.py --config"], capture_output=True).returncode != 0 and not (os.path.exists("{RUN}/DONE") and "SFT_DONE" in open("{RUN}.train.log").read() if os.path.exists("{RUN}.train.log") else False):
+    subprocess.Popen({cmd!r}, shell=True)
 log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
 print(log[-1200:])
 assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
@@ -161,7 +163,8 @@ if "train" in stages and a.epoch_range:
         cmd = f"cd {ROOT}/train && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup python3 train.py --config {cfg} --set {sets} pause_at_epoch={e} > {RUN}.train.log 2>&1 &"
         (d / f"36{e:02d}_train.py").write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
-subprocess.Popen({cmd!r}, shell=True)
+if subprocess.run(["pgrep", "-f", "train.py --config"], capture_output=True).returncode != 0 and not (os.path.exists("{RUN}/DONE") and "SFT_DONE" in open("{RUN}.train.log").read() if os.path.exists("{RUN}.train.log") else False):
+    subprocess.Popen({cmd!r}, shell=True)
 log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
 print(log[-1200:])
 assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
@@ -178,7 +181,8 @@ elif "train" in stages:
         nm = "36_train.py" if ci == 0 else f"36{chr(97 + ci)}_train.py"
         (d / nm).write_text(HEART + f'''
 os.makedirs("{RUN}", exist_ok=True)
-subprocess.Popen({cmd!r}, shell=True)
+if subprocess.run(["pgrep", "-f", "train.py --config"], capture_output=True).returncode != 0 and not (os.path.exists("{RUN}/DONE") and "SFT_DONE" in open("{RUN}.train.log").read() if os.path.exists("{RUN}.train.log") else False):
+    subprocess.Popen({cmd!r}, shell=True)
 log = heart("{RUN}.train.log", "SFT_DONE|Traceback|PAUSE|NONFINITE", 2800, "train.py")
 print(log[-1500:])
 assert "Traceback" not in log and "NONFINITE" not in log, "train failed"
