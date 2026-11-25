@@ -71,7 +71,7 @@ class MoldeController extends ChangeNotifier {
   List<ChatMsg> get chat => chats.putIfAbsent(current?.id ?? '', () => (current?.chat ?? []).map(ChatMsg.fromJson).toList());
 
   /// Buttons of earlier messages stop working once answered or when the app changes.
-  void _disableButtons() { for (final m in chat) { if (m.buttons.isNotEmpty) m.disabled = true; } }
+  void _disableButtons({ChatMsg? except}) { for (final m in chat) { if (!identical(m, except) && m.buttons.isNotEmpty) m.disabled = true; } }
 
   void _persistChat() {
     final r = current;
@@ -83,7 +83,9 @@ class MoldeController extends ChangeNotifier {
   }
 
   void _say(String who, String text, {String? code, List<ChatBtn> buttons = const [], String kind = 'text'}) {
-    chat.add(ChatMsg(who, text, code: code, buttons: buttons, kind: kind));
+    final msg = ChatMsg(who, text, code: code, buttons: buttons, kind: kind);
+    if (buttons.isNotEmpty) _disableButtons(); // a newer question makes every older unanswered one stale
+    chat.add(msg);
     _persistChat();
     notifyListeners();
   }
@@ -95,7 +97,7 @@ class MoldeController extends ChangeNotifier {
     bridge.onProgress = (p) {
       final m = _liveMsg;
       if (m != null) {
-        m.text = '${_longNote}Writing the app… ${p['lines']} lines';
+        m.text = '${_longNote}Writing line ${(p['lines'] as int) + 1}… (${p['seconds']} s)';
         m.code = '${p['program']}';
         notifyListeners();
       }
@@ -307,7 +309,7 @@ class MoldeController extends ChangeNotifier {
       final m = llm.model!;
       final oldLines = kind == 'edit' ? programLines(current!.source).length : 0;
       _longNote = oldLines > 30 ? 'This app is long, changes can take a few minutes.\n' : '';
-      live.text = '${_longNote}Writing the app…';
+      live.text = '${_longNote}Reading your request…';
       notifyListeners();
       final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': request, 'current': kind == 'edit' ? current!.source : '',
@@ -333,6 +335,7 @@ class MoldeController extends ChangeNotifier {
 
   void _finishLive(ChatMsg live, String text, {List<ChatBtn> buttons = const [], String kind = 'text'}) {
     live.text = text; live.code = null; live.live = false; live.buttons = buttons; live.kind = kind;
+    if (buttons.isNotEmpty) { _disableButtons(except: live); live.disabled = false; }
     _persistChat();
     notifyListeners();
   }
@@ -346,7 +349,7 @@ class MoldeController extends ChangeNotifier {
   Future<void> _afterGenerate(ChatMsg live, String kind, String request, Map<String, dynamic> res, {String? doneLabel, bool direct = false}) async {
     final secs = (res['stats']?['seconds'] ?? 0);
     if (res['cancelled'] == true) { _finishLive(live, 'Stopped. Nothing changed.'); return; }
-    if (res['timedOut'] == true) { _finishLive(live, 'That took too long, so I stopped. ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Try a shorter request.'); return; }
+    if (res['timedOut'] == true) { _finishLive(live, 'I stopped because nothing new was written for a while. ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Try again, or a shorter request.'); return; }
     if (res['modelError'] == true) { _finishLive(live, 'The model stopped with an error: ${(res['errors'] as List).join('; ')}. ${kind == 'edit' ? 'Your app is unchanged.' : ''}'); return; }
     final ask = res['ask'];
     if (ask is Map) {

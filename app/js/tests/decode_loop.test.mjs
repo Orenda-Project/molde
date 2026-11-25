@@ -131,3 +131,28 @@ test('edit requests offer the old line as a draft on the greedy call only; creat
   await generate({ kind: 'create', request: 'water', complete });
   assert.equal(seen[1].draft, undefined);
 });
+
+test('the limit follows progress: slow but steady lines are never cut off; a stall is', async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // steady: 30 lines at 60 ms each (1.8 s in all) with a 250 ms stall limit
+  const inner = fake();
+  const steady = await generate({ kind: 'create', request: 'water log', complete: async req => { await sleep(60); return inner(req); }, stallMs: 250, firstLineMs: 250, hardCapMs: 60000 });
+  assert.equal(steady.ok, true, JSON.stringify(steady.errors));
+  assert.ok(steady.stats.seconds > 0.9);
+  // stall: the model hangs on line 5
+  let calls = 0, release;
+  const hang = new Promise(r => { release = r; });
+  const stalled = await generate({ kind: 'create', request: 'x', complete: async req => { calls++; if (calls === 5) { await hang; return { stop: 'cancel', text: '' }; } await sleep(30); return inner(req); }, stallMs: 200, firstLineMs: 200, hardCapMs: 60000, cancelNative: () => release() });
+  assert.equal(stalled.timedOut, true);
+  assert.ok(stalled.stats.lines >= 2);
+  // the hard cap stops even a steady model
+  const capped = await generate({ kind: 'create', request: 'x', complete: async req => { await sleep(60); return inner(req); }, stallMs: 5000, firstLineMs: 5000, hardCapMs: 300 });
+  assert.equal(capped.timedOut, true);
+});
+
+test('progress events carry the line count and seconds', async () => {
+  const seen = [];
+  await generate({ kind: 'create', request: 'water log', complete: fake(), onProgress: p => seen.push(p) });
+  assert.ok(seen.length > 3 && seen.every(p => typeof p.seconds === 'number'));
+  assert.equal(seen[seen.length - 1].lines, seen.length);
+});

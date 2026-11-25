@@ -199,8 +199,9 @@ void main() {
     });
     test('the bundled copy is a valid catalogue with the recommended r1 Q4_K_M', () {
       final c = Catalogue.parse(File('assets/models.json').readAsStringSync());
-      expect(c.recommended!.bytes, 253155040);
-      expect(c.recommended!.sha256, startsWith('156e9d17'));
+      expect(c.recommended!.id, 'r3-gemma270m-q4');
+      expect(c.recommended!.bytes, 253155008);
+      expect(c.recommended!.sha256, startsWith('62ebb1c7'));
       expect(c.models.length, greaterThanOrEqualTo(2));
     });
     test('load: network copy when it works, bundled copy when the fetch fails, times out or is garbage', () async {

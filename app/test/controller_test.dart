@@ -36,6 +36,7 @@ void main() {
   roundThreeFlows();
   roundFour();
   roundFourFlows();
+  roundFive();
   late Directory tmp;
   late WebBridge bridge;
   late ScriptedPage page;
@@ -168,7 +169,7 @@ void main() {
       return c.chat.last.text;
     }
     expect(await run({'ok': false, 'cancelled': true, 'program': '', 'errors': [], 'stats': {}}), 'Stopped. Nothing changed.');
-    expect(await run({'ok': false, 'timedOut': true, 'program': '', 'errors': [], 'stats': {}}), contains('took too long'));
+    expect(await run({'ok': false, 'timedOut': true, 'program': '', 'errors': [], 'stats': {}}), contains('nothing new was written'));
     expect(await run({'ok': false, 'modelError': true, 'program': '', 'errors': ['out of memory'], 'stats': {}}), contains('out of memory'));
     final ask = await run({'ok': false, 'ask': {'question': 'What do you want to track?', 'options': ['Water', 'Money']}, 'program': '', 'errors': [], 'stats': {}});
     expect(ask, contains('What do you want to track?'));
@@ -575,5 +576,56 @@ void roundFourFlows() {
     await c.send('sleep tracker');
     expect(c.current!.name, 'Sleep tracker');
     expect(c.chat.last.text, startsWith('Made Sleep tracker: add s entries'));
+  });
+}
+
+void roundFive() {
+  late Directory tmp; late WebBridge bridge; late ScriptedPage page; late MoldeController c;
+  const w = 'app "Water" drop ocean\ntable drink ml num\nform drink\n';
+  setUp(() async {
+    tmp = Directory.systemTemp.createTempSync('molde_r5_');
+    final holder = _Holder();
+    bridge = WebBridge(holder); page = ScriptedPage(bridge); holder.inner = page;
+    bridge.onRaw(jsonEncode({'t': 'ready'}));
+    final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1);
+    c = MoldeController(store: AppStore(Directory('${tmp.path}/molde')), bridge: bridge, llm: llm, modelDirs: [tmp], readAsset: (p) async => w);
+    page.handlers['open'] = (a) => {'ok': true};
+    await c.store.save(AppRecord(id: 'w', name: 'Water', source: w));
+    await c.init();
+    c.changeCurrent();
+  });
+  tearDown(() => tmp.deleteSync(recursive: true));
+
+  test('a newer question disables every older unanswered one (New/Change and asks alike)', () async {
+    page.handlers['generate'] = (a) => {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}};
+    await c.send('sleep tracker');
+    final first = c.chat.last;
+    expect(first.buttons, isNotEmpty);
+    expect(first.disabled, isFalse);
+    await c.send('kharcha');
+    final second = c.chat.last;
+    expect(second.buttons, isNotEmpty);
+    expect(first.disabled, isTrue, reason: 'the older question is stale');
+    expect(second.disabled, isFalse);
+    await c.send('gym log');
+    expect(second.disabled, isTrue);
+    expect(c.chat.last.disabled, isFalse);
+    // an ask question disables the New/Change one before it
+    c.startNewApp();
+    page.handlers['generate'] = (a) => {'ok': false, 'ask': {'question': 'For what?', 'options': ['A', 'B']}, 'program': '', 'errors': [], 'stats': {}};
+    await c.send('make me an app');
+    expect(c.chat.where((m) => m.buttons.isNotEmpty && !m.disabled).length, 1);
+  });
+
+  test('the live message shows the line being written and the seconds', () async {
+    String? seen;
+    page.handlers['generate'] = (a) {
+      bridge.onRaw(jsonEncode({'t': 'progress', 'lines': 11, 'program': 'x\n', 'rejected': 0, 'seconds': 45}));
+      seen = c.chat.last.text;
+      return {'ok': false, 'program': '', 'errors': ['x'], 'stats': {}};
+    };
+    await c.send('add something');
+    expect(seen, contains('Writing line 12'));
+    expect(seen, contains('45 s'));
   });
 }

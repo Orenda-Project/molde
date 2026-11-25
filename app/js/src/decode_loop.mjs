@@ -51,7 +51,7 @@ const hashOf = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7)
  * returns { ok, program, errors, ask, cancelled, timedOut, stats }
  */
 export async function generate(o) {
-  const { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = 6 * 60 * 1000, maxLines = 70, useDraft = true, allowAsk = true, ask: askCtx = null, cancelNative = null } = o;
+  let { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = null, stallMs = 150 * 1000, firstLineMs = 300 * 1000, hardCapMs = 30 * 60 * 1000, maxLines = 70, useDraft = true, allowAsk = true, ask: askCtx = null, cancelNative = null } = o;
   const types = arm === 'E';
   // edits mostly re-emit the old program: offer the old line we expect next as a draft the native side can verify in one batch
   const oldLines = kind === 'edit' ? String(current || '').split('\n').filter((l, i, a) => i < a.length - 1 || l) : [];
@@ -62,11 +62,18 @@ export async function generate(o) {
   const st = { calls: 0, genTok: 0, genMs: 0, promptTok: 0, promptMs: 0, cacheTok: 0, rejected: 0, fallbacks: 0, gramMs: 0, gramFail: 0, lines: 0, draftTry: 0, draftOk: 0 };
   let prefix = '', stoppedBy = null, errorText = null;
   // the deadline also interrupts a line in progress: the native side checks its cancel flag after every token
-  let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; if (cancelNative) try { cancelNative(); } catch (e) { /* ignore */ } }, deadlineMs);
+  // The limit depends on progress: keep going while lines still arrive, stop only after `stallMs` with no new line
+  // (`firstLineMs` before the first one: the prompt has to be read), or at the hard cap. `deadlineMs` sets all three (tests).
+  if (deadlineMs != null) { stallMs = firstLineMs = hardCapMs = deadlineMs; }
+  let timedOut = false, lastLineAt = Date.now();
+  const stop = () => { if (timedOut) return; timedOut = true; if (cancelNative) try { cancelNative(); } catch (e) { /* ignore */ } };
+  const timer = setInterval(() => {
+    const now = Date.now();
+    if (now - t0 > hardCapMs || now - lastLineAt > (st.lines === 0 ? firstLineMs : stallMs)) stop();
+  }, Math.max(10, Math.min(1000, stallMs / 4)));
   const log = [];
   for (let n = 0; n < maxLines; n++) {
-    if (timedOut || Date.now() - t0 > deadlineMs) { stoppedBy = 'timeout'; break; }
+    if (timedOut) { stoppedBy = 'timeout'; break; }
     if (cancelled()) { stoppedBy = 'cancel'; break; }
     let g;
     const tg = performance.now();
@@ -98,13 +105,14 @@ export async function generate(o) {
     if (accepted == null) { if (first == null) break; accepted = first; st.fallbacks++; }
     prefix += accepted;
     st.lines++;
+    lastLineAt = Date.now();
     oldPtr = nextOldPtr(oldLines, oldPtr, accepted.replace(/\n$/, ''));
-    onProgress({ lines: st.lines, program: prefix, rejected: st.rejected });
+    onProgress({ lines: st.lines, program: prefix, rejected: st.rejected, seconds: Math.round((Date.now() - t0) / 1000) });
     if (/^ask /.test(prefix) && prefix.split('\n').filter(Boolean).length === 1) break;   // an ask program is one line
     const ls = prefix.split('\n').filter(Boolean);
     if (ls.length > 10 && new Set(ls.slice(-6)).size === 1) break;                           // degenerate repetition
   }
-  clearTimeout(timer);
+  clearInterval(timer);
   const seconds = (Date.now() - t0) / 1000;
   const stats = { seconds: +seconds.toFixed(2), tokens: st.genTok, tokPerSec: st.genMs ? +(st.genTok / (st.genMs / 1000)).toFixed(1) : 0, calls: st.calls, resamples: st.rejected, fallbacks: st.fallbacks, lines: st.lines, promptTokens: st.promptTok, cachedTokens: st.cacheTok, grammarMs: Math.round(st.gramMs), grammarFailures: st.gramFail, draftTried: st.draftTry, draftAccepted: st.draftOk, arm };
   if (stoppedBy === 'cancel') return { ok: false, cancelled: true, program: prefix, errors: [], stats, log };

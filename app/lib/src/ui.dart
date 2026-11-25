@@ -41,7 +41,7 @@ class _ShellPageState extends State<ShellPage> {
   void _changed() {
     if (!mounted) return;
     setState(() {});
-    void toEnd() { if (scroll.hasClients) scroll.jumpTo(scroll.position.maxScrollExtent); }
+    void toEnd() { if (scroll.hasClients) scroll.jumpTo(0); } // the list is reversed: offset 0 is the newest message
     // after layout, and once more when the last bubble (buttons, code block) has its final height
     WidgetsBinding.instance.addPostFrameCallback((_) { toEnd(); Future<void>.delayed(const Duration(milliseconds: 120), toEnd); });
   }
@@ -236,10 +236,12 @@ class _Chat extends StatelessWidget {
                 ),
               )
             : ListView.builder(
+                // reversed: the newest message is anchored at the bottom and the oldest can always be scrolled fully into view
+                reverse: true,
                 controller: scroll,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
                 itemCount: msgs.length,
-                itemBuilder: (_, i) => _Bubble(c: c, m: msgs[i], canUndo: identical(msgs[i], undoable) && !c.busy),
+                itemBuilder: (_, i) { final m = msgs[msgs.length - 1 - i]; return _Bubble(c: c, m: m, canUndo: identical(m, undoable) && !c.busy); },
               ),
       ),
       Padding(
