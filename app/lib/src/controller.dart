@@ -95,6 +95,7 @@ class MoldeController extends ChangeNotifier {
     bridge.onSnapshot = _onSnapshot;
     bridge.nativeHandler = _native;
     bridge.onProgress = (p) {
+      _progressSeen = true;
       final m = _liveMsg;
       if (m != null) {
         m.text = '${_longNote}Writing line ${(p['lines'] as int) + 1}… (${p['seconds']} s)';
@@ -229,6 +230,8 @@ class MoldeController extends ChangeNotifier {
   }
 
   ChatMsg? _liveMsg;
+  bool _progressSeen = false;
+  Timer? _tick;
   String _longNote = '';
 
   Future<void> cancel() async {
@@ -242,6 +245,7 @@ class MoldeController extends ChangeNotifier {
     if (request.isEmpty || busy) return;
     if (pendingAsk != null) { await answerAsk(request); return; }
     final kind = (current == null || newAppMode) ? 'create' : 'edit';
+    _disableButtons(); // moving on from an unanswered question makes it stale
     _say('you', request);
     if (kind == 'edit') {
       // exact edits of line 1 (colour, dark/light, text size, title) and of one setting value: no model, instant
@@ -311,6 +315,14 @@ class MoldeController extends ChangeNotifier {
       _longNote = oldLines > 30 ? 'This app is long, changes can take a few minutes.\n' : '';
       live.text = '${_longNote}Reading your request…';
       notifyListeners();
+      _progressSeen = false;
+      final started = DateTime.now();
+      _tick?.cancel();
+      _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_progressSeen || !live.live) return;
+        live.text = '${_longNote}Reading your request… (${DateTime.now().difference(started).inSeconds} s)';
+        notifyListeners();
+      });
       final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': request, 'current': kind == 'edit' ? current!.source : '',
         'system': m.system, 'arm': m.arm ?? arm,
@@ -327,6 +339,7 @@ class MoldeController extends ChangeNotifier {
     } catch (e) {
       _finishLive(live, 'Something went wrong while building: $e. Your app is unchanged.');
     } finally {
+      _tick?.cancel();
       _liveMsg = null;
       busy = false;
       notifyListeners();

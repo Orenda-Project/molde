@@ -50,7 +50,7 @@ class _ShellPageState extends State<ShellPage> {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
-    final panelH = (mq.size.height * 0.45).clamp(260.0, 520.0);
+    final panelH = (mq.size.height * 0.45).clamp(330.0, 520.0); // about 45% of the screen, never so small that the chat has no room
     return PopScope(
       canPop: !open,
       onPopInvokedWithResult: (didPop, _) {
