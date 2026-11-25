@@ -16,6 +16,17 @@ The only network use is in `lib/src/catalogue.dart` (fetch `models.json` from `h
 - **Deadline.** The 6-minute limit also interrupts a line in progress (the native cancel flag is checked per token).
 - **Gauntlet:** `tool/gauntlet_r3.py` (see its header) drives the emulator through the ask, flow, goal and green checks.
 
+## Round 4 (version 0.4.0): never claim what did not happen
+
+- **Honest replies.** A model program that equals the current one, or changes nothing that matters, is never reported as "already does that": the chat says "I couldn't make that change yet. Your app is unchanged." After an applied change `unmetClaims` (`lib/src/rules.dart`) checks what the request asked for where it can: a theme word, dark/light, a new title, a named field added or removed, a chart added or removed, a setting value. If the asked part is missing the chat does not say "Changed": it says what did change and that the asked part did not happen, with Undo.
+- **Exact edits, no model.** Colour words (red orange yellow green teal blue purple pink grey, ocean mint slate ink plum), dark or light mode, bigger or smaller text and renaming the title are exact edits of line 1 (`appLineEdit`): instant, "Done: green". The same goes for "change the goal to 3000" (`settingEditProgram`). Everything else goes to the model.
+- **Modes.** After a create the mode is "Changing <new app>". Requests that start with a change verb (change, rename, make it, add, remove, delete, hide, show, set, move, bigger, smaller, ...) are changes and never raise the new-app question; a bare noun phrase that names nothing of the open app ("sleep tracker", "kharcha", "gym log") does.
+- **Chat.** One chat per app, kept across restarts (text only); buttons of an answered ask or clarifier are disabled; the sheet is at most 45% of the screen with the app visible above.
+- **Titles and wording.** A model title that is a question or a sentence is replaced by the request's main noun; a new app is announced in one plain sentence from its program ("Made Savings: add deposit entries with amount, see your totals and a chart.").
+- **Long apps.** Apps over 30 lines say up front "This app is long, changes can take a few minutes"; the developer menu lists the measured seconds of the last generations.
+- **Bundle.** Language 4698991 (accent colours, dark mode, text size) and renderer fdbe5aa. The decoder copy (`phase-2-decode`) predates the newest grammar (`later-arg`); `js/build.mjs` patches the vendored copy and `js/tests/coverage.test.mjs` checks that every line of the 45 example programs is accepted by the per-line grammar.
+- **Gauntlet:** `tool/gauntlet_r4.py` (direct edits, modes, create, the critic's cases, flows, asks).
+
 ## Getting the model (in the app)
 
 First run with no model shows a setup screen: what the model is, its size, that Molde works offline after the download, a Wi-Fi hint on mobile data, the Gemma licence line with the link (as text too), and the buttons Download (recommended) and Other models. "Try the example apps first" skips it (the example apps need no model).
