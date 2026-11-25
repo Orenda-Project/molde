@@ -164,3 +164,16 @@ test('the page forwards the seconds of every progress event to the app (0.5.0 se
   const bundle = rf(new URL('../../assets/web/molde.js', import.meta.url), 'utf8');
   assert.ok(/t:"progress",lines:\w+\.lines,program:\w+\.program,rejected:\w+\.rejected,seconds:\w+\.seconds/.test(bundle), 'the built bundle carries it too');
 });
+
+test('Qwen prompt is ChatML with an empty think block and no BOS; Gemma stays the same', () => {
+  const q = promptFor('SYS', 'Request: water', 'app "W" drop\n', 'qwen');
+  assert.equal(q, '<|tok:248045|>system\nSYS<|tok:248046|>\n<|tok:248045|>user\nRequest: water<|tok:248046|>\n<|tok:248045|>assistant\n<think>\n\n</think>\n\napp "W" drop\n');
+  assert.ok(!q.includes('<|tok:2|>'));
+  assert.equal(promptFor('SYS', 'U', '', 'gemma'), '<|tok:2|><|tok:105|>user\nSYS\n\nU<|tok:106|>\n<|tok:105|>model\n');
+  assert.equal(promptFor('SYS', 'U', ''), promptFor('SYS', 'U', '', 'gemma'));
+});
+test('generate passes the template to the prompt', async () => {
+  let seen = '';
+  await generate({ kind: 'create', request: 'x', template: 'qwen', complete: async req => { seen = req.prompt; return { stop: 'eos', text: '' }; } });
+  assert.ok(seen.startsWith('<|tok:248045|>system'));
+});

@@ -27,11 +27,17 @@ export function noAsk(grammar) {
   return grammar.includes('( ask-stmt | app-stmt ) nl') ? grammar.replace('( ask-stmt | app-stmt ) nl', 'app-stmt nl') : grammar;
 }
 
-// <bos>=2, <start_of_turn>=105, <end_of_turn>=106 as real ids, exactly like training (the GGUF would
-// otherwise read the turn markers as plain text; see decode/REPORT.md finding 3).
-export function promptFor(system, user, accepted) {
+// Gemma: <bos>=2, <start_of_turn>=105, <end_of_turn>=106 as real ids, exactly like training (the GGUF would otherwise read the
+// turn markers as plain text; see decode/REPORT.md finding 3). Qwen3.5 (template 'qwen'): ChatML with the empty think block,
+// <|im_start|>=248045 and <|im_end|>=248046, no BOS (the format the r4 Qwen training uses).
+export const TEMPLATES = ['gemma', 'qwen'];
+export function promptFor(system, user, accepted, template = 'gemma') {
+  if (template === 'qwen') {
+    return `<|tok:248045|>system\n${clean(system)}<|tok:248046|>\n<|tok:248045|>user\n${user}<|tok:248046|>\n<|tok:248045|>assistant\n<think>\n\n</think>\n\n${accepted}`;
+  }
   return `<|tok:2|><|tok:105|>user\n${clean(system)}\n\n${user}<|tok:106|>\n<|tok:105|>model\n${accepted}`;
 }
+
 
 // Where the old program goes on after an accepted line: past the line it copied, past a later old line it jumped to,
 // and unchanged when the line is new (an insertion) so the old line is offered again for the next position.
@@ -51,7 +57,7 @@ const hashOf = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7)
  * returns { ok, program, errors, ask, cancelled, timedOut, stats }
  */
 export async function generate(o) {
-  let { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = null, stallMs = 150 * 1000, firstLineMs = 300 * 1000, hardCapMs = 30 * 60 * 1000, maxLines = 70, useDraft = true, allowAsk = true, ask: askCtx = null, cancelNative = null } = o;
+  let { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = null, stallMs = 150 * 1000, firstLineMs = 300 * 1000, hardCapMs = 30 * 60 * 1000, maxLines = 70, useDraft = true, allowAsk = true, ask: askCtx = null, cancelNative = null, template = 'gemma' } = o;
   const types = arm === 'E';
   // edits mostly re-emit the old program: offer the old line we expect next as a draft the native side can verify in one batch
   const oldLines = kind === 'edit' ? String(current || '').split('\n').filter((l, i, a) => i < a.length - 1 || l) : [];
@@ -85,7 +91,7 @@ export async function generate(o) {
     for (let k = 0; k < 4; k++) {
       if (timedOut) { stoppedBy = 'timeout'; break; }
       if (cancelled()) { stoppedBy = 'cancel'; break; }
-      const req = { prompt: promptFor(system, user, prefix), grammar: g, nPredict: 200, stopNl: true, temp: k === 0 ? 0 : 0.7, seed: k === 0 ? 1 : (seedBase + k * 7919 + n) | 0 };
+      const req = { prompt: promptFor(system, user, prefix, template), grammar: g, nPredict: 200, stopNl: true, temp: k === 0 ? 0 : 0.7, seed: k === 0 ? 1 : (seedBase + k * 7919 + n) | 0 };
       if (k === 0 && useDraft && oldPtr < oldLines.length) req.draft = oldLines[oldPtr];
       const x = await complete(req);
       if (x.stop === 'error') { errorText = x.error || 'the model stopped with an error'; stoppedBy = 'error'; break; }

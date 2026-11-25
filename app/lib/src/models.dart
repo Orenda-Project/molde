@@ -113,6 +113,7 @@ class ModelManager extends ChangeNotifier {
     final name = id != null ? (catalogue?.byId(id)?.name ?? f.uri.pathSegments.last) : (source == 'hand' ? f.uri.pathSegments.last : (catalogue?.models.where((m) => m.localName == f.uri.pathSegments.last).firstOrNull?.name ?? f.uri.pathSegments.last));
     active = ActiveModel(path: f.path, name: name, bytes: bytes, source: source, id: id ?? catalogue?.models.where((m) => m.localName == f.uri.pathSegments.last).firstOrNull?.id);
     llm.preferred = f;
+    llm.templateHint = id != null ? catalogue?.byId(id)?.template : null;
     if (save) await AppStore.writeAtomic(settingsFile, jsonEncode({'v': 1, 'active': {'id': active!.id, 'file': f.uri.pathSegments.last, 'source': source}}));
   }
 

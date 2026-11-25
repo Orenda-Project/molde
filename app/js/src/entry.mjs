@@ -109,10 +109,10 @@ const methods = {
   describe({ source }) { try { return { text: describe(source) }; } catch (e) { return { text: '' }; } },
   check({ source }) { const c = check(source); return { ok: c.ok, errors: c.errors.map(String) }; },
   format({ source }) { try { return { text: format(source) }; } catch (e) { return { text: source }; } },
-  async generate({ kind, request, current, system, arm, deadlineMs, allowAsk, ask, maxLines }) {
+  async generate({ kind, request, current, system, arm, deadlineMs, allowAsk, ask, maxLines, template }) {
     S.cancel = false;
     const r = await generate({
-      kind, request, current, system: system || DEFAULT_SYSTEM, arm: arm || 'E', deadlineMs, allowAsk: allowAsk !== false, ask, maxLines: maxLines || 70, cancelNative: () => native('cancel', {}),
+      kind, request, current, system: system || DEFAULT_SYSTEM, arm: arm || 'E', deadlineMs, allowAsk: allowAsk !== false, ask, template: template || 'gemma', maxLines: maxLines || 70, cancelNative: () => native('cancel', {}),
       complete: req => native('complete', req),
       cancelled: () => S.cancel,
       onProgress: p => post({ t: 'progress', lines: p.lines, program: p.program, rejected: p.rejected, seconds: p.seconds }),

@@ -8,7 +8,7 @@ export 'rules.dart';
 import 'llm.dart';
 import 'store.dart';
 
-const String kVersion = '0.5.0';
+const String kVersion = '0.6.0';
 
 class ChatBtn {
   ChatBtn(this.label, this.onTap, {this.primary = false});
@@ -329,7 +329,7 @@ class MoldeController extends ChangeNotifier {
       });
       final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': request, 'current': kind == 'edit' ? current!.source : '',
-        'system': m.system, 'arm': m.arm ?? arm,
+        'system': m.system, 'arm': m.arm ?? arm, 'template': m.template,
         'allowAsk': may, 'ask': ask, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
       }));
       final stats = res['stats'] is Map ? Map<String, dynamic>.from(res['stats'] as Map) : null;

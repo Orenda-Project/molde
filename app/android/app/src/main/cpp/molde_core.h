@@ -69,6 +69,19 @@ struct Core {
   std::atomic<bool> cancel{false};
   bool backends_loaded = false;
 
+  // Recurrent and hybrid models (Qwen3.5: DeltaNet layers) cannot drop the last few tokens of the cache: llama_memory_seq_rm
+  // fails for a partial range and the whole prompt would be read again. For them the sequence state is saved once per call,
+  // after the prompt, and restored when the loop goes back to that point (a resample, a draft that was not followed).
+  bool recurrent = false;
+  std::vector<uint8_t> snap;        // llama_state_seq data of the sequence after `snap_len` tokens
+  size_t snap_len = 0;
+  // Incremental tokenisation: when the next prompt is the last prompt plus the line just generated plus a newline, the tokens
+  // already in the cache are reused as they are (a fresh tokenisation could split the end of the line differently and force a rollback).
+  std::string last_prompt, last_text;
+  bool last_stopped_nl = false;
+  size_t last_cached_after = 0;     // cached.size() when the last call ended
+  bool last_nl_in_cache = false;    // the newline token of the last line was evaluated too (draft path)
+
   std::string load(const std::string & path, const std::string & libdir, int nctx, int threads, bool use_mmap) {
     unload();
     if (!backends_loaded) {
@@ -90,15 +103,53 @@ struct Core {
     ctx = llama_init_from_model(model, cp);
     if (!ctx) { llama_model_free(model); model = nullptr; return "could not create the model context (out of memory?)"; }
     n_ctx = (int) llama_n_ctx(ctx);
+    recurrent = llama_model_is_recurrent(model) || llama_model_is_hybrid(model);
+    snap.clear(); snap_len = 0; last_prompt.clear(); last_text.clear(); last_stopped_nl = false;
     MOLDE_LOGI("loaded %s n_ctx=%d threads=%d vocab=%d", path.c_str(), n_ctx, threads, llama_vocab_n_tokens(vocab));
     return "";
   }
   void unload() {
     if (ctx) { llama_free(ctx); ctx = nullptr; }
     if (model) { llama_model_free(model); model = nullptr; }
-    cached.clear();
+    cached.clear(); snap.clear(); snap_len = 0; last_prompt.clear(); last_text.clear(); last_stopped_nl = false;
   }
-  void reset() { if (ctx) llama_memory_clear(llama_get_memory(ctx), true); cached.clear(); }
+  void reset() { if (ctx) llama_memory_clear(llama_get_memory(ctx), true); cached.clear(); snap.clear(); snap_len = 0; last_prompt.clear(); last_text.clear(); last_stopped_nl = false; }
+
+  // a metadata string of the model file (general.architecture, tokenizer.chat_template, ...), empty when absent
+  std::string meta(const std::string & key) {
+    if (!model) return "";
+    char buf[512];
+    int n = llama_model_meta_val_str(model, key.c_str(), buf, sizeof buf);
+    return n > 0 ? std::string(buf, std::min<size_t>(n, sizeof buf - 1)) : std::string();
+  }
+
+  void take_snapshot() {
+    if (!recurrent || !ctx) return;
+    size_t n = llama_state_seq_get_size(ctx, 0);
+    snap.resize(n);
+    size_t w = llama_state_seq_get_data(ctx, snap.data(), n, 0);
+    if (w != n) { snap.clear(); snap_len = 0; return; }
+    snap_len = cached.size();
+  }
+  // Back to the saved state (cached shrinks to the snapshot's length). False when there is none or it does not fit.
+  bool restore_snapshot(size_t want_len) {
+    if (!recurrent || snap.empty() || snap_len != want_len || want_len > cached.size()) return false;
+    llama_memory_t m = llama_get_memory(ctx);
+    llama_memory_seq_rm(m, 0, -1, -1);                 // removing a whole sequence never fails
+    if (llama_state_seq_set_data(ctx, snap.data(), snap.size(), 0) == 0) { cached.clear(); return false; }
+    cached.resize(want_len);
+    return true;
+  }
+  // Shrinks the cache to `len` tokens: partial removal where the model allows it, the snapshot where it does not.
+  // False when neither works (the caller re-reads the prompt).
+  bool rollback_to(size_t len) {
+    if (len == cached.size()) return true;
+    if (recurrent) return restore_snapshot(len);
+    llama_memory_t m = llama_get_memory(ctx);
+    if (!llama_memory_seq_rm(m, 0, (llama_pos) len, -1)) return false;
+    cached.resize(len);
+    return true;
+  }
 
   bool tokenize_text(const std::string & seg, std::vector<llama_token> & out) {
     std::vector<llama_token> t(seg.size() + 8);
@@ -157,7 +208,18 @@ struct Core {
     cancel = false;
     if (!ctx) { R.stop = "error"; R.error = "no model loaded"; return R; }
     std::vector<llama_token> toks;
-    if (!build_tokens(prompt, toks) || toks.empty()) { R.stop = "error"; R.error = "tokenization failed"; return R; }
+    bool incremental = false;
+    if (last_stopped_nl && !last_prompt.empty() && !cached.empty() && cached.size() == last_cached_after) {
+      const std::string head = last_prompt + last_text + "\n";
+      if (prompt.size() >= head.size() && prompt.compare(0, head.size(), head) == 0) {
+        toks = cached;                              // the cache already holds the last prompt and the line that was generated
+        const std::string rest = (last_nl_in_cache ? std::string() : std::string("\n")) + prompt.substr(head.size());
+        if (!rest.empty() && !build_tokens(rest, toks)) { R.stop = "error"; R.error = "tokenization failed"; return R; }
+        incremental = true;
+      }
+    }
+    if (!incremental && (!build_tokens(prompt, toks) || toks.empty())) { R.stop = "error"; R.error = "tokenization failed"; return R; }
+    last_stopped_nl = false;
     if ((int) toks.size() + 8 >= n_ctx) { R.stop = "error"; R.error = "prompt too long for the context"; R.n_prompt = (int) toks.size(); return R; }
 
     auto t0 = clk::now();
@@ -166,14 +228,20 @@ struct Core {
     while (common < toks.size() && common < cached.size() && toks[common] == cached[common]) common++;
     if (common >= toks.size()) common = toks.size() - 1;
     llama_memory_t mem = llama_get_memory(ctx);
-    if (common < cached.size()) {
-      if (!llama_memory_seq_rm(mem, 0, (llama_pos) common, -1)) { llama_memory_clear(mem, true); common = 0; }
-      cached.resize(common);
-    }
-    int rc = eval_tokens(toks, common);
+    if (common < cached.size() && !rollback_to(common)) { llama_memory_clear(mem, true); cached.clear(); common = 0; }
+    if (recurrent && snap_len != toks.size() - 1) { snap.clear(); snap_len = 0; }   // a snapshot of another prompt is useless
     R.n_cache = (int) common;
+    int rc = 0;
+    if (recurrent && toks.size() >= 1 && !(snap_len == toks.size() - 1 && cached.size() == snap_len)) {
+      // evaluate all but the last prompt token, save the state there, then the last token (its logits start the line)
+      std::vector<llama_token> head_toks(toks.begin(), toks.end() - 1);
+      rc = eval_tokens(head_toks, cached.size());
+      if (rc == 0) { take_snapshot(); std::vector<llama_token> all = toks; rc = eval_tokens(all, cached.size()); }
+    } else {
+      rc = eval_tokens(toks, common);
+    }
     if (rc == 2) { R.stop = "cancel"; R.n_prompt = (int) (cached.size() - common); R.ms_prompt = ms_since(t0); return R; }
-    if (rc != 0) { cached.clear(); llama_memory_clear(mem, true); R.stop = "error"; R.error = "decode failed (prompt)"; return R; }
+    if (rc != 0) { cached.clear(); llama_memory_clear(mem, true); snap.clear(); snap_len = 0; R.stop = "error"; R.error = "decode failed (prompt)"; return R; }
     R.n_prompt = (int) (toks.size() - common);
     R.ms_prompt = ms_since(t0);
 
@@ -245,8 +313,11 @@ struct Core {
         if (id == dt[0]) {
           R.n_draft_try++;
           const size_t base = cached.size();
-          if (!eval_draft(dt)) { R.stop = "error"; R.error = "decode failed (draft)"; break; }
-          size_t kept = dt.size();                 // tokens of the draft that stay in the cache
+          // the batch holds every draft token but the newline: the newline is checked from the last output and, as in the
+          // normal path, never evaluated (the next call evaluates it, after saving the state for a recurrent model)
+          const std::vector<llama_token> dtc(dt.begin(), dt.end() - 1);
+          if (!eval_draft(dtc)) { R.stop = "error"; R.error = "decode failed (draft)"; break; }
+          size_t kept = dtc.size();                 // tokens of the draft that stay in the cache
           bool stopped = false, mismatch = false;
           for (size_t j = 1; j < dt.size(); j++) {
             if (cancel) { R.stop = "cancel"; stopped = true; kept = j; break; }
@@ -256,14 +327,23 @@ struct Core {
               if (llama_vocab_is_eog(vocab, t)) { R.stop = "eos"; stopped = true; kept = j; break; }
               text += piece_of(t); R.n_gen++; i++; R.n_draft_ok++;
               size_t nl = text.find('\n');
-              if (nl != std::string::npos) { text.resize(nl); R.stop = "stop"; stopped = true; kept = dt.size(); break; }
+              if (nl != std::string::npos) { text.resize(nl); R.stop = "stop"; stopped = true; kept = dtc.size(); break; }
             } else {                               // the model wants something else here: keep the first j draft tokens, go on from `t`
               pending = t; have_pending = true; kept = j; mismatch = true; break;
             }
           }
           // cache: the draft tokens up to `kept` are in; the others are rolled back
-          if (kept < dt.size()) {
-            if (llama_memory_seq_rm(mem, 0, (llama_pos) (base + kept), -1)) {
+          if (kept < dtc.size()) {
+            if (recurrent) {                        // restore the state before the last prompt token, re-read it and the kept draft tokens
+              if (restore_snapshot(toks.size() - 1)) {
+                std::vector<llama_token> full = toks; full.insert(full.end(), dt.begin(), dt.begin() + kept);
+                if (eval_tokens(full, cached.size()) != 0) { R.stop = "error"; R.error = "decode failed (restore)"; break; }
+              } else {
+                std::vector<llama_token> full = toks; full.insert(full.end(), dt.begin(), dt.begin() + kept);
+                llama_memory_clear(mem, true); cached.clear(); snap.clear(); snap_len = 0;
+                if (eval_tokens(full, 0) != 0) { R.stop = "error"; R.error = "decode failed (rebuild)"; break; }
+              }
+            } else if (llama_memory_seq_rm(mem, 0, (llama_pos) (base + kept), -1)) {
               cached.insert(cached.end(), dt.begin(), dt.begin() + kept);
             } else {                               // cannot roll back partially: rebuild the cache up to the kept tokens
               std::vector<llama_token> full = toks; full.insert(full.end(), dt.begin(), dt.begin() + kept);
@@ -271,7 +351,7 @@ struct Core {
               if (eval_tokens(full, 0) != 0) { R.stop = "error"; R.error = "decode failed (rebuild)"; break; }
             }
           } else {
-            cached.insert(cached.end(), dt.begin(), dt.end());
+            cached.insert(cached.end(), dtc.begin(), dtc.end());
           }
           if (stopped) break;
           if (mismatch) continue;                 // pending token processed at the top of the loop
@@ -284,9 +364,10 @@ struct Core {
       if ((int) cached.size() + 4 >= n_ctx) { R.stop = "limit"; break; }
     }
     R.ms_gen = ms_since(t1);
+    last_prompt = prompt; last_text = R.text; last_stopped_nl = (R.stop == "stop"); last_cached_after = cached.size(); last_nl_in_cache = false;
     if (gram) llama_sampler_free(gram);
     llama_sampler_free(chain);
-    if (R.stop == "error") { cached.clear(); llama_memory_clear(mem, true); }
+    if (R.stop == "error") { cached.clear(); llama_memory_clear(mem, true); snap.clear(); snap_len = 0; last_stopped_nl = false; }
     MOLDE_LOGI("complete: stop=%s prompt_eval=%d cached=%d gen=%d draft=%d/%d ms_prompt=%.0f ms_gen=%.0f full_vocab_filters=%d (%.0f ms)", R.stop.c_str(), R.n_prompt, R.n_cache, R.n_gen, R.n_draft_ok, R.n_draft_try, R.ms_prompt, R.ms_gen, R.n_full, R.ms_full);
     return R;
   }

@@ -26,6 +26,7 @@ class FakePlatform extends Platform {
 }
 
 void main() {
+  templateTests();
   late Directory tmp;
   late CatalogueModel a, b;
   ModelManager make(FakeLlm llm) => ModelManager(
@@ -113,6 +114,25 @@ void main() {
       expect(html, contains("default-src 'none'"));
       expect(html, isNot(contains('connect-src')));
       expect(RegExp(r'(src|href)="https?://').hasMatch(html), isFalse);
+    });
+  });
+}
+
+void templateTests() {
+  group('prompt template choice', () {
+    test('sidecar beats the catalogue hint, which beats the architecture; unknown means gemma', () {
+      expect(LlmService.pickTemplate(sidecar: 'qwen', hint: 'gemma', architecture: 'gemma3'), 'qwen');
+      expect(LlmService.pickTemplate(hint: 'qwen', architecture: 'gemma3'), 'qwen');
+      expect(LlmService.pickTemplate(architecture: 'qwen35'), 'qwen');
+      expect(LlmService.pickTemplate(architecture: 'Qwen3'), 'qwen');
+      expect(LlmService.pickTemplate(architecture: 'gemma3'), 'gemma');
+      expect(LlmService.pickTemplate(), 'gemma');
+      expect(LlmService.pickTemplate(sidecar: 'weird', architecture: 'gemma3'), 'gemma');
+    });
+    test('models.json may carry a template field', () {
+      final c = Catalogue.parse('{"models":[{"id":"q","name":"Q","file":"q.gguf","url":"https://h/q","bytes":5,"sha256":"${'a' * 64}","template":"qwen"},{"id":"g","name":"G","file":"g.gguf","url":"https://h/g","bytes":5,"sha256":"${'b' * 64}"}]}');
+      expect(c.byId('q')!.template, 'qwen');
+      expect(c.byId('g')!.template, isNull);
     });
   });
 }

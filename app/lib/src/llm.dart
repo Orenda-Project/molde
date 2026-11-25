@@ -5,7 +5,10 @@ import 'package:flutter/services.dart';
 
 /// Where the model is and how it was loaded.
 class ModelInfo {
-  ModelInfo(this.path, this.sizeBytes, this.loadSeconds, {this.system, this.arm, this.name});
+  ModelInfo(this.path, this.sizeBytes, this.loadSeconds, {this.system, this.arm, this.name, this.template = 'gemma', this.architecture = ''});
+  /// The prompt format the model was trained with: gemma (turn markers) or qwen (ChatML with an empty think block).
+  final String template;
+  final String architecture; // general.architecture of the GGUF
   final String path;
   final int sizeBytes;
   final double loadSeconds;
@@ -107,7 +110,8 @@ class LlmService {
       loadError = err;
       return;
     }
-    model = ModelInfo(f.path, await f.length(), sw.elapsedMilliseconds / 1000, system: side['system'] as String?, arm: side['arm'] as String?, name: side['name'] as String?);
+    final arch = await meta('general.architecture');
+    model = ModelInfo(f.path, await f.length(), sw.elapsedMilliseconds / 1000, system: side['system'] as String?, arm: side['arm'] as String?, name: side['name'] as String?, architecture: arch, template: pickTemplate(sidecar: side['template'] as String?, hint: templateHint, architecture: arch));
   }
 
   Future<void> unload() async {
@@ -119,6 +123,17 @@ class LlmService {
     if (model == null) return {'stop': 'error', 'text': '', 'error': 'the model is not loaded'};
     final s = await _ch.invokeMethod<String>('complete', req);
     return Map<String, dynamic>.from(jsonDecode(s ?? '{}') as Map);
+  }
+
+  Future<String> meta(String key) async { try { return await _ch.invokeMethod<String>('meta', {'key': key}) ?? ''; } catch (_) { return ''; } }
+
+  /// models.json can name the template of a model; it is used when no sidecar file says and the architecture does not.
+  String? templateHint;
+
+  /// Which prompt format a model uses: the sidecar `template`, else the catalogue hint, else the GGUF architecture (qwen*) , else gemma.
+  static String pickTemplate({String? sidecar, String? hint, String architecture = ''}) {
+    for (final t in [sidecar, hint]) { if (t == 'qwen' || t == 'gemma') return t!; }
+    return architecture.toLowerCase().startsWith('qwen') ? 'qwen' : 'gemma';
   }
 
   Future<void> cancel() => _ch.invokeMethod('cancel');

@@ -75,6 +75,10 @@ class MainActivity : FlutterActivity() {
                 try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(call.argument<String>("url") ?: "")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); result.success(true) }
                 catch (e: Throwable) { result.success(false) }
             }
+            "meta" -> {
+                val key = call.argument<String>("key") ?: ""
+                result.success(try { engine().nativeMeta(key) } catch (e: Throwable) { "" })
+            }
             "cancel" -> { llm?.nativeCancel(); result.success(null) }
             "load" -> {
                 val path = call.argument<String>("path")!!

@@ -28,6 +28,12 @@ JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeLoad(JNIEnv * 
   env->ReleaseStringUTFChars(jpath, path); env->ReleaseStringUTFChars(jlibdir, libdir);
   return env->NewStringUTF(g_core.load(p, ld, n_ctx, n_threads, use_mmap).c_str());
 }
+JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeMeta(JNIEnv * env, jobject, jstring jkey) {
+  const char * k = env->GetStringUTFChars(jkey, nullptr);
+  std::string key = k;
+  env->ReleaseStringUTFChars(jkey, k);
+  return env->NewStringUTF(g_core.meta(key).c_str());
+}
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeUnload(JNIEnv *, jobject) { g_core.unload(); }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeCancel(JNIEnv *, jobject) { g_core.cancel = true; }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeReset(JNIEnv *, jobject) { g_core.reset(); }

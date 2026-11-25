@@ -6,6 +6,7 @@ class NativeLlm {
         init { System.loadLibrary("molde_llm") }
     }
     external fun nativeLoad(path: String, libDir: String, nCtx: Int, nThreads: Int, useMmap: Boolean): String
+    external fun nativeMeta(key: String): String
     external fun nativeUnload()
     external fun nativeCancel()
     external fun nativeReset()
