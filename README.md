@@ -1,64 +1,157 @@
 # Molde
 
-An offline phone app that moulds itself to whatever you need. Say "track my exercise" or "log my thoughts", and one very tiny model running fully on the phone plans the tool, builds it inside the app, keeps track of it, fixes its own errors, and changes it when you ask.
+**One tiny model, running offline on your phone, that builds small apps from a chat and changes them when you ask.**
 
-Status: plan v2 (2026-11-23). A generic UI kit exists in PR #33; the language, runtime and model are not built yet. Owner: Kamal (Orenda-Project). Android first. Planned package name: `com.oyekamal.molde`.
+Say "track how many glasses of water I drink" and Molde writes the app, draws it, and keeps your data. Say "add a note to each drink" and it changes the app without losing what you entered. Nothing leaves the phone.
 
-**The current plan is [`docs/PLAN.md`](docs/PLAN.md).** This page is the short version.
+Molde is an idea by Kamal ([oyekamal](https://github.com/oyekamal)), built in the open by [Orenda Project](https://github.com/Orenda-Project). It is **early research software**: it works end to end, and it also makes plenty of mistakes. The numbers below say how many.
 
-## The idea (Kamal's words, tidied)
-
-The user types or says what they want. One small model, fully offline, does all of the work:
-
-1. **Understand and plan.** It reads the idea and decides what screens and data the tool needs.
-2. **Build inside the app.** The tool appears right there and the user starts using it.
-3. **Keep track of everything.** The plan, every version, the change history and the errors are stored, not lost in a chat.
-4. **Fix its own errors** without ever disturbing the user's saved data.
-5. **Change by asking.** "Add a rest timer", "show weekly progress".
-
-## How v2 makes it fast enough for a small phone
-
-The model no longer writes HTML and JavaScript. It writes **MoldeScript**, a small strict language made for this one job, and a runtime we write once turns that into the app.
-
-- An app is about 100 tokens instead of about 1,000.
-- A language this small can be learned by a model of roughly 100 to 300 million parameters (about 100 to 300 MB) instead of a 2B model (1.3 GB).
-- A grammar guides the model while it writes, so the syntax cannot be wrong. A type checker catches the rest.
-- Nothing the model writes is ever executed as code. Only our runtime runs, which removes most of the sandbox risk.
-- Target: a working app in 2 to 5 seconds on a low-end phone. This is a target, not a measurement; Phase 2 of the plan measures it on a real phone before any large spend.
-
-```
-app "Water" theme ocean
-table drink: ml num, at time
-setting goal = 2000
-stat sum(drink.ml today) of goal unit "ml" draw glass
-quick drink.ml 250 500
-chart bar sum(drink.ml) by day last 7
-list drink today show ml at
-```
-
-(Draft syntax. Phase 0 fixes the real one.)
-
-## The honest limit
-
-A closed language builds only what its parts can express: trackers, logs, lists, planners, counters, timers, reminders, simple calculators. It will not make a game or call the internet. The plan tests this first: if fewer than 90% of 300 varied requests can be written in MoldeScript, the language grows before anything is trained.
-
-## Phases
-
-| Phase | What | Gate |
+| Make an app | Change it, with Undo | It asks when unsure |
 |---|---|---|
-| 0 | Language spec and coverage test | 90% of requests expressible, median program 150 tokens or fewer |
-| 1 | Runtime on the existing kit | 30 programs render; fuzzed edits never lose data |
-| 2 | Model spike on a real phone | a model under 1B reaches 80% and builds an app in 10 s or less |
-| 3 | Full data, training, distillation, quantization | the eval gates in the plan |
-| 4 | Phone app and 10 testers | testers keep using their tools |
-| 5 | Closed beta | clean Play pre-launch report |
+| <img src="docs/images/app-create.png" width="240" alt="The chat writes a to-do app line by line"> | <img src="docs/images/app-change-undo.png" width="240" alt="A change was applied and an Undo button is shown"> | <img src="docs/images/app-ask.png" width="240" alt="The app asks what the new app should help with and offers tap answers"> |
+
+## How it works
+
+The model does not write HTML or JavaScript. It writes **MoldeScript**, a small strict language made for this one job. A whole app is usually 10 to 40 short lines:
+
+```
+app "Reading log" book ink
+table page_log title text, mins num 1..600, pages num 1..500
+form page_log
+daybars last 7 days, sum(page_log.pages on it)
+list page_log by day
+remind "Time to add reading" at 21:00
+```
+
+(That program was written by the r2 model on a laptop for "a reading log: book title, pages read each day, and a chart of pages over the last 7 days".)
+
+1. A grammar guides the model while it writes, so the syntax is always right. A line-by-line decoder also stops it from using names that do not exist.
+2. A type checker reads the program. If it fails, the app keeps the last good version.
+3. A runtime draws the program as a real screen. The model's text is never run as code.
+4. Changes are checked against every earlier version of the app: a field is hidden, never dropped, so your saved data survives every change.
+
+Because the language is so small, a 270M-parameter model (about 240 MB on disk) is enough to learn it.
+
+## Where it stands (honest numbers)
+
+Current model: **r2**, Gemma 3 270M fine-tuned on dataset v2 (14k pairs), Q4_K_M, with the line-stepped decoder.
+
+**140 new app ideas** that the model never saw, written to sound like real people (trackers, lists, counters, calculators, timers, changes to existing apps):
+
+| | r1 | r2 | hand-written reference |
+|---|---|---|---|
+| program is valid and runs | 76% | **81%** | 100% |
+| app works when used (add a row, see it) | 66% | **78%** | 97% |
+| must-have features present | 30% | **42%** | 99% |
+| every must-have present | 2% | **7%** | 96% |
+| median seconds per app (laptop CPU) | 9.1 | **3.7** | |
+
+On the fixed test set of 149 requests (heldout2), r2 passes the checker on 90.6% (creates 87%, edits 100%, asks 100%, out-of-scope 90%).
+
+What does **not** work well yet:
+
+- **Apps look plain.** The model copies the simple look of its training data, so its apps are far less rich than hand-written ones (see the picture below).
+- **Small changes to long apps** often drop sections of the app. Only about 1 in 4 small changes were fully correct in one test.
+- **Must-haves.** A valid app often misses part of what was asked (42% of must-haves met).
+- **Very short requests** ("todo", "budget") sometimes make the model ask a question first instead of building.
+- **English only.** The language cannot make games or call the internet.
+- Speed on a real low-end phone is not measured yet; the emulator is slow (about 100 s per app), a laptop CPU takes about 4 s.
+
+Dataset v3 (18.5k pairs) targets the first three problems; r3 is training on it now.
+
+<img src="docs/images/model-vs-handwritten-budget.png" width="640" alt="A budget app: two hand-written versions next to the plainer version made by the r2 model">
+
+*Left two: hand-written MoldeScript. Right: what the r2 model made for the same request. Valid and working, but plainer.*
+
+## Try it
+
+### 1. Android app (easiest)
+
+1. Download the APK from the [v0.3.0 release](https://github.com/Orenda-Project/molde/releases/tag/v0.3.0):
+   - `molde-0.3.0-arm64-v8a-debug.apk` for a real phone (most Android phones from the last 6 years),
+   - `molde-0.3.0-x86_64-debug.apk` for the Android emulator on a PC.
+2. Install it (allow "install unknown apps" for your browser or file manager), or `adb install molde-0.3.0-arm64-v8a-debug.apk`.
+3. Open it. It downloads the model (241 MB) once from Hugging Face, then works fully offline. Without the model you can still open the example apps.
+4. Tap the chat button and describe an app, or pick an example and ask for a change.
+
+These are debug builds, not signed for the Play Store. A phone with 3 GB of memory or more is recommended.
+
+<img src="docs/images/app-download.png" width="240" alt="The app downloading the Molde model on first run">
+
+### 2. The model on a laptop with llama.cpp
+
+Tested on Linux with llama.cpp build b12144. Any recent build works; on a Mac, `brew install llama.cpp`.
+
+```bash
+# llama.cpp (Linux x64 build; other systems: https://github.com/ggml-org/llama.cpp/releases)
+curl -L -o llama.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b12144/llama-b12144-bin-ubuntu-x64.tar.gz
+mkdir llama && tar xzf llama.tar.gz -C llama
+LLAMA=$(dirname "$(find "$PWD/llama" -name llama-completion -type f | head -1)")
+
+# the model (241 MB) and the grammar
+curl -L -o molde-r2-q4.gguf https://huggingface.co/oyekamal/molde-tiny/resolve/main/r2-gemma270m/r2-gemma270m-Q4_K_M.gguf
+curl -L -o moldescript.gbnf https://raw.githubusercontent.com/Orenda-Project/molde/main/lang/moldescript.gbnf
+
+# the prompt (Gemma chat format; the system text is the one the model was trained with)
+cat > prompt.txt <<'EOF'
+<start_of_turn>user
+You write MoldeScript, a tiny language for small phone apps. Reply with the complete program only, no explanation. For an edit request you get the current program: reply with the full updated program.
+
+Request: a reading log: book title, pages read each day, and a chart of pages over the last 7 days<end_of_turn>
+<start_of_turn>model
+EOF
+
+LD_LIBRARY_PATH=$LLAMA $LLAMA/llama-completion -m molde-r2-q4.gguf --grammar-file moldescript.gbnf \
+  -f prompt.txt -n 600 --temp 0 -no-cnv --no-display-prompt 2>/dev/null | sed '/\[end of text\]/d' > app.mo
+cat app.mo
+```
+
+Check the program and read it in plain English (Node 20 or newer, no `npm install`; run from a clone of this repo):
+
+```bash
+git clone https://github.com/Orenda-Project/molde && cd molde
+node lang/mo.mjs check ../app.mo      # OK, or each error with its line and a fix
+node lang/mo.mjs describe ../app.mo   # what the app keeps and shows
+node lang/mo.mjs tree ../app.mo       # the UI tree a renderer draws
+```
+
+For an edit, use `Edit request: <what to change>\n\nCurrent program:\n<the program>` as the user text. This simple command uses only the grammar. The app and the numbers above also use the line-by-line name decoder (branch `phase-2-decode`), which gives clearly better results.
+
+### 3. The web demo (no install)
+
+[Open the demo](https://orenda-project.github.io/molde/demo/) to see 15 hand-written MoldeScript apps drawn live by the web runtime, with the program next to each one. Changes in the demo chat are scripted; no model runs in the browser. A second page, [lessons](https://orenda-project.github.io/molde/demo/molde-lessons.html), shows where the project is heading: lesson screens that a learner or teacher reshapes by chat.
+
+<img src="docs/images/web-demo.png" width="640" alt="The web demo: list of apps, a water tracker drawn live, and its MoldeScript program">
+
+## Links
+
+- Model: [huggingface.co/oyekamal/molde-tiny](https://huggingface.co/oyekamal/molde-tiny) (GGUF, Q4_K_M and Q8_0)
+- Dataset: [huggingface.co/datasets/oyekamal/molde-data](https://huggingface.co/datasets/oyekamal/molde-data) (v1, v2, v3)
+- Train your own or improve the data: [TRAINING.md](TRAINING.md)
+- Help out: [CONTRIBUTING.md](CONTRIBUTING.md)
+- The plan and the reasons behind it: [docs/PLAN.md](docs/PLAN.md)
 
 ## Repo map
 
-- `docs/PLAN.md`: plan v2 (current).
-- `docs/plan/01` to `04`: plan v1 (model writes HTML; superseded, kept as history; the product flows in `04` still apply).
-- `docs/process/`, `tools/`: the builder and critic process tools.
-- `docs/research/`: the first research write-up.
-- PR #33 (`task-02-kit`): the generic kit that becomes the runtime engine.
+`main` holds what a newcomer needs. Active work happens on branches and is merged when it passes review.
 
-Related work in Orenda: `offline-teacher-coach` (small on-device model, fine-tuning, a Flutter shell that already runs a GGUF on a phone).
+| Path / branch | What |
+|---|---|
+| `lang/` | MoldeScript: spec, grammar (`moldescript.gbnf`), parser, type checker, formatter, evaluator, CLI `mo.mjs`, tests |
+| `train/` | dataset builder, fine-tuning, GGUF export, evaluation and scoring |
+| `docs/` | plan, process, images, the web demo |
+| branch `phase-0-language` | language work in progress |
+| branch `phase-1-renderer` | the web runtime that draws programs (`runtime/`) |
+| branch `phase-2-decode` | the line-stepped constrained decoder and its report |
+| branch `phase-2-train` | training work in progress |
+| branch `phase-4-app` | the Flutter Android app |
+| branch `data` | dataset generators, reports and verdicts |
+| branch `eval-novel` | the 140-idea evaluation, judge prompts and results |
+
+## Licence
+
+- Code, the MoldeScript language and its documentation: [Apache License 2.0](LICENSE).
+- Model weights: fine-tuned from Gemma 3 270M, so they follow the [Gemma Terms of Use](https://ai.google.dev/gemma/terms) and the [Gemma Prohibited Use Policy](https://ai.google.dev/gemma/prohibited_use_policy).
+- Dataset: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is synthetic: requests and programs were written by large language models and by scripts, then every program was checked by the MoldeScript checker.
+
+Copyright 2026 Muhammad Kamal (oyekamal) and Orenda Project.
