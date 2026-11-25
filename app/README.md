@@ -16,6 +16,12 @@ The only network use is in `lib/src/catalogue.dart` (fetch `models.json` from `h
 - **Deadline.** The 6-minute limit also interrupts a line in progress (the native cancel flag is checked per token).
 - **Gauntlet:** `tool/gauntlet_r3.py` (see its header) drives the emulator through the ask, flow, goal and green checks.
 
+## Version 0.6.0: Qwen3.5 in the app; 0.5.1 fixes
+
+- **Progress text** now always has numbers ("Writing line 5… (31 s)"): the page forwards the seconds and the app also counts them between lines. **Ages** ("Changed 3 h ago") use a monotonic clock for apps changed in this session, so a device clock that jumps cannot age a new app; a time in the future reads "just now". **Unasked removals:** if a model edit drops lines the request does not name (`dropsUnasked`), the chat shows "This would also remove: ..." with **Keep my app** (default) and **Apply anyway**. **Machine check:** `tool/machine_check.py` (overflow, text under 12 sp, touch targets under 44 dp, on five screens at 360x640 and 412x915; results in the PR).
+- **ChatML template.** `template` = `qwen` (sidecar json, a `template` field in models.json, or a GGUF architecture starting with `qwen`) selects `<|im_start|>` ... with an empty think block and no BOS.
+- **Recurrent models** (Qwen3.5 DeltaNet): the native core saves the sequence state after the prompt and restores it instead of re-reading the prompt, and tokenises the next prompt incrementally. Qwen edits: 186 s -> 13.5 s (27 lines), 617 s -> 29.6 s (43 lines); Gemma is not slower (details: `molde-model/r4/app-qwen-speed.md`). The MTP metadata fix is not needed with this native build.
+
 ## Round 5 (version 0.5.0): fewer asks, faster edits
 
 - **No asking when the request names something.** Any request with at least one non-filler word is built at once (`namesAThing`, `allowAsk=false`: the first-line grammar loses `ask-stmt`); a second ask after one answer is impossible. Measured on r3 Q4_K_M with the app's loop on the 60 short requests: ask rate 31.7% -> 0%, checker pass 65% -> 96.7%; the 19 asks that were answered all built (`js/tools/measure_asks.mjs`).

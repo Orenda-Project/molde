@@ -28,13 +28,18 @@ def clip_lines(nodes, h):
         d = (n.get('content-desc') or '')
         m = re.match(r'\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', n.get('bounds') or '')
         if m and (d.startswith('Mode: ') or d == 'Close chat' or d == 'Your apps'):
-            y1, y2 = int(m.group(2)), int(m.group(4)); ys += [y1 - 90, y2 + 25]
+            y1, y2 = int(m.group(2)), int(m.group(4)); ys += [y1 - 130, y2 + 25]
+        if m and (d.startswith('Molde 0.') or (n.get('text') or '').startswith('Molde 0.')):
+            ys.append(int(m.group(2)))                 # the list ends where its footer (the version) begins
     return ys
 
 def check_screen(name):
     w, h, sc = screen_dp()
     issues = []
     nodes = ui.nodes(); cuts = clip_lines(nodes, h)
+    if name == 'the developer menu':   # the screens under the modal sheet are still in the tree: look only at the sheet
+        tops = [int(re.match(r'\[-?\d+,(-?\d+)\]', n.get('bounds')).group(1)) for n in nodes if (n.get('text') or n.get('content-desc') or '').startswith('Developer menu')]
+        if tops: nodes = [n for n in nodes if int(re.match(r'\[-?\d+,(-?\d+)\]', n.get('bounds')).group(1)) >= tops[0] - 60]
     for n in nodes:
         m = re.match(r'\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', n.get('bounds') or '')
         if not m: continue
@@ -44,9 +49,10 @@ def check_screen(name):
         if n.get('package') != 'com.oyekamal.molde': continue
         if x1 < -2 or y1 < -2 or x2 > w + 2 or y2 > h + 2:
             issues.append({'kind': 'overflow', 'node': label, 'bounds': n.get('bounds')})
-        if (n.get('text') or '').strip() and '\n' not in (n.get('text') or '') and bh < 14 and not n.get('text', '').isspace():
+        clipped = any(y1 < c <= y2 + 3 for c in cuts) or y2 >= h - 4 or y1 <= 4   # cut by the sheet, the list viewport or the screen edge: its real size is larger
+        if (n.get('text') or '').strip() and '\n' not in (n.get('text') or '') and bh < 14 and not clipped:
             issues.append({'kind': 'small text', 'node': label, 'height_dp': round(bh, 1)})
-        clipped = any(y1 < c < y2 for c in cuts) or y2 >= h - 4 or y1 <= 4   # cut by the sheet, the list viewport or the screen edge: its real size is larger
+        clipped = any(y1 < c <= y2 + 3 for c in cuts) or y2 >= h - 4 or y1 <= 4   # cut by the sheet, the list viewport or the screen edge: its real size is larger
         if n.get('clickable') == 'true' and (bw < 44 or bh < 44) and (bw > 0 and bh > 0) and not clipped:
             issues.append({'kind': 'small target', 'node': label, 'size_dp': f'{bw:.0f}x{bh:.0f}'})
     return {'screen': name, 'issues': issues}
@@ -74,14 +80,17 @@ def run_size(label):
         time.sleep(4)
     res.append(check_screen('the chat sheet'))
     g.apps_view(); time.sleep(1); res.append(check_screen('the app list'))
-    g.chat_view()
-    n = None
-    for c in ui.nodes():
-        if (c.get('content-desc') or '') == 'Settings' and ui.center(c)[1] > screen_dp()[1] * 0.3: n = c
+    n = None   # the gear of the sheet header (it is in the app list view too)
+    for _try in range(3):
+        for c in ui.nodes():
+            if 'Settings' in (c.get('content-desc') or '') and ui.center(c)[1] > screen_dp()[1] * 0.3 and c.get('package') == 'com.oyekamal.molde': n = c
+        if n is not None: break
+        time.sleep(2)
     if n is not None:
         x, y = ui.center(n); g.adb('shell', 'input', 'tap', str(x), str(y)); time.sleep(3)
         res.append(check_screen('Settings')); g.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); time.sleep(2)
-    else: res.append({'screen': 'Settings', 'issues': [{'kind': 'not reached'}]})
+    else:
+        res.append({'screen': 'Settings', 'issues': [{'kind': 'not reached', 'seen': [ (c.get('content-desc') or c.get('text') or '')[:20] for c in ui.nodes() if c.get('package') == 'com.oyekamal.molde'][:25]}]})
     g.apps_view()
     w, h, sc = screen_dp(); g.adb('shell', 'input', 'swipe', str(w // 2), str(h - 50), str(w // 2), str(h - 50), '1500'); time.sleep(3)
     res.append(check_screen('the developer menu')); g.adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); time.sleep(1)
