@@ -1,0 +1,17 @@
+# Medium arm: Qwen3.5-0.8B full fine-tune on data v2, 1 epoch (budget: about 70 min per epoch on an L4 with gradient checkpointing; no-checkpoint runs out of 22 GB even at batch 2).
+# ES on val checker is not usable for Qwen3.5 with batched left-padded HF generation (linear attention), so es_val_n=0; val loss is logged.
+model: Qwen/Qwen3.5-0.8B
+add_molde_tokens: true
+token_mode: safe
+epochs: 1
+lr: 3.0e-5
+warmup_steps: 20
+batch_size: 8
+grad_accum: 2
+grad_checkpointing: true
+ckpt_mode: weights
+eval_every: 300
+save_every: 100000
+es_val_n: 0
+chat_kwargs: {enable_thinking: false}
+data_dir: /content/molde/train/data/out-r2
