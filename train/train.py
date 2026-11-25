@@ -26,7 +26,7 @@ from common import encode_example, read_jsonl  # noqa: E402
 DEFAULTS = dict(tokenizer=None, data_dir="data/out", out_dir="runs/smoke", lang="lang", add_molde_tokens=False, token_mode="full",
                 epochs=3, max_steps=0, lr=5e-5, min_lr_ratio=0.1, warmup_steps=10, weight_decay=0.0, batch_size=8,
                 grad_accum=1, max_len=1536, precision="auto", grad_checkpointing=False, eval_every=20, save_every=50,
-                max_minutes=0, seed=1234, pause_at_epoch=0, init_weights="", start_step=0, lora=False, lora_r=64, lora_alpha=128, lora_dropout=0.0, base_dtype="fp32", ckpt_mode="full", restart_warmup=20, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
+                max_minutes=0, seed=1234, pause_at_epoch=0, es_bs=16, gpu_mem_gb=0, init_weights="", start_step=0, lora=False, lora_r=64, lora_alpha=128, lora_dropout=0.0, base_dtype="fp32", ckpt_mode="full", restart_warmup=20, es_val_n=48, es_patience=2, es_max_new=420, save_dtype="bf16", chat_kwargs={})
 
 
 def load_cfg(argv):
@@ -73,6 +73,8 @@ def main():
         print("SFT_DONE already"); return
     random.seed(cfg["seed"]); torch.manual_seed(cfg["seed"])
     dev = "cuda" if torch.cuda.is_available() else "cpu"
+    if dev == "cuda" and cfg["gpu_mem_gb"]:   # shared machine: hard cap for this process
+        torch.cuda.set_per_process_memory_fraction(min(1.0, cfg["gpu_mem_gb"] * 2**30 / torch.cuda.get_device_properties(0).total_memory))
     ck = out / "ckpt"
     src = str(ck / "model") if (ck / "state.json").exists() else cfg["model"]
     tok = AutoTokenizer.from_pretrained(src if (ck / "state.json").exists() else (cfg["tokenizer"] or cfg["model"]))
@@ -194,8 +196,8 @@ def main():
         rows = read_jsonl(pathlib.Path(cfg["data_dir"]) / "val.jsonl")[:n]
         model.eval(); tok.padding_side = "left"; outs = []
         old_cache = model.config.use_cache; model.config.use_cache = True
-        for i in range(0, len(rows), 16):
-            ps = [prompt_text(tok, r["messages"][:-1], ck_args) for r in rows[i:i + 16]]
+        for i in range(0, len(rows), cfg["es_bs"]):
+            ps = [prompt_text(tok, r["messages"][:-1], ck_args) for r in rows[i:i + cfg["es_bs"]]]
             enc = tok(ps, return_tensors="pt", padding=True, add_special_tokens=False).to(dev)
             with torch.no_grad(), (torch.autocast("cuda", dtype=amp_dtype) if amp_dtype and dev == "cuda" else torch.autocast("cpu", enabled=False)):
                 o = model.generate(**enc, max_new_tokens=cfg["es_max_new"], do_sample=False, pad_token_id=pad)
