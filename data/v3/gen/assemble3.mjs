@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 const L = await import('../../data-v1/gen/lib.mjs');
-const { canon, verify, diff, sha, norm, rng, saveCache, LANG, LANG_COMMIT } = L;
+const { canon, verify, diff, sha, norm, rng, saveCache, LANG, LANG_COMMIT, migrateBatch } = L;
+const OUTD = process.env.OUTD || new URL('../', import.meta.url).pathname; const OUTNAME = process.env.OUTNAME || 'v3.jsonl';
 const { tokenCounts } = await import('../../data-v1/gen/tokcount.mjs');
 const { readHand3 } = await import('./hand3.mjs');
 const { nearest, key: simKey, changeTestPairs, HELD_N } = await import('./simcheck.mjs');
@@ -30,28 +31,28 @@ for (const o of hand) {
   cand.push({ task: 'create', request, program: o.program, source, style: o.style || 'detailed', domain: o.domain, needs: o.needs, topic: o.topic, area: tag.replace(/-\d+\.txt/, ''), ...ctx });
 }
 info.rich_programs = rich.length;
-// ---- short named requests
-const S = outs('s'); let ns = 0;
-for (const o of rich) { const s = S.get(hid(o)); if (s && s.short) { cand.push({ task: 'create', request: s.short, program: o.program, source: 'v3:short-named', style: 'short_named', domain: o.domain, needs: o.needs, topic: o.topic }); ns++; } }
-info.short_named = ns;
-// ---- multi-turn
-const M = outs('m'); let nm = 0;
-for (const o of rich) { const m = M.get(hid(o)); if (m) { cand.push({ task: 'create', request: `${m.orig}\nQuestion: ${m.question}\nAnswer: ${m.answer}`, program: o.program, source: 'v3:multi-turn', style: 'multi_turn', domain: o.domain, needs: o.needs, topic: o.topic, turns: { original: m.orig, question: m.question, options: m.options, answer: m.answer } }); nm++; } }
-info.multi_turn = nm;
-// ---- change-mode new app
-const C2 = outs('c2'); let nc = 0;
-for (const o of hand) { const c = C2.get(hid(o)); if (c && c.request) { const name = (o.program.match(/^app "([^"]*)"/) || [])[1]; if (!name) continue; cand.push({ task: 'edit', request: c.request, before: o.program, program: `ask "New app or change ${name}?" "New app" "Change ${name}"\n`, source: 'v3:change-mode-new-app', style: 'new_app_in_change_mode', domain: o.domain, askTarget: true }); nc++; } }
-info.change_mode_new_app = nc;
+// ---- carried over from v3.0 (short names, multi-turn, change-mode asks): their item ids were keyed to the old program text, so reuse the frozen rows and migrate the programs
+{
+  const old = existsSync(D + 'v3.jsonl') ? rd(D + 'v3.jsonl').filter(r => ['v3:short-named', 'v3:multi-turn', 'v3:change-mode-new-app'].includes(r.source)) : [];
+  const texts = [...new Set(old.flatMap(r => r.program_before ? [r.program, r.program_before] : [r.program]))]; const mg = migrateBatch(texts); const MM = new Map(texts.map((t, i) => [t, mg[i]]));
+  const cnt = {};
+  for (const r of old) { cnt[r.source] = (cnt[r.source] || 0) + 1; cand.push({ task: r.task, request: r.request, before: r.program_before ? MM.get(r.program_before) : undefined, program: MM.get(r.program), source: r.source, style: r.meta.style, domain: r.meta.domain, needs: r.meta.needs, topic: r.meta.topic, turns: r.meta.turns, askTarget: !!r.meta.ask_target }); }
+  info.short_named = cnt['v3:short-named'] || 0; info.multi_turn = cnt['v3:multi-turn'] || 0; info.change_mode_new_app = cnt['v3:change-mode-new-app'] || 0;
+}
 // ---- long edits
 const X = outs('x'); let nx = 0;
-for (const e of rd(D + 'work/longedits-raw.jsonl')) { const x = X.get(e.id); if (x && x.request) { cand.push({ task: 'edit', request: x.request, before: e.before, program: e.after, source: 'v3:long-edit:' + e.kind, style: 'long_edit', domain: e.base, long: true, op: e.kind, keep_others: e.kept_others, keep_all: e.kept_all, tokens_before: e.tokens_before }); nx++; } }
+const raw3 = existsSync(D + 'work/longedits3-raw.jsonl') ? rd(D + 'work/longedits3-raw.jsonl') : [];
+const SKIP_KINDS = new Set(['colour', 'title', 'bigger']); // the app does these edits itself (round 4)
+const rawLong = [...rd(D + 'work/longedits-raw.jsonl'), ...raw3].filter(e => !SKIP_KINDS.has(e.kind)), rawSmall = (existsSync(D + 'work/smalledits-raw.jsonl') ? rd(D + 'work/smalledits-raw.jsonl') : []).filter(e => !SKIP_KINDS.has(e.kind));
+{ const texts = [...new Set([...rawLong, ...rawSmall].flatMap(e => [e.before, e.after]))]; const mg = migrateBatch(texts); const MM = new Map(texts.map((t, i) => [t, mg[i]])); for (const e of [...rawLong, ...rawSmall]) { e.before = MM.get(e.before); e.after = MM.get(e.after); } }
+for (const e of rawLong) { const x = X.get(e.id); if (x && x.request) { cand.push({ task: 'edit', request: x.request, before: e.before, program: e.after, source: 'v3:long-edit:' + e.kind, style: 'long_edit', domain: e.base, long: true, op: e.kind, keep_others: e.kept_others, keep_all: e.kept_all, tokens_before: e.tokens_before }); nx++; } }
 info.long_edits = nx;
 // ---- small edits (colour word on the app line, title, setting with `set`) on short programs
 let nse = 0;
-if (existsSync(D + 'work/smalledits-raw.jsonl')) for (const e of rd(D + 'work/smalledits-raw.jsonl')) { const x = X.get(e.id); if (x && x.request) { cand.push({ task: 'edit', request: x.request, before: e.before, program: e.after, source: 'v3:small-edit:' + e.kind, style: 'small_edit', domain: e.base, op: e.kind, small: true }); nse++; } }
+for (const e of rawSmall) { const x = X.get(e.id); if (x && x.request) { cand.push({ task: 'edit', request: x.request, before: e.before, program: e.after, source: 'v3:small-edit:' + e.kind, style: 'small_edit', domain: e.base, op: e.kind, small: true }); nse++; } }
 info.small_edits = nse;
 // ---- v2 rows (relabeled asks removed)
-const v2 = rd(D + '../data-v2/v2.jsonl'); const namedIds = new Set(named.keys()); let v2kept = 0, v2relabeled = 0;
+const v2 = rd(D + '../data-v2/v2.jsonl'); { const t2 = [...new Set(v2.flatMap(r => r.program_before ? [r.program, r.program_before] : [r.program]))]; const g2 = migrateBatch(t2); const MV = new Map(t2.map((t, i) => [t, g2[i]])); for (const r of v2) { r.program = MV.get(r.program); if (r.program_before) r.program_before = MV.get(r.program_before); } } const namedIds = new Set(named.keys()); let v2kept = 0, v2relabeled = 0;
 for (const r of v2) {
   if (namedIds.has(r.id)) { v2relabeled++; continue; }
   cand.push({ task: r.task, request: r.request, before: r.program_before, program: r.program, source: 'v2:' + r.source, style: r.meta.style, domain: r.meta.domain, oos: r.meta.oos, v2: true }); v2kept++;
@@ -92,7 +93,7 @@ const rows = final.map(c => {
   return o;
 });
 const ordered = rng('v3order').shuffle(rows);
-writeFileSync(D + 'v3.jsonl', ordered.map(r => JSON.stringify(r)).join('\n') + '\n');
-writeFileSync(D + 'heldout_similarity.json', JSON.stringify({ held_requests_compared: HELD_N, threshold: THR, histogram_max_similarity: sim.hist, dropped_by_set: sim.bySet, dropped_examples: sim.dropped }, null, 1));
-writeFileSync(D + 'out/build-v3.json', JSON.stringify({ candidates: cand.length, final: rows.length, drops, info, hand_fails: fails.slice(0, 20) }, null, 1));
+writeFileSync(OUTD + OUTNAME, ordered.map(r => JSON.stringify(r)).join('\n') + '\n');
+writeFileSync(OUTD + 'heldout_similarity.json', JSON.stringify({ held_requests_compared: HELD_N, threshold: THR, histogram_max_similarity: sim.hist, dropped_by_set: sim.bySet, dropped_examples: sim.dropped }, null, 1));
+writeFileSync(OUTD + 'build.json', JSON.stringify({ candidates: cand.length, final: rows.length, drops, info, hand_fails: fails.slice(0, 20) }, null, 1));
 console.log(JSON.stringify({ candidates: cand.length, final: rows.length, drops, info, sim: sim.hist }));

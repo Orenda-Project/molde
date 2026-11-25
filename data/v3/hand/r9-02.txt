@@ -1,0 +1,538 @@
+@rich domain=r9_kiln_log topic=pottery_piece_stages style=detailed
+I make mugs and plates on a wheel and lose track of what is drying, what went into the bisque firing and what is glazed. Each piece has a name, a stage and the glaze I used. Show how many pieces are at each stage, and let me push one to the next stage with a button
+needs: add a piece with name, stage and glaze | stage chips with counts that filter | next stage button | shows how many are ready for the kiln
+---
+app "Kiln Log" fire purple
+table pot name text, stage pick Wheel|Drying|Bisque|Glazed|Fired = Wheel, glaze text?
+state st text = ""
+topbar pot, "Add piece"
+statcard count(pot where stage = Drying), "dry and ready for the bisque kiln"
+row gap 1
+  each options pot.stage
+    button it count(pot where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each pot where st = "" or stage = st sort at desc as p empty "No pieces yet. Add the first mug."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.stage p.glaze faint
+    if p.stage != Fired
+      button "Next" tap set p.stage = if(p.stage = Wheel, Drying, if(p.stage = Drying, Bisque, if(p.stage = Bisque, Glazed, Fired)))
+===
+@rich domain=r9_resin_orders topic=resin_art_orders style=multi_feature
+resin coasters, trays and clocks, mostly custom orders from Instagram. add the item, customer, colour theme and price, tick shipped, and show my profit using a material cost I set per piece, plus how many pieces of each kind I made
+needs: add an order with item, customer, colour and price | tick shipped | profit using a material cost setting | pieces made per kind | shows orders waiting to ship
+---
+app "Resin Orders" star pink
+table piece item pick Coaster|Tray|Clock|Jewellery = Coaster, customer text, colour text, price money, shipped bool
+setting material money = 400 "Material cost per piece"
+let profit = sum(piece.price) - count(piece) * material
+topbar piece, "Add order"
+row gap 2
+  statcard profit, "profit so far"
+  statcard count(piece where shipped = no), "waiting to ship"
+section "Pieces by kind", "all orders"
+  bars options piece.item, count(piece where item = it), it
+each piece where shipped = no sort at as p empty "Nothing waiting to ship. Nice."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.shipped
+    stack grow gap 0
+      p.customer bold
+      p.item p.colour faint
+    p.price bold
+===
+@rich domain=r9_crochet_orders topic=crochet_toy_orders style=short
+crochet orders
+needs: add an order with toy, buyer, due date and price | mark finished | shows money pending | highlights orders that are late
+---
+app "Crochet Orders" heart grey
+table toy name text, buyer text, due date, price money, done bool
+topbar toy, "Add order"
+row gap 2
+  statcard sum(toy.price where done = no), "money pending"
+  statcard count(toy where done = no and due < today), "late orders"
+each toy where done = no sort due as t empty "No orders in hand. Add the next toy."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    stack grow gap 0
+      t.name bold
+      t.buyer "- due" t.due faint color if(t.due < today, bad, muted)
+    t.price bold
+===
+@rich domain=r9_leather_goods topic=leather_wallet_margins style=detailed
+leather wallets and belts from my workshop. For each product I need the leather cost, my hours, the selling price and how many I have in stock, and I want to see the margin on each one and which product earns the most per hour
+needs: add a product with leather cost, hours, price and stock | shows margin per product | shows earning per hour | stock goes down with a sold button | best earner first
+---
+app "Leather Shop" bag ocean
+table item name text, cost money, hours num 0.5..40 = 2 unit "h", price money, stock num 0..200 = 3
+let margin(x item) = x.price - x.cost
+topbar item, "Add product"
+statcard sum(item, margin(it) * it.stock), "profit sitting in stock"
+each item sort margin(it) / it.hours desc as x empty "No products yet. Add your first wallet."
+  stack card gap 1 tap edit x swipe remove x
+    row
+      x.name bold grow
+      x.stock "in stock" faint
+    row gap 2
+      "Margin" margin(x) bold
+      "Per hour" round(margin(x) / x.hours) faint grow
+      button "Sold 1" tap set x.stock = x.stock - 1
+===
+@rich domain=r9_soap_batches topic=soap_curing_batches style=short
+soap batches
+needs: log a batch with scent, bars and date | shows cure end date | shows days left | bars ready to sell
+---
+app "Soap Batches" leaf mint
+table cook scent text, bars num 1..200, day date = today
+setting cure num = 28 "Cure days"
+let ends(c cook) = c.day + cure
+let readybars = sum(cook, if(ends(it) <= today, it.bars, 0))
+topbar cook, "Log batch"
+row gap 2
+  statcard readybars, "bars ready to sell"
+  statcard sum(cook.bars) - readybars, "bars curing"
+each cook sort day desc as c empty "No batches yet. Log your next soap."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.scent bold
+      c.bars "bars, ready" ends(c) faint
+    if ends(c) > today
+      ends(c) - today "days" bold color warn
+    else
+      "Ready" bold color good
+===
+@rich domain=r9_jewellery_orders topic=custom_jewellery_orders style=detailed
+I make custom silver and gold-plated pieces. I want two tabs: orders, where I add customer, piece, metal, price and the deposit received, and a money tab showing deposits taken, balance due on delivery and what I will earn when all are delivered
+needs: add an order with customer, piece, metal, price and deposit | tab with money summary | shows balance due on delivery | mark delivered | total value of undelivered orders
+---
+app "Jewellery Orders" gift slate
+table piece customer text, what text, metal pick Silver|Gold_plated|Brass|Gem = Silver, price money, deposit money = 0, sent bool
+screen orders "Orders" list
+  topbar piece, "Add order"
+  each piece where sent = no sort at as p empty "No open orders. Add the first custom piece."
+    row card gap 2 tap edit p swipe remove p
+      stack grow gap 0
+        p.customer bold
+        p.what p.metal faint
+      stack gap 0 align end
+        p.price - p.deposit bold
+        "due" tiny faint
+      button "Sent" tap set p.sent = yes
+screen money "Money" coin
+  statcard sum(piece.deposit where sent = no), "deposits held for open orders"
+  statcard sum(piece, if(it.sent, 0, it.price - it.deposit)), "balance due on delivery"
+  statcard sum(piece, if(it.sent, 0, it.price)), "value of open orders"
+===
+@rich domain=r9_craft_fairs topic=craft_fair_profit style=multi_feature
+I do craft fairs and bazaars almost every month and never know which ones were worth the stall fee. Add each fair with its name and stall fee, add what I sold there with item and amount, and show profit per fair = sales minus fee, and the best fair at the top
+needs: add a fair with name and stall fee | add a sale for a fair with item and amount | shows profit per fair | best fair listed first | total profit of all fairs
+---
+app "Craft Fairs" tag ink dark
+table fair name text, fee money
+table sale fair ref fair, item text, amount money
+let net(f fair) = sum(f.sale.amount) - f.fee
+topbar fair, "Add fair"
+statcard sum(fair, net(it)), "profit from all fairs"
+each fair sort net(it) desc as f empty "No fairs yet. Add the next bazaar you book."
+  stack card gap 1 tap edit f swipe remove f
+    row
+      f.name bold grow
+      net(f) bold color if(net(f) >= 0, good, bad)
+    "Sold" sum(f.sale.amount) "in" count(f.sale) "sales, stall fee" f.fee faint
+    row gap 1
+      button "Sold 500" tap add sale fair = f, item = "Item", amount = 500
+      button "Sold 1000" tap add sale fair = f, item = "Item", amount = 1000
+===
+@rich domain=r9_print_jobs topic=photocopy_print_jobs style=short
+print jobs
+needs: add a job with customer, pages, copies and rate | total price from pages and copies | mark paid | cash taken today
+---
+app "Print Jobs" note plum
+table pjob customer text, pages num 1..2000, copies num 1..500 = 1, rate money = 5, paid bool
+let total(j pjob) = j.pages * j.copies * j.rate
+topbar pjob, "Add job"
+row gap 2
+  statcard sum(pjob, if(it.paid, total(it), 0)), "taken in total"
+  statcard sum(pjob, if(it.paid, 0, total(it))), "not paid yet"
+each pjob as j empty "No jobs yet. Add the first print job."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.customer bold
+      j.pages "pages x" j.copies faint
+    total(j) bold
+    toggle j.paid
+===
+@rich domain=r9_stationery_stock topic=stationery_reorder_list style=custom_ui
+my stationery shop sells copies, pens, markers and files. I key in stock and the level where I must reorder, tap sold or received buttons to change it, and I want a separate list at the top of what I must order now
+needs: add a product with stock and reorder level | sold and received buttons change stock | list of products to reorder now | count of products below level
+---
+app "Stationery Stock" pencil red
+table prod name text, stock num 0..9999 = 20, level num 0..999 = 10
+let low = count(prod where stock <= level)
+topbar prod, "Add product"
+if low > 0
+  stack card gap 1 fill soft
+    "Order now" head color bad
+    each prod where stock <= level sort stock as p
+      row gap 2
+        p.name grow
+        p.stock "left, order to" p.level * 2 faint
+else
+  "Nothing to reorder today." color good
+each prod sort name as p empty "No products yet. Add your first pen."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      "Reorder at" p.level faint
+    p.stock bold color if(p.stock <= p.level, bad, ink)
+    button "-1" tap set p.stock = p.stock - 1
+    button "+10" tap set p.stock = p.stock + 10
+===
+@rich domain=r9_wedding_cards topic=wedding_card_print_orders style=detailed
+we print shaadi cards. I want each order with the family name, how many cards, the rate per card, advance and a tick when the family approved the proof. show the full price, the balance, and the number of cards I must print this week
+needs: add an order with family, cards, rate and advance | tick proof approved | shows balance per order | cards waiting to print | list sorted by delivery date
+---
+app "Card Press" book orange
+table card family text, qty num 50..5000 = 500, rate money, advance money = 0, proof bool, due date
+topbar card, "New order"
+row gap 2
+  statcard sum(card.qty where proof = yes), "cards ready to print"
+  statcard sum(card.qty where proof = no), "cards waiting for proof"
+each card sort due as c empty "No card orders yet. Add the first family."
+  stack card gap 1 tap edit c swipe remove c
+    row
+      c.family bold grow
+      "Due" c.due faint color if(c.due < today, bad, muted)
+    row gap 2
+      c.qty "cards = " c.qty * c.rate bold
+      "Balance" c.qty * c.rate - c.advance faint grow
+    row gap 1
+      toggle c.proof
+      "Proof approved" faint
+===
+@rich domain=r9_sticker_preorders topic=sticker_pack_preorders style=custom_ui
+I sell sticker packs by preorder. Pack names with price, and each preorder says who and which pack and how many. I want to see a grid where each pack is a tile showing total preordered, to know what to print, and how many preorders are still unpaid
+needs: add a pack with name and price | add a preorder with buyer, pack and count | grid of packs showing total preordered | shows unpaid preorders | tick paid
+---
+app "Sticker Shop" tag yellow
+table pack name text, price money
+table pre buyer text, pack ref pack, n num 1..50 = 1, paid bool
+screen packs "Packs" grid
+  topbar pack, "Add pack"
+  grid 2 gap 2
+    each pack as p empty "No packs yet. Add your first design."
+      stack card gap 0 align center tap edit p
+        p.name bold
+        sum(p.pre.n) big
+        "to print at" p.price faint
+screen orders "Preorders" cart
+  topbar pre, "Add preorder"
+  statcard count(pre where paid = no), "preorders not paid"
+  each pre as o empty "No preorders yet."
+    row card gap 2 tap edit o swipe remove o
+      toggle o.paid
+      stack grow gap 0
+        o.buyer bold
+        o.n "x" o.pack.name faint
+===
+@rich domain=r9_tshirt_print topic=tshirt_printing_orders style=multi_feature
+custom t-shirt printing for school teams and shops. each job: customer, design, how many small, medium, large and XL, price per shirt, advance. show total shirts per job and the total shirts I have to print, and a tick when delivered
+needs: add a job with customer, design, sizes S M L XL, price and advance | shows shirts per job | shows total shirts still to print | tick delivered | shows balance per job
+---
+app "Shirt Print" bag green
+table job customer text, design text, s num 0..500 = 0, m num 0..500 = 0, l num 0..500 = 0, xl num 0..500 = 0, price money, advance money = 0, sent bool
+let shirts(j job) = j.s + j.m + j.l + j.xl
+topbar job, "Add job"
+row gap 2
+  statcard sum(job, if(it.sent, 0, shirts(it))), "shirts still to print"
+  statcard sum(job, if(it.sent, 0, shirts(it) * it.price - it.advance)), "balance to collect"
+each job sort sent as j empty "No jobs yet. Add the first team order."
+  stack card gap 1 tap edit j swipe remove j
+    row
+      j.customer bold grow
+      shirts(j) "shirts" bold
+    j.design "- S" j.s "M" j.m "L" j.l "XL" j.xl faint
+    row gap 2
+      "Balance" shirts(j) * j.price - j.advance
+      toggle j.sent
+===
+@rich domain=r9_flex_banners topic=flex_banner_pricing style=detailed
+flex banner shop: customer gives width and height in feet and I charge a rate per square foot that I can change. Show the area and price for each banner, tick when it is printed, and tell me the total square feet to print today
+needs: add a banner with customer, width and height | rate per square foot setting | shows area and price per banner | tick printed | total square feet still to print
+---
+app "Flex Banners" board teal
+table banner customer text, w num 1..60 unit "ft", h num 1..30 unit "ft", printed bool
+setting rate money = 35 "Rate per square foot"
+let area(b banner) = b.w * b.h
+topbar banner, "New banner"
+row gap 2
+  statcard sum(banner, if(it.printed, 0, area(it))), "sq ft still to print"
+  statcard sum(banner, if(it.printed, 0, area(it) * rate)), "value waiting"
+each banner sort printed as b empty "No banners yet. Add the first order."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.printed
+    stack grow gap 0
+      b.customer bold
+      b.w "x" b.h "ft =" area(b) "sq ft" faint
+    area(b) * rate bold
+===
+@rich domain=r9_tuition_fees topic=tuition_group_fee_tracking style=short
+tuition fees
+needs: add a student with monthly fee | record a payment from a student | month arrows to see another month | shows who has not paid this month | total collected this month
+---
+app "Tuition Fees" coin blue
+table kid name text, fee money
+table pay kid ref kid, amount money
+state m date = today
+topbar kid, "Add student"
+monthnav m
+row gap 2
+  statcard sum(pay.amount month of m), "collected in the month"
+  statcard sum(kid, max(it.fee - sum(it.pay.amount month of m), 0)), "still to collect"
+each kid sort name as k empty "No students yet. Add the first child."
+  row card gap 2 tap edit k swipe remove k
+    stack grow gap 0
+      k.name bold
+      "Fee" k.fee faint
+    if sum(k.pay.amount month of m) >= k.fee
+      "Paid" bold color good
+    else
+      button "Got fee" fill accent tap add pay kid = k, amount = k.fee
+===
+@rich domain=r9_online_classes topic=online_class_week_plan style=custom_ui
+I teach maths online to about 12 kids and my week is a mess of WhatsApp reminders. Show a day picker, only the classes on that day in time order, a tick for classes done today, and how many classes I take every week
+needs: add a class with student, day and time | day picker shows classes of that day | tick class done today | count of classes per week
+---
+app "Online Classes" phone purple dark
+table slot student text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, at_time time, subject text?
+table held slot ref slot
+state d pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon
+topbar slot, "Add class"
+choice d
+"Classes every week" count(slot) faint
+each slot where day = d sort at_time as s empty "No classes on this day. Enjoy the break."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.held
+    stack grow gap 0
+      s.student bold
+      s.at_time s.subject faint
+section "Classes per day", "this week plan"
+  bars options slot.day, count(slot where day = it), it
+===
+@rich domain=r9_tutor_lessons topic=private_tutor_lesson_log style=detailed
+I tutor kids at their homes. Keep each student with the subject and the fee per hour. After every lesson I log the topic, minutes and homework given. Tell me hours taught this week, money earned this month and the last topic for every child
+needs: add a student with subject and hourly fee | log a lesson with topic, minutes and homework | shows hours taught this week | shows money earned this month | shows last topic per student
+---
+app "Tutor Diary" pen pink
+table kid name text, subject text, rate money
+table lesson kid ref kid, topic text, mins num 15..240 = 60, homework text?
+let hours = sum(lesson.mins week) / 60
+let earned = sum(kid, sum(it.lesson.mins month) * it.rate / 60)
+screen kids "Students" users
+  topbar kid, "Add student"
+  row gap 2
+    statcard round(hours * 10) / 10, "hours this week"
+    statcard round(earned), "earned this month"
+  each kid sort name as k empty "No students yet. Add the first one."
+    stack card gap 1 tap edit k swipe remove k
+      row
+        k.name bold grow
+        k.subject faint
+      "Last topic:" last(k.lesson.topic) faint
+screen log "Lessons" book
+  topbar lesson, "Log lesson"
+  list lesson by day, "No lessons yet. Log your first lesson."
+===
+@rich domain=r9_quran_online topic=online_quran_progress style=multi_feature
+I teach Quran online to 8 students. For each student I want name, country, the para they are on, a plus button when they finish a para and a bar showing how close they are to 30. Also show how many have finished the whole Quran
+needs: add a student with name, country and current para | button to move to next para | progress bar toward para 30 | count of students who finished
+---
+app "Quran Class" mosque grey
+table pupil name text, country text?, para num 1..31 = 1
+topbar pupil, "Add student"
+statcard count(pupil where para > 30), "students finished the Quran"
+each pupil sort para desc as p empty "No students yet. Add your first one."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.name bold grow
+      if p.para > 30
+        "Finished" bold color good
+      else
+        "Para" p.para "of 30" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp((p.para - 1) / 30, 0, 1), 4 fill accent radius 2
+    if p.para <= 30
+      button "Finished this para" tap set p.para = p.para + 1
+===
+@rich domain=r9_music_pupils topic=music_lesson_pupils style=detailed
+guitar and keyboard lessons at my home. I want pupils with instrument and fee per lesson, a button to mark a lesson taken today, a button for money received, and the amount each pupil still owes me from lessons taken minus money paid
+needs: add a pupil with instrument and lesson fee | button records a lesson taken | button records payment received | shows amount owed per pupil | total owed
+---
+app "Music Pupils" music ocean
+table pupil name text, inst pick Guitar|Keyboard|Vocals|Tabla = Guitar, fee money
+table lesson pupil ref pupil
+table paid pupil ref pupil, amount money
+let owes(p pupil) = count(p.lesson) * p.fee - sum(p.paid.amount)
+topbar pupil, "Add pupil"
+statcard sum(pupil, owes(it)), "owed to me in total"
+each pupil sort name as p empty "No pupils yet. Add the first one."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.name bold grow
+      p.inst faint
+    row gap 2
+      count(p.lesson) "lessons" faint grow
+      owes(p) bold color if(owes(p) > 0, warn, good)
+    row gap 1
+      button "Lesson taken" tap add lesson pupil = p
+      button "Got money" tap add paid pupil = p, amount = p.fee
+===
+@rich domain=r9_homework_given topic=tutor_homework_tracker style=custom_ui
+homework I give to my tuition kids: child name, what I gave, due date and a tick when it is brought back. Show late ones in red at the top and how many are missing
+needs: add homework with child, task and due date | tick when brought back | late ones highlighted | shows how many are missing | sorted by due date
+---
+app "Homework Given" pencil mint
+table hw kid text, task text, due date, back bool
+let missing = count(hw where back = no and due < today)
+topbar hw, "Give homework"
+row gap 2
+  statcard missing, "late and missing"
+  statcard count(hw where back = no and due >= today), "still within time"
+each hw where back = no sort due as h empty "All homework is back. Give the next one."
+  row card gap 2 tap edit h swipe remove h
+    toggle h.back
+    stack grow gap 0
+      h.kid bold
+      h.task faint
+    h.due bold color if(h.due < today, bad, muted)
+===
+@rich domain=r9_mock_scores topic=mock_test_score_trend style=multi_feature
+exam prep class: each student takes a mock every week. Let me add students, add a mock mark out of 100 for a student, and show a chart of the class average over the mocks plus each student's best and last mark
+needs: add a student | add a mock mark out of 100 | chart of class average per mock | shows best and last mark per student | shows number of mocks taken
+---
+app "Mock Scores" chart slate
+table kid name text
+table mock kid ref kid, marks num 0..100
+let avg = round(avg(mock.marks))
+topbar kid, "Add student"
+row gap 2
+  statcard avg, "class average"
+  statcard count(mock), "mocks marked"
+section "Marks over time", "all mocks"
+  if count(mock) < 2
+    "Add two marks to see the line." faint
+  else
+    trend mock sort at, it.marks
+each kid sort name as k empty "No students yet. Add the first one."
+  row card gap 2 tap edit k swipe remove k
+    stack grow gap 0
+      k.name bold
+      "Best" max(k.mock.marks) "- last" last(k.mock.marks) faint
+    button "+ mark" tap edit k
+===
+@rich domain=r9_ielts_coach topic=ielts_band_scores style=detailed
+IELTS coaching: students sit a mock and I score listening, reading, writing and speaking out of 9. I need each mock's overall band (the average of the four), a target band I can set, and a line of overall bands to see if the student is improving
+needs: add a mock with date and four skill scores | shows overall band per mock | target band setting | line chart of overall band | shows gap to the target
+---
+app "IELTS Mocks" school ink
+table mock day date = today, listening num 0..9 = 5, reading num 0..9 = 5, writing num 0..9 = 5, speaking num 0..9 = 5
+setting target num = 7 "Target band"
+let band(m mock) = round((m.listening + m.reading + m.writing + m.speaking) / 4 * 2) / 2
+topbar mock, "Add mock"
+if count(mock) > 0
+  row gap 2
+    statcard band(last(mock)), "latest band", target
+    statcard max(target - band(last(mock)), 0), "bands to reach the target"
+section "Overall band", "oldest to newest"
+  if count(mock) < 2
+    "Add two mocks to see the line." faint
+  else
+    trend mock sort day, band(it)
+each mock sort day desc as m empty "No mocks yet. Add the first one."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.day bold
+      "L" m.listening "R" m.reading "W" m.writing "S" m.speaking faint
+    band(m) big
+===
+@rich domain=r9_coaching_batches topic=coaching_batches_income style=multi_feature
+coaching centre with batches for class 9, 10, FSc and O level. I enter each batch with subject, monthly fee and number of students. second tab shows monthly income per batch, and the total, with a bar for each batch so I see where the money comes from
+needs: add a batch with name, subject, fee and students | monthly income per batch | total monthly income | bar per batch | tab for the income view
+---
+app "Coaching Batches" school plum
+table batch name text, subject text, fee money, kids num 0..200
+let income(b batch) = b.fee * b.kids
+screen batches "Batches" users
+  topbar batch, "Add batch"
+  each batch sort name as b empty "No batches yet. Add your first class."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.name bold
+        b.subject faint
+      b.kids "students" faint
+screen money "Income" coin
+  statcard sum(batch, income(it)), "monthly income"
+  section "By batch"
+    bars batch sort name, income(it), it.name
+===
+@rich domain=r9_youtube_calendar topic=youtube_upload_calendar style=detailed
+I upload twice a week and keep forgetting where each video is. Add a video with title, publish date and stage (idea, script, shoot, edit, live). Show how many days to the next upload, how many videos at each stage and mark the late ones in red
+needs: add a video with title, publish date and stage | shows days to next upload | count of videos per stage | late videos highlighted in red | move video to next stage
+---
+app "Upload Calendar" star red dark
+table video title text, publish date, stage pick Idea|Script|Shoot|Edit|Live = Idea
+let next = min(video where stage != Live and publish >= today, it.publish - today)
+topbar video, "Add video"
+row gap 2
+  statcard next, "days to next upload"
+  statcard count(video where stage != Live and publish < today), "late videos"
+row gap 1
+  each options video.stage
+    stack grow gap 0 align center
+      count(video where stage = it) big
+      it tiny faint
+each video where stage != Live sort publish as v empty "No videos planned. Add your next idea."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.title bold
+      v.stage "- publish" v.publish faint color if(v.publish < today, bad, muted)
+    button "Next" tap set v.stage = if(v.stage = Idea, Script, if(v.stage = Script, Shoot, if(v.stage = Shoot, Edit, Live)))
+===
+@rich domain=r9_video_ideas topic=video_idea_ranking style=short
+video ideas
+needs: add an idea with title | plus button to vote it up | ranked list with top idea first | tick ideas already filmed
+---
+app "Video Ideas" bolt orange
+table idea title text, votes num 0..99 = 0, filmed bool
+topbar idea, "Add idea"
+statcard count(idea where filmed = no), "ideas waiting"
+each idea where filmed = no sort votes desc as i empty "No ideas yet. Add the first one."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.title bold
+      i.votes "votes" faint
+    button "+1" tap set i.votes = i.votes + 1
+    button "Filmed" tap set i.filmed = yes
+===
+@rich domain=r9_podcast_episodes topic=podcast_episode_plan style=multi_feature
+weekly podcast. list each episode with number, title, guest, recording date and downloads. I want to tick when it is live, enter downloads later, and see a line chart of downloads across live episodes plus the total
+needs: add an episode with number, title, guest and recording date | tick when it is live | enter downloads | line chart of downloads | shows total downloads
+---
+app "Podcast Plan" music yellow
+table ep number num 1..999, title text, guest text?, recorded date, live bool, plays num 0.. = 0
+topbar ep, "Add episode"
+row gap 2
+  statcard sum(ep.plays), "total downloads"
+  statcard count(ep where live = no), "episodes in the pipeline"
+section "Downloads per live episode"
+  if count(ep where live = yes) < 2
+    "Two live episodes are needed for the line." faint
+  else
+    trend ep where live = yes sort number, it.plays
+each ep sort number desc as e empty "No episodes yet. Plan your first one."
+  row card gap 2 tap edit e swipe remove e
+    toggle e.live
+    stack grow gap 0
+      "#" e.number e.title bold
+      e.guest "- recorded" e.recorded faint
+    e.plays faint

@@ -1,0 +1,500 @@
+@rich domain=r9_reel_plan topic=instagram_reel_calendar style=multi_feature
+I post reels for my small clothing page and want a plan: idea, the day I will post, tick when posted, and views after. show a grid of the last 28 days coloured on the days I actually posted, how many reels in 30 days and the views they got
+needs: add a reel idea with day and views | tick when posted | grid of the last 28 days coloured by posts | reels posted in 30 days | views in 30 days
+---
+app "Reel Plan" phone green
+table reel idea text, day date, views num 0.. = 0, posted bool
+topbar reel, "Plan reel"
+row gap 2
+  statcard count(reel where posted = yes and day >= today - 29), "reels in 30 days"
+  statcard sum(reel.views where day >= today - 29), "views in 30 days"
+section "Posting days", "last 28 days"
+  daygrid last 28 days, count(reel where posted = yes and day = it)
+each reel sort day desc as r empty "No reels planned. Add the first idea."
+  row card gap 2 tap edit r swipe remove r
+    toggle r.posted
+    stack grow gap 0
+      r.idea bold
+      r.day faint
+    r.views "views" faint
+===
+@rich domain=r9_sponsor_deals topic=creator_sponsorship_pipeline style=detailed
+as a small youtuber I get brand offers on email and lose track. Put each brand with the fee, what I must deliver and where the deal is (pitched, agreed, posted, paid), filter by that stage and show me the money still waiting to be paid
+needs: add a deal with brand, fee and deliverable | filter by stage with counts | move deal to next stage | shows money waiting to be paid | total earned from paid deals
+---
+app "Brand Deals" tag teal
+table deal brand text, fee money, task text?, stage pick Pitched|Agreed|Posted|Paid = Pitched
+state st text = ""
+topbar deal, "Add deal"
+row gap 2
+  statcard sum(deal.fee where stage = Posted), "waiting to be paid"
+  statcard sum(deal.fee where stage = Paid), "earned from brands"
+row gap 1
+  each options deal.stage
+    button it count(deal where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each deal where st = "" or stage = st sort at desc as d empty "No deals yet. Add the first brand."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.brand bold
+      d.task faint
+    d.fee bold
+    if d.stage != Paid
+      button "Next" tap set d.stage = if(d.stage = Pitched, Agreed, if(d.stage = Agreed, Posted, Paid))
+===
+@rich domain=r9_thumbnail_tests topic=thumbnail_ab_tests style=custom_ui
+testing two thumbnails per video. enter the video title and the click rate of thumbnail A and B, and the app should say which won and by how many points. also show how many tests B won
+needs: add a test with title and click rates for A and B | shows which thumbnail won | shows the difference in points | count of tests won by B
+---
+app "Thumbnail Tests" eye blue
+table test title text, a num 0..100 unit "%", b num 0..100 unit "%"
+topbar test, "Add test"
+row gap 2
+  statcard count(test where b > a), "tests won by B"
+  statcard count(test where a >= b), "tests won by A"
+each test sort at desc as t empty "No tests yet. Add the first video."
+  stack card gap 1 tap edit t swipe remove t
+    t.title bold
+    row gap 2
+      stack grow gap 0
+        "A" t.a "%" big color if(t.a >= t.b, accent, muted)
+      stack grow gap 0
+        "B" t.b "%" big color if(t.b > t.a, accent, muted)
+    if t.a = t.b
+      "A tie." faint
+    else
+      "Winner" if(t.b > t.a, "B", "A") "by" abs(t.a - t.b) "points" faint
+===
+@rich domain=r9_channel_growth topic=channel_subscriber_growth style=multi_feature
+every Sunday I write down my subscriber count. I want a line of the counts, a goal I can change with a bar toward it, and how many I gained since the last Sunday
+needs: log subscribers with date | line chart of subscribers | goal setting with progress bar | shows gained since last entry
+---
+app "Channel Growth" chart purple
+table check day date = today, subs num 0..
+setting aim num = 1000 "Subscriber goal"
+let now_subs = last(check.subs)
+let before = nth(check sort day desc, 2).subs
+topbar check, "Log count"
+goal now_subs, aim, "subscribers"
+if count(check) > 1
+  statcard now_subs - before, "gained since the last entry"
+section "Subscribers over time"
+  if count(check) < 2
+    "Log two Sundays to see the line." faint
+  else
+    trend check sort day, it.subs
+===
+@rich domain=r9_blog_posts topic=blog_post_pipeline style=short
+blog posts
+needs: add a post with title and publish date | status idea, writing, edited, live | filter by status | count of posts live this month
+---
+app "Blog Posts" pen pink
+table post title text, due date, status pick Idea|Writing|Edited|Live = Idea
+state st text = ""
+topbar post, "Add post"
+statcard count(post where status = Live and due >= today - 29), "posts live in 30 days"
+row gap 1
+  button "All" fill if(st = "", accent, soft) tap set st = ""
+  each options post.status
+    button it fill if(st = it, accent, soft) tap set st = it
+each post where st = "" or status = st sort due as p empty "No posts here. Add the first title."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.title bold
+      p.status "- due" p.due faint
+    if p.status != Live
+      button "Next" tap set p.status = if(p.status = Idea, Writing, if(p.status = Writing, Edited, Live))
+===
+@rich domain=r9_livestream_slots topic=livestream_schedule style=detailed
+I go live on gaming nights. let me add a stream with topic, the day, start time and a tick when done, and show me how many days until the next one, how many streams I did this month and a list of upcoming ones
+needs: add a stream with topic, day and start time | tick when done | shows days until next stream | streams done this month | upcoming list
+---
+app "Live Nights" bolt grey dark
+table stream topic text, day date, start time, done bool
+let nextin = min(stream where done = no and day >= today, it.day - today)
+topbar stream, "Add stream"
+row gap 2
+  statcard nextin, "days to next live"
+  statcard count(stream where done = yes and day >= today - 29), "streams in 30 days"
+each stream where done = no sort day as s empty "No streams planned. Add your next night."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    stack grow gap 0
+      s.topic bold
+      s.day "at" s.start faint color if(s.day = today, accent, muted)
+===
+@rich domain=r9_gig_book topic=musician_gig_book style=detailed
+I play weddings and restaurants most weekends. My gig book: venue, date, kind of gig, the fee agreed and a tick once the money is in. Show what I have earned this month, what people still owe me and the next gig first
+needs: add a gig with venue, date, kind and fee | tick money received | shows earned this month | shows money still owed | next gig listed first
+---
+app "Gig Book" music ocean
+table gig venue text, day date, kind pick Wedding|Restaurant|Private|Festival|Other = Wedding, fee money, paid bool
+topbar gig, "Add gig"
+row gap 2
+  statcard sum(gig.fee where paid = yes and day >= today - 29), "earned in 30 days"
+  statcard sum(gig.fee where paid = no and day < today), "owed to me"
+each gig where day >= today sort day as g empty "No gigs coming up. Time to message the venues."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.venue bold
+      g.kind "on" g.day faint
+    g.fee bold
+    toggle g.paid
+section "Played already", count(gig where day < today)
+  each gig where day < today sort day desc top 5 as g
+    row gap 2
+      g.venue grow
+      toggle g.paid
+===
+@rich domain=r9_setlist_builder topic=band_setlist_builder style=custom_ui
+we get 45 minute slots at open mics. keep our songs with key and length in minutes, tick the ones in tonight's set, and show the total minutes of the set against the slot time so I know if we are over
+needs: add a song with title, key and minutes | tick songs in tonight's set | total set minutes against slot time | warns when over the slot | slot length setting
+---
+app "Setlist" music mint
+table song title text, key pick C|D|E|F|G|A|B = C, mins num 1..15 = 4 unit "min", inset bool
+setting slot num = 45 "Slot length (min)"
+let total = sum(song.mins where inset = yes)
+topbar song, "Add song"
+goal total, slot, "minutes in tonight's set"
+if total > slot
+  "Over by" total - slot "minutes. Drop a song." bold color bad
+each song sort title as s empty "No songs yet. Add the first one."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.inset
+    stack grow gap 0
+      s.title bold
+      "Key of" s.key faint
+    s.mins "min" faint
+===
+@rich domain=r9_band_rehearsal topic=band_rehearsal_attendance style=multi_feature
+four of us in a band and someone always misses practice. list the members with their instrument, a tick for who is here today, how many are here, and a bar chart of how many rehearsals each person has made it to
+needs: add a member with instrument | tick who is here today | shows how many are here today | chart of rehearsals attended per member
+---
+app "Band Practice" users slate
+table member name text, inst text
+table here member ref member
+topbar member, "Add member"
+statcard count(member, count(it.here today) > 0), "here today of" count(member), count(member)
+each member sort name as m empty "No members yet. Add the band."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.here
+    stack grow gap 0
+      m.name bold
+      m.inst faint
+section "Rehearsals made it to"
+  bars member, count(it.here), it.name
+===
+@rich domain=r9_song_practice topic=song_practice_minutes style=detailed
+learning 6 songs for a recital. For each song I tap +10 when I practise and I want a bar chart of my minutes for the last 7 days against a daily goal I can change, and the total time spent on each song
+needs: add a song with title | buttons to add 10 or 20 practice minutes | bar chart of minutes in last 7 days with a goal line | total minutes per song | daily goal setting
+---
+app "Practice Songs" music ink
+table song title text
+table prac song ref song, mins num 1..240
+setting daily num = 30 "Daily goal (min)"
+topbar song, "Add song"
+section "Minutes per day", "goal" daily
+  goalbars last 7 days, sum(prac.mins on it), daily, "Goal reached"
+each song sort title as s empty "No songs yet. Add what you are learning."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.title bold
+      sum(s.prac.mins) "minutes in total" faint
+    button "+10" tap add prac song = s, mins = 10
+    button "+20" tap add prac song = s, mins = 20
+===
+@rich domain=r9_wedding_band topic=wedding_band_bookings style=multi_feature
+we are a 5 piece band doing wedding functions. record each booking with the family, date, fee and advance. Show the balance to collect on the day, and what each member gets as an equal share of the fee after we keep 10 percent for the band fund
+needs: add a booking with family, date, fee and advance | shows balance to collect | shows each member's equal share after 10 percent fund | number of members setting | upcoming bookings first
+---
+app "Band Bookings" star plum
+table book family text, day date, fee money, advance money = 0
+setting players num = 5 "Band members"
+let share(b book) = round(b.fee * 0.9 / players)
+topbar book, "Add booking"
+statcard sum(book where day >= today, it.fee - it.advance), "to collect on the day"
+each book sort day as b empty "No bookings yet. Add the first function."
+  stack card gap 1 tap edit b swipe remove b
+    row
+      b.family bold grow
+      b.day faint color if(b.day < today, muted, accent)
+    row gap 2
+      "Balance" b.fee - b.advance bold
+      "Each member" share(b) faint grow
+      "Fund" round(b.fee * 0.1) faint
+===
+@rich domain=r9_dj_gigs topic=dj_event_bookings style=short
+dj gigs
+needs: add an event with name, date and pay | pick the kit used | shows pay this month | upcoming events first
+---
+app "DJ Gigs" music red
+table event name text, day date, pay money, kit pick Basic|Full_sound|Lights_plus_sound = Basic, paid bool
+topbar event, "Add event"
+row gap 2
+  statcard sum(event.pay where day >= today - 29 and day <= today), "earned in 30 days"
+  statcard count(event where day >= today), "events coming"
+each event where day >= today sort day as e empty "No events coming. Post a reel to get bookings."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.name bold
+      e.day e.kit faint
+    e.pay bold
+    toggle e.paid
+===
+@rich domain=r9_busker_spots topic=street_busking_earnings style=custom_ui
+I busk on guitar around town. After each session I note the spot, the hours and the tips. I want to see tips per hour for every session and which spot pays best, as a bar share
+needs: log a session with spot, hours and tips | shows tips per hour | shares bars of tips per spot | total earned this month
+---
+app "Busking Spots" music orange
+table set spot text, hours num 0.5..8 = 2 unit "h", tips money
+let perhour(s set) = round(s.tips / s.hours)
+statcard sum(set.tips month), "tips this month"
+form set, "Save session"
+section "Which spot pays best", "tips per spot"
+  share set by spot, sum(it.tips), it.key
+each set as s empty "No sessions yet. Go play and log it here."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.spot bold
+      s.hours "hours" faint
+    stack gap 0 align end
+      perhour(s) bold
+      "per hour" tiny faint
+===
+@rich domain=r9_band_merch topic=band_merch_table style=detailed
+at gigs we sell shirts, CDs and stickers. Keep what I brought for each item with the price, tap sold when somebody buys, show how many are left and how much money the merch table made in total
+needs: add an item with starting stock and price | sold button for each item | shows how many are left | shows total money made | warns when an item is sold out
+---
+app "Merch Table" bag yellow dark
+table item name text, brought num 0..500, price money
+table sale item ref item, qty num 1..20 = 1
+let left(i item) = i.brought - sum(i.sale.qty)
+topbar item, "Add item"
+statcard sum(sale, it.qty * it.item.price), "made at the merch table"
+each item sort name as i empty "No merch yet. Add the first item."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      if left(i) <= 0
+        "Sold out" bold color bad
+      else
+        left(i) "left at" i.price faint
+    button "Sold 1" tap add sale item = i, qty = 1
+===
+@rich domain=r9_painting_commissions topic=painting_commission_stages style=detailed
+I paint portraits and landscapes on commission. Each one has the client, subject, canvas size, price and deposit, and where it is: sketch, painting, varnish or delivered. Let me filter by stage, move it forward with one tap, and show the balance I will receive on delivery
+needs: add a commission with client, subject, size, price and deposit | stage chips filter | move to next stage | balance to receive on delivery | total of undelivered commissions
+---
+app "Commissions" pen green
+table work client text, subject text, size pick Small|Medium|Large = Medium, price money, deposit money = 0, stage pick Sketch|Painting|Varnish|Delivered = Sketch
+state st text = ""
+topbar work, "Add commission"
+statcard sum(work where stage != Delivered, it.price - it.deposit), "to receive on delivery"
+row gap 1
+  each options work.stage
+    button it count(work where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each work where st = "" or stage = st sort at as w empty "No commissions yet. Add the first canvas."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.client bold
+      w.subject w.size faint
+    stack gap 0 align end
+      w.price - w.deposit bold
+      "due" tiny faint
+    if w.stage != Delivered
+      button "Next" tap set w.stage = if(w.stage = Sketch, Painting, if(w.stage = Painting, Varnish, Delivered))
+===
+@rich domain=r9_sketch_orders topic=portrait_sketch_orders style=short
+sketch orders
+needs: add an order with name, size and price | mark finished | shows money pending | shows sketches finished this month
+---
+app "Sketch Orders" pencil teal
+table sketch name text, size pick A5|A4|A3 = A4, price money, due date, done bool
+topbar sketch, "Add order"
+row gap 2
+  statcard sum(sketch.price where done = no), "money pending"
+  statcard count(sketch where done = yes and due >= today - 29), "finished in 30 days"
+each sketch where done = no sort due as s empty "No sketches waiting. Add the next one."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    stack grow gap 0
+      s.name bold
+      s.size "- due" s.due faint color if(s.due < today, bad, muted)
+    s.price bold
+===
+@rich domain=r9_mural_jobs topic=wall_mural_pricing style=multi_feature
+I paint murals on cafe and school walls. I charge by the square foot with a rate I can change. For each wall I enter the place, area and paint cost, then it should show the price and my profit, and my profit across all walls
+needs: add a wall with place, area and paint cost | rate per square foot setting | shows price and profit per wall | total profit across all walls
+---
+app "Mural Jobs" pen blue
+table wall place text, sqft num 10..5000 unit "sq ft", paint money
+setting rate money = 120 "Rate per square foot"
+let price(w wall) = w.sqft * rate
+topbar wall, "Add wall"
+statcard sum(wall, price(it) - it.paint), "profit across all walls"
+each wall sort at desc as w empty "No walls yet. Add your first mural."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.place bold
+      w.sqft "sq ft, paint" w.paint faint
+    stack gap 0 align end
+      price(w) bold
+      "profit" price(w) - w.paint faint
+===
+@rich domain=r9_calligraphy_orders topic=name_plate_calligraphy style=custom_ui
+calligraphy name plates and nikah certificates. text to write, style (naskh, nastaliq, kufic), price, due date. show orders by style with chips, red date if late and my total pending money
+needs: add an order with text, style, price and due date | filter orders by style | late orders in red | total pending money | tick when delivered
+---
+app "Calligraphy" pen purple
+table plate wording text, style pick Naskh|Nastaliq|Kufic = Nastaliq, price money, due date, sent bool
+state fs text = ""
+topbar plate, "Add order"
+statcard sum(plate.price where sent = no), "pending money"
+row gap 1
+  button "All" fill if(fs = "", accent, soft) tap set fs = ""
+  each options plate.style
+    button it fill if(fs = it, accent, soft) tap set fs = it
+each plate where sent = no and (fs = "" or style = fs) sort due as p empty "No orders here. Add the next one."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.sent
+    stack grow gap 0
+      p.wording bold
+      p.style "- due" p.due faint color if(p.due < today, bad, muted)
+    p.price bold
+===
+@rich domain=r9_knitting_rows topic=knitting_row_counter style=custom_ui
+my knitting row counter. for each project (scarf, baby blanket) a big count of rows done out of the rows the pattern needs, plus buttons +1, +10 and minus 1 for when I mess up, and a bar showing how far along I am
+needs: add a project with name and total rows | buttons add 1 row, 10 rows or take 1 off | shows rows done of total | progress bar per project
+---
+app "Row Counter" heart pink
+table proj name text, rows num 0..9999 = 0, target num 1..9999
+topbar proj, "Add project"
+each proj sort name as p empty "No projects yet. Add the first scarf."
+  stack card gap 2 tap edit p swipe remove p
+    row
+      p.name bold grow
+      round(p.rows * 100 / p.target) "%" faint
+    p.rows "of" p.target "rows" big
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(p.rows / p.target, 0, 1), 4 fill accent radius 2
+    row gap 1
+      button "-1" tap set p.rows = p.rows - 1
+      button "+1" fill accent grow tap set p.rows = p.rows + 1
+      button "+10" tap set p.rows = p.rows + 10
+===
+@rich domain=r9_yarn_stash topic=yarn_stash_inventory style=detailed
+I have yarn everywhere. List each yarn with colour, brand, weight (lace to bulky), and the number of balls I have, a button when I use one, and how many balls in total. let me filter by weight so I can see what fits a pattern
+needs: add a yarn with colour, brand, weight and balls | use one ball button | filter by weight | total balls in stash
+---
+app "Yarn Stash" tag grey
+table yarn colour text, brand text?, weight pick Lace|Fine|DK|Worsted|Bulky = DK, balls num 0..200 = 1
+state wt text = ""
+topbar yarn, "Add yarn"
+statcard sum(yarn.balls), "balls in the stash"
+row gap 1
+  button "All" fill if(wt = "", accent, soft) tap set wt = ""
+  each options yarn.weight
+    button it fill if(wt = it, accent, soft) tap set wt = it
+each yarn where (wt = "" or weight = wt) and balls > 0 sort colour as y empty "No yarn found. Add a ball to the stash."
+  row card gap 2 tap edit y swipe remove y
+    stack grow gap 0
+      y.colour bold
+      y.brand y.weight faint
+    y.balls "balls" bold
+    button "Use 1" tap set y.balls = y.balls - 1
+===
+@rich domain=r9_cross_stitch topic=cross_stitch_progress style=multi_feature
+I am stitching a big peacock pattern with 18000 stitches and it takes months. Let me save the stitches I did each evening, and show a percentage done, a bar chart of the last 7 days and how many stitches are left
+needs: add a pattern with total stitches | log stitches done today | percent done | bar chart of last 7 days | shows stitches left
+---
+app "Cross Stitch" star ocean
+table piece name text, total num 100..200000
+table sit piece ref piece, stitches num 1..5000
+topbar piece, "Add pattern"
+each piece sort name as p empty "No patterns yet. Add the first one."
+  stack card gap 2 tap edit p swipe remove p
+    row
+      p.name bold grow
+      round(sum(p.sit.stitches) * 100 / p.total) "%" bold
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(p.sit.stitches) / p.total, 0, 1), 4 fill accent radius 2
+    max(p.total - sum(p.sit.stitches), 0) "stitches left" faint
+    row gap 1
+      button "+100" tap add sit piece = p, stitches = 100
+      button "+250" tap add sit piece = p, stitches = 250
+      button "+500" tap add sit piece = p, stitches = 500
+section "Stitches per day", "last 7 days"
+  daybars last 7 days, sum(sit.stitches on it)
+===
+@rich domain=r9_quilt_blocks topic=quilt_block_tracker style=custom_ui
+making a quilt of 20 blocks. show the blocks as little squares in a grid, tap one when it is sewn, and say how many are done and how many remain. let me set the number of blocks
+needs: set the number of blocks | grid of squares | tap a square to mark it sewn | shows blocks done and remaining
+---
+app "Quilt Blocks" grid mint dark
+table sewn n num 1..100
+setting total num = 20 "Blocks in the quilt"
+goal count(sewn), total, "blocks sewn"
+grid 5 gap 1
+  each 1..total
+    box height 44 radius 8 fill if(count(sewn where n = it) > 0, accent, soft) tap toggle sewn all where n = it
+      it small align center color if(count(sewn where n = it) > 0, bg, ink)
+total - count(sewn) "blocks still to sew" faint
+===
+@rich domain=r9_wood_projects topic=woodworking_project_tracker style=detailed
+my weekend woodworking: bookshelf, bench, toy box. For each project I want its stage (design, cutting, joinery, finish, done), hours spent with a +1 hour button, and what I spent on wood and screws against the budget I set
+needs: add a project with name, stage and budget | +1 hour button | shows hours spent | shows spent against budget | next stage button
+---
+app "Workshop" tool slate
+table job name text, stage pick Design|Cutting|Joinery|Finish|Done = Design, hours num 0..999 = 0, budget money, spent money = 0
+topbar job, "Add project"
+statcard sum(job.hours), "hours in the workshop"
+each job sort stage as j empty "No projects yet. Draw the first one."
+  stack card gap 1 tap edit j swipe remove j
+    row
+      j.name bold grow
+      j.stage faint
+    row gap 2
+      j.hours "hours" grow
+      "Spent" j.spent "of" j.budget color if(j.spent > j.budget, bad, muted)
+    row gap 1
+      button "+1 hour" tap set j.hours = j.hours + 1
+      if j.stage != Done
+        button "Next stage" tap set j.stage = if(j.stage = Design, Cutting, if(j.stage = Cutting, Joinery, if(j.stage = Joinery, Finish, Done)))
+===
+@rich domain=r9_cut_list topic=plywood_cut_list style=short
+cut list
+needs: add a part with length, width and quantity | total area of all parts | sheets of plywood needed | sheet size setting
+---
+app "Cut List" tool ink
+table part name text, len num 1..120 unit "in", wid num 1..60 unit "in", qty num 1..50 = 1
+setting sheet num = 4608 "Sheet area (sq in)"
+let area = sum(part, it.len * it.wid * it.qty)
+form part, "Add part"
+row gap 2
+  statcard area, "sq in to cut"
+  statcard floor(area * 1.15 / sheet) + 1, "sheets with 15% waste"
+each part sort at desc as p empty "No parts yet. Add the first board."
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    p.qty "x" p.len "x" p.wid faint
+===
+@rich domain=r9_furniture_orders topic=carpenter_furniture_orders style=multi_feature
+carpenter shop: customer orders a bed, wardrobe or table. I enter the customer, the piece, the price, the advance and the delivery date. I want tab one for orders sorted by delivery date and tab two for money with advance received, balance due and the total value of orders
+needs: add an order with customer, piece, price, advance and delivery date | orders sorted by delivery date | money tab with advance and balance | tick delivered | late deliveries in red
+---
+app "Furniture Orders" home plum
+table job customer text, piece pick Bed|Wardrobe|Table|Sofa|Door|Other = Bed, price money, advance money = 0, due date, sent bool
+screen jobs "Orders" list
+  topbar job, "Add order"
+  each job where sent = no sort due as j empty "No open orders. Add the first piece."
+    row card gap 2 tap edit j swipe remove j
+      toggle j.sent
+      stack grow gap 0
+        j.customer bold
+        j.piece "- due" j.due faint color if(j.due < today, bad, muted)
+      j.price bold
+screen money "Money" coin
+  statcard sum(job.advance where sent = no), "advance received"
+  statcard sum(job, if(it.sent, 0, it.price - it.advance)), "balance due"
+  statcard sum(job.price where sent = no), "value of open orders"

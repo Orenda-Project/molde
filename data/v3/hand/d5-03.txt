@@ -1,0 +1,535 @@
+@rich domain=d5_api_test_cases topic=api_test_cases style=short
+api test cases
+needs: add a case with path, method and expected status | pass or fail buttons | pass rate | filter by result
+---
+app "API tests" check ocean
+table apit path text, method pick GET|POST|PUT|DELETE = GET, expect num 100..599 = 200 "Expected status", result pick Untested|Pass|Fail = Untested
+state f pick All|Untested|Pass|Fail = All
+topbar apit, "Add case"
+statcard round(count(apit where result = Pass) * 100 / max(count(apit where result != Untested), 1)), "percent of run cases pass"
+choice f
+each apit where f = All or result = f as t empty "No cases here. Add the first endpoint to check."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      text t.method t.path bold
+      text "Expects" t.expect "·" t.result faint color if(t.result = Fail, bad, muted)
+    button "Pass" fill soft tap set t.result = Pass
+    button "Fail" fill soft tap set t.result = Fail
+===
+@rich domain=d5_load_test_runs topic=load_test_results style=detailed
+results of my load tests: date comes automatically, I enter requests per second reached, p95 latency in ms and the percent of errors. there is a p95 budget I can set to 300 ms. show the p95 trend, my best rps, and flag runs that broke the budget
+needs: log a run with rps, p95 and error percent | p95 budget setting | p95 trend line | best rps | runs over budget flagged
+---
+app "Load tests" bolt orange dark
+table lt rps num 1.., p95 num 0.. "p95 latency" unit "ms", errs num 0..100 = 0 "Errors" unit "%"
+setting budget num = 300 "p95 budget (ms)"
+topbar lt, "Log run"
+row gap 2
+  statcard max(lt.rps), "best requests per second"
+  statcard count(lt where p95 > budget), "runs over budget"
+if count(lt) > 1
+  section "p95 over runs", "budget" budget "ms"
+    trend lt, it.p95
+each lt as r empty "No load tests yet. Log the first run after the next test."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      text r.rps "rps" bold
+      text r.errs "% errors" faint
+    text r.p95 "ms" bold color if(r.p95 > budget, bad, ink)
+===
+@rich domain=d5_lighthouse_scores topic=lighthouse_score_log style=multi_feature
+I audit pages with lighthouse. for every page I enter the performance, accessibility and seo scores out of 100, and want the three averages, the weakest page by performance, and a small bar for each score on every page
+needs: add a page with three scores | averages of each score | weakest page by performance | small bars per score on every page
+---
+app "Lighthouse" eye green
+table lh page text, perf num 0..100, a11y num 0..100 "Accessibility", seo num 0..100
+let weakest = first(lh sort perf).page
+topbar lh, "Add page"
+row gap 2
+  statcard round(avg(lh.perf)), "performance"
+  statcard round(avg(lh.a11y)), "accessibility"
+  statcard round(avg(lh.seo)), "seo"
+if count(lh) > 0
+  stack card gap 0 fill soft
+    text "Weakest page" faint
+    text weakest bold
+each lh sort perf as p empty "No pages scored yet. Run lighthouse on your homepage."
+  stack card gap 1 tap edit p swipe remove p
+    text p.page bold
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, p.perf, 3 fill if(p.perf >= 90, good, if(p.perf >= 50, warn, bad)) radius 1
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, p.a11y, 3 fill if(p.a11y >= 90, good, if(p.a11y >= 50, warn, bad)) radius 1
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, p.seo, 3 fill if(p.seo >= 90, good, if(p.seo >= 50, warn, bad)) radius 1
+    text "Perf" p.perf "· A11y" p.a11y "· SEO" p.seo faint
+===
+@rich domain=d5_bundle_budget topic=bundle_size_budget style=detailed
+bundle size per release against a budget: version name and size in KB. the budget is a setting, default 250. show a bar chart of releases with a red line at the budget, mark releases over it in red, and show how much the last one grew compared to the one before
+needs: log a release with version and size in KB | budget setting | bars with budget line | over budget in red | growth of last release
+---
+app "Bundle size" package red
+table bundle ver text "Version", kb num 1.. "Size" unit "KB"
+setting budget num = 250 "Budget (KB)"
+let latest = last(bundle.kb)
+let prev = nth(bundle sort at desc, 2).kb
+topbar bundle, "Log release"
+if count(bundle) > 0
+  stack card gap 1
+    text latest "KB" big color if(latest > budget, bad, ink)
+    if count(bundle) > 1
+      text if(latest >= prev, "Grew by", "Shrank by") abs(latest - prev) "KB since the last release" faint
+    text if(latest > budget, "Over the budget of", "Within the budget of") budget "KB" faint
+  section "Releases"
+    plot 0..count(bundle), 0..max(budget, max(bundle.kb)) axes gridlines
+      line 0, budget, count(bundle), budget stroke bad thick 1
+      each bundle sort at
+        rect index + 0.15, 0, 0.7, it.kb fill if(it.kb > budget, bad, accent) radius 2
+        tick index + 0.5, it.ver
+else
+  text "No releases logged. Add the size of your latest build." faint
+===
+@rich domain=d5_test_coverage topic=test_coverage_trend style=short
+test coverage
+needs: log coverage percent | line chart of coverage | target percent setting | progress to target
+---
+app "Coverage" shield yellow
+table cov pct num 0..100 "Coverage" unit "%", note text?
+setting target num = 80 "Target (%)"
+topbar cov, "Log coverage"
+goal last(cov.pct), target, "line coverage now", "%"
+if count(cov) > 1
+  section "Over time"
+    trend cov, it.pct
+list cov by day, "No coverage logged. Paste the number from the last CI run."
+===
+@rich domain=d5_dora_metrics topic=deploy_frequency_lead_time style=multi_feature
+a little DORA board: every deploy I log how many hours it took from commit to production and whether it failed. show deploys per week over the last 4 weeks, the change failure rate, the average lead time and a chart of deploys per day for two weeks
+needs: log a deploy with lead time hours and failed tick | deploys per week | change failure rate | average lead time | chart of deploys for 14 days
+---
+app "DORA" chart purple
+table dep lead num 0.. "Lead time" unit "h", failed bool
+topbar dep, "Log deploy"
+row gap 2
+  statcard round(count(dep last 4 weeks) * 10 / 4) / 10, "deploys per week"
+  statcard round(count(dep where failed = yes) * 100 / max(count(dep), 1)), "percent fail"
+  statcard round(avg(dep.lead) * 10) / 10, "hours lead time"
+section "Last 14 days", plural(count(dep last 14 days), "deploy")
+  daybars last 14 days, count(dep on it)
+each dep as d empty "No deploys logged yet. Log the next one right after it ships."
+  row card gap 2 tap edit d swipe remove d
+    text d.at grow
+    text d.lead "h" bold
+    if d.failed
+      text "Failed" color bad bold
+===
+@rich domain=d5_uptime_nines topic=uptime_downtime_calculator style=custom_ui
+calculator that shows how much downtime a given uptime promise allows. tap 99, 99.9, 99.95, 99.99 or 99.999 percent and see minutes allowed per month and per year, then log outages in minutes this month and show how much of the allowance I burnt
+needs: tap an uptime percent | downtime allowed per month and year | log outage minutes | allowance burnt this month
+---
+app "Nines" cloud pink
+table out cause text, mins num 1..10000 "Minutes down"
+state pct num = 99.9
+let permonth = (100 - pct) / 100 * 43200
+let peryear = (100 - pct) / 100 * 525600
+let burnt = sum(out.mins month)
+row gap 1
+  each [99, 99.9, 99.95, 99.99, 99.999] as p
+    button p fill if(pct = p, accent, soft) tap set pct = p
+stack card gap 1
+  text pct "% uptime allows" faint
+  text fixed(permonth, 1) "min per month" big
+  text fixed(peryear / 60, 1) "hours per year" faint
+section "This month", fixed(burnt, 0) "of" fixed(permonth, 1) "min used"
+  draw 100, 4
+    rect 0, 0, 100, 4 fill soft radius 2
+    rect 0, 0, 100 * clamp(burnt / max(permonth, 0.1), 0, 1), 4 fill if(burnt > permonth, bad, accent) radius 2
+  text if(burnt > permonth, "Allowance spent. Freeze risky changes.", "Still inside the allowance.") faint
+form out, "Log outage"
+list out, "No outages this month."
+===
+@rich domain=d5_team_leave topic=team_leave_planner style=detailed
+who is off when: for each person I enter the first and last day away and a kind (vacation, sick, conference, other). at the top show who is out today, then the upcoming absences sorted by start date, and a count of people out today
+needs: add leave with person, first day, last day and kind | who is out today | upcoming leave sorted by start | count out today
+---
+app "Team leave" calendar teal
+table leave person text, starts date, ends date, kind pick Vacation|Sick|Conference|Other = Vacation
+topbar leave, "Add leave"
+section "Out today", plural(count(leave where starts <= today and ends >= today), "person")
+  each leave where starts <= today and ends >= today as l empty "Everyone is in today."
+    row gap 2
+      text l.person bold grow
+      text l.kind "until" l.ends faint
+section "Coming up"
+  each leave where starts > today sort starts as l empty "No leave booked ahead."
+    row gap 2 tap edit l swipe remove l
+      stack grow gap 0
+        text l.person bold
+        text l.kind faint
+      text l.starts "to" l.ends
+===
+@rich domain=d5_mentor_hours topic=mentor_office_hours style=multi_feature
+office hours I hold for junior devs: I create slots with a date and start time, someone books a slot by name and topic, and I tick it when done. show the free slots versus booked ones and what is coming next
+needs: create slots with date and time | book a slot with name and topic | tick done | free vs booked count | upcoming order
+---
+app "Office hours" users blue
+table slot day date, start time, mentee text?, topic text?, done bool
+topbar slot, "Open a slot"
+row gap 2
+  statcard count(slot where mentee = "" and day >= today), "free slots"
+  statcard count(slot where mentee != "" and done = no), "booked"
+each slot where done = no sort day as s empty "No open slots. Open a few for next week."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      text s.day s.start bold
+      if s.mentee = ""
+        text "Free. Tap to book." faint
+      else
+        text s.mentee ":" s.topic faint
+    toggle s.done
+===
+@rich domain=d5_mentoring_log topic=mentoring_sessions_log style=short
+mentoring log
+needs: log a session with mentee, topic and minutes | hours per mentee | next action text | hours this month
+---
+app "Mentoring" smile mint
+table ses mentee text, topic text, mins num 5..240 = 30 "Minutes", action text? "Next action"
+topbar ses, "Log session"
+statcard round(sum(ses.mins month) / 6) / 10, "hours this month"
+if count(ses) > 0
+  section "Hours per mentee"
+    share ses by mentee, round(sum(it.mins) / 6) / 10, it.key
+each ses as s empty "No sessions yet. Log your next one after the call."
+  stack card gap 0 tap edit s swipe remove s
+    row
+      text s.mentee bold grow
+      text s.mins "min" faint
+    text s.topic
+    if s.action != ""
+      text "Next:" s.action color accent
+===
+@rich domain=d5_dojo_scoreboard topic=team_kata_dojo style=custom_ui
+friday dojo scoreboard. each time someone solves a kata I add their name, the kata and points from 1 to 10. rank people by total points with a bar, show the leader with a trophy line, and I want to reset the view to just this month
+needs: add a solve with name, kata and points | ranked totals with bars | leader highlighted | this month only totals
+---
+app "Dojo" trophy yellow
+table pt who text, kata text, pts num 1..10 = 5 "Points"
+topbar pt, "Add a solve"
+if count(pt month) > 0
+  stack card gap 0 fill soft
+    text "Leading this month" faint
+    each pt month by who sort pts desc top 1
+      text it.key "with" sum(it.pts) "points" head
+section "Ranking", "this month"
+  each pt month by who sort pts desc as g empty "No solves this month. Be the first on the board."
+    stack gap 0
+      row
+        text index + 1 "." g.key bold grow
+        text sum(g.pts)
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * sum(g.pts) / max(sum(pt.pts month), 1), 3 fill accent radius 1
+list pt by day, "Nothing yet."
+===
+@rich domain=d5_peoples_choice topic=hack_peoples_choice_vote style=short
+people's choice vote
+needs: add teams | vote button per team | vote counts as bars | leading team named
+---
+app "Crowd vote" star plum
+table team name text
+table vote team ref team
+let top = first(team sort count(it.vote) desc).name
+topbar team, "Add team"
+if count(vote) > 0
+  stack card gap 0 fill soft align center
+    text "Leading" faint
+    text top huge
+each team sort count(it.vote) desc as t empty "No teams yet. Add the demos people will see."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 2
+      text t.name bold grow
+      text count(t.vote) "votes" faint
+      button "Vote" fill accent tap add vote team = t
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * count(t.vote) / max(count(vote), 1), 3 fill accent radius 1
+===
+@rich domain=d5_lab_roll_call topic=coding_lab_attendance style=multi_feature
+roll call for my coding lab. I add students once, then each lab day press present, late or absent next to each name. show how many are present today and an attendance rate per student that counts late as present
+needs: add students | present, late or absent buttons per student | present count today | attendance rate per student
+---
+app "Lab roll" school grey
+table stu name text
+table att stu ref stu, status pick Present|Late|Absent = Present
+topbar stu, "Add student"
+statcard count(att today where status != Absent), "here today of" count(stu), count(stu)
+each stu sort name as s empty "No students yet. Add your class list."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 1
+      text s.name bold grow
+      text round(count(s.att where status != Absent) * 100 / max(count(s.att), 1)) "%" faint
+    row gap 1
+      button "Present" fill if(count(s.att today where status = Present) > 0, good, soft) tap add att stu = s, status = Present
+      button "Late" fill if(count(s.att today where status = Late) > 0, warn, soft) tap add att stu = s, status = Late
+      button "Absent" fill if(count(s.att today where status = Absent) > 0, bad, soft) tap add att stu = s, status = Absent
+===
+@rich domain=d5_late_penalty topic=assignment_late_penalty style=detailed
+grading with late penalties: student, assignment, raw score out of 100 and days late. the penalty per late day is a setting, like 10 percent, capped at 100. show the final score after the penalty on each row and the class average of final scores
+needs: add a submission with student, assignment, score and days late | penalty per day setting | final score after penalty | class average of finals
+---
+app "Late marks" pencil ocean
+table sub student text, task text "Assignment", score num 0..100, late num 0..14 = 0 "Days late"
+setting pen num 0..100 = 10 "Penalty per late day (%)"
+let final(s sub) = round(s.score * (100 - min(s.late * pen, 100)) / 100)
+topbar sub, "Add submission"
+statcard round(sum(sub, final(it)) / max(count(sub), 1)), "class average after penalties", 100
+each sub sort at desc as s empty "No submissions yet. Add the first one you grade."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      text s.student bold
+      text s.task faint
+      if s.late > 0
+        text s.score "raw, minus" min(s.late * pen, 100) "% for" plural(s.late, "late day") color warn
+    text final(s) big
+===
+@rich domain=d5_peer_review_scores topic=student_peer_review style=multi_feature
+students review each other's code. I type who reviewed, who got reviewed, a clarity score and a correctness score from 1 to 5, and a comment. show for every person reviewed the average clarity and correctness
+needs: add a review with reviewer, reviewee, clarity, correctness and comment | average clarity per person | average correctness per person | list of comments
+---
+app "Peer review" users mint
+table pr reviewer text, reviewee text, clear num 1..5 = 3 "Clarity", correct num 1..5 = 3 "Correctness", comment text?
+topbar pr, "Add review"
+each pr by reviewee as g empty "No reviews yet. Add the first one after the swap."
+  stack card gap 1
+    row
+      text g.key head grow
+      text count(g) "reviews" faint
+    row gap 3
+      stack gap 0
+        text "Clarity" faint
+        text fixed(sum(g.clear) / count(g), 1) big
+      stack gap 0
+        text "Correctness" faint
+        text fixed(sum(g.correct) / count(g), 1) big
+section "Comments"
+  each pr where comment != "" as r empty "No comments yet."
+    stack gap 0 tap edit r swipe remove r
+      text r.comment
+      text r.reviewer "on" r.reviewee faint
+===
+@rich domain=d5_question_bank topic=exam_question_bank style=custom_ui
+question bank for my programming exams. each question has a topic (loops, arrays, functions, recursion, OOP), a level and the text. I want a button that picks a random unused question, a tick to mark it used, and a filter by topic
+needs: add a question with topic, level and text | button picks a random unused question | mark as used | filter by topic
+---
+app "Question bank" list yellow
+table qn topic pick Loops|Arrays|Functions|Recursion|OOP = Loops, level pick Easy|Medium|Hard = Medium, body long "Question", used bool
+state f pick All|Loops|Arrays|Functions|Recursion|OOP = All
+state shown text = ""
+topbar qn, "Add question"
+stack card gap 2
+  text "Pick for the exam" faint
+  text if(shown = "", "Press the button", shown) head
+  button "Random unused question" fill accent tap set shown = random(qn where used = no).body
+  text count(qn where used = no) "unused of" count(qn) faint
+choice f
+each qn where f = All or topic = f sort used as q empty "No questions here. Add one you would ask."
+  row card gap 2 tap edit q swipe remove q
+    toggle q.used
+    stack grow gap 0
+      text q.body
+      text q.topic "·" q.level faint
+===
+@rich domain=d5_capstone_milestones topic=capstone_project_milestones style=multi_feature
+my capstone project has milestones with a due date and a done tick. show a ring for percent done, the final deadline as a setting with days left, the next milestone coming up, and overdue ones in red
+needs: add a milestone with due date | done tick | progress ring | final deadline with days left | overdue in red
+---
+app "Capstone" flag red
+table ms title text, due date, done bool
+setting final date = today "Final deadline"
+let nextm = first(ms where done = no sort due).title
+topbar ms, "Add milestone"
+statcard count(ms where done = yes), "milestones done of" count(ms), count(ms)
+stack card gap 0
+  text "Final deadline in" faint
+  text plural(max(final - today, 0), "day") big color if(final < today, bad, ink)
+  if count(ms where done = no) > 0
+    text "Next:" nextm color accent
+each ms sort due as m empty "No milestones yet. Break the project into five steps."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.done
+    stack grow gap 0
+      text m.title bold color if(m.done, muted, ink)
+      if m.due < today and m.done = no
+        text "Was due" m.due color bad
+      else
+        text "Due" m.due faint
+===
+@rich domain=d5_retainer_hours topic=client_retainer_burn style=detailed
+one client pays me a monthly retainer of 20 hours. I log hours with what I did, and want to see hours used this month against the retainer, how many days are left in the month, and how many hours a day I can still spend without going over
+needs: log hours with what I did | retainer hours setting | used vs retainer this month | days left in the month | hours per day still available
+---
+app "Retainer" clock green
+table log what text, hrs num 0.25..24 = 1 "Hours"
+setting hours num = 20 "Retainer hours per month"
+let used = sum(log.hrs month)
+let daysleft = monthdays(today) - monthday(today) + 1
+topbar log, "Log hours"
+goal used, hours, "used this month", "h"
+stack card gap 1
+  text max(round((hours - used) * 10 / daysleft) / 10, 0) "hours a day" big
+  text "still available over" plural(daysleft, "day") "left in the month" faint
+  if used > hours
+    text "Over the retainer by" fixed(used - hours, 1) "hours" color bad
+list log by day, "No hours logged this month."
+===
+@rich domain=d5_proposal_pipeline topic=freelance_proposal_pipeline style=multi_feature
+pipeline for proposals I send as a freelancer: client, value, status draft, sent, won or lost. buttons to mark sent proposals won or lost, the total value still open, and my win rate from the ones decided
+needs: add a proposal with client, value and status | buttons mark won or lost | open pipeline value | win rate | grouped by status
+---
+app "Proposals" gift purple
+table prop client text, value money, status pick Draft|Sent|Won|Lost = Draft
+topbar prop, "New proposal"
+row gap 2
+  statcard sum(prop.value where status = Draft or status = Sent), "still open"
+  statcard round(count(prop where status = Won) * 100 / max(count(prop where status = Won or status = Lost), 1)), "percent won"
+each options prop.status as s
+  section s, count(prop where status = s)
+    each prop where status = s as p empty "Nothing here."
+      row gap 2 tap edit p swipe remove p
+        stack grow gap 0
+          text p.client bold
+          text p.value faint
+        if p.status = Draft
+          button "Sent" tap set p.status = Sent
+        if p.status = Sent
+          button "Won" fill accent tap set p.status = Won
+          button "Lost" tap set p.status = Lost
+===
+@rich domain=d5_weekly_timesheet topic=weekly_client_timesheet style=short
+weekly timesheet
+needs: add clients | log hours for a client | grid of hours per client per day this week | total hours this week
+---
+app "Timesheet" calendar orange
+table client name text
+table ts client ref client, hrs num 0.25..16 = 1 "Hours"
+topbar client, "Add client"
+form ts, "Log hours"
+statcard sum(ts.hrs week), "hours this week"
+section "This week"
+  row gap 1
+    text "" width 70
+    each days week as d
+      text dayname(d) tiny color muted grow align center
+  each client as c empty "No clients yet. Add one to start the sheet."
+    row gap 1 align center
+      text c.name width 70 bold
+      each days week as d
+        text sum(c.ts.hrs on d) grow align center
+===
+@rich domain=d5_home_office_costs topic=home_office_expenses style=detailed
+home office costs for my freelance taxes: item, cost, category (desk, chair, monitor, internet, electricity). I set what percent is business use, like 60, and want the year total, the claimable part and the split by category
+needs: add an item with category and cost | business use percent setting | year total | claimable amount | split by category
+---
+app "Home office" home teal
+table he item text, cat pick Desk|Chair|Monitor|Internet|Electricity|Other = Desk, cost money
+setting biz num 0..100 = 60 "Business use (%)"
+topbar he, "Add item"
+row gap 2
+  statcard sum(he.cost year), "spent this year"
+  statcard sum(he.cost year) * biz / 100, "claimable"
+if count(he year) > 0
+  section "By category"
+    share he year by cat, sum(it.cost), it.key
+list he by day, "Nothing yet. Add the desk and the chair first."
+===
+@rich domain=d5_tax_set_aside topic=freelancer_tax_set_aside style=multi_feature
+I set aside a share of every payment for tax. log each payment from a client, set the percent (25 for me), log the transfers I make to my tax savings, and show how much I still need to move over
+needs: log a client payment | set-aside percent setting | log a transfer to savings | amount still to set aside | progress bar of saved vs needed
+---
+app "Tax jar" coin blue
+table pay client text, amt money "Payment"
+table moved amt money "Transferred"
+setting pct num 0..60 = 25 "Set aside (%)"
+let need = sum(pay.amt) * pct / 100
+let saved = sum(moved.amt)
+topbar pay, "Log payment"
+stack card gap 2
+  text if(saved >= need, "Covered", "Still to move") faint
+  text max(need - saved, 0) big
+  draw 100, 4
+    rect 0, 0, 100, 4 fill soft radius 2
+    rect 0, 0, 100 * clamp(saved / max(need, 1), 0, 1), 4 fill if(saved >= need, good, accent) radius 2
+  text saved "saved of" need "needed" faint
+form moved, "Log transfer"
+each pay as p empty "No payments yet. Log the first invoice you get paid."
+  row card gap 2 tap edit p swipe remove p
+    text p.client grow
+    text p.amt "→" p.amt * pct / 100 faint
+===
+@rich domain=d5_hourly_rate_calc topic=freelance_hourly_rate_calculator style=short
+hourly rate calculator
+needs: income goal, yearly costs, hours per week and weeks off as settings | computed hourly and day rate | quote a project in hours | list of quotes
+---
+app "Rate calc" calc grey
+table quote project text, hrs num 1..2000 "Hours"
+setting income money = 60000 "Yearly income goal"
+setting costs money = 6000 "Yearly business costs"
+setting weekly num 1..60 = 25 "Billable hours per week"
+setting off num 0..30 = 5 "Weeks off"
+let rate = (income + costs) / (weekly * (52 - off))
+topbar quote, "Add quote"
+stack card gap 1 align center
+  text round(rate) huge
+  text "per hour to hit your goal" faint
+  text round(rate * 8) "per 8 hour day" faint
+each quote as q empty "No quotes yet. Add a project and its hours."
+  row card gap 2 tap edit q swipe remove q
+    stack grow gap 0
+      text q.project bold
+      text q.hrs "hours" faint
+    text round(q.hrs * rate) bold
+===
+@rich domain=d5_scope_changes topic=client_scope_change_log style=multi_feature
+log every time a client asks for something outside the scope: client, what they asked, extra hours I estimate, and a status (asked, quoted, approved, declined). my hourly rate is a setting, show extra revenue from approved ones and buttons to approve or decline
+needs: log a request with client, description, hours and status | hourly rate setting | extra revenue from approved | approve and decline buttons
+---
+app "Scope changes" tag ink
+table chg client text, what text "Request", hrs num 0.5..200 = 2 "Extra hours", status pick Asked|Quoted|Approved|Declined = Asked
+setting rate money = 50 "Hourly rate"
+topbar chg, "Log request"
+row gap 2
+  statcard sum(chg.hrs where status = Approved) * rate, "extra revenue approved"
+  statcard count(chg where status = Asked or status = Quoted), "still undecided"
+each chg sort at desc as c empty "No scope changes yet. Log the next small extra a client asks for."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 1
+      text c.client bold grow
+      text c.status faint
+    text c.what
+    row gap 1
+      text c.hrs "h =" c.hrs * rate faint grow
+      if c.status = Asked or c.status = Quoted
+        button "Approve" fill accent tap set c.status = Approved
+        button "Decline" tap set c.status = Declined
+===
+@rich domain=d5_feedback_rounds topic=client_feedback_rounds style=detailed
+for each client project I count review rounds: project name, round number, how many comments the client left and whether they approved in that round. show a bar chart of comment counts, the average number of rounds before approval, and the approved projects
+needs: log a round with project, number, comment count and approved tick | bar chart of comments | average rounds before approval | approved projects list
+---
+app "Feedback rounds" pencil pink
+table fbr project text, n num 1..10 "Round", comments num 0..200 = 0, ok bool "Approved"
+topbar fbr, "Log round"
+row gap 2
+  statcard round(sum(fbr.comments) / max(count(fbr), 1)), "comments per round"
+  statcard round(sum(fbr, if(it.ok, it.n, 0)) * 10 / max(count(fbr where ok = yes), 1)) / 10, "rounds before approval"
+if count(fbr) > 0
+  section "Comments per round"
+    bars fbr, it.comments, it.project
+section "Approved"
+  each fbr where ok = yes as r empty "Nothing approved yet."
+    row gap 2 tap edit r swipe remove r
+      text r.project grow bold
+      text "round" r.n faint

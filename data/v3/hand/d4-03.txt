@@ -1,0 +1,487 @@
+@rich domain=d4_cert_study_plan topic=certification_study_plan style=detailed
+studying for two cloud certifications. for each exam I enter the name, the exam date and how many study hours I think I need, then log every study session. show a progress bar per exam, the days left, and how many hours a day I must study to make it
+needs: add a certification with exam date and hours needed | log a study session with hours | progress bar of hours studied per exam | days left to the exam | hours per day needed
+---
+app "Cert plan" trophy ink
+table cert name text, exam date, need num 1.. = 40 "Study hours needed"
+table study cert ref cert, hrs num 0..
+topbar cert, "Add exam"
+form study, "Log study time"
+each cert sort exam as c empty "No exams yet. Add the certification you are aiming for."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 1
+      c.name bold grow
+      plural(c.exam - today, "day") "to go" faint
+    goal sum(c.study.hrs), c.need, "hours studied", "h"
+    if c.exam > today and sum(c.study.hrs) < c.need
+      "Needs" round((c.need - sum(c.study.hrs)) * 10 / (c.exam - today)) / 10 "hours a day" faint
+===
+@rich domain=d4_conference_talks topic=conference_talk_submissions style=multi_feature
+I send talk proposals to conferences. let me log the talk title, the conference, when the call for papers closes, and the status (idea, submitted, accepted, rejected, delivered). show how many were accepted, filter by status, and a button to mark an idea as submitted
+needs: add a talk with title, conference and CFP deadline | status idea, submitted, accepted, rejected or delivered | filter by status | count accepted | button marks idea as submitted
+---
+app "Talks" flag purple
+table talk title text, conf text "Conference", status pick Idea|Submitted|Accepted|Rejected|Delivered = Idea, cfp date? "CFP closes"
+state f pick All|Idea|Submitted|Accepted|Rejected|Delivered = All
+topbar talk, "Add talk"
+row gap 2
+  statcard count(talk where status = Accepted), "talks accepted"
+  statcard count(talk where status = Submitted), "waiting for an answer"
+choice f
+each talk where f = All or status = f sort cfp as t empty "No talks yet. Write down the idea you keep telling friends about."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 1
+      t.title bold grow
+      t.status faint
+    t.conf faint
+    if t.status = Idea and t.cfp >= today
+      button "Submitted" tap set t.status = Submitted
+      "CFP closes in" plural(t.cfp - today, "day") color warn
+===
+@rich domain=d4_portfolio_board topic=portfolio_projects_board style=custom_ui
+board of my portfolio projects in four columns of status: idea, building, shipped, paused. each has a name, tech stack and link. buttons to move an idea to building and a building one to shipped, and a count of how many I actually shipped
+needs: add a project with name, stack and link | grouped by status idea, building, shipped, paused | button moves idea to building and building to shipped | count of shipped projects
+---
+app "Portfolio" grid mint
+table proj name text, stack text?, status pick Idea|Building|Shipped|Paused = Idea, link text?
+topbar proj, "Add project"
+statcard count(proj where status = Shipped), "shipped out of" count(proj) "projects", count(proj)
+each options proj.status as s
+  section s, plural(count(proj where status = s), "project")
+    each proj where status = s as p empty "Nothing here yet."
+      row gap 2 tap edit p swipe remove p
+        stack grow gap 0
+          p.name bold
+          p.stack faint
+        if p.status = Idea
+          button "Start" tap set p.status = Building
+        if p.status = Building
+          button "Ship" fill accent tap set p.status = Shipped
+===
+@rich domain=d4_offer_compare topic=job_offer_comparison style=detailed
+got three offers and need to compare them properly. enter company, yearly base, bonus and yearly equity value, and whether it is remote. show total pay for each and a bar comparison so the winner is obvious, with the winner named above
+needs: add an offer with company, base, bonus, equity and remote flag | total pay per offer | bar comparison of totals | winner named at the top | remote tag on the list
+---
+app "Offers" coin orange
+table offer company text, base money, bonus money = 0, equity money = 0 "Equity per year", remote bool
+let total(o offer) = o.base + o.bonus + o.equity
+form offer, "Add offer"
+if count(offer) > 0
+  "Best total pay:" first(offer sort total(it) desc).company head
+section "Total pay per year"
+  bars offer sort total(it) desc, total(it), it.company
+each offer sort total(it) desc as o empty "No offers yet. Add the first one when the email arrives."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.company bold
+      if o.remote
+        "Remote" faint
+      else
+        "On site" faint
+    total(o) bold
+===
+@rich domain=d4_skill_levels topic=skills_self_rating style=multi_feature
+skills matrix for myself: skill name, area (backend, frontend, devops, data) and my level from 1 to 5, with plus and minus buttons so I can bump it when I improve. show the average level per area so I see where I am thin
+needs: add a skill with area and level | plus and minus buttons for level | average level per area | list grouped by area
+---
+app "Skills" brain teal
+table skill name text, area pick Backend|Frontend|DevOps|Data = Backend, lvl num 1..5 = 2 "Level"
+topbar skill, "Add skill"
+section "Average level by area", "out of 5"
+  share skill by area, avg(it.lvl), it.key
+each skill by area as g empty "No skills yet. Start with the three you use every day."
+  section g.key
+    each g as s
+      row gap 2 tap edit s swipe remove s
+        s.name bold grow
+        button "-" tap set s.lvl = s.lvl - 1
+        s.lvl bold
+        button "+" tap set s.lvl = s.lvl + 1
+===
+@rich domain=d4_sideproject_hours topic=side_project_hours style=short
+side project hours
+needs: log hours with a note | weekly hour goal setting | progress bar of hours this week | bar chart of the last 7 days
+---
+app "Side hours" clock ink
+table work hrs num 0.. = 1 unit "h", what text?
+setting goal num = 10 "Weekly goal (hours)"
+form work, "Log time"
+goal sum(work.hrs week), goal, "hours on side projects this week", "h"
+statcard streak(work), "days in a row with some work"
+section "Last 7 days", "hours"
+  daybars last 7 days, sum(work.hrs on it)
+"Total:" sum(work.hrs) "hours so far, longest session" max(work.hrs) "h" faint
+list work by day, "No hours logged yet. Even twenty minutes counts."
+===
+@rich domain=d4_network_followups topic=career_network_followups style=custom_ui
+people in my network I should keep warm: name, what we talked about and how many days between check-ins. show who is due to hear from me, longest overdue first, and a button to say I talked to them today
+needs: add a person with topic and check-in interval | who is due for a check-in | longest overdue first | button marks talked today | count of people due
+---
+app "Keep in touch" users red
+table person name text, topic text?, every num 7..365 = 60 "Check in every (days)", last date = today "Last talked"
+let over(p person) = today - p.last >= p.every
+topbar person, "Add person"
+statcard count(person, today - it.last >= it.every), "people are due for a message", count(person)
+"Most overdue:" first(person sort every - (today - last)).name faint
+each person sort every - (today - last) as p empty "Nobody here yet. Add the mentor who helped you most."
+  row card gap 2 tap edit p swipe remove p fill if(over(p), warn, soft)
+    stack grow gap 0
+      p.name bold
+      p.topic faint
+      "Last talked" plural(today - p.last, "day") "ago" faint
+    button "Talked" tap set p.last = today
+===
+@rich domain=d4_brag_doc topic=promotion_brag_doc style=detailed
+brag document for my review: every time something good happens I note what I did, the impact in a line and the kind (shipped, fixed, mentored, led, saved money). show how many wins this year, a breakdown by kind and the list by day, so review time is easy
+needs: add a win with description, impact and kind | count of wins this year | breakdown by kind | list grouped by day | edit or remove a win
+---
+app "Brag doc" trophy green
+table win what text, impact text?, kind pick Shipped|Fixed|Mentored|Led|Saved_money = Shipped
+topbar win, "Add win"
+row gap 2
+  statcard count(win year), "wins this year"
+  statcard count(win month), "this month"
+if count(win) > 0
+  "Latest win:" last(win.what) faint
+section "Wins by kind"
+  share win year by kind, count(it), it.key
+plural(count(win where kind = Shipped), "shipped win") "so far" faint
+list win by day, "No wins yet. Write down the last thing you were proud of."
+===
+@rich domain=d4_cv_versions topic=cv_versions_sent style=multi_feature
+I send out three versions of my CV (A, B and C) and want to know which works. log each application with company, which version and the reply (none, replied, interview, rejected). show for each version how many replies it got out of how many sent
+needs: log an application with company, CV version and reply | reply count per CV version | change reply for an application | overall reply rate | list of applications
+---
+app "CV versions" note pink
+table sent company text, cv pick A|B|C = A "CV version", reply pick None|Replied|Interview|Rejected = None
+topbar sent, "Log application"
+statcard round(count(sent where reply != None) * 100 / count(sent)), "% of applications got a reply", 100
+section "Replies per version"
+  each options sent.cv as v
+    row gap 2
+      "CV" v bold grow
+      count(sent where cv = v and reply != None) "of" count(sent where cv = v) "replied"
+each sent sort at desc as s empty "No applications logged. Add the one you sent this morning."
+  row card gap 2 tap edit s swipe remove s
+    s.company bold grow
+    s.cv faint
+    s.reply
+===
+@rich domain=d4_freelance_rate_calc topic=freelance_hourly_rate style=custom_ui
+work out my freelance hourly rate. I set the monthly income I need, my monthly business costs, how many billable hours a week I can sell and how many weeks off I take. it shows the hourly rate, and then a quote for any number of project hours
+needs: settings for income, costs, billable hours and weeks off | hourly rate | quote for project hours | save a quote to a list
+---
+app "Rate calc" calc blue
+table quote client text, hours num 1.. = 10, price money
+setting need money = 3000 "Monthly income I need"
+setting costs money = 400 "Monthly business costs"
+setting hpw num = 25 "Billable hours per week"
+setting off num = 4 "Weeks off a year"
+state ph num = 10
+let rate = (need + costs) * 12 / (hpw * (52 - off))
+stack card gap 1
+  "Your hourly rate" faint
+  round(rate) big
+  "from" hpw * (52 - off) "billable hours a year" faint
+field need
+field costs
+field hpw
+field off
+stack card gap 2
+  "Quote for a project" head
+  field ph "Hours"
+  "Price:" round(rate * ph) bold
+  button "Save quote" tap add quote client = "New client", hours = ph, price = round(rate * ph)
+each quote sort at desc top 6 as q empty "Saved quotes appear here."
+  row card gap 2 tap edit q swipe remove q
+    q.client bold grow
+    q.hours "h ·" q.price
+===
+@rich domain=d4_blog_pipeline topic=tech_blog_pipeline style=multi_feature
+my dev blog pipeline: ideas, drafts, editing and published. add a post idea with a title, move it along the stages with one button, and keep a yearly goal of posts published with a progress bar
+needs: add a post with title | button moves stage idea, draft, edit, published | grouped by stage | yearly goal of published posts | progress bar toward goal
+---
+app "Blog pipeline" pen plum
+table post title text, stage pick Idea|Draft|Edit|Published = Idea
+setting target num = 12 "Posts this year"
+topbar post, "Add idea"
+goal count(post where stage = Published), target, "posts published"
+plural(count(post where stage = Draft), "draft") "in progress" faint
+each options post.stage as s
+  section s, plural(count(post where stage = s), "post")
+    each post where stage = s as p empty "Empty."
+      row gap 2 tap edit p swipe remove p
+        p.title grow
+        if p.stage != Published
+          button "Next" tap set p.stage = if(p.stage = Idea, Draft, if(p.stage = Draft, Edit, Published))
+===
+@rich domain=d4_quarter_learning_goals topic=quarterly_learning_goals style=detailed
+my learning goals this quarter, like finish 12 chapters or build 3 small apps. each goal has a target number and what I have done so far. one button adds one to the progress, I want a bar for each goal and one overall percentage on top
+needs: add a goal with a target number | button adds one to progress | progress bar per goal | overall percentage | list sorted by least done
+---
+app "Quarter goals" target ocean
+table aim what text, target num 1.., done num 0.. = 0
+let overall = sum(aim.done) * 100 / sum(aim.target)
+topbar aim, "Add goal"
+statcard round(overall), "% of all goals done", 100
+plural(count(aim where done >= target), "goal") "finished" faint
+each aim sort done / target as a empty "No goals yet. Pick two things you really want to finish by the end of the quarter."
+  stack card gap 1 tap edit a swipe remove a
+    row gap 1
+      a.what bold grow
+      button "+1" tap set a.done = a.done + 1
+    goal a.done, a.target, "of" a.target "done"
+===
+@rich domain=d4_client_change_requests topic=client_change_requests style=custom_ui
+clients keep asking for changes after sign-off. log each request with client, what they asked, my hours estimate and approval (pending, approved, declined). buttons to approve or decline, hours of approved extra work at the top and what is still pending
+needs: log a request with client, ask and hours estimate | approve or decline buttons | total approved hours | total hours pending | list sorted with pending first
+---
+app "Change requests" list slate
+table cr client text, ask text, hrs num 0.. = 2 "Estimate (h)", approval pick Pending|Approved|Declined = Pending
+topbar cr, "Log request"
+row gap 2
+  statcard sum(cr.hrs where approval = Approved), "approved extra hours"
+  statcard sum(cr.hrs where approval = Pending), "hours waiting on a yes"
+each cr sort approval as c empty "No change requests. Enjoy the quiet while it lasts."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 1
+      c.client bold grow
+      c.hrs "h" faint
+    c.ask
+    if c.approval = Pending
+      row gap 1
+        button "Approve" fill accent tap set c.approval = Approved
+        button "Decline" tap set c.approval = Declined
+    else
+      c.approval faint color if(c.approval = Approved, good, bad)
+===
+@rich domain=d4_agency_timesheet topic=project_timesheet style=short
+timesheet by project
+needs: log hours with project and note | hours per project comparison | bar chart of the last 7 days | total hours this week
+---
+app "Timesheet" clock orange
+table sheet project text, hrs num 0.. = 1 unit "h", note text?
+topbar sheet, "Log hours"
+statcard sum(sheet.hrs week), "hours this week"
+section "Hours by project", "this month"
+  share sheet month by project, sum(it.hrs), it.key
+section "Last 7 days", "hours"
+  daybars last 7 days, sum(sheet.hrs on it)
+each sheet sort at desc top 8 as s empty "No hours yet. Log the first block of work."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.project bold
+      s.note faint
+    s.hrs "h"
+===
+@rich domain=d4_scope_creep topic=scope_creep_log style=short
+scope creep log
+needs: log an extra ask with project and hours | tick when billed | unbilled hours total | bar chart of unbilled hours per project
+---
+app "Scope creep" flag yellow
+table creep project text, ask text, hrs num 0.. = 1, billed bool
+form creep, "Log extra ask"
+statcard sum(creep.hrs where billed = no), "unbilled extra hours"
+section "Unbilled by project", "hours"
+  share creep where billed = no by project, sum(it.hrs), it.key
+each creep sort billed as c empty "Nothing extra so far. Keep it written down when it happens."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.billed
+    stack grow gap 0
+      c.ask bold
+      c.project faint
+    c.hrs "h" color if(c.billed, muted, bad)
+===
+@rich domain=d4_client_invoices topic=client_invoices_owed style=multi_feature
+who still owes me money: client, amount, the day I sent the invoice and a tick when paid. show the total outstanding, mark invoices older than 30 days in red and give me a count of the late ones
+needs: add an invoice with client, amount and sent date | tick when paid | total outstanding | red for unpaid over 30 days | count of late invoices
+---
+app "Invoices" money green
+table inv client text, amount money, sent date = today, paid bool
+let late(i inv) = i.paid = no and today - i.sent > 30
+form inv, "Add invoice"
+row gap 2
+  statcard sum(inv.amount where paid = no), "still owed"
+  statcard count(inv, it.paid = no and today - it.sent > 30), "invoices over 30 days"
+each inv sort paid as i empty "No invoices yet. Add the one you sent last."
+  row card gap 2 tap edit i swipe remove i fill if(late(i), bad, soft)
+    toggle i.paid
+    stack grow gap 0
+      i.client bold
+      "Sent" plural(today - i.sent, "day") "ago" faint
+    i.amount bold
+===
+@rich domain=d4_retainer_hours topic=retainer_hours_burn style=detailed
+some clients pay me a monthly retainer of fixed hours. add each client with the hours they bought, log hours I spend for them, and show a bar per client of how much of the month's hours is used, turning red once they pass 80 percent
+needs: add a client with retainer hours | log hours spent for a client | bar per client of hours used this month | red above 80 percent | hours left per client
+---
+app "Retainers" timer teal
+table client name text, bought num 1.. "Hours per month"
+table burn client ref client, hrs num 0.. = 1
+topbar client, "Add client"
+form burn, "Log hours"
+each client sort name as c empty "No retainer clients yet. Add the first one and the hours they pay for."
+  stack card gap 1 tap edit c swipe remove c
+    row gap 1
+      c.name bold grow
+      max(c.bought - sum(c.burn.hrs month), 0) "h left" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(c.burn.hrs month) / c.bought, 0, 1), 4 fill if(sum(c.burn.hrs month) > c.bought * 0.8, bad, accent) radius 2
+    sum(c.burn.hrs month) "of" c.bought "hours used this month" faint
+===
+@rich domain=d4_revision_rounds topic=design_revision_rounds style=multi_feature
+my contract includes two revision rounds per project. list the projects, a plus button for each time the client asks for another round, and show in red when a project is over what is included. I set how many rounds are included
+needs: add a project | plus button to count a revision round | set included rounds | red when over included | count of projects over
+---
+app "Revisions" pencil purple
+table job name text, rounds num 0.. = 0
+setting included num = 2 "Rounds included"
+topbar job, "Add project"
+statcard count(job where rounds > included), "projects over the included rounds"
+"Most rounds on one project:" max(job.rounds) faint
+each job sort rounds desc as j empty "No projects yet. Add the one that is in feedback right now."
+  row card gap 2 tap edit j swipe remove j fill if(j.rounds > included, bad, soft)
+    stack grow gap 0
+      j.name bold
+      j.rounds "of" included "rounds used" faint
+    button "+ round" tap set j.rounds = j.rounds + 1
+===
+@rich domain=d4_quote_builder topic=client_quote_builder style=custom_ui
+quote builder for web clients: add lines with a task and hours, I set my hourly rate and a safety margin in percent, and it shows the subtotal, the margin and the total to quote. a bar for which line costs the most
+needs: add a line with task and hours | settings for hourly rate and margin percent | subtotal, margin and total | bar comparison of line costs
+---
+app "Quote builder" calc grey
+table line task text, hrs num 0.. = 4
+setting rate money = 50 "Hourly rate"
+setting margin num = 15 "Safety margin (%)"
+let sub = sum(line.hrs) * rate
+topbar line, "Add line"
+stack card gap 1
+  "Subtotal" faint
+  sub head
+  "Margin" margin "%:" sub * margin / 100 faint
+  "Quote this" big
+  sub * (100 + margin) / 100 bold
+section "Cost per line"
+  share line sort hrs desc, it.hrs * rate, it.task
+each line as l empty "No lines yet. Break the job into tasks."
+  row card gap 2 tap edit l swipe remove l
+    l.task grow
+    l.hrs "h"
+===
+@rich domain=d4_project_profit topic=project_effective_rate style=multi_feature
+after each fixed-price job I write the price I quoted and the hours it really took. show the real hourly rate per job, mark jobs under my target rate in red, and a bar chart comparing the rates so I know what to charge next time
+needs: add a job with quoted price and hours spent | real hourly rate per job | red below target rate | bar chart of rates | set target rate
+---
+app "Real rate" chart ocean dark
+table job name text, price money, hrs num 1.. = 10 "Hours it took"
+setting target money = 40 "Target hourly rate"
+topbar job, "Add job"
+section "Real hourly rate", "per job"
+  bars job, it.price / it.hrs, it.name
+"Average real rate:" round(sum(job.price) / sum(job.hrs)) faint
+each job sort price / hrs as j empty "No jobs yet. Add the last fixed-price project."
+  row card gap 2 tap edit j swipe remove j fill if(j.price / j.hrs < target, bad, soft)
+    stack grow gap 0
+      j.name bold
+      j.price "in" j.hrs "hours" faint
+    j.price / j.hrs bold
+===
+@rich domain=d4_proposal_pipeline topic=client_proposal_pipeline style=detailed
+my pipeline of possible clients: name, expected value and stage (lead, proposal, negotiating, won, lost). move each along with a button, show the total value in play, how much I have won, and a comparison of value per stage
+needs: add a lead with name, value and stage | button moves to the next stage | total value in play | total won | comparison of value per stage
+---
+app "Pipeline" bag pink
+table lead name text, value money, stage pick Lead|Proposal|Negotiating|Won|Lost = Lead
+topbar lead, "Add lead"
+row gap 2
+  statcard sum(lead.value where stage != Won and stage != Lost), "in play"
+  statcard sum(lead.value where stage = Won), "won so far"
+section "Value per stage"
+  share lead by stage, sum(it.value), it.key
+each lead where stage != Lost sort at desc as l empty "No leads yet. Add the person who emailed you this week."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.name bold
+      l.stage faint
+    l.value bold
+    if l.stage != Won
+      button "Next" tap set l.stage = if(l.stage = Lead, Proposal, if(l.stage = Proposal, Negotiating, Won))
+===
+@rich domain=d4_deliverables_due topic=project_deliverables_due style=short
+deliverables
+needs: add a deliverable with project and due date | tick when delivered | late ones in red | grouped by project
+---
+app "Deliverables" package blue
+table deliv project text, what text, due date, done bool
+topbar deliv, "Add deliverable"
+statcard count(deliv where done = no and due < today), "deliverables are late"
+plural(count(deliv where done = no), "deliverable") "still to hand over" faint
+each deliv by project as g empty "Nothing due. Add what you promised this week."
+  section g.key
+    each g as d
+      row gap 2 tap edit d swipe remove d
+        toggle d.done
+        stack grow gap 0
+          d.what bold
+          d.due faint color if(d.done = no and d.due < today, bad, muted)
+===
+@rich domain=d4_client_timers topic=per_client_stopwatch style=custom_ui
+a stopwatch for each client: tap start when I begin working for them, stop when I finish and the minutes are saved. show how many minutes I did for each client today and in total today
+needs: add a client | start button per client | stop button saves the time | minutes per client today | total minutes today
+---
+app "Client timers" timer yellow
+table client name text
+table session client ref client, spent dur
+topbar client, "Add client"
+statcard round(sum(session.spent today) / 1m), "minutes worked today"
+each client sort name as c empty "No clients yet. Add the first one to start a timer."
+  state on bool = no
+  state since when = now
+  row card gap 2 swipe remove c
+    stack grow gap 0
+      c.name bold
+      round(sum(c.session.spent today) / 1m) "min today" faint
+    if on
+      button "Stop" fill accent tap add session client = c, spent = now - since then set on = no
+    else
+      button "Start" tap set since = now then set on = yes
+===
+@rich domain=d4_team_utilization topic=agency_utilization style=detailed
+for my small agency I log each person's hours and whether they were billable. show the utilization (billable hours as percent of all hours) this month, a comparison of hours per person and a red warning when we are below 60 percent
+needs: log hours with person and billable flag | utilization percent this month | comparison of hours per person | warning below 60 percent | list newest first
+---
+app "Utilization" users mint
+table hours person text, hrs num 0.. = 8, billable bool
+let util = sum(hours.hrs month where billable = yes) * 100 / sum(hours.hrs month)
+topbar hours, "Log hours"
+statcard round(util), "% billable this month", 100
+if util < 60 and count(hours month) > 0
+  "Below 60 percent. Check what is eating the unbillable time." bold color bad
+section "Hours per person", "this month"
+  share hours month by person, sum(it.hrs), it.key
+each hours sort at desc top 8 as h empty "No hours logged yet this month."
+  row card gap 2 tap edit h swipe remove h
+    h.person bold grow
+    h.hrs "h" faint
+    if h.billable
+      "billable" color good
+===
+@rich domain=d4_maintenance_renewals topic=client_maintenance_renewals style=multi_feature
+clients on monthly maintenance plans: name, monthly fee and the date their plan renews. show the total monthly income from them, who renews in the next 30 days, and a button to push the renewal a year ahead
+needs: add a client with monthly fee and renewal date | total monthly income | clients renewing within 30 days | button pushes renewal one year ahead | list sorted by renewal date
+---
+app "Maintenance plans" tool slate
+table plan client text, fee money, renews date
+topbar plan, "Add plan"
+row gap 2
+  statcard sum(plan.fee), "monthly income"
+  statcard count(plan where renews - today <= 30), "renew in 30 days"
+each plan sort renews as p empty "No plans yet. Add the client who pays you every month."
+  row card gap 2 tap edit p swipe remove p fill if(p.renews - today <= 30, warn, soft)
+    stack grow gap 0
+      p.client bold
+      "Renews" p.renews faint
+    p.fee bold
+    button "Renewed" tap set p.renews = addmonths(p.renews, 12)

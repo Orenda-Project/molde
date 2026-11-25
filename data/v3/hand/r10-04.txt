@@ -1,0 +1,525 @@
+@rich domain=r10_shift_handover topic=shop_floor_shift_handover style=custom_ui
+I am a supervisor on a factory shop floor. When a shift ends the next one needs to know what is left. Let me write tasks with the shift they belong to (morning, evening, night), a tick for done and a flag for urgent. Chips on top for each shift showing how many tasks are still open, and urgent tasks in red.
+needs: add a task with description, shift and urgent flag | tick done | shift chips with open counts | urgent tasks in red | count of open urgent tasks
+---
+app "Shift Handover" list ink
+table job what text, shift pick Morning|Evening|Night = Morning, hot bool, done bool
+state sh text = ""
+topbar job, "Add task"
+statcard count(job where hot = yes and done = no), "urgent tasks open"
+row gap 1
+  each options job.shift
+    button it count(job where shift = it and done = no) fill if(sh = it, accent, soft) grow tap set sh = if(sh = it, "", it)
+each job where (sh = "" or shift = sh) and done = no sort hot desc as j empty "Nothing left to hand over. Clean shift."
+  row card gap 2 tap edit j swipe remove j
+    toggle j.done
+    stack grow gap 0
+      j.what bold color if(j.hot, bad, ink)
+      j.shift faint
+===
+@rich domain=r10_weighbridge topic=weighbridge_net_weight style=detailed
+we have a weighbridge at the mandi gate. For every truck I write the plate, the party name, the weight when it came in loaded and the weight when it left empty. The net weight is the difference. I charge a rate per ton that I can change. Show today's trucks, the tons weighed today and the earnings for the month.
+needs: add a truck with plate, party, loaded weight and empty weight | net weight worked out | rate per ton setting | tons weighed today | earnings this month
+---
+app "Weighbridge" scale orange
+table weigh plate text, party text, gross num 0..100000 unit "kg", tare num 0..100000 unit "kg"
+setting rate money = 150 "Charge per ton"
+let net(w weigh) = max(w.gross - w.tare, 0)
+topbar weigh, "Weigh truck"
+row gap 2
+  statcard round(sum(weigh, if(it.at >= today, net(it), 0)) / 10) / 100, "tons today"
+  statcard count(weigh month) * rate, "earned this month"
+each weigh sort at desc top 20 as w empty "No trucks weighed yet."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.plate bold
+      w.party faint
+    stack gap 0 align end
+      net(w) "kg" bold
+      w.at tiny faint
+===
+@rich domain=r10_dock_slots topic=loading_dock_bookings style=short
+dock slots
+needs: book a dock with truck and start time | dock chips to see one dock | flags two trucks booked at the same dock and time | list in time order | count booked per dock
+---
+app "Dock Slots" bus ocean
+table slot dock pick D1|D2|D3|D4 = D1, starts time, truck text
+state dk text = ""
+topbar slot, "Book slot"
+row gap 1
+  each options slot.dock
+    button it count(slot where dock = it) fill if(dk = it, accent, soft) grow tap set dk = if(dk = it, "", it)
+each slot where dk = "" or dock = dk sort starts as s empty "No slots booked. All docks are free."
+  row card gap 2 tap edit s swipe remove s
+    s.starts bold
+    stack grow gap 0
+      s.truck bold
+      s.dock faint
+    if count(slot where dock = s.dock and starts = s.starts) > 1
+      "Clash" bold color bad
+===
+@rich domain=r10_container_demurrage topic=container_demurrage_days style=multi_feature
+clearing agent here. Containers sit at the port and after the free days the shipping line charges per day. For each container I enter the number, date it arrived and where it is now (port, truck, yard, empty returned). I set the free days and the daily charge. Show the days used, charge so far, and a red mark once free days run out.
+needs: add a container with number, arrival date and status | free days and daily charge settings | days used per container | charge so far | red mark when free days are over
+---
+app "Containers" box blue
+table box ref_no text, came date = today, spot pick Port|Truck|Yard|Returned = Port
+setting free num 0..60 = 7 "Free days"
+setting rate money = 80 "Charge per extra day (USD)"
+let used(b box) = today - b.came
+topbar box, "Add container"
+statcard sum(box, if(it.spot = Returned, 0, max(used(it) - free, 0) * rate)), "demurrage so far"
+each box where spot != Returned sort came as b empty "No containers to watch."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.ref_no bold
+      b.spot "- day" used(b) faint
+    if used(b) > free
+      max(used(b) - free, 0) * rate bold color bad
+    else
+      free - used(b) "free days left" color good
+    button "Returned" tap set b.spot = Returned
+===
+@rich domain=r10_pallet_racks topic=warehouse_rack_locations style=short
+pallet locations
+needs: add a pallet with code, rack, shelf and goods | tap a rack to filter | pallets per rack | search by looking at the filtered list | remove a pallet when it leaves
+---
+app "Pallet Racks" grid slate
+table pallet code text, rack pick A|B|C|D = A, shelf num 1..5 = 1, goods text
+state rk text = ""
+topbar pallet, "Add pallet"
+grid 4 gap 1
+  each options pallet.rack
+    stack radius 10 pad 1 gap 0 fill if(rk = it, accent, soft) tap set rk = if(rk = it, "", it)
+      "Rack" it bold
+      count(pallet where rack = it) "pallets" small
+each pallet where rk = "" or rack = rk sort code as p empty "No pallets here. Add the first one."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.code bold
+      p.goods faint
+    p.rack "shelf" p.shelf bold
+===
+@rich domain=r10_crate_deposits topic=returnable_crates_ledger style=detailed
+I supply soda crates to shops. Each time I drop crates I write the shop and how many were delivered, and each time empties come back I write how many returned. Show for every shop how many crates are still with them, and the deposit money held, from a deposit per crate I can set.
+needs: record a drop or return with shop, crates out and crates back | crates still with each shop | deposit per crate setting | deposit money held in total | list of shops
+---
+app "Crate Ledger" box yellow
+table crate shop text, out num 0..1000 = 0, back num 0..1000 = 0
+setting deposit money = 200 "Deposit per crate"
+topbar crate, "Record crates"
+row gap 2
+  statcard sum(crate.out) - sum(crate.back), "crates are with shops"
+  statcard (sum(crate.out) - sum(crate.back)) * deposit, "deposit held"
+each crate by shop empty "No crates recorded yet."
+  row card gap 2
+    it.key bold grow
+    sum(it.out) - sum(it.back) "crates" bold color if(sum(it.out) > sum(it.back), warn, good)
+===
+@rich domain=r10_gas_cylinders topic=gas_cylinder_deliveries style=short
+gas cylinders
+needs: add a delivery with customer and size | price settings for small and large | tick when the empty came back | count of empties not returned | money this month
+---
+app "Gas Cylinders" fire red
+table cyl cust text, size pick Small|Large = Small, empty_back bool
+setting p_small money = 3200 "Small cylinder price"
+setting p_large money = 12500 "Large cylinder price"
+let price(c cyl) = if(c.size = Large, p_large, p_small)
+topbar cyl, "Add delivery"
+row gap 2
+  statcard sum(cyl month, price(it)), "sold this month"
+  statcard count(cyl where empty_back = no), "empties not back"
+each cyl sort at desc top 20 as c empty "No deliveries yet."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.empty_back
+    stack grow gap 0
+      c.cust bold
+      c.size "- empty back?" faint
+    price(c) bold
+===
+@rich domain=r10_water_cans topic=water_can_deliveries style=short
+water cans
+needs: add a home with name and price per can | plus one can button on each home | minus button to undo | bill for each home this month | total to collect
+---
+app "Water Cans" drop mint
+table home name text, rate money = 100
+table can home ref home
+topbar home, "Add home"
+statcard sum(home, count(it.can month) * it.rate), "to collect this month"
+each home sort name as h empty "No homes yet. Add the first customer."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.name bold
+      count(h.can month) "cans -" count(h.can month) * h.rate faint
+    button "-" tap remove last(h.can month)
+    button "+ can" fill accent tap add can home = h
+===
+@rich domain=r10_paper_route topic=newspaper_hawker_route style=short
+paper route
+needs: add a house with paper name and price | tick delivered today | last 7 days dots per house | bill for the month | count delivered today of all
+---
+app "Paper Route" book plum
+table sub house text, paper text, price money
+table got sub ref sub
+topbar sub, "Add house"
+stack gap 0
+  count(sub, count(it.got today) > 0) "of" count(sub) "delivered today" head
+each sub sort house as s empty "No houses yet. Add the first subscriber."
+  stack card gap 2 tap edit s swipe remove s
+    row gap 2
+      stack grow gap 0
+        s.house bold
+        s.paper "-" count(s.got month) * s.price "this month" faint
+      toggle s.got
+    weekdots count(s.got on it) > 0
+===
+@rich domain=r10_tiffin_route topic=tiffin_delivery_route style=custom_ui
+I run a tiffin service for offices. Each customer has a name, an area, and a plan of lunch, dinner or both. On the road I want customers grouped by area with a tick for delivered today, and the number still to deliver, so I follow the route in the right order.
+needs: add a customer with name, area and plan | grouped by area | tick delivered today | count still to deliver | count of customers per area
+---
+app "Tiffin Route" food orange
+table cust name text, area text, plan pick Lunch|Dinner|Both = Lunch
+table sent cust ref cust
+topbar cust, "Add customer"
+statcard count(cust, count(it.sent today) = 0), "tiffins still to deliver", count(cust)
+each cust by area empty "No customers yet. Add the first office."
+  stack card gap 2
+    row
+      it.key head grow
+      count(it) "customers" faint
+    each it as c
+      row gap 2 tap edit c swipe remove c
+        toggle c.sent
+        c.name bold grow
+        c.plan faint
+===
+@rich domain=r10_laundry_orders topic=laundry_shop_orders style=multi_feature
+dhobi shop. I pick up clothes from homes, wash them, press and deliver. I want three tabs: pickups where I add the customer and the piece count, ready where the finished orders wait with a Delivered button, and money tab with the amount due for orders delivered but not paid. The charge per piece should be a setting.
+needs: add an order with customer and number of pieces | charge per piece setting | tab of ready orders with delivered button | tab with money due | mark paid
+---
+app "Laundry" cup blue
+table order cust text, pieces num 1..100, stage pick Picked|Ready|Delivered = Picked, paid bool
+setting rate money = 60 "Charge per piece"
+screen pickups "Pickups" home
+  topbar order, "New pickup"
+  each order where stage = Picked sort at as o empty "No clothes waiting to be washed."
+    row card gap 2 tap edit o swipe remove o
+      stack grow gap 0
+        o.cust bold
+        o.pieces "pieces" faint
+      button "Ready" tap set o.stage = Ready
+screen ready "Ready" check
+  each order where stage = Ready sort at as o empty "Nothing ready to deliver."
+    row card gap 2 tap edit o
+      stack grow gap 0
+        o.cust bold
+        o.pieces * rate faint
+      button "Delivered" tap set o.stage = Delivered
+screen money "Money" money
+  statcard sum(order, if(it.stage = Delivered and not it.paid, it.pieces * rate, 0)), "to collect from customers"
+  each order where stage = Delivered and paid = no sort at as o empty "Everyone has paid."
+    row card gap 2
+      toggle o.paid
+      o.cust bold grow
+      o.pieces * rate bold
+===
+@rich domain=r10_solar_units topic=solar_panel_output style=detailed
+we put solar panels on the roof and I want to know if they are worth it. Every evening I write the units generated that day. I set a daily target and the price of a unit from the grid. Show a bar chart for the last 7 days with a line at the target, the units this month and how much money that saved.
+needs: add units generated for a day | daily target setting | price per unit setting | bar chart of 7 days with target line | money saved this month
+---
+app "Solar Units" sun yellow
+table gen units num 0..200
+setting target num 1..200 = 15 "Daily target (units)"
+setting tariff money = 55 "Grid price per unit"
+topbar gen, "Add units"
+row gap 2
+  statcard sum(gen.units month), "units this month"
+  statcard sum(gen.units month) * tariff, "saved this month"
+section "Units per day", "line is the target"
+  goalbars last 7 days, sum(gen.units on it), target, "Target met", "Below"
+each gen sort at desc top 7 as g empty "No readings yet. Add today's units."
+  row card gap 2 tap edit g swipe remove g
+    g.at faint grow
+    g.units "units" bold
+===
+@rich domain=r10_post_office_desk topic=post_office_mail_desk style=multi_feature
+sub post office counter. I handle letters, money orders and parcels. Each item has who it is for, the type, the amount if it is a money order and a status of booked, out for delivery, delivered or returned. Show how much money-order cash is still undelivered, filter by type, and a button to move an item along.
+needs: add an item with receiver, type, amount and status | filter by type | undelivered money order total | move to next status button | count of items out for delivery
+---
+app "Post Desk" note green
+table mail to text, kind pick Letter|Money_order|Parcel = Letter, amount money = 0, status pick Booked|Out|Delivered|Returned = Booked
+state kd text = ""
+topbar mail, "Book item"
+row gap 2
+  statcard sum(mail.amount where kind = Money_order and status != Delivered and status != Returned), "money orders undelivered"
+  statcard count(mail where status = Out), "out for delivery"
+row gap 1
+  each options mail.kind
+    button it fill if(kd = it, accent, soft) grow tap set kd = if(kd = it, "", it)
+each mail where kd = "" or kind = kd sort at desc as m empty "No items booked yet."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.to bold
+      m.kind m.status faint
+    if m.status = Booked
+      button "Send out" tap set m.status = Out
+    if m.status = Out
+      button "Delivered" tap set m.status = Delivered
+===
+@rich domain=r10_utility_bills topic=household_utility_bills style=detailed
+I pay bills for my own house, my shop and my parents' village house, and I always miss one. Add each bill with the place, the type (electricity, gas, water, internet), the amount and the last date to pay, tick it when paid, remind me two days before, and show how much is unpaid for each place.
+needs: add a bill with place, type, amount and last date | tick when paid | reminder two days before the last date | unpaid total per place | overdue bills in red
+---
+app "Utility Bills" bolt plum dark
+table bill place pick Home|Shop|Village = Home, kind pick Electricity|Gas|Water|Internet = Electricity, amount money, payby date, paid bool
+remind "A bill is due soon" at bill.payby - 2d at 9:00
+topbar bill, "Add bill"
+section "Unpaid by place", "all bills"
+  share options bill.place, sum(bill.amount where place = it and paid = no), it
+each bill where paid = no sort payby as b empty "All bills are paid."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    stack grow gap 0
+      b.place b.kind bold
+      "Pay by" b.payby faint color if(b.payby < today, bad, muted)
+    b.amount bold
+===
+@rich domain=r10_property_tax topic=plot_property_tax style=multi_feature
+I collect the property tax for the plots in our small town. Each plot has an owner and size in marla, and tax is a rate per marla that the council sets. Work out the tax of every plot, tick when it is paid this year, show collected and still due, and which owners are late.
+needs: add a plot with owner and size in marla | tax rate per marla setting | tax worked out per plot | tick paid this year | collected and still due totals
+---
+app "Plot Tax" home teal
+table plot owner text, marla num 1..500
+table settled plot ref plot
+setting rate money = 1500 "Tax per marla per year"
+let tax(p plot) = p.marla * rate
+topbar plot, "Add plot"
+row gap 2
+  statcard sum(plot, if(count(it.settled year) > 0, tax(it), 0)), "collected this year"
+  statcard sum(plot, if(count(it.settled year) > 0, 0, tax(it))), "still due"
+each plot sort owner as p empty "No plots yet. Add the first owner."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.settled year
+    stack grow gap 0
+      p.owner bold
+      p.marla "marla" faint
+    tax(p) bold color if(count(p.settled year) > 0, good, ink)
+===
+@rich domain=r10_traffic_challans topic=vehicle_challan_list style=short
+challan
+needs: add a challan with plate, amount and date | tick when paid | unpaid total | total per vehicle | list newest first
+---
+app "Challans" flag pink
+table fine plate text, amount money, issued date = today, paid bool
+topbar fine, "Add challan"
+statcard sum(fine, if(it.paid, 0, it.amount)), "unpaid challans"
+section "Per vehicle", "all challans"
+  each fine by plate
+    row gap 2
+      it.key grow
+      sum(it.amount) bold
+each fine sort issued desc as f empty "No challans. Drive safe."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.paid
+    stack grow gap 0
+      f.plate bold
+      f.issued faint
+    f.amount bold
+===
+@rich domain=r10_noise_log topic=noise_complaint_diary style=short
+noise log
+needs: log a noise with source and how bad | heat grid of the last 28 days | count per level | worst source listed | list newest first
+---
+app "Noise Log" bell grey dark
+table noise source text, level pick Mild|Loud|Unbearable = Loud
+topbar noise, "Log noise"
+section "Last 28 days", "darker means more noise"
+  heat last 28 days, count(noise on it), 3
+each options noise.level
+  row gap 2
+    it grow
+    count(noise where level = it) bold
+each noise sort at desc top 10 as n empty "Quiet so far. Nothing logged."
+  row card gap 2 tap edit n swipe remove n
+    stack grow gap 0
+      n.source bold
+      n.at faint
+    n.level color if(n.level = Unbearable, bad, muted)
+===
+@rich domain=r10_pest_visits topic=pest_control_calendar style=custom_ui
+pest control man comes to our building every now and then and nobody remembers when. I want a month calendar where I tap the day he came, a count of visits this month, how many days since the last visit, and a way to add a visit with the area (kitchen, garage, garden, store) and what he charged.
+needs: month calendar where a tap marks a visit | add a visit with area and cost | visits this month | days since last visit | visits per area
+---
+app "Pest Control" shield green
+table visit area pick Kitchen|Garage|Garden|Store = Kitchen, cost money = 0
+topbar visit, "Add visit"
+row gap 2
+  statcard count(visit month), "visits this month"
+  statcard since(visit), "days since last visit"
+calendar visit
+section "By area", "all visits"
+  bars options visit.area, count(visit where area = it), it
+===
+@rich domain=r10_tank_levels topic=water_tank_levels style=custom_ui
+we have a roof tank and a ground tank and the motor runs by guess. Let me tap a level (25, 50, 75, 100 percent) for a tank when I check, draw the two tanks with the water inside, and show the last time each was checked and a warning in red when a tank is under 25 percent.
+needs: pick a tank and tap a level | drawing of both tanks with water | last checked time | warning under 25 percent | history list
+---
+app "Tank Levels" drop teal
+table level tank pick Roof|Ground = Roof, pct num 0..100
+state tk text = Roof
+let roof = if(count(level where tank = Roof) = 0, 0, last(level.pct where tank = Roof))
+let ground = if(count(level where tank = Ground) = 0, 0, last(level.pct where tank = Ground))
+draw 100, 60
+  rect 5, 5, 35, 50 stroke ink thick 1 radius 3
+  rect 6, 55 - 48 * roof / 100, 33, 48 * roof / 100 fill accent
+  label 22, 32, roof "%" bold
+  rect 60, 5, 35, 50 stroke ink thick 1 radius 3
+  rect 61, 55 - 48 * ground / 100, 33, 48 * ground / 100 fill accent
+  label 78, 32, ground "%" bold
+row gap 2
+  "Roof tank" align center grow
+  "Ground tank" align center grow
+if roof < 25 or ground < 25
+  "A tank is under 25 percent. Run the motor." color bad
+row gap 1
+  each options level.tank
+    button it fill if(tk = it, accent, soft) grow tap set tk = it
+row gap 1
+  each [25, 50, 75, 100]
+    button it "%" grow tap add level tank = tk, pct = it
+each level sort at desc top 8 as l empty "No levels logged yet."
+  row gap 2 swipe remove l
+    l.tank grow
+    l.pct "%" bold
+    l.at faint
+===
+@rich domain=r10_stray_feeding topic=stray_animal_feeding style=short
+stray feeding
+needs: add a feeding with spot and kilos | days in a row fed | kilos fed this week | share per spot | last 7 days dots
+---
+app "Stray Feeding" paw orange
+table feed spot pick Park|Market|Lane = Park, kg num 0.5..20 = 1
+topbar feed, "Add feeding"
+row gap 2
+  statcard streak(feed), "days in a row"
+  statcard sum(feed.kg week), "kg fed this week"
+weekdots count(feed on it) > 0
+section "By spot", "this month"
+  share options feed.spot, sum(feed.kg month where spot = it), it
+each feed sort at desc top 10 as f empty "No feedings yet."
+  row card gap 2 tap edit f swipe remove f
+    f.spot bold grow
+    f.kg "kg" bold
+    f.at faint
+===
+@rich domain=r10_blood_donors topic=blood_donor_register style=short
+blood donors
+needs: add a donor with name, blood group and last donation date | donors eligible after 90 days | filter by blood group | donated today button | count eligible now
+---
+app "Blood Donors" heart red
+table donor name text, grp pick A|B|AB|O = O, given date
+state g text = ""
+let ready(d donor) = d.given <= today - 90
+topbar donor, "Add donor"
+statcard count(donor, ready(it)), "donors can give now", count(donor)
+row gap 1
+  each options donor.grp
+    button it count(donor where grp = it) fill if(g = it, accent, soft) grow tap set g = if(g = it, "", it)
+each donor where g = "" or grp = g sort given as d empty "No donors yet. Add the first one."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.grp "- last gave" d.given faint
+    if ready(d)
+      button "Gave today" tap set d.given = today
+    else
+      "Wait" ready(d) faint
+===
+@rich domain=r10_ambulance_trips topic=ambulance_trip_log style=detailed
+I drive a welfare ambulance. After each trip I log the patient name, the type of trip (emergency, transfer, discharge), the distance in km and the fare if any. I want a chart of trips for the last 7 days, the number of trips and km this month, and how many trips were of each type.
+needs: add a trip with patient, type, km and fare | bar chart of trips last 7 days | trips and km this month | count per trip type | fare income this month
+---
+app "Ambulance Log" heart pink
+table trip patient text, kind pick Emergency|Transfer|Discharge = Emergency, km num 1..500, fare money = 0
+topbar trip, "Log trip"
+row gap 2
+  statcard count(trip month), "trips this month"
+  statcard sum(trip.km month), "km this month"
+section "Trips per day", "last 7 days"
+  daybars last 7 days, count(trip on it)
+section "By type", "this month"
+  share options trip.kind, count(trip month where kind = it), it
+statcard sum(trip.fare month), "fare income this month"
+each trip sort at desc top 10 as t empty "No trips yet."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.patient bold
+      t.kind faint
+    t.km "km" faint
+===
+@rich domain=r10_dispensary_stock topic=village_dispensary_stock style=multi_feature
+I am the compounder at a village dispensary. For each medicine I need the stock, a minimum level and the expiry date. A Give 1 button when I hand out a strip, a warning for items that are low, and another for items that expire within 60 days so I can return them to the supplier.
+needs: add a medicine with name, stock, minimum and expiry date | give one button lowers stock | warning for low stock | warning for expiry within 60 days | count of medicines needing attention
+---
+app "Dispensary" pill mint
+table drug name text, qty num 0..9999, low num 0..9999 = 20, exp date
+topbar drug, "Add medicine"
+row gap 2
+  statcard count(drug where qty <= low), "running low"
+  statcard count(drug where exp < today + 60), "expiring in 60 days"
+each drug sort exp as d empty "No medicines yet. Add the first one."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.qty "in stock - expires" d.exp faint
+      if d.qty <= d.low
+        "Low stock" color bad
+      if d.exp < today + 60
+        "Expiring soon" color warn
+    button "Give 1" tap set d.qty = d.qty - 1
+===
+@rich domain=r10_tent_house topic=tent_house_rentals style=detailed
+we rent chairs, tables, plates and shamiana sets for weddings. First I list the items with how many we own. Then for each hire I write the client, the item, how many went out and tick when they come back. I want to see how many of each item are available right now before I accept a new booking.
+needs: add an item with name and total owned | add a hire with client, item and quantity | tick when returned | available now per item | list of hires still out
+---
+app "Tent House" cart purple
+table gear name text, total num 1..5000
+table hire gear ref gear, client text, qty num 1..2000, back bool
+let free(g gear) = g.total - sum(g.hire.qty where back = no)
+screen stock "Stock" box
+  topbar gear, "Add item"
+  each gear sort name as g empty "No items yet. Add the chairs first."
+    row card gap 2 tap edit g swipe remove g
+      stack grow gap 0
+        g.name bold
+        "Owned" g.total faint
+      free(g) "free" bold color if(free(g) <= 0, bad, good)
+screen out "Hires" users
+  topbar hire, "New hire"
+  each hire where back = no sort at as h empty "Nothing is out on hire."
+    row card gap 2 tap edit h swipe remove h
+      toggle h.back
+      stack grow gap 0
+        h.client bold
+        h.gear.name faint
+      h.qty bold
+===
+@rich domain=r10_conductor_cash topic=bus_conductor_daily_cash style=custom_ui
+I am a bus conductor and the owner wants a daily account. For each trip I note the route (A, B or C), how many passengers and the fare collected. Below that I add the day's expenses like fuel, tea and repair. Show today's collection minus expenses and a chart of collection over the last 7 days.
+needs: add a trip with route, passengers and fare | add an expense with kind and amount | collection minus expenses today | bar chart of 7 days collection | passengers carried today
+---
+app "Conductor Cash" bus grey
+table run route pick A|B|C = A, riders num 1..120, fare money
+table cost what pick Fuel|Tea|Repair|Other = Fuel, amount money
+topbar run, "Add trip"
+row gap 2
+  statcard sum(run.fare today) - sum(cost.amount today), "left after expenses today"
+  statcard sum(run.riders today), "passengers today"
+section "Collection", "last 7 days"
+  daybars last 7 days, sum(run.fare on it)
+each run today sort at desc as r empty "No trips yet today."
+  row card gap 2 tap edit r swipe remove r
+    "Route" r.route bold grow
+    r.riders "riders" faint
+    r.fare bold
+form cost, "Add expense"

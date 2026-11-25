@@ -1,0 +1,546 @@
+@rich domain=c5_reading_speed topic=reading_speed_finish_date style=detailed
+i timed myself reading 24 pages in 30 minutes. type that, plus the pages in the whole book, the page i am on and how many minutes i can read a day, and tell me my pages per hour, pages left, how many days to finish and the date i will be done
+needs: pages read and minutes taken | book pages and current page | pages per hour | days to finish | finish date
+---
+app "Reading Speed" book ocean
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state read num = 24
+state mins num = 30
+state total num = 320
+state page num = 100
+state perday num = 40
+let pph = if(mins > 0, read * 60 / mins, 0)
+let left = max(0, total - page)
+let days = if(pph > 0 and perday > 0, ceil0(left / (pph * perday / 60)), 0)
+grid 2 gap 2
+  field read "Pages read in the test"
+  field mins "Minutes it took"
+  field total "Pages in the book"
+  field page "I am on page"
+field perday "Minutes I can read a day"
+row gap 2
+  statcard round(pph), "pages an hour"
+  statcard left, "pages left"
+"Done in" plural(days, "day") big
+"Finish line:" today + days faint
+===
+@rich domain=c5_cram_plan topic=exam_cramming_plan style=multi_feature
+exam is on a date and i have so many topics left. i set the exam date, the topics, the hours each topic needs and my study hours a day, and it should say whether the time is enough and how many topics to cover every day
+needs: exam date | topics and hours per topic | study hours per day | days left and topics per day | enough time or not warning
+---
+app "Cram Plan" pencil mint
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state exam date = 2026-12-20
+state topics num = 12
+state per num = 2
+state hpd num = 4
+let daysleft = max(0, exam - today)
+let need = topics * per
+let have = daysleft * hpd
+field exam "Exam date"
+field topics "Topics left"
+field per "Hours one topic needs"
+field hpd "Study hours per day"
+slider hpd 1..14
+row gap 2
+  statcard daysleft, "days left"
+  statcard if(daysleft > 0, round(topics / daysleft * 10) / 10, 0), "topics a day"
+goal need, max(have, 1), "hours needed of hours you have", " h"
+if need > have
+  "Not enough time. You are short by" round(need - have) "hours; add" ceil0(need / max(daysleft, 1)) - hpd "hours a day." bold color bad
+else
+  "You have enough time with" round(have - need) "hours to spare." bold color good
+===
+@rich domain=c5_marks_needed_papers topic=marks_needed_last_papers style=multi_feature
+board exams: add each paper i have already sat with marks got and marks out of, set my target overall percent, tell me how many marks i need in the remaining papers and as what percent of them
+needs: add a paper with marks and total | target percent setting | marks needed in remaining papers | needed percent of remaining | warning when out of reach
+---
+app "Marks Needed" school slate
+table paper name text, got num 0..1000, outof num 1..1000 = 100
+setting target num 1..100 = 60 "Target overall percent"
+state rest num = 200
+let have = sum(paper.got)
+let sat = sum(paper.outof)
+let need = target * (sat + rest) / 100 - have
+let pct = if(rest > 0, need * 100 / rest, 0)
+topbar paper, "Add paper"
+field rest "Marks in the papers still to come"
+statcard have, "marks so far, out of" sat
+if pct > 100
+  "Out of reach" big color bad
+  "You would need more than full marks. Lower the target to" floor((have + rest) * 100 / (sat + rest)) "% at most." faint
+else
+  if need <= 0
+    "Target already secured" big color good
+  else
+    round(need) big
+    "marks needed, which is" round(pct) "% of the remaining papers" faint
+each paper as p empty "No papers yet. Add each paper you have already sat."
+  row card tap edit p swipe remove p
+    p.name grow
+    p.got "/" p.outof bold
+===
+@rich domain=c5_pomodoro_plan topic=study_sessions_plan style=custom_ui
+i have 6 hours of study to get through. split it into 25 minute sessions with 5 minute breaks and tell me how many sessions, the total time with breaks, and the clock time i will finish if i start at 4:00 pm
+needs: hours to study | session and break length | number of sessions | total time with breaks | finish clock time
+---
+app "Session Planner" timer plum
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state hours num = 6
+state sess num = 25
+state brk num = 5
+state start time = 16:00
+let sessions = if(sess > 0, ceil0(hours * 60 / sess), 0)
+let mins = sessions * sess + max(0, sessions - 1) * brk
+let end = (hour(start) * 60 + minute(start) + mins) % 1440
+field hours "Hours to study"
+"Session" sess "minutes" faint
+slider sess 15..60
+"Break" brk "minutes" faint
+slider brk 3..15
+field start "Start at"
+row gap 2
+  statcard sessions, "sessions"
+  statcard round(mins / 6) / 10, "hours with breaks"
+"Finish at" join(floor(end / 60), ":", if(end % 60 < 10, "0", ""), end % 60) big
+===
+@rich domain=c5_vocab_daily topic=words_per_day_target style=short
+vocab plan
+needs: words to learn and words known | exam date | words per day needed | words per week and progress bar
+---
+app "Vocab Plan" pen red
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state target num = 1000
+state known num = 150
+state when date = 2026-12-31
+let left = max(0, target - known)
+let days = max(1, when - today)
+field target "Words to learn"
+field known "Words I know"
+field when "By this date"
+statcard ceil0(left / days), "new words a day"
+"That is" ceil0(left / days * 7) "a week for" days "days." faint
+goal known, target, "words learned", " words"
+===
+@rich domain=c5_exam_time_split topic=exam_minutes_per_section style=multi_feature
+the paper has sections with different marks and i always run out of time. set the total minutes of the exam, keep ten for reading, add each section with its marks, and show how many minutes to spend on each, in proportion to marks
+needs: add a section with marks | total exam minutes | reading time reserved | minutes for each section | bar per section
+---
+app "Exam Time Split" clock blue dark
+table part name text, marks num 1..100
+setting total num 10..360 = 180 "Exam minutes"
+setting readmin num 0..30 = 10 "Reading time"
+let marks = sum(part.marks)
+let mins(p part) = if(marks > 0, (total - readmin) * p.marks / marks, 0)
+topbar part, "Add section"
+row gap 2
+  statcard total - readmin, "minutes to write"
+  statcard marks, "marks in the paper"
+section "Minutes per section", "about 1 mark per" round((total - readmin) * 10 / max(marks, 1)) / 10 "min"
+  each part sort marks desc as p empty "No sections yet. Add Section A, B and so on."
+    row tap edit p swipe remove p
+      p.name grow
+      p.marks "marks" faint
+      round(mins(p)) "min" bold
+  bars part, mins(it), it.name
+===
+@rich domain=c5_percent_from_marks topic=marks_to_percent_grade style=short
+percent from marks
+needs: marks obtained and total | percentage | grade letter | marks to reach the next grade
+---
+app "Percent from Marks" school pink
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state got num = 0
+state out num = 100
+let pct = if(out > 0, got * 100 / out, 0)
+let grade = if(pct >= 80, "A+", if(pct >= 70, "A", if(pct >= 60, "B", if(pct >= 50, "C", if(pct >= 40, "D", "F")))))
+let nextcut = if(pct >= 80, 80, if(pct >= 70, 80, if(pct >= 60, 70, if(pct >= 50, 60, if(pct >= 40, 50, 40)))))
+field got "Marks obtained"
+field out "Total marks"
+statcard round(pct * 10) / 10, "percent", 100
+"Grade" grade big
+if pct < 80
+  "Next grade at" nextcut "%, which is" ceil0(nextcut * out / 100 - got) "more marks." faint
+===
+@rich domain=c5_revision_dates topic=spaced_revision_dates style=custom_ui
+when i learn something new i want to revise it after 1, 3, 7, 14 and 30 days. pick the day i learned it and show the dates of each revision and how many days from today each one is
+needs: date learned | revision dates at 1 3 7 14 30 days | days from today | highlight the revision due today
+---
+app "Revision Dates" calendar teal
+state learned date = today
+field learned "Learned on"
+section "Revise on", "spaced repetition"
+  each [1, 3, 7, 14, 30] as gap
+    row
+      "Day" gap grow
+      learned + gap bold
+      if learned + gap = today
+        "today" bold color good
+      else
+        if learned + gap > today
+          "in" learned + gap - today "days" faint
+        else
+          "passed" faint
+===
+@rich domain=c5_screen_week topic=weekly_screen_time style=multi_feature
+log each stretch of phone, laptop or tv time in hours, set a daily limit, and show hours today, total this week, the daily average and a bar chart of the last 7 days so i can see which days went wild
+needs: log hours with device | daily limit setting | hours today and this week | daily average | bar chart for 7 days
+---
+app "Screen Time" phone pink
+table use device pick Phone|Laptop|TV = Phone, hours num 0.1..16 = 1
+setting limit num 1..16 = 3 "Daily limit (hours)"
+topbar use, "Log time"
+row gap 2
+  statcard round(sum(use.hours today) * 10) / 10, "hours today", limit
+  statcard round(sum(use.hours week) * 10) / 10, "hours this week"
+"Average per day this week" round(sum(use.hours week) / max(1, weekday(today)) * 10) / 10 "h" faint
+section "Last 7 days", "hours"
+  daybars last 7 days, sum(use.hours on it)
+if sum(use.hours today) > limit
+  "Over today's limit by" round((sum(use.hours today) - limit) * 10) / 10 "h" bold color bad
+===
+@rich domain=c5_data_plan_pace topic=mobile_data_pace style=detailed
+my monthly data pack is 50 gb and it started on a date. type how much i have used so far and show how many days into the cycle i am, how much i can use per day from now to last the 30 days, and where i will end up at this rate
+needs: pack size and used gb | cycle start date | day of the cycle | allowance per day for the rest | projected total use
+---
+app "Data Pace" phone slate
+state plan num = 50
+state used num = 22
+state begin date = 2026-11-10
+let day = min(30, max(1, today - begin + 1))
+let daysleft = 30 - day + 1
+let proj = used / day * 30
+field plan "Pack (GB)"
+field used "Used so far (GB)"
+field begin "Cycle started on"
+statcard day, "day of 30", 30
+"You can use" round(max(0, plan - used) / daysleft * 100) / 100 "GB a day to last." big
+"At this pace you will use" round(proj * 10) / 10 "GB." faint
+if proj > plan
+  "Slow down: you will run out in about" floor(plan / max(used / day, 0.01)) "days." bold color bad
+else
+  "On track, with room to spare." bold color good
+===
+@rich domain=c5_password_points topic=password_strength_points style=custom_ui
+just a fun checker: type a made up password and score it, one point each for 8 or more characters, 12 or more, a digit, a symbol and no spaces, then show points out of 5 and a label like weak or strong
+needs: type a password | points for length digit and symbol | points out of 5 | weak medium or strong label
+---
+app "Password Points" lock ink
+state pw text = ""
+let digit = count([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], has(pw, join(it))) > 0
+let symbol = has(pw, "!") or has(pw, "@") or has(pw, "#") or has(pw, "$") or has(pw, "%") or has(pw, "&") or has(pw, "*")
+let nospace = not has(pw, " ")
+let pts = if(len(pw) >= 8, 1, 0) + if(len(pw) >= 12, 1, 0) + if(digit, 1, 0) + if(symbol, 1, 0) + if(nospace and len(pw) > 0, 1, 0)
+field pw "Try a made up password"
+"Never type your real password here." faint
+statcard pts, "points out of 5", 5
+if len(pw) = 0
+  "Start typing to see the score." faint
+else
+  if pts >= 5
+    "Strong" big color good
+  else
+    if pts >= 3
+      "Medium" big color warn
+    else
+      "Weak" big color bad
+  "Length" len(pw) "characters" faint
+===
+@rich domain=c5_battery_health topic=battery_wear_estimate style=detailed
+how worn is my phone battery? i type the number of charge cycles, the cycles the maker rates it for, and also the capacity in mah when new and what a test app says it holds now, and show wear from cycles, health from capacity and a verdict
+needs: charge cycles and rated cycles | design and measured capacity | wear from cycles | health from capacity | verdict
+---
+app "Battery Wear" bolt orange
+state cycles num = 300
+state rated num = 500
+state design num = 4500
+state cap num = 3900
+let wear = if(rated > 0, cycles * 100 / rated, 0)
+let health = if(design > 0, cap * 100 / design, 0)
+grid 2 gap 2
+  field cycles "Charge cycles"
+  field rated "Rated cycles"
+  field design "Capacity when new (mAh)"
+  field cap "Capacity now (mAh)"
+row gap 2
+  statcard round(wear), "percent of cycle life used", 100
+  statcard round(health), "percent of capacity left", 100
+if health < 80
+  "Replace soon, it holds less than 80 percent." bold color bad
+else
+  "Battery is in good shape." bold color good
+===
+@rich domain=c5_phone_storage topic=photos_and_video_fit style=multi_feature
+my phone has some free gb. pick whether i shoot video in hd or 4k, slide how much of the free space goes to photos and the rest to videos, and show how many photos and how many minutes of video fit
+needs: free storage in gb | video quality choice | photos share slider | photos that fit | minutes of video that fit
+---
+app "Storage Planner" box green
+state free num = 32
+state quality pick HD|FourK = HD
+state photoshare num = 50
+let mbmin = if(quality = HD, 130, 350)
+let photos = floor(free * 1024 * photoshare / 100 / 4)
+let video = floor(free * 1024 * (100 - photoshare) / 100 / mbmin)
+field free "Free space (GB)"
+choice quality
+"Share for photos" photoshare "%" faint
+slider photoshare 0..100
+row gap 2
+  statcard photos, "photos at 4 MB each"
+  statcard video, "minutes of video"
+"Video uses about" mbmin "MB a minute in" quality faint
+===
+@rich domain=c5_download_time topic=download_time_estimate style=short
+download time
+needs: file size in MB or GB | connection speed in Mbps | time to download | speed in megabytes per second
+---
+app "Download Time" cloud purple
+state size num = 2
+state unit pick MB|GB = GB
+state mbps num = 20
+let mb = if(unit = GB, size * 1024, size)
+let secs = if(mbps > 0, mb * 8 / mbps, 0)
+choice unit
+field size "File size"
+field mbps "Speed (Mbps)"
+if secs = 0
+  "Enter the speed to see the time." faint
+else
+  floor(secs / 3600) "h" floor(secs % 3600 / 60) "min" round(secs) % 60 "s" big
+"Real speed is about" round(mbps / 8 * 100) / 100 "MB per second." faint
+===
+@rich domain=c5_stream_data topic=streaming_data_per_month style=detailed
+how much data will my tv and phone streaming eat? hours of video per day, quality of sd, hd or 4k, days in the month and my monthly pack, then show gb used and what percent of the pack it takes
+needs: hours per day | quality choice | monthly data used in gb | percent of pack | warning when over the pack
+---
+app "Streaming Data" cloud grey
+state hours num = 2
+state q pick SD|HD|UHD = HD
+state pack num = 100
+let gbh = if(q = SD, 0.7, if(q = HD, 3, 7))
+let gb = hours * gbh * 30
+choice q
+field hours "Hours of video a day"
+slider hours 0..10
+field pack "Monthly pack (GB)"
+statcard round(gb), "GB a month", pack
+if gb > pack
+  "Over the pack by" round(gb - pack) "GB. Drop the quality one step." bold color bad
+else
+  round(gb * 100 / max(pack, 1)) "% of the pack" bold
+"1 hour of" q "uses about" gbh "GB." faint
+===
+@rich domain=c5_ups_backup topic=ups_battery_runtime style=multi_feature
+load shedding is long. my ups has batteries of some ah at 12 volts. i enter how many batteries, the total watts of fan and lights and the inverter efficiency, and want the hours of backup, remembering only half of a battery is usable
+needs: battery ah and count | load in watts | inverter efficiency slider | hours of backup | half usable rule
+---
+app "UPS Backup" bolt yellow
+state ah num = 150
+state count num = 1
+state watts num = 200
+state eff num = 85
+let wh = ah * 12 * count * 0.5 * eff / 100
+let hours = if(watts > 0, wh / watts, 0)
+field ah "Battery size (Ah)"
+field count "Batteries"
+field watts "Load (watts)"
+"Inverter efficiency" eff "%" faint
+slider eff 60..95
+statcard round(hours * 10) / 10, "hours of backup"
+"Usable energy" round(wh) "Wh, which is half the battery." faint
+"A fan (80 W) and 4 lights (40 W) is about 200 W." faint
+===
+@rich domain=c5_salary_raise topic=salary_raise_percent style=multi_feature
+boss offered a raise. i type my old and new salary and want the percent raise and yearly extra. second part: i type a percent i want to ask for and see the salary that gives
+needs: old and new salary | raise percent | extra per month and per year | salary for a wanted percent
+---
+app "Salary Raise" money green
+state oldp money = 0
+state newp money = 0
+state ask num = 15
+section "What they offered"
+  field oldp "Current salary"
+  field newp "New salary"
+  if oldp > 0
+    statcard round((newp - oldp) * 1000 / oldp) / 10, "percent raise"
+    "Extra" newp - oldp "a month," (newp - oldp) * 12 "a year" faint
+  else
+    "Enter your current salary." faint
+section "What to ask for"
+  "Raise" ask "%" faint
+  slider ask 1..50
+  "Ask for" round(oldp * (1 + ask / 100)) big
+===
+@rich domain=c5_inflation_cost topic=inflation_price_growth style=detailed
+if inflation stays at 12 percent a year, what will something that costs 50000 today cost later? type the price, the percent, and years, and show a short table at 1, 5, 10 and 20 years, plus what a thousand rupees will buy then
+needs: price today and inflation percent | years | future price | table at 1 5 10 20 years | value of 1000 rupees later
+---
+app "Inflation Effect" chart plum
+state price money = 50000
+state rate num = 12
+state years num = 5
+let grow(y num) = pow(1 + rate / 100, y)
+field price "Price today"
+"Inflation" rate "%" faint
+slider rate 1..30
+"Years" years faint
+slider years 1..30
+statcard round(price * grow(years)), "price after" years "years"
+"1000 today buys only" round(1000 / grow(years)) "worth then" faint
+section "Price later"
+  each [1, 5, 10, 20] as y
+    row
+      y "years" grow
+      round(price * grow(y)) bold
+===
+@rich domain=c5_loan_overpay topic=loan_extra_payment_effect style=short
+loan overpay
+needs: balance rate and monthly payment | extra payment | months to payoff with and without | months saved | warning when payment is too small
+---
+app "Loan Overpay" wallet red
+state bal num = 800000
+state rate num = 14
+state pay num = 20000
+state extra num = 5000
+let r = rate / 1200
+let months(p num) = if(r > 0 and p > bal * r, count(1..480, bal * pow(1 + r, it) - p * (pow(1 + r, it) - 1) / r > 0) + 1, 0)
+field bal "Balance owed"
+field rate "Yearly rate, percent"
+field pay "Monthly payment"
+field extra "Extra each month"
+if months(pay) = 0
+  "That payment does not even cover the interest." bold color bad
+else
+  row gap 2
+    statcard months(pay), "months as planned"
+    statcard months(pay + extra), "months with extra"
+  "You finish" months(pay) - months(pay + extra) "months sooner." big color good
+  "Interest saved is about" round((pay * months(pay)) - (pay + extra) * months(pay + extra)) faint
+===
+@rich domain=c5_goal_by_date topic=savings_target_by_date style=custom_ui
+i want to buy a laptop for a set price by a certain date and i have some saved already. show how many months are left, what i must put away each month and each week, and a bar of how much i already have
+needs: target amount | date wanted | amount saved so far | per month and per week needed | progress bar
+---
+app "Goal by Date" target teal
+state cost money = 0
+state by date = 2027-03-01
+state have money = 0
+let days = max(0, by - today)
+let months = days / 30.4
+let gap = max(0, cost - have)
+field cost "Price to reach"
+field by "By this date"
+field have "Saved so far"
+goal have, max(cost, 1), "saved", ""
+if days = 0
+  "That date is today or already passed." faint color bad
+else
+  statcard round(gap / max(months, 0.1)), "to save every month"
+  "That is" round(gap / max(days / 7, 1)) "a week, for" floor(months * 10) / 10 "months." faint
+===
+@rich domain=c5_gift_split_families topic=wedding_gift_family_split style=multi_feature
+cousins are chipping in for the wedding gift. add each family with the number of people in it, type the gift total, and split by head count, rounding each family's share up to the next 100 so it is easy to collect
+needs: add a family with number of members | gift total | share per family by members | rounded up to 100 | total collected
+---
+app "Gift Split" gift pink
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+table fam name text, members num 1..20 = 2
+setting gift money = 0 "Gift total"
+let heads = sum(fam.members)
+let share(f fam) = if(heads > 0, ceil0(gift * f.members / heads / 100) * 100, 0)
+topbar fam, "Add family"
+row gap 2
+  statcard gift, "gift total"
+  statcard heads, "people chipping in"
+section "Each family pays", "rounded up to 100"
+  each fam as f empty "Add each family with how many people are in it."
+    row tap edit f swipe remove f
+      f.name grow
+      f.members "people" faint
+      share(f) bold
+"Collected" sum(fam, share(it)) "so" sum(fam, share(it)) - gift "extra for the card or flowers" faint
+===
+@rich domain=c5_appliance_units topic=electricity_by_appliance style=short
+appliance units
+needs: add an appliance with watts hours and count | unit price | units per month | bill per appliance | bar chart of the biggest users
+---
+app "Appliance Units" bolt blue
+table gear name text, watts num 1..5000, hours num 0.1..24 = 4, qty num 1..20 = 1
+setting rate money = 0 "Price per unit"
+let units(g gear) = g.watts * g.hours * g.qty * 30 / 1000
+let all = sum(gear, units(it))
+topbar gear, "Add appliance"
+row gap 2
+  statcard round(all), "units a month"
+  statcard round(all * rate), "monthly bill"
+section "Biggest users", "units"
+  bars gear sort units(it) desc top 6, round(units(it)), it.name
+each gear sort units(it) desc as g empty "No appliances yet. Add the AC, fridge and fans."
+  row card tap edit g swipe remove g
+    g.name grow
+    round(units(g)) "units" faint
+    round(units(g) * rate) bold
+===
+@rich domain=c5_kameti_payout topic=committee_turn_payout style=detailed
+we run a monthly kameti (committee) of 12 people paying 10000 each. i know my turn is month 5. show the pot when my turn comes, how much i will have paid by then, the amount i am ahead at that point, and the whole schedule of payments
+needs: members and monthly amount | my turn month | pot received | paid by my turn | schedule per month
+---
+app "Kameti Turn" users orange dark
+state n num = 12
+state amt money = 10000
+state turn num = 5
+let pot = n * amt
+let paid = min(turn, n) * amt
+field n "Members"
+field amt "Monthly amount each"
+field turn "My turn (month)"
+slider turn 1..24
+row gap 2
+  statcard pot, "pot at my turn"
+  statcard paid, "paid in by then"
+"Ahead by" pot - paid big
+"Still to pay after the pot:" max(0, n - turn) * amt faint
+section "Schedule"
+  each 1..min(n, 24) empty "Add the number of members."
+    row
+      "Month" it grow
+      if it = turn
+        "receive" pot bold color good
+      else
+        "pay" amt faint
+===
+@rich domain=c5_hourly_rate topic=hourly_pay_from_salary style=short
+hourly rate
+needs: monthly salary | hours worked per week | hourly rate | overtime pay at double rate
+---
+app "Hourly Rate" clock ink
+state salary money = 0
+state hours num = 45
+state ot num = 10
+let rate = salary * 12 / (52 * max(hours, 1))
+field salary "Monthly salary"
+field hours "Hours per week"
+statcard round(rate), "per hour"
+field ot "Overtime hours"
+"Overtime at double:" round(rate * 2 * ot) faint
+"Per working day (5 days)" round(rate * hours / 5) faint
+===
+@rich domain=c5_coffee_habit topic=daily_coffee_yearly_cost style=custom_ui
+my cafe habit: cups a week and the price of a cup. show the cost per month and per year, and what that money would grow to in 10 years if i saved it every year at 8 percent, with a slider for cups
+needs: cups per week slider | price per cup | cost per month and per year | savings value in 10 years
+---
+app "Cafe Habit" cup yellow
+state cups num = 5
+state price money = 0
+state rate num = 8
+let year = cups * price * 52
+let fv = if(rate > 0, year * (pow(1 + rate / 100, 10) - 1) / (rate / 100), year * 10)
+"Cups a week" cups faint
+slider cups 0..21
+field price "Price of a cup"
+row gap 2
+  statcard round(year / 12), "a month"
+  statcard round(year), "a year"
+"If saved instead at" rate "% for 10 years:" big
+round(fv) big color good
+slider rate 0..15

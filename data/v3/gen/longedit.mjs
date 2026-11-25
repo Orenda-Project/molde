@@ -56,8 +56,8 @@ export function applyOp(prog, op, r) {
     return null;
   }
   if (op === 'remove') {
-    const idx = bs.map((b, i) => [kindOf(b), i]).filter(([k]) => ['section', 'chart', 'statcard', 'goal', 'stat'].includes(k)).map(([, i]) => i);
-    if (idx.length < 2) return null; const i = r.pick(idx); const nb = bs.slice(); const [gone] = nb.splice(i, 1);
+    const idx = bs.map((b, i) => [kindOf(b), i]).filter(([k]) => ['section', 'chart', 'statcard', 'goal', 'stat', 'list', 'form', 'quick', 'calendar'].includes(k)).map(([, i]) => i);
+    if (idx.length < 3) return null; const i = r.pick(idx); const nb = bs.slice(); const [gone] = nb.splice(i, 1);
     return { after: join(head, nb), text: `${label(gone)} was removed (${gone.lines.length} lines)`, kind: 'remove', touched: gone.lines.length, removed: label(gone) };
   }
   if (op === 'addchart') {
@@ -81,6 +81,33 @@ export function applyOp(prog, op, r) {
     const L = lines(prog).map(l => { const m = l.match(re); return m ? m[1] + nv + m[2] + ' set' : l; });
     return { after: L.join('\n') + '\n', text: `the setting "${S.name.replace(/_/g, ' ')}" now defaults to ${nv} instead of ${S.val} and carries the word set so the new value is applied`, kind: 'setting', touched: 1, setting: S.name, value: nv, old: S.val };
   }
+
+  if (op === 'addfield') {
+    const L = lines(prog); const cands = [];
+    L.forEach((l, i) => { const m = l.match(/^table (\w+)(?: "[^"]*")? (.+)$/); if (m && /\b(text|num|money|pick|date|bool)\b/.test(m[2])) cands.push([i, m[1], m[2]]); });
+    if (!cands.length) return null; const [i, tname, rest] = r.pick(cands);
+    const FIELDS = [['note', 'note text?', 'note'], ['rating', 'rating num? 1..5', 'rating'], ['phone', 'phone text?', 'phone number'], ['method', 'method pick Cash|Card|Online = Cash', 'payment method'], ['due', 'due date?', 'due date'], ['comment', 'comment text?', 'comment'], ['place', 'place text?', 'place'], ['priority', 'priority pick Low|Normal|High = Normal', 'priority']];
+    const ok = FIELDS.filter(f => !new RegExp('\\b' + f[0] + '\\b').test(prog)); if (!ok.length) return null;
+    const f = r.pick(ok); L[i] = L[i] + ', ' + f[1];
+    const human = tname.replace(/_/g, ' ');
+    return { after: L.join('\n') + '\n', text: `a new field "${f[2]}" is added to each ${human} entry (${f[1].split(' ').slice(1).join(' ')}); the add form shows it`, kind: 'addfield', touched: 1, field: f[2], table: human, must: f[2].split(' ').pop() };
+  }
+  if (op === 'addoption') {
+    const L = lines(prog); const cands = [];
+    L.forEach((l, i) => { const m = l.match(/(\b(\w+) pick ([\w]+(?:\|[\w]+)+))/); if (m && /^(table|setting|state)\b/.test(l)) cands.push([i, m]); });
+    if (!cands.length) return null; const [i, m] = r.pick(cands); const opts = m[3].split('|');
+    const bank = ['Other', 'Misc', 'Extra', 'Later', 'Spare', 'Special', 'Urgent', 'Maybe'].filter(x => !opts.includes(x)); if (!bank.length) return null; const nw = r.pick(bank);
+    L[i] = L[i].replace(m[1], m[1] + '|' + nw);
+    return { after: L.join('\n') + '\n', text: `the choice "${nw}" is added to the options of ${m[2].replace(/_/g, ' ')} (${opts.join(', ')})`, kind: 'addoption', touched: 1, option: nw, fieldname: m[2].replace(/_/g, ' '), must: nw };
+  }
+  if (op === 'renamebutton') {
+    const L = lines(prog); const cands = [];
+    L.forEach((l, i) => { let m; if ((m = l.match(/^(\s*topbar \w+, )"([^"]*)"/))) cands.push([i, m[2], 'the app bar button']); if ((m = l.match(/button "([A-Za-z][^"]{2,})"/))) cands.push([i, m[1], 'a button']); if ((m = l.match(/^(\s*form \w+, )"([^"]*)"/))) cands.push([i, m[2], 'the form button']); });
+    if (!cands.length) return null; const [i, old, where] = r.pick(cands);
+    const bank = ['New entry', 'Log it', 'Done', 'Save entry', 'Add one', 'Create', 'Record', 'Add now', 'Submit', 'Go']; const nw = r.pick(bank.filter(x => x !== old));
+    L[i] = L[i].replace('"' + old + '"', '"' + nw + '"');
+    return { after: L.join('\n') + '\n', text: `${where} that says "${old}" is renamed to "${nw}"`, kind: 'renamebutton', touched: 1, old, nw, must: nw };
+  }
   if (op === 'bigger') {
     const cand = []; const L = lines(prog);
     L.forEach((l, i) => { if (i === 0 || /^\s*(table|setting|state|let|def|topbar|section|remind|screen|each|if|else|row|stack|grid|box|draw|rect|circle|arc|line|label|path|poly|pt|button|field|toggle|choice|slider|form|quick|statcard|stat|goal|list|daybars|goalbars|trend|heat|daygrid|weekdots|share|bars|calendar|timer|monthnav)\b/.test(l)) return; if (/ (faint|bold|head)$/.test(l) && (l.trim().startsWith('"') || /^\s*[\w.]+\(/.test(l) || /^\s*[\w.]+ /.test(l))) cand.push(i); });
@@ -91,6 +118,7 @@ export function applyOp(prog, op, r) {
   }
   return null;
 }
+export const OPS3 = ['addfield', 'addoption', 'renamebutton', 'reorder', 'remove', 'addchart'];
 export const OPS = ['colour', 'title', 'reorder', 'bigger', 'remove', 'addchart', 'setting'];
 export function keepRate(before, after, touched) {
   const a = lines(before), b = lines(after); const cnt = new Map(); for (const l of b) cnt.set(l, (cnt.get(l) || 0) + 1);

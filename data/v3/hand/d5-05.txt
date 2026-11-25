@@ -1,0 +1,212 @@
+@rich domain=d5_meeting_cost topic=meeting_cost_calculator style=short
+meeting cost
+needs: sliders for people and minutes | average hourly rate setting | cost of this meeting | save the meeting with a title to a list | cost this week
+---
+app "Meeting cost" calc plum
+table held title text, cost money
+setting rate money = 40 "Average hourly cost per person"
+state ppl num = 5
+state mins num = 30
+state ttl text = ""
+let cost = ppl * rate * mins / 60
+stack card gap 1 align center
+  text cost huge
+  text ppl "people for" mins "minutes" faint
+text "People" bold
+slider ppl 1..20
+text "Minutes" bold
+slider mins 5..180
+field ttl "Meeting title"
+button "Save to list" fill accent tap add held title = ttl, cost = cost then set ttl = ""
+statcard sum(held.cost week), "spent in meetings this week"
+each held as h empty "No meetings saved yet. Save the next standup to see what it costs."
+  row card gap 2 tap edit h swipe remove h
+    text h.title grow
+    text h.cost bold
+===
+@rich domain=d5_code_freeze topic=code_freeze_calendar style=detailed
+release managers keep a list of code freezes: first day, last day and the reason. at the top say if a freeze is on right now, otherwise how many days until the next one, and list all freezes in date order with the active one marked
+needs: add a freeze with first day, last day and reason | banner if a freeze is active | days until next freeze | list in date order with active marked
+---
+app "Code freeze" lock blue dark
+table freeze starts date, ends date, why text "Reason"
+let on = count(freeze where starts <= today and ends >= today) > 0
+let gap = first(freeze where starts > today sort starts).starts - today
+topbar freeze, "Add freeze"
+if on
+  stack card gap 1 fill bad
+    text "Code freeze is on" head
+    text "Only fixes for production. Hold the merge button." faint
+else
+  stack card gap 1
+    text "No freeze today" head color good
+    if count(freeze where starts > today) > 0
+      text "Next freeze in" plural(gap, "day") faint
+each freeze sort starts as f empty "No freezes planned. Add the one before the next big release."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      text f.why bold
+      text f.starts "to" f.ends faint
+    if f.starts <= today and f.ends >= today
+      text "Active" color bad bold
+===
+@rich domain=d5_stale_branches topic=stale_branch_cleanup style=short
+stale branches
+needs: add a branch with owner and days since last commit | stale threshold setting | stale ones in red | mark deleted | count stale
+---
+app "Stale branches" tool grey
+table br name text, owner text?, days num 0..999 "Days since last commit", gone bool "Deleted"
+setting stale num = 30 "Stale after (days)"
+topbar br, "Add branch"
+statcard count(br where gone = no and days > stale), "stale branches to clean up"
+each br where gone = no sort days desc as b empty "No branches listed. A clean repo, or you have not added any yet."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      text b.name bold
+      text b.owner faint
+    text b.days "d" bold color if(b.days > stale, bad, ink)
+    button "Deleted" tap set b.gone = yes
+===
+@rich domain=d5_hack_day_agenda topic=hack_day_agenda style=multi_feature
+run of show for our hack day: each item has a start time, what happens and how many minutes. tick items as they finish, show the next item that is not done, the total length of the day in hours and how much is done
+needs: add an item with start time, what and minutes | tick when finished | next item not done | total length in hours | progress of items done
+---
+app "Hack day" clock yellow
+table item start time, what text, mins num 5..600 = 30 "Minutes", done bool
+let nextitem = first(item where done = no sort start).what
+topbar item, "Add item"
+statcard count(item where done = yes), "items done of" count(item), count(item)
+row gap 2
+  statcard round(sum(item.mins) / 6) / 10, "hours in the day"
+  stack card gap 0 grow
+    text "Next up" faint
+    text if(count(item where done = no) = 0, "All done", nextitem) bold
+each item sort start as i empty "No agenda yet. Add kickoff first."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.done
+    stack grow gap 0
+      text i.start i.what bold color if(i.done, muted, ink)
+      text i.mins "minutes" faint
+===
+@rich domain=d5_demo_shot_list topic=demo_video_shot_list style=custom_ui
+shot list for a product demo video. each shot has a number, what is on screen, seconds and a captured tick. show the total length as minutes and seconds, how many shots are captured, and the shots still to film in order
+needs: add a shot with number, description and seconds | captured tick | total length in minutes and seconds | captured count | shots left in order
+---
+app "Shot list" star pink
+table shot n num 1..99 "Shot", what text "On screen", secs num 1..600 = 10 "Seconds", got bool "Captured"
+let total = sum(shot.secs)
+topbar shot, "Add shot"
+row gap 2
+  statcard count(shot where got = yes), "captured of" count(shot), count(shot)
+  stack card gap 0 grow
+    text floor(total / 60) "m" total % 60 "s" big
+    text "total length" faint
+section "Still to film"
+  each shot where got = no sort n as s empty "Everything is captured. Time to edit."
+    row gap 2 tap edit s swipe remove s
+      text s.n head
+      text s.what grow
+      text s.secs "s" faint
+      toggle s.got
+===
+@rich domain=d5_store_reviews topic=app_store_review_triage style=multi_feature
+triage of app store reviews: who wrote it, stars 1 to 5, the text, app version and a replied tick. show the average stars, how many one and two star reviews have no reply yet, a switch to see only the unreplied, and a replied button
+needs: add a review with stars, text and version | replied tick and button | average stars | unreplied low-star count | switch for unreplied only
+---
+app "Store reviews" star orange dark
+table rev who text, stars num 1..5 = 5, body text "Review", ver text?, replied bool
+state open bool = no
+topbar rev, "Add review"
+row gap 2
+  statcard round(avg(rev.stars) * 10) / 10, "average stars"
+  statcard count(rev where stars <= 2 and replied = no), "low reviews waiting"
+row gap 2
+  toggle open
+  text "Only unreplied"
+each rev where open = no or replied = no sort stars as r empty "No reviews here. Nothing waiting for a reply."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 1
+      text r.who bold grow
+      text r.stars "stars" bold color if(r.stars <= 2, bad, ink)
+    text r.body
+    row gap 1
+      text r.ver faint grow
+      if r.replied = no
+        button "Replied" tap set r.replied = yes
+===
+@rich domain=d5_alert_noise topic=noisy_alert_tally style=detailed
+tally of our pager alerts: alert name, how many times it fired and how many of those led to real action. two plus buttons count a firing or an action. show the precision of each alert, with the noisiest first and the bad ones in red, and the overall precision
+needs: add an alert name | plus buttons for fired and acted | precision per alert | noisiest first | overall precision
+---
+app "Alert noise" bell teal dark
+table alert name text, fired num 0.. = 0, acted num 0.. = 0 "Led to action"
+let prec(a alert) = a.acted * 100 / max(a.fired, 1)
+topbar alert, "Add alert"
+statcard round(sum(alert.acted) * 100 / max(sum(alert.fired), 1)), "percent of pages were real"
+each alert sort fired - acted desc as a empty "No alerts yet. Add the one that woke you last night."
+  stack card gap 1 tap edit a swipe remove a
+    row gap 1
+      text a.name bold grow
+      text round(prec(a)) "%" bold color if(prec(a) < 30 and a.fired >= 5, bad, ink)
+    row gap 1
+      text a.fired "fired," a.acted "acted on" faint grow
+      button "+ fired" tap set a.fired = a.fired + 1
+      button "+ acted" tap set a.acted = a.acted + 1
+===
+@rich domain=d5_rubber_duck topic=rubber_duck_log style=short
+rubber duck log
+needs: log a problem with minutes stuck | solved tick | average minutes stuck | count solved by explaining
+---
+app "Rubber duck" smile green
+table duck problem text, mins num 1..600 = 30 "Minutes stuck", solved bool "Solved by explaining it"
+topbar duck, "Log a problem"
+row gap 2
+  statcard round(avg(duck.mins)), "average minutes stuck"
+  statcard count(duck where solved = yes), "solved by talking it through"
+list duck by day, "No problems yet. Explain the next bug to the duck and log it."
+===
+@rich domain=d5_learning_budget topic=team_learning_budget style=multi_feature
+each person on the team has a yearly learning budget. I add people, then log purchases like books, courses and conference tickets against a person. show for each person what is left as a bar, the budget per person is a setting, and the total spent this year
+needs: add people | log a purchase with item and cost against a person | budget per person setting | amount left per person as a bar | total spent this year
+---
+app "Learning budget" school ocean
+table person name text
+table buy person ref person, what text "Item", cost money
+setting per money = 1000 "Budget per person per year"
+topbar person, "Add person"
+form buy, "Log purchase"
+statcard sum(buy.cost year), "spent this year of" per * count(person), per * count(person)
+each person as p empty "No people yet. Add the team first."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      text p.name bold grow
+      text per - sum(p.buy.cost year) "left" bold color if(sum(p.buy.cost year) > per, bad, ink)
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(sum(p.buy.cost year) / per, 0, 1), 3 fill if(sum(p.buy.cost year) > per, bad, accent) radius 1
+    each p.buy as b
+      text b.what "·" b.cost faint
+===
+@rich domain=d5_pr_size_review_time topic=pull_request_size_log style=detailed
+I want to see if big pull requests really take longer to review. log each PR with its title, lines changed and the hours until it was reviewed. flag PRs bigger than a limit I set (400 lines), show the average size, and plot size against review hours as dots
+needs: log a PR with title, lines changed and review hours | size limit setting | big PRs flagged | average size | plot of size against review hours
+---
+app "PR size" chart slate
+table pr title text, lines num 1..20000 "Lines changed", hrs num 0..500 "Hours to review"
+setting big num = 400 "Big PR limit (lines)"
+topbar pr, "Log PR"
+row gap 2
+  statcard round(avg(pr.lines)), "lines on average"
+  statcard count(pr where lines > big), "big PRs"
+if count(pr) > 1
+  section "Size against review time", "dots"
+    plot 0..max(max(pr.lines), big), 0..max(max(pr.hrs), 1) axes gridlines
+      line big, 0, big, max(max(pr.hrs), 1) stroke bad thick 1
+      each pr
+        circle it.lines, it.hrs, max(max(pr.lines), big) / 60 fill if(it.lines > big, bad, accent)
+each pr sort lines desc as p empty "No pull requests logged. Add the last one you merged."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      text p.title bold
+      text p.hrs "hours to review" faint
+    text p.lines "lines" bold color if(p.lines > big, bad, ink)

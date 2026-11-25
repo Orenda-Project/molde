@@ -1,0 +1,505 @@
+@rich domain=d5_demo_script_timing topic=demo_script_timing style=detailed
+I have a 30 minute slot to demo our product. list the steps of the script in order with minutes each, set the slot length in settings, and show a bar of total planned time against the slot that turns red when I run over, plus a bar chart of minutes per step
+needs: add a step with order and minutes | slot length setting | total vs slot bar turning red | bar chart of minutes per step
+---
+app "Demo script" timer teal
+table step n num 1..30 "Order", what text "Step", mins num 1..60 = 3 "Minutes"
+setting slot num = 30 "Demo slot (minutes)"
+let total = sum(step.mins)
+topbar step, "Add step"
+stack card gap 2
+  text total "of" slot "minutes planned" head color if(total > slot, bad, ink)
+  draw 100, 4
+    rect 0, 0, 100, 4 fill soft radius 2
+    rect 0, 0, 100 * clamp(total / slot, 0, 1), 4 fill if(total > slot, bad, accent) radius 2
+  text if(total > slot, "Cut something. You are over.", "You have room for questions.") faint
+if count(step) > 0
+  section "Minutes per step"
+    bars step sort n, it.mins, it.n
+each step sort n as s empty "No steps yet. Write the first thing you will show."
+  row card gap 2 tap edit s swipe remove s
+    text s.n head
+    text s.what grow
+    text s.mins "min" faint
+===
+@rich domain=d5_beta_testers topic=beta_tester_signups style=multi_feature
+beta testers for our app. name, platform (iOS, Android, web), status from invited to installed, active or dropped, and a counter button for each feedback message they send. show how many testers are active and a split by platform, with a filter on status
+needs: add a tester with platform and status | feedback counter button | count active testers | split by platform | filter by status
+---
+app "Beta testers" smile mint
+table tester name text, platform pick iOS|Android|Web = Android, status pick Invited|Installed|Active|Dropped = Invited, fb num 0.. = 0 "Feedback messages"
+state f pick All|Invited|Installed|Active|Dropped = All
+topbar tester, "Add tester"
+row gap 2
+  statcard count(tester where status = Active), "active testers"
+  statcard sum(tester.fb), "feedback messages"
+section "By platform"
+  share tester by platform, count(it), it.key
+choice f
+each tester where f = All or status = f sort fb desc as t empty "No testers here. Invite your first five."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      text t.name bold
+      text t.platform "·" t.status faint
+    text t.fb faint
+    button "+ feedback" tap set t.fb = t.fb + 1
+===
+@rich domain=d5_bug_bash topic=team_bug_bash_scores style=custom_ui
+we run a bug bash on friday. everyone adds the bugs they find with a title, severity (minor 1 point, major 3, critical 5) and the points. show a leaderboard of people by total points with bars, the total number of bugs found, and the critical ones listed first
+needs: add a bug with finder, title, severity and points | leaderboard with bars | total bugs found | critical bugs first
+---
+app "Bug bash" bolt red dark
+table bug who text "Found by", title text, sev pick Minor|Major|Critical = Minor, pts num 1..5 = 1 "Points (1, 3 or 5)"
+topbar bug, "Add a bug"
+statcard count(bug), "bugs found so far"
+section "Leaderboard"
+  each bug by who sort pts desc as g empty "No bugs yet. Go break something."
+    stack gap 0
+      row
+        text index + 1 "." g.key bold grow
+        text sum(g.pts) "pts"
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * sum(g.pts) / max(sum(bug.pts), 1), 3 fill accent radius 1
+section "Critical first"
+  each bug sort pts desc top 8 as b
+    row gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        text b.title bold
+        text b.who faint
+      text b.sev color if(b.sev = Critical, bad, muted) bold
+===
+@rich domain=d5_changelog_notes topic=changelog_entries style=multi_feature
+I write changelog entries as I work: a line of text, a kind (added, changed, fixed, removed) and the release it belongs to. let me pick a release, then show its entries grouped under added, changed, fixed and removed, with counts
+needs: add an entry with kind and release | pick a release to view | grouped by added, changed, fixed, removed | count per group
+---
+app "Changelog" note yellow
+table entry body text "What changed", kind pick Added|Changed|Fixed|Removed = Added, rel text = "next" "Release"
+state v text = "next"
+topbar entry, "Add entry"
+field v "Release to show"
+stat count(entry where rel = v), "entries in this release"
+each options entry.kind as k
+  section k, count(entry where rel = v and kind = k)
+    each entry where rel = v and kind = k as e empty "Nothing here."
+      row gap 2 tap edit e swipe remove e
+        text "•"
+        text e.body grow
+===
+@rich domain=d5_semver_bump topic=semver_bump_helper style=custom_ui
+version bump helper. it shows the current version as major.minor.patch, three buttons for bumping major, minor or patch (lower numbers reset to zero), and a tag button that saves the version with a release note into a history list
+needs: version shown as major.minor.patch | bump major, minor or patch buttons | lower parts reset | tag button saves version with a note to history
+---
+app "Semver" tag purple
+table tagged ver text, note text?
+state maj num = 1
+state mnr num = 0
+state pat num = 0
+state note text = ""
+let ver = join(maj, ".", mnr, ".", pat)
+stack card gap 2 align center
+  text ver huge
+  text "current version" faint
+row gap 1
+  button "Major" tap set maj = maj + 1 then set mnr = 0 then set pat = 0
+  button "Minor" tap set mnr = mnr + 1 then set pat = 0
+  button "Patch" tap set pat = pat + 1
+field note "Release note"
+button "Tag this version" fill accent tap add tagged ver = ver, note = note then set note = ""
+text "History" head
+each tagged as t empty "Nothing tagged yet. Bump and tag your first release."
+  row card gap 2 tap edit t swipe remove t
+    text t.ver bold
+    text t.note faint grow
+===
+@rich domain=d5_coding_streak topic=daily_coding_streak style=short
+coding streak
+needs: tick today as a coding day | current and best streak | grid of the last 10 weeks | days coded this month
+---
+app "Coding streak" flame green
+table coded
+let did = count(coded today) > 0
+row gap 2 align center
+  toggle coded
+  text if(did, "Coded today", "Not yet today") head
+row gap 2
+  statcard streak(coded), "day streak"
+  statcard best(coded), "best streak"
+section "Last 10 weeks", plural(count(coded month), "day") "this month"
+  daygrid last 70 days, count(coded on it)
+===
+@rich domain=d5_oss_prs topic=open_source_pr_goal style=detailed
+I am aiming for four merged open source pull requests this month. log each PR with title, repo and status (open, merged, closed), show a progress bar of merged ones against my goal, and a button to mark an open one merged
+needs: log a PR with title, repo and status | monthly goal progress bar | merged count | button marks open PR merged
+---
+app "OSS goal" star blue
+table pr title text, repo text, status pick Open|Merged|Closed = Open
+setting goal num = 4 "Merged PRs goal"
+topbar pr, "Log PR"
+goal count(pr month where status = Merged), goal, "merged this month"
+if count(pr month where status = Merged) >= goal
+  text "Goal reached. Anything more is a bonus." color good bold
+each pr sort at desc as p empty "No pull requests yet. Find a good first issue."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      text p.title bold
+      text p.repo "·" p.status faint
+    if p.status = Open
+      button "Merged" fill accent tap set p.status = Merged
+===
+@rich domain=d5_dev_blog_pipeline topic=dev_blog_pipeline style=multi_feature
+pipeline for my dev blog posts: title, stage (idea, outline, draft, edited, published) and word count. one button moves a post to the next stage, show how many are published and the total words written, and list the posts under each stage
+needs: add a post with stage and word count | next stage button | published count | total words | grouped by stage
+---
+app "Blog pipeline" pen pink
+table post title text, stage pick Idea|Outline|Draft|Edited|Published = Idea, words num 0.. = 0
+topbar post, "Add post"
+row gap 2
+  statcard count(post where stage = Published), "published"
+  statcard sum(post.words), "words written"
+each options post.stage as s
+  section s, count(post where stage = s)
+    each post where stage = s as p empty "Nothing at this stage."
+      row gap 2 tap edit p swipe remove p
+        stack grow gap 0
+          text p.title bold
+          text p.words "words" faint
+        if p.stage = Idea
+          button "Outline" tap set p.stage = Outline
+        if p.stage = Outline
+          button "Draft" tap set p.stage = Draft
+        if p.stage = Draft
+          button "Edited" tap set p.stage = Edited
+        if p.stage = Edited
+          button "Publish" fill accent tap set p.stage = Published
+===
+@rich domain=d5_eye_breaks topic=eye_break_counter style=custom_ui
+I stare at a screen all day, so remind me every 20 minutes from 9 to 6 to look away for 20 seconds. a big button to count each break I take, a daily goal of 20 breaks as a setting, and a chart of breaks for the last 7 days
+needs: reminder every 20 minutes during work hours | button counts a break | daily goal setting | chart of the last 7 days
+---
+app "Eye breaks" eye ocean
+table brk
+setting goal num = 20 "Breaks per day"
+remind "Look 20 feet away for 20 seconds" every 20m from 9:00 to 18:00
+stack card gap 2 align center
+  text count(brk today) huge
+  text "breaks today, goal" goal faint
+  button "I looked away" fill accent width 200 tap add brk
+section "Last 7 days"
+  goalbars last 7 days, count(brk on it), goal, "Goal reached", "Under goal"
+===
+@rich domain=d5_coffee_code topic=coffee_and_code_log style=short
+coffee and code
+needs: buttons add a coffee, latte, tea or cold brew | daily limit setting | cups today against the limit | chart of the last 7 days
+---
+app "Coffee" coffee orange
+table cup kind pick Espresso|Latte|Tea|Cold_brew = Espresso
+setting limit num = 4 "Daily limit"
+goal count(cup today), limit, "cups today"
+row gap 1
+  each options cup.kind as k
+    button k tap add cup kind = k
+if count(cup today) > limit
+  text "Over your limit. Water next." color bad bold
+section "Last 7 days"
+  daybars last 7 days, count(cup on it)
+===
+@rich domain=d5_env_booking topic=staging_environment_booking style=detailed
+we share a few test environments: staging 1, staging 2, QA and demo. book one with who, the first and last day and the purpose. show for each environment who has it today or that it is free, and the full booking list in date order
+needs: book an environment with who, dates and purpose | status per environment today | free or taken | bookings in date order
+---
+app "Env booking" key slate
+table book env pick Staging_1|Staging_2|QA|Demo = Staging_1, who text, starts date = today, ends date, purpose text?
+topbar book, "Book environment"
+section "Today"
+  each options book.env as e
+    row gap 2
+      text e bold grow
+      if count(book where env = e and starts <= today and ends >= today) = 0
+        text "Free" color good bold
+      else
+        text last(book.who where env = e and starts <= today and ends >= today) color warn bold
+section "Bookings"
+  each book where ends >= today sort starts as b empty "No bookings ahead. Everything is free."
+    row gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        text b.env bold
+        text b.who ":" b.purpose faint
+      text b.starts "to" b.ends faint
+===
+@rich domain=d5_test_devices topic=test_device_checkout style=short
+test devices
+needs: add a device with name and OS | take it with my name | return button | count available
+---
+app "Devices" phone grey
+table dev name text, os pick iOS|Android = Android, holder text?
+state me text = ""
+topbar dev, "Add device"
+statcard count(dev where holder = ""), "available of" count(dev), count(dev)
+field me "My name"
+each dev sort holder as d empty "No devices yet. Add the phones in the drawer."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      text d.name bold
+      if d.holder = ""
+        text d.os "· available" faint color good
+      else
+        text d.os "· with" d.holder faint color warn
+    if d.holder = ""
+      button "Take" fill accent tap set d.holder = me
+    else
+      button "Return" tap set d.holder = ""
+===
+@rich domain=d5_docs_gaps topic=missing_documentation_list style=multi_feature
+list of docs we should write: page name, priority (low, medium, high), an owner and a done tick. show progress of how many are written, how many high priority are still open, and a filter on priority
+needs: add a doc with priority and owner | done tick | progress bar | count of high priority still open | filter by priority
+---
+app "Docs gaps" book teal
+table doc page text, prio pick Low|Medium|High = Medium "Priority", owner text?, done bool
+state f pick All|Low|Medium|High = All
+topbar doc, "Add page"
+goal count(doc where done = yes), count(doc), "pages written"
+statcard count(doc where prio = High and done = no), "high priority still open"
+choice f
+each doc where f = All or prio = f sort done as d empty "No pages here. Add the one new hires keep asking about."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.done
+    stack grow gap 0
+      text d.page bold color if(d.done, muted, ink)
+      text d.prio "·" d.owner faint
+===
+@rich domain=d5_estimate_vs_actual topic=estimate_vs_actual_hours style=detailed
+to improve my estimates I log tasks with the hours I estimated and the hours it really took. show each task with two bars, estimate and actual, my accuracy as estimated total over actual total, and which tasks ran over by more than half
+needs: log a task with estimated and actual hours | two bars per task | accuracy ratio | tasks over by more than half
+---
+app "Estimates" hourglass purple
+table task name text, est num 0.5..200 "Estimated hours", act num 0..300 "Actual hours"
+topbar task, "Log task"
+row gap 2
+  statcard round(sum(task.est) * 100 / max(sum(task.act), 1)), "percent accuracy"
+  statcard count(task where act > est * 1.5), "ran over by half or more"
+each task as t empty "No tasks yet. Log the last thing you estimated."
+  stack card gap 1 tap edit t swipe remove t
+    row
+      text t.name bold grow
+      text t.est "h est," t.act "h actual" faint
+    draw 100, 6
+      rect 0, 0, 100 * t.est / max(max(task, it.est), max(task, it.act)), 2.5 fill muted radius 1
+      rect 0, 3.5, 100 * t.act / max(max(task, it.est), max(task, it.act)), 2.5 fill if(t.act > t.est * 1.5, bad, accent) radius 1
+===
+@rich domain=d5_spike_log topic=research_spike_log style=multi_feature
+log of research spikes: the question, a timebox in hours, hours spent so far and the outcome (open, yes, no, unclear). a button adds an hour spent, spikes past their timebox turn red, and show how many are still open
+needs: add a spike with question and timebox | hours spent with plus button | outcome open, yes, no or unclear | over timebox in red | count open
+---
+app "Spikes" brain ink
+table spike q text "Question", box num 1..40 = 4 "Timebox hours", spent num 0..80 = 0 "Hours spent", outcome pick Open|Yes|No|Unclear = Open
+topbar spike, "New spike"
+statcard count(spike where outcome = Open), "spikes still open"
+each spike sort outcome as s empty "No spikes yet. Write down the question you keep arguing about."
+  stack card gap 1 tap edit s swipe remove s
+    text s.q bold
+    row gap 2
+      text s.spent "of" s.box "hours" grow color if(s.spent > s.box, bad, muted)
+      text s.outcome bold
+      if s.outcome = Open
+        button "+1h" tap set s.spent = s.spent + 1
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(s.spent / s.box, 0, 1), 3 fill if(s.spent > s.box, bad, accent) radius 1
+===
+@rich domain=d5_tech_radar topic=personal_tech_radar style=short
+tech radar
+needs: add a technology with ring adopt, trial, assess or hold | quadrant languages, tools, platforms or techniques | rings drawn as circles with counts | filter by quadrant
+---
+app "Tech radar" target mint
+table tech name text, ring pick Adopt|Trial|Assess|Hold = Assess, quad pick Languages|Tools|Platforms|Techniques = Tools "Quadrant"
+state f pick All|Languages|Tools|Platforms|Techniques = All
+topbar tech, "Add technology"
+choice f
+draw 100, 100 height 220
+  circle 50, 50, 46 fill soft
+  circle 50, 50, 34 fill surface stroke edge
+  circle 50, 50, 22 fill soft stroke edge
+  circle 50, 50, 10 fill accent opacity 0.4
+  label 50, 50, count(tech where ring = Adopt and (f = All or quad = f)) bold
+  label 50, 36, count(tech where ring = Trial and (f = All or quad = f)) bold
+  label 50, 22, count(tech where ring = Assess and (f = All or quad = f)) bold
+  label 50, 8, count(tech where ring = Hold and (f = All or quad = f)) bold
+text "Centre outwards: adopt, trial, assess, hold" faint
+each tech where f = All or quad = f sort ring as t empty "No technologies here. Add the one your team is debating."
+  row card gap 2 tap edit t swipe remove t
+    text t.name bold grow
+    text t.ring "·" t.quad faint
+===
+@rich domain=d5_deep_work_blocks topic=meetings_vs_deep_work style=custom_ui
+each day I log how many hours went to meetings and how many to deep work. draw stacked bars for the last 7 days with deep work at the bottom and meetings on top, a deep work goal per day in settings, and tell me the average deep hours
+needs: log meeting and deep work hours | stacked bars for 7 days | deep work goal setting | average deep hours
+---
+app "Deep work" brain slate
+table dw meet num 0..12 "Meeting hours", deep num 0..12 "Deep work hours"
+setting goal num = 3 "Deep work goal (hours a day)"
+topbar dw, "Log a day"
+statcard round(sum(dw.deep last 7 days) * 10 / 7) / 10, "average deep hours a day", goal
+section "Last 7 days", "deep work bottom, meetings top"
+  plot 0..7, 0..max(10, max(days last 7 days, sum(dw.deep on it) + sum(dw.meet on it))) axes gridlines
+    line 0, goal, 7, goal stroke ink thick 1
+    each days last 7 days
+      rect index + 0.15, 0, 0.7, sum(dw.deep on it) fill accent radius 2
+      rect index + 0.15, sum(dw.deep on it), 0.7, sum(dw.meet on it) fill muted opacity 0.5 radius 2
+      tick index + 0.5, dayname(it)
+list dw by day, "No days logged yet. Fill in today before you close the laptop."
+===
+@rich domain=d5_module_owners topic=code_owners_bus_factor style=multi_feature
+who owns which part of the code: module name, owner and backup owner. modules with no backup are a bus factor risk and should be shown in red, with a count of risky ones and a chart of how many modules each person owns
+needs: add a module with owner and backup | red when no backup | count of risky modules | modules owned per person chart
+---
+app "Owners" users red
+table mod name text, owner text, backup text?
+topbar mod, "Add module"
+statcard count(mod where backup = ""), "modules with no backup of" count(mod), count(mod)
+if count(mod) > 0
+  section "Modules per owner"
+    share mod by owner, count(it), it.key
+each mod sort backup as m empty "No modules yet. List the services your team owns."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      text m.name bold
+      text "Owner" m.owner faint
+    if m.backup = ""
+      text "No backup" color bad bold
+    else
+      text "Backup" m.backup faint
+===
+@rich domain=d5_log_retention topic=log_retention_policy style=short
+log retention
+needs: add a system with retention days and size | policy maximum setting | flag systems over the policy | total GB
+---
+app "Retention" list orange
+table sys name text, days num 1..3650 "Retention days", gb num 0.. unit "GB"
+setting maxdays num = 90 "Policy maximum (days)"
+topbar sys, "Add system"
+row gap 2
+  statcard sum(sys.gb), "GB of logs"
+  statcard count(sys where days > maxdays), "keep logs too long"
+each sys sort days desc as s empty "No systems yet. Add the first one that writes logs."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      text s.name bold
+      text s.gb "GB" faint
+    text s.days "days" bold color if(s.days > maxdays, bad, ink)
+===
+@rich domain=d5_api_latency_notes topic=endpoint_latency_log style=short
+api latency
+needs: log a latency in ms for an endpoint | average per endpoint bars | slow threshold setting | slow endpoints counted
+---
+app "Latency" bolt yellow
+table lat endpoint text, ms num 1..60000 "Milliseconds"
+setting slo num = 200 "Slow above (ms)"
+topbar lat, "Log latency"
+statcard count(lat where ms > slo), "slow calls of" count(lat), count(lat)
+if count(lat) > 0
+  section "Average per endpoint", "ms"
+    share lat by endpoint, round(sum(it.ms) / count(it)), it.key
+list lat by day, "No timings yet. Log the number from your last curl."
+===
+@rich domain=d5_cache_hit_ratio topic=cache_hit_ratio_log style=detailed
+each day I note the CDN cache hits and misses from the dashboard. show the hit ratio of every entry as a line chart, the average ratio, and my target of 90 percent as a setting with a warning when the latest day is below it
+needs: log hits and misses | hit ratio line chart | average ratio | target setting | warning below target
+---
+app "Cache hits" cloud blue
+table cache hits num 0.., miss num 0.. "Misses"
+setting target num = 90 "Target hit ratio (%)"
+let ratio(c cache) = c.hits * 100 / max(c.hits + c.miss, 1)
+let latest = ratio(last(cache))
+topbar cache, "Log a day"
+if count(cache) > 0
+  stack card gap 1
+    text round(latest) "%" big color if(latest < target, warn, ink)
+    text if(latest < target, "Below your target of", "Above your target of") target "%" faint
+if count(cache) > 1
+  section "Hit ratio", "percent"
+    trend cache, ratio(it)
+each cache as c empty "No days logged yet. Add yesterday's numbers."
+  row card gap 2 tap edit c swipe remove c
+    text c.hits "hits," c.miss "misses" grow
+    text round(ratio(c)) "%" bold
+===
+@rich domain=d5_queue_depth topic=message_queue_depth style=custom_ui
+watching message queues: add each queue, then log its depth now and then. show the latest depth per queue as a bar against an alert level I set, and a small trend line for each queue, with red when it is over the alert
+needs: add a queue | log depth for a queue | latest depth bar against alert level | alert level setting | trend line per queue
+---
+app "Queues" box purple dark
+table q name text
+table depth q ref q, n num 0.. "Messages waiting"
+setting alert num = 1000 "Alert level"
+topbar q, "Add queue"
+form depth, "Log depth"
+each q as x empty "No queues yet. Add the first one you watch."
+  stack card gap 1 tap edit x swipe remove x
+    row
+      text x.name bold grow
+      text last(x.depth.n) bold color if(last(x.depth.n) > alert, bad, ink)
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(last(x.depth.n) / alert, 0, 1), 3 fill if(last(x.depth.n) > alert, bad, accent) radius 1
+    if count(x.depth) > 1
+      trend x.depth, it.n
+===
+@rich domain=d5_error_heat topic=service_error_heatmap style=multi_feature
+every time a service throws a burst of errors I log which service and how many. show one calendar heat grid of the last 4 weeks per service, so I can see which one is noisy, with buttons to add errors fast and the total this week
+needs: log errors for a service with a count | heat grid of 28 days per service | quick add buttons | total this week
+---
+app "Error heat" fire red dark
+table err svc pick Auth|Billing|Search|Gateway = Gateway "Service", n num 1.. = 1 "Errors"
+topbar err, "Log errors"
+statcard sum(err.n week), "errors this week"
+each options err.svc as k
+  stack card gap 1
+    row gap 2
+      text k head grow
+      text sum(err.n last 28 days where svc = k) "in 4 weeks" faint
+      button "+10" tap add err svc = k, n = 10
+    daygrid last 28 days, sum(err.n on it where svc = k), 20
+===
+@rich domain=d5_restore_drills topic=backup_restore_drills style=detailed
+we do restore drills from backups. log the system, minutes the restore took and whether the data was complete. show days since the last drill with a warning after 90 days, the success rate and a trend of restore minutes
+needs: log a drill with system, minutes and complete tick | days since last drill | warning after 90 days | success rate | trend of minutes
+---
+app "Restore drills" shield green
+table drill sys text "System", mins num 1..2000 "Minutes to restore", ok bool "Data complete"
+topbar drill, "Log drill"
+if count(drill) = 0
+  stack card gap 1
+    text "No drills yet" head
+    text "A backup you never restored is a hope. Run the first drill." faint
+else
+  stack card gap 1
+    text since(drill) big color if(since(drill) > 90, bad, ink)
+    text "days since the last drill" faint
+    if since(drill) > 90
+      text "Overdue. Schedule one this week." color bad bold
+row gap 2
+  statcard round(count(drill where ok = yes) * 100 / max(count(drill), 1)), "percent complete"
+  statcard round(avg(drill.mins)), "average minutes"
+if count(drill) > 1
+  section "Restore time", "minutes"
+    trend drill, it.mins
+list drill by day, "No drills logged."
+===
+@rich domain=d5_team_timezones topic=team_time_zones style=detailed
+my team is spread over time zones. I enter each person with their UTC offset, set my own offset, and want to see each person's local hour now with a green mark when they are inside 9 to 18, plus how many are online now
+needs: add a person with UTC offset | my own offset setting | local hour per person | green mark inside working hours | count online now
+---
+app "Time zones" map ocean
+table mate name text, off num -12..14 "UTC offset (hours)"
+setting me num -12..14 = 5 "My UTC offset"
+let localh(m mate) = (hour(now) - me + m.off + 48) % 24
+topbar mate, "Add person"
+statcard count(mate, localh(it) >= 9 and localh(it) < 18), "online now of" count(mate), count(mate)
+each mate sort off as m empty "No teammates yet. Add the first person with their UTC offset."
+  row card gap 2 tap edit m swipe remove m
+    box width 12 height 12 radius 6 fill if(localh(m) >= 9 and localh(m) < 18, good, soft)
+    stack grow gap 0
+      text m.name bold
+      text "UTC" m.off faint
+    text localh(m) ":00" bold

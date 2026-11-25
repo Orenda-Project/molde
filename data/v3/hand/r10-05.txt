@@ -1,0 +1,210 @@
+@rich domain=r10_vendor_fees topic=street_vendor_daily_fees style=short
+vendor fees
+needs: add a vendor with name and daily spot fee | tick when fee paid today | collected today against expected | last 7 days dots per vendor | unpaid vendors listed first
+---
+app "Vendor Fees" tag teal
+table vendor name text, fee money
+table pay vendor ref vendor
+topbar vendor, "Add vendor"
+let got = sum(vendor, if(count(it.pay today) > 0, it.fee, 0))
+stack card gap 2
+  goal got, sum(vendor.fee), "collected today"
+each vendor sort count(it.pay today) as v empty "No vendors yet. Add the first stall."
+  stack card gap 2 tap edit v swipe remove v
+    row gap 2
+      stack grow gap 0
+        v.name bold
+        v.fee "per day" faint
+      toggle v.pay
+    weekdots count(v.pay on it) > 0
+===
+@rich domain=r10_booth_tally topic=polling_booth_tally style=custom_ui
+I am a polling agent sitting in the booth and I need to count votes by tapping, not by writing. Four symbol buttons (arrow, lion, bat, plate) plus a spoilt button, a total, each symbol's share in percent, the turnout against the registered voters of the booth that I set, and an undo for the last tap.
+needs: tap buttons to add a vote per symbol and spoilt | share in percent per symbol | registered voters setting | turnout progress bar | undo last tap
+---
+app "Booth Tally" check slate dark
+table vote symbol pick Arrow|Lion|Bat|Plate|Spoilt
+setting voters num 1..5000 = 1200 "Registered voters"
+stack card gap 2
+  goal count(vote), voters, "votes cast"
+  round(count(vote) * 100 / voters) "% turnout" faint
+grid 3 gap 1
+  each options vote.symbol
+    button it count(vote where symbol = it) fill accent tap add vote symbol = it
+section "Share of votes", "percent of all cast"
+  each options vote.symbol
+    row gap 2
+      it grow
+      round(count(vote where symbol = it) * 100 / max(count(vote), 1)) "%" bold
+button "Undo last tap" tap remove last(vote)
+===
+@rich domain=r10_hostel_visitors topic=hostel_visitor_book style=short
+hostel visitors
+needs: add a visitor with name, resident visited and relation | left button | list grouped by resident | visitors inside now | visitors today
+---
+app "Visitor Book" users pink
+table visit who text, resident text, rel pick Parent|Friend|Other = Parent, left bool
+topbar visit, "Add visitor"
+row gap 2
+  statcard count(visit where left = no), "visitors inside"
+  statcard count(visit today), "visitors today"
+each visit where left = no by resident empty "No visitors inside right now."
+  stack card gap 1
+    it.key head
+    each it as v
+      row gap 2 tap edit v swipe remove v
+        stack grow gap 0
+          v.who bold
+          v.rel faint
+        button "Left" tap set v.left = yes
+===
+@rich domain=r10_housekeeping_rooms topic=guest_house_housekeeping style=custom_ui
+we have 9 rooms in our guest house and the housekeeping boy always asks which room to clean first. Draw the rooms as tiles, each showing dirty, cleaning, ready or occupied by colour, and tap a tile to move it to the next state. Show how many rooms are dirty and how many are ready to sell.
+needs: add a room with number | tiles coloured by state | tap a tile to go to next state | count of dirty rooms | count of ready rooms
+---
+app "Housekeeping" bed mint
+table room code text, state pick Dirty|Cleaning|Ready|Occupied = Dirty
+topbar room, "Add room"
+row gap 2
+  statcard count(room where state = Dirty), "rooms dirty"
+  statcard count(room where state = Ready), "ready to sell"
+grid 3 gap 1
+  each room sort code as r empty "No rooms yet. Add room 1."
+    stack radius 10 pad 2 gap 0 fill if(r.state = Ready, good, if(r.state = Dirty, bad, if(r.state = Cleaning, warn, soft))) tap set r.state = if(r.state = Dirty, Cleaning, if(r.state = Cleaning, Ready, if(r.state = Ready, Occupied, Dirty)))
+      r.code bold
+      r.state small
+"Tap a tile to move the room to its next state." faint
+===
+@rich domain=r10_kabari_scrap topic=scrap_dealer_buy_sell style=multi_feature
+I run a kabari shop. People sell me iron, paper, plastic and copper by the kg at a rate, and then I sell the loads to the big dealer. I want a buy tab and a sell tab to note kg and rate for each, and a profit number with the total bought, the total sold and the kg in stock for each material.
+needs: add a purchase with material, kg and rate | add a sale with material, kg and rate | total bought and total sold | profit | kg in stock per material
+---
+app "Kabari Shop" tag orange
+table buy mat pick Iron|Paper|Plastic|Copper = Iron, kg num 0.5..5000, rate money
+table sell mat pick Iron|Paper|Plastic|Copper = Iron, kg num 0.5..20000, rate money
+let spent = sum(buy, it.kg * it.rate)
+let earned = sum(sell, it.kg * it.rate)
+stack card gap 1
+  "Profit so far" faint
+  earned - spent big color if(earned >= spent, good, bad)
+  row
+    "Bought" spent faint grow
+    "Sold" earned faint
+each options buy.mat
+  row card gap 2
+    it bold grow
+    sum(buy.kg where mat = it) - sum(sell.kg where mat = it) "kg in stock" faint
+screen buys "Buy" cart
+  topbar buy, "Add purchase"
+  each buy sort at desc as b empty "No purchases yet."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.mat bold
+        b.kg "kg at" b.rate faint
+      b.kg * b.rate bold
+screen sells "Sell" money
+  topbar sell, "Add sale"
+  each sell sort at desc as s empty "No sales yet."
+    row card gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.mat bold
+        s.kg "kg at" s.rate faint
+      s.kg * s.rate bold color good
+===
+@rich domain=r10_ward_complaints topic=ward_complaint_register style=detailed
+I am a ward councillor's assistant and people bring complaints about roads, water, sewage, street lights and garbage. Each complaint gets the street, the kind and a status of open, sent to department or done. I want a bar chart of open complaints per kind, a filter by kind, and how many days each open one has been pending.
+needs: add a complaint with street, kind and status | bar chart of open complaints per kind | filter by kind | days pending per open complaint | button to move to next status
+---
+app "Ward Complaints" flag blue
+table gripe street text, kind pick Road|Water|Sewage|Light|Garbage = Road, status pick Open|Sent|Done = Open
+state kd text = ""
+topbar gripe, "Add complaint"
+section "Not finished", "open or sent, per kind"
+  bars options gripe.kind, count(gripe where kind = it and status != Done), it
+row gap 1
+  each options gripe.kind
+    button it fill if(kd = it, accent, soft) grow tap set kd = if(kd = it, "", it)
+each gripe where (kd = "" or kind = kd) and status != Done sort at as g empty "No pending complaints."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.street bold
+      g.kind g.status "-" plural(today - g.at, "day") faint
+    button if(g.status = Open, "Send", "Done") tap set g.status = if(g.status = Open, Sent, Done)
+===
+@rich domain=r10_azan_roster topic=mosque_azan_roster style=short
+azan roster
+needs: add a duty with weekday, prayer and person | today's duties on top | grid of all duties by prayer | daily reminder to check the roster | count of duties per person
+---
+app "Azan Roster" mosque green
+table duty wd num 1..7 = 1, prayer pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr, who text
+let dn(n num) = dayname(today - weekday(today) + n)
+remind "Check today's azan duties" at 4:00
+topbar duty, "Add duty"
+section "Today", dayname(today)
+  each duty where wd = weekday(today) sort prayer as d empty "No duty is set for today."
+    row gap 2
+      d.prayer bold grow
+      d.who
+each options duty.prayer
+  stack card gap 1
+    it head
+    each duty where prayer = it sort wd as d
+      row gap 2 tap edit d swipe remove d
+        dn(d.wd) grow
+        d.who bold
+===
+@rich domain=r10_cow_milk topic=milk_sales_to_homes style=short
+cow milk
+needs: add a milk delivery with home and litres | price per litre setting | bill per home this month | litres per day chart for a week | total litres this month
+---
+app "Cow Milk" milk ocean
+table drop home text, litres num 0.5..50 = 2
+setting rate money = 220 "Price per litre"
+topbar drop, "Add delivery"
+row gap 2
+  statcard sum(drop.litres month), "litres this month"
+  statcard sum(drop.litres month) * rate, "worth this month"
+section "Litres per day", "last 7 days"
+  daybars last 7 days, sum(drop.litres on it)
+section "Bill by home", "this month"
+  each drop month by home empty "No deliveries this month."
+    row gap 2
+      it.key grow
+      sum(it.litres) "L" faint
+      sum(it.litres) * rate bold
+===
+@rich domain=r10_ration_depot topic=utility_store_stock_sales style=detailed
+I run a government ration depot counter. I list each item (flour, sugar, ghee, pulses) with the stock I received and the price per unit. At the counter I tap Sell 1 and the stock goes down, with the sale noted. Show today's sales money, mark items with fewer than 10 left in red and sort so the lowest stock is first.
+needs: add an item with name, stock received and price | sell one button lowers stock | sales money today | marks items below 10 left | lowest stock first
+---
+app "Ration Depot" bag red
+table stuff name text, got num 0..100000, price money
+table sold stuff ref stuff, qty num 1..100 = 1
+let left(s stuff) = s.got - sum(s.sold.qty)
+topbar stuff, "Add item"
+row gap 2
+  statcard sum(sold today, it.qty * it.stuff.price), "sales today"
+  statcard count(stuff, left(it) < 10), "items nearly out"
+each stuff sort got - count(it.sold) as s empty "No items yet. Add the first one."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      s.price "each" faint
+    left(s) "left" bold color if(left(s) < 10, bad, ink)
+    button "Sell 1" tap add sold stuff = s
+===
+@rich domain=r10_shoes_stand topic=mosque_shoes_stand_tokens style=short
+shoes stand
+needs: give a token number to a pair of shoes | handed back button | pairs still at the stand | pairs taken in each of the last 7 days | list of tokens in order
+---
+app "Shoes Stand" walk grey
+table pair token text, back bool
+topbar pair, "Take shoes"
+statcard count(pair where back = no), "pairs at the stand"
+section "Pairs taken", "last 7 days"
+  daybars last 7 days, count(pair on it)
+each pair where back = no sort at as p empty "The stand is empty."
+  row card gap 2 tap edit p swipe remove p
+    "Token" p.token bold grow
+    p.at faint
+    button "Back" tap set p.back = yes

@@ -1,0 +1,529 @@
+@rich domain=d5_burndown_days topic=burndown_by_day style=detailed
+sprint burndown by day numbers: every morning I type the sprint day and the points still left. draw the actual line against the ideal straight line from the starting total down to zero over the sprint length, and tell me if I am ahead or behind. total points and sprint length should be settings
+needs: log sprint day and points left | actual line chart | ideal line from total to zero | ahead or behind message | total points and sprint days settings
+---
+app "Burndown" chart purple dark
+table burn d num 0..30 "Sprint day", left num 0.. "Points left"
+setting total num = 40 "Points at start"
+setting len num = 10 "Sprint length (days)"
+let lastday = max(burn.d)
+let rest = last(burn.left)
+let ideal = round(total * (1 - lastday / len))
+topbar burn, "Log today"
+if count(burn) > 0
+  stack card gap 1
+    text if(rest > ideal, "Behind the line", "On or ahead of the line") head color if(rest > ideal, warn, good)
+    text rest "points left, the ideal is" ideal faint
+section "Burndown", "day 0 to" len
+  plot 0..len, 0..total axes gridlines
+    line 0, total, len, 0 stroke muted thick 1
+    poly stroke accent thick 2
+      each burn sort d
+        pt it.d, it.left
+each burn sort d desc as b empty "No days logged yet. Type the points left tomorrow morning."
+  row card gap 2 tap edit b swipe remove b
+    text "Day" b.d grow
+    text b.left "left" bold
+===
+@rich domain=d5_wip_board topic=wip_limit_board style=short
+WIP limit board
+needs: add a card in To do, Doing, Review or Done | buttons move a card forward | limits for Doing and Review | column turns red over its limit
+---
+app "WIP board" board pink
+table card title text, col pick Todo|Doing|Review|Done = Todo
+setting limdoing num = 3 "Doing limit"
+setting limreview num = 2 "Review limit"
+let lim(c text) = if(c = Doing, limdoing, if(c = Review, limreview, 99))
+topbar card, "Add card"
+each options card.col as c
+  section c, plural(count(card where col = c), "card")
+    if count(card where col = c) > lim(c)
+      text "Over the limit. Finish something before starting more." color bad bold
+    each card where col = c as x empty "Nothing here."
+      row gap 2 tap edit x swipe remove x
+        text x.title grow
+        if x.col = Todo
+          button "Start" tap set x.col = Doing
+        if x.col = Doing
+          button "Review" tap set x.col = Review
+        if x.col = Review
+          button "Done" fill accent tap set x.col = Done
+===
+@rich domain=d5_flaky_tests topic=flaky_test_counter style=multi_feature
+counting flaky tests: add a test name, tap "Failed again" every time it flakes in CI, sorted with the worst first, and mark it quarantined. anything over 5 flakes gets a red warning, and show a bar chart of the top 5
+needs: add a test name | Failed again button counts flakes | sorted worst first | quarantined tick | red warning over 5 | bar chart of top 5
+---
+app "Flaky tests" bolt grey
+table test name text, fails num 0.. = 1 "Flakes", quar bool "Quarantined"
+topbar test, "Add test"
+statcard count(test where fails > 5 and quar = no), "need quarantine now"
+if count(test) > 0
+  section "Worst five"
+    bars test sort fails desc top 5, it.fails, it.name
+each test sort fails desc as t empty "No flaky tests logged. A good day."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.quar
+    stack grow gap 0
+      text t.name bold
+      if t.fails > 5 and not t.quar
+        text t.fails "flakes. Quarantine it." color bad
+      else
+        text t.fails "flakes" faint
+    button "Failed again" tap set t.fails = t.fails + 1
+===
+@rich domain=d5_build_times topic=build_time_log style=short
+build times
+needs: log a build time in minutes with the branch | line chart of the trend | average of the last 10 builds | slowest build | target build time setting
+---
+app "Build times" timer ocean
+table build mins num 0..120 "Minutes", branch pick Main|Develop|Pull_request = Main
+setting target num = 8 "Target (minutes)"
+topbar build, "Log build"
+row gap 2
+  statcard round(avg(build.mins) * 10) / 10, "average minutes"
+  statcard max(build.mins), "slowest build"
+if count(build) > 1
+  section "Trend", "target" target "min"
+    trend build, it.mins
+if avg(build.mins) > target
+  text "Builds are slower than your target." color warn
+list build by day, "No builds logged. Log the next CI run."
+===
+@rich domain=d5_container_inventory topic=container_image_inventory style=detailed
+inventory of our docker images: name, tag, size in MB, which registry (Docker Hub, GHCR, ECR, private), date of the last vulnerability scan and whether it had known vulnerabilities. show total size, how many were not scanned in 30 days, and flag the vulnerable ones
+needs: add an image with tag, size, registry and scan date | vulnerable tick with a flag | total size | count not scanned in 30 days
+---
+app "Images" box mint
+table img name text, tag text = latest, mb num 1.. "Size" unit "MB", reg pick Docker_Hub|GHCR|ECR|Private = GHCR "Registry", scanned date = today "Last scan", vuln bool "Known vulnerabilities"
+topbar img, "Add image"
+row gap 2
+  statcard round(sum(img.mb) / 1024 * 10) / 10, "GB in total"
+  statcard count(img where scanned < today - 30), "not scanned in 30 days"
+each img sort scanned as i empty "No images yet. Add the first one from your registry."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      text i.name ":" i.tag bold
+      text i.reg "·" i.mb "MB · scanned" i.scanned faint
+    if i.vuln
+      text "Vulnerable" color bad bold
+    else
+      if i.scanned < today - 30
+        text "Scan due" color warn
+===
+@rich domain=d5_dns_notebook topic=dns_records_notebook style=short
+dns notebook
+needs: add a record with domain, type, host and value | grouped by domain | TTL in seconds | filter by record type
+---
+app "DNS notes" map slate
+table rec domain text, kind pick A|AAAA|CNAME|MX|TXT|NS = A "Type", host text = "@", value text, ttl num 60..86400 = 3600 "TTL" unit "s"
+state f pick All|A|AAAA|CNAME|MX|TXT|NS = All
+topbar rec, "Add record"
+choice f
+each rec where f = All or kind = f by domain as g empty "No records yet. Note down the DNS of your first domain."
+  stack card gap 1
+    row
+      text g.key head grow
+      text count(rec where domain = g.key) "records" faint
+    each g as r
+      row gap 2 tap edit r swipe remove r
+        text r.kind bold
+        stack grow gap 0
+          text r.host "→" r.value
+          text "TTL" r.ttl "s" faint
+===
+@rich domain=d5_api_quota_tracker topic=api_rate_limit_quota style=custom_ui
+I use several third party APIs with daily limits. add each API with its daily call limit, then tap buttons to add calls as I use them (1, 10 or 100), see a progress bar per API for today turning red when above 80 percent, and a count of APIs close to the limit
+needs: add an API with daily limit | buttons add 1, 10 or 100 calls | progress bar of today's calls per API | red above 80 percent | count of APIs close to limit
+---
+app "API quota" key yellow
+table api name text, limit num 1.. "Daily limit"
+table call api ref api, n num 1.. = 1 "Calls"
+let near(a api) = sum(a.call.n today) * 100 / a.limit >= 80
+topbar api, "Add API"
+statcard count(api, near(it)), "APIs close to their limit"
+each api as a empty "No APIs yet. Add the first one with its daily limit."
+  stack card gap 2 tap edit a swipe remove a
+    row
+      text a.name head grow
+      text sum(a.call.n today) "of" a.limit "today" faint
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(sum(a.call.n today) / a.limit, 0, 1), 4 fill if(near(a), bad, accent) radius 2
+    row gap 1
+      button "+1" tap add call api = a, n = 1
+      button "+10" tap add call api = a, n = 10
+      button "+100" tap add call api = a, n = 100
+===
+@rich domain=d5_webhook_failures topic=webhook_failure_log style=short
+webhook failures
+needs: log a failed delivery with endpoint, status code and tries | resolved button | count unresolved and server errors | failures per endpoint
+---
+app "Webhooks" bell ink dark
+table hook endpoint text, code num 100..599 "Status code" = 500, tries num 1..20 = 1, fixed bool "Resolved"
+topbar hook, "Log failure"
+row gap 2
+  statcard count(hook where fixed = no), "unresolved"
+  statcard count(hook where code >= 500), "server errors"
+section "Per endpoint"
+  share hook by endpoint, sum(it.tries), it.key
+each hook where fixed = no as h empty "No open failures. Every webhook got through."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      text h.endpoint bold
+      text "HTTP" h.code "· tried" h.tries "times" faint
+    button "Resolved" tap set h.fixed = yes
+===
+@rich domain=d5_sprint_capacity topic=sprint_capacity_planner style=detailed
+planning sprint capacity for a team: each person's name and days available in the two week sprint (holidays and leave taken out). I set the focus factor, like 70 percent, and how many story points one person-day is worth, and the app tells me total capacity in points
+needs: add a person with days available | focus factor setting | points per person-day setting | total capacity in points | bar of days per person
+---
+app "Capacity" users green
+table person name text, days num 0..10 = 10 "Days available"
+setting focus num 10..100 = 70 "Focus factor (%)"
+setting ppd num = 0.8 "Points per person-day"
+let cap = round(sum(person.days) * focus / 100 * ppd)
+topbar person, "Add person"
+stack card gap 1
+  text cap huge
+  text "story points of capacity from" sum(person.days) "person-days" faint
+if count(person) > 0
+  section "Days per person"
+    bars person, it.days, it.name
+each person as p empty "Nobody yet. Add the first teammate."
+  row card gap 2 tap edit p swipe remove p
+    text p.name bold grow
+    text p.days "days" faint
+===
+@rich domain=d5_pair_sessions topic=pair_programming_log style=short
+pairing sessions
+needs: log a session with partner, topic and minutes | hours this month | minutes per partner | list newest first
+---
+app "Pairing" users teal
+table pair partner text, topic text, mins num 5..480 = 60 "Minutes"
+topbar pair, "Log session"
+statcard round(sum(pair.mins month) / 60 * 10) / 10, "hours pairing this month"
+if count(pair month) > 0
+  section "By partner", "this month"
+    share pair month by partner, sum(it.mins), it.key
+list pair by day, "No sessions yet. Log the next time you pair."
+===
+@rich domain=d5_lunch_learn topic=lunch_and_learn_schedule style=multi_feature
+schedule for our lunch and learn talks: date, speaker, topic and a slides link. show the next talk up top with how many days to go, then upcoming talks in date order and past talks underneath
+needs: add a talk with date, speaker, topic and link | next talk with days to go | upcoming talks in date order | past talks list
+---
+app "Lunch and learn" school blue
+table talk held date "Date", speaker text, topic text, link text?
+let nexttalk = first(talk where held >= today sort held).topic
+let nextday = first(talk where held >= today sort held).held - today
+topbar talk, "Add talk"
+if count(talk where held >= today) > 0
+  stack card gap 0
+    text "Next up" faint
+    text nexttalk head
+    text if(nextday = 0, "Today", join(plural(nextday, "day"), " to go")) color accent
+section "Upcoming"
+  each talk where held >= today sort held as t empty "No talks booked. Ask a teammate to present."
+    row gap 2 tap edit t swipe remove t
+      stack grow gap 0
+        text t.topic bold
+        text t.speaker faint
+      text t.held
+section "Past talks"
+  each talk where held < today sort held desc as t empty "Nothing yet."
+    row gap 2 tap edit t
+      text t.topic grow
+      text t.speaker faint
+===
+@rich domain=d5_talks_watched topic=tech_talks_watched style=custom_ui
+keeping notes on tech talks I watch: title, where it came from (conference, youtube, podcast, course), a rating of 1 to 5 and one takeaway I do not want to forget. show my average rating per source and the best rated ones first
+needs: log a talk with source, rating and takeaway | average rating per source | best rated first | count of talks this month
+---
+app "Talks watched" eye pink
+table watch title text, src pick Conference|YouTube|Podcast|Course = YouTube "Source", stars num 1..5 = 4 "Rating", takeaway text?
+topbar watch, "Log a talk"
+statcard count(watch month), "talks this month"
+section "Average rating", "by source"
+  each options watch.src as k
+    row gap 2
+      text k grow
+      if count(watch where src = k) = 0
+        text "none yet" faint
+      else
+        text round(avg(watch.stars where src = k) * 10) / 10 bold
+        text "from" count(watch where src = k) faint
+each watch sort stars desc as w empty "No talks logged. Write down the last one that taught you something."
+  stack card gap 0 tap edit w swipe remove w
+    row
+      text w.title bold grow
+      text w.stars "/ 5"
+    text w.takeaway faint
+===
+@rich domain=d5_conference_trip_budget topic=conference_trip_budget style=detailed
+planning a conference trip budget: I add costs one by one with a type (ticket, flight, hotel, food, local transport, other) and the amount. my budget is a setting. show total spent vs budget with a bar, what is left, and the split by type
+needs: add a cost with type and amount | budget setting | total vs budget bar | amount left | split by type
+---
+app "Trip budget" plane orange
+table cost item text, kind pick Ticket|Flight|Hotel|Food|Local_transport|Other = Ticket "Type", amt money
+setting budget money = 1500 "Trip budget"
+let spent = sum(cost.amt)
+topbar cost, "Add cost"
+stack card gap 2
+  text if(spent <= budget, "Left in the budget", "Over budget by") faint
+  text abs(budget - spent) big color if(spent <= budget, ink, bad)
+  draw 100, 4
+    rect 0, 0, 100, 4 fill soft radius 2
+    rect 0, 0, 100 * clamp(spent / budget, 0, 1), 4 fill if(spent > budget, bad, accent) radius 2
+  text spent "of" budget faint tap edit budget
+if spent > 0
+  section "Split by type"
+    share cost by kind, sum(it.amt), it.key
+list cost, "No costs yet. Start with the ticket price."
+===
+@rich domain=d5_bootcamp_assignments topic=bootcamp_assignment_tracker style=multi_feature
+I am in a coding bootcamp. track assignments by week with a title, due date, a done tick and the score I got (optional). show my average score, how many are late or still open after the due date, and group them by week
+needs: add an assignment with week, title and due date | done tick | optional score | average score | count of overdue open assignments | grouped by week
+---
+app "Bootcamp" school red
+table asg week num 1..16, title text, due date, done bool, score num? 0..100
+topbar asg, "Add assignment"
+row gap 2
+  statcard round(avg(asg.score)), "average score"
+  statcard count(asg where done = no and due < today), "overdue"
+each asg by week sort week as g empty "No assignments yet. Add the first one from the syllabus."
+  stack card gap 1
+    text "Week" g.key head
+    each g as a
+      row gap 2 tap edit a swipe remove a
+        toggle a.done
+        stack grow gap 0
+          text a.title bold color if(a.done, muted, ink)
+          if a.done = no and a.due < today
+            text "Overdue since" a.due color bad
+          else
+            text "Due" a.due faint
+        text a.score
+===
+@rich domain=d5_leetcode_log topic=leetcode_practice_log style=short
+leetcode log
+needs: log a problem with difficulty and attempts | solved tick | solved vs total per difficulty | day streak | list newest first
+---
+app "LeetLog" brain yellow
+table prob name text, diff pick Easy|Medium|Hard = Medium, tries num 1..50 = 1 "Attempts", solved bool
+topbar prob, "Log problem"
+row gap 2
+  statcard count(prob where solved = yes), "solved"
+  statcard streak(prob), "day streak"
+section "By difficulty"
+  each options prob.diff as k
+    stack gap 0
+      row
+        text k grow
+        text count(prob where diff = k and solved = yes) "of" count(prob where diff = k) faint
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * count(prob where diff = k and solved = yes) / max(count(prob where diff = k), 1), 3 fill accent radius 1
+each prob as p empty "No problems yet. Log the one you are stuck on."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.solved
+    stack grow gap 0
+      text p.name bold
+      text p.diff "·" plural(p.tries, "attempt") faint
+===
+@rich domain=d5_shortcut_learning topic=keyboard_shortcuts_learning style=multi_feature
+shortcuts I am trying to learn: what it does, the keys, which tool (VS Code, Vim, JetBrains, terminal) and how confident I feel 1 to 5. a plus button raises the confidence, and I want to filter by tool and see how many are still under 3
+needs: add a shortcut with action, keys, tool and confidence | plus button raises confidence | filter by tool | count under 3
+---
+app "Shortcuts" key mint
+table sc what text "What it does", keys text, tool pick VS_Code|Vim|JetBrains|Terminal = VS_Code, conf num 1..5 = 1 "Confidence"
+state f pick All|VS_Code|Vim|JetBrains|Terminal = All
+topbar sc, "Add shortcut"
+statcard count(sc where conf < 3), "still under 3 of" count(sc), count(sc)
+choice f
+each sc where f = All or tool = f sort conf as s empty "No shortcuts here. Add the one you keep reaching for the mouse to do."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      text s.what bold
+      text s.keys faint
+    text s.conf "/ 5" bold
+    button "+" tap set s.conf = s.conf + 1
+===
+@rich domain=d5_regex_book topic=regex_notebook style=short
+regex notebook
+needs: add a pattern with its purpose and language | tested tick | search box on purpose or pattern | count tested
+---
+app "Regex book" pen plum
+table rx purpose text, pat text "Pattern", lang pick JS|Python|Any = Any, tested bool
+state q text = ""
+topbar rx, "Add pattern"
+statcard count(rx where tested = yes), "tested of" count(rx), count(rx)
+field q "Search purpose or pattern"
+each rx where has(purpose, q) or has(pat, q) as r empty "No patterns match. Save the next regex you google."
+  stack card gap 0 tap edit r swipe remove r
+    row gap 1
+      text r.purpose bold grow
+      text r.lang faint
+    text r.pat color accent
+    if r.tested = no
+      text "Not tested yet" faint
+===
+@rich domain=d5_snippet_shelf topic=code_snippet_shelf style=custom_ui
+shelf for code snippets I reuse. title, language (python, js, sql, bash, css), the code in a big text box, and a star to mark favourites. show only favourites with a switch and filter by language
+needs: add a snippet with title, language and code | star favourites | favourites-only switch | filter by language
+---
+app "Snippets" note slate dark
+table snip title text, lang pick Python|JS|SQL|Bash|CSS = Python, code long, fav bool "Favourite"
+state f pick All|Python|JS|SQL|Bash|CSS = All
+state favs bool = no
+topbar snip, "Save snippet"
+choice f
+row gap 2
+  toggle favs
+  text "Favourites only"
+each snip where (f = All or lang = f) and (favs = no or fav = yes) as s empty "No snippets here. Save the one you pasted three times this week."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 1
+      text s.title bold grow
+      text s.lang faint
+      toggle s.fav
+    text s.code faint
+===
+@rich domain=d5_env_checklists topic=environment_config_checklist style=detailed
+checklists for dev, staging and prod: each item is a thing to configure like a database url, a feature flag state or a monitoring alert, with a tick. I want a progress bar for each environment and the open items under it
+needs: add an item for an environment | tick when configured | progress bar per environment | open items listed under it
+---
+app "Env checks" grid teal
+table envitem env pick Dev|Staging|Prod = Dev, what text "Item", done bool
+topbar envitem, "Add item"
+each options envitem.env as e
+  section e, count(envitem where env = e and done = yes) "of" count(envitem where env = e)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * count(envitem where env = e and done = yes) / max(count(envitem where env = e), 1), 4 fill accent radius 2
+    each envitem where env = e and done = no as x empty "Nothing open here."
+      row gap 2 tap edit x swipe remove x
+        toggle x.done
+        text x.what grow
+===
+@rich domain=d5_local_ports topic=local_dev_ports_registry style=short
+local ports
+needs: add a port with service and project | conflict warning when a port repeats | sorted by port number | search by project
+---
+app "Local ports" pin blue
+table portr port num 1..65535, svc text "Service", proj text "Project"
+state q text = ""
+let clashes = count(portr, count(portr where port = it.port) > 1)
+topbar portr, "Add port"
+if clashes > 0
+  text clashes "entries share a port number. Change one." color bad bold
+field q "Search by project"
+each portr where has(proj, q) sort port as p empty "No ports noted. Add the first service you run locally."
+  row card gap 2 tap edit p swipe remove p
+    text p.port big
+    stack grow gap 0
+      text p.svc bold
+      text p.proj faint
+    if count(portr where port = p.port) > 1
+      text "Clash" color bad bold
+===
+@rich domain=d5_git_cheats topic=git_commands_i_forget style=multi_feature
+cheat sheet of git commands I always forget: the command, what it does, a category (undo, branch, remote, stash, history), and a button to count each time I look it up. show the five I look up most and filter by category
+needs: add a command with description and category | button counts a lookup | top five most looked up | filter by category
+---
+app "Git cheats" tool red
+table gc cmd text "Command", what text "What it does", cat pick Undo|Branch|Remote|Stash|History|Other = Undo, uses num 0.. = 0 "Lookups"
+state f pick All|Undo|Branch|Remote|Stash|History|Other = All
+topbar gc, "Add command"
+if count(gc) > 0
+  section "Looked up most"
+    bars gc sort uses desc top 5, it.uses, it.cmd
+choice f
+each gc where f = All or cat = f sort uses desc as g empty "No commands here. Add the one you just searched for."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      text g.cmd bold color accent
+      text g.what faint
+    text g.uses faint
+    button "Used" tap set g.uses = g.uses + 1
+===
+@rich domain=d5_sql_notebook topic=sql_query_notebook style=detailed
+notebook of SQL queries I run: title, the query text, which database (postgres, mysql, sqlite, bigquery) and how long it took in milliseconds. flag the slow ones over a threshold that I can change, and show a bar chart of runtimes
+needs: save a query with title, text, database and runtime | slow threshold setting | slow ones flagged | bar chart of runtimes
+---
+app "SQL book" book ocean
+table qry title text, sql long "Query", db pick Postgres|MySQL|SQLite|BigQuery = Postgres, ms num 0.. "Runtime" unit "ms"
+setting slow num = 500 "Slow above (ms)"
+topbar qry, "Save query"
+statcard count(qry where ms > slow), "slow queries of" count(qry), count(qry)
+if count(qry) > 0
+  section "Runtime per query", "ms"
+    bars qry, it.ms, it.title
+each qry sort ms desc as q empty "No queries yet. Save the one you keep rewriting."
+  stack card gap 0 tap edit q swipe remove q
+    row gap 1
+      text q.title bold grow
+      text q.ms "ms" bold color if(q.ms > slow, bad, ink)
+    text q.db faint
+    text q.sql faint
+===
+@rich domain=d5_command_flash topic=linux_command_flashcards style=custom_ui
+flashcards for linux commands I am learning. add a command and what it does, show one card at a time that I tap to flip between the command and the meaning, with back and next buttons and a counter, and a count of the commands I added
+needs: add a command with meaning | one card at a time | tap to flip | back and next with counter
+---
+app "Command cards" list ink
+table cmd name text, does text "What it does"
+state i num = 1
+state flip bool = no
+let shown = nth(cmd sort at, i).name
+let meaning = nth(cmd sort at, i).does
+topbar cmd, "Add command"
+if count(cmd) = 0
+  stack card gap 2
+    text "No cards yet" head
+    text "Add a command like tar -xzf and what it does." color muted
+else
+  stack card gap 2 align center pad 5 tap set flip = not flip
+    text if(flip, meaning, shown) big
+    text if(flip, "Tap to see the command", "Tap to see the meaning") faint
+  row gap 2 align center
+    button "Back" fill soft tap set i = max(i - 1, 1) then set flip = no
+    text i "of" count(cmd) grow align center
+    button "Next" fill accent tap set i = min(i + 1, count(cmd)) then set flip = no
+===
+@rich domain=d5_review_matrix topic=code_review_checklist_matrix style=custom_ui
+code review checklist I keep for my team: a list of criteria like tests added, no secrets, error handling, docs. for each pull request I log, I tick which criteria were checked. show how many criteria are ticked for each review
+needs: add review criteria | log a pull request review | tick each criterion per review | count ticked per review
+---
+app "Review list" check grey
+table crit item text "Criterion"
+table review pr text "Pull request"
+table tick review ref review, crit ref crit
+topbar review, "Log review"
+form crit, "Add criterion"
+each review as r empty "No reviews yet. Log the pull request you are looking at."
+  stack card gap 1 tap edit r swipe remove r
+    row
+      text r.pr head grow
+      text count(r.tick) "of" count(crit) faint
+    each crit as c empty "Add some criteria above."
+      row gap 2
+        toggle tick all where review = r and crit = c
+        text c.item
+===
+@rich domain=d5_standup_picker topic=standup_speaker_picker style=short
+who speaks next
+needs: add team members | button picks a random person who has not spoken | mark spoken | reset for tomorrow
+---
+app "Who is next" users orange
+table mem name text, spoke bool
+state who text = ""
+topbar mem, "Add member"
+stack card gap 2 align center
+  text "Next up" faint
+  text if(who = "", "Press the button", who) huge
+  button "Pick someone" fill accent tap set who = random(mem where spoke = no).name
+  text count(mem where spoke = no) "still to speak" faint
+each mem sort spoke as m empty "No team members yet. Add everyone in the standup."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.spoke
+    text m.name grow color if(m.spoke, muted, ink)
+button "New round" fill soft tap set all mem.spoke = no then set who = ""

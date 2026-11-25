@@ -1,0 +1,536 @@
+@rich domain=r10_bus_departures topic=bus_stand_departure_board style=custom_ui
+I manage a small bus adda and the departure times are all in my head. Let me add a bus with its number, destination (Multan, Lahore, Sukkur or Quetta), departure time and seats left. Show the buses in time order, grey out the ones already gone, and sell a seat with one tap on a plus-minus button.
+needs: add a bus with number, destination, departure time and seats | list in departure time order | sell a seat button that lowers seats left | marks full buses | count of buses leaving today
+---
+app "Bus Adda" bus purple
+table bus no_ text, to pick Multan|Lahore|Sukkur|Quetta = Multan, leaves time, seats num 0..60 = 40
+topbar bus, "Add bus"
+statcard count(bus), "buses on the board"
+each bus sort leaves as b empty "No buses yet. Add the first departure."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.leaves b.to bold
+      "Bus" b.no_ faint
+    if b.seats = 0
+      "Full" bold color bad
+    else
+      b.seats "seats" faint
+      button "Sold" tap set b.seats = b.seats - 1
+===
+@rich domain=r10_taxi_queue topic=taxi_stand_queue style=multi_feature
+taxi stand turn system. Drivers join the line with their plate number and name and the one who came first goes first. I want the line shown in order with who is next, a Gone button when a taxi takes a passenger, and how many trips each driver did today.
+needs: join the line with plate and driver name | line in order with the next taxi marked | gone button when a taxi leaves | trips per driver today | count of taxis waiting
+---
+app "Taxi Line" car pink
+table taxi plate text, driver text, gone bool
+table trip taxi ref taxi
+topbar taxi, "Join line"
+statcard count(taxi where gone = no), "taxis waiting"
+each taxi where gone = no sort at as t empty "Nobody in the line. The stand is empty."
+  row card gap 2 tap edit t swipe remove t
+    if index = 0
+      "NEXT" bold color good
+    else
+      text index + 1 faint
+    stack grow gap 0
+      t.driver bold
+      t.plate faint
+    button "Gone" tap set t.gone = yes then add trip taxi = t
+"Trips today" head
+each taxi sort count(it.trip today) desc as t
+  row gap 2
+    t.driver grow
+    count(t.trip today) bold
+===
+@rich domain=r10_rickshaw_union topic=rickshaw_union_dues style=detailed
+our rickshaw union takes a monthly fee from every member. I want a list of members with their rickshaw number, a tick that says paid for this month, how much has come in against what should come, and who is still left to pay so I can remind them at the stand.
+needs: add a member with name and rickshaw number | tick fee paid this month | amount collected against expected | list of members not yet paid | setting for monthly fee
+---
+app "Union Dues" users grey dark
+table member name text, ric text
+table fee member ref member
+setting dues money = 300 "Monthly fee"
+topbar member, "Add member"
+let paid = count(member, count(it.fee month) > 0)
+stack card gap 2
+  goal paid * dues, count(member) * dues, "collected this month"
+  paid "of" count(member) "members paid" faint
+each member sort name as m empty "No members yet. Add the first rickshaw driver."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.fee month
+    stack grow gap 0
+      m.name bold
+      "Rickshaw" m.ric faint
+    if count(m.fee month) = 0
+      "Pending" color warn
+===
+@rich domain=r10_parking_tickets topic=parking_lot_hourly_fees style=detailed
+I run a parking lot near the bazaar. When a vehicle comes in I write the plate and type (car, bike, van). When it leaves I tap exit and the fee is worked out from the hours it stayed and my hourly rate for that day. Show how many vehicles are inside and how much I earned today.
+needs: check in a vehicle with plate and type | hourly rate setting | exit button that works out the fee | how many vehicles inside | earnings today
+---
+app "Parking Lot" car ocean
+table ticket plate text, kind pick Car|Bike|Van = Car, out bool, fee money = 0
+setting rate money = 40 "Rate per hour"
+topbar ticket, "Vehicle in"
+row gap 2
+  statcard count(ticket where out = no), "vehicles inside"
+  statcard sum(ticket.fee today), "earned today"
+each ticket where out = no sort at as t empty "The lot is empty."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.plate bold
+      t.kind "- in at" t.at faint
+    button "Exit" tap set t.fee = max(1, round((now - t.at) / 1h)) * rate then set t.out = yes
+"Left today" head
+each ticket where out = yes as t empty "No exits yet today."
+  row gap 2
+    t.plate grow
+    t.fee bold
+===
+@rich domain=r10_parking_passes topic=monthly_parking_passes style=multi_feature
+monthly pass holders in my basement parking. Add the person, their plate, and the date their pass runs till. Show passes that end within the next 7 days or are already over in red, and give me a Renew button that adds 30 days. Also how many active passes I have.
+needs: add a pass with name, plate and valid till date | marks passes ending in 7 days or expired | renew button adds 30 days | count of active passes | sorted by end date
+---
+app "Parking Passes" key ink
+table pass name text, plate text, till date
+topbar pass, "Add pass"
+row gap 2
+  statcard count(pass where till >= today), "active passes"
+  statcard count(pass where till < today + 8), "ending or over"
+each pass sort till as p empty "No passes yet. Add the first holder."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.plate "- till" p.till faint color if(p.till < today + 8, bad, muted)
+    button "Renew" tap set p.till = if(p.till < today, today, p.till) + 30
+===
+@rich domain=r10_water_tanker topic=water_tanker_orders style=short
+water tanker
+needs: add a delivery with street, litres and price | price per tanker setting | litres delivered per street chart | money spent this month | list of latest deliveries
+---
+app "Water Tanker" drop slate
+table drop street text, litres num 500..30000 = 6000, price money
+topbar drop, "Add delivery"
+row gap 2
+  statcard sum(drop.price month), "spent this month"
+  statcard sum(drop.litres month), "litres this month"
+section "Litres by street", "this month"
+  share drop month by street, sum(it.litres), it.key
+each drop sort at desc top 15 as d empty "No deliveries yet."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.street bold
+      d.at faint
+    d.litres "L" faint
+    d.price bold
+===
+@rich domain=r10_water_timings topic=street_water_timings style=custom_ui
+In our mohalla the municipal water comes at different times on different days for each street. Let me add a street with the day and the time water starts and ends. I want to filter by day with chips, and get a reminder on the phone when the water starts so I can switch the motor on.
+needs: add a street with day, start time and end time | day chips to filter | reminder when water starts | list sorted by start time | shows which streets have water today
+---
+app "Water Timings" cloud ink
+table sup street text, wd num 1..7 = 1, starts time, ends time
+state d num = 0
+let dn(n num) = dayname(today - weekday(today) + n)
+remind "Water is coming to a street" at sup.starts
+topbar sup, "Add street"
+row gap 1
+  each 1..7
+    button dn(it) fill if(d = it, accent, soft) grow tap set d = if(d = it, 0, it)
+section "Water today", dayname(today)
+  each sup where wd = weekday(today) sort starts as s empty "No street has water today."
+    row gap 2
+      s.street bold grow
+      s.starts "to" s.ends faint
+each sup where d = 0 or wd = d sort wd as s empty "Nothing here. Add a street and its day."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.street bold
+      dn(s.wd) faint
+    s.starts "-" s.ends
+===
+@rich domain=r10_electric_readings topic=house_electricity_readings style=multi_feature
+I rent out 4 portions in one building and each has its own electricity meter. I want to enter a reading for a portion when I read the meter, set the price per unit, and see how many units each portion used this month and what to charge them. Also the combined units of all portions.
+needs: add a portion | add a meter reading with portion and units | price per unit setting | units used this month per portion | bill amount per portion
+---
+app "Meter Readings" bolt orange
+table portion name text
+table reading portion ref portion, units num 0..
+setting price money = 42 "Price per unit"
+let used(p portion) = max(p.reading.units month) - min(p.reading.units month)
+screen portions "Portions" home
+  topbar portion, "Add portion"
+  statcard sum(portion, used(it)), "units used by all portions"
+  each portion sort name as p empty "No portions yet. Add the first one."
+    row card gap 2 tap edit p swipe remove p
+      stack grow gap 0
+        p.name bold
+        used(p) "units this month" faint
+      used(p) * price bold
+screen reads "Readings" bolt
+  topbar reading, "Add reading"
+  each reading sort at desc as r empty "No readings yet. Read a meter and add it."
+    row card gap 2 tap edit r swipe remove r
+      r.portion.name bold grow
+      r.units "units" faint
+      r.at faint
+===
+@rich domain=r10_gas_meter topic=gas_meter_by_house style=detailed
+gas bill is shared between three houses on the lane. Each time the gas man comes or I read the meter I note the house (Ali, Baber, Chaudhry) and the reading. Show me the units each house used between its first and latest reading and a bar comparing the houses so the arguments stop.
+needs: add a reading with house and meter value | units used per house between first and latest reading | bar comparing houses | latest reading date per house | list of all readings
+---
+app "Gas Meters" fire ocean
+table gas house pick Ali|Baber|Chaudhry = Ali, value num 0.. unit "m3"
+topbar gas, "Add reading"
+section "Gas used", "latest minus first reading"
+  bars options gas.house, max(gas.value where house = it) - min(gas.value where house = it), it
+each options gas.house
+  row card gap 2
+    it bold grow
+    max(gas.value where house = it) - min(gas.value where house = it) "m3 used" faint
+each gas sort at desc top 12 as g empty "No readings yet. Add the first meter value."
+  row gap 2 tap edit g swipe remove g
+    g.house grow
+    g.value "m3" bold
+    g.at faint
+===
+@rich domain=r10_submeter_split topic=tenant_electric_bill_split style=custom_ui
+Landlord sends one big electricity bill and the 3 tenants should pay by how much their own sub meter moved. I put the bill amount, then for each tenant the old and new reading. Work out each tenant's units, their share of the total bill in rupees, and tick when they have paid.
+needs: setting for the total bill | add a tenant with old and new reading | units per tenant | share of bill in proportion to units | tick when paid
+---
+app "Bill Split" calc yellow
+table ten name text, before num 0.., after num 0..
+table settled ten ref ten
+setting bill money = 18000 "Total bill"
+let units(t ten) = max(t.after - t.before, 0)
+let total = sum(ten, units(it))
+topbar ten, "Add tenant"
+stack card gap 1
+  "Total units" faint
+  total big
+  "Rate per unit" round(bill / max(total, 1)) faint
+each ten sort name as t empty "No tenants yet. Add the first sub meter."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.settled all
+    stack grow gap 0
+      t.name bold
+      units(t) "units" faint
+    round(bill * units(t) / max(total, 1)) bold
+===
+@rich domain=r10_garbage_rota topic=garbage_duty_rota style=multi_feature
+Our street shares the job of taking garbage to the collection point. I want a weekly list: for each weekday who is on duty. Show today's duty at the top, with a tick when it is done today, and show how many times each person did the duty this month.
+needs: add a duty with weekday number and person | shows today's duty at top | tick when done today | duties done per person this month | list of the week in day order
+---
+app "Garbage Rota" bag green
+table duty wd num 1..7 = 1, who text
+table did duty ref duty
+let dn(n num) = dayname(today - weekday(today) + n)
+topbar duty, "Add duty"
+section "Today", dayname(today)
+  each duty where wd = weekday(today) as d empty "Nobody is on duty today."
+    row gap 2
+      toggle d.did
+      d.who bold grow
+      if count(d.did today) > 0
+        "Done" color good
+      else
+        "To do" color warn
+"The week" head
+each duty sort wd as d empty "No duties yet. Add who goes on Monday."
+  row card gap 2 tap edit d swipe remove d
+    dn(d.wd) bold grow
+    d.who
+    count(d.did month) "times" faint
+===
+@rich domain=r10_cleaning_areas topic=common_area_cleaning style=detailed
+common areas in our office building (stairs, lobby, washrooms, roof) must be cleaned every day. List the areas, give each a tick when the cleaner has done it today, show how many days since each was last cleaned and mark in red any that is two or more days late.
+needs: add an area | tick cleaned today | days since last cleaned | marks areas two days late | count cleaned today of all
+---
+app "Cleaning Areas" leaf teal
+table area name text
+table wash area ref area
+topbar area, "Add area"
+let done = count(area, count(it.wash today) > 0)
+stack gap 0
+  done "of" count(area) "areas cleaned today" head
+  if done = count(area) and done > 0
+    "All clean" color good
+each area sort name as a empty "No areas yet. Add the stairs or the lobby."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.wash
+    stack grow gap 0
+      a.name bold
+      if since(a.wash) = 0
+        "Cleaned today" faint color good
+      else
+        "Last cleaned" since(a.wash) "days ago" faint color if(due(a.wash, 2), bad, muted)
+===
+@rich domain=r10_guard_rounds topic=security_guard_rounds style=custom_ui
+I am a night guard supervisor. Each guard has to check five points (gate, store, back wall, generator, roof) every round. I want a tick for each point checked in the round tonight, a count of points checked, and a grid of the last 14 days showing which nights all points were done.
+needs: list of checkpoints | tick each checkpoint tonight | count checked of total | 14 day grid of nights completed | add or remove a checkpoint
+---
+app "Guard Rounds" shield blue dark
+table point name text
+table check point ref point
+topbar point, "Add point"
+let n = count(point)
+let ok = count(point, count(it.check today) > 0)
+stack card gap 2
+  goal ok, n, "points checked tonight"
+  if ok = n and n > 0
+    "Round complete. Sign the book." color good
+each point sort at as p empty "No points yet. Add the gate first."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.check
+    p.name bold grow
+    if since(p.check) != 0
+      "not yet" faint
+section "Complete nights", "last 14 days"
+  daygrid last 14 days, count(check on it), max(n, 1)
+===
+@rich domain=r10_guard_roster topic=guard_shift_roster style=multi_feature
+We have 8 guards across day, evening and night shifts and I keep forgetting who is where. List guards with their phone and shift, and a weekly off day. Show each shift with how many guards are on it, and warn me in red if a shift has fewer than two guards.
+needs: add a guard with name, phone, shift and weekly off day | count of guards per shift | warning if a shift has fewer than two guards | list grouped by shift | tap to edit a guard
+---
+app "Guard Roster" users purple
+table guard name text, phone text, shift pick Day|Evening|Night = Day, off pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Sun
+topbar guard, "Add guard"
+each options guard.shift
+  stack card gap 1
+    row
+      it head grow
+      count(guard where shift = it) "guards" color if(count(guard where shift = it) < 2, bad, good)
+    if count(guard where shift = it) < 2
+      "Needs at least two guards on this shift." color bad
+    each guard where shift = it sort name as g
+      row gap 2 tap edit g swipe remove g
+        g.name grow
+        "off" g.off faint
+        g.phone faint
+===
+@rich domain=r10_clinic_tokens topic=clinic_queue_tokens style=custom_ui
+small clinic, patients crowd the door. I want to issue a token to each patient with their name, show the token numbers in order of arrival, and a Call next button that marks the first waiting patient as seen. Show who is being called now and how many are waiting.
+needs: issue a token with patient name | token numbers in arrival order | call next button | shows who is being called now | count waiting
+---
+app "Clinic Tokens" bell mint dark
+table token name text, seen bool
+let waiting = count(token today where seen = no)
+topbar token, "New token"
+stack card gap 2 align center
+  "Now calling" faint
+  if waiting = 0
+    "Nobody waiting" head
+  else
+    each token today where seen = no sort at top 1 as t
+      t.name huge
+  waiting "waiting" faint
+  button "Call next" fill accent tap set all token.seen = yes where id = first(token today where seen = no sort at).id
+"Tokens today" head
+each token today sort at as t empty "No tokens yet today."
+  row card gap 2 tap edit t swipe remove t
+    "#" index + 1 bold
+    t.name grow
+    if t.seen
+      "Seen" color good
+    else
+      "Waiting" color warn
+===
+@rich domain=r10_clinic_fees topic=clinic_daily_fees style=short
+clinic fees
+needs: add a patient visit with name, fee and type | fees collected today | patients seen today | bar chart of the last 7 days | free visits counted separately
+---
+app "Clinic Fees" heart pink
+table visit who text, fee money = 0, kind pick New|Follow_up|Free = New
+topbar visit, "Add visit"
+row gap 2
+  statcard sum(visit.fee today), "collected today"
+  statcard count(visit today), "patients today"
+section "Fees by day", "last 7 days"
+  daybars last 7 days, sum(visit.fee on it)
+"Free visits this week:" count(visit week where kind = Free) faint
+each visit today sort at desc as v empty "No patients yet today."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.who bold
+      v.kind faint
+    v.fee bold
+===
+@rich domain=r10_vaccine_camp topic=vaccination_camp_tally style=detailed
+we run a vaccination camp in the village school. For every child I add the name and which vaccine we gave (BCG, Polio, Penta, Measles). The ministry wants a target of children covered, so I want a bar showing how many against the target I can set, and the count given of each vaccine.
+needs: add a child with name and vaccine given | target setting | progress bar against target | count per vaccine | list of children vaccinated today
+---
+app "Vaccine Camp" tooth blue
+table dose child text, vac pick BCG|Polio|Penta|Measles = Polio
+setting target num 1..5000 = 120 "Children to cover"
+topbar dose, "Add child"
+stack card gap 2
+  goal count(dose), target, "doses given so far"
+  "Left to reach:" max(target - count(dose), 0) faint
+section "By vaccine", "all days"
+  bars options dose.vac, count(dose where vac = it), it
+each dose today sort at desc as d empty "No children yet today."
+  row card gap 2 tap edit d swipe remove d
+    d.child grow
+    d.vac faint
+===
+@rich domain=r10_mosque_fund topic=mosque_fund_accounts style=multi_feature
+treasurer of our mosque committee. Money comes as Friday donations, monthly chanda and special appeals, and goes out as salary, bills and repairs. I want to add each income and expense with the type, see the balance, and a chart of what came in each of the last 7 days.
+needs: add an income with source and amount | add an expense with item and amount | balance in hand | chart of donations last 7 days | tab for income and tab for expenses
+---
+app "Mosque Fund" mosque green
+table inc source pick Friday|Chanda|Appeal|Other = Friday, amount money
+table exp item pick Salary|Bills|Repair|Other = Bills, amount money
+statcard sum(inc.amount) - sum(exp.amount), "balance in hand"
+screen income "Income" money
+  topbar inc, "Add income"
+  section "Donations", "last 7 days"
+    daybars last 7 days, sum(inc.amount on it)
+  each inc sort at desc as i empty "No income yet."
+    row card gap 2 tap edit i swipe remove i
+      i.source grow
+      i.amount bold color good
+screen out "Expenses" cart
+  topbar exp, "Add expense"
+  each exp sort at desc as e empty "No expenses yet."
+    row card gap 2 tap edit e swipe remove e
+      e.item grow
+      e.amount bold
+===
+@rich domain=r10_church_offerings topic=sunday_offering_totals style=detailed
+Each Sunday after service we count the money in three bags: tithe, offering and the building fund. I need to enter each bag's amount, and see the total for this Sunday, the total for the month and a bar chart of the last 8 weeks so the elders can see the trend.
+needs: add an amount with bag type | total this week | total this month | bar chart of last 8 weeks | list of entries
+---
+app "Offerings" star plum
+table gift bag pick Tithe|Offering|Building = Offering, amount money
+topbar gift, "Add amount"
+row gap 2
+  statcard sum(gift.amount week), "this week"
+  statcard sum(gift.amount month), "this month"
+section "Last 8 weeks", "all bags"
+  bars gift last 8 weeks by week, sum(it.amount), it.key
+each gift sort at desc top 12 as g empty "Nothing counted yet. Add the first bag."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.bag bold
+      g.at faint
+    g.amount bold
+===
+@rich domain=r10_mosque_pledges topic=renovation_pledges style=custom_ui
+we are building a new wudu area and people promise amounts. For each donor I note the name, the amount promised and the amount paid so far. I want a quick +1000 button on each to add payments, the total promised, the total paid and what is still outstanding, with a bar towards the full target.
+needs: add a pledge with donor and promised amount | plus 1000 button for payments | total promised, paid and outstanding | progress bar to a target setting | donors with pending amount
+---
+app "Pledges" tool orange
+table pledge donor text, promised money, paid money = 0
+setting target money = 500000 "Project cost"
+topbar pledge, "Add pledge"
+stack card gap 2
+  goal sum(pledge.paid), target, "paid of project cost"
+  row
+    "Promised" sum(pledge.promised) faint grow
+    "Still to come" sum(pledge, max(it.promised - it.paid, 0)) bold color warn
+each pledge sort at desc as p empty "No pledges yet. Add the first donor."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.donor bold
+      p.paid "of" p.promised faint
+    if p.paid < p.promised
+      button "+1000" tap set p.paid = p.paid + 1000
+    else
+      "Complete" color good
+===
+@rich domain=r10_mosque_bills topic=monthly_mosque_bills style=multi_feature
+Every month the mosque has electricity, gas, water and the imam's salary to pay. I want to add a bill with its type and amount, tick it when paid, see what is still unpaid this month, and get a reminder on the 1st and the 15th so we do not get a disconnection notice.
+needs: add a bill with type and amount | tick when paid | unpaid total this month | reminder on the 1st and 15th | bill totals by type
+---
+app "Mosque Bills" bell plum
+table bill what pick Electricity|Gas|Water|Salary|Other = Electricity, amount money, paid bool
+remind "Check the mosque bills" monthly on 1, 15 at 9:00
+topbar bill, "Add bill"
+row gap 2
+  statcard sum(bill.amount month where paid = no), "unpaid this month"
+  statcard sum(bill.amount month where paid = yes), "paid this month"
+section "This month by type", "all bills"
+  share options bill.what, sum(bill.amount month where what = it), it
+each bill month sort paid as b empty "No bills added this month."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    b.what bold grow
+    b.amount bold
+===
+@rich domain=r10_charity_kitchen topic=free_meals_served style=detailed
+we serve free lunch and dinner to poor people outside the shrine. Each service I note how many plates were given. The kitchen can make about 300 plates a day, so I want a chart showing each of the last 7 days against that limit, and today's total, and how many plates total this month.
+needs: add a service with lunch or dinner and number of plates | daily capacity setting | bar chart of 7 days with a line at capacity | plates today | plates this month
+---
+app "Free Kitchen" food red
+table serve meal pick Lunch|Dinner = Lunch, plates num 1..2000
+setting cap num 1..5000 = 300 "Plates we can make per day"
+topbar serve, "Add service"
+row gap 2
+  statcard sum(serve.plates today), "plates today", cap
+  statcard sum(serve.plates month), "plates this month"
+section "Plates per day", "line is capacity"
+  goalbars last 7 days, sum(serve.plates on it), cap, "At capacity", "Under"
+each serve sort at desc top 10 as s empty "No services yet. Add today's lunch."
+  row card gap 2 tap edit s swipe remove s
+    s.meal bold grow
+    s.plates "plates" faint
+    s.at faint
+===
+@rich domain=r10_ration_bags topic=ration_bag_distribution style=custom_ui
+Ramzan ration drive. We have a list of needy families and each gets one bag per month. Add the family with a head name and members, and tick when their bag has been handed over this month. Show how many bags given of the total families and how many are left to give.
+needs: add a family with head name and members | tick bag given this month | bags given of total families | progress bar | families still waiting
+---
+app "Ration Drive" bag yellow
+table fam head text, members num 1..20 = 5
+table bag fam ref fam
+let given = count(fam, count(it.bag month) > 0)
+topbar fam, "Add family"
+stack card gap 2
+  goal given, count(fam), "bags given this month"
+  count(fam) - given "families still waiting" faint
+each fam sort head as f empty "No families yet. Add the first one."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.bag month
+    stack grow gap 0
+      f.head bold
+      f.members "members" faint
+    if count(f.bag month) = 0
+      "Waiting" color warn
+===
+@rich domain=r10_zakat_given topic=zakat_paid_records style=multi_feature
+I want to keep a record of who I gave my zakat to. Add each payment with the name or organisation, amount and date, set the total zakat I have to pay this year, and show a bar of how much is paid and how much remains so I finish before Ramzan ends.
+needs: add a payment with receiver, amount and date | setting for total zakat due | progress bar paid against due | remaining amount | list of receivers by date
+---
+app "Zakat Given" coin purple
+table paid to text, amount money, on_ date = today
+setting due_ money = 60000 "Total zakat due this year"
+topbar paid, "Add payment"
+stack card gap 2
+  goal sum(paid.amount year), due_, "paid this year"
+  "Remaining" max(due_ - sum(paid.amount year), 0) bold
+  if sum(paid.amount year) >= due_
+    "Zakat complete for this year." color good
+each paid sort on_ desc as p empty "No payments yet. Add the first receiver."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.to bold
+      p.on_ faint
+    p.amount bold
+===
+@rich domain=r10_sadaqah_daily topic=daily_sadaqah_streak style=short
+sadaqah
+needs: one tap buttons for 50, 100 and 500 | days in a row of giving | total given this month | weekly dots | list of gifts
+---
+app "Sadaqah" gift teal
+table gave amount money
+quick gave, amount, [50, 100, 500]
+row gap 2
+  statcard streak(gave), "days in a row"
+  statcard sum(gave.amount month), "given this month"
+weekdots count(gave on it) > 0
+topbar gave, "Other amount"
+each gave sort at desc top 20 as g empty "No sadaqah yet. Tap an amount above."
+  row card gap 2 tap edit g swipe remove g
+    g.amount bold grow
+    g.at faint
+===

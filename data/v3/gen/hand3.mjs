@@ -5,11 +5,15 @@
 //   ---
 //   program
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { canon, verify } from '../../data-v1/gen/lib.mjs';
+import { canon, verify, migrateBatch } from '../../data-v1/gen/lib.mjs';
 export function readHand3(dir, filter) {
   const out = [], fails = [];
   for (const f of readdirSync(dir).filter(f => f.endsWith('.txt') && (!filter || f.startsWith(filter))).sort()) {
-    const recs = readFileSync(dir + f, 'utf8').split(/^===\s*$/m).map(x => x.trim()).filter(Boolean);
+    const recs0 = readFileSync(dir + f, 'utf8').split(/^===\s*$/m).map(x => x.trim()).filter(Boolean);
+    // migrate every program (older spellings, e.g. topbar "Title", TABLE) with the real mo.mjs migrate before checking
+    const progIdx = recs0.map(rec => { const L = rec.split('\n'); const sep = L.findIndex(l => /^---\s*$/.test(l)); return sep < 0 ? null : { L, sep }; });
+    const texts = progIdx.map(x => x ? x.L.slice(x.sep + 1).join('\n') + '\n' : ''); const mig = migrateBatch(texts);
+    const recs = recs0.map((rec, i) => progIdx[i] ? [...progIdx[i].L.slice(0, progIdx[i].sep + 1), mig[i].replace(/\n$/, '')].join('\n') : rec);
     recs.forEach((rec, n) => {
       const L = rec.split('\n'); const id = `${f}#${n}`;
       const m = L[0].match(/^@(\w+)\s*(.*)$/); if (!m) { fails.push({ id, why: 'no header' }); return; }

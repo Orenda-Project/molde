@@ -1,0 +1,516 @@
+@rich domain=r9_repair_cafe topic=repair_cafe_items style=detailed
+I help run a monthly repair cafe in our community hall. People bring toasters, lamps and bags. Log the item, owner name, the fault and who is fixing it, then move it from waiting to fixing to fixed or beyond repair, filter by that, and show what share we managed to fix
+needs: log an item with owner, fault and volunteer | stage chips with counts that filter | buttons to mark fixed or beyond repair | shows share fixed
+---
+app "Repair Cafe" tool red
+table thing item text, owner text, fault text?, who text?, stage pick Waiting|Fixing|Fixed|Beyond_repair = Waiting
+state st text = ""
+let closed = count(thing where stage = Fixed or stage = Beyond_repair)
+topbar thing, "Log item"
+statcard round(count(thing where stage = Fixed) * 100 / max(closed, 1)), "% of closed items were fixed"
+row gap 1
+  each options thing.stage
+    button it count(thing where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each thing where st = "" or stage = st sort at desc as t empty "Nothing here yet. Log the first item people bring."
+  stack card gap 1 tap edit t swipe remove t
+    row
+      t.item bold grow
+      t.owner faint
+    t.fault faint
+    if t.stage = Waiting or t.stage = Fixing
+      row gap 1
+        button "Fixing" tap set t.stage = Fixing
+        button "Fixed" fill accent tap set t.stage = Fixed
+        button "Beyond repair" tap set t.stage = Beyond_repair
+===
+@rich domain=r9_tool_rental topic=hardware_tool_rental style=multi_feature
+small tool rental from my garage: drill, ladder, grinder, generator. keep each tool with its rate per day. when a tool goes out I add the renter, days and a tick for paid. show how much each tool has earned and how many tools are out now
+needs: add a tool with daily rate | record a rental with renter and days | tick paid | shows earnings per tool | shows money not paid yet
+---
+app "Tool Rental" tool orange
+table tool name text, rate money
+table hire tool ref tool, renter text, days num 1..60 = 1, paid bool
+let earned(t tool) = sum(t.hire.days) * t.rate
+screen tools "Tools" tool
+  topbar tool, "Add tool"
+  statcard sum(tool, earned(it)), "earned by all tools"
+  each tool sort name as t empty "No tools yet. Add the first one."
+    row card gap 2 tap edit t swipe remove t
+      stack grow gap 0
+        t.name bold
+        t.rate "per day," count(t.hire) "rentals" faint
+      earned(t) bold
+screen hires "Rentals" list
+  topbar hire, "New rental"
+  statcard sum(hire, if(it.paid, 0, it.days * it.tool.rate)), "money not paid yet"
+  each hire as h empty "No rentals yet."
+    row card gap 2 tap edit h swipe remove h
+      toggle h.paid
+      stack grow gap 0
+        h.renter bold
+        h.tool.name h.days "days" faint
+===
+@rich domain=r9_camera_rental topic=camera_hire_desk style=detailed
+we rent cameras and lenses to film students. For every hire: the kit, who has it, the day it left, the day it is due back and a deposit. Charge is days times a day rate I can change. Show kits that are overdue in red, and how many kits are out
+needs: add a hire with kit, renter, out date, due date and deposit | day rate setting | shows charge per hire | overdue hires in red | tick returned
+---
+app "Camera Hire" eye yellow
+table hire kit text, renter text, out date = today, due date, deposit money = 0, back bool
+setting daily money = 2500 "Day rate"
+let days(h hire) = max(h.due - h.out, 1)
+topbar hire, "New hire"
+row gap 2
+  statcard count(hire where back = no), "kits out"
+  statcard count(hire where back = no and due < today), "overdue"
+each hire sort back as h empty "No hires yet. Add the first booking."
+  row card gap 2 tap edit h swipe remove h
+    toggle h.back
+    stack grow gap 0
+      h.kit bold
+      h.renter "- back" h.due faint color if(h.back = no and h.due < today, bad, muted)
+    stack gap 0 align end
+      days(h) * daily bold
+      days(h) "days" tiny faint
+===
+@rich domain=r9_chair_tent_rental topic=chairs_and_tents_booking style=custom_ui
+Event rental: I own 300 chairs and 6 tents. For each booking I add customer, date, chairs and tents, and the total uses my chair and tent rates. Warn me red when the chairs booked for the same date go over what I own
+needs: add a booking with customer, date, chairs and tents | rates for chair and tent settings | shows total price per booking | warns when chairs on one date exceed stock | shows upcoming income
+---
+app "Event Rentals" seat teal
+table book customer text, day date, chairs num 0..500 = 100, tents num 0..20 = 0
+setting stock num = 300 "Chairs I own"
+setting chairrate money = 30 "Rate per chair"
+setting tentrate money = 4000 "Rate per tent"
+let total(b book) = b.chairs * chairrate + b.tents * tentrate
+topbar book, "Add booking"
+statcard sum(book, if(it.day >= today, total(it), 0)), "upcoming income"
+each book where day >= today sort day as b empty "No bookings coming up."
+  stack card gap 1 tap edit b swipe remove b
+    row
+      b.customer bold grow
+      b.day faint
+    row gap 2
+      b.chairs "chairs," b.tents "tents" grow
+      total(b) bold
+    if sum(book.chairs where day = b.day) > stock
+      "Too many chairs on this date:" sum(book.chairs where day = b.day) "of" stock bold color bad
+===
+@rich domain=r9_mobile_repair topic=mobile_repair_jobs style=multi_feature
+phone repair counter. each job: phone model, problem (screen, battery, charging port, water, software), the price I quote, what the part cost me and a status. Show today's cash, my profit this month and a list of jobs not yet delivered
+needs: add a job with model, problem, price and part cost | status waiting, repairing, ready, delivered | shows cash taken today | shows profit this month | button to mark delivered
+---
+app "Phone Repair" phone teal dark
+table job model text, problem pick Screen|Battery|Port|Water|Software|Other = Screen, price money, part money = 0, stage pick Waiting|Repairing|Ready|Delivered = Waiting
+topbar job, "New job"
+row gap 2
+  statcard sum(job.price today where stage = Delivered), "cash taken today"
+  statcard sum(job month where stage = Delivered, it.price - it.part), "profit this month"
+each job where stage != Delivered sort at as j empty "No jobs on the bench. Add the first phone."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.model bold
+      j.problem j.stage faint
+    j.price bold
+    if j.stage = Ready
+      button "Delivered" fill accent tap set j.stage = Delivered
+    else
+      button "Next" tap set j.stage = if(j.stage = Waiting, Repairing, Ready)
+===
+@rich domain=r9_bike_repair topic=bicycle_shop_tickets style=short
+bike repair
+needs: add a ticket with owner, issue and price | mark ready for pickup | shows bikes waiting | shows money taken this week
+---
+app "Bike Repair" bike blue
+table ticket owner text, issue text, price money, ready bool, gone bool
+topbar ticket, "New ticket"
+row gap 2
+  statcard count(ticket where gone = no), "bikes in the shop"
+  statcard sum(ticket.price week where gone = yes), "taken this week"
+each ticket where gone = no sort ready as t empty "No bikes in the shop."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.owner bold
+      t.issue faint
+    t.price bold
+    if t.ready
+      button "Picked up" fill accent tap set t.gone = yes
+    else
+      button "Ready" tap set t.ready = yes
+===
+@rich domain=r9_appliance_repair topic=home_appliance_repair_visits style=detailed
+I repair fans, irons, geysers and washing machines at people's homes. Each visit: address, which appliance, what I charged and the parts I bought. Show a bar chart of how much I earned per appliance, profit after parts, and visits this week
+needs: add a visit with address, appliance, charge and parts cost | bar chart of charges per appliance | shows profit after parts | shows visits this week
+---
+app "House Calls" tool purple
+table visit address text, thing pick Fan|Iron|Geyser|Washer|Fridge|Other = Fan, charge money, parts money = 0
+row gap 2
+  statcard count(visit week), "visits this week"
+  statcard sum(visit, it.charge - it.parts), "profit after parts"
+section "Charges per appliance"
+  bars options visit.thing, sum(visit.charge where thing = it), it
+form visit, "Save visit"
+list visit by day, "No visits yet. Add your first house call."
+===
+@rich domain=r9_shoe_repair topic=cobbler_pickup_tickets style=custom_ui
+cobbler shop. Customer name, the pair, what work (new sole, stitching, polish, zip), fee and pickup day. Show ready pairs that are waiting to be picked up and the money I will get when they come
+needs: add a ticket with customer, item, work, fee and pickup day | mark pair ready | mark collected | shows money waiting at the shop | list of ready pairs
+---
+app "Cobbler" bag pink
+table pair customer text, item text, work pick Sole|Stitch|Polish|Zip|Heel = Sole, fee money, pickup date, ready bool, taken bool
+topbar pair, "New ticket"
+statcard sum(pair.fee where ready = yes and taken = no), "waiting for pickup"
+each pair where taken = no sort pickup as p empty "No pairs in the shop."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.customer bold
+      p.item p.work "- pickup" p.pickup faint
+    p.fee bold
+    if p.ready
+      button "Collected" fill accent tap set p.taken = yes
+    else
+      button "Ready" tap set p.ready = yes
+===
+@rich domain=r9_car_wash topic=car_wash_takings style=short
+car wash
+needs: one tap to add a bike, car or van wash with its price | shows cars washed today | shows money today | bar chart of money for 7 days
+---
+app "Car Wash" car grey
+table wash kind pick Bike|Car|Van = Car, price money
+row gap 1
+  button "Bike" tap add wash kind = Bike, price = 100
+  button "Car" fill accent grow tap add wash kind = Car, price = 400
+  button "Van" tap add wash kind = Van, price = 700
+row gap 2
+  statcard count(wash today), "washed today"
+  statcard sum(wash.price today), "money today"
+section "Money per day", "last 7 days"
+  daybars last 7 days, sum(wash.price on it)
+list wash by day, "No washes yet today."
+===
+@rich domain=r9_workshop_cards topic=garage_job_cards style=multi_feature
+I run a small car workshop. Job card for each car: registration, what work, labour charge, parts charge and its stage (open, in bay, ready, paid). Filter by stage, show how much is waiting to be collected from ready cars, and total taken this month
+needs: add a job card with registration, work, labour and parts | stage filter chips | shows money to collect from ready cars | shows taken this month | button to move to next stage
+---
+app "Job Cards" car ocean
+table card reg text, work text, labour money, parts money = 0, stage pick Open|In_bay|Ready|Paid = Open
+state st text = ""
+topbar card, "New card"
+row gap 2
+  statcard sum(card where stage = Ready, it.labour + it.parts), "to collect"
+  statcard sum(card month where stage = Paid, it.labour + it.parts), "taken this month"
+row gap 1
+  each options card.stage
+    button it count(card where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each card where (st = "" and stage != Paid) or stage = st sort at as c empty "No cars in the workshop."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.reg bold
+      c.work c.stage faint
+    c.labour + c.parts bold
+    if c.stage != Paid
+      button "Next" tap set c.stage = if(c.stage = Open, In_bay, if(c.stage = In_bay, Ready, Paid))
+===
+@rich domain=r9_tyre_shop topic=tyre_stock_and_sales style=custom_ui
+tyre shop stock: size (like 175/65 R14), brand, how many in stock and the selling price. tap sold to take one, +4 when a delivery comes, and put a red warning for anything with 4 or less. also show total tyres on the shelf
+needs: add a tyre with size, brand, stock and price | sold button takes one off | plus 4 button for deliveries | warning for 4 or fewer | total tyres on the shelf
+---
+app "Tyre Stock" tag mint
+table tyre size text, brand text, stock num 0..500 = 4, price money
+topbar tyre, "Add tyre"
+row gap 2
+  statcard sum(tyre.stock), "tyres on the shelf"
+  statcard count(tyre where stock <= 4), "sizes running low"
+each tyre sort stock as t empty "No tyres yet. Add the first size."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.size bold
+      t.brand t.price faint
+    t.stock bold color if(t.stock <= 4, bad, ink)
+    button "Sold" tap set t.stock = t.stock - 1
+    button "+4" tap set t.stock = t.stock + 4
+===
+@rich domain=r9_auto_electric topic=vehicle_service_reminders style=detailed
+auto electrician. for each vehicle I do work on I want the owner, the vehicle, what I did, the charge and the date the next service is due, and the phone should remind me 3 days before that date so I can call them
+needs: add a job with owner, vehicle, work, charge and next service date | reminder 3 days before next service | shows services due in the next 14 days | shows charges this month
+---
+app "Auto Electric" bolt slate
+table job owner text, vehicle text, work text, charge money, next date
+remind "Call about the next service" at job.next - 3d at 9:00
+topbar job, "Add job"
+row gap 2
+  statcard count(job where next >= today and next <= today + 14), "services due in 14 days"
+  statcard sum(job.charge month), "charged this month"
+each job sort next as j empty "No jobs yet. Add the first vehicle."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.owner bold
+      j.vehicle j.work faint
+    stack gap 0 align end
+      j.next bold color if(j.next < today, bad, ink)
+      "next service" tiny faint
+===
+@rich domain=r9_oil_change topic=oil_change_km_tracker style=custom_ui
+oil change shop: I note each customer's plate, the km on the meter at the last change and how many km between changes (5000 or 7000 usually). when they come back I put the current km and see how many km are left, red when it is overdue
+needs: add a vehicle with plate, km at last change and interval | update current km | shows km left to next change | overdue vehicles in red | count of vehicles overdue
+---
+app "Oil Changes" drop ink dark
+table car plate text, last num 0..999999 unit "km", gap num 1000..20000 = 5000, meter num 0..999999 unit "km"
+let left(c car) = c.last + c.gap - c.meter
+topbar car, "Add vehicle"
+statcard count(car where meter >= last + gap), "vehicles due for an oil change"
+each car sort left(it) as c empty "No vehicles yet. Add the first plate."
+  stack card gap 1 tap edit c swipe remove c
+    row
+      c.plate bold grow
+      if left(c) <= 0
+        "Overdue by" abs(left(c)) "km" bold color bad
+      else
+        left(c) "km left" bold color good
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp((c.meter - c.last) / c.gap, 0, 1), 3 fill if(left(c) <= 0, bad, accent) radius 1
+    row gap 1
+      button "+500 km" tap set c.meter = c.meter + 500
+      button "Changed now" tap set c.last = c.meter
+===
+@rich domain=r9_mehndi_bookings topic=mehndi_artist_bookings style=detailed
+I do mehndi for brides and guests. Booking has client name, date, where (home, salon, venue), how many hands, price and the advance. Show today's bookings on top, upcoming below, the balance due on the day and my income this month
+needs: add a booking with client, date, place, hands, price and advance | shows today's bookings first | shows balance due on the day | income this month | tick when done
+---
+app "Mehndi Bookings" heart plum
+table slot client text, day date, place pick Home|Salon|Venue = Home, hands num 1..40 = 2, price money, advance money = 0, done bool
+topbar slot, "Add booking"
+row gap 2
+  statcard count(slot where day = today and done = no), "bookings today"
+  statcard sum(slot.price where done = yes and day >= today - 29), "earned in 30 days"
+each slot where done = no and day >= today sort day as s empty "No bookings coming up. Share your portfolio."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    stack grow gap 0
+      s.client bold
+      s.day s.place s.hands "hands" faint color if(s.day = today, accent, muted)
+    stack gap 0 align end
+      s.price - s.advance bold
+      "balance" tiny faint
+===
+@rich domain=r9_bridal_makeup topic=bridal_makeup_calendar style=multi_feature
+freelance bridal makeup artist. Each bride has the wedding date, package (party, bridal, full day), price, advance and a tick for the trial done. Show the days left to each wedding, what the brides still owe, and how many trials I still have to do
+needs: add a bride with date, package, price and advance | tick trial done | shows days left to each wedding | shows balance still owed | shows trials still to do
+---
+app "Bridal Makeup" smile red
+table bride name text, day date, pack pick Party|Bridal|Full_day = Bridal, price money, advance money = 0, trial bool
+topbar bride, "Add bride"
+row gap 2
+  statcard sum(bride where day >= today, it.price - it.advance), "still owed by brides"
+  statcard count(bride where trial = no and day >= today), "trials to do"
+each bride where day >= today sort day as b empty "No weddings coming up."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.trial
+    stack grow gap 0
+      b.name bold
+      b.pack "- trial" if(b.trial, "done", "pending") faint
+    stack gap 0 align end
+      b.day - today "days" bold color if(b.day - today < 8, warn, ink)
+      "left" tiny faint
+===
+@rich domain=r9_salon_home_visits topic=beauty_home_visit_day_plan style=custom_ui
+I do beauty services at customers' homes. Let me flip through days with back and next buttons, see that day's visits in time order with the service, the area, the fee and a travel charge I can change, and the total I will earn that day
+needs: day arrows to go back and forward | add a visit with client, day, time, service and area | travel charge setting | shows total earning for the day | tick when done
+---
+app "Home Visits" home orange
+table visit client text, day date = today, at_time time, service pick Facial|Threading|Waxing|Haircut|Bridal = Facial, area text?, fee money, done bool
+setting travel money = 300 "Travel charge per visit"
+state d date = today
+topbar visit, "Add visit"
+row align center gap 1
+  button "<" tap set d = d - 1
+  text d bold grow align center
+  button ">" tap set d = d + 1
+statcard sum(visit where day = d, it.fee + travel), "to earn on this day"
+each visit where day = d sort at_time as v empty "No visits on this day."
+  row card gap 2 tap edit v swipe remove v
+    toggle v.done
+    stack grow gap 0
+      v.client bold
+      v.at_time v.service v.area faint
+    v.fee + travel bold
+===
+@rich domain=r9_henna_cones topic=henna_cone_sales style=short
+henna cones
+needs: set how many cones I made | sell buttons for 1, 5 or 10 cones | shows cones left | shows money from sales
+---
+app "Henna Cones" leaf yellow
+table sold qty num 1..100
+setting made num = 100 "Cones made this week"
+setting price money = 60 "Price per cone"
+let left = max(made - sum(sold.qty), 0)
+statcard left, "cones left of" made, made
+statcard sum(sold.qty) * price, "money from sales"
+row gap 1
+  each [1, 5, 10]
+    button "Sold" it grow tap add sold qty = it
+button "Undo last sale" tap remove last(sold)
+===
+@rich domain=r9_nail_art topic=nail_art_appointments style=multi_feature
+nail artist working from home. appointments with client, design, price, and tip, and the day. I want daily takings as bars for the last 7 days, tips this month, and how many clients I had today
+needs: add an appointment with client, design, price and tip | bar chart of takings for 7 days | shows tips this month | shows clients today
+---
+app "Nail Studio" star green
+table appt client text, design text, price money, tip money = 0
+topbar appt, "Add appointment"
+row gap 2
+  statcard count(appt today), "clients today"
+  statcard sum(appt.tip month), "tips this month"
+section "Takings", "last 7 days"
+  daybars last 7 days, sum(appt.price on it) + sum(appt.tip on it)
+list appt by day, "No appointments yet. Add the first client."
+===
+@rich domain=r9_braiding_styles topic=hair_braiding_pricing style=detailed
+I braid hair. for each client I write the style (box braids, cornrows, twists), hours it took and what I charged. Show the price per hour for each job and which style pays best per hour, as bars
+needs: add a job with client, style, hours and price | shows price per hour for each job | bars comparing styles by earnings | shows total earned this month
+---
+app "Braid Studio" heart teal
+table braid client text, style pick Box|Cornrow|Twist|Knotless|Other = Box, hours num 0.5..14 = 3 unit "h", price money
+let rate(b braid) = round(b.price / b.hours)
+topbar braid, "Add job"
+statcard sum(braid.price month), "earned this month"
+section "Earned per style", "all jobs"
+  share braid by style, sum(it.price), it.key
+each braid sort at desc as b empty "No jobs yet. Add the first client."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.client bold
+      b.style b.hours "h" faint
+    stack gap 0 align end
+      b.price bold
+      rate(b) "per hour" tiny faint
+===
+@rich domain=r9_reseller_parcels topic=online_reseller_parcels style=multi_feature
+I resell clothes and bags on Facebook and Instagram. For each parcel: customer, item, what I paid for it, my price, courier and where it is (packed, shipped, delivered, returned). Filter by that and show my profit from delivered parcels
+needs: add a parcel with customer, item, cost, price and courier | stage chips with counts | button to mark shipped or delivered | shows profit from delivered parcels | returned parcels counted
+---
+app "Reseller Parcels" package blue
+table parcel customer text, item text, cost money, price money, courier pick TCS|Leopards|Post|Rider = TCS, stage pick Packed|Shipped|Delivered|Returned = Packed
+state st text = ""
+topbar parcel, "Add parcel"
+row gap 2
+  statcard sum(parcel where stage = Delivered, it.price - it.cost), "profit from delivered"
+  statcard count(parcel where stage = Returned), "returned"
+row gap 1
+  each options parcel.stage
+    button it count(parcel where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each parcel where st = "" or stage = st sort at desc as p empty "No parcels yet. Pack the first order."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.customer bold
+      p.item p.courier faint
+    p.price bold
+    if p.stage = Packed
+      button "Shipped" tap set p.stage = Shipped
+    if p.stage = Shipped
+      button "Delivered" fill accent tap set p.stage = Delivered
+===
+@rich domain=r9_returns_tracker topic=online_shop_returns style=detailed
+returns are eating my margin. log each return with the order number, reason (wrong size, damaged, changed mind, not as shown), the money I refunded and whether the item went back into stock. Show total refunded and a bar of returns per reason
+needs: log a return with order number, reason and refund | tick item back in stock | shows total refunded | bars of returns per reason | shows how many items are not restocked
+---
+app "Returns" package purple dark
+table back order text, why pick Wrong_size|Damaged|Changed_mind|Not_as_shown = Wrong_size, refund money, stocked bool
+topbar back, "Log return"
+row gap 2
+  statcard sum(back.refund), "refunded in total"
+  statcard count(back where stocked = no), "not back in stock"
+section "Returns per reason"
+  share back by why, count(it), it.key
+each back sort at desc as r empty "No returns logged. Hopefully it stays that way."
+  row card gap 2 tap edit r swipe remove r
+    toggle r.stocked
+    stack grow gap 0
+      "Order" r.order bold
+      r.why faint
+    r.refund bold
+===
+@rich domain=r9_cod_parcels topic=cash_on_delivery_settlements style=custom_ui
+my courier collects cash on delivery and pays me in batches. list parcels with city, the cash amount, and the courier fee. a tick when the parcel is delivered, another when the courier paid me. show how much cash the courier is holding for me right now
+needs: add a parcel with city, cash amount and courier fee | tick delivered | tick courier paid me | shows cash the courier holds for me | shows parcels not yet delivered
+---
+app "COD Parcels" cart pink
+table cod city text, cash money, fee money = 200, got bool, settled bool
+topbar cod, "Add parcel"
+row gap 2
+  statcard sum(cod where got = yes and settled = no, it.cash - it.fee), "courier is holding"
+  statcard count(cod where got = no), "not delivered yet"
+each cod where settled = no sort at as c empty "No open parcels. All settled."
+  stack card gap 1 tap edit c swipe remove c
+    row
+      c.city bold grow
+      c.cash bold
+    row gap 2
+      toggle c.got
+      "Delivered" grow
+      if c.got
+        button "Courier paid" tap set c.settled = yes
+===
+@rich domain=r9_thrift_flips topic=thrift_flip_profit style=multi_feature
+I buy stuff at Sunday bazaars and flip it online. record what it was, the price I bought it for, the price it sold for and how many days it took to sell. show profit per item, total profit, and a line of profit over my flips
+needs: add an item with name, bought price, sold price and days to sell | shows profit per item | shows total profit | line of profit over time | shows average days to sell
+---
+app "Flip Log" tag grey
+table flip name text, bought money, sold money, days num 0..365 = 7
+let profit(f flip) = f.sold - f.bought
+topbar flip, "Add flip"
+row gap 2
+  statcard sum(flip, profit(it)), "total profit"
+  statcard round(avg(flip.days)), "days to sell on average"
+section "Profit per flip", "oldest to newest"
+  if count(flip) < 2
+    "Add two flips to see the line." faint
+  else
+    trend flip sort at, profit(it)
+each flip sort at desc as f empty "No flips yet. Add your first find."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.name bold
+      f.bought "to" f.sold "in" f.days "days" faint
+    profit(f) bold color if(profit(f) >= 0, good, bad)
+===
+@rich domain=r9_insta_preorders topic=minimum_order_preorders style=detailed
+I do preorders for imported bags and perfumes and only order when there are enough buyers. For each product I set the minimum number to order, then add preorders with buyer name and count. Show bars of how close each product is to its minimum
+needs: add a product with name and minimum order | add a preorder with buyer and count | progress toward minimum for each product | shows total preorders | tick when buyer paid
+---
+app "Preorders" cart ocean
+table item name text, moq num 1..500 = 10
+table pre item ref item, buyer text, n num 1..50 = 1, paid bool
+screen items "Products" bag
+  topbar item, "Add product"
+  each item sort name as i empty "No products yet. Add your first import."
+    stack card gap 1 tap edit i swipe remove i
+      goal sum(i.pre.n), i.moq, i.name, "ordered"
+screen buyers "Preorders" users
+  topbar pre, "Add preorder"
+  statcard sum(pre.n), "items preordered"
+  each pre as p empty "No preorders yet."
+    row card gap 2 tap edit p swipe remove p
+      toggle p.paid
+      stack grow gap 0
+        p.buyer bold
+        p.n "x" p.item.name faint
+===
+@rich domain=r9_parcels_in_transit topic=parcels_in_transit style=short
+parcels
+needs: add a parcel with what it is, who it is for and date sent | tick when arrived | shows days in transit | red when more than 7 days
+---
+app "Parcels" package mint
+table parcel what text, who text, sent date = today, arrived bool
+topbar parcel, "Add parcel"
+statcard count(parcel where arrived = no), "parcels on the way"
+each parcel sort arrived as p empty "No parcels yet. Add the one you just posted."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.arrived
+    stack grow gap 0
+      p.what bold
+      "For" p.who faint
+    if p.arrived
+      "Arrived" faint color good
+    else
+      plural(today - p.sent, "day") bold color if(today - p.sent > 7, bad, ink)

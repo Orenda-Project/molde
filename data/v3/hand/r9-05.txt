@@ -1,0 +1,200 @@
+@rich domain=r9_rent_book topic=shop_room_rent_book style=short
+rent book
+needs: add a tenant with room and monthly rent | record a rent payment | month arrows to see another month | shows who has not paid in that month | total collected in the month
+---
+app "Rent Book" home slate
+table tenant name text, room text, rent money
+table paid tenant ref tenant, amount money
+state m date = today
+topbar tenant, "Add tenant"
+monthnav m
+row gap 2
+  statcard sum(paid.amount month of m), "collected in the month"
+  statcard sum(tenant, max(it.rent - sum(it.paid.amount month of m), 0)), "still due"
+each tenant sort room as t empty "No tenants yet. Add the first room."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.room "- rent" t.rent faint
+    if sum(t.paid.amount month of m) >= t.rent
+      "Paid" bold color good
+    else
+      button "Got rent" fill accent tap add paid tenant = t, amount = t.rent
+===
+@rich domain=r9_shoot_list topic=photoshoot_shot_list style=short
+shot list
+needs: add a shot with a description and who is in it | tick shots as taken | mark must-have shots | shows how many are taken out of all
+---
+app "Shot List" eye ink
+table shot what text, who text?, must bool, taken bool
+topbar shot, "Add shot"
+goal count(shot where taken = yes), max(count(shot), 1), "shots taken"
+if count(shot where must = yes and taken = no) > 0
+  "Still missing" count(shot where must = yes and taken = no) "must-have shots" bold color warn
+each shot sort taken as s empty "No shots listed. Add the first one before the shoot."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.taken
+    stack grow gap 0
+      s.what bold
+      s.who faint
+    if s.must
+      icon star
+===
+@rich domain=r9_candle_orders topic=candle_customer_orders style=short
+candle orders
+needs: add an order with customer, scent and quantity | price per candle setting | shows order total | mark delivered | shows candles to pour
+---
+app "Candle Orders" fire plum
+table order customer text, scent text, qty num 1..200 = 1, sent bool
+setting price money = 900 "Price per candle"
+topbar order, "Add order"
+row gap 2
+  statcard sum(order.qty where sent = no), "candles to pour"
+  statcard sum(order.qty where sent = yes) * price, "sold so far"
+each order sort sent as o empty "No orders yet. Add the first one."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.sent
+    stack grow gap 0
+      o.customer bold
+      o.qty "x" o.scent faint
+    o.qty * price bold
+===
+@rich domain=r9_makeup_expiry topic=makeup_kit_expiry style=short
+makeup kit
+needs: add a product with brand and expiry date | shows products expiring in 60 days | shows already expired products in red | count of products in the kit
+---
+app "Makeup Kit" smile red dark
+table product name text, brand text?, expires date
+let soon = count(product where expires >= today and expires <= today + 60)
+topbar product, "Add product"
+row gap 2
+  statcard count(product), "products in the kit"
+  statcard soon, "expire in 60 days"
+each product sort expires as p empty "No products yet. Add what is in your bag."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.brand faint
+    stack gap 0 align end
+      p.expires bold color if(p.expires < today, bad, if(p.expires <= today + 60, warn, ink))
+      if p.expires < today
+        "expired" tiny color bad
+      else
+        p.expires - today "days left" tiny faint
+===
+@rich domain=r9_momo_cart topic=momo_cart_plates style=short
+momo cart
+needs: tap a plate size to add a sale | plates sold today | money today from plate prices | bar chart of plates in the last 7 days
+---
+app "Momo Cart" food orange
+table plate size pick Half|Full = Full
+setting half money = 120 "Half plate price"
+setting full money = 220 "Full plate price"
+row gap 1
+  button "Half plate" grow tap add plate size = Half
+  button "Full plate" fill accent grow tap add plate size = Full
+row gap 2
+  statcard count(plate today), "plates today"
+  statcard count(plate today where size = Half) * half + count(plate today where size = Full) * full, "money today"
+section "Plates per day", "last 7 days"
+  daybars last 7 days, count(plate on it)
+button "Undo last plate" tap remove last(plate today)
+===
+@rich domain=r9_song_lyrics topic=lyrics_notebook style=short
+song lyrics
+needs: add a song with title and lyrics | search songs by title | tap a song to edit its lyrics | shows number of songs
+---
+app "Lyrics" book yellow
+table song title text, lyrics long?, key text?
+state q text = ""
+topbar song, "Add song"
+field q "Search by title"
+"Songs" count(song) faint
+each song where has(title, q) sort title as s empty "No songs found. Add your first lyrics."
+  stack card gap 1 tap edit s swipe remove s
+    row
+      s.title bold grow
+      s.key faint
+    s.lyrics faint
+===
+@rich domain=r9_paint_mixes topic=paint_mix_recipes style=short
+paint mixes
+needs: add a mix with name and parts of white, blue and red | shows the total parts | shows the percent of each colour | search a mix by name
+---
+app "Paint Mixes" pen green
+table mix name text, white num 0..20 = 0, blue num 0..20 = 0, red num 0..20 = 0
+state q text = ""
+let parts(m mix) = m.white + m.blue + m.red
+topbar mix, "Add mix"
+field q "Search mixes"
+each mix where has(name, q) sort name as m empty "No mixes yet. Save the colour you just made."
+  stack card gap 1 tap edit m swipe remove m
+    row
+      m.name bold grow
+      parts(m) "parts" faint
+    draw 100, 6
+      rect 0, 0, 100 * m.white / max(parts(m), 1), 6 fill edge
+      rect 100 * m.white / max(parts(m), 1), 0, 100 * m.blue / max(parts(m), 1), 6 fill blue
+      rect 100 * (m.white + m.blue) / max(parts(m), 1), 0, 100 * m.red / max(parts(m), 1), 6 fill red
+    "White" m.white "Blue" m.blue "Red" m.red faint
+===
+@rich domain=r9_lumber_stock topic=lumber_yard_stock style=short
+wood stock
+needs: add a wood type with thickness, length and count | sold button takes one off | shows total boards in stock | warns when 5 or fewer
+---
+app "Wood Stock" tree teal
+table board kind pick Sheesham|Deodar|Kikar|Plywood|Mango = Deodar, inch num 0.5..6 = 1 unit "in", ft num 2..20 = 8 unit "ft", left num 0..999 = 10
+topbar board, "Add wood"
+row gap 2
+  statcard sum(board.left), "boards in stock"
+  statcard count(board where left <= 5), "types running low"
+each board sort left as b empty "No wood in stock. Add the first type."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.kind bold
+      b.inch "in x" b.ft "ft" faint
+    b.left bold color if(b.left <= 5, bad, ink)
+    button "Sold" tap set b.left = b.left - 1
+===
+@rich domain=r9_channel_earnings topic=youtube_monthly_earnings style=short
+youtube earnings
+needs: log earnings for a month | line chart of earnings | compare this month with last month | shows total earned this year
+---
+app "Channel Earnings" coin blue
+table pay month date = today, usd money
+let thism = sum(pay.usd month)
+let lastm = sum(pay.usd prev month)
+topbar pay, "Log earnings"
+row gap 2
+  statcard thism, "this month"
+  statcard thism - lastm, "compared with last month"
+statcard sum(pay.usd year), "earned this year"
+section "Earnings over time"
+  if count(pay) < 2
+    "Log two months to see the line." faint
+  else
+    trend pay sort month, it.usd
+each pay sort month desc as p empty "Nothing logged yet."
+  row card gap 2 tap edit p swipe remove p
+    p.month bold grow
+    p.usd bold
+===
+@rich domain=r9_etsy_orders topic=online_shop_order_net style=short
+etsy orders
+needs: add an order with item, sale price and shipping cost | platform fee percent setting | shows net money per order | mark shipped | total net earned
+---
+app "Shop Orders" bag purple
+table sale item text, price money, ship money = 0, sent bool
+setting fee num = 6.5 "Platform fee (%)"
+let net(s sale) = s.price - s.price * fee / 100 - s.ship
+topbar sale, "Add order"
+row gap 2
+  statcard round(sum(sale, net(it))), "net earned in total"
+  statcard count(sale where sent = no), "orders to ship"
+each sale sort sent as s empty "No orders yet. Your first sale will show here."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.sent
+    stack grow gap 0
+      s.item bold
+      "Price" s.price "- shipping" s.ship faint
+    round(net(s)) bold

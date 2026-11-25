@@ -1,0 +1,567 @@
+@rich domain=r11_visitors topic=shop_visitor_count style=short
+visitors
+needs: one tap to count a visitor | add a visitor with name and reason | visitors today and this month | heat map of the last 8 weeks | list of today's visitors
+---
+app "Visitors" users purple
+table visitor who text?, why pick Browsing|Buying|Enquiry|Delivery = Browsing
+statcard count(visitor today), "visitors today", 50
+row gap 1
+  each options visitor.why
+    button it grow tap add visitor why = it
+row gap 2
+  statcard count(visitor month), "this month"
+  statcard count(visitor week), "this week"
+section "Busy days", "last 8 weeks, darker is busier"
+  heat last 56 days, count(visitor on it), 30
+"Today" head
+each visitor today sort at desc as v empty "No visitors yet today. Tap a button when someone walks in."
+  row card gap 2 tap edit v swipe remove v
+    v.who grow
+    v.why faint
+    v.at faint
+===
+@rich domain=r11_study_hours topic=weekly_study_hours style=short
+study hours
+needs: add a study session with subject and minutes | weekly hours goal with progress | bar chart of hours per day | hours per subject this week | list of recent sessions
+---
+app "Study Hours" pencil pink
+table study subject pick Maths|Science|English|Urdu|Other = Maths, mins num 5..600 = 45 unit "min"
+setting weekly num = 15 "Weekly goal (hours)"
+topbar study, "Log study"
+goal round(sum(study.mins week) / 6) / 10, weekly, "hours this week", " h"
+section "Last 7 days", "hours per day"
+  daybars last 7 days, round(sum(study.mins on it) / 6) / 10
+section "By subject", "this week"
+  bars options study.subject, sum(study.mins week where subject = it) / 60, it
+each study sort at desc top 8 as s empty "No study sessions yet. Log the first one."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.subject bold
+      s.at faint
+    s.mins "min" bold
+===
+@rich domain=r11_milk_bill topic=daily_milk_calendar_bill style=short
+milk bill
+needs: tap a day on the calendar when milk came | litres per delivery | price per litre setting | bill for the month | move to other months
+---
+app "Milk Bill" milk grey
+table milk litres num 0.5..10 = 1 unit "L"
+setting rate money = 220 "Price per litre"
+state m date = today
+monthnav m
+calendar milk, m
+row gap 2
+  statcard sum(milk.litres month of m), "litres this month"
+  statcard count(milk month of m), "days delivered"
+stack card gap 1
+  "Bill for" monthname(m) faint
+  sum(milk.litres month of m) * rate big
+  "at" rate "per litre. Tap to change the price." faint tap edit rate
+===
+@rich domain=r11_sleep topic=nightly_sleep_hours style=short
+sleep
+needs: add a night with hours slept | sleep needed setting | average sleep over 7 days | bar chart with goal line | list of nights
+---
+app "Sleep" bed ocean
+table night slept dur = 8h "Slept for", feel pick Rested|Okay|Tired = Okay
+setting need num = 8 "Hours I need"
+topbar night, "Add night"
+row gap 2
+  statcard round(avg(night.slept last 7 days) / 6m) / 10, "hours on average, 7 days"
+  statcard count(days last 7 days, sum(night.slept on it) / 1h >= need), "nights with enough sleep", 7
+section "Last 7 nights", "dark line is what you need"
+  goalbars last 7 days, round(sum(night.slept on it) / 6m) / 10, need, "Enough sleep"
+each night sort at desc top 10 as n empty "No nights yet. Add how long you slept."
+  row card gap 2 tap edit n swipe remove n
+    n.slept big
+    stack grow gap 0
+      n.feel
+      n.at faint
+===
+@rich domain=r11_electric_bill topic=monthly_electricity_units style=short
+electric bill
+needs: add a month's units and bill amount | cost per unit | line chart of units over months | compare with last month | list of past bills
+---
+app "Electric Bill" bolt mint dark
+table ebill units num 1..5000 unit "units", amount money
+let unitcost = sum(ebill.amount) / max(1, sum(ebill.units))
+topbar ebill, "Add bill"
+stack card gap 2
+  "Latest bill" faint
+  if count(ebill) = 0
+    "No bills yet" head
+  else
+    last(ebill.amount) big
+    last(ebill.units) "units" faint
+    if count(ebill) > 1
+      if last(ebill.units) > nth(ebill sort at desc, 2).units
+        "More than the month before" color bad
+      else
+        "Less than the month before" color good
+row gap 2
+  statcard round(unitcost * 10) / 10, "average cost per unit"
+  statcard sum(ebill.amount year), "paid this year"
+section "Units per bill"
+  trend ebill, it.units
+each ebill sort at desc as e empty "No bills yet. Add the first one from your paper bill."
+  row card gap 2 tap edit e swipe remove e
+    e.units "units" grow
+    e.amount bold
+===
+@rich domain=r11_gas_cylinder topic=gas_cylinder_refills style=short
+gas cylinder
+needs: log a refill with price | days since the last refill | average days a cylinder lasts | expected next refill date | spend this year
+---
+app "Gas Cylinder" fire slate
+table refill price money
+topbar refill, "Log refill"
+stack card gap 1
+  "Last refill" faint
+  if count(refill) = 0
+    "No refills yet" head
+  else
+    since(refill) "days ago" big
+    if count(refill) > 1
+      "Lasts about" round(gap(refill)) "days. Next one around" last(refill.at) + round(gap(refill)) faint
+row gap 2
+  statcard count(refill year), "cylinders this year"
+  statcard sum(refill.price year), "spent this year"
+each refill sort at desc top 10 as r empty "No refills yet. Log one when the new cylinder arrives."
+  row card gap 2 tap edit r swipe remove r
+    r.at grow
+    r.price bold
+===
+@rich domain=r11_blood_pressure topic=blood_pressure_readings style=short
+blood pressure
+needs: add upper, lower and pulse readings | last reading with a high or normal label | line chart of upper and lower over 14 days | average this week | list of readings
+---
+app "Blood Pressure" heart ink
+table bp sys num 60..260 = 120 "Upper", dia num 30..160 = 80 "Lower", pulse num? 30..220
+topbar bp, "Add reading"
+stack card gap 1
+  "Last reading" faint
+  if count(bp) = 0
+    "No readings yet" head
+  else
+    last(bp.sys) "/" last(bp.dia) big
+    if last(bp.sys) >= 140 or last(bp.dia) >= 90
+      "High. Rest and measure again." color bad
+    else
+      "In a normal range" color good
+row gap 2
+  statcard round(avg(bp.sys week)), "average upper, this week"
+  statcard round(avg(bp.dia week)), "average lower, this week"
+section "Last 14 days", "upper in colour, lower in grey"
+  plot 0..13, 40..200 axes gridlines
+    poly stroke accent thick 2
+      each days last 14 days
+        if count(bp on it) > 0
+          pt index, sum(bp.sys on it) / count(bp on it)
+    poly stroke muted thick 2
+      each days last 14 days
+        if count(bp on it) > 0
+          pt index, sum(bp.dia on it) / count(bp on it)
+each bp sort at desc top 8 as b empty "Nothing here yet. Add a reading after you rest for five minutes."
+  row card gap 2 tap edit b swipe remove b
+    b.sys "/" b.dia bold
+    b.pulse "bpm" faint grow
+    b.at faint
+===
+@rich domain=r11_ramzan_fasts topic=ramadan_fasts_grid style=short
+ramzan fasts
+needs: tap a day to mark it fasted | grid of the 30 days | fasts kept so far | fasts still to come | undo by tapping again
+---
+app "Ramzan Fasts" moon plum
+table fast day num 1..30
+let kept = count(fast)
+statcard kept, "fasts kept", 30
+row gap 2
+  statcard 30 - kept, "days still to come"
+  statcard round(kept * 100 / 30), "percent of the month"
+"Tap a day when you fast" head
+grid 6 gap 1
+  each 1..30
+    box ratio 1 radius 8 pad 1 fill if(count(fast where day = it) > 0, accent, soft) tap toggle fast all where day = it
+      it bold align center
+"Tap a filled day again to undo it." faint
+===
+@rich domain=r11_qaza_namaz topic=missed_prayers_makeup style=short
+qaza namaz
+needs: add missed prayers per prayer | one tap to log a prayer made up | how many are left per prayer | total left | progress bar per prayer
+---
+app "Qaza Namaz" mosque red
+table owed prayer pick Fajr|Dhuhr|Asr|Maghrib|Isha|Witr = Fajr, n num 1..100000 "How many missed"
+table made prayer pick Fajr|Dhuhr|Asr|Maghrib|Isha|Witr = Fajr
+topbar owed, "Add missed"
+row gap 2
+  statcard max(0, sum(owed.n) - count(made)), "prayers left to make up"
+  statcard count(made today), "made up today"
+each options owed.prayer
+  stack card gap 2
+    row gap 2
+      it head grow
+      max(0, sum(owed.n where prayer = it) - count(made where prayer = it)) "left" bold
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(count(made where prayer = it) / max(1, sum(owed.n where prayer = it)), 0, 1), 3 fill accent radius 1
+    button "Made up one" tap add made prayer = it
+===
+@rich domain=r11_quran_pages topic=quran_khatam_pages style=short
+quran pages
+needs: add pages read with quick buttons | progress out of 604 pages | pages a day needed to finish in set days | bar chart of pages per day | list of readings
+---
+app "Quran Pages" book orange
+table read pages num 1..604 = 5
+setting days num = 30 "Days to finish"
+let total = sum(read.pages)
+goal total, 604, "of 604 pages read"
+stack card gap 1
+  if total >= 604
+    "Khatam complete" head color good
+  else
+    round((604 - total) / max(1, days)) "pages a day to finish in" days "days" head
+  "Tap to change the days" faint tap edit days
+quick read, pages, [1, 2, 5, 10]
+section "Last 7 days", "pages per day"
+  daybars last 7 days, sum(read.pages on it)
+each read sort at desc top 8 as r empty "No pages yet. Tap a number after you read."
+  row card tap edit r swipe remove r
+    r.pages "pages" bold grow
+    r.at faint
+===
+@rich domain=r11_driving_lessons topic=driving_practice_log style=short
+driving lessons
+needs: log a lesson with minutes, skill and a 1 to 5 rating | hours practised against a goal | average rating per skill | list of lessons | goal hours setting
+---
+app "Driving Lessons" car yellow
+table drive mins num 10..300 = 60 unit "min", skill pick Parking|Reversing|Highway|City|Night = City, rating num 1..5 = 3
+setting need num = 20 "Practice hours wanted"
+topbar drive, "Log lesson"
+goal round(sum(drive.mins) / 6) / 10, need, "hours practised", " h"
+section "How each skill is going", "average rating, 1 to 5"
+  bars options drive.skill, sum(drive.rating where skill = it) / max(1, count(drive where skill = it)), it
+each drive sort at desc as d empty "No lessons yet. Log your first drive."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.skill bold
+      d.at faint
+    d.mins "min" faint
+    d.rating "/ 5" bold
+===
+@rich domain=r11_homework topic=homework_due_tracker style=short
+homework
+needs: add homework with subject, task and due date | tick it when done | tabs for open and done | count overdue | due dates in red when late
+---
+app "Homework" pencil green
+table task subject text, what text, due date, done bool
+state tab pick Open|Done = Open
+topbar task, "Add homework"
+row gap 2
+  statcard count(task where done = no), "still to do"
+  statcard count(task where done = no and due < today), "overdue"
+choice tab
+each task where done = (tab = Done) sort due as t empty "Nothing here. Add homework with Add homework."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.subject bold
+      t.what
+      "Due" t.due color if(t.due < today and not t.done, bad, muted)
+    toggle t.done
+===
+@rich domain=r11_exam_dates topic=exam_countdown_list style=short
+exam dates
+needs: add an exam with subject and date | days left for each exam | the next exam highlighted | exams already past | tap to edit or swipe to remove
+---
+app "Exam Dates" calendar teal dark
+table exam subject text, held date
+let coming = count(exam where held >= today)
+let nextexam = nth(exam where held >= today sort held, 1)
+topbar exam, "Add exam"
+stack card gap 1
+  "Next exam" faint
+  if coming = 0
+    "No exam coming up" head
+  else
+    plural(nextexam.held - today, "day") "to go for" nextexam.subject big
+    "Exams still to sit:" coming faint
+"Coming up" head
+each exam where held >= today sort held as e empty "No exams ahead. Add one with its date."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.subject bold
+      e.held faint
+    plural(e.held - today, "day") bold color if(e.held - today <= 7, bad, ink)
+"Done" head
+each exam where held < today sort held desc as e empty "No past exams yet."
+  row gap 2
+    e.subject grow faint
+    e.held faint
+===
+@rich domain=r11_bus_fare topic=daily_bus_fare_vs_pass style=short
+bus fare
+needs: tap morning or evening ride to add the fare | fare per ride setting | monthly spend | compare with a monthly pass price | bar chart of the last 14 days
+---
+app "Bus Fare" bus blue
+table ride fare money, way pick Morning|Evening = Morning
+setting price money = 60 "Fare per ride"
+setting pass money = 2500 "Monthly pass price"
+row gap 1
+  button "Morning ride" fill accent grow pad 3 tap add ride fare = price, way = Morning
+  button "Evening ride" grow pad 3 tap add ride fare = price, way = Evening
+stack card gap 2
+  "Spent this month" faint
+  sum(ride.fare month) big
+  goal sum(ride.fare month), pass, "of the pass price"
+  if sum(ride.fare month) > pass
+    "A monthly pass would have been cheaper." color warn
+  else
+    "Paying per ride is cheaper so far." color good
+section "Last 14 days", "fare per day"
+  daybars last 14 days, sum(ride.fare on it)
+each ride today sort at desc as r empty "No rides yet today."
+  row card tap edit r swipe remove r
+    r.way grow
+    r.fare bold
+===
+@rich domain=r11_duty_roster topic=staff_shift_roster style=short
+duty roster
+needs: add a shift with person, day and morning, evening, night or off | filter the roster by person | week grid of shifts | colours for off days | who is on today
+---
+app "Duty Roster" users purple
+table shift who text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, kind pick Morning|Evening|Night|Off = Morning
+state sel text = ""
+topbar shift, "Add shift"
+stack card gap 1
+  "On today" faint
+  each shift where day = dayname(today) and kind != Off as s empty "Nobody is rostered today."
+    row gap 2
+      s.who bold grow
+      s.kind
+row gap 1
+  each shift by who as g
+    button g.key fill if(sel = g.key, accent, soft) tap set sel = if(sel = g.key, "", g.key)
+grid 7 gap 1
+  each options shift.day as d
+    stack gap 1
+      d tiny bold align center color if(d = dayname(today), accent, muted)
+      each shift where day = d and (sel = "" or who = sel) as s
+        box pad 1 radius 6 fill if(s.kind = Off, soft, accent) tap edit s
+          s.who tiny bold
+          s.kind tiny
+===
+@rich domain=r11_overtime topic=overtime_hours_pay style=short
+overtime
+needs: add overtime hours with a reason | pay rate per hour setting | hours and pay this month | monthly cap of hours with progress | line of hours by day
+---
+app "Overtime" clock pink
+table ot hrs num 0.5..16 = 2 unit "h", why text?
+setting rate money = 400 "Pay per hour"
+setting cap num = 40 "Monthly cap (hours)"
+topbar ot, "Add overtime"
+row gap 2
+  statcard sum(ot.hrs month), "hours this month"
+  statcard sum(ot.hrs month) * rate, "overtime pay"
+goal sum(ot.hrs month), cap, "of the monthly cap", " h"
+section "This month", "hours per day"
+  trend days month, sum(ot.hrs on it)
+each ot month sort at desc as o empty "No overtime this month. Add the hours when you stay late."
+  row card gap 2 tap edit o swipe remove o
+    o.hrs "h" big
+    stack grow gap 0
+      o.why
+      o.at faint
+===
+@rich domain=r11_tip_jar topic=daily_tips_earned style=short
+tips
+needs: one-tap buttons to add a tip | total tips today | best day in the last 30 days | bar chart of 14 days | list of today's tips
+---
+app "Tips" coin grey
+table tip amount money
+statcard sum(tip.amount today), "tips today"
+quick tip, amount, [50, 100, 200, 500]
+row gap 2
+  statcard sum(tip.amount week), "this week"
+  statcard max(days last 30 days, sum(tip.amount on it)), "best day, last 30 days"
+section "Last 14 days"
+  daybars last 14 days, sum(tip.amount on it)
+each tip today sort at desc as t empty "No tips yet today. Tap an amount when you get one."
+  row card tap edit t swipe remove t
+    t.amount bold grow
+    t.at faint
+===
+@rich domain=r11_rickshaw_earnings topic=rickshaw_daily_profit style=short
+rickshaw earnings
+needs: add a trip with fare and km | add a cost like fuel or repair | profit today after costs | tab for trips and tab for costs | earnings chart for 7 days
+---
+app "Rickshaw Earnings" bike ocean
+table trip fare money, km num 0.. = 3 unit "km"
+table cost what pick Fuel|Repair|Challan|Other = Fuel, amount money
+screen trips "Trips" bike
+  topbar trip, "Add trip"
+  stack card gap 1
+    "Profit today" faint
+    sum(trip.fare today) - sum(cost.amount today) big color if(sum(trip.fare today) >= sum(cost.amount today), ink, bad)
+    plural(count(trip today), "trip") "," sum(trip.km today) "km, costs" sum(cost.amount today) faint
+  section "Last 7 days", "fares per day"
+    daybars last 7 days, sum(trip.fare on it)
+  each trip today sort at desc as t empty "No trips yet today."
+    row card tap edit t swipe remove t
+      t.fare bold grow
+      t.km "km" faint
+screen costs "Costs" wallet
+  topbar cost, "Add cost"
+  statcard sum(cost.amount month), "costs this month"
+  each cost month sort at desc as c empty "No costs this month."
+    row card tap edit c swipe remove c
+      c.what grow
+      c.amount bold
+===
+@rich domain=r11_delivery_runs topic=delivery_parcels_today style=short
+delivery runs
+needs: add a parcel with address, fee and cash to collect | tick delivered | parcels left today | fee earned and cash collected today | daily parcels chart
+---
+app "Delivery Runs" package mint
+table parcel to text, fee money, cash money = 0, sent bool
+topbar parcel, "Add parcel"
+row gap 2
+  statcard count(parcel today where sent = no), "parcels left"
+  statcard count(parcel today where sent = yes), "delivered", count(parcel today)
+row gap 2
+  statcard sum(parcel.fee today where sent = yes), "fees earned"
+  statcard sum(parcel.cash today where sent = yes), "cash collected"
+each parcel today sort sent as p empty "No parcels today. Add the first stop."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.to bold
+      if p.cash > 0
+        "Collect" p.cash color warn
+    toggle p.sent
+section "Last 7 days", "parcels per day"
+  daybars last 7 days, count(parcel on it)
+===
+@rich domain=r11_egg_count topic=poultry_egg_collection style=short
+egg count
+needs: add eggs collected with quick buttons | trays of 30 this week | average per day | best day | bar chart of 14 days
+---
+app "Egg Count" egg slate
+table lay eggs num 1..2000 = 10
+quick lay, eggs, [10, 20, 50, 100]
+statcard sum(lay.eggs today), "eggs today"
+row gap 2
+  statcard floor(sum(lay.eggs week) / 30), "full trays this week"
+  statcard round(sum(lay.eggs last 14 days) / 14), "average per day"
+section "Last 14 days", "best day" max(days last 14 days, sum(lay.eggs on it))
+  daybars last 14 days, sum(lay.eggs on it)
+each lay today sort at desc as l empty "No eggs counted today. Tap a number after each round."
+  row card tap edit l swipe remove l
+    l.eggs "eggs" bold grow
+    l.at faint
+===
+@rich domain=r11_crop_sprays topic=field_spray_schedule style=short
+crop sprays
+needs: add a field with its crop | log a spray with product and cost | which fields are due for a spray | days since last spray | spray gap setting
+---
+app "Crop Sprays" leaf ink dark
+table patch name text, crop text
+table spray patch ref patch, product text, cost money = 0
+setting gapdays num = 14 "Spray every (days)"
+topbar patch, "Add field"
+stack card gap 1
+  count(patch, due(it.spray, gapdays)) big color if(count(patch, due(it.spray, gapdays)) > 0, warn, good)
+  "fields due for a spray" color muted
+each patch sort name as p empty "No fields yet. Add a field with its crop."
+  stack card gap 2 tap edit p swipe remove p
+    row gap 2
+      stack grow gap 0
+        p.name bold
+        p.crop faint
+      if due(p.spray, gapdays)
+        "Spray due" bold color warn
+      else
+        "In " gapdays - since(p.spray) "days" faint
+    if count(p.spray) > 0
+      "Last sprayed" since(p.spray) "days ago with" last(p.spray.product) faint
+    button "Log spray" tap add spray patch = p, product = "Same as before"
+"Spend" head
+statcard sum(spray.cost year), "spent on sprays this year"
+===
+@rich domain=r11_buffalo_milk topic=animal_milk_yield style=short
+buffalo milk
+needs: add litres from an animal for morning or evening | milk price setting | litres and income today | litres by animal today | line of daily litres
+---
+app "Buffalo Milk" milk plum
+table pail animal text, litres num 0.5..40 = 5 unit "L", slot pick Morning|Evening = Morning
+setting rate money = 180 "Price per litre"
+topbar pail, "Add milk"
+row gap 2
+  statcard sum(pail.litres today), "litres today"
+  statcard sum(pail.litres today) * rate, "income today"
+section "By animal today"
+  each pail today by animal as g empty "No milk recorded today."
+    row gap 2
+      g.key bold grow
+      sum(g.litres) "L" bold
+section "Last 14 days", "litres per day"
+  trend days last 14 days, sum(pail.litres on it)
+each pail sort at desc top 8 as p empty "Nothing yet. Add the morning milking."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.animal bold
+      p.slot faint
+    p.litres "L" bold
+===
+@rich domain=r11_goat_weights topic=goat_weight_gain style=short
+goat weights
+needs: add a goat | log a weight in kg for a goat | latest weight and gain since the first weighing | line chart of weights per goat | herd total weight
+---
+app "Goat Weights" paw red
+table goat name text
+table weigh goat ref goat, kg num 1..200
+state newkg num = 20
+topbar goat, "Add goat"
+statcard sum(goat, last(it.weigh.kg)), "kg across the herd"
+each goat sort name as g empty "No goats yet. Add the first one."
+  stack card gap 2 tap edit g swipe remove g
+    row gap 2
+      g.name bold grow
+      if count(g.weigh) > 0
+        last(g.weigh.kg) "kg" bold
+        text last(g.weigh.kg) - first(g.weigh.kg) "kg gained" color good
+    if count(g.weigh) > 1
+      trend g.weigh, it.kg
+    field newkg "Weight today (kg)"
+    button "Weigh" tap add weigh goat = g, kg = newkg
+===
+@rich domain=r11_tractor_hours topic=tractor_hire_hours style=short
+tractor hours
+needs: add a job with client and hours | rate per hour setting | income this month | amount still unpaid | tick when paid
+---
+app "Tractor Hours" tool orange
+table job client text, hrs num 0.5..24 = 2 unit "h", paid bool
+setting rate money = 2500 "Rate per hour"
+topbar job, "Add job"
+row gap 2
+  statcard sum(job.hrs month) * rate, "income this month"
+  statcard sum(job where paid = no, it.hrs * rate), "still unpaid"
+statcard sum(job.hrs month), "tractor hours this month"
+each job sort at desc as j empty "No jobs yet. Add the first field you worked."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.client bold
+      j.hrs "h =" j.hrs * rate faint
+    toggle j.paid
+===
+@rich domain=r11_seed_stock topic=seed_stock_levels style=short
+seed stock
+needs: add a seed with kg in stock and low level | one tap to use 1 kg | tiles coloured when stock is low | count of seeds running low | tap to edit
+---
+app "Seed Stock" plant yellow
+table seed name text, kg num 0.. = 10 unit "kg", low num 0.. = 3 "Warn below (kg)"
+topbar seed, "Add seed"
+statcard count(seed where kg <= low), "seeds running low", count(seed)
+grid 2 gap 2
+  each seed sort name as s empty "No seeds yet. Add what is in your store."
+    stack card gap 1 fill if(s.kg <= s.low, soft, surface) tap edit s swipe remove s
+      s.name bold
+      s.kg "kg" big color if(s.kg <= s.low, bad, ink)
+      button "Used 1 kg" tap set s.kg = s.kg - 1

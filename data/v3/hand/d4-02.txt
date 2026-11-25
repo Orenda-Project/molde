@@ -1,0 +1,485 @@
+@rich domain=d4_password_audit topic=password_manager_audit style=detailed
+doing a password clean-up this weekend. I go through my password manager and note each site with what is wrong (weak, reused, old or fine), then tick it once I changed it. want a bar of how many accounts are clean now and a breakdown of which problem is left most
+needs: add an account with the problem found | tick when fixed | progress bar of clean accounts | breakdown of open problems by kind | list of accounts still to fix first
+---
+app "Password audit" key purple dark
+table acct site text, issue pick Weak|Reused|Old|Fine = Weak, fixed bool
+form acct, "Add account"
+goal count(acct where issue = Fine or fixed = yes), count(acct), "accounts with a strong, unique password"
+section "Still open", "by kind of problem"
+  share acct where issue != Fine and fixed = no by issue, count(it), it.key
+plural(count(acct where fixed = yes), "account") "fixed so far" faint
+each acct sort fixed as a empty "No accounts yet. Open your password manager and add the first site."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.fixed
+    a.site bold grow
+    a.issue faint
+===
+@rich domain=d4_two_factor_checklist topic=two_factor_per_account style=multi_feature
+checklist of my accounts and which kind of 2FA each one has: none, SMS, authenticator app or hardware key. tick if I saved the backup codes. show how many accounts are protected by something better than SMS, and put the ones with nothing in red
+needs: add an account with 2FA method | tick backup codes saved | count protected by app or hardware key | red for accounts with no 2FA | button to upgrade to authenticator app
+---
+app "2FA check" shield pink
+table acct name text, method pick None|SMS|App|Hardware_key = None, codes bool "Backup codes saved"
+let strong = count(acct where method = App or method = Hardware_key)
+topbar acct, "Add account"
+goal strong, count(acct), "accounts with an app or hardware key"
+plural(count(acct where codes = no), "account") "without saved backup codes" faint
+each acct sort method as a empty "No accounts yet. Start with email, bank and GitHub."
+  row card gap 2 tap edit a swipe remove a fill if(a.method = None, bad, soft)
+    stack grow gap 0
+      a.name bold
+      a.method "· codes" if(a.codes, "saved", "not saved") faint
+    if a.method = None or a.method = SMS
+      button "Use app" tap set a.method = App
+===
+@rich domain=d4_phishing_log topic=phishing_report_log style=short
+phishing log
+needs: log a phishing attempt with sender and channel | tick when reported | bar chart of attempts per day | count not reported yet
+---
+app "Phishing log" shield orange
+table phish sender text, channel pick Email|SMS|Chat|Call = Email, reported bool
+form phish, "Log attempt"
+statcard count(phish where reported = no), "not reported to security yet"
+section "Last 14 days", "attempts per day"
+  daybars last 14 days, count(phish on it)
+"Last attempt was" plural(since(phish), "day") "ago" faint
+each phish sort at desc as p empty "Nothing suspicious logged. Add the next odd email you get."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.reported
+    stack grow gap 0
+      p.sender bold
+      p.channel faint
+===
+@rich domain=d4_patch_tuesday topic=patch_tuesday_tracker style=detailed
+I am the only IT person at a small office. each patch day I list the update (KB number), which group of machines it touches (servers, laptops, phones, network), and move it from Pending to Testing to Deployed. flag anything pending for more than two weeks after release and show how many are late
+needs: add a patch with KB number, group and release date | move status pending, testing, deployed | flag patches pending over 14 days | count of late patches | comparison by status
+---
+app "Patch day" tool ocean
+table patch kb text, grp pick Servers|Laptops|Phones|Network = Laptops "Machines", status pick Pending|Testing|Deployed = Pending, released date = today
+let late(p patch) = p.status != Deployed and today - p.released > 14
+topbar patch, "Add patch"
+statcard count(patch, it.status != Deployed and today - it.released > 14), "patches over two weeks old and not deployed"
+section "By status"
+  share patch by status, count(it), it.key
+each patch sort released as p empty "No patches tracked. Add the ones from this month's release."
+  row card gap 2 tap edit p swipe remove p fill if(late(p), bad, soft)
+    stack grow gap 0
+      p.kb bold
+      p.grp "· released" p.released faint
+    if p.status = Pending
+      button "Test" tap set p.status = Testing
+    if p.status = Testing
+      button "Deploy" fill accent tap set p.status = Deployed
+    if p.status = Deployed
+      "Deployed" bold color good
+===
+@rich domain=d4_ssh_key_rotation topic=ssh_key_rotation style=multi_feature
+keep my ssh keys from getting ancient. for each key I note the name and the day I made it, plus after how many months it should be rotated. show the next rotation date, mark the overdue ones, and a button I press when I rotated it
+needs: add a key with creation date and rotation months | next rotation date per key | highlight overdue keys | button marks rotated today | count of overdue keys
+---
+app "SSH keys" key ink dark
+table skey name text, made date = today, months num 1..36 = 6 "Rotate every (months)"
+let over(k skey) = addmonths(k.made, k.months) < today
+topbar skey, "Add key"
+statcard count(skey, addmonths(it.made, it.months) < today), "keys overdue for rotation", count(skey)
+"Oldest key is" plural(max(skey, today - it.made), "day") "old" faint
+each skey sort addmonths(made, months) as k empty "No keys listed. Add the ones in your authorized_keys files."
+  row card gap 2 tap edit k swipe remove k fill if(over(k), warn, soft)
+    stack grow gap 0
+      k.name bold
+      "Rotate by" addmonths(k.made, k.months) faint
+    button "Rotated" tap set k.made = today
+===
+@rich domain=d4_vuln_scan_results topic=vulnerability_scan_list style=short
+cve list from my scan
+needs: add a finding with host, CVE and CVSS score | tick when patched | count of unpatched critical findings | bar chart of the worst five open ones
+---
+app "Scan results" lock ink
+table vuln host text, cve text, cvss num 0..10, patched bool
+topbar vuln, "Add finding"
+statcard count(vuln where cvss >= 9 and patched = no), "unpatched critical findings"
+section "Worst open findings", "CVSS score"
+  bars vuln where patched = no sort cvss desc top 5, it.cvss, it.cve
+each vuln sort cvss desc as v empty "No findings yet. Paste the first CVE from the scanner report."
+  row card gap 2 tap edit v swipe remove v
+    toggle v.patched
+    stack grow gap 0
+      v.cve bold
+      v.host faint
+    v.cvss bold color if(v.cvss >= 9, bad, ink)
+===
+@rich domain=d4_ctf_log topic=ctf_challenge_log style=custom_ui
+my ctf practice log: challenge name, category (web, crypto, pwn, reverse, forensics), the points it is worth and a tick when I solved it. show total points I earned, and a bar comparing points by category so I see my weak area
+needs: add a challenge with category and points | tick when solved | total points earned | bar comparison of earned points by category | count solved
+---
+app "CTF log" flag green
+table ctf name text, cat pick Web|Crypto|Pwn|Reverse|Forensics = Web, pts num 0.. = 100, solved bool
+form ctf, "Add challenge"
+row gap 2
+  statcard sum(ctf.pts where solved = yes), "points earned"
+  statcard count(ctf where solved = yes), "of" count(ctf) "solved", count(ctf)
+section "Earned points by category"
+  share ctf where solved = yes by cat, sum(it.pts), it.key
+each ctf sort solved as c empty "No challenges yet. Add the one you are stuck on right now."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.solved
+    stack grow gap 0
+      c.name bold
+      c.cat faint
+    c.pts "pts"
+===
+@rich domain=d4_access_review topic=quarterly_access_review style=multi_feature
+every quarter I check who still needs access to what. list person and system, then I mark each as Keep, Remove or Ask. let me filter to one decision, count how many I still have to ask about and how many access rights are to be removed
+needs: add an access entry with person and system | mark keep, remove or ask | filter by decision | count of entries to remove | count still to ask
+---
+app "Access review" users slate
+table access person text, sys text "System", decision pick Ask|Keep|Remove = Ask
+state f pick All|Ask|Keep|Remove = All
+topbar access, "Add access"
+row gap 2
+  statcard count(access where decision = Remove), "access rights to remove"
+  statcard count(access where decision = Ask), "still to ask about"
+choice f
+each access where f = All or decision = f sort person as a empty "No entries yet. List who has access to the admin panel first."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.person bold
+      a.sys faint
+    button "Keep" tap set a.decision = Keep
+    button "Remove" fill if(a.decision = Remove, bad, soft) tap set a.decision = Remove
+===
+@rich domain=d4_migration_steps topic=db_migration_checklist style=custom_ui
+checklist for each database migration before it goes live: backup taken, tried on staging, run on prod, results verified. one card per migration with the four ticks and a little progress bar, and a count of migrations that are not finished
+needs: add a migration with a name | four ticks backup, staging, prod and verified | progress bar per migration | count of unfinished migrations
+---
+app "Migrations" board mint dark
+table mig name text, backup bool, staging bool "On staging", prod bool "On prod", verified bool
+let steps(m mig) = if(m.backup, 1, 0) + if(m.staging, 1, 0) + if(m.prod, 1, 0) + if(m.verified, 1, 0)
+topbar mig, "Add migration"
+statcard count(mig, steps(it) < 4), "migrations not finished", count(mig)
+each mig sort at desc as m empty "No migrations yet. Add the one you plan for the next release."
+  stack card gap 1 swipe remove m
+    row gap 1
+      m.name bold grow
+      steps(m) "/ 4" faint
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1.5
+      rect 0, 0, 25 * steps(m), 3 fill accent radius 1.5
+    row gap 2
+      "Backup" faint
+      toggle m.backup
+      "Staging" faint
+      toggle m.staging
+      "Prod" faint
+      toggle m.prod
+      "Checked" faint
+      toggle m.verified
+===
+@rich domain=d4_query_tuning topic=query_before_after style=detailed
+every time I tune a query I write the name, how long it took before in ms and, once I have fixed it, how long it takes after. show the milliseconds saved per query, the total saved and a bar chart of the biggest wins
+needs: add a query with time before | add the time after once fixed | milliseconds saved per query | total milliseconds saved | bar chart of the biggest wins
+---
+app "Query tuning" timer blue
+table tune query text, before num 1.. unit "ms", after num? 1.. unit "ms"
+topbar tune, "Add query"
+statcard sum(tune, it.before - it.after), "ms saved in total"
+statcard count(tune where after > 0), "queries fixed out of" count(tune), count(tune)
+section "Biggest wins", "milliseconds saved"
+  bars tune where after > 0 sort it.before - it.after desc top 6, it.before - it.after, it.query
+"Slowest logged:" max(tune.before) "ms" faint
+each tune sort at desc as t empty "No queries yet. Add the slowest one first."
+  row card gap 2 tap edit t swipe remove t
+    t.query bold grow
+    t.before "ms ->" t.after "ms" faint
+===
+@rich domain=d4_schema_change_requests topic=schema_change_requests style=multi_feature
+the team keeps asking me to change tables, so now I log each request: who asked, which table, what they want, how urgent it is, and the status (open, approved, rejected, done). I want to filter by status and see how many urgent ones are still open
+needs: log a request with requester, table, change and urgency | change status open, approved, rejected or done | filter by status | count of urgent open requests | list sorted by urgency
+---
+app "Schema requests" note purple
+table req who text "Requested by", tbl text "Table", change long, prio pick Normal|Urgent|Low = Normal, status pick Open|Approved|Rejected|Done = Open
+state f pick All|Open|Approved|Rejected|Done = All
+topbar req, "Log request"
+statcard count(req where prio = Urgent and status = Open), "urgent requests still open"
+choice f
+each req where f = All or status = f sort if(prio = Urgent, 0, 1) as r empty "No requests yet. Log the next ALTER TABLE ask."
+  stack card gap 1 tap edit r swipe remove r
+    row gap 1
+      r.tbl bold grow
+      r.prio faint color if(r.prio = Urgent, bad, muted)
+    r.change
+    r.who "·" r.status faint
+    if r.status = Open
+      row gap 1
+        button "Approve" fill accent tap set r.status = Approved
+        button "Reject" tap set r.status = Rejected
+===
+@rich domain=d4_index_inventory topic=unused_index_inventory style=custom_ui
+inventory of database indexes: table, index name, size in MB and a tick if it has been used lately. show how many MB sit in indexes nobody uses, so I know what to drop, and highlight those rows
+needs: add an index with table, name and size | tick if used lately | total MB in unused indexes | highlight unused indexes | list sorted by size
+---
+app "Indexes" list red
+table idx tbl text "Table", name text, mb num 0.. unit "MB", used bool "Used lately"
+topbar idx, "Add index"
+statcard sum(idx.mb where used = no), "MB held by unused indexes"
+goal sum(idx.mb where used = yes), sum(idx.mb), "MB of indexes in use", "MB"
+plural(count(idx where used = no), "unused index") "to review" faint
+each idx sort mb desc as i empty "No indexes listed. Add the big ones from your table stats."
+  row card gap 2 tap edit i swipe remove i fill if(i.used, soft, warn)
+    stack grow gap 0
+      i.name bold
+      i.tbl faint
+    i.mb "MB" bold
+    toggle i.used
+===
+@rich domain=d4_restore_drills topic=backup_restore_drills style=detailed
+a backup is only real if you restore it. log every restore drill with the database, how many minutes the restore took and whether it worked. I set how often I want to drill (days), it tells me how long since the last one, and shows a line of restore times
+needs: log a drill with database, minutes and success | set drill interval in days | days since last drill | line chart of restore minutes | warning when a drill is due
+---
+app "Restore drills" shield ink
+table drill db text, mins num 0.. unit "min", worked bool "Restore worked"
+setting every num = 30 "Drill every (days)"
+topbar drill, "Log drill"
+statcard since(drill), "days since the last drill"
+if due(drill, every)
+  "A drill is due. Restore last night's backup somewhere safe." bold color warn
+section "Restore time", "minutes, oldest first"
+  trend drill sort at, it.mins
+each drill sort at desc top 8 as d empty "No drills yet. Restore your smallest database first."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.db bold
+      d.mins "minutes" faint
+    d.worked
+===
+@rich domain=d4_sql_snippets topic=sql_snippet_library style=custom_ui
+my sql snippets are all over the place. one library: a title, the query itself, and a tag (report, fix, admin). a search box on top that filters by title and a count of how many I have saved
+needs: add a snippet with title, query and tag | search box filtering by title | count of snippets | list with the query shown | edit or remove a snippet
+---
+app "SQL snippets" note grey
+table snip title text, sql long "Query", tag pick Report|Fix|Admin = Report
+state q text = ""
+topbar snip, "Add snippet"
+plural(count(snip), "snippet") "saved" head
+field q "Search by title"
+plural(count(snip where tag = Fix), "fix snippet") "saved" faint
+each snip where has(title, q) sort title as s empty "Nothing matches. Add a snippet or clear the search."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 1
+      s.title bold grow
+      s.tag faint
+    s.sql faint
+===
+@rich domain=d4_code_reading_journal topic=code_reading_journal style=detailed
+I read other people's code to get better. after each session I want to write the repo, the file I read, what I learned and how clear the code was from one to five. show a dots strip of the days I read this week, the average clarity, and which repo I have read most
+needs: add a reading with repo, file, what I learned and clarity | week dots of days I read | average clarity | most-read repo | list newest first
+---
+app "Code reading" book teal
+table read repo text, file text, learned long "What I learned", clarity num 1..5 = 3
+topbar read, "Add session"
+row gap 2
+  statcard round(avg(read.clarity) * 10) / 10, "average clarity out of 5", 5
+  statcard streak(read), "days in a row"
+weekdots count(read on it) > 0
+section "Most read repos", "sessions"
+  share read by repo, count(it), it.key
+each read sort at desc as r empty "No sessions yet. Pick one file in a project you admire and read it slowly."
+  stack card gap 0 tap edit r swipe remove r
+    r.repo "/" r.file bold
+    r.learned
+    "Clarity" r.clarity "of 5" faint
+===
+@rich domain=d4_repo_queue topic=repos_to_read_queue style=short
+repos to read
+needs: add a repo with language | move status queue, reading, done | filter by status | count per status
+---
+app "Repo queue" box green
+table repo name text, lang pick Python|JS|Go|Rust|C|Other = Python, status pick Queue|Reading|Done = Queue
+state f pick All|Queue|Reading|Done = All
+topbar repo, "Add repo"
+row gap 2
+  statcard count(repo where status = Queue), "in the queue"
+  statcard count(repo where status = Reading), "reading now"
+  statcard count(repo where status = Done), "done"
+choice f
+each repo where f = All or status = f sort name as r empty "No repos yet. Add the project you keep meaning to read."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.name bold
+      r.lang faint
+    if r.status != Done
+      button if(r.status = Queue, "Start", "Finish") tap set r.status = if(r.status = Queue, Reading, Done)
+===
+@rich domain=d4_oss_contributions topic=open_source_contribution_log style=multi_feature
+log my open source contributions: repo, what kind (docs, bug fix, feature, review) and the stage (draft, open, merged, closed). I want a yearly goal of merged PRs with a progress bar and a chart of merged ones by kind
+needs: log a contribution with repo, kind and stage | yearly goal of merged PRs | progress bar toward goal | chart of merged by kind | move stage from open to merged
+---
+app "Contributions" heart pink
+table pr repo text, kind pick Docs|Bug_fix|Feature|Review = Bug_fix, stage pick Draft|Open|Merged|Closed = Open
+setting target num = 12 "Merged PRs this year"
+form pr, "Log contribution"
+goal count(pr year where stage = Merged), target, "merged this year"
+section "Merged by kind"
+  share pr where stage = Merged by kind, count(it), it.key
+each pr sort at desc as p empty "No contributions yet. A typo fix in the docs counts."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.repo bold
+      p.kind "·" p.stage faint
+    if p.stage = Open
+      button "Merged" fill accent tap set p.stage = Merged
+===
+@rich domain=d4_til_notes topic=today_i_learned_streak style=short
+til notes
+needs: add a note with topic and details | week dots of days with a note | day streak | list newest first
+---
+app "TIL" pen yellow
+table til topic text, note long?
+form til, "Add TIL"
+row gap 2
+  statcard streak(til), "day streak"
+  statcard count(til), "things learned"
+weekdots count(til on it) > 0
+"Last note was" plural(since(til), "day") "ago" faint
+each til sort at desc as t empty "Nothing learned yet. What surprised you today?"
+  stack card gap 0 tap edit t swipe remove t
+    t.topic bold
+    t.note faint
+===
+@rich domain=d4_algo_practice topic=algorithm_practice_log style=detailed
+interview prep: I log each problem I solve, the topic (arrays, graphs, DP, trees, strings, heap), difficulty, how many attempts it took and how many minutes. tick when solved. show how many I solved, average minutes on solved ones and a chart of which topic I practise most
+needs: log a problem with topic, difficulty, attempts and minutes | tick when solved | count solved | average minutes on solved problems | chart of problems per topic
+---
+app "Algo practice" brain ocean
+table prob name text, topic pick Arrays|Graphs|DP|Trees|Strings|Heap = Arrays, level pick Easy|Medium|Hard = Medium, tries num 1.. = 1 "Attempts", mins num 0.. = 30, solved bool
+topbar prob, "Log problem"
+row gap 2
+  statcard count(prob where solved = yes), "problems solved"
+  statcard round(avg(prob.mins where solved = yes)), "average minutes when solved"
+section "Practice by topic", "problems"
+  share prob by topic, count(it), it.key
+each prob sort at desc as p empty "No problems logged. Do one easy array question to start."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.solved
+    stack grow gap 0
+      p.name bold
+      p.topic "·" p.level "·" p.mins "min" faint
+    button "+1 try" tap set p.tries = p.tries + 1
+    p.tries "x"
+===
+@rich domain=d4_system_design_topics topic=system_design_confidence style=short
+system design topics
+needs: add a topic | plus and minus buttons for confidence from 1 to 5 | weakest topics first | bar chart of confidence
+---
+app "Design topics" board slate
+table topic name text, conf num 1..5 = 1 "Confidence"
+topbar topic, "Add topic"
+section "Confidence by topic", "1 to 5"
+  bars topic sort conf, it.conf, it.name
+"Weakest topic:" first(topic sort conf).name faint
+each topic sort conf as t empty "No topics yet. Add caching, queues, sharding and the rest."
+  row card gap 2 tap edit t swipe remove t
+    t.name bold grow
+    button "-" tap set t.conf = t.conf - 1
+    t.conf bold
+    button "+" tap set t.conf = t.conf + 1
+===
+@rich domain=d4_mock_interviews topic=mock_interview_scores style=multi_feature
+I do mock interviews with friends. log each one with the type (coding, system design, behavioral), a score from 1 to 10 and the feedback they gave. show my score trend line, the average per type and the last feedback up top so I remember what to fix
+needs: log a mock with type, score and feedback | line chart of scores over time | average score per type | latest feedback shown on top | list of past mocks
+---
+app "Mock interviews" users orange
+table mock kind pick Coding|System|Behavioral = Coding, score num 1..10 = 6, feedback text?
+form mock, "Log mock"
+if count(mock) > 0
+  stack card gap 0
+    "Last feedback" faint
+    last(mock.feedback) bold
+section "Scores over time", "out of 10"
+  trend mock sort at, it.score
+section "Average by type"
+  share mock by kind, avg(it.score), it.key
+each mock sort at desc as m empty "No mocks yet. Ask a friend for thirty minutes."
+  row card gap 2 tap edit m swipe remove m
+    m.kind bold grow
+    m.score "/ 10"
+===
+@rich domain=d4_star_stories topic=behavioral_star_stories style=custom_ui
+story bank for behavioral interviews. each story has a title, the skill it shows (leadership, conflict, failure, teamwork, ownership), the situation and the result with numbers. filter by skill, and warn me which skill I have no story for yet
+needs: add a story with title, skill, situation and result | filter by skill | list of skills with no story yet | count of stories per skill | edit or remove stories
+---
+app "STAR stories" star plum
+table story title text, skill pick Leadership|Conflict|Failure|Teamwork|Ownership = Teamwork, situation long, result long "Result with numbers"
+state f pick All|Leadership|Conflict|Failure|Teamwork|Ownership = All
+topbar story, "Add story"
+section "Skills with no story yet"
+  each options story.skill as o
+    if count(story where skill = o) = 0
+      o bold color warn
+choice f
+each story where f = All or skill = f sort title as s empty "No stories yet. Start with the project you are proudest of."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 1
+      s.title bold grow
+      s.skill faint
+    s.situation faint
+    "Result:" s.result
+===
+@rich domain=d4_dsa_streak topic=daily_problem_streak style=short
+leetcode streak
+needs: one tap button when I solve a problem | daily goal setting | day streak | grid of the last 35 days
+---
+app "Daily solve" flame red
+table solved
+setting daily num = 1 "Problems per day"
+button "Solved one" fill accent tap add solved
+row gap 2
+  statcard count(solved today), "solved today", daily
+  statcard streak(solved), "day streak"
+section "Last 35 days"
+  daygrid last 35 days, count(solved on it), daily
+"Best streak:" plural(best(solved), "day") faint
+each solved sort at desc top 5 as s empty "Nothing solved yet today. One easy one counts."
+  row card gap 2 swipe remove s
+    s.at faint
+===
+@rich domain=d4_interview_pipeline topic=job_interview_pipeline style=multi_feature
+tracking my interviews at different companies: company, role, current stage (applied, phone, onsite, offer, rejected) and the date of the next step. one button moves a company to the next stage, and I want to see how many companies are in each stage
+needs: add a company with role, stage and next date | button advances the stage | count of companies in each stage | list sorted by next date | hide rejected from the main list
+---
+app "Interviews" users green dark
+table iv company text, role text?, stage pick Applied|Phone|Onsite|Offer|Rejected = Applied, nextdate date? "Next step on"
+topbar iv, "Add company"
+grid 4 gap 1
+  each ["Applied", "Phone", "Onsite", "Offer"] as s
+    stack card gap 0 align center
+      count(iv where stage = s) big
+      s faint
+each iv where stage != Rejected sort nextdate as i empty "No applications yet. Add the first company you applied to."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.company bold
+      i.role faint
+      "Next:" i.nextdate faint
+    if i.stage != Offer
+      button i.stage fill accent tap set i.stage = if(i.stage = Applied, Phone, if(i.stage = Phone, Onsite, Offer))
+===
+@rich domain=d4_takehome_tests topic=take_home_assignments style=short
+take home tests
+needs: add an assignment with company and due date | days left until due | hours spent with plus one hour button | tick when submitted
+---
+app "Take-homes" pencil blue
+table home company text, due date, hours num 0.. = 0 "Hours spent", sent bool "Submitted"
+topbar home, "Add assignment"
+statcard sum(home.hours), "hours spent on take-homes"
+each home sort sent as h empty "No take-home tests right now. Good luck with the next one."
+  row card gap 2 tap edit h swipe remove h fill if(h.sent, soft, if(h.due - today <= 1, warn, soft))
+    toggle h.sent
+    stack grow gap 0
+      h.company bold
+      if h.sent
+        "Submitted after" h.hours "hours" faint
+      else
+        plural(h.due - today, "day") "left ·" h.hours "hours so far" faint
+    button "+1h" tap set h.hours = h.hours + 1

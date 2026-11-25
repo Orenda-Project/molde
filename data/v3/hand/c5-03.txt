@@ -1,0 +1,539 @@
+@rich domain=c5_bat_average topic=batting_average_log style=multi_feature
+our club coach wants every player's batting average. add each innings with runs scored and whether i was not out, then show total runs, the average (runs divided by times out), best score and how many fifties
+needs: add an innings with runs and not out | total runs | batting average | highest score | count of fifties
+---
+app "Batting Average" ball green
+table inns runs num 0..400, notout bool
+let outs = count(inns where notout = no)
+let avg = if(outs > 0, sum(inns.runs) / outs, sum(inns.runs))
+topbar inns, "Add innings"
+row gap 2
+  statcard sum(inns.runs), "runs in total"
+  statcard round(avg * 100) / 100, "batting average"
+row gap 2
+  statcard max(inns.runs), "highest score"
+  statcard count(inns where runs >= 50), "fifties or more"
+section "Runs in each innings", "oldest first"
+  trend inns, it.runs
+each inns top 8 as i empty "No innings yet. Add your first score."
+  row card tap edit i swipe remove i
+    i.runs if(i.notout, "not out", "out") bold
+===
+@rich domain=c5_strike_rate topic=strike_rate_knocks style=short
+strike rate
+needs: runs and balls of a knock | strike rate | runs per over | saved knocks list
+---
+app "Strike Rate" bolt teal
+state runs num = 0
+state balls num = 0
+table knock label text, sr num
+let sr = if(balls > 0, runs * 100 / balls, 0)
+field runs "Runs scored"
+field balls "Balls faced"
+statcard round(sr * 10) / 10, "strike rate"
+"Runs per over" round(sr * 6) / 100 faint
+button "Save this knock" fill accent tap add knock label = join(runs, " off ", balls), sr = round(sr)
+section "Saved knocks"
+  each knock top 6 as k empty "Nothing saved yet."
+    row tap remove k
+      k.label grow
+      k.sr bold
+===
+@rich domain=c5_net_run_rate topic=net_run_rate_tournament style=detailed
+tournament net run rate. i type runs we scored and overs we batted, runs we conceded and overs we bowled. overs come like 18.3 meaning 18 overs and 3 balls, so please convert properly. show nrr for the match
+needs: runs scored and overs batted | runs conceded and overs bowled | run rates for and against | net run rate | handles overs written like 18.3
+---
+app "Net Run Rate" trophy ink
+state rf num = 0
+state of num = 20
+state ra num = 0
+state ob num = 20
+let balls(o num) = floor(o) * 6 + round((o - floor(o)) * 10)
+let rate1 = if(balls(of) > 0, rf * 6 / balls(of), 0)
+let rate2 = if(balls(ob) > 0, ra * 6 / balls(ob), 0)
+let nrr = rate1 - rate2
+section "We batted"
+  field rf "Runs scored"
+  field of "Overs faced"
+section "We bowled"
+  field ra "Runs conceded"
+  field ob "Overs bowled"
+row gap 2
+  statcard round(rate1 * 100) / 100, "our run rate"
+  statcard round(rate2 * 100) / 100, "their run rate"
+if nrr >= 0
+  "NRR +" round(nrr * 1000) / 1000 big color good
+else
+  "NRR" round(nrr * 1000) / 1000 big color bad
+===
+@rich domain=c5_league_points topic=league_points_table style=multi_feature
+running our mohalla league. add every team with its wins, losses and ties and show a points table sorted from the top, 2 points a win and 1 for a tie, with a bar showing each team's points
+needs: add a team with wins losses and ties | points total per team | table sorted by points | bar chart of points | matches played
+---
+app "League Table" trophy orange
+table side name text, won num 0..40 = 0, lost num 0..40 = 0, tied num 0..40 = 0
+let pts(s side) = s.won * 2 + s.tied
+topbar side, "Add team"
+section "Standings", "2 for a win, 1 for a tie"
+  each side sort pts(it) desc as s empty "No teams yet. Add the first team."
+    row tap edit s swipe remove s
+      text index + 1 faint
+      s.name grow
+      "P" s.won + s.lost + s.tied faint
+      pts(s) bold
+section "Points chart"
+  bars side, pts(it), it.name
+===
+@rich domain=c5_race_splits topic=race_pace_splits style=custom_ui
+planning a race. pick 5k, 10k or half marathon, type my goal time in minutes, and show the pace per km and a split for every kilometre so i know my time at each marker
+needs: distance choice | goal time in minutes | pace per km | split time at each km
+---
+app "Race Splits" run blue
+state dist pick K5|K10|Half = K10
+state goal num = 55
+let km = if(dist = K5, 5, if(dist = K10, 10, 21))
+let pace = goal * 60 / km
+let mmss(t num) = join(floor(t / 60), ":", if(t % 60 < 10, "0", ""), round(t) % 60)
+choice dist
+field goal "Goal time (minutes)"
+mmss(round(pace)) big
+"per kilometre" faint
+section "Splits", km "km"
+  each 1..km empty "Pick a distance."
+    row
+      "km" it grow
+      mmss(round(pace * it)) bold
+===
+@rich domain=c5_bowling_figures topic=bowling_figures_economy style=detailed
+after my spell i type overs bowled in the 4.2 style, runs given and wickets taken and it tells me economy, bowling average and strike rate. if i took no wickets show a dash note instead of garbage
+needs: overs runs and wickets | economy rate | bowling average | strike rate | note when no wickets
+---
+app "Bowling Figures" ball red
+state ov num = 4
+state runs num = 0
+state wk num = 0
+let balls = floor(ov) * 6 + round((ov - floor(ov)) * 10)
+let eco = if(balls > 0, runs * 6 / balls, 0)
+field ov "Overs bowled"
+field runs "Runs conceded"
+field wk "Wickets"
+slider wk 0..10
+statcard round(eco * 100) / 100, "economy, runs per over"
+if wk > 0
+  row gap 2
+    statcard round(runs / wk * 10) / 10, "runs per wicket"
+    statcard round(balls / wk * 10) / 10, "balls per wicket"
+else
+  "No wickets yet, so average and strike rate are not defined." faint
+===
+@rich domain=c5_chase_rrr topic=chase_required_rate style=multi_feature
+chasing in a 20 over game. i put the target, runs so far and overs done and want runs still needed, balls left, the required rate versus the current rate, and a bar of how close we are
+needs: target and runs so far | overs done | runs needed and balls left | required and current run rate | progress bar
+---
+app "Chase Rate" target purple dark
+state target num = 150
+state runs num = 40
+state overs num = 5.2
+let done = floor(overs) * 6 + round((overs - floor(overs)) * 10)
+let left = max(0, 120 - done)
+let need = max(0, target - runs)
+let rrr = if(left > 0, need * 6 / left, 0)
+let crr = if(done > 0, runs * 6 / done, 0)
+field target "Target"
+field runs "Runs so far"
+field overs "Overs done"
+row gap 2
+  statcard need, "runs needed"
+  statcard left, "balls left"
+row gap 2
+  statcard round(rrr * 100) / 100, "required rate"
+  statcard round(crr * 100) / 100, "current rate"
+goal runs, target, "runs of the target"
+if need = 0
+  "Target reached" bold color good
+else
+  if rrr > crr + 2
+    "Rate is climbing, take the risk now" bold color warn
+===
+@rich domain=c5_football_season topic=football_season_results style=multi_feature
+our football team's season. log each match with the opponent, goals we scored and goals we let in, then show wins, draws, losses, points at 3 for a win and goal difference, with bars of the goal difference per match
+needs: add a match with opponent and goals | wins draws and losses | points | goal difference | bar per match
+---
+app "Season Table" ball mint
+table game opp text, scored num 0..20, conceded num 0..20
+let wins = count(game where scored > conceded)
+let draws = count(game where scored = conceded)
+let losses = count(game where scored < conceded)
+let diff = sum(game.scored) - sum(game.conceded)
+topbar game, "Add match"
+row gap 2
+  statcard wins * 3 + draws, "points"
+  statcard diff, "goal difference"
+"W" wins "D" draws "L" losses bold
+section "Goal difference per match"
+  bars game top 10, it.scored - it.conceded, it.opp
+each game as g empty "No matches yet. Add the first result."
+  row card tap edit g swipe remove g
+    g.opp grow
+    g.scored "-" g.conceded bold
+===
+@rich domain=c5_run_pace_speed topic=run_pace_speed style=short
+running pace
+needs: distance and time | pace per km | speed in km per hour | projected 5k and 10k time
+---
+app "Running Pace" run slate
+state km num = 5
+state mins num = 30
+state secs num = 0
+let total = mins * 60 + secs
+let pace = if(km > 0, total / km, 0)
+let mmss(t num) = join(floor(t / 60), ":", if(t % 60 < 10, "0", ""), round(t) % 60)
+field km "Distance (km)"
+field mins "Minutes"
+field secs "Seconds"
+mmss(round(pace)) big
+"per kilometre" faint
+"Speed" round(if(total > 0, km * 3600 / total, 0) * 10) / 10 "km/h" faint
+"At this pace: 5K in" mmss(pace * 5) "and 10K in" mmss(pace * 10) faint
+===
+@rich domain=c5_one_rep_max topic=one_rep_max_percentages style=detailed
+gym helper: i lifted some weight for a few reps and want my estimated one rep max using the epley formula, then a small table of the weights for 60, 70, 80 and 90 percent of it so i can plan my sets
+needs: weight lifted and reps | estimated one rep max | weights at 60 70 80 90 percent | handles one rep as a plain max
+---
+app "One Rep Max" dumbbell plum
+state w num = 60
+state reps num = 8
+let orm = if(reps <= 1, w, w * (1 + reps / 30))
+field w "Weight lifted (kg)"
+field reps "Reps"
+slider reps 1..20
+statcard round(orm * 10) / 10, "estimated one rep max, kg"
+section "Training weights", "kg"
+  each [60, 70, 80, 90] as pc
+    row
+      pc "%" grow
+      round(orm * pc / 100 / 2.5) * 2.5 bold
+"Rounded to the nearest 2.5 kg plate step." faint
+===
+@rich domain=c5_balls_to_overs topic=balls_to_overs_converter style=short
+balls to overs
+needs: balls bowled | overs in 18.3 style | overs to balls | maiden-friendly 6 ball rule
+---
+app "Balls to Overs" ball yellow
+state balls num = 111
+state ov num = 18.3
+let balls2(o num) = floor(o) * 6 + round((o - floor(o)) * 10)
+section "Balls into overs"
+  field balls "Balls bowled"
+  join(floor(balls / 6), ".", balls % 6) big
+  "overs" faint
+section "Overs into balls"
+  field ov "Overs, like 18.3"
+  statcard balls2(ov), "balls"
+"Six legal balls make an over. Wides and no-balls are not counted." faint
+===
+@rich domain=c5_swim_laps topic=swimming_laps_log style=custom_ui
+i swim after work. let me log each swim as laps done, my pool is 25 m, show distance today and this week and a bar chart of the last seven days, and my weekly goal progress in metres
+needs: log laps for a swim | distance today and this week | bar chart of 7 days | weekly goal progress
+---
+app "Swim Laps" drop grey
+table swim laps num 1..200
+setting pool num 10..100 = 25 "Pool length (m)"
+setting wkgoal num = 2000 "Weekly goal (m)"
+topbar swim, "Log swim"
+row gap 2
+  statcard sum(swim.laps today) * pool, "metres today"
+  statcard sum(swim.laps week) * pool, "metres this week", wkgoal
+section "Last 7 days", "metres"
+  daybars last 7 days, sum(swim.laps on it) * pool
+each swim top 5 as s empty "No swims yet. Log your first laps."
+  row card tap edit s swipe remove s
+    s.at grow
+    s.laps "laps" faint
+    s.laps * pool "m" bold
+===
+@rich domain=c5_trip_fuel topic=trip_fuel_cost style=detailed
+driving from lahore to karachi with family. type distance in km, the car's km per litre and the petrol price, choose one way or return, and tell me litres needed, fuel cost and what each of us pays when we are 4 people sharing
+needs: distance | km per litre and petrol price | one way or return choice | litres and cost | cost per person
+---
+app "Trip Fuel" car pink
+state dist num = 1200
+state kpl num = 12
+state price money = 0
+state way pick One_way|Return = One_way
+state people num = 4
+let km = if(way = Return, dist * 2, dist)
+let litres = if(kpl > 0, km / kpl, 0)
+choice way
+field dist "Distance one way (km)"
+field kpl "Car does (km per litre)"
+field price "Petrol per litre"
+field people "People sharing"
+row gap 2
+  statcard round(litres), "litres of petrol"
+  statcard round(litres * price), "fuel cost"
+"Each person pays" round(litres * price / max(people, 1)) big
+===
+@rich domain=c5_visa_days topic=visa_days_used style=multi_feature
+schengen style rule: i can stay 90 days in total. add each trip with the date i entered and the date i left and show total days used, days remaining and a bar for how much of the 90 i have spent
+needs: add a stay with entry and exit date | days per stay | total days used | days remaining | progress bar toward the limit
+---
+app "Visa Days" plane teal
+table stay entry date, leave date
+setting limit num 1..365 = 90 "Allowed days"
+let days(s stay) = max(0, s.leave - s.entry + 1)
+let used = sum(stay, days(it))
+topbar stay, "Add stay"
+statcard max(0, limit - used), "days left", limit
+goal used, limit, "days used", " days"
+if used > limit
+  "You are over the limit by" used - limit "days." bold color bad
+each stay sort entry desc as s empty "No trips yet. Add the dates of your first stay."
+  row card tap edit s swipe remove s
+    s.entry grow
+    days(s) "days" bold
+===
+@rich domain=c5_luggage_weight topic=luggage_weight_check style=multi_feature
+packing for a flight where the limit is 23 kg. i add each thing i pack with its weight in kg and see the total, how much room is left, and the excess charge at a price per extra kg if i go over
+needs: add an item with weight | total weight | kg left under the limit | excess charge per extra kg | bar progress to the limit
+---
+app "Luggage Weight" bag red
+table thing name text, kg num 0.1..30
+setting limit num = 23 "Bag allowance (kg)"
+setting fee money = 0 "Fee per extra kg"
+let total = sum(thing.kg)
+topbar thing, "Add item"
+statcard round(total * 10) / 10, "kg packed", limit
+goal total, limit, "kg of the allowance", " kg"
+if total > limit
+  "Over by" round((total - limit) * 10) / 10 "kg. Fee:" round((total - limit) * fee) bold color bad
+else
+  "Room left:" round((limit - total) * 10) / 10 "kg" bold color good
+each thing sort kg desc as t empty "Nothing packed yet."
+  row card tap edit t swipe remove t
+    t.name grow
+    t.kg "kg" bold
+===
+@rich domain=c5_tip_country topic=tipping_by_country style=short
+tip by country
+needs: pick the country | bill amount | tip amount and total | note on local custom
+---
+app "Tip Abroad" map ocean
+state place pick USA|Japan|Egypt|Turkey|Pakistan|UK = USA
+state bill money = 0
+let pct = if(place = USA, 18, if(place = Japan, 0, if(place = Egypt, 12, if(place = Turkey, 10, if(place = Pakistan, 10, 12)))))
+choice place
+field bill "Bill"
+statcard round(bill * pct / 100), "tip at" pct "%"
+"Total to pay" round(bill * (1 + pct / 100)) big
+if place = Japan
+  "Tipping is not expected and can feel awkward." faint
+if place = UK
+  "Check if service charge is already on the bill." faint
+===
+@rich domain=c5_roadtrip_split topic=friends_roadtrip_share style=detailed
+road trip with friends to naran. fuel for the van, tolls, and a night's hotel. i type the distance, the van's km per litre, petrol price, tolls and hotel cost, and how many of us go, and want each one's share
+needs: distance and mileage | petrol price | tolls and hotel cost | number of people | each person's share
+---
+app "Roadtrip Share" map blue
+state dist num = 600
+state kpl num = 9
+state petrol money = 0
+state tolls money = 0
+state hotel money = 0
+state friends num = 5
+let fuel = if(kpl > 0, dist / kpl * petrol, 0)
+let all = fuel + tolls + hotel
+grid 2 gap 2
+  field dist "Distance (km)"
+  field kpl "Km per litre"
+  field petrol "Petrol per litre"
+  field tolls "Tolls"
+field hotel "Hotel"
+field friends "People going"
+slider friends 1..15
+section "Trip bill", "total"
+  "Fuel" round(fuel)
+  "Tolls and hotel" tolls + hotel
+  "Total" round(all) bold
+statcard round(all / max(friends, 1)), "each person pays"
+===
+@rich domain=c5_arrival_time topic=flight_arrival_local style=custom_ui
+my flight leaves at 9:00 and takes 7 hours and the destination clock is 4 hours ahead. type those three and show the local arrival time, and say if it lands the next day
+needs: departure time | flight hours | time zone difference | local arrival time | next day note
+---
+app "Arrival Time" plane purple
+state dep time = 9:00
+state flight num = 7
+state zone num = 4
+let start = hour(dep) + minute(dep) / 60
+let raw = start + flight + zone
+let wrapped = (raw % 24 + 24) % 24
+let hh = floor(wrapped)
+let mm = round((wrapped - hh) * 60)
+field dep "Leaves at (home time)"
+field flight "Flight time (hours)"
+field zone "Destination is ahead by (hours)"
+slider zone -12..12
+join(hh, ":", if(mm < 10, "0", ""), mm) big
+"local arrival time" faint
+if raw >= 24
+  "Lands the next day." bold
+if raw < 0
+  "Lands the day before on the local calendar." bold
+===
+@rich domain=c5_trip_budget_fx topic=holiday_budget_in_rupees style=multi_feature
+a week in istanbul. i set my daily spending in lira, the number of days and the rupee price of one lira, plus a buffer percent for surprises, and see the total in lira and in rupees
+needs: days and daily spend | exchange rate | buffer percent slider | total in foreign money | total in rupees
+---
+app "Holiday Budget" money green
+state days num = 7
+state daily num = 3000
+state rate money = 0
+state buffer num = 10
+let lira = days * daily * (1 + buffer / 100)
+field days "Days"
+field daily "Spending per day (lira)"
+field rate "Rupees per 1 lira"
+"Buffer" buffer "%" faint
+slider buffer 0..30
+statcard round(lira), "lira to take"
+statcard round(lira * rate), "rupees at today's rate"
+"Without buffer:" days * daily "lira" faint
+===
+@rich domain=c5_car_vs_taxi topic=rental_car_or_taxi style=detailed
+is it cheaper to rent a car or just take taxis. i enter the days, km per day, rental price per day, fuel cost per km, and the taxi rate per km, and want the totals of both and which wins
+needs: days and km per day | rental price and fuel per km | taxi rate per km | total for both | cheaper option
+---
+app "Car or Taxi" car grey
+state days num = 5
+state km num = 40
+state rent money = 0
+state fuelkm money = 0
+state taxikm money = 0
+let carcost = days * rent + days * km * fuelkm
+let taxicost = days * km * taxikm
+grid 2 gap 2
+  field days "Days"
+  field km "Km per day"
+  field rent "Rental per day"
+  field fuelkm "Fuel per km"
+field taxikm "Taxi per km"
+row gap 2
+  statcard round(carcost), "rent a car"
+  statcard round(taxicost), "taxis"
+if carcost > 0 or taxicost > 0
+  if carcost < taxicost
+    "Renting saves" round(taxicost - carcost) big color good
+  else
+    "Taxis save" round(carcost - taxicost) big color good
+===
+@rich domain=c5_hotel_total topic=hotel_stay_total style=multi_feature
+hotel quote: nights, rate per night, a tax percent and a fixed resort fee for each night, then how many people sharing the room. show the total stay and the cost per person per night
+needs: nights and nightly rate | tax percent | resort fee per night | total stay | per person per night
+---
+app "Hotel Total" bed slate
+state nights num = 3
+state rate money = 0
+state tax num = 16
+state resort money = 0
+state sharing num = 2
+let night = rate * (1 + tax / 100) + resort
+let total = night * nights
+field nights "Nights"
+field rate "Rate per night"
+"Tax" tax "%" faint
+slider tax 0..30
+field resort "Resort fee per night"
+field sharing "People sharing"
+statcard round(total), "total stay"
+"Per person per night" round(night / max(sharing, 1)) big
+"Tax and fees add" round(total - rate * nights) "to the quoted rate." faint
+===
+@rich domain=c5_jet_lag topic=jet_lag_recovery style=short
+jet lag
+needs: time zones crossed | direction east or west | days to adjust | tips depending on the direction
+---
+app "Jet Lag" moon ink dark
+state zones num = 5
+state dir pick East|West = East
+let days = if(dir = East, zones, zones * 2 / 3)
+choice dir
+field zones "Time zones crossed"
+slider zones 1..12
+statcard round(days * 10) / 10, "days to feel normal"
+if dir = East
+  "Going east is harder. Get morning light and sleep early." faint
+else
+  "Going west is easier. Stay up and take evening light." faint
+===
+@rich domain=c5_group_tickets topic=group_ticket_price style=detailed
+selling museum tickets for school groups. adult ticket price, children pay half, and if the group is over 10 people everybody gets 10 percent off. type adults and children and it shows the full price, the discount and what the group pays
+needs: adult ticket price | adults and children | children half price | group discount over 10 | total payable
+---
+app "Group Tickets" tag yellow
+state price money = 0
+state adults num = 2
+state kids num = 10
+let full = price * adults + price * kids / 2
+let group = adults + kids
+let off = if(group > 10, full * 0.1, 0)
+field price "Adult ticket"
+field adults "Adults"
+field kids "Children"
+row gap 2
+  statcard group, "people"
+  statcard round(full), "full price"
+if off > 0
+  "Group discount" round(off) color good
+else
+  "Add" 11 - group "more to get the group discount." faint
+"Group pays" round(full - off) big
+===
+@rich domain=c5_umrah_budget topic=pilgrimage_budget_by_item style=multi_feature
+saving for umrah. let me add expenses as flight, hotel, food, transport or gifts with the amount, set my total budget, and see how much is spent, how much is left and a bar split by category
+needs: add an expense with category and amount | total budget setting | amount spent and left | bars by category | list of expenses
+---
+app "Umrah Budget" mosque mint
+table cost item pick Flight|Hotel|Food|Transport|Gifts = Flight, amount money
+setting budget money = 0 "Total budget"
+let spent = sum(cost.amount)
+topbar cost, "Add expense"
+statcard spent, "spent so far", budget
+goal spent, budget, "of the budget"
+"Left to spend" budget - spent bold
+section "By category"
+  each options cost.item as o
+    row
+      o grow
+      sum(cost.amount where item = o) bold
+each cost sort at desc top 8 as c empty "No costs yet. Add the flight or the hotel first."
+  row card tap edit c swipe remove c
+    c.item grow
+    c.amount bold
+===
+@rich domain=c5_drive_breaks topic=driving_time_with_breaks style=custom_ui
+long drive: distance, average speed, and a rest stop of 20 minutes for every 2 hours at the wheel. show the driving time, the number of stops, the total door to door time, and the arrival clock if i leave at 6:00
+needs: distance and speed | rest stop length and gap | driving time and number of stops | total time | arrival time
+---
+app "Drive Time" car orange
+state dist num = 450
+state speed num = 80
+state gap num = 2
+state rest num = 20
+state start time = 6:00
+let drive = if(speed > 0, dist / speed, 0)
+let stops = if(gap > 0, floor(drive / gap), 0)
+let total = drive + stops * rest / 60
+let arr = (hour(start) + minute(start) / 60 + total) % 24
+let hh = floor(arr)
+let mm = round((arr - hh) * 60)
+field dist "Distance (km)"
+field speed "Average speed (km/h)"
+field start "Leaving at"
+row gap 2
+  statcard round(drive * 10) / 10, "hours driving"
+  statcard stops, "rest stops"
+statcard round(total * 10) / 10, "hours door to door"
+"Arrive around" join(hh, ":", if(mm < 10, "0", ""), mm) big
+"One" rest "minute stop for every" gap "hours." faint

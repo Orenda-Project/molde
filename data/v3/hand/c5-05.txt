@@ -1,0 +1,209 @@
+@rich domain=c5_gas_meter_split topic=shared_gas_bill_floors style=detailed
+two families share one gas connection but each floor has its own meter. i type last and current readings for both floors and the whole bill, and it should split the bill by units used and show what each floor pays
+needs: previous and current meter readings for each floor | total bill | units used per floor | amount each floor pays
+---
+app "Gas Bill Split" fire ocean dark
+state p1 num = 0
+state c1 num = 0
+state p2 num = 0
+state c2 num = 0
+state bill money = 0
+let u1 = max(0, c1 - p1)
+let u2 = max(0, c2 - p2)
+let tot = u1 + u2
+section "Ground floor"
+  field p1 "Last reading"
+  field c1 "Current reading"
+section "First floor"
+  field p2 "Last reading"
+  field c2 "Current reading"
+field bill "Total bill"
+if tot = 0
+  "Enter both readings to split the bill." faint
+else
+  row gap 2
+    statcard round(bill * u1 / tot), "ground floor pays"
+    statcard round(bill * u2 / tot), "first floor pays"
+  "Units used:" u1 "and" u2 faint
+===
+@rich domain=c5_grocery_per_head topic=grocery_budget_per_person style=multi_feature
+monthly grocery budget for the house, with adults and kids where a kid eats about 60 percent of an adult. type the budget, adults and kids and show the budget per adult, per kid, and per day for the whole house
+needs: monthly budget | adults and kids count | per adult and per kid | per day for the house
+---
+app "Grocery Share" cart mint
+state budget money = 0
+state adults num = 2
+state kids num = 2
+let units = adults + kids * 0.6
+let adult = if(units > 0, budget / units, 0)
+field budget "Monthly grocery budget"
+field adults "Adults"
+field kids "Children"
+row gap 2
+  statcard round(adult), "per adult a month"
+  statcard round(adult * 0.6), "per child a month"
+"The whole house spends" round(budget / 30) "a day" big
+"That is" round(budget / 4.3) "a week for" adults + kids "people." faint
+===
+@rich domain=c5_school_fee_growth topic=school_fee_rise_years style=detailed
+school raises fees every year by some percent. i give this year's monthly fee, the yearly increase, the number of children and how many years are left, and want this year's yearly cost, next year's, and the total paid over all the years
+needs: monthly fee and yearly increase | children | years left | yearly cost now and next year | total over the years
+---
+app "School Fee Rise" school slate
+state fee money = 0
+state rise num = 10
+state kids num = 2
+state years num = 5
+let yr(n num) = fee * 12 * kids * pow(1 + rise / 100, n)
+field fee "Monthly fee per child"
+"Yearly rise" rise "%" faint
+slider rise 0..25
+field kids "Children"
+field years "Years left"
+row gap 2
+  statcard round(yr(0)), "this year"
+  statcard round(yr(1)), "next year"
+"All" years "years cost" round(sum(1..years, yr(it - 1))) big
+"The last year alone is" round(yr(years - 1)) faint
+===
+@rich domain=c5_retirement_lasts topic=savings_last_how_long style=multi_feature
+if i retire with my savings, how many years will it last? i type savings, monthly spending, what the savings earn a year and inflation, and see the years it lasts and a warning if it ends before 25 years
+needs: savings and monthly spending | yearly return and inflation | years the money lasts | warning under 25 years
+---
+app "Money Lasts" moon plum
+state save money = 5000000
+state spend money = 60000
+state ret num = 9
+state infl num = 7
+let g = (ret - infl) / 1200
+let left(k num) = save * pow(1 + g, k) - spend * (pow(1 + g, k) - 1) / g
+let months = if(g = 0, if(spend > 0, floor(save / spend), 0), count(1..600, left(it) > 0) + 1)
+field save "Savings at retirement"
+field spend "Spending a month (today's money)"
+"Return" ret "% a year" faint
+slider ret 0..20
+"Inflation" infl "% a year" faint
+slider infl 0..20
+statcard floor(months / 12), "years it lasts"
+if months < 300
+  "Less than 25 years. Spend less or save more." bold color bad
+else
+  "That should last a long retirement." bold color good
+===
+@rich domain=c5_freelance_rate topic=freelance_rate_to_match_pay style=custom_ui
+i want to freelance and earn what a job pays. type the monthly income i want, monthly business costs, billable hours per week and weeks off a year, and show the hourly rate i must charge and the day rate for eight hours
+needs: monthly income wanted | business costs | billable hours and weeks off | hourly rate | day rate
+---
+app "Freelance Rate" pen orange
+state want money = 0
+state costs money = 0
+state hours num = 20
+state off num = 4
+let weeks = max(1, 52 - off)
+let rate = (want + costs) * 12 / (weeks * max(hours, 1))
+field want "Income I want a month"
+field costs "Business costs a month"
+field hours "Billable hours a week"
+slider hours 5..40
+field off "Weeks off a year"
+statcard round(rate), "per hour"
+"Day rate" round(rate * 8) big
+"Only billable hours count, so emails and chasing clients are not paid." faint
+===
+@rich domain=c5_car_cost_km topic=car_cost_per_kilometre style=detailed
+what does my car really cost per km? i put km per year, petrol price and the car's km per litre, yearly service, insurance, and how much value it loses a year, and want the cost per km and per month
+needs: km per year and mileage | petrol price | service insurance and depreciation | cost per km | cost per month
+---
+app "Car Cost per Km" car red
+state km num = 12000
+state kpl num = 11
+state petrol money = 0
+state service money = 0
+state insure money = 0
+state deprec money = 0
+let fuel = if(kpl > 0, km / kpl * petrol, 0)
+let yearly = fuel + service + insure + deprec
+grid 2 gap 2
+  field km "Km a year"
+  field kpl "Km per litre"
+  field petrol "Petrol per litre"
+  field service "Service a year"
+  field insure "Insurance a year"
+  field deprec "Value lost a year"
+statcard round(yearly / max(km, 1) * 10) / 10, "per kilometre"
+"A month costs" round(yearly / 12) big
+"Fuel is" round(fuel * 100 / max(yearly, 1)) "% of it." faint
+===
+@rich domain=c5_rent_increase_years topic=rent_rise_over_years style=short
+rent rise
+needs: current rent | yearly increase percent | rent in each of the next 5 years | total paid in 5 years
+---
+app "Rent Rise" home yellow dark
+state rent money = 0
+state rise num = 10
+let rentin(n num) = rent * pow(1 + rise / 100, n)
+field rent "Rent now"
+"Landlord raises it" rise "% a year" faint
+slider rise 0..25
+section "Monthly rent by year"
+  each 1..5
+    row
+      "Year" it grow
+      round(rentin(it - 1)) bold
+"Paid over 5 years" round(sum(1..5, rentin(it - 1) * 12)) big
+===
+@rich domain=c5_pocket_money_plan topic=kids_pocket_money_plan style=custom_ui
+for my son's pocket money: type the weekly amount, slide the share he must save, and show what he can spend per day, what he saves each week and how much he will have saved after 10 weeks
+needs: weekly pocket money | savings share slider | spend per day | saved per week | saved after 10 weeks
+---
+app "Pocket Money" gift teal dark
+state weekly money = 0
+state share num = 30
+let saved = weekly * share / 100
+field weekly "Pocket money a week"
+"Save" share "%" faint
+slider share 0..100
+row gap 2
+  statcard round(saved), "saved a week"
+  statcard round((weekly - saved) / 7), "to spend a day"
+"After 10 weeks" round(saved * 10) big
+"After a year" round(saved * 52) faint
+===
+@rich domain=c5_pet_monthly_cost topic=pet_cost_per_month style=multi_feature
+add everything the cat costs me, like food, vet visits or litter, with the amount and whether i pay it every week, month or year, and show the true monthly total, the yearly total and bars by item
+needs: add a cost with amount and how often | monthly equivalent of each | monthly and yearly total | bar by item
+---
+app "Pet Costs" paw green
+table petcost item text, amount money, every pick Week|Month|Year = Month
+let monthly(c petcost) = if(c.every = Week, c.amount * 4.33, if(c.every = Year, c.amount / 12, c.amount))
+let total = sum(petcost, monthly(it))
+topbar petcost, "Add cost"
+row gap 2
+  statcard round(total), "a month"
+  statcard round(total * 12), "a year"
+section "Biggest costs", "per month"
+  bars petcost, round(monthly(it)), it.item
+each petcost sort monthly(it) desc as c empty "No costs yet. Add food, litter, vet visits."
+  row card tap edit c swipe remove c
+    c.item grow
+    c.every faint
+    round(monthly(c)) bold
+===
+@rich domain=c5_commute_cost topic=commute_cost_and_time style=short
+commute cost
+needs: distance one way | days per week | choice of car bike or bus | monthly cost | hours lost per month
+---
+app "Commute Cost" bus blue
+state km num = 12
+state days num = 5
+state mode pick Bike|Car|Bus = Bike
+let perkm = if(mode = Bike, 6, if(mode = Car, 22, 8))
+let speed = if(mode = Bike, 30, if(mode = Car, 25, 18))
+let trips = km * 2 * days * 4.3
+choice mode
+field km "Distance one way (km)"
+field days "Days a week"
+slider days 1..7
+statcard round(trips * perkm), "a month"
+"Time on the road" round(trips / speed * 10) / 10 "hours a month" bold
+"Estimated at" perkm "per km and" speed "km/h." faint

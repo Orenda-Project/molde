@@ -1,0 +1,542 @@
+@rich domain=c5_cups_to_grams topic=cups_to_grams style=custom_ui
+my grandmother's recipes are all in cups and my scale only does grams. let me pick flour, sugar, butter, rice or milk, type the number of cups and get grams, plus tablespoons in grams too
+needs: choice of ingredient | cups field | grams result | grams per cup shown | tablespoon equivalent
+---
+app "Cups to Grams" cup purple
+state stuff pick Flour|Sugar|Butter|Rice|Milk = Flour
+state cups num = 1
+let gpc = if(stuff = Flour, 120, if(stuff = Sugar, 200, if(stuff = Butter, 227, if(stuff = Rice, 185, 240))))
+choice stuff
+field cups "Cups"
+slider cups 0..10
+statcard round(cups * gpc), "grams"
+"One cup of" stuff "weighs about" gpc "g" faint
+section "In spoons", "16 tablespoons to a cup"
+  "1 tablespoon" round(gpc / 16 * 10) / 10 "g"
+  "1 teaspoon" round(gpc / 48 * 10) / 10 "g"
+===
+@rich domain=c5_seed_spacing topic=seeds_for_a_plot style=detailed
+planting a vegetable plot. i give the plot length and width in metres, the gap between rows and between plants in centimetres, and the seeds in one packet, and want the rows, plants in a row, seeds needed, and how many packets to buy
+needs: plot length and width | row gap and plant gap | rows and plants per row | seeds needed | packets to buy
+---
+app "Seed Spacing" plant pink
+state len num = 10
+state wid num = 4
+state rowgap num = 50
+state plantgap num = 30
+state perpack num = 100
+let rows = if(rowgap > 0, floor(wid * 100 / rowgap), 0)
+let inrow = if(plantgap > 0, floor(len * 100 / plantgap), 0)
+let seeds = rows * inrow
+let packs = if(perpack > 0, floor(seeds / perpack) + if(seeds % perpack > 0, 1, 0), 0)
+grid 2 gap 2
+  field len "Length (m)"
+  field wid "Width (m)"
+  field rowgap "Row gap (cm)"
+  field plantgap "Plant gap (cm)"
+field perpack "Seeds per packet"
+row gap 2
+  statcard rows, "rows"
+  statcard inrow, "plants per row"
+statcard seeds, "seeds needed"
+"Buy" plural(packs, "packet") faint
+===
+@rich domain=c5_feed_mix topic=feed_mix_ratio style=multi_feature
+i mix cattle feed from maize, bran and soy cake in parts, like 5 to 3 to 2. slide the parts, type how many kg of feed i want to mix and show kg of each ingredient and the cost at their prices
+needs: sliders for parts of maize bran and soy | total kg to mix | kg of each ingredient | cost of the mix
+---
+app "Feed Mix" paw grey
+state pm num = 5
+state pb num = 3
+state ps num = 2
+state total num = 200
+setting prm money = 0 "Maize price per kg"
+setting prb money = 0 "Bran price per kg"
+setting prs money = 0 "Soy cake price per kg"
+let parts = max(pm + pb + ps, 1)
+let km = total * pm / parts
+let kb = total * pb / parts
+let ks = total * ps / parts
+field total "Kg of feed to mix"
+"Maize parts" pm faint
+slider pm 0..10
+"Bran parts" pb faint
+slider pb 0..10
+"Soy cake parts" ps faint
+slider ps 0..10
+section "Weigh out", total "kg"
+  row
+    "Maize" grow
+    round(km * 10) / 10 "kg" bold
+  row
+    "Bran" grow
+    round(kb * 10) / 10 "kg" bold
+  row
+    "Soy cake" grow
+    round(ks * 10) / 10 "kg" bold
+"Cost of the mix" round(km * prm + kb * prb + ks * prs) big
+===
+@rich domain=c5_water_turn topic=canal_water_turns style=short
+water turn
+needs: add a farmer with acres | weekly water hours setting | hours and minutes per farmer | total acres | bar per farmer
+---
+app "Water Turn" drop ocean
+table farmer name text, acres num 0.5..200
+setting hours num 1..168 = 48 "Water hours per week"
+let tot = sum(farmer.acres)
+let mins(f farmer) = if(tot > 0, round(hours * 60 * f.acres / tot), 0)
+topbar farmer, "Add farmer"
+row gap 2
+  statcard tot, "acres on the channel"
+  statcard hours, "hours a week", 168
+section "Turn per farmer", "each week"
+  each farmer sort acres desc as f empty "No farmers yet. Add each farmer with his acres."
+    row tap edit f swipe remove f
+      f.name grow
+      floor(mins(f) / 60) "h" mins(f) % 60 "min" bold
+  bars farmer, mins(it) / 60, it.name
+===
+@rich domain=c5_milk_fat_pay topic=milk_payment_by_fat style=detailed
+the dairy pays me by fat percent, so much per litre for every fat point. add each delivery with litres and fat, set the rate per fat point, and show what i earned in total, my average fat weighted by litres, and a line of how fat moved
+needs: add a delivery with litres and fat | rate per fat point | total payment | average fat percent | trend line of fat
+---
+app "Milk Cheque" milk mint
+table drop litres num 1..500, fat num 2..10 = 5
+setting rate money = 0 "Rate per litre per fat point"
+let pay(d drop) = d.litres * d.fat * rate
+let litres = sum(drop.litres)
+let avgfat = if(litres > 0, sum(drop, it.litres * it.fat) / litres, 0)
+topbar drop, "Add delivery"
+row gap 2
+  statcard round(sum(drop, pay(it))), "earned"
+  statcard round(avgfat * 100) / 100, "average fat, percent"
+section "Fat per delivery", "oldest first"
+  trend drop, it.fat
+each drop top 10 as d empty "No deliveries yet. Add today's milk."
+  row card tap edit d swipe remove d
+    d.at grow
+    d.litres "L at" d.fat "%" faint
+    round(pay(d)) bold
+===
+@rich domain=c5_rice_water topic=rice_and_water style=short
+rice and water
+needs: number of people | cups of rice and water | cooking time | choice of rice type
+---
+app "Rice and Water" food slate
+state people num = 4
+state kind pick Basmati|Sella|Brown = Basmati
+let per = 0.5
+let ratio = if(kind = Basmati, 1.5, if(kind = Sella, 1.75, 2))
+let mins = if(kind = Basmati, 15, if(kind = Sella, 20, 40))
+choice kind
+field people "People eating"
+slider people 1..20
+statcard people * per, "cups of rice"
+row gap 2
+  statcard people * per * ratio, "cups of water"
+  statcard mins, "minutes to cook"
+"Soak" kind "for 30 minutes first, except brown rice, which needs an hour." faint
+===
+@rich domain=c5_urea_acres topic=fertilizer_cost_acre style=detailed
+how much urea and dap for my land. i type the size in acres or kanal, bags per acre of each and the price per bag, and it adds up the bags needed and the total spend
+needs: land size with acres or kanal | bags per acre of urea and dap | price per bag | total bags | total spend
+---
+app "Fertilizer Bags" plant ink dark
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state unit pick Acres|Kanal = Acres
+state land num = 5
+state urea num = 2
+state dap num = 1
+setting purea money = 0 "Urea price per bag"
+setting pdap money = 0 "DAP price per bag"
+let acres = if(unit = Kanal, land / 8, land)
+choice unit
+field land "Land size"
+field urea "Urea bags per acre"
+field dap "DAP bags per acre"
+statcard round(acres * 100) / 100, "acres to feed"
+row gap 2
+  statcard ceil0(acres * urea), "urea bags"
+  statcard ceil0(acres * dap), "DAP bags"
+"Total spend" round(ceil0(acres * urea) * purea + ceil0(acres * dap) * pdap) big
+===
+@rich domain=c5_broiler_feed topic=broiler_feed_per_day style=multi_feature
+raising broilers. the feed per bird per day grows as they age, roughly 30 grams plus 15 grams for each week. i type the number of birds and their age in weeks and want kg per day for the shed and how many days a 50 kg bag lasts
+needs: number of birds | age in weeks | grams per bird per day | kg per day for the flock | days one 50 kg bag lasts
+---
+app "Broiler Feed" paw plum
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state birds num = 500
+state weeks num = 3
+let gram = 30 + 15 * weeks
+let kgday = birds * gram / 1000
+field birds "Birds in the shed"
+"Age" weeks "weeks" faint
+slider weeks 0..7
+row gap 2
+  statcard gram, "grams per bird a day"
+  statcard round(kgday * 10) / 10, "kg a day"
+"One 50 kg bag lasts" fixed(50 / max(kgday, 1), 1) "days" bold
+"Feed for the next week:" ceil0(kgday * 7 / 50) "bags" faint
+===
+@rich domain=c5_pan_swap topic=baking_pan_scale style=custom_ui
+the recipe is for an 8 inch round pan but i only have a 10 inch one. pick the pan sizes and show how much bigger the area is and what to multiply every ingredient by
+needs: recipe pan size | my pan size | area ratio | multiplier for ingredients | a note when the batter will be too thin
+---
+app "Pan Swap" food red
+state recipe num = 8
+state mine num = 10
+let areaa = pi * pow(recipe / 2, 2)
+let areab = pi * pow(mine / 2, 2)
+let mult = if(areaa > 0, areab / areaa, 0)
+field recipe "Pan in the recipe (inches)"
+slider recipe 4..14
+field mine "Pan I have (inches)"
+slider mine 4..14
+statcard round(mult * 100) / 100, "multiply every ingredient by"
+row gap 2
+  "Recipe pan" round(areaa) "sq in" faint
+  "My pan" round(areab) "sq in" faint
+if mult < 0.8
+  "Your pan is much smaller, so the batter will be deep. Bake longer and check the middle." faint
+if mult > 1.3
+  "The pan is much larger, so scale up and bake a little shorter." faint
+===
+@rich domain=c5_harvest_profit topic=harvest_profit_per_acre style=multi_feature
+at the end of each season i add the crop with acres, maunds per acre, price per maund and what i spent in total, and see income, profit, profit per acre, and a bar for each season. one maund is 40 kg
+needs: add a season with crop acres yield price and cost | income and profit | profit per acre | bar chart of seasons | list with kg harvested
+---
+app "Season Profit" tree orange
+table season crop text, acres num 0.5..500, yield num 1..200, price money, cost money
+let inc(s season) = s.acres * s.yield * s.price
+let prof(s season) = inc(s) - s.cost
+let totalprof = sum(season, prof(it))
+topbar season, "Add season"
+row gap 2
+  statcard round(sum(season, inc(it))), "income"
+  statcard round(totalprof), "profit"
+if sum(season.acres) > 0
+  "Profit per acre" round(totalprof / sum(season.acres)) faint
+section "Profit by season"
+  bars season, prof(it), it.crop
+each season as s empty "No seasons yet. Add the crop you grew."
+  row card tap edit s swipe remove s
+    s.crop grow
+    s.acres * s.yield * 40 "kg" faint
+    round(prof(s)) bold
+===
+@rich domain=c5_honey_jars topic=honey_jar_filling style=short
+honey jars
+needs: kilos of honey | jar size in grams | jars filled and leftover | jar cost and price per jar
+---
+app "Honey Jars" cup purple
+state kg num = 12
+state jar num = 500
+state jarcost money = 0
+state price money = 0
+let jars = if(jar > 0, floor(kg * 1000 / jar), 0)
+let left = kg * 1000 - jars * jar
+field kg "Kilos of honey"
+field jar "Jar size (grams)"
+field jarcost "Cost of an empty jar with lid"
+field price "Selling price of a jar"
+row gap 2
+  statcard jars, "full jars"
+  statcard round(left), "grams left over"
+"Sales" jars * price big
+"After jar costs" jars * (price - jarcost) faint
+===
+@rich domain=c5_dawat_meat topic=party_food_quantity style=custom_ui
+planning food for a dawat. pick biryani, karahi or bbq, slide the number of guests, and show kilos of meat and rice i need with a rough cost at my prices, because every dish takes a different portion
+needs: choice of dish | guests slider | kg of meat | kg of rice | rough cost
+---
+app "Dawat Planner" food green
+state dish pick Biryani|Karahi|BBQ = Biryani
+state guests num = 40
+setting meatprice money = 0 "Meat price per kg"
+setting riceprice money = 0 "Rice price per kg"
+let meat = guests * if(dish = Biryani, 0.15, if(dish = Karahi, 0.2, 0.25))
+let rice = if(dish = Biryani, guests * 0.15, 0)
+choice dish
+"Guests" guests faint
+slider guests 5..300
+row gap 2
+  statcard round(meat * 10) / 10, "kg of meat"
+  statcard round(rice * 10) / 10, "kg of rice"
+"About" round(meat * meatprice + rice * riceprice) "for the main food" big
+"Add a little extra if people are bringing children." faint
+===
+@rich domain=c5_brine_mix topic=brine_salt_percent style=short
+brine mix
+needs: litres of water | salt percent | grams of salt to add | a quick guide for pickles
+---
+app "Brine Mix" cup teal
+state litres num = 2
+state salt num = 5
+let grams = litres * 1000 * salt / 100
+field litres "Water in litres"
+"Salt" salt "%" faint
+slider salt 1..20
+statcard round(grams), "grams of salt"
+"That is about" round(grams / 18) "tablespoons" faint
+if salt < 3
+  "Too weak to keep pickles, it may spoil." faint color warn
+if salt > 12
+  "Very salty. Good for olives, too much for most veg." faint
+===
+@rich domain=c5_orchard_trees topic=trees_per_acre style=detailed
+setting up a small orchard. i type the distance between trees in a row and between rows in feet, price of a sapling, and how many acres, then show the trees per acre, trees for all the land and the sapling bill
+needs: tree spacing and row spacing in feet | acres | trees per acre | total trees | sapling cost
+---
+app "Orchard Plan" tree blue
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state within num = 15
+state between num = 20
+state acres num = 2
+state sapling money = 0
+let per = if(within * between > 0, floor(43560 / (within * between)), 0)
+field within "Gap between trees (ft)"
+field between "Gap between rows (ft)"
+field acres "Acres"
+field sapling "Price of one sapling"
+row gap 2
+  statcard per, "trees per acre"
+  statcard per * acres, "trees in all"
+"Saplings cost" round(per * acres * sapling) big
+"Order 5 percent extra for losses:" ceil0(per * acres * 1.05) faint
+===
+@rich domain=c5_suit_cloth topic=cloth_for_suits style=custom_ui
+tailor's helper: pick the size, small to xl, and the number of suits and it gives the metres of cloth for shalwar kameez, and the cost at the rate per metre
+needs: size choice | number of suits | metres of cloth | cloth cost at rate
+---
+app "Suit Cloth" bag purple
+state size pick S|M|L|XL = M
+state suits num = 1
+setting rate money = 0 "Cloth rate per metre"
+let each = if(size = S, 2.5, if(size = M, 2.75, if(size = L, 3, 3.25)))
+choice size
+field suits "Number of suits"
+slider suits 1..20
+statcard each * suits, "metres of cloth"
+"One suit takes" each "metres." faint
+"Cloth cost" round(each * suits * rate) big
+===
+@rich domain=c5_tile_calc topic=tile_calculator style=short
+tile calculator
+needs: room length and width | tile size | tiles needed with wastage | boxes to buy
+---
+app "Tile Calculator" grid pink
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state len num = 12
+state wid num = 10
+state tile num = 12
+state perbox num = 8
+state waste num = 10
+let tiles = if(tile > 0, ceil0(len * wid * 144 / (tile * tile) * (1 + waste / 100)), 0)
+field len "Room length (ft)"
+field wid "Room width (ft)"
+field tile "Tile size, square (inches)"
+field perbox "Tiles in a box"
+"Wastage" waste "%" faint
+slider waste 0..25
+statcard tiles, "tiles needed"
+"Buy" ceil0(tiles / max(perbox, 1)) "boxes" bold
+===
+@rich domain=c5_slab_concrete topic=concrete_slab_mix style=detailed
+pouring a roof slab. type length and width in feet and thickness in inches, slide the mix parts for sand and gravel, and show the volume in cubic feet and the bags of cement, sand and gravel for the 1 to s to a mix
+needs: slab length width thickness | sand and gravel parts sliders | volume | cement bags | sand and gravel quantity
+---
+app "Slab Mix" tool grey dark
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state len num = 20
+state wid num = 15
+state thick num = 5
+state sand num = 2
+state gravel num = 4
+let vol = len * wid * thick / 12
+let dry = vol * 1.54
+let parts = 1 + sand + gravel
+let cement = dry / parts
+field len "Length (ft)"
+field wid "Width (ft)"
+field thick "Thickness (inches)"
+"Sand parts" sand faint
+slider sand 1..4
+"Gravel parts" gravel faint
+slider gravel 2..8
+statcard round(vol), "cubic feet of concrete"
+section "Order list", "1 : " sand ": " gravel
+  "Cement" ceil0(cement / 1.25) "bags"
+  "Sand" round(dry * sand / parts) "cubic feet"
+  "Gravel" round(dry * gravel / parts) "cubic feet"
+===
+@rich domain=c5_roof_sheets topic=roof_area_sheets style=multi_feature
+need to cover a shed with roofing sheets. type the floor length and width in feet, pick a slope flat, gentle or steep since a slope makes the roof area bigger, and show the roof area and number of 8 by 3 sheets with 10 percent overlap
+needs: floor length and width | slope choice | roof area | number of sheets | extra for overlap
+---
+app "Roof Sheets" home ocean
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state len num = 20
+state wid num = 12
+state slope pick Flat|Gentle|Steep = Gentle
+let factor = if(slope = Flat, 1.02, if(slope = Gentle, 1.12, 1.3))
+let area = len * wid * factor
+let sheets = ceil0(area * 1.1 / 24)
+choice slope
+field len "Floor length (ft)"
+field wid "Floor width (ft)"
+statcard round(area), "square feet of roof"
+row gap 2
+  statcard sheets, "sheets of 8 x 3 ft"
+  statcard ceil0(area * 0.1 / 24), "extra for overlap"
+"Slope adds" round((factor - 1) * 100) "% to the floor area." faint
+===
+@rich domain=c5_wire_gauge topic=wire_size_by_current style=short
+wire gauge
+needs: current in amps | cable length | recommended wire size | voltage drop percent
+---
+app "Wire Gauge" bolt mint
+state amps num = 10
+state metres num = 20
+let size = if(amps <= 10, 1.5, if(amps <= 16, 2.5, if(amps <= 25, 4, if(amps <= 32, 6, 10))))
+let drop = 2 * metres * amps * 0.0175 / size
+let pct = drop * 100 / 230
+field amps "Load in amps"
+slider amps 1..40
+field metres "One-way cable length (m)"
+statcard size, "sq mm copper wire"
+"Voltage drop about" round(drop * 10) / 10 "V, or" round(pct * 10) / 10 "%" faint
+if pct > 3
+  "Too much drop. Use the next size up." bold color bad
+else
+  "Drop is fine." bold color good
+===
+@rich domain=c5_wall_paint topic=paint_for_rooms style=multi_feature
+how much paint for a room? type room length, width and height in feet, take off the doors and windows area, pick one or two coats and i want litres and tins of 4 litres, one litre covers about 100 square feet
+needs: room length width and height | doors and windows area | coats | litres of paint | tins of 4 litres
+---
+app "Room Paint" pencil slate
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state len num = 14
+state wid num = 12
+state high num = 10
+state openings num = 40
+state coats num = 2
+let walls = 2 * (len + wid) * high - openings
+let litres = max(walls, 0) * coats / 100
+grid 2 gap 2
+  field len "Length (ft)"
+  field wid "Width (ft)"
+  field high "Height (ft)"
+  field openings "Doors and windows (sq ft)"
+"Coats" coats faint
+slider coats 1..3
+statcard max(walls, 0), "sq ft of wall"
+row gap 2
+  statcard round(litres * 10) / 10, "litres"
+  statcard ceil0(litres / 4), "tins of 4 litres"
+===
+@rich domain=c5_brick_wall topic=bricks_for_wall style=short
+bricks for wall
+needs: wall length and height | thickness choice | bricks needed | breakage allowance | brick cost
+---
+app "Brick Wall" home ink
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state len num = 50
+state high num = 6
+state thick pick Half|Full = Full
+state price money = 0
+let cft = len * high * if(thick = Half, 4.5, 9) / 12
+let bricks = ceil0(cft * 13.5)
+choice thick
+field len "Wall length (ft)"
+field high "Wall height (ft)"
+field price "Price per brick"
+statcard bricks, "bricks for the wall"
+"With 5 percent breakage buy" ceil0(bricks * 1.05) bold
+"Brick bill" round(ceil0(bricks * 1.05) * price) big
+"Half is a 4.5 inch wall, Full is 9 inches." faint
+===
+@rich domain=c5_curtain_cloth topic=curtain_fabric style=custom_ui
+curtain fabric for my windows: width and drop in inches, fullness slider so that curtains look gathered, hems extra, give metres of fabric for one pair and the stitching plus cloth cost
+needs: window width and drop | fullness slider | metres for a pair | cloth and stitching cost
+---
+app "Curtain Cloth" home plum
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+state wid num = 60
+state drop num = 72
+state full num = 2
+state rate money = 0
+state stitch money = 0
+let width = wid * full + 8
+let length = drop + 12
+let panels = ceil0(width / 54)
+let metres = panels * length / 39.37
+field wid "Window width (in)"
+field drop "Drop (in)"
+"Fullness x" full faint
+slider full 1..3
+statcard round(metres * 10) / 10, "metres for a pair"
+field rate "Cloth per metre"
+field stitch "Stitching charge"
+"Total" round(ceil0(metres) * rate + stitch) big
+===
+@rich domain=c5_rebar_weight topic=rebar_weight_kg style=multi_feature
+for steel bars, weight per metre is dia squared over 162 with dia in mm. let me type the bar diameter, the length of each bar in metres and how many bars, to get kg, and the price at the rate per kg
+needs: diameter in mm | bar length and count | weight per metre | total kg | cost at rate per kg
+---
+app "Rebar Weight" tool red
+state dia num = 12
+state len num = 12
+state count num = 20
+state rate money = 0
+let perm = pow(dia, 2) / 162
+let kg = perm * len * count
+field dia "Bar diameter (mm)"
+slider dia 8..32
+field len "Length of each bar (m)"
+field count "Number of bars"
+row gap 2
+  statcard round(perm * 100) / 100, "kg per metre"
+  statcard round(kg), "kg in total"
+field rate "Steel rate per kg"
+"Steel cost" round(kg * rate) big
+===
+@rich domain=c5_cushion_covers topic=cushion_covers_from_bolt style=short
+cushion covers
+needs: cloth length available | cloth per cover | covers possible and cloth left | sewing price per cover
+---
+app "Cushion Covers" bed orange
+state bolt num = 20
+state each num = 1.1
+state sewing money = 0
+let covers = if(each > 0, floor(bolt / each), 0)
+field bolt "Cloth I have (m)"
+field each "Cloth for one cover (m)"
+field sewing "Sewing charge per cover"
+statcard covers, "covers you can sew"
+"Cloth left over" fixed(bolt - covers * each, 1) "m" faint
+"Sewing bill" round(covers * sewing) big
+===
+@rich domain=c5_stairs_steps topic=stair_step_design style=short
+stair layout
+needs: total height | wanted rise per step | number of steps | exact rise per step | tread depth
+---
+app "Stair Layout" board yellow dark
+state total num = 120
+state want num = 7
+let steps = if(want > 0, max(1, round(total / want)), 0)
+let rise = if(steps > 0, total / steps, 0)
+let tread = 25 - 2 * rise
+field total "Floor to floor (inches)"
+field want "Rise I would like (inches)"
+slider want 5..9
+row gap 2
+  statcard steps, "steps"
+  statcard round(rise * 100) / 100, "inch rise each"
+"Tread depth" round(tread * 10) / 10 "inches" big
+if rise > 7.75
+  "Steep stairs. Add a step or two." color bad
+else
+  "Comfortable rise." color good
+"Total run" round(tread * (steps - 1)) "inches" faint

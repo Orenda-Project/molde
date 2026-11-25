@@ -1,0 +1,606 @@
+@rich domain=r11_cake_orders topic=home_bakery_orders style=short
+cake orders
+needs: add an order with customer, flavour, pounds, due date and price | status from new to delivered | filter chips by status with counts | deliveries due today | button to move an order to the next stage
+---
+app "Cake Orders" food green
+table cake who text, flavour pick Chocolate|Vanilla|Red_velvet|Fruit|Custom = Chocolate, pounds num 1..20 = 2 unit "lb", due date, price money, status pick New|Baking|Ready|Delivered = New
+state st text = ""
+topbar cake, "New order"
+row gap 2
+  statcard count(cake where due = today and status != Delivered), "to deliver today"
+  statcard sum(cake where status != Delivered, it.price), "money in open orders"
+row gap 1
+  each options cake.status
+    button it count(cake where status = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each cake where (st = "" and status != Delivered) or status = st sort due as c empty "No open orders. Add the first cake."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.who bold
+      c.pounds "lb" c.flavour faint
+      "Due" c.due color if(c.due < today and c.status != Delivered, bad, muted)
+    stack gap 1 align end
+      c.price bold
+      if c.status != Delivered
+        button if(c.status = New, "Start", if(c.status = Baking, "Ready", "Delivered")) tap set c.status = if(c.status = New, Baking, if(c.status = Baking, Ready, Delivered))
+===
+@rich domain=r11_juice_stall topic=juice_stall_sales style=short
+juice stall
+needs: tap a flavour to sell a glass | price per glass setting | sales and glasses today | bar chart of glasses per flavour | list of recent sales
+---
+app "Juice Stall" cup teal
+table sale flavour pick Mango|Orange|Sugarcane|Pomegranate|Mixed = Mango, amount money
+setting price money = 80 "Price per glass"
+row gap 2
+  statcard sum(sale.amount today), "sold today"
+  statcard count(sale today), "glasses today"
+"Tap to sell a glass" head
+grid 2 gap 1
+  each options sale.flavour
+    button it fill accent pad 3 tap add sale flavour = it, amount = price
+section "Glasses today", "per flavour"
+  bars options sale.flavour, count(sale today where flavour = it), it
+each sale sort at desc top 6 as s empty "No sales yet. Tap a flavour above."
+  row card tap edit s swipe remove s
+    s.flavour grow
+    s.amount bold
+    s.at faint
+===
+@rich domain=r11_cycling topic=bike_ride_distance style=short
+cycling
+needs: log a ride with km and minutes | weekly km goal setting | longest ride | average speed | bar chart of km per day
+---
+app "Cycling" bike blue
+table pedal km num 0.5..300 = 10 unit "km", mins num 5..900 = 40 unit "min"
+setting weekly num = 60 "Weekly goal (km)"
+topbar pedal, "Log ride"
+goal sum(pedal.km week), weekly, "km this week", " km"
+row gap 2
+  statcard max(pedal.km), "longest ride (km)"
+  statcard round(sum(pedal.km) * 60 / max(1, sum(pedal.mins)) * 10) / 10, "average km per hour"
+section "Last 14 days", "km per day"
+  daybars last 14 days, sum(pedal.km on it)
+each pedal sort at desc top 10 as p empty "No rides yet. Log your first one."
+  row card gap 2 tap edit p swipe remove p
+    p.km "km" big
+    stack grow gap 0
+      p.mins "min" bold
+      p.at faint
+===
+@rich domain=r11_running topic=run_log_pace style=short
+running
+needs: log a run with km and minutes | pace in minutes per km for each run | total km this month | line chart of pace over runs | best distance
+---
+app "Running" run grey
+table jog km num 0.5..100 = 5 unit "km", mins num 5..600 = 30 unit "min"
+topbar jog, "Log run"
+row gap 2
+  statcard round(sum(jog.km month) * 10) / 10, "km this month"
+  statcard max(jog.km), "longest run (km)"
+section "Pace", "minutes per km, lower is faster"
+  trend jog last 60 days, it.mins / it.km
+each jog sort at desc top 10 as j empty "No runs yet. Lace up and log the first one."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.km "km in" j.mins "min" bold
+      j.at faint
+    fixed(j.mins / j.km, 1) "min/km" faint
+===
+@rich domain=r11_yoga topic=yoga_minutes_streak style=short
+yoga
+needs: add a session with minutes and style | day streak | minutes this week | grid of the last 28 days | list of sessions
+---
+app "Yoga" leaf mint
+table asana mins num 5..180 = 20 unit "min", style pick Gentle|Flow|Power|Stretch = Gentle
+topbar asana, "Log session"
+row gap 2
+  statcard streak(asana), "day streak"
+  statcard sum(asana.mins week), "minutes this week"
+section "Last 28 days", "darker is longer"
+  daygrid last 28 days, sum(asana.mins on it), 30
+each asana sort at desc top 8 as a empty "No sessions yet. Roll out the mat and log one."
+  row card gap 2 tap edit a swipe remove a
+    a.style bold grow
+    a.mins "min" faint
+    a.at faint
+===
+@rich domain=r11_plank_hold topic=plank_stopwatch_best style=short
+plank hold
+needs: start and stop a stopwatch for the plank | save the hold in seconds | best hold | line chart of recent holds | list of holds
+---
+app "Plank Hold" timer slate
+table plank secs num 1..1800
+state run num = 0
+state going bool = no
+every 1s if going set run = run + 1
+draw width 220
+  circle 44 stroke soft thick 6
+  arc 44, 0, 360 * (run % 60) / 60 stroke accent thick 6
+  label 50, 46, run huge
+  label 50, 66, if(going, "hold on", "seconds") color muted
+row gap 1
+  button if(going, "Stop", "Start") fill accent grow tap set going = not going
+  button "Save hold" grow tap add plank secs = run then set going = no then set run = 0
+  button "Reset" grow tap set going = no then set run = 0
+row gap 2
+  statcard max(plank.secs), "best hold (s)"
+  statcard count(plank week), "holds this week"
+section "Recent holds", "seconds"
+  trend plank last 60 days, it.secs
+each plank sort at desc top 6 as p empty "No holds saved yet. Start the stopwatch."
+  row card tap edit p swipe remove p
+    p.secs "s" bold grow
+    p.at faint
+===
+@rich domain=r11_skipping_rope topic=rope_jump_counter style=short
+skipping rope
+needs: tap a number to add jumps | daily jump goal setting | ring of today's progress | dots for days the goal was reached | list of today's sets
+---
+app "Skipping Rope" star pink
+table rope jumps num 1..2000 = 50
+setting target num = 500 "Daily jumps goal"
+let jumped = sum(rope.jumps today)
+row gap 3 align center
+  draw width 110
+    circle 42 stroke soft thick 10
+    arc 42, 0, 360 * clamp(jumped / target, 0, 1) stroke accent thick 10
+    label 50, 50, jumped big
+  stack grow gap 1
+    if jumped >= target
+      "Goal reached" head color good
+    else
+      target - jumped "jumps to go" head
+    "Goal" target "- tap to change" faint tap edit target
+quick rope, jumps, [10, 25, 50, 100]
+section "This week"
+  weekdots sum(rope.jumps on it) >= target
+each rope today sort at desc as r empty "No jumps yet today. Tap a number after each set."
+  row card tap edit r swipe remove r
+    r.jumps "jumps" bold grow
+    r.at faint
+===
+@rich domain=r11_swim_laps topic=swimming_laps_distance style=short
+swim laps
+needs: tap to add a lap | pool length setting | distance swum today in metres | best swim | bar chart of laps per day
+---
+app "Swim Laps" drop ocean
+table lap n num 1..200 = 1
+setting pool num = 25 "Pool length (m)"
+stack card gap 1
+  "Today" faint
+  sum(lap.n today) * pool "m" big
+  plural(sum(lap.n today), "lap") faint
+row gap 1
+  button "+ 1 lap" fill accent grow tap add lap n = 1
+  button "+ 4 laps" grow tap add lap n = 4
+  button "+ 10 laps" grow tap add lap n = 10
+row gap 2
+  statcard max(days last 60 days, sum(lap.n on it)) * pool, "best day (m)"
+  statcard sum(lap.n month) * pool, "metres this month"
+section "Last 14 days", "laps per day"
+  daybars last 14 days, sum(lap.n on it)
+each lap today sort at desc as l empty "No laps yet today. Tap + 1 lap after each length."
+  row card tap edit l swipe remove l
+    l.n "laps" grow
+    l.n * pool "m" bold
+===
+@rich domain=r11_calorie_count topic=daily_calorie_meals style=short
+calorie count
+needs: add a food with calories and meal | daily calorie limit setting | calories left today | share by meal | list of today's foods
+---
+app "Calorie Count" apple mint
+table eaten food text, kcal num 1..3000 unit "kcal", meal pick Breakfast|Lunch|Dinner|Snack = Lunch
+setting limit num = 2000 "Daily limit (kcal)"
+topbar eaten, "Add food"
+stack card gap 2
+  if(limit >= sum(eaten.kcal today), "Left today", "Over by") faint
+  abs(limit - sum(eaten.kcal today)) "kcal" big color if(sum(eaten.kcal today) > limit, bad, ink)
+  goal sum(eaten.kcal today), limit, "eaten today", " kcal"
+section "By meal", "today"
+  share eaten today by meal, sum(it.kcal), it.key
+each eaten today sort at desc as e empty "Nothing eaten yet today. Add your first meal."
+  row card gap 2 tap edit e swipe remove e
+    stack grow gap 0
+      e.food bold
+      e.meal faint
+    e.kcal "kcal" bold
+===
+@rich domain=r11_protein topic=daily_protein_grams style=short
+protein
+needs: add protein grams from a food | daily protein goal setting | progress bar for today | grams per day for a week | list of today's entries
+---
+app "Protein" egg orange
+table prot food text, grams num 1..200 = 20 unit "g"
+setting target num = 100 "Daily goal (g)"
+let got = sum(prot.grams today)
+stack card gap 2
+  got "g of" target "g" big
+  draw 100, 5
+    rect 0, 0, 100, 5 fill soft radius 2
+    rect 0, 0, 100 * clamp(got / target, 0, 1), 5 fill if(got >= target, good, accent) radius 2
+  if got >= target
+    "Goal reached today" color good
+  else
+    target - got "g to go" color muted tap edit target
+topbar prot, "Add protein"
+section "Last 7 days", "grams per day"
+  daybars last 7 days, sum(prot.grams on it)
+each prot today sort at desc as p empty "No protein logged today. Eggs, dal, chicken or milk all count."
+  row card gap 2 tap edit p swipe remove p
+    p.food grow bold
+    p.grams "g" bold
+===
+@rich domain=r11_fasting_window topic=intermittent_fasting_timer style=short
+fasting window
+needs: start a fast with one tap | hours fasted so far against a goal | end the fast and save it | line chart of past fasts | list of finished fasts
+---
+app "Fasting Window" hourglass ink
+table fastlog hrs num 0..72
+setting aim num = 16 "Fasting goal (hours)"
+state started when = now
+state fasting bool = no
+let hrs_now = floor((now - started) / 1h)
+if fasting
+  stack card gap 2
+    "Fasting for" faint
+    hrs_now "h" big
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(hrs_now / aim, 0, 1), 4 fill if(hrs_now >= aim, good, accent) radius 2
+    if hrs_now >= aim
+      "Goal reached. You can eat now." color good
+    else
+      aim - hrs_now "h to your goal" color muted
+  button "End fast" fill accent tap add fastlog hrs = hrs_now then set fasting = no
+else
+  stack card gap 2
+    "Not fasting" head
+    "Your last fast was" last(fastlog.hrs) "h" color muted
+  button "Start fast" fill accent tap set started = now then set fasting = yes
+row gap 2
+  statcard max(fastlog.hrs), "longest fast (h)"
+  statcard count(fastlog month), "fasts this month"
+section "Past fasts", "hours"
+  trend fastlog last 60 days, it.hrs
+each fastlog sort at desc top 6 as f empty "No finished fasts yet."
+  row card tap edit f swipe remove f
+    f.hrs "h" bold grow
+    f.at faint
+===
+@rich domain=r11_coffee_cups topic=caffeine_cups_limit style=short
+coffee cups
+needs: tap a size to log a cup | daily cup limit setting | cups today against the limit | time of the last cup | dots for days under the limit
+---
+app "Coffee Cups" coffee red dark
+table cup size pick Small|Regular|Large = Regular
+setting limit num = 3 "Cups a day"
+stack card gap 2
+  count(cup today) "of" limit "cups today" big color if(count(cup today) > limit, bad, ink)
+  goal count(cup today), limit, "cups", ""
+  if count(cup) > 0
+    "Last cup at" last(cup.at) faint
+row gap 1
+  each options cup.size
+    button it fill accent grow tap add cup size = it
+section "This week", "dot is filled when you stayed within the limit"
+  weekdots count(cup on it) <= limit and count(cup on it) > 0
+each cup today sort at desc as c empty "No coffee yet today. Good start."
+  row card tap edit c swipe remove c
+    c.size grow
+    c.at faint
+===
+@rich domain=r11_screen_time topic=phone_screen_minutes style=short
+screen time
+needs: add minutes on the phone | daily limit setting | bar chart of 7 days with the limit line | bars over the limit in red | minutes today
+---
+app "Screen Time" phone purple
+table phone mins num 5..600 = 30 unit "min"
+setting limit num = 180 "Daily limit (min)"
+statcard sum(phone.mins today), "minutes on the phone today", limit
+quick phone, mins, [15, 30, 60]
+section "Last 7 days", "red days went over the limit"
+  plot 0..7, 0..max(limit, max(days last 7 days, sum(phone.mins on it))) axes gridlines
+    each days last 7 days
+      rect index + 0.15, 0, 0.7, sum(phone.mins on it) fill if(sum(phone.mins on it) > limit, bad, accent) radius 3
+      tick index + 0.5, dayname(it)
+    line 0, limit, 7, limit stroke ink thick 1
+row gap 2
+  statcard round(sum(phone.mins last 7 days) / 7), "daily average"
+  statcard count(days last 7 days, sum(phone.mins on it) > limit), "days over the limit", 7
+each phone today sort at desc as p empty "Nothing added today."
+  row card tap edit p swipe remove p
+    p.mins "min" bold grow
+    p.at faint
+===
+@rich domain=r11_data_pack topic=mobile_data_balance style=short
+data pack
+needs: add data used in GB | pack size setting | data left this month | daily allowance for the days remaining | progress bar
+---
+app "Data Pack" cloud pink
+table used gb num 0.1..50 = 1 unit "GB"
+setting pack num = 30 "Pack size (GB)"
+let left = pack - sum(used.gb month)
+let days_left = monthdays(today) - monthday(today) + 1
+topbar used, "Add usage"
+stack card gap 2
+  if left >= 0
+    fixed(left, 1) "GB left" big
+  else
+    fixed(abs(left), 1) "GB over the pack" big color bad
+  draw 100, 5
+    rect 0, 0, 100, 5 fill soft radius 2
+    rect 0, 0, 100 * clamp(sum(used.gb month) / pack, 0, 1), 5 fill if(left < 0, bad, accent) radius 2
+  fixed(sum(used.gb month), 1) "GB used of" pack faint tap edit pack
+if left > 0
+  stack fill soft pad 2 radius 10
+    fixed(left / days_left, 2) "GB a day keeps you inside the pack for" plural(days_left, "more day")
+section "Last 14 days", "GB per day"
+  daybars last 14 days, sum(used.gb on it)
+each used month sort at desc top 8 as u empty "No usage added this month."
+  row card tap edit u swipe remove u
+    u.gb "GB" bold grow
+    u.at faint
+===
+@rich domain=r11_recharge topic=mobile_recharge_log style=short
+recharge
+needs: add a recharge with amount and network | spend this month | share of spend by network | list of recharges by day | total this year
+---
+app "Recharge" phone grey
+table load amount money, net pick Jazz|Zong|Telenor|Ufone = Jazz
+topbar load, "Add recharge"
+row gap 2
+  statcard sum(load.amount month), "recharged this month"
+  statcard sum(load.amount year), "this year"
+section "By network", "this year"
+  share load year by net, sum(it.amount), it.key
+each load by day as g empty "No recharges yet. Add the first one."
+  text g.key bold faint
+  each g as r
+    row card tap edit r swipe remove r
+      r.net grow
+      r.amount bold
+===
+@rich domain=r11_library_books topic=library_books_due style=short
+library books
+needs: add a borrowed book with its due date | reminder the day before it is due | return button | overdue and due soon shown in colour | count of books out
+---
+app "Library Books" book ocean
+table borrow title text, due date, back bool
+remind "A library book is due tomorrow" at borrow.due - 1d at 9:00
+topbar borrow, "Add book"
+row gap 2
+  statcard count(borrow where back = no), "books out"
+  statcard count(borrow where back = no and due < today), "overdue"
+each borrow where back = no sort due as b empty "No books out. Add the next one you borrow."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      if b.due < today
+        text today - b.due "days overdue" color bad
+      else
+        "Due" b.due color if(b.due - today <= 3, warn, muted)
+    button "Returned" tap set b.back = yes
+"Returned" head
+each borrow where back = yes sort at desc top 5 as b empty "Nothing returned yet."
+  row gap 2
+    b.title grow faint
+===
+@rich domain=r11_movie_list topic=movies_to_watch_rated style=short
+movie list
+needs: add a movie to watch | tabs for to watch and seen | mark a movie seen with one tap | rate a seen movie from 1 to 5 | counts of each tab
+---
+app "Movie List" star mint
+table movie title text, seen bool, stars num? 1..5
+state tab pick Watch|Seen = Watch
+topbar movie, "Add movie"
+choice tab
+row gap 2
+  statcard count(movie where seen = no), "to watch"
+  statcard count(movie where seen = yes), "seen"
+each movie where seen = (tab = Seen) sort title as m empty "Nothing here. Add a movie to start your list."
+  stack card gap 1 tap edit m swipe remove m
+    row gap 2
+      m.title bold grow
+      if tab = Watch
+        button "Seen it" tap set m.seen = yes
+    if tab = Seen
+      "Rating" m.stars "of 5" faint
+      slider m.stars 1..5
+===
+@rich domain=r11_guitar_practice topic=guitar_practice_streak style=short
+guitar practice
+needs: log minutes with chord, song or scale | daily minutes goal | streak of practice days | grid of the last 5 weeks | list of sessions
+---
+app "Guitar Practice" music slate
+table strum mins num 5..180 = 20 unit "min", what pick Chords|Song|Scales|Fingerpicking = Chords
+setting target num = 20 "Daily goal (min)"
+topbar strum, "Log practice"
+goal sum(strum.mins today), target, "minutes today", " min"
+row gap 2
+  statcard streak(strum), "day streak"
+  statcard best(strum), "best streak"
+section "Last 5 weeks", "darker is longer"
+  daygrid last 35 days, sum(strum.mins on it), target
+each strum sort at desc top 8 as s empty "No practice yet. Pick up the guitar and log the first session."
+  row card gap 2 tap edit s swipe remove s
+    s.what bold grow
+    s.mins "min" faint
+    s.at faint
+===
+@rich domain=r11_chess_games topic=chess_results_record style=short
+chess games
+needs: add a game with result and opponent | win, draw and loss ring | win rate | last 10 results as dots | list of games
+---
+app "Chess Games" game ink
+table match result pick Win|Draw|Loss = Win, opp text?
+let tot = count(match)
+let wn = count(match where result = Win)
+let dr = count(match where result = Draw)
+topbar match, "Add game"
+row gap 3 align center
+  draw width 110
+    circle 40 stroke soft thick 14
+    arc 50, 50, 40, 0, 360 * wn / max(1, tot) stroke good thick 14
+    arc 50, 50, 40, 360 * wn / max(1, tot), 360 * (wn + dr) / max(1, tot) stroke muted thick 14
+    arc 50, 50, 40, 360 * (wn + dr) / max(1, tot), 360 stroke bad thick 14
+    label 50, 50, tot big
+  stack grow gap 0
+    round(wn * 100 / max(1, tot)) "% wins" head
+    wn "won," dr "drawn," tot - wn - dr "lost" color muted
+"Last 10" head
+row gap 1
+  each match sort at desc top 10 as m empty "No games yet. Add a result after you play."
+    box width 28 height 28 radius 14 fill if(m.result = Win, good, if(m.result = Draw, muted, bad))
+each match sort at desc top 8 as m
+  row card gap 2 tap edit m swipe remove m
+    m.result bold grow
+    m.opp faint
+===
+@rich domain=r11_ludo_scores topic=ludo_night_wins style=short
+ludo scores
+needs: add players | one tap to give a player a win | leaderboard sorted by wins | bar for each player's wins | remove a player
+---
+app "Ludo Scores" dice grey dark
+table player name text
+table win player ref player
+topbar player, "Add player"
+statcard count(win), "games played tonight"
+each player sort count(it.win) desc as p empty "No players yet. Add everyone who is playing."
+  stack card gap 2 tap edit p swipe remove p
+    row gap 2
+      text index + 1 faint
+      p.name bold grow
+      count(p.win) "wins" bold
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * count(p.win) / max(1, count(win)), 3 fill accent radius 1
+    button "Won a game" tap add win player = p
+===
+@rich domain=r11_carrom_score topic=carrom_board_scoreboard style=short
+carrom score
+needs: team name settings | plus buttons for a coin and the queen | save the board result | boards won by each team | reset the current board
+---
+app "Carrom Score" board orange
+table board a num 0..50, b num 0..50
+setting teama text = "Us" "Team A name"
+setting teamb text = "Them" "Team B name"
+state sa num = 0
+state sb num = 0
+row gap 2
+  stack card grow gap 1 align center
+    teama faint
+    sa huge
+    row gap 1
+      button "+1" tap set sa = sa + 1
+      button "Queen +3" tap set sa = sa + 3
+  stack card grow gap 1 align center
+    teamb faint
+    sb huge
+    row gap 1
+      button "+1" tap set sb = sb + 1
+      button "Queen +3" tap set sb = sb + 3
+row gap 1
+  button "Save board" fill accent grow tap add board a = sa, b = sb then set sa = 0 then set sb = 0
+  button "Reset" grow tap set sa = 0 then set sb = 0
+section "Boards won"
+  row gap 3
+    stack gap 0
+      count(board where a > b) big
+      teama faint
+    stack gap 0
+      count(board where b > a) big
+      teamb faint
+each board sort at desc top 8 as r empty "No boards saved yet."
+  row card tap edit r swipe remove r
+    r.a bold
+    "-" faint
+    r.b bold
+    r.at faint grow
+===
+@rich domain=r11_rummy_scores topic=card_game_points style=short
+rummy scores
+needs: add players | add points for a player each round | total points per player | leader with the lowest total | rounds played
+---
+app "Rummy Scores" cards plum
+table player name text
+table deal player ref player, pts num 0..500
+state newpts num = 0
+topbar player, "Add player"
+stack card gap 1
+  "Rounds played" faint
+  max(player, count(it.deal)) big
+each player sort sum(it.deal.pts) as p empty "No players yet. Add everyone at the table."
+  stack card gap 2 tap edit p swipe remove p
+    row gap 2
+      if index = 0 and count(deal) > 0
+        icon trophy
+      p.name bold grow
+      sum(p.deal.pts) "pts" big
+    row gap 1
+      field newpts "Points this round"
+      button "Add" fill accent tap add deal player = p, pts = newpts
+"Lowest total leads." faint
+===
+@rich domain=r11_trip_packing topic=trip_packing_checklist style=short
+trip packing
+needs: add an item with the bag it goes in | tick when packed | progress of packed items | filter by bag | items still to pack
+---
+app "Trip Packing" bag teal
+table thing item text, bag pick Cabin|Check_in|Backpack = Cabin, packed bool
+state sel text = ""
+topbar thing, "Add item"
+statcard count(thing where packed = yes), "items packed", count(thing)
+row gap 1
+  each options thing.bag
+    button it count(thing where bag = it and packed = no) fill if(sel = it, accent, soft) grow tap set sel = if(sel = it, "", it)
+each thing where sel = "" or bag = sel sort packed as t empty "Nothing to pack yet. Add passport, charger and clothes."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.item bold
+      t.bag faint
+    toggle t.packed
+===
+@rich domain=r11_committee_money topic=rotating_committee_pot style=short
+committee money
+needs: add members with the month they receive | amount each person pays setting | pot size | tick who has paid this month | who receives this month
+---
+app "Committee Money" users blue
+table member who text, turn date
+table paid member ref member
+setting dues money = 5000 "Each person pays"
+topbar member, "Add member"
+row gap 2
+  statcard dues * count(member), "pot each month"
+  statcard count(paid month), "paid this month", count(member)
+stack card gap 1
+  "Receives the pot this month" faint
+  each member where month(turn) = month(today) and year(turn) = year(today) as m empty "Nobody is due this month."
+    m.who big
+each member sort turn as m empty "No members yet. Add each person and the month they get the pot."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.who bold
+      "Gets the pot in" monthname(m.turn) faint
+    toggle m.paid month
+===
+@rich domain=r11_eid_shopping topic=eid_gift_shopping_list style=short
+eid shopping
+needs: add a gift with person, item and price | tick when bought | budget setting with progress | total planned and spent | items still to buy
+---
+app "Eid Shopping" gift pink
+table gift who text, item text, price money, bought bool
+setting budget money = 40000 "Eid budget"
+topbar gift, "Add gift"
+stack card gap 2
+  "Planned" sum(gift.price) big
+  goal sum(gift.price), budget, "of the budget planned"
+  "Already bought for" sum(gift where bought = yes, it.price) faint
+row gap 2
+  statcard count(gift where bought = no), "still to buy"
+  statcard count(gift where bought = yes), "bought", count(gift)
+each gift sort bought as g empty "No gifts yet. Add the first person on your list."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.who bold
+      g.item faint
+    g.price bold
+    toggle g.bought

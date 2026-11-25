@@ -1,0 +1,487 @@
+@rich domain=d4_store_review_status topic=store_review_status style=detailed
+we ship to both stores and I lose track of which build is waiting for review. log each submission with the platform, version number and the day I sent it, then flip it to In review, Approved or Rejected. filter by status and tell me how many days the oldest waiting one has been sitting there
+needs: log a submission with platform, version and sent date | change status to in review, approved or rejected | filter by status | days the oldest waiting build has waited | count of builds waiting
+---
+app "Store reviews" phone ocean
+table sub platform pick Android|iOS = iOS, version text, sent date = today, status pick Waiting|In_review|Approved|Rejected = Waiting, note text?
+state show pick All|Waiting|In_review|Approved|Rejected = All
+let waiting = count(sub where status = Waiting or status = In_review)
+let oldest = max(sub where status = Waiting or status = In_review, today - it.sent)
+topbar sub, "New submission"
+row gap 2
+  statcard waiting, "builds waiting for review"
+  statcard oldest, "days the oldest has waited"
+choice show
+each sub where show = All or status = show sort sent as s empty "Nothing submitted yet. Log the build you just uploaded."
+  stack card gap 1 tap edit s swipe remove s
+    row gap 1
+      s.platform s.version bold grow
+      s.status faint
+    "Sent" s.sent "·" plural(today - s.sent, "day") "ago" faint
+    if s.status = Waiting or s.status = In_review
+      row gap 1
+        button "In review" tap set s.status = In_review
+        button "Approved" fill accent tap set s.status = Approved
+        button "Rejected" tap set s.status = Rejected
+===
+@rich domain=d4_crash_free_log topic=crash_rate_log style=short
+crash rate log
+needs: log sessions and crashes for a version | crash-free percentage per entry | trend line of crash-free rate | set the target crash-free percentage
+---
+app "Crash rate" bolt mint
+table crash version text, sessions num 1.., crashes num 0.. = 0
+setting target num = 99.5 "Target crash-free %"
+let free(c crash) = 100 - c.crashes * 100 / c.sessions
+form crash, "Log version"
+statcard round(free(last(crash)) * 100) / 100, "% crash-free, latest entry"
+if free(last(crash)) < target
+  "Below the" target "% target. Look at the newest crashes first." bold color bad
+section "Crash-free over time", "oldest to newest"
+  trend crash sort at, free(it)
+each crash sort at desc as c empty "No data yet. Add a version with its sessions and crashes from the console."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.version bold
+      c.crashes "crashes in" c.sessions "sessions" faint
+    fixed(free(c), 2) "%" bold color if(free(c) < target, bad, good)
+===
+@rich domain=d4_version_adoption topic=version_adoption_share style=multi_feature
+tracking how fast users move to the new app version. I type the share of users on each version in percent, want a bar comparison between versions, a number showing how many are still on older builds than the newest, and I can tick which versions we have dropped support for
+needs: add a version with percent of users | bar comparison between versions | percent of users not on the newest version | tick versions with dropped support | list sorted by share
+---
+app "Adoption" chart orange
+table ver name text, pct num 0..100 unit "%", dropped bool
+let newest = max(ver.pct)
+form ver, "Add version"
+statcard 100 - newest, "% of users are not on the top version", 100
+section "Share by version", "percent of users"
+  share ver sort pct desc, it.pct, it.name
+plural(count(ver where dropped = yes), "version") "marked as dropped" faint
+each ver sort pct desc as v empty "No versions yet. Add the one in your store listing first."
+  row card gap 2 tap edit v swipe remove v
+    toggle v.dropped
+    v.name bold grow
+    v.pct "%" color if(v.dropped, bad, ink)
+===
+@rich domain=d4_testflight_testers topic=beta_tester_roster style=short
+testflight testers
+needs: add a tester with name, device and build | tick which testers are active | grouped by build | count of active testers
+---
+app "Beta testers" users yellow
+table tester name text, device text, build text, active bool
+topbar tester, "Add tester"
+plural(count(tester where active = yes), "active tester") "of" count(tester) head
+plural(count(tester by device, yes), "device type") "in the pool" faint
+each tester by build as g empty "No testers yet. Add the friends who agreed to try your build."
+  section "Build" g.key
+    each g as t
+      row gap 2 tap edit t swipe remove t
+        toggle t.active
+        stack grow gap 0
+          t.name bold
+          t.device faint
+===
+@rich domain=d4_store_ratings topic=store_ratings_breakdown style=custom_ui
+I read the play console reviews every Monday. let me add each rating with stars and a line of what they said, show the average, a bar for how many one, two, three, four and five star ratings we have, and a list of just the 1 and 2 star ones to answer first
+needs: add a rating with stars and review text | average rating | bar per star level | list of 1 and 2 star reviews to answer | count of ratings
+---
+app "Ratings" star green
+table rating stars num 1..5 = 5, review text?
+topbar rating, "Add rating"
+row gap 2
+  statcard round(avg(rating.stars) * 10) / 10, "average stars", 5
+  statcard count(rating), "ratings so far"
+section "How many of each", "stars"
+  bars 1..5, count(rating where stars = it), it
+section "Answer these first", "1 and 2 stars"
+  each rating where stars <= 2 sort at desc as r empty "No unhappy reviews. Enjoy it."
+    row gap 2 tap edit r swipe remove r
+      r.stars "stars" bold color bad
+      r.review grow
+===
+@rich domain=d4_aso_keyword_rank topic=keyword_rank_tracker style=multi_feature
+aso work: I track keywords and where my app ranks for each in the store. add keywords once, then log a new rank whenever I check, and for each keyword show the latest rank and how many places it moved since the first check, with a small line of the ranks
+needs: add a keyword | log a new rank for a keyword | latest rank per keyword | places moved since first check | line of rank history per keyword
+---
+app "Keyword ranks" tag teal
+table kw word text
+table check kw ref kw, rank num 1..500
+topbar kw, "Add keyword"
+form check, "Log rank"
+each kw sort word as k empty "No keywords yet. Add the words you want to rank for."
+  stack card gap 1 swipe remove k
+    row gap 1
+      k.word bold grow
+      "#" last(k.check.rank) bold
+    if count(k.check) > 1
+      first(k.check.rank) - last(k.check.rank) "places gained since the first check" faint color if(last(k.check.rank) <= first(k.check.rank), good, bad)
+      trend k.check sort at, it.rank
+===
+@rich domain=d4_playtest_feedback topic=playtest_feedback_notes style=detailed
+after each playtest session I want to jot down who played, how fun it was from 1 to 5, where they got stuck (tutorial, level 3, boss, menu or nowhere) and a note. show the average fun score and a chart of which stuck spot comes up most
+needs: add a playtest with tester name, fun score, stuck spot and note | average fun score | chart of stuck spots | list of notes newest first | count of sessions
+---
+app "Playtests" game purple dark
+table play tester text, fun num 1..5 = 3, stuck pick Nowhere|Tutorial|Level_3|Boss|Menu = Nowhere, note long?
+form play, "Add playtest"
+row gap 2
+  statcard round(avg(play.fun) * 10) / 10, "average fun out of 5", 5
+  statcard count(play), "sessions played"
+section "Where people got stuck", "number of sessions"
+  share play where stuck != Nowhere by stuck, count(it), it.key
+each play sort at desc as p empty "No playtests yet. Ask one friend to play for ten minutes."
+  stack card gap 0 tap edit p swipe remove p
+    row gap 1
+      p.tester bold grow
+      p.fun "/ 5" faint
+    p.note
+    p.stuck faint
+===
+@rich domain=d4_asset_checklist topic=game_asset_checklist style=custom_ui
+checklist for all the art and sound my little game needs. name of the asset, what kind it is (sprite, sound, music, UI, model) and a button to move it from Todo to Doing to Done. show a progress bar of how much is done and which kind has the most left
+needs: add an asset with name and kind | button moves status todo to doing to done | progress bar of done assets | count left per kind | list sorted by status
+---
+app "Asset list" box pink
+table asset name text, kind pick Sprite|Sound|Music|UI|Model = Sprite, status pick Todo|Doing|Done = Todo
+form asset, "Add asset"
+goal count(asset where status = Done), count(asset), "assets finished"
+section "Still to make", "by kind"
+  share asset where status != Done by kind, count(it), it.key
+each asset sort status as a empty "No assets listed yet. Write down every sprite and sound the game needs."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.name bold
+      a.kind faint
+    if a.status != Done
+      button if(a.status = Todo, "Start", "Finish") fill accent tap set a.status = if(a.status = Todo, Doing, Done)
+    else
+      "Done" bold color good
+===
+@rich domain=d4_build_size_log topic=game_build_size_log style=multi_feature
+my game keeps growing and the store limit is close. log the build size in MB for each build with the platform, set a size budget, show a line of the sizes over time and flag builds that went over the budget
+needs: log a build with version, platform and size in MB | set a size budget | line chart of build size over time | flag builds over budget | latest size against budget
+---
+app "Build sizes" package red
+table build ver text, platform pick Android|iOS|Windows = Android, mb num 1.. unit "MB"
+setting budget num = 150 "Size budget (MB)"
+form build, "Log build"
+goal last(build.mb), budget, "MB, latest build", "MB"
+section "Size over builds", "MB, oldest first"
+  trend build sort at, it.mb
+each build sort at desc as b empty "No builds logged. Add the size of your latest export."
+  row card gap 2 tap edit b swipe remove b fill if(b.mb > budget, bad, soft)
+    stack grow gap 0
+      b.ver bold
+      b.platform faint
+    b.mb "MB" bold
+===
+@rich domain=d4_game_jam_clock topic=game_jam_countdown style=custom_ui
+game jam this weekend: a 48 hour countdown I can start and pause, and under it my must-have list of tasks to tick off with a bar for how many are done. add a task with a name and who it is for (code, art, sound)
+needs: 48 hour countdown with start and pause | add a task with name and area | tick tasks done | progress bar of done tasks | list grouped by area
+---
+app "Jam clock" timer blue
+table task what text, area pick Code|Art|Sound = Code, done bool
+topbar task, "Add task"
+timer 48h, "Jam time left"
+goal count(task where done = yes), count(task), "must-haves done"
+plural(count(task where done = no), "task") "still to do" faint
+each task by area as g empty "No tasks yet. Add the three things the game cannot ship without."
+  section g.key
+    each g as t
+      row gap 2 swipe remove t
+        toggle t.done
+        t.what grow
+===
+@rich domain=d4_level_deaths topic=level_death_counter style=custom_ui
+I watch people play my platformer and tap a level button each time they die so I can see which level is the killer. one button per level, a bar chart of deaths per level, and a way to add new levels with a name
+needs: add a level with a name | one tap button per level to count a death | bar chart of deaths per level | name of the deadliest level
+---
+app "Deaths" flag grey
+table level name text
+table death level ref level
+topbar level, "Add level"
+let worst = max(level, count(it.death))
+if count(death) > 0
+  "Deadliest:" last(level sort count(it.death)).name bold color bad
+section "Deaths per level"
+  bars level, count(it.death), it.name
+"Tap when the player dies" faint
+grid 2 gap 1
+  each level as l empty "No levels yet. Add Level 1 to start counting."
+    button l.name "·" count(l.death) tap add death level = l
+===
+@rich domain=d4_balance_tweaks topic=game_balance_changes style=detailed
+log every balance change I make to my card game: the unit or card name, which stat (damage, health, speed, cost), the number before and after, and whether I keep it, revert it or it is still testing. show the change in percent on each row and how many are still being tested
+needs: log a tweak with unit, stat, before and after values | change in percent per row | set keep, revert or testing | count still testing | list newest first
+---
+app "Balance log" scale slate
+table tweak unit text, stat pick Damage|Health|Speed|Cost = Damage, before num, after num, verdict pick Testing|Keep|Revert = Testing
+form tweak, "Log tweak"
+statcard count(tweak where verdict = Testing), "tweaks still being tested"
+each tweak sort at desc as t empty "No tweaks logged. Write down the number before you change it."
+  stack card gap 1 tap edit t swipe remove t
+    row gap 1
+      t.unit bold grow
+      t.verdict faint
+    t.stat t.before "to" t.after "(" round((t.after - t.before) * 100 / t.before) "%)" color if(t.after > t.before, good, warn)
+    if t.verdict = Testing
+      row gap 1
+        button "Keep" fill accent tap set t.verdict = Keep
+        button "Revert" tap set t.verdict = Revert
+===
+@rich domain=d4_component_stock topic=electronics_component_stock style=short
+component stock
+needs: add a part with quantity and low-stock level | plus and minus buttons for quantity | highlight parts at or below low level | count of parts running low
+---
+app "Parts bin" box ink
+table part name text, qty num 0.. = 0, low num 0.. = 5 "Reorder at", bin text?
+form part, "Add part"
+let lowcount = count(part where qty <= low)
+if lowcount > 0
+  lowcount "parts running low, reorder soon" bold color warn
+each part sort qty - low as p empty "The bin is empty. Add resistors, caps and chips as you count them."
+  row card gap 2 tap edit p swipe remove p fill if(p.qty <= p.low, warn, soft)
+    stack grow gap 0
+      p.name bold
+      p.bin faint
+    button "-" tap set p.qty = p.qty - 1
+    p.qty bold
+    button "+" tap set p.qty = p.qty + 1
+===
+@rich domain=d4_wiring_pin_notes topic=wiring_notes_pin_table style=custom_ui
+wiring notes for my arduino and esp32 builds. one row per pin: which board, the pin label (D4, GPIO21), what kind of wire it is (power, ground, signal, data) and what it goes to. show them grouped by board so I can read a whole pin table before I plug anything
+needs: add a pin note with board, pin and what it connects to | wire kind power, ground, signal or data | grouped by board as a pin table | count of pins per board
+---
+app "Pin tables" tool plum
+table pin board text, label text, wire pick Signal|Power|Ground|Data = Signal, goes text "Connects to"
+topbar pin, "Add pin"
+plural(count(pin), "pin") "on" plural(count(pin by board, yes), "board") head
+plural(count(pin where wire = Power), "power pin") "noted" faint
+each pin by board as g empty "No wiring notes yet. Add the first pin of your build."
+  section g.key, plural(count(g), "pin")
+    each g as p
+      row gap 2 tap edit p swipe remove p
+        p.label bold width 80
+        p.goes grow
+        p.wire faint
+===
+@rich domain=d4_firmware_versions topic=device_firmware_versions style=multi_feature
+I have a bunch of esp32 and pi devices around the house running different firmware. list each device with the version it runs, the latest version available and the date I flashed it, mark the ones that are behind, and a button to say I just updated it
+needs: add a device with running version and latest version | date flashed per device | highlight devices behind latest | button to mark updated today | count of devices behind
+---
+app "Firmware" bolt orange
+table device name text, fw text "Running", latest text "Latest", flashed date = today
+let behind = count(device where fw != latest)
+topbar device, "Add device"
+statcard behind, "of" count(device) "devices are behind", count(device)
+each device sort name as d empty "No devices yet. Add the first board that runs your code."
+  row card gap 2 tap edit d swipe remove d fill if(d.fw != d.latest, warn, soft)
+    stack grow gap 0
+      d.name bold
+      "Running" d.fw "· latest" d.latest faint
+      "Flashed" d.flashed faint
+    if d.fw != d.latest
+      button "Updated" fill accent tap set d.fw = d.latest then set d.flashed = today
+===
+@rich domain=d4_sensor_calibration topic=sensor_calibration_log style=detailed
+calibrating a temperature sensor against a reference thermometer. each time I log the reference reading and what the sensor said, show the error of that reading, the average error so I know what offset to apply, and a line chart of the error so I can see if it drifts
+needs: log a reading with sensor, reference value and sensor value | error per reading | average error as offset | line chart of error over time
+---
+app "Calibration" target yellow
+table cal sensor text, ref num "Reference", got num "Sensor said"
+let avgerr = sum(cal, it.got - it.ref) / count(cal)
+form cal, "Log reading"
+statcard round(avgerr * 100) / 100, "average error: subtract this from the sensor"
+section "Error over time", "sensor minus reference"
+  trend cal sort at, it.got - it.ref
+each cal sort at desc top 10 as c empty "No readings yet. Put both thermometers in the same glass of water."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.sensor bold
+      "Ref" c.ref "· sensor" c.got faint
+    c.got - c.ref bold
+===
+@rich domain=d4_bom_cost topic=hardware_parts_cost style=multi_feature
+bill of materials for my pcb: item, how many and unit price, show the cost per line and the whole total against my budget. a bar comparison of the five most expensive lines would help me decide what to swap
+needs: add a part with quantity and unit price | cost per line | total against budget | bar comparison of the five dearest lines | set the budget
+---
+app "BOM" tag grey
+table bom item text, qty num 1.. = 1, price money
+setting budget money = 50 "Budget"
+let total = sum(bom, it.qty * it.price)
+topbar bom, "Add part"
+goal total, budget, if(total > budget, "over budget", "of the budget"), ""
+section "Costliest lines", "quantity times price"
+  share bom sort it.qty * it.price desc top 5, it.qty * it.price, it.item
+each bom sort item as b empty "No parts in the list yet."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.item bold
+      b.qty "x" b.price faint
+    b.qty * b.price bold
+===
+@rich domain=d4_battery_runtime topic=battery_runtime_tests style=custom_ui
+battery life tests for my sensor node: each test I type the battery name, the capacity in mAh and how many hours it lasted. show the average draw in mA for each test, the best battery so far, and a line chart over the tests
+needs: log a test with battery, mAh and hours lasted | average draw in mA per test | best battery by hours | line chart over tests
+---
+app "Battery tests" bolt teal
+table run battery text, mah num 1.. "Capacity (mAh)", hours num 0.1..
+topbar run, "Log test"
+if count(run) > 0
+  "Best so far:" last(run sort hours).battery "with" max(run.hours) "hours" bold color good
+section "Hours per test", "oldest first"
+  trend run sort at, it.hours
+each run sort at desc as r empty "No tests yet. Run the node until the battery dies and write it down."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.battery bold
+      r.mah "mAh" faint
+    r.hours "h ·" round(r.mah / r.hours) "mA" bold
+===
+@rich domain=d4_resistor_bands topic=resistor_color_code_reader style=custom_ui
+resistor colour code helper: I pick the first digit, the second digit and the multiplier with sliders, it draws the resistor with the three coloured bands and tells me the value in ohms
+needs: sliders for first digit, second digit and multiplier | drawing of a resistor with three bands | value in ohms | save the resistor to a list
+---
+app "Resistor" pin blue
+table saved ohms num 0..
+state a num = 4
+state b num = 7
+state m num = 2
+let ohms = (a * 10 + b) * pow(10, m)
+a b "zeros" m faint
+slider a 0..9
+slider b 0..9
+slider m 0..6
+draw 100, 30
+  rect 22, 2, 56, 26 fill soft
+  rect 30, 2, 7, 26 fill if(a = 0, black, if(a = 1, hue(25), if(a = 2, red, if(a = 3, orange, if(a = 4, yellow, if(a = 5, green, if(a = 6, blue, if(a = 7, purple, if(a = 8, grey, white)))))))))
+  rect 46, 2, 7, 26 fill if(b = 0, black, if(b = 1, hue(25), if(b = 2, red, if(b = 3, orange, if(b = 4, yellow, if(b = 5, green, if(b = 6, blue, if(b = 7, purple, if(b = 8, grey, white)))))))))
+  rect 62, 2, 7, 26 fill if(m = 0, black, if(m = 1, hue(25), if(m = 2, red, if(m = 3, orange, if(m = 4, yellow, if(m = 5, green, if(m = 6, blue, purple)))))))
+ohms "ohms" big
+button "Save" fill accent tap add saved ohms = ohms
+each saved sort at desc top 8 as s empty "Saved resistors show here."
+  row card gap 2 swipe remove s
+    s.ohms "ohms" grow
+===
+@rich domain=d4_led_resistor topic=led_resistor_calculator style=detailed
+led resistor calculator: I type the supply voltage, the led forward voltage and the current I want in mA, and it gives me the resistor I need and the power it burns. let me save the combos I use to a list with the led colour
+needs: inputs for supply voltage, led voltage and current | resistor value in ohms | power in the resistor | save a combo with led colour | list of saved combos
+---
+app "LED resistor" bolt ocean
+table combo colour pick Red|Green|Blue|White|Yellow = Red, ohms num 0..
+state vs num = 5
+state vf num = 2
+state ma num = 20
+let r = round((vs - vf) * 1000 / ma)
+stack card gap 2
+  field vs "Supply (V)"
+  field vf "LED forward (V)"
+  field ma "Current (mA)"
+  r "ohms" big
+  "Power in the resistor:" round((vs - vf) * ma) / 1000 "W" faint
+  "Use the next standard value up if yours is not exact." faint
+topbar combo, "Save combo"
+each combo sort at desc as c empty "No saved combos. Add the colour and ohms you ended up using."
+  row card gap 2 tap edit c swipe remove c
+    c.colour bold grow
+    c.ohms "ohms"
+===
+@rich domain=d4_lan_ip_inventory topic=lan_ip_device_inventory style=multi_feature
+list every device on my home network with its last IP number (like .42), what kind it is and the room it sits in. warn me when two devices got the same number, show how many numbers are free and let me filter by kind
+needs: add a device with name, last IP number, kind and room | warning when two devices share a number | free numbers left | filter by kind | list sorted by IP
+---
+app "LAN devices" grid mint
+table dev name text, ip num 2..254 "Last IP number", kind pick Phone|Laptop|Camera|Printer|Server|IoT = IoT, room text?
+state kind_filter pick All|Phone|Laptop|Camera|Printer|Server|IoT = All
+let clash = count(dev, count(dev, it.ip = it.ip) > 1)
+topbar dev, "Add device"
+statcard 253 - count(dev), "numbers still free of 253", 253
+if clash > 0
+  "Two devices share an IP number. Fix the red rows." bold color bad
+choice kind_filter
+each dev where kind_filter = All or kind = kind_filter sort ip as d empty "No devices yet. Add your router's neighbours one by one."
+  row card gap 2 tap edit d swipe remove d fill if(count(dev, it.ip = d.ip) > 1, bad, soft)
+    "." d.ip bold width 60
+    stack grow gap 0
+      d.name bold
+      d.kind "·" d.room faint
+===
+@rich domain=d4_port_notes topic=home_lab_port_notes style=detailed
+notes for the ports in my home lab: service name, port number, which host runs it, TCP or UDP, and a tick for the ones I forwarded to the internet. filter by protocol and show a red count of how many are exposed
+needs: add a port note with service, port number, host and protocol | tick if exposed to the internet | filter by TCP or UDP | count of exposed ports | list sorted by port
+---
+app "Port notes" lock red
+table port svc text, num num 1..65535 "Port", host text, proto pick TCP|UDP = TCP, open bool "Exposed"
+state pf pick All|TCP|UDP = All
+let exposed = count(port where open = yes)
+form port, "Add port"
+if exposed > 0
+  plural(exposed, "port") "open to the internet" bold color bad
+else
+  "Nothing is exposed to the internet." color good
+choice pf
+each port where pf = All or proto = pf sort num as p empty "No ports noted yet. Start with SSH and your web server."
+  row card gap 2 tap edit p swipe remove p fill if(p.open, bad, soft)
+    p.num bold width 64
+    stack grow gap 0
+      p.svc bold
+      p.host "·" p.proto faint
+    toggle p.open
+===
+@rich domain=d4_backup_schedule topic=home_backup_schedule style=multi_feature
+what backs up when: for each thing I back up (photos, laptop, nas config) I set how many days between backups, where it goes (local, cloud, NAS) and the last time it ran. show what is overdue first, a button to mark it done today, and count the overdue ones
+needs: add a backup with interval in days, target and last run | overdue shown first | button to mark done today | count overdue | days since last run
+---
+app "Backups" shield green
+table bk what text, every num 1..365 = 7 "Every (days)", dest pick Local|Cloud|NAS = Cloud, last date = today
+let over(b bk) = today - b.last >= b.every
+topbar bk, "Add backup"
+statcard count(bk, today - it.last >= it.every), "backups overdue", count(bk)
+"Next up:" first(bk sort every - (today - last)).what faint
+each bk sort every - (today - last) as b empty "No backups set up. Add the one you would cry about losing."
+  row card gap 2 tap edit b swipe remove b fill if(over(b), warn, soft)
+    stack grow gap 0
+      b.what bold
+      b.dest "· every" b.every "days" faint
+      "Last run" plural(today - b.last, "day") "ago" faint
+    button "Done" tap set b.last = today
+===
+@rich domain=d4_wifi_speed_log topic=wifi_speed_by_room style=short
+wifi speed by room
+needs: log a test with download, upload and room | latest download and upload shown big | line chart of download over time | average download per room | room with the slowest test
+---
+app "Wifi speed" cloud pink
+table speed down num 0.. "Download (Mbps)", up num 0.. "Upload (Mbps)", room pick Living_room|Bedroom|Office|Kitchen|Garden = Living_room
+form speed, "Log test"
+row gap 2
+  statcard last(speed.down), "Mbps down, latest"
+  statcard last(speed.up), "Mbps up, latest"
+section "Download over time", "Mbps"
+  trend speed sort at, it.down
+if count(speed) > 0
+  "Slowest test was in the" first(speed sort down).room bold color warn
+section "Average download by room", "Mbps"
+  share speed by room, avg(it.down), it.key
+each speed sort at desc top 6 as s empty "No tests yet. Run a speed test where the signal feels weak."
+  row card gap 2 tap edit s swipe remove s
+    s.room bold grow
+    s.down "down ·" s.up "up" faint
+===
+@rich domain=d4_nas_drives topic=nas_drive_health style=multi_feature
+my nas has several drives and I want to watch them: each drive with its size in TB, how much is used, temperature, and SMART status (good, warning, failing). show total space used against total size and make hot or unhealthy drives red
+needs: add a drive with size, used TB, temperature and SMART status | total used against total size | red for hot or unhealthy drives | count of unhealthy drives | list sorted by temperature
+---
+app "NAS drives" box slate
+table drive name text, size num 1.. unit "TB", used num 0.. unit "TB", temp num 0..100 unit "C", smart pick Good|Warning|Failing = Good
+let bad_n = count(drive where smart != Good or temp > 50)
+topbar drive, "Add drive"
+goal sum(drive.used), sum(drive.size), "TB used across all drives", "TB"
+if bad_n > 0
+  plural(bad_n, "drive") "hot or not healthy" bold color bad
+each drive sort temp desc as d empty "No drives yet. Add each disk in your NAS."
+  row card gap 2 tap edit d swipe remove d fill if(d.smart != Good or d.temp > 50, bad, soft)
+    stack grow gap 0
+      d.name bold
+      d.used "of" d.size "TB used" faint
+    d.temp "C" bold
+    d.smart faint

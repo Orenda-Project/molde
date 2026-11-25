@@ -1,0 +1,570 @@
+@rich domain=r9_shoot_book topic=photo_shoot_bookings style=detailed
+I do weddings, portraits and product shoots and my bookings live in WhatsApp chats. Let me add a shoot with client, kind, date and fee, tick it when the client has paid, filter by kind, and show how much money is still to collect
+needs: add a shoot with client, kind, date and fee | tick a shoot as paid | filter shoots by kind | shows money still to collect | fees by kind chart
+---
+app "Shoot Book" star ocean
+table shoot client text, kind pick Wedding|Portrait|Product|Event|Family = Portrait, day date, fee money, paid bool
+state f text = ""
+topbar shoot, "Book shoot"
+row gap 2
+  statcard sum(shoot.fee where paid = no), "still to collect"
+  statcard count(shoot where day >= today and day < today + 8), "shoots this week"
+row gap 1
+  button "All" fill if(f = "", accent, soft) tap set f = ""
+  each options shoot.kind
+    button it fill if(f = it, accent, soft) tap set f = it
+each shoot where f = "" or kind = f sort day as s empty "No shoots booked yet. Add the first one."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.client bold
+      s.kind "on" s.day faint color if(s.day < today and s.paid = no, bad, muted)
+    s.fee bold
+    toggle s.paid
+section "Fees by kind", "all time"
+  share shoot by kind, sum(it.fee), it.key
+===
+@rich domain=r9_wedding_films topic=wedding_video_pipeline style=multi_feature
+shaadi videographer here, 2 cameras and a drone. keep each wedding with couple names, date, package and the balance they still owe, then move it from shot to editing to review to delivered. show how many films are at each stage and the total balance still to come
+needs: add a wedding with couple, date, package, balance | move a film to the next stage | stage buttons with counts that filter | total balance still due | mark for review button on films being edited
+---
+app "Wedding Films" star mint
+table film couple text, day date, package pick Highlight|Full_day|Cinematic = Highlight, balance money, stage pick Shot|Editing|Review|Delivered = Shot
+state st text = ""
+let owed = sum(film.balance where stage != Delivered)
+topbar film, "Add wedding"
+statcard owed, "balance still to come"
+row gap 1
+  each options film.stage
+    button it count(film where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each film where st = "" or stage = st sort day as f empty "No weddings yet. Add the first booking."
+  stack card gap 1 tap edit f swipe remove f
+    row
+      f.couple bold grow
+      f.day faint
+    row gap 2
+      f.package f.stage faint grow
+      "Balance" f.balance bold color if(f.balance > 0, warn, good)
+    if f.stage = Editing
+      button "Send for review" tap set f.stage = Review
+    if f.stage = Review
+      button "Delivered" fill accent tap set f.stage = Delivered
+===
+@rich domain=r9_photo_edits topic=photo_edit_queue style=short
+photo edits
+needs: add a batch with client, photo count and due date | move a batch through culling, editing, export and sent | photos still to deliver | filter by stage
+---
+app "Photo Edits" pen slate
+table batch client text, shots num 1..3000, stage pick Culling|Editing|Export|Sent = Culling, due date
+state st text = ""
+let open = sum(batch.shots where stage != Sent)
+topbar batch, "Add batch"
+statcard open, "photos still to deliver"
+row gap 1
+  each options batch.stage
+    button it sum(batch.shots where stage = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each batch where (st = "" and stage != Sent) or stage = st sort due as b empty "Nothing in the queue. Add a batch after your next shoot."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.client bold
+      b.shots "photos, due" b.due faint color if(b.due < today, bad, muted)
+    if b.stage != Sent
+      button "Next" fill accent tap set b.stage = if(b.stage = Culling, Editing, if(b.stage = Editing, Export, Sent))
+===
+@rich domain=r9_portrait_sessions topic=portrait_clients_sessions style=detailed
+I shoot portraits for 20 or so regular clients. I want a client list with phone, then each session I do for them with date, location and price, plus a number showing what each client has spent with me in total and who I have not shot in over 90 days
+needs: add a client with phone | add a session for a client with date, place and price | shows total spent per client | flags clients not shot in 90 days | income this month
+---
+app "Portrait Clients" user ink
+table client name text, phone text?
+table session client ref client, day date, place text, price money
+let income = sum(session.price month)
+screen clients "Clients" users
+  topbar client, "Add client"
+  statcard income, "earned this month"
+  each client sort name as c empty "No clients yet. Add your first regular."
+    row card gap 2 tap edit c swipe remove c
+      stack grow gap 0
+        c.name bold
+        if count(c.session) = 0
+          "No sessions yet" faint
+        else
+          "Last shot" last(c.session.day) faint color if(today - last(c.session.day) > 90, warn, muted)
+      sum(c.session.price) bold
+screen sessions "Sessions" star
+  topbar session, "Add session"
+  list session, "No sessions yet. Add one after your next shoot."
+===
+@rich domain=r9_drone_log topic=drone_flight_log style=short
+drone log
+needs: log a flight with place, minutes and battery left | total flight time this month | trend of flight minutes | note wind speed per flight
+---
+app "Drone Log" bolt plum
+table flight place text, mins num 1..60, battery num 0..100 = 30 unit "%", wind num 0..60 = 5 unit "km/h"
+topbar flight, "Log flight"
+row gap 2
+  statcard sum(flight.mins month), "minutes in the air this month"
+  statcard count(flight month), "flights this month"
+section "Flight minutes", "all flights"
+  if count(flight) < 2
+    "Log two flights to see the line." faint
+  else
+    trend flight sort at, it.mins
+each flight as f empty "No flights yet. Log the first one after landing."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.place bold
+      "Wind" f.wind "km/h, battery" f.battery "%" faint color if(f.wind > 30, warn, muted)
+    f.mins "min" bold
+===
+@rich domain=r9_gear_checkout topic=camera_gear_lending style=custom_ui
+my assistants borrow lenses and lights and half of it never comes back on time. list my gear, mark who has each piece and when it left, and a big red tag on anything out for more than 3 days. I also want to see how many pieces are out right now
+needs: add a gear item with name and kind | record who took it and when | mark it returned | highlights gear out for more than 3 days | count of pieces out
+---
+app "Gear Room" eye red
+table gear name text, kind pick Camera|Lens|Light|Tripod|Audio = Lens, holder text?, since date?, out bool
+state who text = ""
+let outnow = count(gear where out = yes)
+topbar gear, "Add gear"
+row gap 2
+  statcard outnow, "pieces out now"
+  statcard count(gear) - outnow, "on the shelf"
+field who "Borrower name"
+each gear sort kind as g empty "No gear listed. Add your first lens."
+  row card gap 2 tap edit g swipe remove g
+    stack grow gap 0
+      g.name bold
+      if g.out
+        g.holder "since" g.since faint color if(today - g.since > 3, bad, muted)
+      else
+        g.kind faint
+    if g.out
+      button "Returned" fill accent tap set g.out = no then set g.holder = "" then set g.since = today
+    else
+      button "Lend" tap set g.out = yes then set g.holder = who then set g.since = today
+===
+@rich domain=r9_album_proofs topic=wedding_album_proofs style=detailed
+For every wedding album I send a proof and the family asks for changes again and again. Let me add an album with client, pages and the due date, press a button each time they ask for changes so I can see how many rounds it took, and a button to approve it. Show how many are approved out of all
+needs: add an album with client, pages and due date | button counts a round of changes | approve an album | shows approved out of all albums | shows rounds used per album
+---
+app "Album Proofs" book orange
+table album client text, pages num 10..120 = 30, due date, rounds num 0..20 = 0, approved bool
+let done = count(album where approved = yes)
+topbar album, "Add album"
+goal done, max(count(album), 1), "albums approved"
+each album sort due as a empty "No albums in proof. Add one when you send the first draft."
+  stack card gap 2 tap edit a swipe remove a
+    row
+      a.client bold grow
+      a.pages "pages" faint
+    row gap 2
+      "Due" a.due faint color if(a.due < today and a.approved = no, bad, muted)
+      plural(a.rounds, "round") "of changes" bold color if(a.rounds > 2, warn, ink)
+    if a.approved
+      "Approved" bold color good
+    else
+      row gap 1
+        button "They want changes" tap set a.rounds = a.rounds + 1
+        button "Approved" fill accent tap set a.approved = yes
+===
+@rich domain=r9_photo_prints topic=photo_print_orders style=multi_feature
+small print corner: customers order 4x6, 5x7 or A4 photos. I add the name, size, how many and price per print, mark it paid, and I want to see the total takings and a bar chart of how many prints of each size I sold
+needs: add an order with name, size, copies and price per print | mark an order paid | shows total takings | chart of prints per size | shows unpaid amount
+---
+app "Print Corner" eye yellow dark
+table prints name text, size pick Small|Medium|Large|A4 = Small, copies num 1..500 = 1, rate money, paid bool
+let takings = sum(prints, it.copies * it.rate)
+topbar prints, "New order"
+row gap 2
+  statcard takings, "total orders"
+  statcard sum(prints, if(it.paid, 0, it.copies * it.rate)), "not paid yet"
+section "Prints per size", "copies"
+  bars options prints.size, sum(prints.copies where size = it), it
+each prints as p empty "No orders yet. Add the first customer."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.copies "x" p.size faint
+    p.copies * p.rate bold
+    toggle p.paid
+===
+@rich domain=r9_tailor_orders topic=tailor_orders style=short
+tailor orders
+needs: add an order with customer, garment, due date and price | record the advance taken | shows the balance owed per order | mark delivered | orders due in the next 3 days
+---
+app "Tailor Orders" tool green
+table suit customer text, garment pick Shalwar_kameez|Waistcoat|Blouse|Trousers|Bridal|Other = Shalwar_kameez, due date, price money, advance money = 0, delivered bool
+let soon = count(suit where delivered = no and due <= today + 3)
+topbar suit, "Add order"
+row gap 2
+  statcard soon, "due in 3 days"
+  statcard sum(suit, if(it.delivered, 0, it.price - it.advance)), "still to collect"
+each suit where delivered = no sort due as s empty "No open orders. Add the first suit."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.customer bold
+      s.garment "due" s.due faint color if(s.due < today, bad, if(s.due <= today + 3, warn, muted))
+    stack gap 0 align end
+      s.price - s.advance bold
+      "to pay" tiny faint
+    button "Delivered" tap set s.delivered = yes
+===
+@rich domain=r9_tailor_measures topic=customer_measurement_cards style=custom_ui
+My notebook of customer measurements is full of crossed out numbers. Put each customer's chest, waist, hip, length and sleeve in inches in one place, with a search box by name, and let me tap a card to fix a number
+needs: add a customer with chest, waist, hip, length and sleeve | search by name | tap a card to edit | shows number of customers
+---
+app "Measurements" pencil teal
+table cust name text, chest num 20..60, waist num 20..60, hip num 20..70, len num 10..70 unit "in", sleeve num 5..35
+state q text = ""
+topbar cust, "New customer"
+field q "Search by name"
+"Customers" count(cust) faint
+each cust where has(name, q) sort name as c empty "No customer found. Add one with the button above."
+  stack card gap 1 tap edit c swipe remove c
+    c.name bold
+    row gap 1
+      stack grow gap 0 align center
+        c.chest big
+        "chest" tiny faint
+      stack grow gap 0 align center
+        c.waist big
+        "waist" tiny faint
+      stack grow gap 0 align center
+        c.hip big
+        "hip" tiny faint
+    "Length" c.len "in, sleeve" c.sleeve "in" faint
+===
+@rich domain=r9_boutique_orders topic=home_boutique_orders style=multi_feature
+I sell kurtas from home through Instagram DMs. each order: customer, item, what the fabric and stitching cost me, price I charge and where it is (cutting, stitching, ready, handed over). show profit made so far and an order count per stage
+needs: add an order with customer, item, cost and price | move order through cutting, stitching, ready and handed over | shows profit so far | order count per stage | list of open orders
+---
+app "Home Boutique" bag blue
+table order customer text, item text, cost money, price money, stage pick Cutting|Stitching|Ready|Handed = Cutting
+let profit = sum(order, if(it.stage = Handed, it.price - it.cost, 0))
+topbar order, "Add order"
+row gap 2
+  statcard profit, "profit so far"
+  statcard count(order where stage != Handed), "orders open"
+section "Orders per stage"
+  bars options order.stage, count(order where stage = it), it
+each order where stage != Handed sort at as o empty "No open orders. Take the next DM order."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+      o.item o.stage faint
+    o.price bold
+    button "Next" tap set o.stage = if(o.stage = Cutting, Stitching, if(o.stage = Stitching, Ready, Handed))
+===
+@rich domain=r9_fabric_stock topic=fabric_rolls_and_usage style=detailed
+fabric rolls in my shop room: name, colour and meters left, and every time I cut some I want to log how many meters so the roll goes down by itself. warn me when a roll is below 3 meters. also the value of all fabric left, price per meter times meters
+needs: add a fabric roll with name, meters and price per meter | cut button takes off meters | warns when a roll is below 3 meters | value of fabric in stock | list sorted by lowest meters first
+---
+app "Fabric Room" tag purple dark
+table roll name text, meters num 0..500 = 10 unit "m", rate money
+let value = sum(roll, it.meters * it.rate)
+topbar roll, "Add roll"
+row gap 2
+  statcard value, "worth of fabric in stock"
+  statcard count(roll where meters < 3), "rolls running low"
+each roll sort meters as r empty "No fabric yet. Add the first roll."
+  stack card gap 1 tap edit r swipe remove r
+    row
+      r.name bold grow
+      r.meters "m left" bold color if(r.meters < 3, bad, ink)
+    if r.meters < 3
+      "Running low. Order more soon." color warn
+    row gap 1
+      button "Cut 1 m" tap set r.meters = r.meters - 1
+      button "Cut 2.5 m" tap set r.meters = r.meters - 2.5
+      button "Cut 5 m" tap set r.meters = r.meters - 5
+===
+@rich domain=r9_eid_rush topic=eid_stitching_rush style=custom_ui
+Eid is coming and I have too many suits to stitch. Count the days left, list suits with the date I promised, and tell me how many I must finish every day to make it. My daily limit is 6 suits, show red if I am over it
+needs: set the Eid date | add a suit with customer and promised date | shows days left | shows suits to finish per day | marks suits as done
+---
+app "Eid Rush" calendar pink
+table job customer text, promised date, done bool
+setting eid date = 2027-03-20 "Eid date"
+setting cap num = 6 "Suits I can stitch a day"
+let left = max(eid - today, 1)
+let todo = count(job where done = no)
+let perday = round(todo * 10 / left) / 10
+topbar job, "Add suit"
+row gap 2
+  statcard eid - today, "days to Eid"
+  statcard todo, "suits still open"
+stack card gap 1
+  perday "suits a day needed" head color if(perday > cap, bad, good)
+  if perday > cap
+    "More than your limit of" cap ". Say no to new orders or ask for help." faint
+  else
+    "You can make it at your usual speed." faint
+each job where done = no sort promised as j empty "All suits done. Rest well."
+  row card gap 2 tap edit j swipe remove j
+    toggle j.done
+    stack grow gap 0
+      j.customer bold
+      "Promised" j.promised faint color if(j.promised < today, bad, muted)
+===
+@rich domain=r9_alteration_jobs topic=alteration_shop_takings style=multi_feature
+tiny alteration counter at the market: hem, zip, taking in, shortening sleeves. Write the job with name, kind and fee, tick done when ready, and show how much cash I took today from finished jobs plus how many jobs are waiting
+needs: add a job with name, kind and fee | tick a job done | shows cash taken today | shows jobs waiting | list of waiting jobs
+---
+app "Alterations" tool grey
+table fix name text, kind pick Hem|Zip|Take_in|Sleeves|Patch|Other = Hem, fee money, done bool
+topbar fix, "New job"
+row gap 2
+  statcard sum(fix.fee today where done = yes), "taken today"
+  statcard count(fix where done = no), "jobs waiting"
+each fix where done = no sort at as f empty "Nothing waiting. New jobs show up here."
+  row card gap 2 tap edit f swipe remove f
+    toggle f.done
+    stack grow gap 0
+      f.name bold
+      f.kind faint
+    f.fee bold
+section "Done today", count(fix today where done = yes)
+  each fix today where done = yes as f empty "Nothing finished yet today."
+    row gap 2
+      f.name grow
+      f.fee faint
+===
+@rich domain=r9_sewing_patterns topic=sewing_pattern_library style=detailed
+I keep paper patterns in a cupboard and never remember what I have. List each pattern with name, size, fabric needed in meters and difficulty, tick the ones I already made, and let me filter by difficulty
+needs: add a pattern with name, size, fabric meters and difficulty | tick a pattern as made | filter by difficulty | count of patterns made
+---
+app "Pattern Cupboard" note ocean
+table pattern name text, size pick XS|S|M|L|XL = M, fabric num 0.5..10 = 2 unit "m", level pick Easy|Medium|Hard = Easy, made bool
+state lv text = ""
+topbar pattern, "Add pattern"
+goal count(pattern where made = yes), max(count(pattern), 1), "patterns made"
+row gap 1
+  button "All" fill if(lv = "", accent, soft) tap set lv = ""
+  each options pattern.level
+    button it count(pattern where level = it) fill if(lv = it, accent, soft) tap set lv = it
+each pattern where lv = "" or level = lv sort name as p empty "No patterns here. Add the first paper pattern."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.made
+    stack grow gap 0
+      p.name bold
+      "Size" p.size "-" p.fabric "m of fabric" faint
+    p.level faint
+===
+@rich domain=r9_embroidery_orders topic=hand_embroidery_orders style=multi_feature
+hand embroidery on dupattas and cushions. Each order has the design, how many days it will take me, the price, and the person's name. Show what I earned each of the last 7 days from finished orders as bars, and total pending money
+needs: add an order with name, design, days and price | mark finished | bar chart of earnings in the last 7 days | pending money total
+---
+app "Embroidery" heart mint dark
+table piece who text, design text, days num 1..60 = 7, price money, done bool, doneon date?
+topbar piece, "Add order"
+row gap 2
+  statcard sum(piece.price where done = no), "pending money"
+  statcard count(piece where done = no), "pieces in hand"
+section "Earned, last 7 days"
+  daybars last 7 days, sum(piece.price where doneon = it)
+each piece where done = no sort at as p empty "No pieces in hand. Add the next order."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.who bold
+      p.design "- about" p.days "days" faint
+    p.price bold
+    button "Finished" tap set p.done = yes then set p.doneon = today
+===
+@rich domain=r9_insta_cakes topic=instagram_cake_orders style=detailed
+I bake cakes and sell on Instagram. I put in customer, flavour, size in pounds, pickup date, price and the advance paid. show me today's pickups first, the balance each person owes at pickup and what I earned this week
+needs: add a cake order with customer, flavour, pounds, pickup date, price and advance | shows balance to collect at pickup | todays pickups listed first | earned this week | mark order picked up
+---
+app "Cake Orders" bread slate
+table cake customer text, flavour pick Chocolate|Vanilla|Red_velvet|Coffee|Fruit = Chocolate, pounds num 1..20 = 2, pickup date, price money, advance money = 0, gone bool
+let todays = count(cake where pickup = today and gone = no)
+topbar cake, "Add cake"
+row gap 2
+  statcard todays, "pickups today"
+  statcard sum(cake.price where gone = yes and pickup >= today - 6), "earned, last 7 days"
+each cake where gone = no sort pickup as c empty "No cakes waiting. Add the next order."
+  stack card gap 1 tap edit c swipe remove c
+    row
+      c.customer bold grow
+      c.pickup bold color if(c.pickup = today, accent, muted)
+    c.pounds "lb" c.flavour faint
+    row gap 2
+      "Collect" c.price - c.advance bold
+      button "Picked up" tap set c.gone = yes
+===
+@rich domain=r9_cupcake_boxes topic=cupcake_box_orders style=short
+cupcake boxes
+needs: add an order with name, box size and flavour | total cupcakes to bake | mark box as delivered | filter by delivered or open
+---
+app "Cupcake Boxes" bread ink
+table box name text, cupcakes num 4..48 = 12, flavour pick Vanilla|Choco|Lemon|Oreo = Vanilla, sent bool
+state show text = Open
+let tobake = sum(box.cupcakes where sent = no)
+topbar box, "Add box"
+statcard tobake, "cupcakes to bake"
+row gap 1
+  each ["Open", "Sent"]
+    button it fill if(show = it, accent, soft) grow tap set show = it
+each box where (show = Open and sent = no) or (show = Sent and sent = yes) sort at as b empty "No boxes here yet."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.sent
+    stack grow gap 0
+      b.name bold
+      b.cupcakes "x" b.flavour faint
+===
+@rich domain=r9_chai_stall topic=chai_stall_sales style=short
+chai stall
+needs: one tap to add a cup sold | cups sold today | takings today from price per cup | bar chart of cups in the last 7 days
+---
+app "Chai Stall" cup orange
+table cup kind pick Chai|Karak|Coffee|Green_tea = Chai
+setting price money = 50 "Price per cup"
+quick cup, kind, ["Chai", "Karak", "Coffee", "Green_tea"]
+row gap 2
+  statcard count(cup today), "cups today"
+  statcard count(cup today) * price, "taken today"
+section "Cups sold", "last 7 days"
+  daybars last 7 days, count(cup on it)
+each cup today by kind
+  row
+    it.key bold grow
+    count(it) "cups"
+button "Undo last cup" tap remove last(cup today)
+===
+@rich domain=r9_samosa_cart topic=street_snack_cart_stock style=custom_ui
+I run an evening samosa cart. I fry 120 on a good day. tap the buttons when I sell 1, 5 or 10, show how many are left against what I fried, and show money in against what the oil and flour cost me today. a draw of the tray filling would be cute
+needs: set how many were fried | buttons to sell 1, 5 or 10 | shows samosas left | shows money in against cost | picture of a tray that empties
+---
+app "Samosa Cart" fire red dark
+table sale qty num 1..50
+setting fried num = 120 "Fried today"
+setting cost money = 1500 "Cost today (oil, flour, filling)"
+setting price money = 30 "Price each"
+let sold = sum(sale.qty today)
+let left = max(fried - sold, 0)
+"Tap what you just sold" faint
+row gap 1
+  each [1, 5, 10]
+    button "Sold" it grow tap add sale qty = it
+draw 100, 30
+  rect 0, 0, 100, 30 fill soft radius 4
+  each 0..9
+    each 0..2
+      circle 5 + it * 10, 5 + index * 10, 3 fill if(index * 10 + it < left * 30 / max(fried, 1), accent, edge)
+stack card gap 1
+  left "of" fried "left" big
+  "Money in" sold * price "against cost" cost faint
+  if sold * price >= cost
+    "Profit" sold * price - cost bold color good
+  else
+    "Still to cover" cost - sold * price bold color warn
+===
+@rich domain=r9_tiffin_service topic=home_tiffin_subscribers style=detailed
+my home tiffin service has 25 subscribers, lunch only, dinner only or both. I need the list with name, area and plan, a tick for each one delivered today, how many are left to deliver and who has not paid for this month
+needs: add a subscriber with name, area and plan | tick delivered today | shows deliveries left today | mark month paid | list of unpaid subscribers
+---
+app "Tiffin Service" food orange
+table sub name text, area text, plan pick Lunch|Dinner|Both = Lunch, paid bool
+table drop sub ref sub
+let n = count(sub)
+let sent = count(sub, count(it.drop today) > 0)
+topbar sub, "Add subscriber"
+goal sent, max(n, 1), "delivered today"
+each sub sort area as s empty "No subscribers yet. Add your first customer."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.drop
+    stack grow gap 0
+      s.name bold
+      s.area "-" s.plan faint
+    if s.paid
+      "Paid" faint color good
+    else
+      button "Paid" tap set s.paid = yes
+section "Not paid this month", count(sub where paid = no)
+  each sub where paid = no as s empty "Everyone has paid."
+    text s.name
+===
+@rich domain=r9_bake_costing topic=baking_batch_costing style=multi_feature
+I never know if I really make money on my brownies and cookies. For each batch put what I spent on ingredients and boxes, how many pieces I got and the price per piece. Show profit per piece and the profit of the whole batch, best batch first
+needs: add a batch with item, ingredient cost, packaging cost, pieces and price | shows profit per piece | shows profit per batch | best batch listed first
+---
+app "Bake Costing" bread yellow
+table batch item text, ingredients money, packing money, pieces num 1..500, price money
+let cost(b batch) = b.ingredients + b.packing
+let profit(b batch) = b.pieces * b.price - cost(b)
+topbar batch, "Add batch"
+statcard sum(batch, profit(it)), "profit across all batches"
+each batch sort profit(it) desc as b empty "No batches yet. Add what you baked last."
+  stack card gap 1 tap edit b swipe remove b
+    row
+      b.item bold grow
+      profit(b) bold color if(profit(b) > 0, good, bad)
+    b.pieces "pieces, costing" round(cost(b) * 10 / b.pieces) / 10 "each" faint
+    "Profit per piece" round(profit(b) * 10 / b.pieces) / 10 faint
+===
+@rich domain=r9_cookie_orders topic=cookie_dozen_orders style=custom_ui
+neighbours order cookies by the dozen. need open and done tabs, add with name, flavour and dozens, tap done when handed over, and a chart of dozens by flavour so I know what to bake more
+needs: add an order with name, flavour and dozens | open and done tabs | button to mark handed over | chart of dozens by flavour | total dozens still to bake
+---
+app "Cookie Orders" food green
+table order name text, flavour pick Choc_chip|Oatmeal|Peanut|Sugar = Choc_chip, dozens num 1..20 = 1, done bool
+state tab text = Open
+topbar order, "Add order"
+statcard sum(order.dozens where done = no), "dozens still to bake"
+row gap 1
+  each ["Open", "Done"]
+    button it fill if(tab = it, accent, soft) grow tap set tab = it
+each order where (tab = Open and done = no) or (tab = Done and done = yes) sort at as o empty "No orders in this tab."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.name bold
+      o.dozens "dozen" o.flavour faint
+    if o.done = no
+      button "Handed over" fill accent tap set o.done = yes
+section "Dozens by flavour"
+  share order by flavour, sum(it.dozens), it.key
+===
+@rich domain=r9_handmade_stock topic=handmade_goods_stock style=multi_feature
+I sell crochet bags, keychains and hair clips at fairs. Keep stock count and price for each item, buttons to take one off when I sell it, a red warning when only 2 are left and the total value of everything on the table
+needs: add an item with name, stock and price | sell one button reduces stock | warns when 2 or fewer are left | total value of stock | add stock button
+---
+app "Craft Stock" gift teal
+table piece name text, stock num 0..999 = 5, price money
+let worth = sum(piece, it.stock * it.price)
+topbar piece, "Add item"
+row gap 2
+  statcard worth, "on the table"
+  statcard count(piece where stock <= 2), "need making"
+each piece sort stock as p empty "No items yet. Add what you make."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.name bold grow
+      p.price faint
+    row gap 2
+      p.stock "left" bold color if(p.stock <= 2, bad, ink) grow
+      button "Sold 1" tap set p.stock = p.stock - 1
+      button "+5" tap set p.stock = p.stock + 5
+===
+@rich domain=r9_candle_batches topic=candle_pouring_and_curing style=detailed
+I pour soy candles and they need 14 days to cure before I sell. Log each batch with scent, wax grams and pour date, then show the date it is ready and how many days are left. tell me how many candles are ready to sell now
+needs: log a batch with scent, wax grams, pour date and candle count | shows ready date | shows days left to cure | counts candles ready to sell | settable cure days
+---
+app "Candle Batches" fire blue
+table pour scent text, wax num 100..20000 unit "g", day date = today, jars num 1..200 = 6
+setting cure num = 14 "Cure days"
+let ready(b pour) = b.day + cure
+let fit = sum(pour, if(ready(it) <= today, it.jars, 0))
+let curing = sum(pour, if(ready(it) > today, it.jars, 0))
+topbar pour, "Log pour"
+row gap 2
+  statcard fit, "candles ready to sell"
+  statcard curing, "still curing"
+each pour sort day desc as b empty "No pours yet. Log the first batch."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.scent bold
+      b.jars "jars," b.wax "g wax" faint
+    if ready(b) <= today
+      "Ready" bold color good
+    else
+      stack gap 0 align end
+        ready(b) - today "days" bold
+        "ready" ready(b) tiny faint

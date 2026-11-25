@@ -1,0 +1,654 @@
+@rich domain=c6_wedding_per_head topic=wedding_budget_per_head style=detailed
+we are planning my sister's wedding and dad keeps asking what it will cost. i put guest count, then food, hall and decor per head, and a budget limit. show total, what each guest costs us and whether we are over the limit
+needs: guest count | food hall and decor cost per head | total wedding cost | cost per guest | over or under the budget limit
+---
+app "Wedding Budget" gift ocean
+state guests num = 300
+state food money = 1800
+state hall money = 400
+state decor money = 250
+state cap money = 800000
+let per = food + hall + decor
+let total = guests * per
+section "Guests and per-head costs"
+  "Guests" guests faint
+  slider guests 50..800
+  field food "Food per head"
+  field hall "Hall and chairs per head"
+  field decor "Decor and lights per head"
+  field cap "Budget limit"
+statcard total, "total for" plural(guests, "guest"), cap
+"Each guest costs" per big
+if total > cap
+  "Over the limit by" total - cap bold color bad
+else
+  "Within budget:" cap - total "to spare" bold color good
+===
+@rich domain=c6_hall_or_marquee topic=banquet_hall_vs_marquee style=short
+hall vs marquee
+needs: guest number slider | hall fee and per head rate | marquee fee and per head rate | both totals | which is cheaper and by how much
+---
+app "Hall or Marquee" home mint
+state guests num = 250
+state hall_fee money = 150000
+state hall_head money = 1200
+state tent_fee money = 90000
+state tent_head money = 1500
+let hall = hall_fee + hall_head * guests
+let tent = tent_fee + tent_head * guests
+section "Guests"
+  "Guests" guests faint
+  slider guests 50..600
+section "Banquet hall"
+  field hall_fee "Booking fee"
+  field hall_head "Per head (food and service)"
+section "Marquee at home"
+  field tent_fee "Tent, lights and stage"
+  field tent_head "Per head (food and service)"
+row gap 2
+  statcard hall, "banquet hall total"
+  statcard tent, "marquee total"
+if hall = tent
+  "Both cost the same." big
+else
+  if(hall < tent, "Hall is cheaper by", "Marquee is cheaper by") faint
+  abs(hall - tent) big color good
+===
+@rich domain=c6_kids_party_food topic=birthday_party_food_quantities style=short
+party food quantity
+needs: number of kids and adults | pizzas to order | juice boxes | nuggets | cake slices
+---
+app "Party Food" gift slate dark
+state kids num = 15
+state adults num = 8
+let slices = kids * 2 + adults * 3
+let pizzas = floor((slices + 7) / 8)
+section "Who is coming"
+  "Kids" kids faint
+  slider kids 0..40
+  "Adults" adults faint
+  slider adults 0..30
+if kids + adults = 0
+  "Add some guests to see the shopping list." faint
+else
+  row gap 2
+    statcard pizzas, "pizzas of 8 slices"
+    statcard kids * 2 + adults, "juice boxes"
+  row gap 2
+    statcard kids * 5 + adults * 3, "nuggets"
+    statcard kids + adults, "cake slices"
+  "Leftover pizza slices" pizzas * 8 - slices faint
+===
+@rich domain=c6_iftar_quantities topic=iftar_party_quantities style=detailed
+hosting iftar for the whole street. choose if guests are light, normal or hungry eaters and type how many are coming. need dates, samosas, pakoras in kg, fruit chaat kg and water bottles
+needs: number of guests | light normal or hungry portions | dates and samosas count | pakora and fruit chaat in kg | water bottles
+---
+app "Iftar Quantities" food ink
+state guests num = 40
+state appetite pick Light|Normal|Hungry = Normal
+let f = if(appetite = Light, 0.7, if(appetite = Hungry, 1.4, 1))
+let g = guests * f
+field guests "Guests coming"
+row gap 1
+  "Eaters" faint
+  choice appetite
+row gap 2
+  statcard round(g * 3), "dates"
+  statcard round(g * 2), "samosas"
+row gap 2
+  statcard round(g * 12) / 100, "kg pakora"
+  statcard round(g * 15) / 100, "kg fruit chaat"
+statcard round(guests * 1.5), "water bottles", guests * 2
+if guests = 0
+  "Type the number of guests above." faint
+===
+@rich domain=c6_bbq_meat topic=bbq_meat_per_guest style=short
+bbq meat
+needs: number of people | crowd hunger choice | chicken and beef split | kg of each meat | total meat cost and charcoal
+---
+app "BBQ Planner" fire plum
+state people num = 12
+state hunger pick Snacky|Normal|Starving = Normal
+state chicken num = 60
+state p_chicken money = 650
+state p_beef money = 1800
+let kg = people * if(hunger = Snacky, 0.25, if(hunger = Normal, 0.35, 0.5))
+let kg_c = kg * chicken / 100
+let kg_b = kg - kg_c
+section "Crowd"
+  "People" people faint
+  slider people 2..60
+  choice hunger
+  "Chicken share" chicken "%" faint
+  slider chicken 0..100
+section "Prices per kg"
+  field p_chicken "Chicken"
+  field p_beef "Beef"
+row gap 2
+  statcard round(kg_c * 10) / 10, "kg chicken"
+  statcard round(kg_b * 10) / 10, "kg beef"
+statcard round(kg_c * p_chicken + kg_b * p_beef), "meat bill"
+"Charcoal:" fixed(kg * 0.8, 1) "kg" faint
+===
+@rich domain=c6_office_gift_split topic=colleague_gift_collection style=detailed
+we are buying a gift for our manager. type the gift price and wrapping, then add each colleague who paid with the amount. show what each person should pay, how much is collected and how much is still missing
+needs: gift price and wrapping cost | add who paid and how much | equal share per person | amount collected | amount still missing
+---
+app "Gift Collection" gift red
+table paid who text, amount money
+state price money = 6000
+state wrap money = 300
+state people num = 10
+let cost = price + wrap
+let each_pays = if(people > 0, cost / people, 0)
+let missing = max(cost - sum(paid.amount), 0)
+topbar paid, "Add payment"
+section "The gift"
+  field price "Gift price"
+  field wrap "Wrapping and card"
+  field people "Colleagues sharing"
+row gap 2
+  statcard round(each_pays), "each should pay"
+  statcard sum(paid.amount), "collected", cost
+if missing = 0
+  "All collected. Go and buy it." bold color good
+else
+  "Still missing" missing bold color warn
+each paid top 10 as p empty "Nobody has paid yet. Add the first payment."
+  row card tap edit p swipe remove p
+    p.who grow
+    p.amount bold
+===
+@rich domain=c6_gift_exchange_limit topic=gift_exchange_price_limit style=multi_feature
+secret santa type thing in our office, everyone buys one gift under a limit. i set number of people and the limit per gift, then add the gifts bought with prices. show the budget in total, what is spent and flag any gift over the limit
+needs: number of people and gift limit | add a gift with price | total budget | amount spent so far | gifts over the limit flagged
+---
+app "Gift Exchange" gift orange
+table pick_gift name text, cost money
+state people num = 12
+state limit money = 1500
+let budget = people * limit
+let spent = sum(pick_gift.cost)
+topbar pick_gift, "Add gift"
+row gap 2
+  field people "People"
+  field limit "Limit per gift"
+statcard spent, "spent of" budget, budget
+"Gifts over the limit:" count(pick_gift where cost > limit) bold color if(count(pick_gift where cost > limit) > 0, bad, good)
+each pick_gift top 12 as g empty "No gifts yet. Add the first one you buy."
+  row card tap edit g swipe remove g fill if(g.cost > limit, soft, bg)
+    g.name grow
+    g.cost bold color if(g.cost > limit, bad, ink)
+===
+@rich domain=c6_school_fee_instalments topic=school_fee_instalment_plan style=short
+fee instalments
+needs: total fee | first payment percent | number of instalments | amount of each instalment | due date list
+---
+app "Fee Instalments" school yellow
+state fee money = 60000
+state first num = 40
+state n num = 3
+state start date = today
+let first_amt = fee * first / 100
+let later = if(n > 0, (fee - first_amt) / n, 0)
+section "Fee plan"
+  field fee "Term fee"
+  "First payment" first "%" faint
+  slider first 0..100
+  "Later instalments" n faint
+  slider n 1..8
+  field start "First payment date"
+row gap 2
+  statcard round(first_amt), "paid at start"
+  statcard round(later), "each later instalment"
+section "Due dates"
+  row
+    "On" start grow
+    round(first_amt) bold
+  each 1..n as k
+    row
+      "On" start + 30 * k grow
+      round(later) bold
+===
+@rich domain=c6_sibling_fee_discount topic=sibling_fee_discount style=short
+sibling fee discount
+needs: fee for one child | number of children | discount for second third and fourth child | fee for each child | monthly and yearly total
+---
+app "Sibling Fees" school green
+state fee money = 12000
+state kids num = 3
+state d2 num = 10
+state d3 num = 20
+state d4 num = 30
+let f2 = if(kids >= 2, fee * (100 - d2) / 100, 0)
+let f3 = if(kids >= 3, fee * (100 - d3) / 100, 0)
+let f4 = if(kids >= 4, fee * (100 - d4) / 100, 0)
+let month_total = fee + f2 + f3 + f4
+section "Monthly fee"
+  field fee "Fee for one child"
+  "Children" kids faint
+  slider kids 1..4
+section "Discount for later children"
+  field d2 "Second child %"
+  field d3 "Third child %"
+  field d4 "Fourth child %"
+section "What you pay"
+  row
+    "Child 1" grow
+    fee bold
+  each 2..kids as k
+    row
+      "Child" k grow
+      round(if(k = 2, f2, if(k = 3, f3, f4))) bold
+statcard round(month_total), "per month", month_total
+"Per year (12 months):" round(month_total * 12) big
+===
+@rich domain=c6_pocket_money_plan topic=kids_pocket_money_plan style=short
+pocket money
+needs: weekly pocket money | save and give percentage sliders | amount to spend | weeks until she can afford the toy | amounts for each jar
+---
+app "Pocket Money" smile teal
+state weekly money = 500
+state save num = 40
+state give num = 10
+state toy money = 3000
+let to_save = weekly * save / 100
+let to_give = weekly * give / 100
+let to_spend = max(weekly - to_save - to_give, 0)
+field weekly "Pocket money each week"
+"Save" save "%" faint
+slider save 0..100
+"Give" give "%" faint
+slider give 0..100
+row gap 2
+  statcard round(to_save), "save jar"
+  statcard round(to_give), "give jar"
+  statcard round(to_spend), "spend jar"
+field toy "Toy she wants"
+if to_save = 0
+  "Put some money in the save jar to reach the toy." faint
+else
+  "Toy in" floor((toy + to_save - 1) / to_save) "weeks" big
+===
+@rich domain=c6_teen_allowance topic=teen_weekly_allowance_spending style=multi_feature
+my son gets a weekly allowance and spends it in two days. he adds each thing he buys with the amount, and i want to see how much is left this week, a chart of the last 7 days and the list of purchases
+needs: weekly allowance setting | add a purchase with amount | money left this week | bar chart of last 7 days | list of purchases
+---
+app "Allowance" wallet blue
+table buy what text, amount money
+setting allowance money = 1500 "Weekly allowance"
+let left = allowance - sum(buy.amount week)
+topbar buy, "Add purchase"
+statcard max(left, 0), "left this week", allowance
+if left < 0
+  "Overspent by" abs(left) bold color bad
+section "Last 7 days", sum(buy.amount week) "this week"
+  daybars last 7 days, sum(buy.amount on it)
+each buy week as b empty "Nothing bought this week. Money is safe."
+  row card tap edit b swipe remove b
+    b.what grow
+    b.amount bold
+===
+@rich domain=c6_phone_plan_compare topic=two_phone_plans_compare style=short
+phone plan compare
+needs: minutes talked per month | monthly fee, free minutes and extra rate for plan A | same for plan B | cost on each plan | cheaper plan named
+---
+app "Plan Compare" phone purple
+state mins num = 400
+state fee_a money = 800
+state free_a num = 300
+state rate_a money = 2
+state fee_b money = 600
+state free_b num = 200
+state rate_b money = 1.5
+let cost_a = fee_a + max(mins - free_a, 0) * rate_a
+let cost_b = fee_b + max(mins - free_b, 0) * rate_b
+field mins "Minutes I talk each month"
+section "Plan A"
+  field fee_a "Monthly fee"
+  field free_a "Free minutes"
+  field rate_a "Per extra minute"
+section "Plan B"
+  field fee_b "Monthly fee"
+  field free_b "Free minutes"
+  field rate_b "Per extra minute"
+row gap 2
+  statcard round(cost_a), "plan A a month"
+  statcard round(cost_b), "plan B a month"
+if cost_a = cost_b
+  "Same price on both plans." bold
+else
+  if(cost_a < cost_b, "Plan A", "Plan B") "saves you" round(abs(cost_a - cost_b)) "a month" big color good
+===
+@rich domain=c6_data_gb_price topic=data_pack_price_per_gb style=short
+which data pack is cheapest per gb
+needs: price and size of three packs | price per gb of each | cheapest pack | cost of the gb i need
+---
+app "Data per GB" bolt pink
+state p1 money = 300
+state g1 num = 5
+state p2 money = 900
+state g2 num = 20
+state p3 money = 1500
+state g3 num = 50
+state need num = 10
+let r1 = if(g1 > 0, p1 / g1, 0)
+let r2 = if(g2 > 0, p2 / g2, 0)
+let r3 = if(g3 > 0, p3 / g3, 0)
+let best = min(min(r1, r2), r3)
+section "Pack 1"
+  field p1 "Price"
+  field g1 "GB"
+section "Pack 2"
+  field p2 "Price"
+  field g2 "GB"
+section "Pack 3"
+  field p3 "Price"
+  field g3 "GB"
+row gap 2
+  statcard round(r1 * 10) / 10, "per GB, pack 1"
+  statcard round(r2 * 10) / 10, "per GB, pack 2"
+  statcard round(r3 * 10) / 10, "per GB, pack 3"
+"Cheapest is pack" if(best = r1, 1, if(best = r2, 2, 3)) big color good
+field need "GB I need a month"
+"That costs about" round(best * need) bold
+===
+@rich domain=c6_internet_cost_day topic=home_internet_cost_per_day style=short
+internet cost per day
+needs: monthly internet bill | cost per day | cost per hour of use | cost per GB used | number of days in the month
+---
+app "Internet Per Day" cloud grey
+state bill money = 3500
+state hours num = 6
+state gb num = 300
+let days = monthdays(today)
+section "This month's connection"
+  field bill "Monthly bill"
+  field hours "Hours I use it daily"
+  field gb "GB used this month"
+statcard round(bill / days), "per day over" days "days"
+row gap 2
+  statcard round(bill / max(days * hours, 1)), "per hour of use"
+  statcard round(bill / max(gb, 1) * 10) / 10, "per GB used"
+if bill = 0
+  "Type your monthly bill to see the daily cost." faint
+===
+@rich domain=c6_meter_cost_day topic=electricity_cost_per_day_meter style=custom_ui
+i read my electricity meter at the start and now, days apart. give units used, per day, the energy bill at my rate plus fixed charges and tax percent, and what the full month would cost at this pace
+needs: previous and current meter reading | days between readings | rate per unit fixed charge and tax | cost per day | projected month cost
+---
+app "Meter Cost" bolt ocean
+state prev num = 12040
+state cur num = 12310
+state days num = 9
+state rate money = 38
+state fixed_fee money = 150
+state tax num = 17
+let units = max(cur - prev, 0)
+let bill = (units * rate + fixed_fee) * (100 + tax) / 100
+let per_day = if(days > 0, bill / days, 0)
+section "Meter readings"
+  field prev "Previous reading"
+  field cur "Current reading"
+  field days "Days between readings"
+section "Tariff"
+  field rate "Rate per unit"
+  field fixed_fee "Fixed charges"
+  field tax "Tax %"
+row gap 2
+  statcard units, "units used"
+  statcard round(per_day), "cost per day"
+statcard round(bill), "bill for these days"
+"A 30 day month at this pace:" round(per_day * 30) big
+===
+@rich domain=c6_appliance_running topic=appliance_running_cost style=multi_feature
+list every appliance in my house with its watts and hours used per day and tell me what each costs per month at my unit rate. i want a total and a bar chart so i know which one eats the bill
+needs: add an appliance with watts and daily hours | unit rate setting | monthly units and cost per appliance | total monthly cost | bar chart comparing appliances
+---
+app "Appliance Cost" bolt mint
+table gadget name text, watts num 1..10000, hours num 0..24
+setting rate money = 40 "Price per unit"
+let cost(a gadget) = a.watts * a.hours * 30 / 1000 * rate
+topbar gadget, "Add appliance"
+statcard round(sum(gadget, cost(it))), "total a month", 0
+section "Cost by appliance"
+  bars gadget, cost(it), it.name
+each gadget sort cost(it) desc as a empty "No appliances yet. Add the fridge first."
+  row card tap edit a swipe remove a
+    stack grow gap 0
+      a.name
+      round(a.watts * a.hours * 30 / 1000) "units a month" faint
+    round(cost(a)) bold
+===
+@rich domain=c6_fan_vs_ac topic=fan_vs_ac_night_cost style=short
+fan or ac cost
+needs: hours slept | ac on-time percentage | unit price | cost per night for fan and ac | monthly difference
+---
+app "Fan or AC" moon slate
+state hrs num = 8
+state duty num = 60
+state rate money = 45
+let fan = 75 * hrs / 1000 * rate
+let ac = 1200 * hrs * duty / 100 / 1000 * rate
+field hrs "Hours of sleep"
+field rate "Price per unit"
+"AC on for" duty "% of the night" faint
+slider duty 20..100
+row gap 2
+  statcard round(fan), "fan, one night"
+  statcard round(ac), "AC, one night"
+row gap 2
+  statcard round(fan * 30), "fan, 30 nights"
+  statcard round(ac * 30), "AC, 30 nights"
+"The AC costs" round((ac - fan) * 30) "more each month" big color warn
+===
+@rich domain=c6_generator_fuel_hour topic=generator_fuel_cost_per_hour style=short
+generator fuel cost
+needs: load choice half or full | petrol price | litres per hour at each load | outage hours per day | cost per hour day and month
+---
+app "Generator Fuel" bolt ink
+state load pick Half|Full = Half
+state price money = 270
+state hrs num = 5
+let lph = if(load = Half, 0.9, 1.6)
+let per_hour = lph * price
+row gap 1
+  "Load" faint
+  choice load
+field price "Petrol per litre"
+field hrs "Outage hours per day"
+statcard round(per_hour), "per hour at" lph "litres an hour"
+row gap 2
+  statcard round(per_hour * hrs), "per day"
+  statcard round(per_hour * hrs * 30), "per month"
+"Petrol per month:" round(lph * hrs * 30) "litres" faint
+if hrs = 0
+  "No outage hours entered, so no fuel is burnt." faint
+===
+@rich domain=c6_solar_gen_value topic=solar_panel_generation_value style=detailed
+planning solar. system size in kw, average sun hours, and about 20 percent lost to heat and dust. with my unit price show the units it makes per day and per month, the money saved each month and each year
+needs: system size in kw | sun hours per day | loss percent | units per day and month | money saved per month and year
+---
+app "Solar Value" sun plum
+state kw num = 5
+state sun num = 5.5
+state loss num = 20
+state rate money = 42
+let per_day = kw * sun * (100 - loss) / 100
+let per_month = per_day * 30
+section "Your system"
+  field kw "System size (kW)"
+  field sun "Sun hours per day"
+  "Losses" loss "%" faint
+  slider loss 0..40
+  field rate "Price per unit"
+row gap 2
+  statcard round(per_day * 10) / 10, "units a day"
+  statcard round(per_month), "units a month"
+statcard round(per_month * rate), "saved each month"
+"Saved each year:" round(per_month * rate * 12) big color good
+===
+@rich domain=c6_car_loan_vs_lease topic=car_loan_versus_lease style=detailed
+dealer offers a loan or a lease on the same car. for the loan i give price, down payment, interest and years, and i can resell it later. for the lease i give monthly payment and upfront cost. show total cost of each over the same years
+needs: car price down payment interest and years | resale value after the years | lease monthly payment and upfront | total cost of loan | total cost of lease and the cheaper one
+---
+app "Loan or Lease" car red dark
+state price money = 4000000
+state down money = 800000
+state rate num = 14
+state years num = 4
+state resale money = 2200000
+state lease money = 70000
+state upfront money = 300000
+let r = rate / 1200
+let n = years * 12
+let pay = if(r > 0, (price - down) * r / (1 - pow(1 + r, 0 - n)), (price - down) / max(n, 1))
+let loan_total = down + pay * n - resale
+let lease_total = upfront + lease * n
+section "Buy with a loan"
+  field price "Car price"
+  field down "Down payment"
+  field rate "Interest % a year"
+  field resale "Resale value at the end"
+  "Years" years faint
+  slider years 1..7
+section "Lease"
+  field lease "Monthly lease"
+  field upfront "Upfront cost"
+row gap 2
+  statcard round(loan_total), "loan, cost after resale"
+  statcard round(lease_total), "lease, total cost"
+"Loan payment each month:" round(pay) faint
+"Cheaper:" if(loan_total <= lease_total, "Loan", "Lease") "by" round(abs(loan_total - lease_total)) big
+===
+@rich domain=c6_car_lease_total topic=car_lease_total_cost style=short
+car lease cost
+needs: monthly lease and number of months | upfront payment | buyout at the end | total paid | effective monthly cost
+---
+app "Car Lease" car orange
+state pay money = 65000
+state months num = 36
+state upfront money = 250000
+state buyout money = 0
+let total = upfront + pay * months + buyout
+field pay "Monthly lease"
+"Months" months faint
+slider months 12..60
+field upfront "Upfront payment"
+field buyout "Buyout if you keep the car"
+statcard round(total), "paid over" months "months"
+"That is" round(total / max(months, 1)) "a month in real terms" big
+"Without buyout you return the car and own nothing." faint
+===
+@rich domain=c6_bike_petrol_month topic=motorbike_petrol_per_month style=short
+bike petrol per month
+needs: km per day | bike mileage in km per litre | petrol price | litres and cost per month | days ridden per month
+---
+app "Bike Petrol" bike yellow
+state km num = 28
+state mileage num = 45
+state price money = 275
+state days num = 26
+let litres = km * days / max(mileage, 1)
+field km "Km ridden on a riding day"
+field mileage "Bike gives (km per litre)"
+field price "Petrol per litre"
+"Riding days a month" days faint
+slider days 1..31
+row gap 2
+  statcard round(litres * 10) / 10, "litres a month"
+  statcard round(litres * price), "petrol a month"
+"Petrol per km:" round(price / max(mileage, 1) * 100) / 100 faint
+===
+@rich domain=c6_bike_cost_per_km topic=bike_running_cost_per_km style=multi_feature
+what does my bike really cost per km? petrol is one part but i also pay for oil change every 3000 km and a tyre set every 20000. i enter those and want petrol, service and tyre cost per km, then the sum, and a fill-up log
+needs: petrol price and mileage | service cost and interval | tyre cost and life | cost per km split in three parts | log fill-ups with litres and amount
+---
+app "Bike Cost per Km" bike green
+table fill litres num 0.1..30, paid money
+state price money = 275
+state mileage num = 45
+state service money = 2500
+state every num = 3000
+state tyres money = 14000
+state life num = 20000
+let petrol_km = price / max(mileage, 1)
+let service_km = service / max(every, 1)
+let tyre_km = tyres / max(life, 1)
+section "Costs"
+  field price "Petrol per litre"
+  field mileage "Km per litre"
+  field service "Oil change"
+  field every "Oil change every (km)"
+  field tyres "Tyre set"
+  field life "Tyres last (km)"
+row gap 2
+  statcard round(petrol_km * 100) / 100, "petrol per km"
+  statcard round(service_km * 100) / 100, "service per km"
+  statcard round(tyre_km * 100) / 100, "tyres per km"
+"All in:" round((petrol_km + service_km + tyre_km) * 100) / 100 "per km" big
+section "Fill-ups", sum(fill.litres) "litres in total"
+  topbar fill, "Add fill-up"
+  each fill top 5 as f empty "No fill-ups yet."
+    row tap edit f swipe remove f
+      f.litres "litres" grow
+      f.paid bold
+===
+@rich domain=c6_rent_vs_buy topic=rent_versus_buy_flat style=detailed
+should i keep renting or take a loan for a flat? i give flat price, down payment, loan interest, years i will stay, what i pay rent now and how fast rent rises each year, and how much the flat price grows. compare the net cost of both
+needs: price down payment interest | years of stay | rent now and yearly rise | flat price growth | net cost of renting versus buying
+---
+app "Rent or Buy" home teal
+state price money = 9000000
+state down money = 2000000
+state rate num = 15
+state years num = 8
+state rent money = 60000
+state rise num = 8
+state grow num = 6
+let r = rate / 1200
+let n = years * 12
+let pay = if(r > 0, (price - down) * r / (1 - pow(1 + r, 0 - (25 * 12))), (price - down) / 300)
+let paid_loan = pay * n
+let owed = (price - down) * pow(1 + r, n) - pay * (pow(1 + r, n) - 1) / max(r, 0.0001)
+let value = price * pow(1 + grow / 100, years)
+let buy_net = down + paid_loan + owed - value
+let rent_total = if(rise > 0, rent * 12 * (pow(1 + rise / 100, years) - 1) / (rise / 100), rent * 12 * years)
+section "The flat (25 year loan)"
+  field price "Flat price"
+  field down "Down payment"
+  field rate "Interest % a year"
+  field grow "Price growth % a year"
+section "Renting"
+  field rent "Rent now (monthly)"
+  field rise "Rent rise % a year"
+"Years I will stay" years faint
+slider years 1..25
+row gap 2
+  statcard round(rent_total), "rent paid over" years "years"
+  statcard round(buy_net), "buying, net cost"
+"Better:" if(rent_total <= buy_net, "Rent", "Buy") big
+===
+@rich domain=c6_savings_by_date topic=savings_goal_by_date style=short
+savings goal
+needs: target amount and saved so far | goal date | yearly profit rate | months left | monthly deposit needed
+---
+app "Goal by Date" target blue
+state target money = 1200000
+state have money = 150000
+state when date = today + 540
+state rate num = 8
+let n = max(floor((when - today) / 30), 1)
+let r = rate / 1200
+let growth = pow(1 + r, n)
+let need = if(r > 0, max(target - have * growth, 0) * r / (growth - 1), max(target - have, 0) / n)
+section "Your goal"
+  field target "Target"
+  field have "Saved so far"
+  field when "Goal date"
+  field rate "Profit rate % a year"
+statcard round(need), "to save every month", target
+"Months left" n big
+goal min(have, target), target, "saved so far"
+if need = 0
+  "You have already got there. Well done." bold color good

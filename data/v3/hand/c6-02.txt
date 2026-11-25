@@ -1,0 +1,574 @@
+@rich domain=c6_laptop_fund topic=laptop_savings_fund style=multi_feature
+saving up for a laptop for university. i put the price and the date i need it by, then add every bit of money i set aside. show how much is saved, how much is left, and how much per week i must put aside to make it in time
+needs: laptop price and needed-by date | add a saving with amount | amount saved so far | amount left | weekly amount needed
+---
+app "Laptop Fund" wallet purple
+table put amount money, note text?
+state price money = 180000
+state by date = today + 120
+let left = max(price - sum(put.amount), 0)
+let weeks = max(floor((by - today) / 7), 1)
+topbar put, "Add saving"
+row gap 2
+  field price "Laptop price"
+  field by "Needed by"
+goal sum(put.amount), price, "saved so far"
+row gap 2
+  statcard left, "still to save"
+  statcard round(left / weeks), "to save every week"
+if left = 0
+  "Fully funded. Time to order." bold color good
+each put top 6 as p empty "Nothing set aside yet. Add your first saving."
+  row card tap edit p swipe remove p
+    p.note grow
+    p.amount bold
+===
+@rich domain=c6_retire_corpus topic=retirement_saving_corpus style=short
+retirement savings
+needs: current age and retirement age | savings now and monthly deposit | expected yearly return | pot at retirement | split between deposits and growth
+---
+app "Retirement Pot" target pink
+state age num = 32
+state retire num = 60
+state have money = 500000
+state pmt money = 30000
+state rate num = 10
+let n = max(retire - age, 0) * 12
+let r = rate / 1200
+let g = pow(1 + r, n)
+let pot = have * g + if(r > 0, pmt * (g - 1) / r, pmt * n)
+let own = have + pmt * n
+section "You"
+  field age "Age now"
+  field retire "Retire at"
+section "Money"
+  field have "Saved already"
+  field pmt "Saving each month"
+  field rate "Return % a year"
+statcard round(pot), "at retirement in" max(retire - age, 0) "years"
+row gap 2
+  statcard round(own), "your own money"
+  statcard round(max(pot - own, 0)), "growth"
+if retire <= age
+  "Set a retirement age after your age." faint
+===
+@rich domain=c6_retire_income_needed topic=retirement_income_needed style=short
+retirement pot
+needs: monthly spending today | years to retirement | yearly price rise | spending at retirement | pot needed at 4 percent
+---
+app "Pot Needed" chart grey
+state spend money = 90000
+state years num = 25
+state infl num = 8
+let then_spend = spend * pow(1 + infl / 100, years)
+let pot = then_spend * 12 * 25
+field spend "Monthly spending today"
+"Years to retire" years faint
+slider years 1..40
+"Prices rise" infl "% a year" faint
+slider infl 0..20
+statcard round(then_spend), "a month, in" years "years"
+statcard round(pot), "pot needed at 4 percent"
+"That is" round(pot / max(spend * 12, 1)) "times today's yearly spending" faint
+===
+@rich domain=c6_inflation_future_price topic=inflation_future_price style=short
+future price
+needs: price today | inflation percent | years | future price | bar chart for each year
+---
+app "Future Price" chart ocean dark
+state price money = 250000
+state infl num = 9
+state years num = 10
+let at(y num) = price * pow(1 + infl / 100, y)
+field price "Price today"
+"Inflation" infl "% a year" faint
+slider infl 0..25
+"Years ahead" years faint
+slider years 1..15
+statcard round(at(years)), "after" plural(years, "year")
+"Extra over today:" round(at(years) - price) bold color warn
+section "Year by year"
+  bars 1..years, at(it), it
+===
+@rich domain=c6_inflation_value_lakh topic=inflation_money_worth style=short
+inflation
+needs: amount of money | inflation percent | years | what it will be worth | loss in buying power
+---
+app "Inflation" chart mint
+state amount money = 100000
+state infl num = 10
+state years num = 10
+let worth = amount / pow(1 + infl / 100, years)
+field amount "Money you keep"
+field infl "Inflation % a year"
+"Years" years faint
+slider years 1..30
+statcard round(worth), "is what it buys after" plural(years, "year")
+"You lose" round(amount - worth) "of buying power" big color warn
+"That is" round((amount - worth) * 100 / max(amount, 1)) "% gone" faint
+===
+@rich domain=c6_currency_chain_save topic=dollar_dirham_rupee_chain style=short
+currency chain
+needs: dollar amount | dollar to dirham rate | dirham to rupee rate | dirhams and rupees result | save each conversion to a list
+---
+app "Currency Chain" coin slate
+table conv usd num, pkr num
+state usd num = 500
+state r1 num = 3.67
+state r2 num = 76.5
+let aed = usd * r1
+let pkr = aed * r2
+section "Convert"
+  field usd "US dollars"
+  field r1 "1 dollar gives dirhams"
+  field r2 "1 dirham gives rupees"
+row gap 2
+  statcard round(aed * 100) / 100, "dirhams"
+  statcard round(pkr), "rupees"
+"Combined rate:" round(r1 * r2 * 100) / 100 "rupees per dollar" faint
+button "Save this conversion" fill accent tap add conv usd = usd, pkr = round(pkr)
+section "Saved conversions"
+  each conv top 6 as c empty "Nothing saved yet."
+    row tap remove c
+      c.usd "dollars" grow
+      c.pkr bold
+===
+@rich domain=c6_remittance_services topic=remittance_two_services style=detailed
+sending pounds home to my mother. service one charges a flat fee and gives one rate, service two has no fee but a worse rate. type the amount and all that, and tell me what she receives from each and which is better
+needs: amount to send | flat fee and rate of service one | fee and rate of service two | rupees received from each | better service and the difference
+---
+app "Send Money Home" coin ink
+state amount money = 400
+state fee1 money = 4
+state rate1 num = 352
+state fee2 money = 0
+state rate2 num = 347
+let got1 = max(amount - fee1, 0) * rate1
+let got2 = max(amount - fee2, 0) * rate2
+field amount "Amount to send"
+section "Service one"
+  field fee1 "Flat fee"
+  field rate1 "Rupees per pound"
+section "Service two"
+  field fee2 "Flat fee"
+  field rate2 "Rupees per pound"
+row gap 2
+  statcard round(got1), "service one pays out"
+  statcard round(got2), "service two pays out"
+if got1 = got2
+  "Both pay the same." big
+else
+  if(got1 > got2, "Service one", "Service two") "gives" round(abs(got1 - got2)) "more" big color good
+===
+@rich domain=c6_gold_price_karat topic=gold_price_by_carat style=short
+gold price
+needs: 24 carat rate | carat choice 18 21 22 24 | weight in grams or tola | making charge percent | pure gold weight and final price
+---
+app "Gold Price" coin plum
+state rate money = 29000
+state k pick K18|K21|K22|K24 = K22
+state unit pick Gram|Tola = Gram
+state w num = 10
+state making num = 8
+let carat = if(k = K18, 18, if(k = K21, 21, if(k = K22, 22, 24)))
+let grams = if(unit = Tola, w * 11.664, w)
+let pure = grams * carat / 24
+let gold_cost = pure * rate
+let final = gold_cost * (100 + making) / 100
+field rate "24 carat rate per gram"
+row gap 1
+  "Carat" faint
+  choice k
+row gap 1
+  "Weight in" faint
+  choice unit
+field w "Weight"
+"Making charges" making "%" faint
+slider making 0..30
+row gap 2
+  statcard round(pure * 100) / 100, "g pure gold"
+  statcard round(gold_cost), "gold value"
+statcard round(final), "total to pay"
+===
+@rich domain=c6_carat_price_table topic=gold_carat_comparison style=short
+carat compare
+needs: 24 carat price per gram | weight in grams | purity percent for each carat | price for each carat | bar chart of prices
+---
+app "Carat Compare" star red
+state rate money = 29000
+state w num = 5
+field rate "24 carat price per gram"
+field w "Weight (grams)"
+section "By carat", w "grams"
+  each [18, 21, 22, 24] as c
+    row
+      c "carat" bold grow
+      round(c * 100 / 24 * 10) / 10 "% pure" faint
+      round(rate * w * c / 24) bold
+section "Price chart"
+  bars [18, 21, 22, 24], rate * w * it / 24, it
+"24 carat costs" round(rate * w - rate * w * 18 / 24) "more than 18 carat" faint
+===
+@rich domain=c6_diamond_per_carat topic=diamond_price_per_carat style=short
+diamond price
+needs: carat weight | base price per carat | quality choice | certificate fee | total price and price per gram
+---
+app "Diamond Price" star orange
+state ct num = 0.75
+state base money = 400000
+state q pick Good|Very_Good|Excellent = Good
+state cert money = 5000
+let mult = if(q = Good, 1, if(q = Very_Good, 1.25, 1.6))
+let stone = ct * base * mult
+let total = stone + cert
+section "The stone"
+  field ct "Carat weight"
+  field base "Base price per carat"
+  row gap 1
+    "Cut" faint
+    choice q
+  field cert "Certificate fee"
+statcard round(total), "total price"
+row gap 2
+  statcard round(stone / max(ct * 0.2, 0.01)), "per gram of stone"
+  statcard round(ct * base * (mult - 1)), "added by the cut"
+if ct <= 0
+  "Enter the carat weight." faint
+===
+@rich domain=c6_land_price_units topic=land_price_per_marla_sqft style=short
+land price per marla
+needs: total land price | area in marla | price per marla | price per square foot and per kanal | registration and stamp extra
+---
+app "Land Price" map yellow
+state price money = 8500000
+state marla num = 10
+state extra num = 4
+let per_marla = price / max(marla, 0.01)
+field price "Total land price"
+field marla "Area (marla)"
+field extra "Registration and stamp %"
+row gap 2
+  statcard round(per_marla), "per marla"
+  statcard round(per_marla / 272.25), "per sq ft"
+statcard round(per_marla * 20), "per kanal"
+"Total with extra costs:" round(price * (100 + extra) / 100) big
+===
+@rich domain=c6_plot_premium topic=plot_price_corner_premium style=custom_ui
+pricing a plot in a housing society. the base rate is per square foot, corner plots cost extra, and so does facing the park. i type marla and rate and switch on corner or park to see the final total and price per marla
+needs: plot size in marla | base rate per square foot | corner switch | park facing switch | total price and price per marla
+---
+app "Plot Price" map green
+state marla num = 5
+state rate money = 4200
+state corner bool = no
+state park bool = no
+let sqft = marla * 272.25
+let pct = if(corner, 10, 0) + if(park, 5, 0)
+let total = sqft * rate * (100 + pct) / 100
+field marla "Size (marla)"
+field rate "Base rate per sq ft"
+row gap 2
+  "Corner plot (+10%)" grow
+  toggle corner
+row gap 2
+  "Facing the park (+5%)" grow
+  toggle park
+statcard round(total), "total price for" round(sqft) "sq ft"
+row gap 2
+  statcard pct, "% extra"
+  statcard round(total / max(marla, 0.01)), "per marla"
+===
+@rich domain=c6_property_commission topic=property_agent_commission style=short
+agent commission
+needs: sale price | seller commission percent and buyer commission percent | fixed paperwork fee | amount each side pays | net amount seller receives
+---
+app "Agent Commission" tag teal
+state price money = 12000000
+state pc_s num = 1
+state pc_b num = 1
+state paper money = 15000
+let s_fee = price * pc_s / 100
+let b_fee = price * pc_b / 100
+section "Deal"
+  field price "Sale price"
+  field pc_s "Seller commission %"
+  field pc_b "Buyer commission %"
+  field paper "Paperwork fee"
+row gap 2
+  statcard round(s_fee + paper), "paid by the seller"
+  statcard round(b_fee), "paid by the buyer"
+statcard round(s_fee + b_fee + paper), "agent earns in total"
+"Seller receives" round(price - s_fee - paper) big
+===
+@rich domain=c6_share_trade_fees topic=share_trade_brokerage_fees style=multi_feature
+buying shares and the broker takes a percent plus tax on that fee and a small charge per trade. type price, number of shares and the rates, then show the total to pay and the price i must sell at just to break even
+needs: share price and number of shares | broker commission percent | tax on commission and fee per trade | total cost to buy | break-even sell price
+---
+app "Trade Fees" chart blue
+state price money = 120
+state qty num = 500
+state comm num = 0.15
+state sst num = 15
+state charge money = 25
+let f = comm * (100 + sst) / 10000
+let value = price * qty
+let fees = value * f + charge
+let total = value + fees
+let be = if(qty > 0, (value * (1 + f) / (1 - f) + 2 * charge) / qty, 0)
+section "The trade"
+  field price "Price per share"
+  field qty "Shares"
+section "Charges"
+  field comm "Broker commission %"
+  field sst "Tax on commission %"
+  field charge "Charge per trade"
+row gap 2
+  statcard round(value), "share value"
+  statcard round(fees * 100) / 100, "fees to buy"
+statcard round(total), "total to pay"
+"Break-even sell price:" round(be * 100) / 100 big
+===
+@rich domain=c6_discount_stack_two topic=discount_ten_then_five style=short
+10% off then another 5% off
+needs: original price | first discount percent | second discount percent | final price | total saved and single equivalent percent
+---
+app "Stacked Discount" tag purple
+state price money = 5000
+state d1 num = 10
+state d2 num = 5
+let after1 = price * (100 - d1) / 100
+let final = after1 * (100 - d2) / 100
+field price "Original price"
+field d1 "First discount %"
+field d2 "Second discount %"
+statcard round(final), "you pay"
+row gap 2
+  statcard round(price - final), "saved"
+  statcard round((price - final) * 1000 / max(price, 1)) / 10, "% off in total"
+"Not 15%, because the second discount works on the lower price." faint
+===
+@rich domain=c6_discount_coupon_cashback topic=sale_coupon_cashback_final style=short
+real price after offers
+needs: item price | sale percent | flat coupon | cashback percent and cap | real final price after cashback
+---
+app "Real Price" tag pink
+state price money = 18000
+state sale num = 20
+state coupon money = 1000
+state cb num = 5
+state cap money = 500
+let after_sale = price * (100 - sale) / 100
+let after_coupon = max(after_sale - coupon, 0)
+let back = min(after_coupon * cb / 100, cap)
+let real = after_coupon - back
+section "The offer"
+  field price "Item price"
+  field sale "Store sale %"
+  field coupon "Coupon"
+section "Card cashback"
+  field cb "Cashback %"
+  field cap "Cashback cap"
+row gap 2
+  statcard round(after_sale), "after sale"
+  statcard round(after_coupon), "after coupon"
+statcard round(real), "real final price"
+"Cashback you get back later:" round(back) faint
+"Total saved:" round(price - real) bold color good
+===
+@rich domain=c6_tax_backwards topic=price_before_tax_backwards style=short
+price after tax backwards
+needs: total paid with tax | tax percent | price before tax | tax amount
+---
+app "Before Tax" calc grey
+state paid money = 11700
+state tax num = 17
+let base = paid * 100 / (100 + tax)
+field paid "Total paid"
+field tax "Tax %"
+statcard round(base), "price before tax"
+statcard round(paid - base), "tax inside the total"
+"Do not just take" tax "% off the total. The tax was added to the lower price." faint
+===
+@rich domain=c6_original_price_sale topic=original_price_before_sale style=multi_feature
+saw a jacket marked at what i paid after the winter sale. i remember it was thirty percent off and then the cashier took another ten percent at the till. what was the first price on the tag and how much did i really save
+needs: price paid | sale percent on the tag | extra percent at the till | original tag price | amount saved
+---
+app "Tag Price" tag ocean
+state paid money = 6300
+state d1 num = 30
+state d2 num = 10
+let orig = if(d1 < 100 and d2 < 100, paid * 10000 / ((100 - d1) * (100 - d2)), paid)
+field paid "Price paid"
+field d1 "Sale % on the tag"
+field d2 "Extra % at the till"
+statcard round(orig), "was the tag price"
+row gap 2
+  statcard round(orig - paid), "saved"
+  statcard round((orig - paid) * 100 / max(orig, 1)), "% off overall"
+===
+@rich domain=c6_two_cars_economy topic=fuel_economy_two_cars style=short
+two cars mileage
+needs: km driven per month | km per litre of each car | petrol price | monthly cost for each car | yearly saving of the better car
+---
+app "Two Cars Economy" car mint
+state km num = 1500
+state e1 num = 14
+state e2 num = 9
+state price money = 270
+let m1 = km / max(e1, 0.1) * price
+let m2 = km / max(e2, 0.1) * price
+section "Driving"
+  field km "Km driven a month"
+  field price "Petrol per litre"
+section "Cars"
+  field e1 "Car 1 (km per litre)"
+  field e2 "Car 2 (km per litre)"
+row gap 2
+  statcard round(m1), "car 1 a month"
+  statcard round(m2), "car 2 a month"
+"Car" if(m1 <= m2, 1, 2) "saves" round(abs(m1 - m2) * 12) "a year" big color good
+===
+@rich domain=c6_mpg_converter topic=fuel_economy_unit_converter style=short
+mpg converter
+needs: fuel economy number | choice of km per litre, litres per 100 km or mpg | value in the other two units | cost per 100 km at my petrol price
+---
+app "Economy Units" car slate
+state v num = 12
+state unit pick Km_per_litre|L_per_100km|Mpg = Km_per_litre
+state price money = 270
+let kmpl = if(v <= 0, 0, if(unit = Km_per_litre, v, if(unit = L_per_100km, 100 / v, v * 0.425)))
+field v "Number"
+row gap 1
+  choice unit
+row gap 2
+  statcard round(kmpl * 100) / 100, "km per litre"
+  statcard round(100 / max(kmpl, 0.01) * 100) / 100, "litres per 100 km"
+statcard round(kmpl * 2.352 * 100) / 100, "miles per gallon (US)"
+field price "Petrol per litre"
+"100 km costs" round(100 / max(kmpl, 0.01) * price) big
+===
+@rich domain=c6_water_slab_bill topic=water_bill_slabs style=short
+water bill slabs
+needs: water used in kilolitres | rate for each of three slabs | charge in each slab | total bill | average cost per kilolitre
+---
+app "Water Bill" drop ink
+state use num = 24
+state r1 money = 20
+state r2 money = 45
+state r3 money = 90
+let s1 = min(use, 10)
+let s2 = max(min(use, 30) - 10, 0)
+let s3 = max(use - 30, 0)
+let total = s1 * r1 + s2 * r2 + s3 * r3
+section "Usage"
+  "Used" use "kilolitres" faint
+  slider use 0..80
+section "Rates per kilolitre"
+  field r1 "First 10"
+  field r2 "Next 20"
+  field r3 "Above 30"
+section "Charge by slab"
+  bars [1, 2, 3], if(it = 1, s1 * r1, if(it = 2, s2 * r2, s3 * r3)), if(it = 1, "0-10", if(it = 2, "10-30", "30+"))
+statcard round(total), "total bill"
+"Average:" round(total / max(use, 1) * 10) / 10 "per kilolitre" faint
+===
+@rich domain=c6_taxi_waiting_fare topic=taxi_fare_with_waiting style=short
+taxi fare
+needs: base fare and per km rate | distance and waiting minutes | per minute waiting charge | night switch with surcharge | total fare
+---
+app "Taxi Fare" car plum
+state base money = 120
+state perkm money = 45
+state permin money = 4
+state km num = 12
+state wait num = 10
+state night bool = no
+state sur num = 25
+let sub = base + km * perkm + wait * permin
+let fare = sub * (100 + if(night, sur, 0)) / 100
+section "Meter rates"
+  field base "Starting fare"
+  field perkm "Per km"
+  field permin "Per waiting minute"
+section "The trip"
+  field km "Distance (km)"
+  field wait "Minutes waiting"
+  row gap 2
+    "Night trip" grow
+    toggle night
+  field sur "Night surcharge %"
+statcard round(fare), "fare"
+"Distance" round(km * perkm) "+ waiting" round(wait * permin) faint
+===
+@rich domain=c6_surge_ride_compare topic=ride_surge_vs_normal style=custom_ui
+ride app is showing surge. slide the multiplier, i give base rate per km, a booking fee and my distance. show the fare now, the fare without surge and what the surge costs me, and a fixed bus ticket to compare
+needs: distance base rate per km and booking fee | surge multiplier slider | fare with and without surge | extra cost of the surge | bus ticket comparison
+---
+app "Surge Check" bolt red dark
+state km num = 9
+state rate money = 38
+state fee money = 40
+state surge num = 15
+state bus money = 60
+let normal = km * rate + fee
+let now_fare = km * rate * surge / 10 + fee
+field km "Distance (km)"
+field rate "Rate per km"
+field fee "Booking fee"
+"Surge" surge / 10 "x" faint
+slider surge 10..30
+row gap 2
+  statcard round(now_fare), "fare now"
+  statcard round(normal), "without surge"
+"Surge adds" round(now_fare - normal) big color if(surge > 10, warn, good)
+if now_fare > bus * 3
+  "The bus ticket is" bus "so a ride costs" round(now_fare / max(bus, 1)) "times more." faint
+===
+@rich domain=c6_courier_weight_price topic=courier_price_by_weight style=short
+courier price
+needs: parcel weight in kg | rate for first half kilo and each extra half kilo | zone choice | fuel surcharge percent | price for the parcel
+---
+app "Courier Price" package orange
+state kg num = 2.3
+state first money = 250
+state extra money = 100
+state zone pick Same_city|Other_city|Far_area = Other_city
+state fuel num = 8
+let halves = max(floor((kg * 2 + 0.99)), 1)
+let mult = if(zone = Same_city, 1, if(zone = Other_city, 1.4, 2))
+let price = (first + (halves - 1) * extra) * mult * (100 + fuel) / 100
+field kg "Parcel weight (kg)"
+row gap 1
+  "Zone" faint
+  choice zone
+section "Courier rates"
+  field first "First half kilo"
+  field extra "Each extra half kilo"
+  "Fuel surcharge" fuel "%" faint
+  slider fuel 0..25
+statcard round(price), "to post this parcel"
+"Charged as" halves "half kilos" faint
+===
+@rich domain=c6_volumetric_weight topic=parcel_volumetric_weight style=short
+volumetric weight
+needs: length width and height in cm | actual weight | volumetric weight | chargeable weight | price per kg and total
+---
+app "Parcel Weight" box yellow
+state l num = 50
+state w num = 40
+state h num = 30
+state real num = 4
+state rate money = 180
+let vol = l * w * h / 5000
+let charge = max(vol, real)
+section "Box size (cm)"
+  field l "Length"
+  field w "Width"
+  field h "Height"
+field real "Actual weight (kg)"
+field rate "Price per kg"
+row gap 2
+  statcard round(vol * 10) / 10, "kg by volume"
+  statcard real, "kg actual"
+statcard round(charge * rate), "to pay, charged on" round(charge * 10) / 10 "kg"
+"They charge by" if(vol > real, "volume", "weight") faint

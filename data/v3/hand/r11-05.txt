@@ -1,0 +1,235 @@
+@rich domain=r11_typing_speed topic=typing_speed_practice style=short
+typing speed
+needs: add a test with words per minute and accuracy | target speed setting with progress | best and average speed | line chart of speed over time | list of tests
+---
+app "Typing Speed" pen slate
+table typed wpm num 5..250 unit "wpm", acc num 50..100 = 95 unit "%" "Accuracy"
+setting target num = 60 "Target speed (wpm)"
+topbar typed, "Add test"
+goal max(typed.wpm), target, "wpm, your best", " wpm"
+row gap 2
+  statcard round(avg(typed.wpm last 7 days)), "average this week (wpm)"
+  statcard round(avg(typed.acc last 7 days)), "accuracy this week (%)"
+section "Speed over time", "wpm"
+  trend typed last 90 days, it.wpm
+each typed sort at desc top 10 as t empty "No tests yet. Take a one-minute test and add the result."
+  row card gap 2 tap edit t swipe remove t
+    t.wpm "wpm" big
+    stack grow gap 0
+      t.acc "% accurate" bold
+      t.at faint
+===
+@rich domain=r11_test_marks topic=school_test_marks_percent style=short
+test marks
+needs: add a test with subject, marks got and total marks | percentage for each test | average percentage | bars of average per subject | line chart of percentage over tests
+---
+app "Test Marks" school ink dark
+table test subject pick Maths|Science|English|Urdu|Other = Maths, got num 0..1000, outof num 1..1000 = 100 "Out of"
+topbar test, "Add test"
+row gap 2
+  statcard round(sum(test.got) * 100 / max(1, sum(test.outof))), "overall percent"
+  statcard count(test), "tests taken"
+section "By subject", "average percent"
+  bars options test.subject, sum(test.got where subject = it) * 100 / max(1, sum(test.outof where subject = it)), it
+section "Test by test", "percent"
+  trend test, it.got * 100 / it.outof
+each test sort at desc as t empty "No tests yet. Add the first marks."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.subject bold
+      t.got "of" t.outof faint
+    round(t.got * 100 / t.outof) "%" bold color if(t.got * 100 / t.outof < 50, bad, ink)
+===
+@rich domain=r11_match_fixtures topic=team_match_fixtures_results style=short
+match fixtures
+needs: add a fixture with opponent and date | enter our score and their score after the match | tab for coming matches | tab for results with won, drawn or lost | record of wins, draws and losses
+---
+app "Match Fixtures" ball plum
+table fixture opp text, day date, us num? 0..99 "Our score", them num? 0..99 "Their score"
+screen next "Next" calendar
+  topbar fixture, "Add match"
+  each fixture where day >= today sort day as f empty "No matches coming up. Add the next fixture."
+    row card gap 2 tap edit f swipe remove f
+      stack grow gap 0
+        "vs" f.opp bold
+        f.day faint
+      plural(f.day - today, "day") bold
+screen res "Results" trophy
+  row gap 2
+    statcard count(fixture where day < today and us > them), "won"
+    statcard count(fixture where day < today and us = them), "drawn"
+    statcard count(fixture where day < today and us < them), "lost"
+  each fixture where day < today sort day desc as f empty "No results yet. Tap a past match to enter the score."
+    row card gap 2 tap edit f
+      stack grow gap 0
+        "vs" f.opp bold
+        f.day faint
+      if f.us >= 0
+        f.us "-" f.them bold color if(f.us > f.them, good, if(f.us < f.them, bad, ink))
+      else
+        "Add score" faint
+===
+@rich domain=r11_hall_bookings topic=marriage_hall_bookings style=short
+hall bookings
+needs: add a booking with name, date, price and advance | calendar grid of this month showing booked days | income booked this month | balance still to collect | upcoming bookings in date order
+---
+app "Hall Bookings" home red
+table booking who text, day date, price money, advance money = 0
+topbar booking, "Add booking"
+row gap 2
+  statcard sum(booking.price where month(day) = month(today) and year(day) = year(today)), "booked this month"
+  statcard sum(booking, if(it.day >= today, it.price - it.advance, 0)), "still to collect"
+section monthname(today), count(booking where month(day) = month(today) and year(day) = year(today)) "bookings"
+  grid 7 gap 1
+    each days month
+      box ratio 1 radius 6 pad 1 fill if(count(booking where day = it) > 0, accent, soft)
+        monthday(it) tiny align center
+"Upcoming" head
+each booking where day >= today sort day as b empty "No bookings ahead. Add the first date."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.who bold
+      b.day faint
+      if count(booking where day = b.day) > 1
+        "Double booked" color bad
+    stack gap 0 align end
+      b.price bold
+      b.price - b.advance "due" faint
+===
+@rich domain=r11_farm_account topic=farm_income_and_costs style=short
+farm account
+needs: add a crop sale with amount | add a cost like seed, fertiliser, labour or fuel | profit this year | share of costs by kind | tabs for sales and costs
+---
+app "Farm Account" tree orange
+table sold crop text, amount money
+table outlay kind pick Seed|Fertiliser|Labour|Fuel|Other = Seed, amount money
+screen overview "Summary" chart
+  stack card gap 1
+    "Profit this year" faint
+    sum(sold.amount year) - sum(outlay.amount year) big color if(sum(sold.amount year) >= sum(outlay.amount year), ink, bad)
+    "Sales" sum(sold.amount year) "and costs" sum(outlay.amount year) faint
+  section "Where the money goes", "costs by kind"
+    share outlay year by kind, sum(it.amount), it.key
+screen sales "Sales" cart
+  topbar sold, "Add sale"
+  each sold sort at desc as s empty "No sales yet. Add the first crop you sold."
+    row card gap 2 tap edit s swipe remove s
+      s.crop grow
+      s.amount bold
+screen costs "Costs" wallet
+  topbar outlay, "Add cost"
+  each outlay sort at desc as o empty "No costs yet. Add seed or fertiliser."
+    row card gap 2 tap edit o swipe remove o
+      o.kind grow
+      o.amount bold
+===
+@rich domain=r11_cheque_book topic=post_dated_cheques style=short
+cheque book
+needs: add a cheque with who, amount and date | reminder the day before | tick when cleared | total going out in the next 7 days | overdue cheques in red
+---
+app "Cheque Book" key yellow
+table cheque to text, amount money, due date, cleared bool
+remind "A cheque is due tomorrow" at cheque.due - 1d at 9:00
+topbar cheque, "Add cheque"
+row gap 2
+  statcard sum(cheque where cleared = no and due >= today and due <= today + 7, it.amount), "going out in 7 days"
+  statcard count(cheque where cleared = no and due < today), "overdue"
+each cheque where cleared = no sort due as c empty "No pending cheques. Add one when you write it."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.to bold
+      "Due" c.due color if(c.due < today, bad, muted)
+    c.amount bold
+    toggle c.cleared
+===
+@rich domain=r11_subscriptions topic=monthly_subscriptions_renewals style=short
+subscriptions
+needs: add a subscription with cost and renewal date | monthly total | cost for a year | reminder two days before renewal | bars comparing what each costs
+---
+app "Subscriptions" bell green
+table sub name text, cost money, renew date
+remind "A subscription renews soon" at sub.renew - 2d at 9:00
+topbar sub, "Add subscription"
+row gap 2
+  statcard sum(sub.cost), "every month"
+  statcard sum(sub.cost) * 12, "every year"
+section "What each costs", "per month"
+  bars sub sort cost desc, it.cost, it.name
+each sub sort renew as s empty "No subscriptions yet. Add the apps you pay for."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      "Renews" s.renew faint
+    s.cost bold
+===
+@rich domain=r11_emi topic=loan_installment_tracker style=short
+emi
+needs: set the instalment amount and number of months | pay this month's instalment with one tap | instalments paid out of total | money still left to pay | reminder on the 5th of every month
+---
+app "EMI" calc teal
+table emipay amount money
+setting emi money = 15000 "Monthly instalment"
+setting months num = 24 "Total instalments"
+remind "EMI due this month" monthly on 5 at 10:00
+stack card gap 2
+  count(emipay) "of" months "paid" big
+  goal count(emipay), months, "instalments paid", ""
+  max(0, months - count(emipay)) * emi "still to pay" faint tap edit emi
+button "Paid this month" fill accent tap add emipay amount = emi
+section "Instalments"
+  grid 6 gap 1
+    each 1..months
+      box ratio 1 radius 6 pad 1 fill if(it <= count(emipay), accent, soft)
+        it tiny align center
+each emipay sort at desc top 6 as e empty "No instalment paid yet."
+  row card tap edit e swipe remove e
+    e.at grow
+    e.amount bold
+===
+@rich domain=r11_standup topic=daily_standup_notes style=short
+standup
+needs: add an entry with what I did, what is next and a blocker | entries grouped by day | blockers this week count | days in a row logged | tap to edit
+---
+app "Standup" users blue
+table stand done text, next text, block text?
+topbar stand, "Add standup"
+row gap 2
+  statcard streak(stand), "days in a row"
+  statcard count(stand week where block != ""), "blockers this week"
+each stand by day as g empty "No standups yet. Write today's first."
+  text g.key bold faint
+  each g as s
+    stack card gap 1 tap edit s swipe remove s
+      "Did:" s.done
+      "Next:" s.next color muted
+      if s.block != ""
+        "Blocked:" s.block color bad
+===
+@rich domain=r11_measurements topic=tailor_body_measurements style=short
+measurements
+needs: add a person with chest, waist, length and sleeve in inches | search by name | tap to edit measurements | see when each was last taken | count of people saved
+---
+app "Measurements" tag purple dark
+table body who text, chest num 20..80 unit "in", waist num 20..80 unit "in", length num 20..80 unit "in", sleeve num 10..40 unit "in"
+state q text = ""
+topbar body, "Add person"
+field q "Search by name"
+statcard count(body), "people saved"
+each body where has(who, q) sort who as b empty "Nobody found. Add a person with Add person."
+  stack card gap 2 tap edit b swipe remove b
+    row gap 2
+      b.who bold grow
+      "Taken" b.at faint
+    row gap 3
+      stack gap 0
+        b.chest big
+        "chest" faint
+      stack gap 0
+        b.waist big
+        "waist" faint
+      stack gap 0
+        b.length big
+        "length" faint
+      stack gap 0
+        b.sleeve big
+        "sleeve" faint

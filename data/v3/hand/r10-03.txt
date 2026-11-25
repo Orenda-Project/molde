@@ -1,0 +1,548 @@
+@rich domain=r10_fitrana_collect topic=fitrana_collection style=detailed
+we collect fitrana in our neighbourhood before Eid. Each family has a head and number of members, and fitrana is one rate per head which I set. Work out the amount for each family, tick when paid and give me the total collected and the total still pending so the committee can distribute on time.
+needs: add a family with head and members | fitrana rate per head setting | amount per family | tick when paid | total collected and pending
+---
+app "Fitrana" gift mint
+table home head text, heads num 1..30 = 4, paid bool
+setting rate money = 350 "Fitrana per head"
+topbar home, "Add family"
+row gap 2
+  statcard sum(home, if(it.paid, it.heads * rate, 0)), "collected"
+  statcard sum(home, if(it.paid, 0, it.heads * rate)), "pending"
+each home sort paid as h empty "No families yet. Add the first one."
+  row card gap 2 tap edit h swipe remove h
+    toggle h.paid
+    stack grow gap 0
+      h.head bold
+      h.heads "heads" faint
+    h.heads * rate bold
+===
+@rich domain=r10_kameti_pot topic=kameti_monthly_pot style=short
+kameti
+needs: add a member | tick who paid this month | pot size from monthly share setting | collected against pot | who has received the pot and button to mark
+---
+app "Kameti" users purple
+table member name text, got bool
+table dep member ref member
+setting share money = 5000 "Monthly share per member"
+topbar member, "Add member"
+let n = count(member)
+let in = count(member, count(it.dep month) > 0)
+statcard n * share, "pot this month"
+stack card gap 2
+  goal in * share, n * share, "collected so far"
+each member sort got as m empty "No members yet. Add the first one."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.dep month
+    stack grow gap 0
+      m.name bold
+      if m.got
+        "Has taken the pot" faint color good
+      else
+        "Waiting for turn" faint
+    if not m.got
+      button "Gets pot" tap set m.got = yes
+===
+@rich domain=r10_village_loans topic=village_fund_loans style=detailed
+our village committee lends a little money from the common fund to families for seed, weddings or medical needs. I write the family name, the amount lent and the date, and every time they return something I add it. Show how much is still outstanding in total and for each family, and who has cleared the loan.
+needs: add a loan with family, amount and date | add a repayment against a loan | outstanding per loan | total outstanding | marks cleared loans
+---
+app "Village Fund" coin green
+table loan family text, amount money, taken date = today
+table back loan ref loan, amount money
+let left(l loan) = l.amount - sum(l.back.amount)
+screen loans "Loans" coin
+  topbar loan, "Add loan"
+  statcard sum(loan, left(it)), "outstanding in the fund"
+  each loan sort taken desc as l empty "No loans yet. The fund is untouched."
+    row card gap 2 tap edit l swipe remove l
+      stack grow gap 0
+        l.family bold
+        l.amount "lent on" l.taken faint
+      if left(l) <= 0
+        "Cleared" bold color good
+      else
+        left(l) "left" bold color warn
+screen returns "Repayments" wallet
+  topbar back, "Add repayment"
+  each back sort at desc as r empty "No repayments yet."
+    row card gap 2 tap edit r swipe remove r
+      r.loan.family grow
+      r.amount bold color good
+===
+@rich domain=r10_village_meetings topic=village_committee_minutes style=multi_feature
+I am secretary of the village committee. After every meeting I want to save the topic, the date and how many people came, and then write the action points that came out of it (like repair the culvert) with a tick when done. A list of all open action points would keep us honest.
+needs: add a meeting with topic, date and attendees | add action points for a meeting | tick an action done | list of open actions | count of open actions
+---
+app "Committee" note slate dark
+table meet topic text, held date = today, came num 1..500
+table act meet ref meet, task text, done bool
+let open = count(act where done = no)
+screen meets "Meetings" users
+  topbar meet, "Add meeting"
+  each meet sort held desc as m empty "No meetings recorded yet."
+    stack card gap 1 tap edit m swipe remove m
+      row
+        m.topic bold grow
+        m.held faint
+      m.came "people came," count(m.act where done = no) "open actions" faint
+screen todo "Actions" check
+  topbar act, "Add action"
+  statcard open, "actions still open"
+  each act where done = no sort at as a empty "No open actions. Everything is done."
+    row card gap 2 tap edit a swipe remove a
+      toggle a.done
+      stack grow gap 0
+        a.task bold
+        a.meet.topic faint
+===
+@rich domain=r10_survey_tally topic=door_survey_tally style=short
+survey tally
+needs: tap agree, disagree or unsure to count an answer | choose the ward being surveyed | count and percent per answer | total answered | undo the last answer
+---
+app "Survey Tally" check ink
+table ans reply pick Agree|Disagree|Unsure = Agree, ward pick Ward_1|Ward_2|Ward_3 = Ward_1
+state w text = Ward_1
+let n = count(ans where ward = w)
+row gap 1
+  each options ans.ward
+    button it fill if(w = it, accent, soft) grow tap set w = it
+row gap 1
+  each options ans.reply
+    button it fill accent grow tap add ans reply = it, ward = w
+stack card gap 2
+  n "answers in" w head
+  each options ans.reply
+    row gap 2
+      it bold grow
+      count(ans where ward = w and reply = it) bold
+      round(count(ans where ward = w and reply = it) * 100 / max(n, 1)) "%" faint
+button "Undo last answer" tap remove last(ans where ward = w)
+===
+@rich domain=r10_voter_doorknock topic=door_to_door_canvassing style=detailed
+helping a local candidate with door to door visits. For each house I note the street, the house number, whether I met someone, not home or refused, and what they said: for, against or undecided. I want the streets listed with how many houses are done, plus the count of for, against and undecided so we know our standing.
+needs: add a house with street, number, result and support | counts of for, against and undecided | houses visited per street | goal for houses visited | filter by result
+---
+app "Canvassing" flag blue
+table house street text, num_ text, result pick Met|Not_home|Refused = Met, vote pick For|Against|Undecided = Undecided
+setting aim num 1..5000 = 200 "Houses to visit"
+state rs text = ""
+topbar house, "Add house"
+goal count(house), aim, "houses visited"
+section "Where we stand", "houses that met us"
+  bars options house.vote, count(house where vote = it and result = Met), it
+row gap 1
+  each options house.result
+    button it fill if(rs = it, accent, soft) grow tap set rs = if(rs = it, "", it)
+each house where rs = "" or result = rs by street empty "No houses yet. Knock on the first door."
+  row card gap 2
+    it.key bold grow
+    count(it) "houses" faint
+===
+@rich domain=r10_lost_found topic=lost_and_found_desk style=short
+lost items
+needs: add an item as lost or found with description and place | filter lost or found | mark returned to owner | count still open | list newest first
+---
+app "Lost and Found" eye yellow
+table thing what text, spot text, side pick Lost|Found = Found, back bool
+state f text = ""
+topbar thing, "Add item"
+statcard count(thing where back = no), "items still open"
+row gap 1
+  each options thing.side
+    button it count(thing where side = it and back = no) fill if(f = it, accent, soft) grow tap set f = if(f = it, "", it)
+each thing where (f = "" or side = f) and back = no sort at desc as t empty "Nothing open. Everything found its owner."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.what bold
+      t.side "at" t.spot faint
+    button "Returned" tap set t.back = yes
+===
+@rich domain=r10_gov_docs topic=government_paperwork_tracker style=multi_feature
+there is always some government paperwork pending in our house: domicile, driving licence, property transfer. I want to list each document with the office I must go to, the stage it is at (to apply, submitted, ready, collected) and the last date by which it must be done, with a reminder 3 days before.
+needs: add a document with name, office, stage and last date | stage chips to filter | reminder 3 days before the last date | marks overdue documents | button for next stage
+---
+app "Paperwork" note orange
+table paper name text, office text, stage pick To_apply|Submitted|Ready|Collected = To_apply, last date?
+state st text = ""
+remind "A document deadline is near" at paper.last - 3d at 9:00
+topbar paper, "Add document"
+row gap 1
+  each options paper.stage
+    button it count(paper where stage = it) fill if(st = it, accent, soft) tap set st = if(st = it, "", it)
+each paper where st = "" or stage = st sort last as p empty "No paperwork pending. Enjoy it."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      p.office faint
+      if p.stage != Collected and p.last < today
+        "Overdue since" p.last color bad
+    if p.stage != Collected
+      button "Next" tap set p.stage = if(p.stage = To_apply, Submitted, if(p.stage = Submitted, Ready, Collected))
+===
+@rich domain=r10_id_expiry topic=family_id_expiry_dates style=detailed
+cnic, passport, driving licence, b-form: all of these expire at different times for my family and I always find out too late. Add the person, which document and when it expires. Show days left, sorted with the soonest first, mark the ones expiring within 60 days in red, and remind me a month before.
+needs: add a document with person, type and expiry date | days left per document | soonest first | marks those expiring within 60 days | reminder a month before expiry
+---
+app "ID Expiry" key slate dark
+table card who text, kind pick CNIC|Passport|Licence|B_form = CNIC, ends date
+remind "An ID document expires in 30 days" at card.ends - 30d at 9:00
+topbar card, "Add document"
+statcard count(card where ends < today + 60), "expiring in 60 days or already over"
+each card sort ends as c empty "No documents yet. Add the first CNIC."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.who bold
+      c.kind "- expires" c.ends faint
+    if c.ends < today
+      "Expired" bold color bad
+    else
+      plural(c.ends - today, "day") "left" bold color if(c.ends < today + 60, warn, good)
+===
+@rich domain=r10_court_dates topic=court_hearing_dates style=short
+court dates
+needs: add a hearing with case, court and date | next hearing shown on top | days left to each hearing | reminder the day before | list in date order
+---
+app "Court Dates" pin red
+table hear case text, court text, on_ date
+remind "Court hearing tomorrow" at hear.on_ - 1d at 18:00
+topbar hear, "Add hearing"
+stack card gap 1
+  "Next hearing" faint
+  each hear where on_ >= today sort on_ top 1 as h empty "No hearing coming up."
+    h.case head
+    h.court "on" h.on_ "-" plural(h.on_ - today, "day") "left" faint
+each hear sort on_ as h empty "No hearings added yet."
+  row card gap 2 tap edit h swipe remove h
+    stack grow gap 0
+      h.case bold
+      h.court faint
+    h.on_ bold color if(h.on_ < today, muted, ink)
+===
+@rich domain=r10_case_files topic=small_law_office_cases style=custom_ui
+small law chamber. Every case file has the client, the type of case (civil, criminal, family, property), where it stands (filed, evidence, arguments, judgment), the fee we agreed and the amount received. A Next stage button on the row, the balance due from each client and total fee balance of all cases.
+needs: add a case with client, type, stage, fee and received | next stage button | balance due per case | total balance of all cases | filter by case type
+---
+app "Case Files" board slate
+table file client text, kind pick Civil|Criminal|Family|Property = Civil, stage pick Filed|Evidence|Arguments|Judgment = Filed, fee money, got money = 0
+state k text = ""
+topbar file, "Open file"
+statcard sum(file, it.fee - it.got), "fee balance due from clients"
+row gap 1
+  each options file.kind
+    button it count(file where kind = it) fill if(k = it, accent, soft) grow tap set k = if(k = it, "", it)
+each file where k = "" or kind = k sort at desc as f empty "No case files yet. Open the first one."
+  stack card gap 1 tap edit f swipe remove f
+    row
+      f.client bold grow
+      f.fee - f.got "due" faint color if(f.fee > f.got, warn, good)
+    row gap 2
+      f.kind "-" f.stage faint grow
+      if f.stage != Judgment
+        button "Next stage" tap set f.stage = if(f.stage = Filed, Evidence, if(f.stage = Evidence, Arguments, Judgment))
+===
+@rich domain=r10_tenant_complaints topic=tenant_repair_requests style=detailed
+I am a tenant in a rented flat and the landlord ignores my messages. I want a written log of every problem: what it is, how urgent (low, normal, urgent), the date I reported it and whether it is fixed. Show how many days each open one has been waiting, urgent ones first, so I have proof when the contract is renewed.
+needs: log a problem with description, urgency and date | days waiting per open problem | urgent ones first | tick when fixed | count of open problems
+---
+app "Repair Requests" tool teal
+table prob what text, urgency pick Low|Normal|Urgent = Normal, told date = today, fixed bool
+topbar prob, "Log problem"
+row gap 2
+  statcard count(prob where fixed = no), "problems open"
+  statcard today - first(prob.told where fixed = no), "days since the oldest open report"
+each prob where fixed = no sort told as p empty "Nothing broken. Lucky you."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.fixed
+    stack grow gap 0
+      p.what bold
+      "Told" p.told "-" plural(today - p.told, "day") "waiting" faint color if(today - p.told > 14, bad, muted)
+    if p.urgency = Urgent
+      "Urgent" bold color bad
+"Fixed" head
+each prob where fixed = yes as p
+  row gap 2 swipe remove p
+    toggle p.fixed
+    p.what color muted grow
+===
+@rich domain=r10_rent_receipts topic=rent_receipts_book style=short
+rent receipts
+needs: add a receipt with tenant, amount and date | total received this month | total per tenant | list newest first | total this year
+---
+app "Rent Book" money mint
+table receipt tenant text, amount money, paid_on date = today
+topbar receipt, "Add receipt"
+row gap 2
+  statcard sum(receipt.amount month), "received this month"
+  statcard sum(receipt.amount year), "received this year"
+section "Per tenant", "this year"
+  each receipt year by tenant
+    row gap 2
+      it.key grow
+      sum(it.amount) bold
+each receipt sort paid_on desc as r empty "No receipts yet."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.tenant bold
+      r.paid_on faint
+    r.amount bold
+===
+@rich domain=r10_pump_service topic=tubewell_pump_service style=multi_feature
+We have three water pumps (main, garden, mosque) and they break because nobody services them. Let me log a service with the pump, what was done and the cost. Set how many days between services and then show, for each pump, how many days since its last service and a red warning when it is overdue.
+needs: log a service with pump, work and cost | service interval setting | days since last service per pump | overdue warning | total spent on service this year
+---
+app "Pump Service" tool blue
+table svc pump pick Main|Garden|Mosque = Main, work text, cost money
+setting every_ num 7..365 = 90 "Days between services"
+topbar svc, "Log service"
+statcard sum(svc.cost year), "spent on pump service this year"
+each options svc.pump
+  stack card gap 1
+    row
+      it bold grow
+      if since(svc where pump = it) = 0
+        "Serviced today" color good
+      else
+        since(svc where pump = it) "days since service" faint
+    if due(svc where pump = it, every_)
+      "Service is overdue" color bad
+each svc sort at desc top 8 as s empty "No service logged yet."
+  row gap 2 tap edit s swipe remove s
+    s.pump bold
+    s.work grow
+    s.cost faint
+===
+@rich domain=r10_street_lights topic=street_light_faults style=short
+street lights
+needs: add a pole with number and street | tick when working or broken | count of dark poles | share of broken poles per street | broken poles listed first
+---
+app "Street Lights" bolt yellow
+table pole code text, street text, works bool
+topbar pole, "Add pole"
+statcard count(pole where works = no), "poles are dark", count(pole)
+section "Dark poles by street", "not working"
+  share pole where works = no by street, count(it), it.key
+each pole sort works as p empty "No poles yet. Add the first one."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.works
+    stack grow gap 0
+      "Pole" p.code bold
+      p.street faint
+    if not p.works
+      "Dark" bold color bad
+===
+@rich domain=r10_neighbourhood_watch topic=neighbourhood_watch_incidents style=multi_feature
+our lane started a night watch with volunteers. Two things to keep: who patrolled each night with their name, and a log of incidents like theft attempts, suspicious people, fire or noise with the place. I want a heat grid of the last 28 days showing how busy it has been and a count of each kind.
+needs: log a patrol with volunteer name | log an incident with kind and place | count per kind of incident | 28 day grid of incidents | tab for patrols
+---
+app "Night Watch" shield ink
+table patrol who text
+table event kind pick Theft|Suspicious|Fire|Noise|Other = Suspicious, place text
+screen inc "Incidents" bell
+  topbar event, "Log incident"
+  section "Last 28 days", "darker means more incidents"
+    heat last 28 days, count(event on it), 3
+  each options event.kind
+    row gap 2
+      it grow
+      count(event where kind = it) bold
+  each event sort at desc top 10 as e empty "No incidents. Keep it that way."
+    row card gap 2 tap edit e swipe remove e
+      e.kind bold
+      e.place grow
+      e.at faint
+screen pat "Patrols" walk
+  topbar patrol, "Log patrol"
+  statcard count(patrol month), "patrols this month"
+  each patrol sort at desc top 20 as p empty "No patrols logged yet."
+    row card gap 2 tap edit p swipe remove p
+      p.who bold grow
+      p.at faint
+===
+@rich domain=r10_mohalla_library topic=community_library_loans style=detailed
+a few families keep a small book shelf for the whole street. I note which book went to which neighbour and the date it should come back. A Returned button, a list of books out right now, a count of overdue books and the names of the people who are late.
+needs: lend a book with title, borrower and return date | returned button | list of books out now | count of overdue | late borrowers highlighted
+---
+app "Street Library" book plum
+table lend title text, who text, back_by date, home bool
+topbar lend, "Lend book"
+row gap 2
+  statcard count(lend where home = no), "books out now"
+  statcard count(lend where home = no and back_by < today), "overdue"
+each lend where home = no sort back_by as l empty "All books are on the shelf."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.title bold
+      l.who "- back by" l.back_by faint color if(l.back_by < today, bad, muted)
+    button "Returned" tap set l.home = yes
+===
+@rich domain=r10_tool_lending topic=shared_tool_lending style=short
+tool lending
+needs: add a tool to the shed | lend a tool to a neighbour | see who has each tool | mark returned | count of tools out
+---
+app "Tool Shed" tool grey
+table tool name text
+table out tool ref tool, who text, back bool
+state d new out
+topbar out, "Lend tool"
+statcard count(out where back = no), "tools out", count(tool)
+each tool sort name as t empty "No tools yet. Add the first one."
+  row card gap 2 tap edit t swipe remove t
+    t.name bold grow
+    if count(t.out where back = no) > 0
+      "With" last(t.out.who) color warn
+    else
+      "In the shed" color good
+"Lent out" head
+each out where back = no sort at as o empty "Nothing is lent out."
+  row gap 2
+    o.tool.name grow
+    o.who faint
+    button "Back" tap set o.back = yes
+===
+@rich domain=r10_condolence_fund topic=mohalla_condolence_fund style=custom_ui
+When someone dies in our mohalla every home gives a fixed amount for the family. I want to add an event with the family name, and then for each event write which home gave how much. Show the total collected for each event and a number of homes that gave, newest event first.
+needs: add an event with family name | add a contribution with home and amount for an event | total per event | homes that gave per event | newest event first
+---
+app "Condolence Fund" heart grey dark
+table death family text
+table give death ref death, home text, amount money
+screen events "Events" heart
+  topbar death, "Add event"
+  each death sort at desc as d empty "No events yet. May there be none."
+    stack card gap 1 tap edit d swipe remove d
+      d.family bold
+      sum(d.give.amount) "collected from" count(d.give) "homes" faint
+screen gifts "Contributions" money
+  topbar give, "Add contribution"
+  each give sort at desc as g empty "No contributions yet."
+    row card gap 2 tap edit g swipe remove g
+      stack grow gap 0
+        g.home bold
+        "for" g.death.family faint
+      g.amount bold
+===
+@rich domain=r10_hall_bookings topic=community_hall_bookings style=detailed
+I look after the community hall in our colony. Bookings are for weddings, milad or meetings. I need the booking with the name, date, type, fee and whether the fee is paid. Warn me when two bookings fall on the same day, show what is coming up next, and the fees I should receive this month.
+needs: add a booking with name, date, type, fee and paid | warns of double booking | upcoming bookings in date order | fees received this month | tick when fee paid
+---
+app "Hall Bookings" home pink
+table book who text, on_ date, kind pick Wedding|Milad|Meeting|Other = Wedding, fee money, paid bool
+topbar book, "Add booking"
+row gap 2
+  statcard sum(book, if(it.paid and month(it.on_) = month(today), it.fee, 0)), "fees received this month"
+  statcard sum(book, if(it.paid, 0, it.fee)), "fees still to receive"
+each book where on_ >= today sort on_ as b empty "No upcoming bookings. The hall is free."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    stack grow gap 0
+      b.who bold
+      b.on_ b.kind faint
+      if count(book where on_ = b.on_) > 1
+        "Double booked" color bad bold
+    b.fee bold
+===
+@rich domain=r10_cleanup_drives topic=colony_cleanup_drives style=multi_feature
+we organise a cleanup of the colony drain every Sunday. After each drive I write the date, how many volunteers came and how many garbage bags we filled. I want a total of bags for the year, a chart of bags per drive over time, and a target number of bags for the year that I can set.
+needs: add a drive with volunteers and bags | yearly bag target setting | progress to the target | line chart of bags per drive | total volunteers
+---
+app "Cleanup Drives" leaf ink
+table drive crew num 1..300, bags num 0..500
+setting aim num 1..5000 = 300 "Bags to fill this year"
+topbar drive, "Add drive"
+stack card gap 2
+  goal sum(drive.bags year), aim, "bags filled this year"
+section "Bags per drive", "oldest to newest"
+  trend drive, it.bags
+row gap 2
+  statcard count(drive year), "drives this year"
+  statcard sum(drive.crew year), "volunteer turns"
+each drive sort at desc top 10 as d empty "No drives yet. Plan the first Sunday."
+  row card gap 2 tap edit d swipe remove d
+    d.at grow faint
+    d.crew "people" faint
+    d.bags "bags" bold
+===
+@rich domain=r10_tree_planting topic=tree_planting_survival style=custom_ui
+Our youth group plants trees along the canal road. Each tree is noted with where it was planted, the kind (neem, peepal, mango, shisham) and a tick that says it is still alive. I want to see how many we planted against our target of 200, the survival rate in percent and which kind is surviving best.
+needs: add a tree with place and kind | tick if still alive | progress to a target of trees | survival rate in percent | alive count per kind
+---
+app "Tree Planting" tree green
+table plant spot text, kind pick Neem|Peepal|Mango|Shisham = Neem, alive bool
+setting aim num 1..5000 = 200 "Trees to plant"
+topbar plant, "Plant tree"
+stack card gap 2
+  goal count(plant), aim, "trees planted"
+  "Survival rate" round(count(plant where alive = yes) * 100 / max(count(plant), 1)) "%" bold
+section "Alive by kind", "ticked as alive"
+  bars options plant.kind, count(plant where kind = it and alive = yes), it
+each plant sort at desc top 15 as p empty "No trees yet. Plant the first one."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.alive
+    stack grow gap 0
+      p.kind bold
+      p.spot faint
+===
+@rich domain=r10_quran_class topic=quran_class_progress style=custom_ui
+I teach quran to neighbourhood children at home. Each child has a name and the para they are reading now, from 1 to 30, and a Next para button when they finish one. Also a tick for this month's fee. Show the children with a bar of how far they are in the quran and how many have paid.
+needs: add a child with name and current para | next para button | progress bar out of 30 paras | tick for this month's fee | count of children who paid
+---
+app "Quran Class" book ocean
+table kid name text, para num 1..30 = 1
+table fee kid ref kid
+topbar kid, "Add child"
+statcard count(kid, count(it.fee month) > 0), "fees paid this month", count(kid)
+each kid sort name as k empty "No children yet. Add the first student."
+  stack card gap 2 tap edit k swipe remove k
+    row gap 2
+      stack grow gap 0
+        k.name bold
+        "Para" k.para "of 30" faint
+      toggle k.fee month
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * k.para / 30, 3 fill accent radius 1
+    if k.para < 30
+      button "Next para" tap set k.para = k.para + 1
+===
+@rich domain=r10_donation_boxes topic=donation_box_counts style=short
+donation box
+needs: add the amount found when a box is opened with box name | per box total | total this month | line of recent openings | list newest first
+---
+app "Donation Boxes" gift orange
+table opened box pick Gate|Hall|Office = Gate, amount money
+topbar opened, "Box opened"
+statcard sum(opened.amount month), "found this month"
+section "Per box", "all openings"
+  share options opened.box, sum(opened.amount where box = it), it
+section "Recent openings", "oldest to newest"
+  trend opened top 10, it.amount
+each opened sort at desc as o empty "No box opened yet."
+  row card gap 2 tap edit o swipe remove o
+    o.box bold grow
+    o.at faint
+    o.amount bold
+===
+@rich domain=r10_qurbani_shares topic=qurbani_animal_shares style=short
+qurbani shares
+needs: add an animal with tag, kind and price | add a person's share in an animal | shares left in each animal | cost per share | animals still not full
+---
+app "Qurbani Shares" paw red
+table beast tag text, kind pick Cow|Goat|Camel = Cow, price money
+table part beast ref beast, who text
+let slots(b beast) = if(b.kind = Goat, 1, 7)
+screen beasts "Animals" paw
+  topbar beast, "Add animal"
+  statcard count(beast, count(it.part) < slots(it)), "animals not full yet"
+  each beast sort tag as b empty "No animals yet. Add the first one."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.kind b.tag bold
+        "Share costs" round(b.price / slots(b)) faint
+      slots(b) - count(b.part) "left" bold color if(slots(b) = count(b.part), good, warn)
+screen shares "Shares" users
+  topbar part, "Add share"
+  each part sort at desc as s empty "No shares yet."
+    row card gap 2 tap edit s swipe remove s
+      s.who bold grow
+      s.beast.tag faint

@@ -1,0 +1,557 @@
+@rich domain=d5_dev_time_log topic=daily_dev_time_log style=detailed
+I bill my own time across tickets, so I want to log minutes against a task name, see this week's hours against a weekly goal of 30, a bar chart of hours per day with a 6 hour goal line, and the entries listed by day
+needs: log minutes against a task | this week's hours against a weekly goal | daily bars with a goal line | entries listed by day
+---
+app "Dev hours" clock ocean
+table work task text, mins num 1..960 = 30 "Minutes"
+setting weekgoal num = 30 "Weekly goal (hours)"
+setting daygoal num = 6 "Daily goal (hours)"
+let wk = sum(work.mins week) / 60
+topbar work, "Log time"
+statcard round(wk * 10) / 10, "hours logged this week", weekgoal
+section "Hours per day", "goal line at" daygoal "h"
+  goalbars last 7 days, sum(work.mins on it) / 60, daygoal, "Goal reached", "Under goal"
+list work by day, "No time logged yet. Log the first task you worked on."
+===
+@rich domain=d5_commit_rules topic=commit_message_checklist style=multi_feature
+before I push I check each commit message against four rules: imperative mood, under 50 characters, body explains why, ticket number mentioned. log the commit with four ticks, show the percent that pass all four and a pass rate for each rule
+needs: log a commit message | four tick boxes for the rules | percent passing all four | pass rate per rule
+---
+app "Commit check" check mint
+table commit msg text "Commit message", imperative bool "Imperative mood", short bool "Under 50 characters", body bool "Body explains why", ticket bool "Mentions ticket"
+let full(c commit) = c.imperative and c.short and c.body and c.ticket
+topbar commit, "Check a commit"
+statcard round(count(commit, full(it)) * 100 / max(count(commit), 1)), "percent pass all four rules"
+section "Pass rate by rule"
+  goal count(commit where imperative = yes), count(commit), "imperative mood"
+  goal count(commit where short = yes), count(commit), "under 50 characters"
+  goal count(commit where body = yes), count(commit), "body explains why"
+  goal count(commit where ticket = yes), count(commit), "mentions ticket"
+each commit as c empty "No commits checked yet. Paste the next message you write."
+  stack card gap 1 tap edit c swipe remove c
+    text c.msg bold
+    row gap 2
+      toggle c.imperative
+      toggle c.short
+      toggle c.body
+      toggle c.ticket
+===
+@rich domain=d5_branch_rules topic=branch_naming_rules style=short
+branch name rules
+needs: log a branch with its type | tick lowercase-with-dashes and type prefix | count of compliant branches | filter by type
+---
+app "Branch names" tag slate
+table branch name text, kind pick Feature|Fix|Chore|Hotfix|Docs = Feature, ticket text?, lower bool "Lowercase with dashes", prefixed bool "Has type prefix"
+state f pick All|Feature|Fix|Chore|Hotfix|Docs = All
+let ok = count(branch where lower = yes and prefixed = yes)
+topbar branch, "Add branch"
+statcard ok, "branches follow the rules out of" count(branch), count(branch)
+choice f
+each branch where f = All or kind = f as b empty "No branches yet. Add the one you are working on."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      text b.name bold
+      text b.kind faint
+    if b.lower and b.prefixed
+      text "OK" color good bold
+    else
+      text "Fix name" color warn bold
+===
+@rich domain=d5_bounty_notes topic=bug_bounty_notes style=detailed
+notes for my bug bounty hunting: target, what I found, severity (low, medium, high, critical), points or payout in points, and a status from draft to accepted or rejected. show total points accepted and how many are waiting for triage, and a bar for points by severity
+needs: add a finding with target, severity and points | status draft to rejected | total accepted points | count waiting for triage | bars of points by severity
+---
+app "Bounty notes" shield ink dark
+table bounty target text, bug text "What I found", sev pick Low|Medium|High|Critical = Medium, pts num 0..5000 = 0 "Points", status pick Draft|Submitted|Triaged|Accepted|Duplicate|Rejected = Draft
+topbar bounty, "New finding"
+row gap 2
+  statcard sum(bounty.pts where status = Accepted), "points accepted"
+  statcard count(bounty where status = Submitted or status = Triaged), "waiting on triage"
+section "Points by severity", "accepted only"
+  each options bounty.sev as s
+    stack gap 0
+      row
+        text s grow
+        text sum(bounty.pts where sev = s and status = Accepted) bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * sum(bounty.pts where sev = s and status = Accepted) / max(sum(bounty.pts where status = Accepted), 1), 3 fill accent radius 1
+each bounty sort at desc as b empty "No findings yet. Write down the first odd behaviour you spot."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      text b.target bold
+      text b.bug faint
+      text b.sev "·" b.status faint
+    if b.status = Draft
+      button "Submit" tap set b.status = Submitted
+===
+@rich domain=d5_ctf_notes topic=ctf_challenge_notes style=custom_ui
+ctf notebook for our team. each challenge has a name, a category (web, crypto, pwn, rev, forensics, misc), the points and a solved tick plus a notes box. show points earned versus available for every category
+needs: add a challenge with category and points | solved tick | notes box per challenge | points earned vs available per category
+---
+app "CTF notes" flag plum dark
+table chal name text, cat pick Web|Crypto|Pwn|Rev|Forensics|Misc = Web, pts num 0..1000 = 100, solved bool, note long?
+topbar chal, "Add challenge"
+statcard sum(chal.pts where solved = yes), "points earned of" sum(chal.pts), sum(chal.pts)
+section "By category"
+  each options chal.cat as k
+    stack gap 0
+      row
+        text k grow
+        text sum(chal.pts where cat = k and solved = yes) "/" sum(chal.pts where cat = k) faint
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * sum(chal.pts where cat = k and solved = yes) / max(sum(chal.pts where cat = k), 1), 3 fill accent radius 1
+each chal sort solved as c empty "No challenges yet. Add the first one from the board."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.solved
+    stack grow gap 0
+      text c.name bold
+      text c.cat "·" c.pts "pts" faint
+      if c.note != ""
+        text c.note faint
+===
+@rich domain=d5_kata_streak topic=code_kata_streak style=multi_feature
+daily code kata streak: log the kata name, language and minutes I spent. big number for my streak and my best streak, a grid of the last 4 weeks showing days I practised, and a list newest first
+needs: log a kata with name, language and minutes | current and best streak | grid of the last 28 days | list newest first
+---
+app "Kata streak" flame red
+table kata name text, lang pick Python|JS|Go|Rust|Other = Python, mins num 1..240 = 20
+topbar kata, "Log kata"
+row gap 2
+  statcard streak(kata), "day streak"
+  statcard best(kata), "best streak"
+section "Last 4 weeks", sum(kata.mins last 28 days) "minutes"
+  daygrid last 28 days, count(kata on it), 2
+list kata, "No katas yet. Do one small one today and log it."
+===
+@rich domain=d5_typing_practice topic=typing_speed_practice style=detailed
+typing practice log: after each run I put in words per minute, accuracy and which lesson (home row, numbers, symbols, code). show my best wpm, a line chart of speed over time, and progress against a target of 80 wpm that I can change
+needs: log a run with wpm, accuracy and lesson | best wpm | line chart of speed | progress toward adjustable target wpm
+---
+app "Typing" pen orange
+table run wpm num 5..250, acc num 50..100 = 95 "Accuracy" unit "%", lesson pick Home_row|Numbers|Symbols|Code = Code
+setting target num = 80 "Target wpm"
+let best_wpm = max(run.wpm)
+topbar run, "Log a run"
+goal best_wpm, target, "best speed so far", "wpm"
+if count(run) > 1
+  section "Speed over time", "wpm per run"
+    trend run, it.wpm
+else
+  text "Log two runs to see your speed line." faint
+list run, "No runs yet. Type for five minutes and log the result."
+===
+@rich domain=d5_tech_book_club topic=tech_book_club style=multi_feature
+tech book club at work. keep the books we picked with author and the meeting date, mark each as queued, reading or done, and let me add takeaways per book with who said it. show how many books are done and days until the next meeting
+needs: add a book with author and meeting date | status queued, reading or done | takeaways per book with who said it | books done count | days to next meeting
+---
+app "Book club" book yellow
+table book title text, author text?, meet date "Meeting date", status pick Queued|Reading|Done = Queued
+table take book ref book, who text, point text "Takeaway"
+topbar book, "Add book"
+row gap 2
+  statcard count(book where status = Done), "books finished"
+  statcard if(count(book where meet >= today and status != Done) = 0, 0, first(book where meet >= today and status != Done sort meet).meet - today), "days to next meeting"
+form take, "Add takeaway"
+each book sort meet as b empty "No books yet. Add the one the team voted for."
+  stack card gap 1 tap edit b swipe remove b
+    row gap 1
+      text b.title bold grow
+      text b.status faint
+    text b.author "· meeting" b.meet faint
+    each b.take as t
+      text t.who ":" t.point
+    if count(b.take) = 0
+      text "No takeaways yet." faint
+===
+@rich domain=d5_subscription_audit topic=startup_subscription_audit style=detailed
+audit of every tool our startup pays for: tool name, cost, monthly or yearly, seats bought and seats actually used, and my verdict keep, review or cancel. show the monthly total, what we waste on unused seats, and bars of cost per tool
+needs: add a tool with cost, billing cycle and seats | seats bought vs used | verdict keep, review or cancel | monthly total and wasted spend | bars of monthly cost per tool
+---
+app "Tool audit" tag green
+table sub tool text, cost money, cycle pick Monthly|Yearly = Monthly, seats num 1..500 = 1, active num 0..500 = 1 "Seats used", verdict pick Keep|Review|Cancel = Review
+let monthly(s sub) = if(s.cycle = Yearly, s.cost / 12, s.cost)
+let waste(s sub) = monthly(s) * max(s.seats - s.active, 0) / s.seats
+topbar sub, "Add tool"
+row gap 2
+  statcard sum(sub, monthly(it)), "paid per month"
+  statcard sum(sub, waste(it)), "wasted on unused seats"
+if count(sub) > 0
+  section "Monthly cost per tool"
+    bars sub, monthly(it), it.tool
+each sub sort waste(it) desc as s empty "No tools yet. List the subscriptions on the company card."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      text s.tool bold
+      text s.active "of" s.seats "seats used" faint
+    stack gap 0 align end
+      text monthly(s) bold
+      text s.verdict faint color if(s.verdict = Cancel, bad, muted)
+===
+@rich domain=d5_client_demo_prep topic=client_demo_checklist style=short
+client demo checklist
+needs: add a checklist item with an area | tick items done | progress toward ready | days left to the demo date | filter by area
+---
+app "Demo prep" star teal
+table dstep item text, area pick Data|Environment|Slides|Backup_plan|Access = Data, done bool
+setting demo date = today "Demo date"
+state f pick All|Data|Environment|Slides|Backup_plan|Access = All
+topbar dstep, "Add item"
+statcard count(dstep where done = yes), "items ready of" count(dstep), count(dstep)
+if demo >= today
+  text "Demo in" plural(demo - today, "day") head
+choice f
+each dstep where f = All or area = f sort done as s empty "Nothing on the list. Add the first thing that could go wrong."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.done
+    stack grow gap 0
+      text s.item bold color if(s.done, muted, ink)
+      text s.area faint
+===
+@rich domain=d5_freelance_invoices topic=freelance_invoice_tracker style=detailed
+invoices for my freelance dev work: client, amount, issue date, due date, and a paid tick. show what is still outstanding, how many are overdue, and a button to mark an invoice paid. overdue ones in red
+needs: add an invoice with client, amount, issue and due date | total outstanding | count overdue | button marks invoice paid | overdue shown in red
+---
+app "Invoices" money blue
+table inv client text, amount money, issued date = today, due date, paid bool
+let late = count(inv where paid = no and due < today)
+topbar inv, "New invoice"
+row gap 2
+  statcard sum(inv.amount where paid = no), "still outstanding"
+  statcard late, "overdue"
+section "Waiting for payment"
+  each inv where paid = no sort due as i empty "Nothing outstanding. Everyone has paid."
+    row gap 2 tap edit i swipe remove i
+      stack grow gap 0
+        text i.client bold
+        if i.due < today
+          text "Overdue by" plural(today - i.due, "day") color bad
+        else
+          text "Due" i.due faint
+      text i.amount bold
+      button "Paid" tap set i.paid = yes
+text "Paid this month" faint
+text sum(inv.amount where paid = yes and issued >= today - 30) head
+===
+@rich domain=d5_dev_expenses topic=freelancer_expense_log style=multi_feature
+expenses for my one-person dev business: item, category (hosting, hardware, software, courses, coworking), amount and whether it is tax deductible. show the total this year, the deductible part, and comparison bars per category
+needs: add an expense with category, amount and deductible tick | total this year | deductible total | bars per category
+---
+app "Dev expenses" wallet purple
+table exp item text, cat pick Hosting|Hardware|Software|Courses|Coworking = Software, amt money, deduct bool "Tax deductible"
+topbar exp, "Add expense"
+row gap 2
+  statcard sum(exp.amt year), "spent this year"
+  statcard sum(exp.amt year where deduct = yes), "deductible"
+if count(exp) > 0
+  section "By category"
+    share exp year by cat, sum(it.amt), it.key
+list exp by day, "No expenses yet. Add the hosting bill first."
+===
+@rich domain=d5_hackathon_judging topic=hackathon_score_sheet style=custom_ui
+judging sheet for a hackathon: teams on one side, and every judge enters scores 1 to 10 for idea, tech, design and pitch for a team. show each team's total across all judges in a ranked list with bars so I can announce the winner
+needs: add teams | judge enters idea, tech, design and pitch scores 1 to 10 | total per team across judges | ranked list with bars | winner on top
+---
+app "Judge sheet" trophy pink
+table team name text
+table score team ref team, judge text, idea num 1..10 = 5, tech num 1..10 = 5, design num 1..10 = 5, pitch num 1..10 = 5
+let total(t team) = sum(t.score.idea) + sum(t.score.tech) + sum(t.score.design) + sum(t.score.pitch)
+topbar team, "Add team"
+let lead = first(team sort total(it) desc).name
+if count(team) > 0 and count(score) > 0
+  stack card gap 1 fill soft
+    text "Leading" faint
+    text lead head
+form score, "Save scores"
+section "Ranking", plural(count(score), "score sheet")
+  each team sort total(it) desc as t empty "No teams yet. Add the teams before the judges start."
+    stack gap 0 tap edit t swipe remove t
+      row
+        text index + 1 "." t.name bold grow
+        text total(t) bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * total(t) / max(max(team, total(it)), 1), 3 fill accent radius 1
+===
+@rich domain=d5_meetup_checkin topic=meetup_attendee_checkin style=multi_feature
+door list for our monthly dev meetup. names with RSVP yes or no, a button to check people in, a search box for a name, walk-ins I can add on the spot, and how many have arrived out of those who RSVPed
+needs: add an attendee with RSVP | button checks a person in | search box by name | walk-ins added on the spot | arrived count vs RSVPs
+---
+app "Check-in" users grey
+table att name text, rsvp bool, here bool "Arrived"
+state q text = ""
+topbar att, "Add walk-in"
+statcard count(att where here = yes), "arrived out of" count(att where rsvp = yes) "RSVPs", count(att where rsvp = yes)
+field q "Find a name"
+each att where has(name, q) sort here as a empty "Nobody on the list yet. Add the first attendee."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      text a.name bold
+      if a.rsvp
+        text "RSVP yes" faint
+      else
+        text "Walk-in" faint
+    if a.here
+      text "Here" color good bold
+    else
+      button "Check in" fill accent tap set a.here = yes
+===
+@rich domain=d5_workshop_feedback topic=workshop_feedback_tally style=detailed
+we ran a two hour workshop and collected paper feedback. I want to type each sheet as ratings 1 to 5 for content, pace and usefulness, plus an optional comment, and see the average of each and a tally of how many gave 1 through 5 for content
+needs: enter a sheet with content, pace and usefulness ratings | optional comment | average of each rating | tally of 1 to 5 for content
+---
+app "Workshop" smile ocean
+table fb content num 1..5 = 4, pace num 1..5 = 4, useful num 1..5 = 4 "Usefulness", comment text?
+topbar fb, "Add a sheet"
+row gap 2
+  statcard round(avg(fb.content) * 10) / 10, "content"
+  statcard round(avg(fb.pace) * 10) / 10, "pace"
+  statcard round(avg(fb.useful) * 10) / 10, "useful"
+section "Content ratings", plural(count(fb), "sheet")
+  each 1..5 as r
+    stack gap 0
+      row
+        text r "stars" grow
+        text count(fb where content = r) bold
+      draw 100, 3
+        rect 0, 0, 100, 3 fill soft radius 1
+        rect 0, 0, 100 * count(fb where content = r) / max(count(fb), 1), 3 fill accent radius 1
+each fb where comment != "" as f empty "No comments yet. They show up here when a sheet has one."
+  row card tap edit f swipe remove f
+    text f.comment
+===
+@rich domain=d5_project_grading topic=student_project_grading style=detailed
+I grade final projects for my programming class using a rubric: code quality out of 40, tests out of 30, documentation out of 20, demo out of 10. enter a student's scores, show the total and a letter grade, a bar per student and the class average
+needs: enter a student's rubric scores | total out of 100 | letter grade | bar per student | class average
+---
+app "Project grades" school mint
+table sub student text, code num 0..40, tests num 0..30, docs num 0..20 "Documentation", demo num 0..10
+let total(s sub) = s.code + s.tests + s.docs + s.demo
+let letter(s sub) = if(total(s) >= 90, "A", if(total(s) >= 80, "B", if(total(s) >= 70, "C", if(total(s) >= 60, "D", "F"))))
+topbar sub, "Grade a student"
+statcard round(sum(sub, total(it)) / max(count(sub), 1)), "class average out of 100", 100
+if count(sub) > 0
+  section "Totals"
+    bars sub, total(it), it.student
+each sub sort total(it) desc as s empty "No projects graded yet. Enter the first rubric."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      text s.student bold
+      text "Code" s.code "· tests" s.tests "· docs" s.docs "· demo" s.demo faint
+    stack gap 0 align end
+      text total(s) bold
+      text letter(s) color accent
+===
+@rich domain=d5_tool_requests topic=internal_tool_requests style=multi_feature
+queue of internal tool requests from other teams. title, which team asked (sales, support, ops, HR, finance), impact low, medium or high, and status from open to shipped. people can add votes with a +1 button and the list is sorted by votes, with a filter on status
+needs: add a request with team and impact | status open to shipped | +1 vote button | sorted by votes | filter by status
+---
+app "Tool requests" tool slate
+table req title text, team pick Sales|Support|Ops|HR|Finance = Ops, impact pick Low|Medium|High = Medium, votes num 0.. = 0, status pick Open|Planned|Building|Shipped = Open
+state f pick All|Open|Planned|Building|Shipped = All
+topbar req, "New request"
+choice f
+each req where f = All or status = f sort votes desc as r empty "No requests in this view. Add the first idea a team asked for."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      text r.title bold
+      text r.team "·" r.impact "impact ·" r.status faint
+    text r.votes head
+    button "+1" tap set r.votes = r.votes + 1
+===
+@rich domain=d5_team_kudos topic=small_team_kudos style=custom_ui
+kudos wall for our team of eight. who gave it, who got it, a short message and the value it shows (teamwork, quality, ownership, helpful). show who got the most kudos this month as bars and the latest messages
+needs: add a kudo with giver, receiver, message and value | kudos this month per person as bars | latest messages list | count this month
+---
+app "Kudos" heart ink
+table kudo to text "Who got it", from text, msg text "Message", size num 1..3 = 1 "Size of thanks (1 to 3)", value pick Teamwork|Quality|Ownership|Helpful = Helpful
+topbar kudo, "Give kudos"
+statcard count(kudo month), "kudos this month"
+section "Top this month"
+  each kudo month by to sort size desc top 5 empty "No kudos this month yet. Say thanks to someone."
+    stack gap 0
+      row
+        text it.key grow bold
+        text sum(it.size)
+      draw 100, 3
+        rect 0, 0, 100 * sum(it.size) / max(sum(kudo.size month), 1), 3 fill accent radius 1
+each kudo top 6 as k
+  stack card gap 0 tap edit k swipe remove k
+    text k.msg
+    text k.from "to" k.to "·" k.value faint
+===
+@rich domain=d5_team_okrs topic=team_okr_tracker style=detailed
+our team OKRs for the quarter: an objective with several key results, each with a start value, current value and target. show progress per key result, an overall progress for each objective, and a button to bump the current value by one
+needs: add an objective | add key results with start, current and target values | progress per key result | overall progress per objective | button adds one to current
+---
+app "OKRs" target plum
+table obj title text
+table kr obj ref obj, what text "Key result", start num = 0, cur num = 0 "Current", target num
+let prog(k kr) = clamp((k.cur - k.start) / (k.target - k.start), 0, 1)
+topbar obj, "Add objective"
+form kr, "Add key result"
+each obj as o empty "No objectives yet. Add the one thing the team wants this quarter."
+  stack card gap 2 tap edit o swipe remove o
+    row
+      text o.title head grow
+      text round(sum(o.kr, prog(it)) * 100 / max(count(o.kr), 1)) "%" bold
+    each o.kr as k
+      stack gap 0
+        row gap 1
+          text k.what grow
+          text k.cur "of" k.target faint
+          button "+1" tap set k.cur = k.cur + 1
+        draw 100, 3
+          rect 0, 0, 100, 3 fill soft radius 1
+          rect 0, 0, 100 * prog(k), 3 fill accent radius 1
+===
+@rich domain=d5_release_train topic=release_train_calendar style=multi_feature
+release train calendar: each release has a name, ship date, which train (weekly, biweekly, monthly) and a scope note. I want a grid of the next 4 weeks marking ship days, the name and days until the next release, and the full list sorted by date
+needs: add a release with name, date, train and scope | grid of the next 28 days marking ship days | next release name and days left | list sorted by date
+---
+app "Release train" bus red
+table rel name text, ship date, train pick Weekly|Biweekly|Monthly = Biweekly, scope text?
+let nextr = count(rel where ship >= today)
+let nxt = first(rel where ship >= today sort ship).name
+let nxtday = first(rel where ship >= today sort ship).ship - today
+topbar rel, "Add release"
+if nextr > 0
+  stack card gap 0
+    text "Next release" faint
+    text nxt head
+    text "ships in" plural(nxtday, "day") color accent
+section "Next 4 weeks"
+  grid 7 gap 1
+    each days last 28 days as d
+      stack gap 0 align center
+        text monthday(today + index) tiny color muted
+        box height 24 radius 6 fill if(count(rel where ship = today + index) > 0, accent, soft)
+each rel sort ship as r empty "No releases planned. Add the next train departure."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      text r.name bold
+      text r.scope faint
+    stack gap 0 align end
+      text r.ship
+      text r.train faint
+===
+@rich domain=d5_outage_comms topic=outage_communication_log style=detailed
+when production goes down I post updates in several places. log each update with the channel (status page, email, slack, customer call), the audience (internal, customers, execs) and the message. show how long since the last update, and warn if it is past my 30 minute update promise
+needs: log an update with channel, audience and message | time since last update | warning past 30 minutes | count of updates today
+---
+app "Outage comms" bell orange dark
+table upd channel pick Status_page|Email|Slack|Customer_call = Status_page, audience pick Internal|Customers|Execs = Customers, msg text "Message"
+setting cadence dur = 30m "Update every"
+topbar upd, "Log update"
+if count(upd today) = 0
+  stack card gap 1
+    text "No updates sent today" head
+    text "When an incident starts, log the first message so the clock begins." faint
+else
+  stack card gap 1
+    text "Since the last update" faint
+    text now - last(upd.at) big color if(now - last(upd.at) > cadence, bad, ink)
+    if now - last(upd.at) > cadence
+      text "Past your promised cadence. Send another update." color bad
+    text plural(count(upd today), "update") "sent today" faint
+list upd by day, "No updates logged."
+===
+@rich domain=d5_license_check topic=license_compliance_list style=multi_feature
+list of open source packages we ship with their license. licence options MIT, Apache 2, BSD, GPL, AGPL, Unknown. status approved, review or blocked, a filter by status, count of blocked and how many packages have a risky license
+needs: add a package with license and status | status approved, review or blocked | filter by status | count blocked | count risky licenses
+---
+app "Licenses" lock yellow
+table pkg name text, version text?, lic pick MIT|Apache_2|BSD|GPL|AGPL|Unknown = MIT "License", status pick Approved|Review|Blocked = Review
+state f pick All|Approved|Review|Blocked = All
+let risky = count(pkg where lic = GPL or lic = AGPL or lic = Unknown)
+topbar pkg, "Add package"
+row gap 2
+  statcard count(pkg where status = Blocked), "blocked"
+  statcard risky, "with a risky license"
+choice f
+each pkg where f = All or status = f sort name as p empty "No packages here. Add what your build pulls in."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      text p.name p.version bold
+      text p.lic faint
+    text p.status color if(p.status = Blocked, bad, if(p.status = Approved, good, warn)) bold
+===
+@rich domain=d5_backup_rotation topic=data_backup_rotation_log style=detailed
+log of our backups: which system, kind (daily, weekly, monthly), size in GB and whether I verified a restore. show for each kind when the last one ran and whether it is overdue (daily after 1 day, weekly after 7, monthly after 31), and how many are verified
+needs: log a backup with system, kind, size and verified tick | last run per kind | overdue per kind | verified count
+---
+app "Backups" box green
+table bk sys text "System", kind pick Daily|Weekly|Monthly = Daily, gb num 0.. unit "GB", ok bool "Restore verified"
+let dd = due(bk where kind = Daily, 1)
+let wd = due(bk where kind = Weekly, 7)
+let md = due(bk where kind = Monthly, 31)
+topbar bk, "Log backup"
+row gap 2
+  stack card gap 0 grow
+    text "Daily" faint
+    text if(dd, "Overdue", "On time") bold color if(dd, bad, good)
+    text plural(since(bk where kind = Daily), "day") "ago" faint
+  stack card gap 0 grow
+    text "Weekly" faint
+    text if(wd, "Overdue", "On time") bold color if(wd, bad, good)
+    text plural(since(bk where kind = Weekly), "day") "ago" faint
+  stack card gap 0 grow
+    text "Monthly" faint
+    text if(md, "Overdue", "On time") bold color if(md, bad, good)
+    text plural(since(bk where kind = Monthly), "day") "ago" faint
+statcard count(bk where ok = yes), "restores verified of" count(bk), count(bk)
+list bk by day, "No backups logged. Log tonight's run."
+===
+@rich domain=d5_severity_calc topic=incident_severity_calculator style=custom_ui
+quick severity calculator for incidents: pick how many users are hit (few, some, most, all), tick whether the service is fully down, whether data is lost, whether there is a workaround, and show SEV1 to SEV4. let me save the result with a title to a log
+needs: pick users affected | ticks for down, data loss and workaround | computed severity SEV1 to SEV4 | save result with a title to a log
+---
+app "Severity" bolt blue
+table inc title text, sev text
+state users pick Few|Some|Most|All = Some
+state down bool
+state data bool
+state work bool
+state ttl text = ""
+let u = if(users = All, 3, if(users = Most, 2, if(users = Some, 1, 0)))
+let score = u + if(down, 2, 0) + if(data, 3, 0) - if(work, 1, 0)
+let sev = if(score >= 6, "SEV1", if(score >= 4, "SEV2", if(score >= 2, "SEV3", "SEV4")))
+stack card gap 2 align center
+  text "Severity" faint
+  text sev huge color if(score >= 4, bad, if(score >= 2, warn, good))
+  text "score" score faint
+text "Users affected" head
+choice users
+row gap 2
+  toggle down
+  text "Fully down"
+row gap 2
+  toggle data
+  text "Data lost"
+row gap 2
+  toggle work
+  text "Workaround exists"
+field ttl "Incident title"
+button "Save to log" fill accent tap add inc title = ttl, sev = sev then set ttl = ""
+each inc as i empty "No incidents saved yet."
+  row card gap 2 tap edit i swipe remove i
+    text i.title grow
+    text i.sev bold
+===
+@rich domain=d5_story_velocity topic=story_point_velocity_chart style=detailed
+velocity chart for my squad. every sprint I enter the name, points planned and points done. show a bar chart of points done per sprint, the average velocity, and what percent of planned points we finish overall
+needs: add a sprint with planned and done points | bar chart of done points per sprint | average velocity | percent of planned points finished
+---
+app "Velocity" chart teal
+table sprint name text, planned num 0.., done num 0..
+topbar sprint, "Add sprint"
+row gap 2
+  statcard round(avg(sprint.done)), "average velocity"
+  statcard round(sum(sprint.done) * 100 / max(sum(sprint.planned), 1)), "percent of planned done"
+if count(sprint) > 0
+  section "Points done per sprint"
+    bars sprint, it.done, it.name
+else
+  text "No sprints yet. Add the last one you closed." faint
+list sprint, "No sprints yet."

@@ -1,0 +1,250 @@
+@rich domain=c6_metro_vs_taxi_commute topic=metro_versus_taxi_commute style=detailed
+to office i can take the metro with a walk or a ride-hailing car. metro costs a fare and takes some minutes door to door, the car costs more but is faster. give me the monthly cost of both, the hours the car saves me and what each saved hour costs
+needs: metro fare and minutes | car fare and minutes | working days per month | monthly cost of both | cost of each hour saved
+---
+app "Metro or Taxi" bus ocean
+state mfare money = 80
+state mmin num = 55
+state cfare money = 650
+state cmin num = 30
+state days num = 22
+let mcost = mfare * 2 * days
+let ccost = cfare * 2 * days
+let saved_h = (mmin - cmin) * 2 * days / 60
+section "Metro"
+  field mfare "Fare one way"
+  field mmin "Minutes door to door"
+section "Car"
+  field cfare "Fare one way"
+  field cmin "Minutes door to door"
+"Working days a month" days faint
+slider days 1..31
+row gap 2
+  statcard round(mcost), "metro a month"
+  statcard round(ccost), "car a month"
+if saved_h > 0
+  "The car saves" round(saved_h * 10) / 10 "hours a month, at" round((ccost - mcost) / saved_h) "per hour saved." bold
+else
+  "The car is not faster. Take the metro." bold color good
+===
+@rich domain=c6_world_time_board topic=world_time_board_four_cities style=custom_ui
+my team is spread over london, dubai, new york and sydney and i am in karachi. slide the hour on my clock and show a board with the time in each city, and mark the ones where it is the working day with a green dot
+needs: my hour slider | time in london dubai new york and sydney | working hours marked | next day note for each city
+---
+app "Time Board" clock mint
+state hr num = 15
+let hh(h num) = join(if(h % 24 < 10, "0", ""), h % 24, ":00")
+let ok(h num) = h % 24 >= 9 and h % 24 < 18
+let open_now = if(ok(hr - 1), 1, 0) + if(ok(hr - 5), 1, 0) + if(ok(hr - 10), 1, 0) + if(ok(hr + 6), 1, 0)
+"Karachi time" hh(hr) big
+slider hr 0..23
+section "Team cities"
+  row
+    "Dubai" grow
+    hh(hr - 1) bold
+    if(ok(hr - 1), "open", "closed") faint
+  row
+    "London" grow
+    hh(hr - 5) bold
+    if(ok(hr - 5), "open", "closed") faint
+  row
+    "New York" grow
+    hh(hr - 10) bold
+    if(ok(hr - 10), "open", "closed") faint
+  row
+    "Sydney" grow
+    hh(hr + 6) bold
+    if(ok(hr + 6), "open", "closed") faint
+open_now "of 4 cities are in working hours now." faint
+===
+@rich domain=c6_timesheet_invoice_month topic=freelance_timesheet_invoice style=multi_feature
+i bill a client by the hour. each time i sit down i log the task and hours. show hours this month, the invoice at my rate with a tax withholding percent taken off, and a goal bar for the hours the client booked
+needs: log a task with hours | hourly rate and withholding percent | hours this month against booked hours | invoice amount after withholding | list of tasks this month
+---
+app "Timesheet" timer purple
+table work task text, hrs num 0.25..24
+setting rate money = 2000 "Hourly rate"
+setting wh num = 10 "Withholding tax (%)"
+setting booked num = 80 "Hours booked this month"
+let hours = sum(work.hrs month)
+let gross = hours * rate
+topbar work, "Log hours"
+goal hours, booked, "hours logged this month", "h"
+row gap 2
+  statcard round(gross), "invoice before tax"
+  statcard round(gross * (100 - wh) / 100), "you receive"
+section "This month's tasks"
+  each work month as w empty "No hours logged this month."
+    row card tap edit w swipe remove w
+      w.task grow
+      w.hrs "h" bold
+===
+@rich domain=c6_carpool_fuel_split topic=carpool_fuel_cost_split style=multi_feature
+four of us carpool to the factory in my car. distance one way, the car does so many km per litre, petrol price and working days are known. show cost per trip, what each rider pays per day and per month, and what the driver pays alone otherwise
+needs: one way distance and car mileage | petrol price and working days | cost per trip | each rider's share per day and month | what driving alone costs
+---
+app "Carpool Split" car slate dark
+state km num = 18
+state mileage num = 11
+state price money = 270
+state days num = 24
+state riders num = 4
+let trip = km * 2 / max(mileage, 0.1) * price
+section "Route"
+  field km "Distance one way (km)"
+  field mileage "Car km per litre"
+  field price "Petrol per litre"
+  field days "Working days a month"
+"People in the car" riders faint
+slider riders 1..6
+row gap 2
+  statcard round(trip / max(riders, 1)), "each, per day"
+  statcard round(trip * days / max(riders, 1)), "each, per month"
+"Driving alone costs" round(trip * days) "a month." faint
+"Driver saves" round(trip * days * (riders - 1) / max(riders, 1)) bold color good
+===
+@rich domain=c6_roundup_saver topic=purchase_round_up_savings style=custom_ui
+my bank does round-ups, so i want to copy it by hand. every time i buy something i add it, the app rounds up to the next hundred and shows the spare change, and a running total of what i could have saved
+needs: add a purchase with amount | round up step setting | spare change for each purchase | total spare change saved | count of purchases
+---
+app "Round Up Saver" coin yellow
+table buy what text, amount money
+setting step num = 100 "Round up to the next"
+let spare(b buy) = floor((b.amount + step - 1) / max(step, 1)) * step - b.amount
+topbar buy, "Add purchase"
+statcard round(sum(buy, spare(it))), "saved by rounding up"
+"From" count(buy) "purchases" faint
+section "Purchases"
+  each buy top 10 as b empty "No purchases yet. Add what you just bought."
+    row card tap edit b swipe remove b
+      stack grow gap 0
+        b.what
+        b.amount faint
+      "+" spare(b) bold color good
+===
+@rich domain=c6_eidi_envelopes topic=eid_money_envelopes_by_age style=detailed
+every eid the kids and cousins come for eidi. i have children in three age groups and give a different amount to each group. type how many in each and the amount, set my total budget and see the cost per group, the whole eidi and if i am over
+needs: number of children in three age groups | amount for each group | total eidi | cost per group | over or under the budget
+---
+app "Eidi Envelopes" gift orange
+state n1 num = 6
+state a1 money = 200
+state n2 num = 5
+state a2 money = 500
+state n3 num = 3
+state a3 money = 1000
+state budget money = 8000
+let total = n1 * a1 + n2 * a2 + n3 * a3
+section "Little ones (up to 8)"
+  field n1 "How many"
+  field a1 "Each gets"
+section "Middle (9 to 14)"
+  field n2 "How many"
+  field a2 "Each gets"
+section "Teens"
+  field n3 "How many"
+  field a3 "Each gets"
+field budget "My eidi budget"
+bars [1, 2, 3], if(it = 1, n1 * a1, if(it = 2, n2 * a2, n3 * a3)), if(it = 1, "Little", if(it = 2, "Middle", "Teens"))
+statcard round(total), "eidi in total", budget
+if total > budget
+  "Over by" round(total - budget) bold color bad
+else
+  "Within budget, " round(budget - total) "left." bold color good
+===
+@rich domain=c6_tuition_absent_credit topic=tuition_fee_absence_credit style=multi_feature
+home tutor charges monthly fee for a set number of lessons. when my child misses a lesson with notice the tutor credits it, without notice there is no credit. type the fee, lessons, and both kinds of absences and see the fee per lesson, the credit and what i pay
+needs: monthly fee and lessons per month | absences with notice | absences without notice | fee per lesson and credit | amount to pay
+---
+app "Tuition Fee" pencil teal
+state fee money = 8000
+state lessons num = 12
+state noticed num = 2
+state missed num = 1
+let per = fee / max(lessons, 1)
+let credit = per * min(noticed, lessons)
+section "Fee"
+  field fee "Monthly fee"
+  field lessons "Lessons in the month"
+section "Absences"
+  "With notice" noticed faint
+  slider noticed 0..12
+  "Without notice" missed faint
+  slider missed 0..12
+row gap 2
+  statcard round(per), "per lesson"
+  statcard round(credit), "credit for notice"
+statcard round(fee - credit), "to pay this month"
+if missed > 0
+  missed "lessons missed without notice are still charged." faint
+===
+@rich domain=c6_water_refill_vs_filter topic=bottled_water_vs_home_filter style=detailed
+we buy a 19 litre water bottle every few days. a home filter would cost a one-time amount and some for new cartridges each year. type bottles per week, price per bottle and the filter costs, then show bottled cost per month and year and when the filter pays back
+needs: bottles per week and price per bottle | filter price | cartridge cost per year | cost per month and year of bottled water | months until the filter pays back
+---
+app "Water Choice" drop blue
+state bottles num = 2
+state price money = 180
+state filter money = 18000
+state cart money = 3000
+let month = bottles * price * 4.3
+let saving = month - cart / 12
+section "Bottled water"
+  "Bottles a week" bottles faint
+  slider bottles 1..14
+  field price "Price per bottle"
+section "Home filter"
+  field filter "Filter price"
+  field cart "Cartridges each year"
+row gap 2
+  statcard round(month), "bottled, per month"
+  statcard round(month * 12), "bottled, per year"
+if saving > 0
+  "Filter pays back in" round(filter / saving * 10) / 10 "months" big color good
+else
+  "The filter never pays back at this use." bold color warn
+===
+@rich domain=c6_late_arrival_deduction topic=late_arrival_salary_deduction style=custom_ui
+office rule says every third late arrival cuts one day of pay. i type my salary and how many times i was late this month. show how many days are cut, what a day is worth, the deduction and my salary in hand
+needs: monthly salary | number of late arrivals | days cut by the three-lates rule | value of one day | salary after deduction
+---
+app "Late Cut" alarm red
+state salary money = 60000
+state lates num = 7
+let cut = floor(lates / 3)
+let day = salary / 30
+field salary "Monthly salary"
+"Late arrivals" lates faint
+slider lates 0..20
+row gap 2
+  statcard cut, "days cut"
+  statcard round(day), "one day is worth"
+statcard round(salary - cut * day), "salary in hand"
+if lates % 3 = 2
+  "One more late and you lose another day." color warn bold
+if cut = 0
+  "No pay cut this month. Keep it up." color good
+===
+@rich domain=c6_recharge_validity_date topic=prepaid_pack_validity_expiry style=custom_ui
+i buy a monthly prepaid pack and always forget when it ends. type the day i bought it, how many days it lasts and its price. show the expiry date, days left today, a bar of days used and what each day costs
+needs: purchase date and validity days | price | expiry date | days left | cost per day
+---
+app "Pack Expiry" phone green
+state bought date = today - 12
+state valid num = 30
+state price money = 1200
+let expiry = bought + valid
+let left = max(expiry - today, 0)
+field bought "Bought on"
+"Valid for" valid "days" faint
+slider valid 1..365
+field price "Price"
+"Expires on" expiry big
+goal min(valid - left, valid), valid, "days used", "d"
+row gap 2
+  statcard left, "days left"
+  statcard round(price / max(valid, 1) * 100) / 100, "per day"
+if left = 0
+  "This pack has expired. Time to buy again." bold color bad
+if left > 0 and left <= 3
+  "Ends soon. Renew in" plural(left, "day") faint color warn

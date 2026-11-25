@@ -1,0 +1,561 @@
+@rich domain=r11_birthdays topic=family_birthday_reminders style=short
+birthdays
+needs: add a person with their birth date | days left until each birthday | age they are turning | birthdays this month count | sorted by who is next
+---
+app "Birthdays" gift red
+table person who text, born date
+let nextb(d date) = if(addmonths(d, 12 * (year(today) - year(d))) >= today, addmonths(d, 12 * (year(today) - year(d))), addmonths(d, 12 * (year(today) - year(d) + 1)))
+topbar person, "Add birthday"
+statcard count(person, month(it.born) = month(today)), "birthdays this month", count(person)
+each person sort nextb(it.born) - today as p empty "No birthdays yet. Add the people you never want to forget."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.who bold
+      "Turning" year(nextb(p.born)) - year(p.born) "on" nextb(p.born) faint
+    if nextb(p.born) = today
+      "Today" bold color accent
+    else
+      plural(nextb(p.born) - today, "day") bold
+===
+@rich domain=r11_baby_vaccines topic=baby_vaccine_schedule style=short
+baby vaccines
+needs: set the baby's birth date | add a vaccine with the age in months | each vaccine shows its due date | tick when given | overdue vaccines in red
+---
+app "Baby Vaccines" shield green
+table shot name text, months num 0..72 "Age in months", given bool
+setting born date = today "Baby's birth date"
+topbar shot, "Add vaccine"
+row gap 2
+  statcard count(shot where given = yes), "vaccines given", count(shot)
+  statcard count(shot where given = no and addmonths(born, months) < today), "overdue"
+each shot sort months as s empty "No vaccines yet. Add each one with the age in months."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.name bold
+      if s.given
+        "Given" color good
+      else
+        "Due" addmonths(born, s.months) color if(addmonths(born, s.months) < today, bad, muted)
+    toggle s.given
+===
+@rich domain=r11_baby_naps topic=baby_nap_minutes style=short
+baby naps
+needs: one-tap nap lengths | total sleep from naps today | longest nap | bar chart of 7 days | list of today's naps
+---
+app "Baby Naps" moon yellow dark
+table nap mins num 5..300 = 30 unit "min"
+statcard round(sum(nap.mins today) / 6) / 10, "hours of naps today"
+quick nap, mins, [20, 45, 90, 120]
+row gap 2
+  statcard count(nap today), "naps today"
+  statcard max(nap.mins last 7 days), "longest nap this week (min)"
+section "Last 7 days", "minutes of naps"
+  daybars last 7 days, sum(nap.mins on it)
+each nap today sort at desc as n empty "No naps yet today. Tap the length when baby wakes up."
+  row card tap edit n swipe remove n
+    n.mins "min" bold grow
+    n.at faint
+===
+@rich domain=r11_diaper_changes topic=diaper_change_counts style=short
+diaper changes
+needs: tap wet, dirty or both | count of each kind today | time since the last change | dots for days with six or more changes | chart of 7 days
+---
+app "Diaper Changes" baby green
+table change kind pick Wet|Dirty|Both = Wet
+stack card gap 1
+  "Last change" faint
+  if count(change) = 0
+    "None logged yet" head
+  else
+    floor((now - last(change.at)) / 1h) "h" floor((now - last(change.at)) / 1m) % 60 "min ago" big
+row gap 1
+  each options change.kind
+    button it fill accent grow pad 3 tap add change kind = it
+row gap 2
+  each options change.kind
+    statcard count(change today where kind = it), it
+section "This week", "dot means six or more changes"
+  weekdots count(change on it) >= 6
+  daybars last 7 days, count(change on it)
+===
+@rich domain=r11_star_chart topic=kids_star_reward_chart style=short
+star chart
+needs: add a child | give a star with one tap | stars needed for a treat setting | row of stars filling up | treats earned
+---
+app "Star Chart" star orange
+table kid name text
+table star kid ref kid
+setting need num = 10 "Stars for a treat"
+topbar kid, "Add child"
+each kid sort name as k empty "No children yet. Add a child to start collecting stars."
+  stack card gap 2 tap edit k swipe remove k
+    row gap 2
+      k.name bold grow
+      floor(count(k.star) / need) "treats earned" faint
+    row gap 0
+      each 1..need
+        icon star color if(it <= count(k.star) % need, accent, soft)
+    button "Give a star" fill accent tap add star kid = k
+===
+@rich domain=r11_tuition topic=home_tuition_fees style=short
+tuition
+needs: add a pupil with the fee per class | tap class taken for a pupil | classes and fee due per pupil this month | total to collect | chart of classes per day
+---
+app "Tuition" school purple
+table pupil name text, rate money "Fee per class"
+table held pupil ref pupil
+topbar pupil, "Add pupil"
+statcard sum(pupil, count(it.held month) * it.rate), "to collect this month"
+each pupil sort name as p empty "No pupils yet. Add the first one with the fee per class."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.name bold
+      plural(count(p.held month), "class") "this month" faint
+    stack gap 1 align end
+      count(p.held month) * p.rate bold
+      button "Class taken" tap add held pupil = p
+section "Last 14 days", "classes per day"
+  daybars last 14 days, count(held on it)
+===
+@rich domain=r11_maid_days topic=household_help_attendance style=short
+maid days
+needs: tap a day on the calendar when she came | monthly pay setting | days present and absent this month | pay due after absences | move between months
+---
+app "Maid Days" home pink
+table present
+setting pay money = 8000 "Monthly pay"
+state m date = today
+let now_month = monthname(m) = monthname(today)
+let passed = if(now_month, monthday(today), monthdays(m))
+let absent = max(0, passed - count(present month of m))
+monthnav m
+calendar present, m
+row gap 2
+  statcard count(present month of m), "days present"
+  statcard absent, "days absent so far"
+stack card gap 1
+  "Pay due for" monthname(m) faint
+  round(pay - absent * pay / monthdays(m)) big
+  "Pay" pay "- each absent day costs" round(pay / monthdays(m)) faint tap edit pay
+===
+@rich domain=r11_home_repairs topic=house_repair_jobs style=short
+home repairs
+needs: add a repair with who does it and the cost | status todo, doing or done | filter chips by status | total cost of repairs | button to move a job forward
+---
+app "Home Repairs" tool teal
+table fix what text, who text?, cost money = 0, status pick Todo|Doing|Done = Todo
+state st text = ""
+topbar fix, "Add repair"
+row gap 2
+  statcard count(fix where status != Done), "jobs open"
+  statcard sum(fix.cost), "total cost"
+row gap 1
+  each options fix.status
+    button it count(fix where status = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each fix where st = "" or status = st sort at desc as f empty "No repairs listed. Add the leaking tap first."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.what bold
+      f.who faint
+    stack gap 1 align end
+      f.cost bold
+      if f.status != Done
+        button if(f.status = Todo, "Start", "Done") tap set f.status = if(f.status = Todo, Doing, Done)
+===
+@rich domain=r11_water_tanker topic=water_tanker_deliveries style=short
+water tanker
+needs: log a tanker with its price | days since the last tanker | average days between tankers | spend per month for 6 months | list of tankers
+---
+app "Water Tanker" drop grey
+table tanker price money
+let mlabel(d date) = month(d)
+topbar tanker, "Log tanker"
+stack card gap 1
+  "Last tanker" faint
+  if count(tanker) = 0
+    "No tankers yet" head
+  else
+    since(tanker) "days ago" big
+    if count(tanker) > 2
+      "A tanker lasts about" round(gap(tanker)) "days" faint
+row gap 2
+  statcard count(tanker month), "tankers this month"
+  statcard sum(tanker.price month), "spent this month"
+section "Last 6 months", "rupees per month"
+  plot 0..6, 0..max(1000, max([5, 4, 3, 2, 1, 0], sum(tanker.price month of addmonths(today, 0 - it)))) axes gridlines
+    each [5, 4, 3, 2, 1, 0]
+      rect index + 0.15, 0, 0.7, sum(tanker.price month of addmonths(today, 0 - it)) fill if(it = 0, accent, muted) radius 3
+      tick index + 0.5, mlabel(addmonths(today, 0 - it))
+each tanker sort at desc top 8 as t empty "No tankers yet. Log one when the tanker arrives."
+  row card gap 2 tap edit t swipe remove t
+    t.at grow
+    t.price bold
+===
+@rich domain=r11_toll_tax topic=motorway_toll_receipts style=short
+toll tax
+needs: add a toll with plaza and amount | monthly toll budget setting | spent this month with progress | share of spend by plaza | list of tolls by day
+---
+app "Toll Tax" car ocean
+table toll plaza text, amount money
+setting cap money = 6000 "Monthly toll budget"
+topbar toll, "Add toll"
+stack card gap 2
+  "Paid this month" faint
+  sum(toll.amount month) big
+  goal sum(toll.amount month), cap, "of the monthly budget"
+row gap 2
+  statcard count(toll month), "tolls this month"
+  statcard sum(toll.amount year), "this year"
+section "By plaza", "this month"
+  share toll month by plaza, sum(it.amount), it.key
+each toll by day as g empty "No tolls yet. Add the receipt after each trip."
+  text g.key bold faint
+  each g as r
+    row card tap edit r swipe remove r
+      r.plaza grow
+      r.amount bold
+===
+@rich domain=r11_kitchen_garden topic=kitchen_garden_sowing style=short
+kitchen garden
+needs: add a crop with days to harvest | days left until each harvest | ready crops highlighted | count of crops growing | tap to edit or swipe to remove
+---
+app "Kitchen Garden" leaf mint dark
+table sow crop text, days num 7..180 = 45 unit "days" "Days to harvest"
+let left(r sow) = r.days - (today - r.at)
+topbar sow, "Sow a crop"
+row gap 2
+  statcard count(sow, left(it) > 0), "crops growing"
+  statcard count(sow, left(it) <= 0), "ready to pick"
+each sow sort left(it) as s empty "Nothing sown yet. Add the first seeds you planted."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.crop bold
+      "Sown" s.at faint
+    if left(s) <= 0
+      "Ready" bold color good
+    else
+      plural(left(s), "day") "to go" bold
+    draw 100, 3 width 60
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(1 - left(s) / s.days, 0, 1), 3 fill accent radius 1
+===
+@rich domain=r11_fish_tank topic=aquarium_care_log style=short
+fish tank
+needs: tap to log feeding, water change, filter clean or medicine | days since each kind of care | last fed hours ago | count of care this week | list of recent care
+---
+app "Fish Tank" fish slate
+table care what pick Fed|Water_change|Filter_clean|Medicine = Fed
+each options care.what
+  stack card gap 1
+    row gap 2
+      it bold grow
+      if count(care where what = it) = 0
+        "Never" faint
+      else
+        since(care where what = it) "days ago" faint
+    button "Done now" tap add care what = it
+statcard count(care week), "care actions this week"
+each care sort at desc top 8 as c empty "Nothing logged yet. Tap Done now after you feed the fish."
+  row card tap edit c swipe remove c
+    c.what grow
+    c.at faint
+===
+@rich domain=r11_pantry_expiry topic=pantry_expiry_dates style=short
+pantry expiry
+needs: add an item with place and expiry date | items expired and expiring in a week | list sorted by soonest expiry | items grouped by fridge, freezer or pantry | expired in red
+---
+app "Pantry Expiry" box ink
+table stock item text, place pick Fridge|Freezer|Pantry = Pantry, expires date
+topbar stock, "Add item"
+row gap 2
+  statcard count(stock where expires < today), "expired"
+  statcard count(stock where expires >= today and expires <= today + 7), "expire this week"
+"Use these first" head
+each stock where expires <= today + 7 sort expires as s empty "Nothing is about to expire."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.item bold
+      s.place faint
+    if s.expires < today
+      "Expired" bold color bad
+    else
+      "In" plural(s.expires - today, "day") bold color warn
+each options stock.place as pl
+  section pl, count(stock where place = pl) "items"
+    each stock where place = pl sort expires as s empty "Empty."
+      row gap 2 tap edit s
+        s.item grow
+        s.expires faint
+===
+@rich domain=r11_recipes topic=family_recipe_book style=short
+recipes
+needs: add a recipe with time, kind and steps | search recipes by name | mark favourites | tab of favourites | count of recipes
+---
+app "Recipes" food plum
+table recipe name text, mins num 5..300 = 30 unit "min", kind pick Breakfast|Lunch|Dinner|Dessert|Snack = Dinner, fav bool, steps long?
+state q text = ""
+screen all "All" food
+  topbar recipe, "Add recipe"
+  field q "Search recipes"
+  each recipe where has(name, q) sort name as r empty "No recipes found. Add your first dish."
+    row card gap 2 tap edit r swipe remove r
+      stack grow gap 0
+        r.name bold
+        r.kind r.mins "min" faint
+      toggle r.fav
+screen fav "Favourites" heart
+  statcard count(recipe where fav = yes), "favourites", count(recipe)
+  each recipe where fav = yes sort name as r empty "No favourites yet. Tap the heart on a recipe."
+    row card gap 2 tap edit r
+      r.name bold grow
+      r.mins "min" faint
+===
+@rich domain=r11_wardrobe topic=clothes_wear_count style=short
+wardrobe
+needs: add a clothing item with its kind | tap wore today | most worn items first | items never worn | count of items by kind
+---
+app "Wardrobe" tag red
+table cloth name text, kind pick Shirt|Trouser|Dress|Shoes|Jacket|Other = Shirt
+table wore cloth ref cloth
+topbar cloth, "Add item"
+row gap 2
+  statcard count(cloth), "items"
+  statcard count(cloth, count(it.wore) = 0), "never worn"
+section "By kind"
+  bars options cloth.kind, count(cloth where kind = it), it
+each cloth sort count(it.wore) desc as c empty "Your wardrobe is empty. Add the first piece."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.name bold
+      c.kind faint
+    plural(count(c.wore), "wear") faint
+    button "Wore" tap add wore cloth = c
+===
+@rich domain=r11_dhobi_list topic=laundry_pieces_bill style=short
+dhobi list
+needs: add a bundle with shirts, trousers and sheets | price per piece setting | pieces still out with the dhobi | bill for pieces out | tick when returned
+---
+app "Dhobi List" home orange
+table bundle shirts num 0..50 = 0, trousers num 0..50 = 0, sheets num 0..50 = 0, back bool
+setting fee money = 30 "Price per piece"
+let out_pieces = sum(bundle where back = no, it.shirts + it.trousers + it.sheets)
+topbar bundle, "Give clothes"
+row gap 2
+  statcard out_pieces, "pieces still out"
+  statcard out_pieces * fee, "bill for pieces out"
+each bundle sort back as b empty "No bundles yet. Add what you gave the dhobi."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.shirts + b.trousers + b.sheets "pieces" bold
+      b.shirts "shirts," b.trousers "trousers," b.sheets "sheets" faint
+      b.at faint
+    toggle b.back
+===
+@rich domain=r11_doctor_visits topic=doctor_appointments_costs style=short
+doctor visits
+needs: add a visit with doctor, reason, date and fee | reminder the day before | upcoming and past lists | spent this year | count of upcoming visits
+---
+app "Doctor Visits" heart yellow
+table appt doctor text, why text?, visit date, cost money = 0
+remind "Doctor visit tomorrow" at appt.visit - 1d at 9:00
+topbar appt, "Add visit"
+row gap 2
+  statcard count(appt where visit >= today), "upcoming visits"
+  statcard sum(appt.cost year), "spent this year"
+"Coming up" head
+each appt where visit >= today sort visit as a empty "No visits booked. Add the next appointment."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.doctor bold
+      a.why faint
+    stack gap 0 align end
+      a.visit bold
+      plural(a.visit - today, "day") faint
+"Past visits" head
+each appt where visit < today sort visit desc top 6 as a empty "No past visits."
+  row gap 2 tap edit a
+    a.doctor grow
+    a.visit faint
+    a.cost faint
+===
+@rich domain=r11_inhaler_puffs topic=asthma_inhaler_use style=short
+inhaler puffs
+needs: log puffs with a trigger | puffs today and this week | weekly limit setting that turns red | bar chart of 7 days | triggers over 30 days
+---
+app "Inhaler Puffs" cloud green
+table puff n num 1..10 = 2 "Puffs", trigger pick Exercise|Cold|Dust|Night|Other = Other
+setting limit num = 12 "Tell the doctor above (puffs a week)"
+topbar puff, "Log puffs"
+row gap 2
+  statcard sum(puff.n today), "puffs today"
+  statcard sum(puff.n week), "puffs this week", limit
+if sum(puff.n week) > limit
+  stack fill soft pad 2 radius 10
+    "More puffs than usual this week. Think about telling your doctor." color bad
+section "Last 7 days", "puffs per day"
+  daybars last 7 days, sum(puff.n on it)
+section "Triggers", "last 30 days"
+  bars options puff.trigger, sum(puff.n last 30 days where trigger = it), it
+each puff sort at desc top 6 as p empty "No puffs logged. Good news."
+  row card tap edit p swipe remove p
+    p.n "puffs" bold
+    p.trigger faint grow
+    p.at faint
+===
+@rich domain=r11_migraine topic=headache_diary style=short
+migraine
+needs: log a headache with pain level, hours and trigger | days since the last one | headaches this month | heat map of the last 8 weeks | bars of triggers
+---
+app "Migraine" brain teal dark
+table ache level num 1..10 = 5 "Pain (1 to 10)", hrs num 1..72 = 4 unit "h", trigger pick Stress|Sleep|Food|Screen|Unknown = Unknown
+topbar ache, "Log headache"
+stack card gap 1
+  "Since the last one" faint
+  if count(ache) = 0
+    "None logged" head
+  else
+    since(ache) "days" big
+row gap 2
+  statcard count(ache month), "headaches this month"
+  statcard round(avg(ache.level month)), "average pain this month"
+section "Last 8 weeks", "darker is worse"
+  heat last 56 days, sum(ache.level on it), 10
+section "Triggers", "all time"
+  bars options ache.trigger, count(ache where trigger = it), it
+each ache sort at desc top 6 as a empty "No headaches logged. Hopefully it stays that way."
+  row card gap 2 tap edit a swipe remove a
+    a.level big
+    stack grow gap 0
+      a.trigger bold
+      a.hrs "h" faint
+    a.at faint
+===
+@rich domain=r11_job_applications topic=job_application_pipeline style=short
+job applications
+needs: add an application with company and role | stages applied, interview, offer and rejected | count per stage | button to move to the next stage | list newest first
+---
+app "Job Applications" bag blue
+table jobapp company text, role text, stage pick Applied|Interview|Offer|Rejected = Applied
+topbar jobapp, "Add application"
+grid 2 gap 2
+  each options jobapp.stage
+    statcard count(jobapp where stage = it), it
+each jobapp sort at desc as j empty "No applications yet. Add the first one you sent."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.company bold
+      j.role faint
+    stack gap 1 align end
+      j.stage bold color if(j.stage = Offer, good, if(j.stage = Rejected, bad, ink))
+      if j.stage = Applied
+        button "Got interview" tap set j.stage = Interview
+      if j.stage = Interview
+        button "Got offer" tap set j.stage = Offer
+===
+@rich domain=r11_freelance_invoices topic=client_invoices_unpaid style=short
+freelance invoices
+needs: add an invoice with client, amount and sent date | tick when paid | total still unpaid | invoices unpaid for over 30 days | share of income by client
+---
+app "Freelance Invoices" money purple
+table inv client text, amount money, sent date = today, paid bool
+topbar inv, "Add invoice"
+row gap 2
+  statcard sum(inv where paid = no, it.amount), "still unpaid"
+  statcard count(inv where paid = no and today - sent > 30), "unpaid over 30 days"
+section "Income by client", "all invoices"
+  share inv by client, sum(it.amount), it.key
+each inv sort paid as i empty "No invoices yet. Add the first one you sent."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.client bold
+      if i.paid
+        "Paid" color good
+      else
+        "Sent" today - i.sent "days ago" color if(today - i.sent > 30, bad, muted)
+    i.amount bold
+    toggle i.paid
+===
+@rich domain=r11_client_calls topic=sales_call_log style=short
+client calls
+needs: log a call with client, minutes, result and follow-up date | follow-ups due today or earlier | calls this week | bars of results this month | list of calls
+---
+app "Client Calls" phone pink
+table call who text, mins num 1..180 = 10, result pick Interested|Follow_up|No_answer|Closed = Follow_up, again date?
+topbar call, "Log call"
+row gap 2
+  statcard count(call week), "calls this week"
+  statcard count(call where result = Follow_up and again <= today), "follow-ups due"
+section "Results", "this month"
+  bars options call.result, count(call month where result = it), it
+"Follow up now" head
+each call where result = Follow_up and again <= today sort again as c empty "No follow-ups due. Nice."
+  row card gap 2 tap edit c
+    c.who bold grow
+    c.again faint
+each call sort at desc top 6 as c
+  row gap 2 tap edit c swipe remove c
+    c.who grow
+    c.result faint
+    c.mins "min" faint
+===
+@rich domain=r11_bug_list topic=developer_bug_tracker style=short
+bug list
+needs: add a bug with title and severity | status open, fixing or fixed | filter chips by severity | bars of open bugs by severity | button to move a bug forward
+---
+app "Bug List" tool grey
+table bug title text, sev pick Low|Medium|High|Critical = Medium, status pick Open|Fixing|Fixed = Open
+state sv text = ""
+topbar bug, "Add bug"
+section "Open bugs", "by severity"
+  bars options bug.sev, count(bug where sev = it and status != Fixed), it
+row gap 1
+  each options bug.sev
+    button it fill if(sv = it, accent, soft) grow tap set sv = if(sv = it, "", it)
+each bug where (sv = "" or sev = sv) and status != Fixed sort at desc as b empty "No open bugs. Ship it."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.sev faint
+    button if(b.status = Open, "Start fix", "Fixed") tap set b.status = if(b.status = Open, Fixing, Fixed)
+"Fixed this week" head
+each bug week where status = Fixed as b empty "Nothing fixed yet this week."
+  row gap 2
+    b.title grow faint
+===
+@rich domain=r11_coding_streak topic=daily_coding_practice style=short
+coding streak
+needs: log minutes coded with the language | daily minutes goal | day streak and best streak | grid of the last 10 weeks | share of time by language this week
+---
+app "Coding Streak" bolt ocean
+table code mins num 5..720 = 30 unit "min", lang pick Python|JavaScript|Dart|Other = Python
+setting target num = 30 "Daily goal (min)"
+topbar code, "Log coding"
+goal sum(code.mins today), target, "minutes today", " min"
+row gap 2
+  statcard streak(code), "day streak"
+  statcard best(code), "best streak"
+section "Last 10 weeks", "darker is more minutes"
+  daygrid last 70 days, sum(code.mins on it), target
+section "This week", "by language"
+  share code week by lang, sum(it.mins), it.key
+===
+@rich domain=r11_vocab_words topic=new_words_learning style=short
+vocab words
+needs: add a word with its meaning | tap a word to show or hide the meaning | tick words I know | words learned count | words added today
+---
+app "Vocab Words" pen mint
+table word w text, meaning text, known bool
+state open text = ""
+topbar word, "Add word"
+row gap 2
+  statcard count(word where known = yes), "words known", count(word)
+  statcard count(word today), "added today"
+each word sort at desc as x empty "No words yet. Add the first word you want to learn."
+  stack card gap 1 tap set open = if(open = x.w, "", x.w) swipe remove x
+    row gap 2
+      x.w bold grow
+      toggle x.known
+    if open = x.w
+      x.meaning color muted
+    else
+      "Tap to see the meaning" faint

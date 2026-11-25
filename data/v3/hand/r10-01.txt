@@ -1,0 +1,578 @@
+@rich domain=r10_society_dues topic=apartment_maintenance_dues style=detailed
+I look after a 24 flat apartment block and chasing maintenance money is a headache. Let me add each flat with the owner name and monthly amount, record payments as they come in, and see which flats still owe this month and how much has been collected in total.
+needs: add a flat with number, owner and monthly maintenance | record a payment against a flat | shows which flats still owe this month | total collected this month | second tab listing payments by day
+---
+app "Society Dues" home ocean
+table flat code text, owner text, monthly money
+table pay flat ref flat, amount money
+let owed(f flat) = f.monthly - sum(f.pay.amount month)
+screen flats "Flats" home
+  topbar flat, "Add flat"
+  row gap 2
+    statcard sum(pay.amount month), "collected this month"
+    statcard count(flat, owed(it) > 0), "flats still to pay"
+  each flat sort code as f empty "No flats yet. Add the first flat."
+    row card gap 2 tap edit f swipe remove f
+      stack grow gap 0
+        "Flat" f.code bold
+        f.owner faint
+      if owed(f) > 0
+        owed(f) "due" bold color bad
+      else
+        "Paid" bold color good
+screen pays "Payments" money
+  topbar pay, "Record payment"
+  each pay month by day as g empty "No payments this month yet."
+    row
+      g.key bold faint grow
+      sum(g.amount) faint
+    each g as r
+      row card tap edit r swipe remove r
+        "Flat" r.flat.code grow
+        r.amount bold
+===
+@rich domain=r10_flat_complaints topic=apartment_complaint_board style=multi_feature
+residents keep shouting complaints in the whatsapp group and nothing gets fixed. I want to log each one with the flat, what kind it is (lift, water, parking, noise, other) and its status open, working or fixed, filter by status, and see how many are open for each kind.
+needs: log a complaint with flat, kind and description | status open working or fixed | status filter chips | open count per kind chart | button to move a complaint to the next status
+---
+app "Complaint Board" bell mint
+table cmp flat text, kind pick Lift|Water|Parking|Noise|Other = Water, what text, status pick Open|Working|Fixed = Open
+state st text = ""
+topbar cmp, "Log complaint"
+section "Open by kind", "not fixed yet"
+  bars options cmp.kind, count(cmp where kind = it and status != Fixed), it
+row gap 1
+  each options cmp.status
+    button it count(cmp where status = it) fill if(st = it, accent, soft) grow tap set st = if(st = it, "", it)
+each cmp where st = "" or status = st sort at desc as c empty "No complaints. That is a quiet building."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.kind "- flat" c.flat bold
+      c.what faint
+    if c.status != Fixed
+      button if(c.status = Open, "Start", "Fixed") tap set c.status = if(c.status = Open, Working, Fixed)
+    else
+      "Done" color good
+===
+@rich domain=r10_gate_visitors topic=gate_visitor_register style=custom_ui
+guard at our gate scribbles visitors in a notebook. need a register: visitor name, which flat, purpose (guest, delivery, maid, plumber), and a button to mark them left. show how many are inside right now and a chart of visitors for the past week
+needs: add a visitor with name, flat and purpose | left button | shows how many are inside now | bar chart of visitors last 7 days | list of who is inside
+---
+app "Gate Register" shield slate dark
+table visit who text, flat text, purpose pick Guest|Delivery|Maid|Plumber|Other = Guest, left bool
+topbar visit, "New visitor"
+statcard count(visit where left = no), "visitors inside now"
+section "Last 7 days", "visitors per day"
+  daybars last 7 days, count(visit on it)
+each visit where left = no sort at desc as v empty "Nobody inside right now."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.who bold
+      "Flat" v.flat "-" v.purpose faint
+    button "Left" tap set v.left = yes
+"Gone today" head
+each visit today where left = yes as v empty "Nobody has left yet today."
+  row gap 2
+    v.who grow
+    v.flat faint
+===
+@rich domain=r10_flat_parking topic=apartment_parking_slots style=detailed
+We have 16 parking slots under the building, some for cars and some bikes. Show them as a grid I can tap to mark taken or free, let me add a slot with its number and type, and write which flat uses it. Tell me how many are still free.
+needs: add a slot with number, type and flat | tap a slot to mark taken or free | shows how many slots are free | grid of slots coloured by taken | list of who uses which slot
+---
+app "Parking Slots" car ink
+table slot code text, kind pick Car|Bike = Car, flat text?, taken bool
+topbar slot, "Add slot"
+statcard count(slot where taken = no), "slots free", count(slot)
+grid 4 gap 1
+  each slot sort code as s empty "No slots yet. Add the first one."
+    stack radius 10 pad 1 gap 0 fill if(s.taken, bad, soft) tap set s.taken = not s.taken
+      s.code bold
+      s.kind small
+"Who uses what" head
+each slot where taken = yes sort code as s empty "All slots are free."
+  row card gap 2 tap edit s swipe remove s
+    s.code bold
+    s.flat grow
+    s.kind faint
+===
+@rich domain=r10_mess_bill topic=hostel_mess_bill style=short
+mess bill
+needs: add a meal count for a student on a day | price per meal setting | total bill for each student this month | month total of all students | tap a student to see their meals
+---
+app "Mess Bill" food plum
+table meal student text, meals num 1..3 = 2
+setting rate money = 150 "Price per meal"
+state who text = ""
+topbar meal, "Add meals"
+statcard sum(meal.meals month) * rate, "total mess bill this month"
+each meal month by student as g empty "No meals recorded this month."
+  stack card gap 1 tap set who = if(who = g.key, "", g.key)
+    row
+      g.key bold grow
+      sum(g.meals) "meals" faint
+      sum(g.meals) * rate bold
+    if who = g.key
+      each g as r
+        row gap 2 swipe remove r
+          r.at faint grow
+          r.meals "meals"
+===
+@rich domain=r10_event_fund topic=society_event_fund style=multi_feature
+we are collecting for the annual society dinner. I want to set the target amount, record each flat's contribution with cash or bank transfer, record expenses like tent and food, and see a bar for how much we collected against the target and what is left after the expenses.
+needs: setting for target amount | record a contribution with flat, amount and mode | record an expense with item and amount | progress bar of collected against target | balance after expenses
+---
+app "Dinner Fund" gift red
+table gave flat text, amount money, mode pick Cash|Transfer = Cash
+table spent item text, amount money
+setting target money = 120000 "Target amount"
+let got = sum(gave.amount)
+let out = sum(spent.amount)
+state view pick Gave|Spent = Gave
+topbar gave, "Add contribution"
+stack card gap 2
+  goal got, target, "collected so far"
+  row
+    "Spent" out faint grow
+    "Balance" got - out bold color if(got - out < 0, bad, good)
+row gap 1
+  button "Contributions" fill if(view = Gave, accent, soft) grow tap set view = Gave
+  button "Expenses" fill if(view = Spent, accent, soft) grow tap set view = Spent
+if view = Gave
+  each gave sort at desc as g empty "No contributions yet."
+    row card gap 2 tap edit g swipe remove g
+      "Flat" g.flat bold grow
+      g.mode faint
+      g.amount bold
+else
+  form spent, "Add expense"
+  each spent sort at desc as s empty "No expenses yet."
+    row card gap 2 tap edit s swipe remove s
+      s.item grow
+      s.amount bold
+===
+@rich domain=r10_generator_log topic=generator_diesel_log style=detailed
+Load shedding is bad so our building generator runs for hours. After every run I want to note the hours and the diesel litres used, set the price of a litre, and see the diesel cost per hour, the cost this month and a chart of litres for the last 7 days.
+needs: add a run with hours and litres | price per litre setting | cost per hour of running | cost this month | bar chart of litres for 7 days
+---
+app "Generator Log" bolt plum dark
+table run hours num 0.5..24, litres num 1..500
+setting price money = 280 "Diesel per litre"
+topbar run, "Add run"
+row gap 2
+  statcard sum(run.litres month) * price, "diesel cost this month"
+  statcard round(sum(run.litres all) * price / max(sum(run.hours all), 1)), "cost per running hour"
+section "Diesel used", "litres, last 7 days"
+  daybars last 7 days, sum(run.litres on it)
+each run sort at desc top 20 as r empty "No runs logged. Add the first one after the next outage."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.hours "hours" bold
+      r.at faint
+    r.litres "L" faint
+    r.litres * price bold
+===
+@rich domain=r10_hostel_rooms topic=hostel_room_beds style=multi_feature
+I run a small boys hostel with 10 rooms and different bed counts. Let me add rooms with number and beds, add a student into a room, mark when they check out, and see for each room how many beds are free. A filter to show only rooms that still have a free bed would help.
+needs: add a room with number and beds | add a student stay into a room | check out button | free beds per room | filter for rooms with free beds
+---
+app "Hostel Rooms" bed yellow
+table room code text, beds num 1..8 = 4
+table stay room ref room, student text, out bool
+state free bool = no
+let used(r room) = count(r.stay where out = no)
+screen rooms "Rooms" home
+  topbar room, "Add room"
+  stack card gap 1
+    row
+      "Beds free" faint grow
+      sum(room, it.beds - used(it)) big
+    row gap 2 align center
+      "Only rooms with a free bed" grow
+      toggle free
+  each room sort code as r empty "No rooms to show."
+    if not free or r.beds > used(r)
+      row card gap 2 tap edit r swipe remove r
+        stack grow gap 0
+          "Room" r.code bold
+          used(r) "of" r.beds "beds used" faint
+        if r.beds > used(r)
+          r.beds - used(r) "free" bold color good
+        else
+          "Full" bold color bad
+screen guests "Students" user
+  topbar stay, "Add student"
+  each stay where out = no sort at desc as s empty "No students checked in."
+    row card gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.student bold
+        "Room" s.room.code faint
+      button "Check out" tap set s.out = yes
+===
+@rich domain=r10_guest_house topic=guest_house_bookings style=detailed
+small guest house, 6 rooms. For every booking I need guest name, room, check in date, number of nights and the rate per night. Show who arrives today, who leaves today, and the money for this month. The checkout date should be worked out for me.
+needs: add a booking with guest, room, check in, nights and rate | checkout date worked out | arrivals today | departures today | revenue this month
+---
+app "Guest House" bed ocean
+table book guest text, room pick R1|R2|R3|R4|R5|R6 = R1, checkin date = today, nights num 1..60 = 1, rate money
+let leave(b book) = b.checkin + b.nights
+topbar book, "New booking"
+row gap 2
+  statcard count(book, it.checkin = today), "arriving today"
+  statcard count(book, leave(it) = today), "leaving today"
+statcard sum(book, if(month(it.checkin) = month(today), it.nights * it.rate, 0)), "booked this month"
+each book sort checkin desc as b empty "No bookings yet. Add the first guest."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.guest bold
+      b.room "-" b.checkin "to" leave(b) faint
+    stack gap 0 align end
+      b.nights * b.rate bold
+      plural(b.nights, "night") tiny faint
+===
+@rich domain=r10_hostel_outings topic=girls_hostel_outings style=custom_ui
+I am the warden of a girls hostel. When a girl goes out I note her name, the reason (home, market, hospital, class) and the date she should be back. A Back button closes it. Show who is out right now and flag anyone whose return date has passed.
+needs: record an outing with name, reason and return date | back button | shows who is out now | flags late returns | count of late girls
+---
+app "Hostel Outings" walk teal
+table outing girl text, reason pick Home|Market|Hospital|Class = Market, until date = today, back bool
+let late = count(outing where back = no and until < today)
+topbar outing, "Girl going out"
+row gap 2
+  statcard count(outing where back = no), "out right now"
+  statcard late, "late returns"
+each outing where back = no sort until as o empty "Everyone is inside the hostel."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.girl bold
+      o.reason "- back by" o.until faint color if(o.until < today, bad, muted)
+    button "Back" tap set o.back = yes
+if late > 0
+  "Call the families of the late girls first." color bad
+===
+@rich domain=r10_school_van_routes topic=school_van_routes style=multi_feature
+our school runs three vans, route A B and C. I need every stop with its pickup time and how many kids get on there. Show the stops for one route at a time with chips, add up the kids on each route, and show a bar for which route is fullest.
+needs: add a stop with name, route, pickup time and kids | route chips to filter | kids total per route | bar comparing routes | stops sorted by pickup time
+---
+app "Van Routes" bus blue
+table stop name text, route pick A|B|C = A, pick time, kids num 1..30
+state r text = ""
+topbar stop, "Add stop"
+section "Kids per route", "all stops"
+  bars options stop.route, sum(stop.kids where route = it), it
+row gap 1
+  each options stop.route
+    button "Route" it sum(stop.kids where route = it) fill if(r = it, accent, soft) grow tap set r = if(r = it, "", it)
+each stop where r = "" or route = r sort pick as s empty "No stops yet. Add the first pickup point."
+  row card gap 2 tap edit s swipe remove s
+    s.pick bold
+    stack grow gap 0
+      s.name
+      "Route" s.route faint
+    s.kids "kids" faint
+===
+@rich domain=r10_van_pickups topic=van_daily_pickups style=custom_ui
+I drive the school van. Every morning I want a list of kids with a tick when each one is picked up, a count of how many are on board out of everyone, and a little row showing the last week for each kid so I can see who is often absent.
+needs: add a child with name and stop | tick when picked up today | count picked up of total | last 7 days dots per child | swipe to remove a child
+---
+app "Van Pickups" users purple
+table kid name text, stop text
+table ride kid ref kid
+topbar kid, "Add child"
+let on = count(kid, count(it.ride today) > 0)
+stack gap 0
+  on "of" count(kid) "on board" head
+  if on >= count(kid) and count(kid) > 0
+    "Everyone is picked up" color good
+  else
+    count(kid) - on "still to pick up" color muted
+each kid sort stop as k empty "No children yet. Add the first name and stop."
+  stack card gap 2 tap edit k swipe remove k
+    row gap 2
+      stack grow gap 0
+        k.name bold
+        k.stop faint
+      toggle k.ride
+    weekdots count(k.ride on it) > 0
+===
+@rich domain=r10_van_fees topic=van_monthly_fees style=short
+van fees
+needs: add a child with name and monthly fare | tick when fee is paid | total collected and total pending | reset button for a new month | shows who has not paid
+---
+app "Van Fees" money pink
+table kid name text, fare money, paid bool
+topbar kid, "Add child"
+row gap 2
+  statcard sum(kid, if(it.paid, it.fare, 0)), "collected"
+  statcard sum(kid, if(it.paid, 0, it.fare)), "pending"
+each kid sort paid as k empty "No children yet. Add the first one."
+  row card gap 2 tap edit k swipe remove k
+    toggle k.paid
+    stack grow gap 0
+      k.name bold
+      if k.paid
+        "Paid" faint color good
+      else
+        "Not paid" faint color bad
+    k.fare bold
+button "Start new month" tap set all kid.paid = no
+===
+@rich domain=r10_van_fuel topic=van_fuel_mileage style=detailed
+I fill CNG in the school van every few days. Each time I write the kg, what I paid and the kilometres driven since the last fill. Show me how many km I get for each kg on every fill, the cost per km, and a line of the mileage over the last fills so I can see if the engine is getting worse.
+needs: add a fill with kg, price paid and km since last fill | km per kg for each fill | cost per km | line chart of mileage | total spent this month
+---
+app "Van Fuel" car grey
+table fill kg num 1..60, paid money, km num 1..2000
+let kmkg(f fill) = round(10 * f.km / f.kg) / 10
+topbar fill, "Add fill"
+row gap 2
+  statcard sum(fill.paid month), "spent on fuel this month"
+  statcard round(sum(fill.paid all) / max(sum(fill.km all), 1)), "cost per km"
+section "Mileage trend", "km per kg, last 12 fills"
+  trend fill top 12, round(it.km / it.kg)
+each fill sort at desc top 10 as f empty "No fills yet. Add the first one."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.kg "kg for" f.paid bold
+      f.at faint
+    stack gap 0 align end
+      kmkg(f) bold
+      "km per kg" tiny faint
+===
+@rich domain=r10_courier_parcels topic=courier_parcel_status style=multi_feature
+I take parcels for a courier company at my shop. For each I note the tracking number, receiver name, city and where it is: booked, in transit, out for delivery, delivered or returned. Chips on top with counts so I can see only one status, and a button to push the parcel to the next step.
+needs: add a parcel with tracking number, receiver, city | five status values | status chips with counts | next step button | swipe to remove a parcel
+---
+app "Parcel Desk" package ocean
+table parcel track text, receiver text, city text, status pick Booked|In_transit|Out_for_delivery|Delivered|Returned = Booked
+state st text = ""
+topbar parcel, "Take parcel"
+row gap 1
+  each options parcel.status
+    button it count(parcel where status = it) fill if(st = it, accent, soft) tap set st = if(st = it, "", it)
+each parcel where st = "" or status = st sort at desc as p empty "No parcels here. Take the next one."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.receiver bold
+      p.track "-" p.city faint
+    if p.status = Booked
+      button "Dispatch" tap set p.status = In_transit
+    if p.status = In_transit
+      button "Out" tap set p.status = Out_for_delivery
+    if p.status = Out_for_delivery
+      button "Delivered" tap set p.status = Delivered
+    if p.status = Delivered or p.status = Returned
+      p.status faint
+===
+@rich domain=r10_cod_cash topic=cash_on_delivery_cash style=custom_ui
+I deliver cash on delivery orders on my bike. When I hand over a parcel I collect the amount, and in the evening I deposit the cash at the office. Let me add each order with amount, tick when I have collected, and show how much cash I am carrying that is not yet deposited, with one button to deposit it all.
+needs: add an order with customer and amount | tick when cash collected | shows cash in hand not deposited | deposit all button | orders still to deliver
+---
+app "COD Cash" coin mint
+table cod customer text, amount money, got bool, banked bool
+let hand = sum(cod, if(it.got and not it.banked, it.amount, 0))
+topbar cod, "Add order"
+stack card gap 2
+  "Cash in my pocket" faint
+  hand big color if(hand > 0, warn, ink)
+  button "Deposit all at office" fill accent tap set all cod.banked = yes where got = yes
+row gap 2
+  statcard count(cod where got = no), "still to deliver"
+  statcard sum(cod.amount where banked = yes), "deposited so far"
+each cod where banked = no sort got as c empty "No open orders. Everything is deposited."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.got
+    c.customer bold grow
+    c.amount bold color if(c.got, good, ink)
+===
+@rich domain=r10_cargo_bilty topic=cargo_bookings_freight style=detailed
+cargo booking office. Each bilty has a number, the city it is going to (Lahore, Karachi, Pindi, Quetta, Peshawar), weight in kg and the sender name. The freight should come from my rate per kg that I can change. I want total freight for the month and a comparison of which city gets the most weight.
+needs: add a bilty with number, city, weight and sender | freight rate per kg setting | freight worked out per bilty | total freight this month | share chart of weight per city
+---
+app "Cargo Office" box slate
+table bilty code text, city pick Lahore|Karachi|Pindi|Quetta|Peshawar = Lahore, kg num 1..5000, sender text
+setting rate money = 45 "Freight per kg"
+topbar bilty, "New bilty"
+statcard sum(bilty.kg month) * rate, "freight booked this month"
+section "Weight by city", "kg this month"
+  share options bilty.city, sum(bilty.kg month where city = it), it
+each bilty sort at desc top 15 as b empty "No bilties yet. Book the first parcel."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.code bold
+      b.sender "to" b.city faint
+    stack gap 0 align end
+      b.kg * rate bold
+      b.kg "kg" tiny faint
+===
+@rich domain=r10_parcel_returns topic=returned_parcel_reasons style=short
+parcel returns
+needs: log a returned parcel with receiver and reason | reason list wrong address, refused, not home, damaged | count per reason chart | money lost on return charges | mark resent
+---
+app "Returns" package ink dark
+table ret receiver text, why pick Wrong_address|Refused|Not_home|Damaged = Not_home, charge money = 0, resent bool
+topbar ret, "Log return"
+statcard sum(ret.charge), "lost on return charges"
+section "Why parcels come back", "all returns"
+  share options ret.why, count(ret where why = it), it
+each ret sort at desc as r empty "No returns logged. Good news."
+  row card gap 2 tap edit r swipe remove r
+    toggle r.resent
+    stack grow gap 0
+      r.receiver bold
+      r.why faint
+    r.charge faint
+===
+@rich domain=r10_warehouse_count topic=warehouse_stock_count style=multi_feature
+Every month we do a stock count in the godown. I want to list each item with the quantity the books say and the quantity I counted, see the difference, and highlight items that do not match. Tell me how many items are off and a total of the missing units.
+needs: add an item with name, book quantity and counted quantity | shows the difference per item | highlights mismatches | count of items off | total missing units
+---
+app "Godown Count" box plum
+table item name text, book num 0..100000, counted num 0..100000
+let diff(i item) = i.counted - i.book
+topbar item, "Add item"
+row gap 2
+  statcard count(item, diff(it) != 0), "items do not match"
+  statcard sum(item, if(diff(it) < 0, 0 - diff(it), 0)), "units missing"
+each item sort diff(it) as i empty "No items counted yet. Add the first one."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      "Book" i.book "- counted" i.counted faint
+    if diff(i) = 0
+      "Match" bold color good
+    else
+      diff(i) bold color if(diff(i) < 0, bad, warn)
+===
+@rich domain=r10_shelf_stock topic=shop_shelf_stock style=custom_ui
+shopkeeper here. For each product on my shelves I want the quantity left, a minimum level, plus and minus buttons right on the row when I sell or restock, and a list of what has dropped below the minimum so I know what to order. A little bar on each row would be nice.
+needs: add a product with name, quantity and minimum | plus and minus buttons on each row | bar showing quantity against minimum | list of items to reorder | count of items low
+---
+app "Shelf Stock" cart red
+table prod name text, qty num 0..9999, low num 0..9999 = 5
+topbar prod, "Add product"
+let n = count(prod, it.qty <= it.low)
+if n > 0
+  stack card gap 1
+    n "items to reorder" head color bad
+    each prod where qty <= low as p
+      p.name "-" p.qty "left" faint
+each prod sort qty as p empty "No products yet. Add the first shelf item."
+  stack card gap 1 tap edit p swipe remove p
+    row gap 2
+      p.name bold grow
+      button "-" tap set p.qty = p.qty - 1
+      p.qty bold
+      button "+" tap set p.qty = p.qty + 1
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(p.qty / (p.low * 2 + 1), 0, 1), 3 fill if(p.qty <= p.low, bad, accent) radius 1
+===
+@rich domain=r10_cold_store topic=cold_storage_charges style=detailed
+we rent cold storage space for potatoes. Each lot has the owner, number of bags and the date it came in. The rent is a rate per bag per month which I should be able to change. Show how much rent each lot owes so far, based on the days it has been stored, and the total rent pending.
+needs: add a lot with owner, bags and date in | rent per bag per month setting | rent owed so far per lot | total rent pending | days stored shown per lot
+---
+app "Cold Store" cloud orange
+table lot owner text, bags num 1..5000, came date = today, out bool
+setting rent money = 12 "Rent per bag per month"
+let owes(l lot) = round(l.bags * rent * (today - l.came) / 30)
+topbar lot, "Receive lot"
+row gap 2
+  statcard sum(lot, if(it.out, 0, owes(it))), "rent pending"
+  statcard sum(lot, if(it.out, 0, it.bags)), "bags in store"
+each lot where out = no sort came as l empty "The store is empty. Receive the first lot."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.owner bold
+      l.bags "bags," plural(today - l.came, "day") "in store" faint
+    stack gap 0 align end
+      owes(l) bold
+      button "Out" tap set l.out = yes
+===
+@rich domain=r10_truck_trips topic=truck_trip_income style=multi_feature
+I own three trucks and my driver notes the trips on paper. Let me log each trip with the truck (T1, T2, T3), where it went, kilometres and the freight money. I want to see the income of each truck this month as a comparison and the total.
+needs: add a trip with truck, destination, km and freight | income per truck chart | total freight this month | list of latest trips | truck filter chips
+---
+app "Truck Trips" bus yellow
+table trip truck pick T1|T2|T3 = T1, dest text, km num 1..5000, freight money
+state tk text = ""
+topbar trip, "Log trip"
+statcard sum(trip.freight month), "freight earned this month"
+section "By truck", "this month"
+  share options trip.truck, sum(trip.freight month where truck = it), it
+row gap 1
+  each options trip.truck
+    button it fill if(tk = it, accent, soft) grow tap set tk = if(tk = it, "", it)
+each trip where tk = "" or truck = tk sort at desc top 20 as t empty "No trips yet. Log the first one."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.dest bold
+      t.truck "-" t.km "km" faint
+    t.freight bold
+===
+@rich domain=r10_fleet_fuel topic=fleet_fuel_efficiency style=detailed
+a few pickup vehicles in our fleet. When a driver fills fuel I add the vehicle (Hilux, Bolan, Suzuki), litres, the amount and the km run since the last fill. Show me the km per litre for each vehicle so I know which one drinks the most, and the fuel bill for the month.
+needs: add a fill with vehicle, litres, amount and km run | km per litre for each vehicle | fuel bill this month | worst vehicle highlighted | list of recent fills
+---
+app "Fleet Fuel" fire green
+table fill car pick Hilux|Bolan|Suzuki = Hilux, litres num 1..200, amount money, km num 1..2000
+let kpl(c text) = round(10 * sum(fill.km where car = c) / max(sum(fill.litres where car = c), 1)) / 10
+topbar fill, "Add fill"
+statcard sum(fill.amount month), "fuel bill this month"
+section "Km per litre", "higher is better"
+  each options fill.car
+    row gap 2
+      it grow
+      kpl(it) bold color if(kpl(it) = min(kpl("Hilux"), min(kpl("Bolan"), kpl("Suzuki"))), bad, ink)
+each fill sort at desc top 10 as f empty "No fills yet. Add the first one."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.car bold
+      f.litres "L for" f.amount faint
+    f.km "km" faint
+===
+@rich domain=r10_vehicle_repairs topic=vehicle_repair_jobs style=detailed
+my workshop keeps repairs for company vehicles. Add a job with the vehicle number, what was done and the cost, tick it when the company has paid, and show total unpaid, plus a bar for how much each vehicle has cost me in repairs.
+needs: add a job with vehicle number, work and cost | tick when paid | total unpaid | bar per vehicle for repair cost | open jobs list first
+---
+app "Repair Jobs" tool teal
+table job vehicle text, work text, cost money, paid bool
+topbar job, "Add job"
+statcard sum(job, if(it.paid, 0, it.cost)), "unpaid repairs"
+section "Cost by vehicle", "all jobs"
+  each job by vehicle
+    row gap 2
+      it.key grow
+      sum(it.cost) bold
+each job sort paid as j empty "No jobs yet. Add the first repair."
+  row card gap 2 tap edit j swipe remove j
+    toggle j.paid
+    stack grow gap 0
+      j.vehicle bold
+      j.work faint
+    j.cost bold
+===
+@rich domain=r10_tyre_log topic=truck_tyre_ages style=multi_feature
+tyres on our trucks wear out and I forget when I fitted them. I want to log truck number, position (front left, front right, rear left, rear right, spare) and the date fitted, set how many months a tyre should last, and see which tyres are past that so I can change them.
+needs: log a tyre with truck, position and fitted date | life in months setting | months in use per tyre | highlight tyres past their life | count of tyres to change
+---
+app "Tyre Log" tool blue
+table tyre truck text, spot pick Front_left|Front_right|Rear_left|Rear_right|Spare = Front_left, fitted date = today
+setting life num 1..60 = 18 "Months a tyre should last"
+let age(t tyre) = round((today - t.fitted) / 30)
+topbar tyre, "Log tyre"
+statcard count(tyre, age(it) >= life), "tyres past their life", count(tyre)
+each tyre sort fitted as t empty "No tyres logged yet. Add the first one."
+  stack card gap 1 tap edit t swipe remove t
+    row
+      t.truck bold grow
+      t.spot faint
+    row
+      age(t) "months in use" grow color muted
+      if age(t) >= life
+        "Change now" bold color bad
+      else
+        life - age(t) "months left" color good
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(age(t) / life, 0, 1), 3 fill if(age(t) >= life, bad, accent) radius 1

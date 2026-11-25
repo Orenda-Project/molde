@@ -1,0 +1,636 @@
+@rich domain=r11_mood topic=daily_mood_log style=short
+mood
+needs: log a mood from 1 to 5 with a reason | one-tap mood buttons | average mood this week | bar chart of the last 14 days | list of recent moods
+---
+app "Mood" smile ocean
+table feel score num 1..5 = 3 "Mood (1 bad, 5 great)", why text?
+topbar feel, "Log mood"
+row gap 2
+  statcard round(avg(feel.score week) * 10) / 10, "average this week"
+  statcard count(feel today), "check-ins today"
+section "Last 14 days", "5 is the best"
+  plot 0..14, 0..5 axes gridlines
+    each days last 14 days
+      rect index + 0.15, 0, 0.7, sum(feel.score on it) / max(1, count(feel on it)) fill if(it = today, accent, muted) radius 3
+      tick index + 0.5, monthday(it)
+"One tap" head
+row gap 1
+  each [1, 2, 3, 4, 5]
+    button it grow tap add feel score = it
+each feel sort at desc top 10 as f empty "No moods yet. Tap a number above to log how you feel."
+  row card gap 2 tap edit f swipe remove f
+    f.score big
+    stack grow gap 0
+      f.why
+      f.at faint
+===
+@rich domain=r11_rent topic=tenant_rent_collection style=short
+rent
+needs: add a tenant with room, name and monthly rent | mark a room paid for the month | total collected this month | total still to collect | paid or unpaid status per room
+---
+app "Rent" home mint
+table tenant room text, who text, rent money
+table paid tenant ref tenant, amount money
+let owing(t tenant) = t.rent - sum(t.paid.amount month)
+topbar tenant, "Add tenant"
+row gap 2
+  statcard sum(paid.amount month), "collected this month"
+  statcard sum(tenant, max(0, owing(it))), "still to collect"
+each tenant sort room as t empty "No tenants yet. Add the first room and its rent."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.room bold
+      t.who faint
+    if owing(t) > 0
+      stack gap 1 align end
+        owing(t) "due" bold color bad
+        button "Mark paid" tap add paid tenant = t, amount = owing(t)
+    else
+      "Paid" bold color good
+===
+@rich domain=r11_pushups topic=pushup_set_counter style=short
+pushups
+needs: one-tap buttons to add a set of reps | daily target setting with progress | best day in the last 30 days | bar chart of 7 days with target line | list of today's sets
+---
+app "Pushups" dumbbell slate
+table sets reps num 1..300 = 10
+setting target num = 100 "Daily target"
+goal sum(sets.reps today), target, "pushups today"
+quick sets, reps, [5, 10, 20, 30]
+row gap 2
+  statcard sum(sets.reps week), "this week"
+  statcard max(days last 30 days, sum(sets.reps on it)), "best day, last 30 days"
+section "Last 7 days", "dark line is the target"
+  goalbars last 7 days, sum(sets.reps on it), target, "Reached the target"
+section "Today's sets", plural(count(sets today), "set")
+  list sets today, "No sets yet today. Tap a number above after each set."
+===
+@rich domain=r11_baby_feeds topic=baby_feed_log style=short
+baby feeds
+needs: log a feed as breast, bottle or solid with ml | one-tap buttons per feed type | time since the last feed | feeds per day chart | list of today's feeds
+---
+app "Baby Feeds" baby ink
+table feed kind pick Breast|Bottle|Solid = Breast, ml num 0..400 = 0 unit "ml"
+topbar feed, "Log feed"
+stack card gap 1
+  "Last feed" faint
+  if count(feed) = 0
+    "No feeds logged yet" head
+  else
+    floor((now - last(feed.at)) / 1h) "h" floor((now - last(feed.at)) / 1m) % 60 "min ago" big
+row gap 1
+  each options feed.kind
+    button it fill soft grow tap add feed kind = it
+row gap 2
+  statcard count(feed today), "feeds today"
+  statcard sum(feed.ml today), "ml of bottle today"
+section "Feeds per day", "last 7 days"
+  daybars last 7 days, count(feed on it)
+each feed today sort at desc as f empty "No feeds yet today. Tap Breast, Bottle or Solid when baby eats."
+  row card gap 2 tap edit f swipe remove f
+    f.kind grow bold
+    if f.ml > 0
+      f.ml "ml" faint
+    f.at faint
+===
+@rich domain=r11_pocket_money topic=kids_pocket_money style=short
+pocket money
+needs: add money received or spent with a note | balance in the pocket | saving goal with progress | totals for this month | filter by in or out
+---
+app "Pocket Money" wallet plum
+table pocket what text, amount money, kind pick In|Out = In
+setting want money = 2000 "Saving up for"
+state view pick All|In|Out = All
+let bal = sum(pocket.amount where kind = In) - sum(pocket.amount where kind = Out)
+topbar pocket, "Add"
+stack card gap 2
+  "In my pocket" faint
+  bal big color if(bal < 0, bad, ink)
+  goal max(bal, 0), want, "saved for the goal"
+row gap 2
+  statcard sum(pocket.amount month where kind = In), "got this month"
+  statcard sum(pocket.amount month where kind = Out), "spent this month"
+choice view
+each pocket where view = All or kind = view sort at desc as p empty "Nothing here yet. Add pocket money you got or spent."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.what bold
+      p.at faint
+    p.amount bold color if(p.kind = In, good, bad)
+===
+@rich domain=r11_car_service topic=car_service_reminder style=short
+car service
+needs: log a service with work done, km and cost | service interval setting in km | kilometres left to the next service | cost spent this year | list of past services
+---
+app "Car Service" car red dark
+table service work text, km num 0.. unit "km", cost money
+setting gap_km num = 5000 "Service every (km)"
+setting odo num = 0 "Odometer now (km)"
+let lastkm = max(service.km)
+let nextkm = lastkm + gap_km
+let left = nextkm - odo
+topbar service, "Add service"
+stack card gap 2
+  if count(service) = 0
+    "No service logged yet" head
+    "Add the last service to see when the next one is due." color muted
+  else
+    if left < 0
+      abs(left) "km overdue" big color bad
+    else
+      left "km to the next service" big
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp((odo - lastkm) / gap_km, 0, 1), 4 fill if(left < 0, bad, accent) radius 2
+    "Next at" nextkm "km. Odometer" odo "km, tap to change" faint tap edit odo
+row gap 2
+  statcard sum(service.cost year), "spent this year"
+  statcard count(service), "services logged"
+each service sort km desc as s empty "No services yet. Add the first one with the km on the meter."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.work bold
+      s.km "km" faint
+    s.cost bold
+===
+@rich domain=r11_reading_list topic=books_to_read_list style=short
+reading list
+needs: add a book with title, author and pages | tick a book when finished | tab of books still to read | tab of finished books with pages read | count of books waiting
+---
+app "Reading List" book orange
+table book title text, author text?, pages num? 1..2000, done bool
+screen next "To read" book
+  topbar book, "Add book"
+  statcard count(book where done = no), "books waiting"
+  each book where done = no sort title as b empty "Your list is empty. Add the next book you want to read."
+    row card gap 2 tap edit b swipe remove b
+      stack grow gap 0
+        b.title bold
+        b.author faint
+      toggle b.done
+screen fin "Finished" check
+  row gap 2
+    statcard count(book where done = yes), "books finished"
+    statcard sum(book.pages where done = yes), "pages read"
+  each book where done = yes sort title as b empty "Nothing finished yet. Tick a book when you reach the end."
+    row card gap 2 tap edit b
+      b.title grow
+      toggle b.done
+===
+@rich domain=r11_wedding_budget topic=wedding_cost_planner style=short
+wedding budget
+needs: add a cost with kind, estimate and amount paid | total budget setting with progress | total still to pay | share of spending by kind | each cost shows paid or what is left
+---
+app "Wedding Budget" gift yellow
+table cost item text, kind pick Venue|Food|Clothes|Photos|Decor|Other = Other, estimate money, paid money = 0
+setting total money = 1500000 "Total budget"
+topbar cost, "Add cost"
+stack card gap 2
+  "Planned so far" faint
+  sum(cost.estimate) big
+  goal sum(cost.estimate), total, "of the budget planned"
+  "Paid" sum(cost.paid) "and still to pay" sum(cost.estimate) - sum(cost.paid) faint
+section "Where it goes", "planned by kind"
+  share cost by kind, sum(it.estimate), it.key
+each cost sort estimate desc as c empty "No costs yet. Add the venue, food and clothes first."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.item bold
+      c.kind faint
+    stack gap 0 align end
+      c.estimate bold
+      if c.paid >= c.estimate
+        "Paid" color good
+      else
+        c.estimate - c.paid "left" color muted
+===
+@rich domain=r11_gym_dues topic=gym_member_fees style=short
+gym dues
+needs: add a member with monthly fee and paid-until date | members overdue count | total fees to collect | one tap to renew a member for 30 days | days overdue shown on each member
+---
+app "Gym Dues" dumbbell green
+table member who text, fee money, until date = today
+topbar member, "Add member"
+row gap 2
+  statcard count(member where until < today), "members overdue"
+  statcard sum(member, if(it.until < today, it.fee, 0)), "fees to collect"
+each member sort until as m empty "No members yet. Add the first one with their monthly fee."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.who bold
+      if m.until < today
+        text today - m.until "days overdue" color bad
+      else
+        "Paid until" m.until faint
+    button "Renewed" tap set m.until = if(m.until > today, m.until, today) + 30
+===
+@rich domain=r11_tea_stall topic=tea_stall_sales style=short
+tea stall
+needs: big buttons to sell tea, coffee or a snack | price settings for each item | sales total today | bar chart of sales for 7 days | cups sold today per item
+---
+app "Tea Stall" coffee teal
+table sale item text, amount money
+setting tea money = 30 "Tea price"
+setting coffee money = 60 "Coffee price"
+setting snack money = 25 "Snack price"
+statcard sum(sale.amount today), "sold today", 5000
+grid 3 gap 1
+  button "Tea" fill accent pad 3 tap add sale item = "Tea", amount = tea
+  button "Coffee" fill accent pad 3 tap add sale item = "Coffee", amount = coffee
+  button "Snack" fill accent pad 3 tap add sale item = "Snack", amount = snack
+section "Sold today", plural(count(sale today), "sale")
+  row gap 3
+    stack gap 0
+      count(sale today where item = "Tea") big
+      "tea" faint
+    stack gap 0
+      count(sale today where item = "Coffee") big
+      "coffee" faint
+    stack gap 0
+      count(sale today where item = "Snack") big
+      "snacks" faint
+section "Last 7 days", "rupees per day"
+  daybars last 7 days, sum(sale.amount on it)
+each sale today sort at desc top 8 as s empty "Nothing sold yet today. Tap Tea to start."
+  row card tap edit s swipe remove s
+    s.item grow
+    s.amount bold
+===
+@rich domain=r11_sugar_log topic=blood_sugar_readings style=short
+sugar log
+needs: add a reading in mg/dL with the moment of the day | low and high limits setting | last reading coloured by range | average and in-range count for 7 days | line chart of the last 14 days
+---
+app "Sugar Log" drop blue
+table reading mgdl num 20..600 = 100 unit "mg/dL" "Sugar", moment pick Fasting|Before_meal|After_meal|Bedtime = Fasting
+setting low num = 70 "Low below"
+setting high num = 180 "High above"
+topbar reading, "Add reading"
+stack card gap 1
+  "Last reading" faint
+  if count(reading) = 0
+    "No readings yet" head
+  else
+    last(reading.mgdl) "mg/dL" big color if(last(reading.mgdl) > high or last(reading.mgdl) < low, bad, good)
+    last(reading.moment) faint
+row gap 2
+  statcard round(avg(reading.mgdl last 7 days)), "average, 7 days"
+  statcard count(reading last 7 days where mgdl >= low and mgdl <= high), "readings in range", count(reading last 7 days)
+section "Last 14 days", "mg/dL"
+  trend reading last 14 days, it.mgdl
+each reading sort at desc top 12 as r empty "No readings yet. Add the first one after you test."
+  row card gap 2 tap edit r swipe remove r
+    r.mgdl big color if(r.mgdl > high or r.mgdl < low, bad, ink)
+    stack grow gap 0
+      r.moment
+      r.at faint
+===
+@rich domain=r11_school_fees topic=children_school_fees style=short
+school fees
+needs: add a child with the fee per term | terms per year setting | record a term payment with one tap | progress of fees paid per child | total paid and still owed this year
+---
+app "School Fees" school purple
+table kid name text, fee money
+table fpay kid ref kid, amount money
+setting terms num = 3 "Terms per year"
+let owes(k kid) = k.fee * terms - sum(k.fpay.amount year)
+topbar kid, "Add child"
+row gap 2
+  statcard sum(fpay.amount year), "paid this year"
+  statcard sum(kid, max(0, owes(it))), "still owed this year"
+each kid sort name as k empty "No children yet. Add each child with the fee for one term."
+  stack card gap 2 tap edit k swipe remove k
+    row gap 2
+      k.name bold grow
+      if owes(k) > 0
+        owes(k) "owed" color bad
+      else
+        "All paid" color good
+    draw 100, 3
+      rect 0, 0, 100, 3 fill soft radius 1
+      rect 0, 0, 100 * clamp(sum(k.fpay.amount year) / max(1, k.fee * terms), 0, 1), 3 fill accent radius 1
+    button "Paid one term" tap add fpay kid = k, amount = k.fee
+===
+@rich domain=r11_grocery_prices topic=grocery_price_compare style=short
+grocery prices
+needs: add an item price with shop | tap an item to see its price history | last, lowest and highest price for the item | line chart of the price over time | list of recent prices
+---
+app "Grocery Prices" cart pink
+table price item text, shop text?, cost money
+state sel text = ""
+topbar price, "Add price"
+section "Pick an item", "tap to compare"
+  row gap 1
+    each price by item as g empty "No prices yet. Add what you paid for an item."
+      button g.key fill if(sel = g.key, accent, soft) tap set sel = g.key
+if sel != ""
+  stack card gap 2
+    sel head
+    row gap 3
+      stack gap 0
+        "Last paid" faint
+        last(price.cost where item = sel) bold
+      stack gap 0
+        "Lowest" faint
+        min(price.cost where item = sel) bold color good
+      stack gap 0
+        "Highest" faint
+        max(price.cost where item = sel) bold color bad
+    trend price where item = sel, it.cost
+each price where sel = "" or item = sel sort at desc top 15 as p empty "Nothing for this item yet."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.item bold
+      p.shop faint
+    p.cost bold
+===
+@rich domain=r11_prayer_times topic=daily_prayer_times_tick style=short
+prayer times
+needs: set the time of each of the five prayers | reminder at each prayer time | tick a prayer as prayed today | progress ring of prayers done today | last 7 days dots and chart
+---
+app "Prayer Times" mosque grey dark
+table azan name pick Fajr|Dhuhr|Asr|Maghrib|Isha, clock time
+table done prayer ref azan
+remind "Prayer time" at azan.clock
+topbar azan, "Set a time"
+row gap 3 align center
+  draw width 96
+    circle 42 stroke soft thick 10
+    arc 42, 0, 360 * clamp(count(done today) / max(1, count(azan)), 0, 1) stroke accent thick 10
+    label 50, 50, count(done today) "/" count(azan) head
+  stack grow gap 1
+    "Prayed today" head
+    if count(azan) > 0 and count(done today) >= count(azan)
+      "All prayers done" color good
+    else
+      "Tick each prayer after you pray." color muted
+each azan sort clock as a empty "No prayer times yet. Add Fajr, Dhuhr, Asr, Maghrib and Isha with your local times."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.name bold
+      a.clock faint
+    toggle a.done
+section "This week"
+  weekdots count(done on it) >= count(azan)
+  daybars last 7 days, count(done on it)
+===
+@rich domain=r11_plant_water topic=houseplant_watering_due style=short
+plant water
+needs: add a plant with how often it needs water | tap watered to log watering | shows which plants are thirsty today | days since each plant was watered | count of thirsty plants
+---
+app "Plant Water" plant ocean
+table plant name text, every num 1..60 = 7 "Water every (days)"
+table water plant ref plant
+let thirsty = count(plant, due(it.water, it.every))
+topbar plant, "Add plant"
+stack card gap 1
+  thirsty big color if(thirsty > 0, warn, good)
+  if thirsty = 0
+    "No plant is thirsty today" color muted
+  else
+    plural(thirsty, "plant") "need water today" color muted
+grid 2 gap 2
+  each plant sort name as p empty "No plants yet. Add the first one and how often it drinks."
+    stack card gap 1 fill if(due(p.water, p.every), soft, surface) tap edit p swipe remove p
+      row gap 1
+        icon plant
+        p.name bold grow
+      if count(p.water) = 0
+        "Never watered" faint
+      else
+        "Watered" since(p.water) "days ago" faint
+      button "Watered" tap add water plant = p
+===
+@rich domain=r11_pet_vet topic=pet_vet_visits style=short
+pet vet
+needs: log a visit with pet, reason, cost and next visit date | reminder the day before the next visit | cost spent this year | spending split by pet | list of visits
+---
+app "Pet Vet" paw mint
+table visit pet text, why text, cost money, again date?
+remind "Vet visit tomorrow" at visit.again - 1d at 9:00
+topbar visit, "Log visit"
+row gap 2
+  statcard sum(visit.cost year), "spent this year"
+  statcard count(visit where again >= today), "visits coming up"
+section "Cost by pet", "all time"
+  share visit by pet, sum(it.cost), it.key
+each visit sort at desc as v empty "No vet visits yet. Log the first one."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.pet bold
+      v.why faint
+      if v.again >= today
+        "Next visit" v.again color accent
+    v.cost bold
+===
+@rich domain=r11_dish_rota topic=household_chore_rota style=short
+dish rota
+needs: add a turn with day, person and task | who is on duty today | week grid of turns per day | tap a turn to edit | highlights today's column
+---
+app "Dish Rota" cup slate
+table chore day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, who text, task pick Dishes|Cooking|Laundry|Cleaning = Dishes
+topbar chore, "Add turn"
+stack card gap 1
+  "On duty today" faint
+  each chore where day = dayname(today) as c empty "Nobody is on duty today. Add a turn."
+    row gap 2
+      c.who bold grow
+      c.task
+grid 7 gap 1
+  each options chore.day as d
+    stack gap 1
+      d tiny bold align center color if(d = dayname(today), accent, muted)
+      each chore where day = d as c
+        box pad 1 radius 6 fill if(d = dayname(today), accent, soft) tap edit c
+          c.who tiny bold
+          c.task tiny
+===
+@rich domain=r11_loan_book topic=money_lent_borrowed style=short
+loan book
+needs: add a loan with person, amount and lent or borrowed | totals of what I am owed and what I owe | filter by lent or borrowed | one tap to mark a loan repaid | outstanding amount per loan
+---
+app "Loan Book" book ink
+table loan who text, amount money, kind pick Lent|Borrowed = Lent, repaid money = 0
+state view pick Lent|Borrowed = Lent
+topbar loan, "Add loan"
+row gap 2
+  statcard sum(loan, if(it.kind = Lent, it.amount - it.repaid, 0)), "owed to me"
+  statcard sum(loan, if(it.kind = Borrowed, it.amount - it.repaid, 0)), "I owe"
+choice view
+each loan where kind = view and repaid < amount sort at as l empty "Nothing outstanding here. Add a loan with Add loan."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.who bold
+      l.amount - l.repaid "still open of" l.amount faint
+    button "Repaid" tap set l.repaid = l.amount
+"Settled" head
+each loan where kind = view and repaid >= amount sort at desc top 5 as l empty "Nothing settled yet."
+  row gap 2
+    l.who grow
+    l.amount faint
+===
+@rich domain=r11_lesson_plan topic=weekly_lesson_plan style=short
+lesson plan
+needs: add a lesson with subject, topic, day and minutes | week view grouped by day | today tab with a tick when taught | taught count today | minutes planned per day
+---
+app "Lesson Plan" pencil plum
+table plan subject text, topic text, day pick Mon|Tue|Wed|Thu|Fri = Mon, mins num 10..120 = 40
+table taught plan ref plan
+screen week "Week" calendar
+  topbar plan, "Add lesson"
+  each options plan.day as d
+    stack card gap 1
+      row gap 1
+        d head grow
+        sum(plan.mins where day = d) "min" faint
+      each plan where day = d sort subject as p empty "Nothing planned."
+        row gap 2 tap edit p swipe remove p
+          p.subject bold
+          p.topic grow
+          p.mins "min" faint
+screen tday "Today" check
+  statcard count(taught today), "lessons taught today", count(plan where day = dayname(today))
+  each plan where day = dayname(today) sort subject as p empty "No lessons planned for today."
+    row card gap 2
+      stack grow gap 0
+        p.subject bold
+        p.topic faint
+      toggle p.taught
+===
+@rich domain=r11_fuel topic=fuel_fill_ups_economy style=short
+fuel
+needs: add a fill-up with litres, cost and odometer | km per litre across all fill-ups | spent and litres bought this month | line chart of price per litre | list of fill-ups
+---
+app "Fuel" car red
+table refuel litres num 1..200 unit "L", cost money, km num 0.. unit "km" "Odometer"
+let kmpl = (max(refuel.km) - min(refuel.km)) / max(1, sum(refuel.litres) - first(refuel.litres))
+topbar refuel, "Add fill-up"
+stack card gap 1
+  "Economy" faint
+  if count(refuel) < 2
+    "Add two fill-ups to see km per litre." color muted
+  else
+    fixed(kmpl, 1) "km per litre" big
+row gap 2
+  statcard sum(refuel.cost month), "spent this month"
+  statcard sum(refuel.litres month), "litres this month"
+section "Price per litre", "over time"
+  trend refuel, it.cost / it.litres
+each refuel sort km desc top 12 as r empty "No fill-ups yet. Add the first one with the odometer reading."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.litres "L at" r.km "km" bold
+      r.at faint
+    r.cost bold
+===
+@rich domain=r11_daily_steps topic=daily_step_goal style=short
+daily steps
+needs: add steps with quick buttons | daily step target setting | ring showing today's progress | bar chart of 7 days with the target line | dots for days the target was met
+---
+app "Daily Steps" run orange
+table stride steps num 1.. = 1000
+setting target num = 8000 "Daily steps target"
+let today_steps = sum(stride.steps today)
+row gap 3 align center
+  draw width 110
+    circle 42 stroke soft thick 10
+    arc 42, 0, 360 * clamp(today_steps / target, 0, 1) stroke accent thick 10
+    label 50, 46, today_steps big
+    label 50, 64, "of" target faint
+  stack grow gap 1
+    if today_steps >= target
+      "Target reached" head color good
+    else
+      target - today_steps "steps to go" head
+    "Tap the target to change it" faint tap edit target
+quick stride, steps, [1000, 2500, 5000]
+section "Last 7 days", "dark line is the target"
+  goalbars last 7 days, sum(stride.steps on it), target, "Reached the target"
+weekdots sum(stride.steps on it) >= target
+each stride today sort at desc as s empty "No steps added today. Tap a button above."
+  row card tap edit s swipe remove s
+    s.steps "steps" bold grow
+    s.at faint
+===
+@rich domain=r11_medicine_times topic=medicine_schedule_ticks style=short
+medicine times
+needs: add a medicine with time and dose | reminder at each medicine time | tick a dose as taken today | doses taken today progress | taken per day chart for a week
+---
+app "Medicine Times" pill yellow dark
+table pill drug text, clock time, dose text?
+table taken pill ref pill
+remind "Time for your medicine" at pill.clock
+topbar pill, "Add medicine"
+statcard count(taken today), "doses taken today", count(pill)
+each pill sort clock as p empty "No medicines yet. Add one with the time you take it."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.drug bold
+      p.clock p.dose faint
+    toggle p.taken
+section "Doses taken", "last 7 days"
+  daybars last 7 days, count(taken on it)
+===
+@rich domain=r11_meal_prep topic=weekly_meal_plan style=short
+meal prep
+needs: add a dish for a day and meal | week plan grouped by day | today's meals highlighted | count of meals planned | tap a dish to change it
+---
+app "Meal Prep" food green
+table meal day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, kind pick Breakfast|Lunch|Dinner = Lunch, dish text
+topbar meal, "Add dish"
+row gap 2
+  statcard count(meal), "dishes planned"
+  statcard count(meal where day = dayname(today)), "meals today"
+each options meal.day as d
+  stack card gap 1 fill if(d = dayname(today), soft, surface)
+    d head color if(d = dayname(today), accent, ink)
+    each meal where day = d sort kind as m empty "Nothing planned."
+      row gap 2 tap edit m swipe remove m
+        m.kind faint
+        m.dish bold grow
+===
+@rich domain=r11_tailor_orders topic=tailor_order_book style=short
+tailor orders
+needs: add an order with customer, item, due date, price and advance | ready button | orders sorted by due date with overdue in red | balance still to collect | count of orders pending
+---
+app "Tailor Orders" tag teal
+table job customer text, item text, due date, price money, advance money = 0, ready bool
+topbar job, "New order"
+row gap 2
+  statcard count(job where ready = no), "orders pending"
+  statcard sum(job where ready = no, it.price - it.advance), "balance to collect"
+each job where ready = no sort due as j empty "No pending orders. Add the first suit or dress."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.customer bold
+      j.item faint
+      "Due" j.due color if(j.due < today, bad, muted)
+    stack gap 1 align end
+      j.price - j.advance "to pay" bold
+      button "Ready" tap set j.ready = yes
+"Ready for pickup" head
+each job where ready = yes sort due desc top 6 as j empty "Nothing ready yet."
+  row gap 2
+    j.customer grow
+    j.item faint
+===
+@rich domain=r11_salary topic=monthly_salary_breakdown style=short
+salary
+needs: base salary setting | add bonus, overtime, deduction or advance | take-home pay this month | amounts by type as bars | list of adjustments
+---
+app "Salary" money blue
+table adj what text, amount money, kind pick Bonus|Overtime|Deduction|Advance = Overtime
+setting base money = 60000 "Base salary"
+let net = base + sum(adj.amount month where kind = Bonus) + sum(adj.amount month where kind = Overtime) - sum(adj.amount month where kind = Deduction) - sum(adj.amount month where kind = Advance)
+topbar adj, "Add"
+stack card gap 1
+  "Take-home this month" faint
+  net big
+  "Base" base "- tap to change" faint tap edit base
+section "This month by type"
+  bars options adj.kind, sum(adj.amount month where kind = it), it
+each adj month sort at desc as a empty "No bonus or deductions this month. Add one to see your take-home change."
+  row card gap 2 tap edit a swipe remove a
+    stack grow gap 0
+      a.what bold
+      a.kind faint
+    a.amount bold color if(a.kind = Bonus or a.kind = Overtime, good, bad)

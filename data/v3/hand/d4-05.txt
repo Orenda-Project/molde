@@ -1,0 +1,183 @@
+@rich domain=d4_frame_time_scenes topic=scene_frame_time_budget style=detailed
+performance pass on my game: for each scene I write the frame time in ms I measured and the device. I set a frame budget (16.6 for 60 fps), scenes over it go red, I want a bar comparison of the scenes and the fps each one gives
+needs: add a scene with frame time and device | set the frame budget | red for scenes over budget | bar comparison of scenes | fps per scene
+---
+app "Frame budget" bolt purple dark
+table scene name text, ms num 0.1.. unit "ms" "Frame time", device pick Phone|Tablet|PC = Phone
+setting budget num = 16.6 "Frame budget (ms)"
+topbar scene, "Add scene"
+statcard count(scene where ms > budget), "scenes over the frame budget", count(scene)
+section "Frame time by scene", "milliseconds"
+  bars scene sort ms desc, it.ms, it.name
+each scene sort ms desc as s empty "No scenes measured yet. Profile the heaviest level first."
+  row card gap 2 tap edit s swipe remove s fill if(s.ms > budget, bad, soft)
+    stack grow gap 0
+      s.name bold
+      s.device faint
+    round(1000 / s.ms) "fps" bold
+===
+@rich domain=d4_firewall_notes topic=firewall_rule_notes style=multi_feature
+notes on the firewall rules of my home lab: rule name, source, destination, port and whether it allows or denies. filter by allow or deny, count the allow rules, and show in red any rule that lets anyone in from any source
+needs: add a rule with name, source, destination, port and action | filter by allow or deny | count of allow rules | red for allow rules from any source | list sorted by port
+---
+app "Firewall" shield ink dark
+table fw name text, src text "Source", dst text "Destination", port num 1..65535, action pick Allow|Deny = Allow
+state f pick All|Allow|Deny = All
+topbar fw, "Add rule"
+row gap 2
+  statcard count(fw where action = Allow), "allow rules"
+  statcard count(fw where action = Allow and src = "any"), "open to any source"
+choice f
+each fw where f = All or action = f sort port as r empty "No rules noted. Write down what you opened first."
+  row card gap 2 tap edit r swipe remove r fill if(r.action = Allow and r.src = "any", bad, soft)
+    r.port bold width 64
+    stack grow gap 0
+      r.name bold
+      r.src "->" r.dst faint
+    r.action faint
+===
+@rich domain=d4_db_size_growth topic=database_size_growth style=custom_ui
+database size growth: I log the size in GB every few days and set the disk size. show the size against the disk, a line chart of growth, how much it grew in the last 4 weeks and how many weeks are left before the disk is full at that speed
+needs: log the database size in GB | set the disk size | size against disk as a bar | growth over the last 4 weeks | weeks left until full
+---
+app "DB growth" chart green
+table dbs gb num 0.. unit "GB" "Size"
+setting disk num = 500 "Disk size (GB)"
+let grown = last(dbs.gb) - first(dbs.gb last 4 weeks)
+topbar dbs, "Log size"
+goal last(dbs.gb), disk, "GB used of the disk", "GB"
+if grown > 0
+  stack card gap 0
+    "Grew" grown "GB in 4 weeks" bold
+    "About" floor((disk - last(dbs.gb)) * 4 / grown) "weeks until the disk is full" faint color warn
+section "Size over time", "GB, oldest first"
+  trend dbs sort at, it.gb
+each dbs sort at desc top 6 as d empty "No sizes logged. Check pg_database_size and write the number here."
+  row card gap 2 tap edit d swipe remove d
+    d.gb "GB" bold grow
+    d.at faint
+===
+@rich domain=d4_review_feedback_tally topic=code_review_feedback_tally style=custom_ui
+I want to learn from my code reviews. every time a reviewer flags something I tap the kind: naming, tests, edge cases, style, docs, performance. show a bar comparison so I see my habit to fix, and the total this month
+needs: one tap button per kind of feedback | bar comparison of kinds | total this month | list of recent flags | remove a mistaken tap
+---
+app "Review habits" eye plum
+table remark kind pick Naming|Tests|Edge_cases|Style|Docs|Perf = Naming
+statcard count(remark month), "review comments this month"
+grid 3 gap 1
+  each options remark.kind as k
+    button k tap add remark kind = k
+section "What reviewers flag most", "all time"
+  share remark by kind, count(it), it.key
+each remark sort at desc top 6 as r empty "Nothing flagged yet. Tap a kind after your next review."
+  row card gap 2 swipe remove r
+    r.kind bold grow
+    r.at faint
+===
+@rich domain=d4_pi_fleet topic=raspberry_pi_fleet style=short
+pi fleet status
+needs: add a pi with name, room, temperature, SD health and update date | red for hot or failing | button marks updated today | count needing attention | list sorted by temperature
+---
+app "Pi fleet" grid yellow
+table pi name text, room text?, temp num 0..110 unit "C", sd pick Fine|Old|Failing = Fine "SD card", updated date = today
+topbar pi, "Add pi"
+statcard count(pi where temp > 70 or sd = Failing), "pis need attention", count(pi)
+each pi sort temp desc as p empty "No pis yet. Add the one running Home Assistant."
+  row card gap 2 tap edit p swipe remove p fill if(p.temp > 70 or p.sd = Failing, bad, soft)
+    stack grow gap 0
+      p.name bold
+      p.room "· SD" p.sd faint
+      "Updated" plural(today - p.updated, "day") "ago" faint
+    p.temp "C" bold
+    button "Updated" tap set p.updated = today
+===
+@rich domain=d4_play_deadlines topic=play_store_policy_deadlines style=short
+play store deadlines
+needs: add a deadline with requirement and date | tick when done | days left | late ones in red
+---
+app "Store deadlines" flag blue
+table dl req text "Requirement", due date, done bool
+topbar dl, "Add deadline"
+statcard count(dl where done = no and due < today), "deadlines already missed"
+each dl sort due as d empty "No deadlines tracked. Add the next target API level date."
+  row card gap 2 tap edit d swipe remove d fill if(d.done = no and d.due < today, bad, soft)
+    toggle d.done
+    stack grow gap 0
+      d.req bold
+      if d.done
+        "Done" faint color good
+      else
+        plural(d.due - today, "day") "left" faint
+===
+@rich domain=d4_push_experiments topic=push_notification_experiments style=detailed
+we test different push notification texts. for each I log the text, how many were sent and how many were opened. show the open rate for each, a bar comparison to find the winner and name the best text on top
+needs: add a push text with sent and opened counts | open rate per text | bar comparison of open rates | best text named on top | edit counts
+---
+app "Push tests" bell ocean
+table push copy text "Notification text", sent num 1.., opened num 0.. = 0
+let rate(p push) = p.opened * 100 / p.sent
+topbar push, "Add test"
+if count(push) > 0
+  "Best so far:" first(push sort rate(it) desc).copy head
+section "Open rate", "percent"
+  bars push sort rate(it) desc, rate(it), it.copy
+each push sort at desc as p empty "No tests yet. Add the text you sent this week."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.copy bold
+      p.opened "of" p.sent "opened" faint
+    round(rate(p)) "%" bold
+===
+@rich domain=d4_interviewer_questions topic=questions_for_interviewers style=custom_ui
+my list of questions to ask at the end of an interview, each with a topic (team, growth, tech, culture, money). during the interview I tick the ones I asked, and a reset button clears the ticks for the next interview. show how many are left to ask
+needs: add a question with topic | tick the ones asked | reset button clears all ticks | count left to ask | filter by topic
+---
+app "Ask them" smile mint
+table ask q text, topic pick Team|Growth|Tech|Culture|Money = Team, asked bool
+state f pick All|Team|Growth|Tech|Culture|Money = All
+topbar ask, "Add question"
+row gap 2
+  statcard count(ask where asked = no), "questions left to ask"
+  button "New interview" tap set all ask.asked = no
+choice f
+each ask where f = All or topic = f sort topic as a empty "No questions yet. Start with what a normal week looks like."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.asked
+    stack grow gap 0
+      a.q bold
+      a.topic faint
+===
+@rich domain=d4_pcb_orders topic=pcb_order_tracker style=multi_feature
+tracking my pcb orders from the fab: board name, quantity, the stage (designed, ordered, shipped, arrived, tested) and the date I placed the order. a button moves it to the next stage and for boards in transit I want to see how many days they have been on the way
+needs: add an order with board, quantity and order date | stage designed, ordered, shipped, arrived or tested | button moves to next stage | days in transit | count of boards on the way
+---
+app "PCB orders" tool red
+table pcb board text, qty num 1.. = 5, stage pick Designed|Ordered|Shipped|Arrived|Tested = Designed, placed date = today "Order date"
+topbar pcb, "Add order"
+statcard count(pcb where stage = Ordered or stage = Shipped), "orders on the way"
+each pcb sort stage as p empty "No boards yet. Add the one waiting in your editor."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.board "x" p.qty bold
+      p.stage faint
+      if p.stage = Ordered or p.stage = Shipped
+        plural(today - p.placed, "day") "on the way" color warn
+    if p.stage != Tested
+      button "Next" tap set p.stage = if(p.stage = Designed, Ordered, if(p.stage = Ordered, Shipped, if(p.stage = Shipped, Arrived, Tested)))
+===
+@rich domain=d4_achievements_list topic=game_achievements_progress style=custom_ui
+the achievements in my game: name and a hint for each, a tick when I have implemented and tested it. show a ring with the percent done, the count left and a list with the unfinished ones first
+needs: add an achievement with name and hint | tick when implemented | ring showing percent done | count left | unfinished shown first
+---
+app "Achievements" trophy teal dark
+table ach name text, hint text?, built bool "Implemented"
+topbar ach, "Add achievement"
+statcard count(ach where built = yes), "of" count(ach) "achievements built", count(ach)
+plural(count(ach where built = no), "achievement") "left to build" head
+"Next up:" first(ach where built = no).name faint
+each ach sort built as a empty "No achievements yet. Start with the easy first-kill one."
+  row card gap 2 tap edit a swipe remove a
+    toggle a.built
+    stack grow gap 0
+      a.name bold
+      a.hint faint

@@ -1,0 +1,448 @@
+@rich domain=d4_async_standup topic=async_standup_digest style=detailed
+our team is spread over five time zones so standup is written. everyone posts what they did, what they plan and whether they are blocked. I want today's digest in one place, blockers pulled to the top in red, and a count of who posted
+needs: post an update with name, what was done, plan and blocked flag | blockers shown on top | count of updates today | digest of today's posts | edit or remove a post
+---
+app "Async standup" note ocean
+table post person text, done text "Did", plan text "Plan today", blocked bool
+topbar post, "Post update"
+row gap 2
+  statcard count(post today), "updates posted today"
+  statcard count(post today where blocked = yes), "people blocked"
+each post today where blocked = yes as b
+  stack card gap 0 fill bad
+    b.person "is blocked" bold
+    b.plan
+"Today's digest" head
+each post today sort at desc as p empty "No updates yet today. Post yours before you sign off."
+  stack card gap 0 tap edit p swipe remove p
+    p.person bold
+    "Did:" p.done faint
+    "Plan:" p.plan
+===
+@rich domain=d4_timezone_overlap topic=timezone_overlap_strips style=custom_ui
+I have teammates in lots of places. add each with the city and how many hours they are ahead or behind me (minus for behind). show their local time now and a 24 hour strip where the hours we both work 9 to 5 are coloured, plus how many overlap hours we have
+needs: add a teammate with city and hour difference | their local time now | 24 hour strip colouring shared working hours | overlap hours count | list sorted by difference
+---
+app "Time zones" clock teal
+table mate name text, city text, off num -12..14 "Hours ahead of me"
+topbar mate, "Add teammate"
+each mate sort off as m empty "No teammates yet. Add the colleague in the farthest time zone first."
+  stack card gap 1 tap edit m swipe remove m
+    row gap 1
+      m.name bold grow
+      m.city faint
+    "Their time now:" (hour(now) + m.off + 24) % 24 ":00" bold
+    draw 96, 8
+      each 0..23 as h
+        rect h * 4, 0, 3.6, 8 fill if(h >= 9 and h < 17, if((h + m.off + 24) % 24 >= 9 and (h + m.off + 24) % 24 < 17, accent, muted), soft)
+    max(8 - abs(m.off), 0) "overlap hours in a 9 to 5 day" faint
+===
+@rich domain=d4_handover_notes topic=shift_handover_notes style=multi_feature
+when I finish my day, the next timezone picks up. write a handover note with who it is from, who it is for, the topic and details. the person ticks it as read, and I want to see how many handovers nobody has acknowledged yet
+needs: write a handover with from, to, topic and details | button to acknowledge | count unacknowledged | unread shown first | edit or remove notes
+---
+app "Handovers" users plum
+table hand from text "From", to text "To", topic text, notes long?, ack bool "Acknowledged"
+topbar hand, "Write handover"
+statcard count(hand where ack = no), "handovers not acknowledged yet", count(hand)
+"Latest topic:" last(hand.topic) faint
+each hand sort ack as h empty "No handovers yet. Leave the next person a note about what is half done."
+  stack card gap 1 tap edit h swipe remove h fill if(h.ack, soft, warn)
+    row gap 1
+      h.topic bold grow
+      h.from "->" h.to faint
+    h.notes faint
+    if h.ack = no
+      button "Got it" fill accent tap set h.ack = yes
+===
+@rich domain=d4_async_decisions topic=async_decisions_waiting style=detailed
+decisions we make in writing: a topic, who owns it, the deadline for comments and the number of people who agreed so far. an agree button adds a vote. show the ones closing in the next two days first and how many are still open
+needs: add a decision with topic, owner and deadline | agree button adds a vote | closing soon shown first | count of open decisions | votes per decision
+---
+app "Decisions" check orange
+table ask topic text, owner text, due date, votes num 0.. = 0
+topbar ask, "Add decision"
+statcard count(ask where due >= today), "decisions still open", count(ask)
+"Most agreed so far:" first(ask sort votes desc).topic faint
+each ask sort due as a empty "No open decisions. Write one down before the next long thread."
+  row card gap 2 tap edit a swipe remove a fill if(a.due - today <= 2 and a.due >= today, warn, soft)
+    stack grow gap 0
+      a.topic bold
+      a.owner "· closes" a.due faint
+      a.votes "agreed so far" faint
+    button "Agree" tap set a.votes = a.votes + 1
+===
+@rich domain=d4_remote_hours_goal topic=remote_work_hours_goal style=custom_ui
+I work from home and tend to overwork. I log how many hours I worked each day and want a bar chart of the last seven days with a line at my target of eight, bars that reach it coloured, and the week total on top
+needs: log hours worked each day | set the daily target | bar chart of 7 days with target line | total hours this week
+---
+app "Work hours" home yellow
+table wk hrs num 0..16 "Hours worked"
+setting target num = 8 "Daily target (hours)"
+topbar wk, "Log hours"
+statcard sum(wk.hrs week), "hours this week", target * 5
+"Average" round(avg(wk.hrs last 7 days) * 10) / 10 "hours a day over the last week" faint
+goalbars last 7 days, sum(wk.hrs on it), target, "Reached the target", "Under the target"
+"Longest day this week:" max(wk.hrs week) "hours" faint
+each wk sort at desc top 7 as w empty "No hours logged yet. Add today's after you close the laptop."
+  row card gap 2 tap edit w swipe remove w
+    w.at faint grow
+    w.hrs "h" bold
+===
+@rich domain=d4_unanswered_questions topic=unanswered_team_questions style=short
+unanswered questions
+needs: add a question with who I asked | tick when answered | days each has waited | count still waiting
+---
+app "Waiting on" bell red
+table q who text "Asked", ask text, answered bool
+topbar q, "Add question"
+statcard count(q where answered = no), "questions still waiting"
+"Oldest question has waited" plural(max(q where answered = no, today - it.at), "day") faint
+each q sort answered as x empty "Nothing pending. Ask the thing you have been avoiding."
+  row card gap 2 tap edit x swipe remove x fill if(x.answered, soft, if(today - x.at > 2, warn, soft))
+    toggle x.answered
+    stack grow gap 0
+      x.ask bold
+      x.who faint
+    if x.answered = no
+      plural(today - x.at, "day") faint
+===
+@rich domain=d4_team_wins topic=weekly_team_wins style=short
+team wins this week
+needs: add a win with who and what | count this week | week dots of days with a win | list grouped by day
+---
+app "Team wins" trophy green
+table cheer who text, what text
+form cheer, "Add win"
+statcard count(cheer week), "wins this week"
+statcard count(cheer prev week), "wins last week"
+weekdots count(cheer on it) > 0
+"Latest:" last(cheer.what) faint
+list cheer by day, "No wins yet this week. Something small counts."
+===
+@rich domain=d4_meeting_load topic=meeting_hours_load style=multi_feature
+too many meetings eat my week. log each meeting with title, minutes and kind (standup, planning, review, one on one, other). set a weekly limit in hours, show the hours so far against it, a bar per day and a comparison of kinds
+needs: log a meeting with title, minutes and kind | set weekly limit in hours | hours so far against the limit | bar per day for last 7 days | comparison by kind
+---
+app "Meeting load" calendar blue
+table meet title text, mins num 5..480 = 30, kind pick Standup|Planning|Review|One_on_one|Other = Other
+setting limit num = 10 "Weekly limit (hours)"
+topbar meet, "Log meeting"
+goal round(sum(meet.mins week) / 6) / 10, limit, "hours in meetings this week", "h"
+section "Per day", "minutes"
+  daybars last 7 days, sum(meet.mins on it)
+section "By kind", "minutes this week"
+  share meet week by kind, sum(it.mins), it.key
+each meet sort at desc top 5 as m empty "No meetings logged this week."
+  row card gap 2 tap edit m swipe remove m
+    m.title grow
+    m.mins "min" faint
+===
+@rich domain=d4_team_status_board topic=team_status_board style=custom_ui
+status board for my remote team: each person has a status chip I can change by tapping (online, focus, lunch, away, offline). show how many are online and a list of people with their chips
+needs: add a person | tap chips to change a status | count of people online | list of people with status
+---
+app "Status board" users pink
+table member name text, status pick Online|Focus|Lunch|Away|Offline = Offline
+topbar member, "Add person"
+statcard count(member where status = Online), "online now", count(member)
+grid 5 gap 1
+  each options member.status as s
+    stack card gap 0 align center
+      count(member where status = s) head
+      s tiny faint
+each member sort name as m empty "No one on the board yet. Add your team."
+  stack card gap 1 swipe remove m
+    m.name bold
+    choice m.status
+===
+@rich domain=d4_leave_handover_list topic=before_leave_checklist style=multi_feature
+I am going on leave soon. set the first day away, list everything I must finish or hand over before I go, tick things off with a progress bar, and show how many days I have left
+needs: set the first day away | add a task to do before leaving | tick tasks done | progress bar of done tasks | days left until leave
+---
+app "Before leave" plane mint dark
+table prep task text, done bool
+setting leave date = today "First day away"
+topbar prep, "Add task"
+statcard leave - today, "days until I am away", 30
+"First day away:" leave bold tap edit leave
+goal count(prep where done = yes), count(prep), "tasks done"
+if leave - today <= 3 and count(prep where done = no) > 0
+  "Leave is close. Hand over what is left." bold color warn
+each prep sort done as p empty "No tasks yet. List the things only you know how to do."
+  row card gap 2 tap edit p swipe remove p
+    toggle p.done
+    p.task grow
+===
+@rich domain=d4_sync_agenda topic=weekly_sync_agenda style=detailed
+agenda for our weekly call: each topic with who brings it and the minutes I give it. I set the length of the meeting and see a bar of the minutes planned against it, going red if I planned too much
+needs: add an agenda topic with who and minutes | set meeting length | bar of planned minutes against length | red when over time | edit or remove topics
+---
+app "Sync agenda" list slate
+table topic title text, who text, mins num 1..60 = 5
+setting length num = 30 "Meeting length (min)"
+topbar topic, "Add topic"
+goal sum(topic.mins), length, if(sum(topic.mins) > length, "minutes planned, too many", "minutes planned"), "min"
+"Spare time:" max(length - sum(topic.mins), 0) "min" faint
+each topic sort at as t empty "Nothing on the agenda. Add what really needs a call."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.title bold
+      t.who faint
+    t.mins "min" bold
+===
+@rich domain=d4_home_office_claims topic=home_office_expense_claims style=multi_feature
+claiming home office costs back from the company: log each purchase with item and amount, tick when I claimed it. show how much I have not claimed yet and the total I spent this year
+needs: log a purchase with item and amount | tick when claimed | total not yet claimed | total spent this year | list newest first
+---
+app "Claims" coin grey
+table exp item text, amount money, claimed bool
+form exp, "Add purchase"
+row gap 2
+  statcard sum(exp.amount where claimed = no), "not claimed yet"
+  statcard sum(exp.amount year), "spent this year"
+"Largest purchase:" max(exp.amount) faint
+each exp sort at desc as e empty "No purchases yet. Add the chair you bought last month."
+  row card gap 2 tap edit e swipe remove e
+    toggle e.claimed
+    e.item bold grow
+    e.amount faint
+===
+@rich domain=d4_alert_rules topic=alert_rules_owners style=multi_feature
+list of all our alert rules: name, who owns it, the threshold as text, and the level (page, ticket, info). filter by level and show how many rules each owner has so we can see who is overloaded
+needs: add a rule with name, owner, threshold and level | filter by level | count of rules per owner | list sorted by name
+---
+app "Alert rules" bell red dark
+table rule name text, owner text, threshold text?, level pick Page|Ticket|Info = Ticket
+state f pick All|Page|Ticket|Info = All
+topbar rule, "Add rule"
+section "Rules per owner"
+  share rule by owner, count(it), it.key
+choice f
+each rule where f = All or level = f sort name as r empty "No rules yet. Add the alert that woke somebody last week."
+  row card gap 2 tap edit r swipe remove r
+    stack grow gap 0
+      r.name bold
+      r.owner "·" r.threshold faint
+    r.level faint color if(r.level = Page, bad, muted)
+===
+@rich domain=d4_noisy_alert_tally topic=noisy_alert_tally style=custom_ui
+tally of noisy alerts: add the alert names once, then tap a Fired button each time one goes off for nothing. show the five noisiest this week as bars and the count for each alert
+needs: add an alert name | tap fired to tally | bar chart of the five noisiest this week | count per alert | name of the noisiest
+---
+app "Noisy alerts" bolt orange
+table alert name text
+table fire alert ref alert
+topbar alert, "Add alert"
+if count(fire week) > 0
+  "Noisiest this week:" first(alert sort count(it.fire week) desc).name bold color warn
+section "Top five this week", "times fired"
+  bars alert sort count(it.fire week) desc top 5, count(it.fire week), it.name
+each alert sort name as a empty "No alerts yet. Add the one that pings you at night."
+  row card gap 2 swipe remove a
+    stack grow gap 0
+      a.name bold
+      count(a.fire week) "this week," count(a.fire) "in total" faint
+    button "Fired" tap add fire alert = a
+===
+@rich domain=d4_oncall_fatigue topic=oncall_fatigue_score style=detailed
+I want to see how tiring my on-call weeks are. for each week I enter the pages I got and how many came at night. the score is pages plus double the night pages, I set a limit and weeks above it show red, with a line of scores over time
+needs: log a week with pages and night pages | score of pages plus double night pages | set the score limit | red for weeks over the limit | line chart of scores
+---
+app "On-call load" heart plum dark
+table wkp start date = today "Week starting", pages num 0.. = 0, night num 0.. = 0 "Night pages"
+setting limit num = 15 "Score limit"
+let score(w wkp) = w.pages + 2 * w.night
+topbar wkp, "Log week"
+statcard score(last(wkp)), "score last week, limit" limit, limit
+section "Score over weeks", "oldest first"
+  trend wkp sort start, score(it)
+each wkp sort start desc as w empty "No weeks logged yet. Add the one that just ended."
+  row card gap 2 tap edit w swipe remove w fill if(score(w) > limit, bad, soft)
+    stack grow gap 0
+      "Week of" w.start bold
+      w.pages "pages," w.night "at night" faint
+    score(w) bold
+===
+@rich domain=d4_disk_usage topic=server_disk_usage style=short
+disk usage per server
+needs: add a volume with host, used GB and size GB | bar per volume | red above 85 percent | fullest first | count of volumes above 85 percent
+---
+app "Disk usage" box grey dark
+table vol host text, used num 0.. unit "GB", size num 1.. unit "GB"
+topbar vol, "Add volume"
+statcard count(vol where used * 100 / size > 85), "volumes above 85 percent"
+each vol sort used / size desc as v empty "No volumes yet. Add the disk that worries you most."
+  stack card gap 1 tap edit v swipe remove v
+    row gap 1
+      v.host bold grow
+      round(v.used * 100 / v.size) "%" bold color if(v.used * 100 / v.size > 85, bad, ink)
+    draw 100, 4
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(v.used / v.size, 0, 1), 4 fill if(v.used * 100 / v.size > 85, bad, accent) radius 2
+    v.used "of" v.size "GB" faint
+===
+@rich domain=d4_alert_silences topic=alert_silence_list style=multi_feature
+we silence alerts during work and then forget them. list each silence with the alert name, why, and the date it ends. show active ones, mark expired ones in red so I remove them, and a button to extend by one day
+needs: add a silence with alert, reason and end date | count of active silences | expired ones in red | button extends one day | list sorted by end date
+---
+app "Silences" moon slate
+table sil alert text, why text, until date
+topbar sil, "Add silence"
+statcard count(sil where until >= today), "silences active", count(sil)
+each sil sort until as s empty "No silences. That means every alert is awake."
+  row card gap 2 tap edit s swipe remove s fill if(s.until < today, bad, soft)
+    stack grow gap 0
+      s.alert bold
+      s.why faint
+      if s.until < today
+        "Expired" plural(today - s.until, "day") "ago" color bad
+      else
+        "Ends" s.until faint
+    button "+1 day" tap set s.until = s.until + 1
+===
+@rich domain=d4_latency_p95 topic=api_latency_p95_log style=multi_feature
+log the p95 latency of our API routes in ms whenever I look at the dashboard. set a budget, show a line of p95 over time, mark readings over the budget and tell me how many this week went over
+needs: log a reading with route and p95 ms | set the latency budget | line chart of p95 over time | mark readings over budget | count over budget this week
+---
+app "Latency" timer ocean
+table lat route text, p95 num 1.. unit "ms"
+setting budget num = 300 "Budget (ms)"
+topbar lat, "Log reading"
+statcard count(lat week where p95 > budget), "readings over budget this week"
+section "p95 over time", "milliseconds"
+  trend lat sort at, it.p95
+"Worst reading:" max(lat.p95) "ms" faint
+each lat sort at desc top 10 as l empty "No readings yet. Log the slowest route first."
+  row card gap 2 tap edit l swipe remove l fill if(l.p95 > budget, warn, soft)
+    l.route bold grow
+    l.p95 "ms"
+===
+@rich domain=d4_pager_swaps topic=pager_shift_swaps style=short
+pager swaps
+needs: add a swap with who asked, who covers and the shift date | status asked, agreed or done | count still open | buttons to move the status
+---
+app "Pager swaps" users yellow
+table swap from text "Asked by", cover text "Covered by", shift date, status pick Asked|Agreed|Done = Asked
+topbar swap, "Add swap"
+statcard count(swap where status != Done), "swaps still open"
+each swap sort shift as s empty "No swaps. Nobody is trading shifts right now."
+  row card gap 2 tap edit s swipe remove s
+    stack grow gap 0
+      s.from "->" s.cover bold
+      s.shift s.status faint
+    if s.status = Asked
+      button "Agreed" tap set s.status = Agreed
+    if s.status = Agreed
+      button "Done" fill accent tap set s.status = Done
+===
+@rich domain=d4_incident_free_days topic=days_without_incident style=short
+days without incident
+needs: log an incident with a title | big count of days since the last incident | grid of the last 60 days | count this year
+---
+app "Incident free" shield green
+table incident title text?
+topbar incident, "Log incident"
+statcard since(incident), "days without an incident"
+statcard count(incident year), "incidents this year"
+section "Last 60 days"
+  daygrid last 60 days, count(incident on it), 2
+"Last incident:" last(incident.title) faint
+each incident sort at desc top 5 as i empty "No incidents logged. Keep it that way."
+  row card gap 2 tap edit i swipe remove i
+    i.title grow
+    i.at faint
+===
+@rich domain=d4_capacity_headroom topic=server_capacity_headroom style=detailed
+capacity check for my servers. add each host once, then log a cpu and memory percent whenever I look. show the latest of each as two small bars per host that go red above 80, and count how many hosts are running hot
+needs: add a host | log cpu and memory percent for a host | two bars per host with latest values | red above 80 percent | count of hot hosts
+---
+app "Headroom" grid blue dark
+table host name text
+table snap host ref host, cpu num 0..100, mem num 0..100 "Memory"
+let hot = count(host, last(it.snap.cpu) > 80 or last(it.snap.mem) > 80)
+topbar host, "Add host"
+form snap, "Log reading"
+statcard hot, "hosts running hot", count(host)
+each host sort name as h empty "No hosts yet. Add the server you worry about."
+  stack card gap 1 swipe remove h
+    h.name bold
+    draw 100, 10
+      rect 0, 0, 100, 4 fill soft radius 2
+      rect 0, 0, 100 * clamp(last(h.snap.cpu) / 100, 0, 1), 4 fill if(last(h.snap.cpu) > 80, bad, accent) radius 2
+      rect 0, 6, 100, 4 fill soft radius 2
+      rect 0, 6, 100 * clamp(last(h.snap.mem) / 100, 0, 1), 4 fill if(last(h.snap.mem) > 80, bad, accent) radius 2
+    "CPU" last(h.snap.cpu) "% · memory" last(h.snap.mem) "%" faint
+===
+@rich domain=d4_ack_times topic=alert_acknowledge_times style=multi_feature
+how fast do we acknowledge alerts? I log the severity and the minutes it took someone to acknowledge. set the target in minutes for critical ones, count critical alerts that missed it, show the average per severity and a line of times
+needs: log an alert with severity and minutes to acknowledge | set the critical target in minutes | count critical ones over target | average minutes per severity | line chart of times
+---
+app "Ack times" alarm purple dark
+table ack sev pick Critical|Major|Minor = Critical, mins num 0.. "Minutes to acknowledge"
+setting slo num = 5 "Critical target (min)"
+topbar ack, "Log alert"
+statcard count(ack where sev = Critical and mins > slo), "critical alerts missed the target"
+section "Average minutes by severity"
+  share ack by sev, avg(it.mins), it.key
+section "Acknowledge time", "minutes, oldest first"
+  trend ack sort at, it.mins
+each ack sort at desc top 6 as a empty "No alerts logged yet."
+  row card gap 2 tap edit a swipe remove a
+    a.sev bold grow
+    a.mins "min" color if(a.sev = Critical and a.mins > slo, bad, ink)
+===
+@rich domain=d4_device_test_matrix topic=mobile_device_test_matrix style=custom_ui
+the phones and tablets I test my app on: name, OS version, kind (phone, tablet, watch) and a tick when this release was tested on it, plus a note of any issue found. progress bar of tested devices and a list grouped by kind
+needs: add a device with name, OS version and kind | tick tested for this release | progress bar of tested devices | note an issue | list grouped by kind
+---
+app "Device matrix" phone teal
+table dev name text, os text "OS version", kind pick Phone|Tablet|Watch = Phone, tested bool, issue text?
+topbar dev, "Add device"
+goal count(dev where tested = yes), count(dev), "devices tested this release"
+each dev by kind as g empty "No devices yet. Add the cheapest Android phone you own first."
+  section g.key
+    each g as d
+      row gap 2 tap edit d swipe remove d
+        toggle d.tested
+        stack grow gap 0
+          d.name bold
+          d.os faint
+          d.issue color bad
+===
+@rich domain=d4_steam_wishlists topic=steam_wishlist_trend style=short
+steam wishlist tracker
+needs: log a wishlist count with a note | latest count shown big | gain in the last 7 days | line chart of counts | list newest first
+---
+app "Wishlists" heart pink
+table wish n num 0.. "Wishlist count", note text?
+topbar wish, "Log count"
+row gap 2
+  statcard last(wish.n), "wishlists now"
+  statcard last(wish.n) - first(wish.n last 7 days), "gained in 7 days"
+section "Wishlists over time", "oldest first"
+  trend wish sort at, it.n
+each wish sort at desc top 8 as w empty "No counts yet. Log today's number before you post anything."
+  row card gap 2 tap edit w swipe remove w
+    stack grow gap 0
+      w.n bold
+      w.note faint
+    w.at faint
+===
+@rich domain=d4_filament_spools topic=filament_spool_stock style=custom_ui
+3d printer filament: each spool with colour, material (PLA, PETG, TPU) and grams left. buttons to subtract 50 or 100 grams after a print, red when under 200 grams, and a total of grams on the shelf
+needs: add a spool with colour, material and grams left | buttons to subtract 50 or 100 grams | red when under 200 grams | total grams on the shelf | filter by material
+---
+app "Filament" package orange
+table spool colour text, mat pick PLA|PETG|TPU|ABS = PLA "Material", grams num 0..1000 = 1000
+state f pick All|PLA|PETG|TPU|ABS = All
+topbar spool, "Add spool"
+statcard sum(spool.grams), "grams on the shelf"
+choice f
+each spool where f = All or mat = f sort grams as s empty "The shelf is empty. Add the spool on the printer now."
+  row card gap 2 tap edit s swipe remove s fill if(s.grams < 200, warn, soft)
+    stack grow gap 0
+      s.colour s.mat bold
+      s.grams "g left" faint
+    button "-50" tap set s.grams = s.grams - 50
+    button "-100" tap set s.grams = s.grams - 100

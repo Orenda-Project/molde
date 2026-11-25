@@ -1,0 +1,578 @@
+@rich domain=c5_price_per_dozen topic=price_per_dozen style=short
+price per dozen
+needs: enter pack price and pieces | price per piece | price per dozen | keep rates in a short list
+---
+app "Price per Dozen" cart ocean
+state paid money = 0
+state pieces num = 30
+table quote label text, perdoz money
+let one = if(pieces > 0, paid / pieces, 0)
+let perdoz = one * 12
+field paid "Price of the tray or crate"
+field pieces "Pieces inside"
+if paid > 0
+  statcard round(perdoz), "per dozen"
+  "One piece costs" round(one * 100) / 100 faint
+else
+  "Enter the price and the piece count to see the dozen rate." faint
+button "Keep this rate" fill accent tap add quote label = join(pieces, " pieces"), perdoz = perdoz
+section "Rates I kept", "tap to remove"
+  each quote top 5 as q empty "Nothing kept yet."
+    row tap remove q
+      q.label grow
+      q.perdoz bold
+===
+@rich domain=c5_change_notes topic=change_due_notes style=multi_feature
+at the till i need to type the bill and the cash the customer gave, then see the change and exactly how many 1000, 500, 100, 50, 20 and 10 notes to hand back. if they gave too little show how much more to collect
+needs: bill and cash fields | change to give back | note count per denomination | shows shortfall when cash is too little
+---
+app "Change Due" coin mint
+state bill money = 0
+state cash money = 0
+let change = max(0, cash - bill)
+let short = max(0, bill - cash)
+field bill "Bill total"
+field cash "Cash received"
+if short > 0
+  statcard short, "still to collect"
+else
+  statcard change, "change to give back"
+section "Notes to hand back", "largest first"
+  row
+    "1000 x" grow
+    floor(change / 1000) bold
+  row
+    "500 x" grow
+    floor(change % 1000 / 500) bold
+  row
+    "100 x" grow
+    floor(change % 500 / 100) bold
+  row
+    "50 x" grow
+    floor(change % 100 / 50) bold
+  row
+    "20 x" grow
+    floor(change % 50 / 20) bold
+  row
+    "10 x" grow
+    floor(change % 20 / 10) bold
+  "Loose coins" change % 10 faint
+===
+@rich domain=c5_soap_cartons topic=bulk_carton_packing style=detailed
+packing soap bars into cartons of 24. i type how many bars i have and how many fit per carton and what one carton costs me, and it should tell me full cartons, bars left over, and the cost of all cartons
+needs: bars on hand | bars per carton | full cartons | leftover bars | total carton cost
+---
+app "Carton Packing" package slate
+state bars num = 1000
+state per num = 24
+state price money = 45
+let full = if(per > 0, floor(bars / per), 0)
+let left = if(per > 0, bars % per, 0)
+let need = if(per > 0, full + if(left > 0, 1, 0), 0)
+field bars "Bars on hand"
+field per "Bars per carton"
+field price "Cost of one carton"
+row gap 2
+  statcard full, "full cartons"
+  statcard left, "bars left over"
+if left > 0
+  "One more carton is needed for the" left "leftover bars." faint
+else
+  "Everything fits exactly, no loose bars." faint
+section "Carton bill", need "cartons"
+  "Cartons to buy:" need
+  "Total cost" need * price big
+===
+@rich domain=c5_veg_wastage topic=vegetable_loss_percent style=multi_feature
+i sell vegetables and some rots every day. add each lot with what i bought in kg and what i actually sold in kg, and show the loss percent overall and the kilos wasted. bar for every lot would be great
+needs: add a lot with kg bought and kg sold | total kg wasted | overall loss percent | bar per lot showing its loss
+---
+app "Wastage" leaf ink dark
+table lot item text, bought num 0..2000, sold num 0..2000
+let wasted = max(0, sum(lot.bought) - sum(lot.sold))
+let lossp = if(sum(lot.bought) > 0, wasted * 100 / sum(lot.bought), 0)
+topbar lot, "Add lot"
+row gap 2
+  statcard round(wasted * 10) / 10, "kg wasted"
+  statcard round(lossp * 10) / 10, "percent lost", 100
+section "Loss per lot", "percent"
+  share lot top 8, if(it.bought > 0, round((it.bought - it.sold) * 100 / it.bought), 0), it.item
+each lot as l empty "No lots yet. Add what you bought and what you sold."
+  row card tap edit l swipe remove l
+    l.item grow
+    l.bought "kg in," l.sold "kg out" faint
+===
+@rich domain=c5_gold_exchange topic=old_gold_exchange style=detailed
+taking old gold to the jeweller to swap for a new piece. i give the weight of the old gold, its karat, today's 24 karat price per gram, and the jeweller's cut in percent, plus the weight and making charge of the new piece, then tell me how much i pay extra
+needs: old gold weight and karat | 24 karat rate | jeweller cut percent | credit value of old gold | extra amount to pay | new piece weight and making charge
+---
+app "Gold Exchange" coin plum
+state oldg num = 10
+state karat pick K18|K21|K22|K24 = K21
+state rate money = 0
+state cut num = 5
+state newg num = 12
+state making money = 0
+let purity = if(karat = K24, 1, if(karat = K22, 0.9167, if(karat = K21, 0.875, 0.75)))
+let credit = oldg * purity * rate * (1 - cut / 100)
+let price = newg * rate * if(karat = K24, 1, purity) + making
+choice karat
+field oldg "Old gold, grams"
+field rate "24 karat price per gram"
+field cut "Jeweller cut, percent"
+slider cut 0..20
+field newg "New piece, grams"
+field making "Making charge"
+statcard round(credit), "credit for the old gold"
+if price > credit
+  "Pay extra" round(price - credit) big
+else
+  "Jeweller pays you back" round(credit - price) big color good
+===
+@rich domain=c5_rent_income topic=rent_to_income style=short
+is my rent too high for my salary
+needs: monthly income and rent | rent as percent of income | verdict on 30 percent rule | highest comfortable rent
+---
+app "Rent vs Income" home red
+state income money = 0
+state rent money = 0
+state limit num = 30
+let ratio = if(income > 0, rent * 100 / income, 0)
+field income "Monthly income"
+field rent "Monthly rent"
+"Comfortable share of income" limit "%" faint
+slider limit 20..50
+if income = 0
+  "Type your income to see how heavy the rent is." faint
+else
+  statcard round(ratio), "percent of income goes to rent", 100
+  if ratio > limit
+    "Rent is above your limit" bold color bad
+  else
+    "Rent is within your limit" bold color good
+  "Comfortable rent:" round(income * limit / 100) faint
+===
+@rich domain=c5_agent_commission topic=agent_commission_pool style=multi_feature
+our property agents put in the month's sales and the office keeps a commission pool of a few percent of all sales, shared by who sold what. add each agent with his sales, let me set the pool percent, and show each agent's cut
+needs: add an agent with sales | pool percent setting | total pool amount | each agent's share of the pool | bars comparing agents
+---
+app "Commission Pool" users orange
+table agent name text, sales money
+setting poolpct num 0..30 = 3 "Pool percent of sales"
+let total = sum(agent.sales)
+let pool = total * poolpct / 100
+let cut(a agent) = if(total > 0, pool * a.sales / total, 0)
+topbar agent, "Add agent"
+row gap 2
+  statcard total, "total sales"
+  statcard round(pool), "pool at" poolpct "%"
+section "Each agent's cut"
+  each agent sort sales desc as a empty "No agents yet. Add the first agent with this month's sales."
+    row tap edit a swipe remove a
+      a.name grow
+      round(cut(a)) bold
+  bars agent, cut(it), it.name
+===
+@rich domain=c5_cheaper_pack topic=which_pack_cheaper style=short
+cheaper pack
+needs: price and grams of two packs | price per 100 grams of each | which one is cheaper | percent saved
+---
+app "Cheaper Pack" scale grey
+state pa money = 0
+state ga num = 500
+state pb money = 0
+state gb num = 750
+let ra = if(ga > 0, pa * 100 / ga, 0)
+let rb = if(gb > 0, pb * 100 / gb, 0)
+section "Pack A"
+  field pa "Price"
+  field ga "Grams"
+section "Pack B"
+  field pb "Price"
+  field gb "Grams"
+if pa > 0 and pb > 0
+  row gap 2
+    statcard round(ra * 100) / 100, "A per 100 g"
+    statcard round(rb * 100) / 100, "B per 100 g"
+  if ra < rb
+    "Pack A is cheaper, you save" round((rb - ra) * 100 / rb) "%" big color good
+  else
+    "Pack B is cheaper, you save" round((ra - rb) * 100 / ra) "%" big color good
+else
+  "Fill in both packs to compare them." faint
+===
+@rich domain=c5_markup_margin topic=markup_vs_margin style=detailed
+i keep confusing markup and margin. type my cost, slide the markup percent, and show the selling price, the profit in rupees, and what that is as a margin on the selling price. also a second box where i type the margin i want and it gives the price
+needs: cost field | markup slider | selling price and profit | margin percent | price for a wanted margin
+---
+app "Markup vs Margin" tag green
+state cost money = 0
+state markup num = 25
+state want num = 30
+let price = cost * (1 + markup / 100)
+let margin = if(price > 0, (price - cost) * 100 / price, 0)
+section "From markup"
+  field cost "What it cost me"
+  "Markup" markup "%" faint
+  slider markup 0..200
+  row gap 2
+    statcard round(price), "selling price"
+    statcard round(margin * 10) / 10, "margin, percent"
+  "Profit on each" round(price - cost) faint
+section "From a wanted margin"
+  "Margin I want" want "%" faint
+  slider want 5..80
+  "Sell it for" round(cost / (1 - want / 100)) big
+  "That equals a markup of" round(want * 100 / (100 - want)) "%" faint
+===
+@rich domain=c5_festival_discounts topic=two_stage_discount style=multi_feature
+festival sale has 20 percent off the tag and then another 10 percent off at the counter for card holders. i type the tag price and both percents and want the final price, rupees saved, and the real total discount because its not 30
+needs: tag price | first and second discount percent | final price | amount saved | real combined discount percent
+---
+app "Stacked Discounts" tag teal
+state tag money = 0
+state d1 num = 20
+state d2 num = 10
+let after1 = tag * (1 - d1 / 100)
+let final = after1 * (1 - d2 / 100)
+let real = if(tag > 0, (tag - final) * 100 / tag, 100 - (100 - d1) * (100 - d2) / 100)
+field tag "Tag price"
+"First discount" d1 "%" faint
+slider d1 0..70
+"Counter discount" d2 "%" faint
+slider d2 0..50
+statcard round(final), "you pay"
+row gap 2
+  statcard round(tag - final), "saved"
+  statcard round(real * 10) / 10, "real discount, percent"
+"After the first cut:" round(after1) faint
+===
+@rich domain=c5_cash_tally topic=end_of_day_cash_count style=detailed
+end of day i count the drawer. let me type how many notes i have of 1000, 500, 100, 50 and 20, plus coins in rupees, add it up, compare with what the sales book says i should have and show the difference
+needs: note counts per denomination | coins amount | total cash counted | expected from sales book | over or short difference
+---
+app "Drawer Count" wallet blue
+state n1000 num = 0
+state n500 num = 0
+state n100 num = 0
+state n50 num = 0
+state n20 num = 0
+state coins money = 0
+state book money = 0
+let counted = n1000 * 1000 + n500 * 500 + n100 * 100 + n50 * 50 + n20 * 20 + coins
+let diff = counted - book
+grid 2 gap 2
+  field n1000 "1000 notes"
+  field n500 "500 notes"
+  field n100 "100 notes"
+  field n50 "50 notes"
+  field n20 "20 notes"
+  field coins "Coins total"
+statcard counted, "cash counted"
+field book "Sales book says"
+if book = 0
+  "Type the sales book total to compare." faint
+else
+  if diff = 0
+    "Drawer matches the book" big color good
+  else
+    if diff > 0
+      "Over by" diff big color warn
+    else
+      "Short by" abs(diff) big color bad
+===
+@rich domain=c5_fabric_shop topic=cloth_length_price style=custom_ui
+cloth shop: customer asks for length in yards or in metres, my rate is per metre. pick the unit, type the length, and show the price, with 5 percent off when it is over 10 metres
+needs: choice of yards or metres | rate per metre | length field | price with bulk discount | length converted to metres
+---
+app "Cloth Price" bag purple dark
+state unit pick Yards|Metres = Metres
+state rate money = 0
+state len num = 3
+let metres = if(unit = Yards, len * 0.9144, len)
+let gross = metres * rate
+let off = if(metres > 10, gross * 0.05, 0)
+choice unit
+field rate "Rate per metre"
+field len "Length wanted"
+statcard round(gross - off), "to pay"
+"Cut length is" fixed(metres, 2) "metres" faint
+if off > 0
+  "Bulk discount applied, you save" round(off) faint color good
+else
+  "Over 10 metres earns 5 percent off." faint
+===
+@rich domain=c5_bargain_floor topic=lowest_price_allowed style=multi_feature
+customers always bargain. i enter what the item cost me and the least margin i can live with, and then what the customer offers. tell me my floor price and whether to accept
+needs: cost field | minimum margin slider | floor price | customer offer field | accept or refuse verdict
+---
+app "Bargain Floor" tag pink
+state cost money = 0
+state minmargin num = 15
+state offer money = 0
+let floorp = cost / (1 - minmargin / 100)
+field cost "Cost price"
+"Lowest margin I accept" minmargin "%" faint
+slider minmargin 5..50
+statcard round(floorp), "never sell below"
+field offer "Customer offers"
+if offer > 0
+  if offer >= floorp
+    "Accept" big color good
+    "You still make" round(offer - cost) faint
+  else
+    "Refuse" big color bad
+    "Ask for at least" round(floorp - offer) "more" faint
+===
+@rich domain=c5_egg_trays topic=eggs_and_trays style=detailed
+we keep hens and sell eggs by the tray of 30. i enter how many hens, what percent lay each day, and the tray price, and want eggs per day, trays per week and the income per week and per month
+needs: hens count | laying percent | tray price | eggs per day | trays per week | weekly and monthly income
+---
+app "Egg Income" egg grey
+state hens num = 40
+state lay num = 70
+state tray money = 0
+let eggs = hens * lay / 100
+let trays = eggs * 7 / 30
+field hens "Hens"
+"Laying" lay "%" faint
+slider lay 20..100
+field tray "Price of a tray of 30"
+row gap 2
+  statcard round(eggs), "eggs a day"
+  statcard round(trays * 10) / 10, "trays a week"
+section "Income"
+  "Per week" round(trays * tray) big
+  "Per month" round(trays * tray * 52 / 12) faint
+===
+@rich domain=c5_chai_breakeven topic=breakeven_cups style=multi_feature
+tea stall: rent and wages are fixed each month, each cup sells for some price and costs some to make. show how many cups i must sell a month to break even and how many that is per day, and a bar for how far i am this month
+needs: monthly fixed cost | price per cup | cost per cup | cups to break even | cups per day | progress bar for cups sold
+---
+app "Break-even Cups" cup ocean
+state fixed money = 0
+state price money = 20
+state unitcost money = 8
+state sold num = 0
+let ceil0(x num) = floor(x) + if(x > floor(x), 1, 0)
+let gain = price - unitcost
+let be = if(gain > 0, ceil0(fixed / gain), 0)
+field fixed "Rent and wages per month"
+field price "Price of a cup"
+field unitcost "Cost of a cup"
+if gain > 0
+  row gap 2
+    statcard be, "cups to break even"
+    statcard ceil0(be / 30), "cups per day"
+else
+  "The price must be above the cost of a cup." color bad
+field sold "Cups sold so far this month"
+goal sold, be, "break-even progress", " cups"
+===
+@rich domain=c5_stock_days topic=days_of_stock_left style=detailed
+how long will my stock last. i type units in the shop and how many i sell on an average day and how many days the supplier takes to deliver, and want the days left, the date i run out and the date i must order by
+needs: units in stock | average daily sale | supplier lead time | days of stock left | run-out date | order-by date
+---
+app "Stock Cover" box mint
+state stock num = 120
+state daily num = 8
+state lead num = 5
+let days = if(daily > 0, floor(stock / daily), 0)
+field stock "Units in stock"
+field daily "Sold per day"
+field lead "Supplier takes (days)"
+statcard days, "days of stock left", 60
+if daily > 0
+  "Runs out on" today + days faint
+  if days <= lead
+    "Order today, you are already late" bold color bad
+  else
+    "Order by" today + days - lead bold
+===
+@rich domain=c5_split_rent topic=split_rent_by_room style=short
+split rent
+needs: monthly rent total | roommates with room size | each person's share by room size | bar chart of shares
+---
+app "Split Rent" users slate
+table mate name text, sqft num 20..400 = 100
+setting rent money = 0 "Monthly rent"
+let area = sum(mate.sqft)
+let part(m mate) = if(area > 0, rent * m.sqft / area, 0)
+topbar mate, "Add roommate"
+row gap 2
+  statcard rent, "rent per month"
+  statcard area, "square feet in total"
+section "Who pays what", "by room size"
+  each mate sort sqft desc as m empty "Add each roommate and the size of the room."
+    row tap edit m swipe remove m
+      m.name grow
+      m.sqft "sq ft" faint
+      round(part(m)) bold
+  bars mate, part(it), it.name
+===
+@rich domain=c5_money_changer topic=currency_dealer_spread style=detailed
+i run a small exchange counter. i put in the buy rate and sell rate for dollars, then the dollar amount a customer brings, and it shows what i pay them if i buy, what they pay me if i sell, and my spread in percent and profit on 1000 dollars turned over
+needs: buy rate and sell rate | dollar amount | rupees paid to customer | rupees received from customer | spread percent | profit on 1000 dollars
+---
+app "Exchange Counter" money ink
+state buy money = 0
+state sell money = 0
+state usd num = 100
+let spread = if(buy > 0, (sell - buy) * 100 / buy, 0)
+field buy "I buy dollars at"
+field sell "I sell dollars at"
+field usd "Dollar amount"
+row gap 2
+  statcard round(usd * buy), "I pay if I buy"
+  statcard round(usd * sell), "I receive if I sell"
+statcard round(spread * 100) / 100, "spread, percent"
+"Profit on 1000 dollars bought and resold:" round(1000 * (sell - buy)) faint
+===
+@rich domain=c5_tomato_crate topic=spoiled_crate_pricing style=multi_feature
+bought a crate of tomatoes for 2400 and about 12 percent will spoil. what per kg price do i need so that after the spoilage i still earn 20 percent profit
+needs: crate cost and kilos | spoilage percent | sellable kilos | selling price per kg for target profit | profit slider
+---
+app "Crate Pricing" apple plum
+state cost money = 2400
+state kilos num = 20
+state spoil num = 12
+state profit num = 20
+let sellable = kilos * (1 - spoil / 100)
+let need = if(sellable > 0, cost * (1 + profit / 100) / sellable, 0)
+field cost "Crate cost"
+field kilos "Kilos in the crate"
+"Spoilage" spoil "%" faint
+slider spoil 0..60
+"Profit I want" profit "%" faint
+slider profit 0..80
+statcard round(sellable * 10) / 10, "kg you can actually sell"
+"Sell at" round(need * 10) / 10 "per kg" big
+"Without spoilage the price would be" round(cost * (1 + profit / 100) / max(kilos, 1)) faint
+===
+@rich domain=c5_pens_carton topic=wholesale_vs_retail style=short
+wholesale margin
+needs: carton cost and pieces | retail price per piece | profit per carton | margin percent | days to sell a carton
+---
+app "Carton Margin" package red
+state carton money = 0
+state pcs num = 144
+state retail money = 0
+state perday num = 6
+let revenue = pcs * retail
+let profit = revenue - carton
+field carton "Carton cost"
+field pcs "Pieces in a carton"
+field retail "Retail price per piece"
+field perday "Pieces sold per day"
+statcard round(profit), "profit per carton"
+if revenue > 0
+  "Margin on sales" round(profit * 100 / revenue) "%" bold
+  "A carton lasts" floor(pcs / max(perday, 1)) "days" faint
+else
+  "Fill in the retail price to see the margin." faint
+===
+@rich domain=c5_late_fee topic=late_payment_fee style=multi_feature
+a customer is late paying my invoice. i charge 2 percent for each full week after a 14 day grace period. enter invoice amount and due date and show weeks late, the fee, and the total now due
+needs: invoice amount | due date | grace days and weekly fee percent | weeks late | fee and total due
+---
+app "Late Fee" calendar orange
+state amount money = 0
+state due date = today
+state grace num = 14
+state weekly num = 2
+let late = max(0, today - due - grace)
+let weeks = floor(late / 7)
+let fee = amount * weekly / 100 * weeks
+field amount "Invoice amount"
+field due "Due date"
+field grace "Grace days"
+field weekly "Fee per week, percent"
+if weeks = 0
+  statcard amount, "due now, no fee yet"
+  "Fee starts after" grace "days past the due date." faint
+else
+  statcard round(amount + fee), "total due now"
+  "Weeks late" weeks bold
+  "Late fee" round(fee) faint color bad
+===
+@rich domain=c5_samosa_cost topic=cost_per_piece_batch style=custom_ui
+add every ingredient with its cost for a batch of samosas, tell me how many pieces the batch makes, and show the cost of one piece and the price i should charge for my profit percent
+needs: add ingredient with cost | pieces per batch | cost per piece | price for profit percent | list of ingredients
+---
+app "Batch Cost" food yellow
+table item name text, cost money
+state pieces num = 40
+state profit num = 40
+let total = sum(item.cost)
+let one = if(pieces > 0, total / pieces, 0)
+topbar item, "Add ingredient"
+row gap 2
+  statcard round(total), "batch cost"
+  statcard round(one * 100) / 100, "cost per piece"
+field pieces "Pieces in the batch"
+"Profit" profit "%" faint
+slider profit 0..150
+"Charge" round(one * (1 + profit / 100) * 10) / 10 "per piece" big
+each item as i empty "No ingredients yet. Add flour, oil, potato and the rest."
+  row card tap edit i swipe remove i
+    i.name grow
+    i.cost bold
+===
+@rich domain=c5_chai_litres topic=cups_from_milk style=detailed
+for the tea stall i buy milk in litres. i type litres bought, ml of milk in each cup and the price of a litre, then how many cups i get and the milk cost per cup, and what i make a day if i sell each cup for a set price
+needs: litres of milk | ml per cup | price per litre | cups per day | milk cost per cup | daily income minus milk
+---
+app "Milk to Cups" cup green dark
+state litres num = 10
+state ml num = 90
+state lprice money = 0
+state cup money = 0
+let cups = if(ml > 0, floor(litres * 1000 / ml), 0)
+let milkcup = ml * lprice / 1000
+field litres "Litres of milk bought"
+field ml "Milk in one cup (ml)"
+field lprice "Price per litre"
+field cup "Selling price of a cup"
+row gap 2
+  statcard cups, "cups from the milk"
+  statcard round(milkcup * 10) / 10, "milk cost per cup"
+"Left after milk:" round(cups * (cup - milkcup)) big
+===
+@rich domain=c5_sack_weigh topic=weigh_sacks_net style=multi_feature
+at the grain stall i weigh each sack with the sack on the scale. let me add each sack with gross kg and the empty sack weight, show net kg of all sacks together, and the amount to pay at the rate per kg
+needs: add a sack with gross and tare weight | net kg per sack | total net kg | rate per kg | amount to pay
+---
+app "Sack Weigh" bag teal
+table sack gross num 0..200, tare num 0..5 = 0.5
+setting rate money = 0 "Rate per kg"
+let net = sum(sack, it.gross - it.tare)
+topbar sack, "Add sack"
+row gap 2
+  statcard round(net * 10) / 10, "kg net in total"
+  statcard round(net * rate), "to pay"
+each sack as s empty "No sacks weighed yet. Add the first sack."
+  row card tap edit s swipe remove s
+    "Sack" grow
+    s.gross "gross" faint
+    s.gross - s.tare "kg net" bold
+===
+@rich domain=c5_buy3get1 topic=buy_three_get_one style=short
+buy 3 get 1 free
+needs: price of one | how many bought and how many free | real price per piece | percent discount | total to pay
+---
+app "Buy Get Free" gift blue
+state price money = 0
+state paid num = 3
+state free num = 1
+state want num = 8
+let sets = if(paid + free > 0, floor(want / (paid + free)), 0)
+let rest = want - sets * (paid + free)
+let pay = sets * paid + min(rest, paid)
+field price "Price of one"
+"Buy" paid "get" free "free" faint
+slider paid 1..10
+slider free 1..5
+field want "I need pieces"
+statcard round(pay * price), "total to pay"
+"Real price per piece" round(pay * price * 100 / max(want, 1)) / 100 faint
+"That is" round(100 - pay * 100 / max(want, 1)) "% off" bold

@@ -1,0 +1,594 @@
+@rich domain=c6_zone_meeting_hour topic=time_zone_meeting_hour style=short
+time zone meeting
+needs: city choice | my meeting hour slider | their local time | next or previous day note | working-hours check
+---
+app "Meeting Hour" clock ocean
+state city pick Dubai|London|New_York|Sydney = London
+state hr num = 16
+let off = if(city = Dubai, -1, if(city = London, -5, if(city = New_York, -10, 6)))
+let there = (hr + off) % 24
+let day = floor((hr + off) / 24)
+let hh(h num) = join(if(h < 10, "0", ""), h, ":00")
+row gap 1
+  choice city
+"My time" hh(hr) faint
+slider hr 0..23
+"Their time" big
+hh(there) big
+if day = 1
+  "That is the next day for them." faint
+if day = -1
+  "That is the previous day for them." faint
+if there >= 9 and there <= 18
+  "Good, it is working hours there." bold color good
+else
+  "Outside working hours there. Try another slot." bold color warn
+===
+@rich domain=c6_flight_arrival_local topic=flight_arrival_local_time style=short
+landing time
+needs: departure hour and minute | flight duration | clock difference at destination | arrival local time | next day note
+---
+app "Landing Time" plane mint
+state dh num = 22
+state dm num = 30
+state fh num = 7
+state fm num = 45
+state diff num = -3
+let total = dh * 60 + dm + fh * 60 + fm + diff * 60
+let t = total % 1440
+let days = floor(total / 1440)
+let hm(x num) = join(if(floor(x / 60) < 10, "0", ""), floor(x / 60), ":", if(x % 60 < 10, "0", ""), x % 60)
+section "Departure"
+  field dh "Hour (0-23)"
+  field dm "Minute"
+section "Flight"
+  field fh "Hours in the air"
+  field fm "Minutes"
+  field diff "Destination clock minus mine (hours)"
+hm(t) big
+"local time when you land" faint
+if days >= 1
+  "That is" plural(days, "day") "later than you left." bold
+if days < 0
+  "That is the day before you left, by the clocks." bold
+===
+@rich domain=c6_shift_overtime_pay topic=shift_hours_overtime_pay style=multi_feature
+im a hospital technician with normal, evening and holiday shifts. evening pays one and a quarter, holiday double. i add each shift with hours and kind and my hourly rate sits in settings. show this month's pay, hours worked and a chart of the last 7 days
+needs: add a shift with hours and kind | hourly rate setting | pay for this month | total hours worked | bar chart of last 7 days hours
+---
+app "Shift Pay" clock slate
+table shift hours num 0.5..16, kind pick Normal|Evening|Holiday = Normal
+setting rate money = 450 "Hourly rate"
+let pay(s shift) = s.hours * rate * if(s.kind = Evening, 1.25, if(s.kind = Holiday, 2, 1))
+topbar shift, "Add shift"
+statcard round(sum(shift month, pay(it))), "earned this month"
+row gap 2
+  statcard sum(shift.hours month), "hours this month"
+  statcard count(shift month), "shifts"
+section "Hours, last 7 days"
+  daybars last 7 days, sum(shift.hours on it)
+each shift month as s empty "No shifts logged this month. Add your first one."
+  row card tap edit s swipe remove s
+    s.hours "h" s.kind grow
+    round(pay(s)) bold
+===
+@rich domain=c6_night_shift_premium topic=night_shift_allowance style=detailed
+factory pays monthly salary with a premium percent of the hourly rate for each night shift of eight hours. i type salary, normal monthly hours, number of nights this month and premium percent. show hourly rate, premium per night and the total with allowance
+needs: monthly salary and monthly hours | night shifts this month | premium percent | premium per night | total pay with allowance
+---
+app "Night Allowance" moon ink dark
+state salary money = 52000
+state hours num = 208
+state nights num = 8
+state prem num = 30
+let hourly = salary / max(hours, 1)
+let per_night = hourly * 8 * prem / 100
+section "Pay"
+  field salary "Monthly salary"
+  field hours "Normal hours a month"
+section "Nights"
+  "Night shifts" nights faint
+  slider nights 0..26
+  "Premium" prem "%" faint
+  slider prem 0..100
+row gap 2
+  statcard round(hourly), "per normal hour"
+  statcard round(per_night), "extra per night"
+statcard round(salary + per_night * nights), "total this month"
+"Allowance only:" round(per_night * nights) faint
+===
+@rich domain=c6_project_hours_estimate topic=project_hours_to_finish_date style=multi_feature
+i do web projects alone. i list each task with its hours, say how many hours a day i can really work and add a safety buffer percent. tell me total hours, working days needed and about which date i will finish, weekends included
+needs: add a task with hours | hours per day and buffer percent | total hours with buffer | working days needed | estimated finish date
+---
+app "Project Estimate" timer plum
+table task name text, hrs num 0.5..200
+setting perday num = 5 "Work hours a day"
+setting buffer num = 20 "Safety buffer (%)"
+let total = sum(task.hrs) * (100 + buffer) / 100
+let days = floor((total + perday - 1) / max(perday, 1))
+topbar task, "Add task"
+row gap 2
+  statcard round(total), "hours with buffer"
+  statcard days, "working days"
+if days > 0
+  "Finish around" today + floor(days * 7 / 5) big
+each task top 8 as t empty "No tasks yet. List the first piece of work."
+  row card tap edit t swipe remove t
+    t.name grow
+    t.hrs "h" bold
+===
+@rich domain=c6_freelance_deadline_load topic=freelance_deadline_hours_per_day style=custom_ui
+client wants delivery by a date. i give the hours still left on the job, the deadline, how many hours a day i can work at most and my rate, and it tells me hours per day i need, whether i can make it, and what the job pays
+needs: hours left and deadline date | most hours per day i can work | rate per hour | hours per day needed | can i make it and what it pays
+---
+app "Deadline Load" timer red
+state left num = 36
+state by date = today + 6
+state cap num = 6
+state rate money = 1500
+let days = max(by - today, 1)
+let need = left / days
+field left "Hours left on the job"
+field by "Deadline"
+field cap "Most hours I can work a day"
+field rate "My rate per hour"
+statcard round(need * 10) / 10, "hours a day for" plural(days, "day"), cap
+if need > cap
+  "Not possible at this pace. Ask for" floor((left + cap - 1) / max(cap, 1)) - days "more days." bold color bad
+else
+  "You can make it." bold color good
+"The job pays" round(left * rate) big
+===
+@rich domain=c6_pomodoro_budget topic=pomodoro_time_budget style=multi_feature
+i have a pile of study work and want to know how long the session really takes with breaks. i set number of pomodoros, work and short break minutes, a long break after every fourth, and my start time, then it shows total time and the finish clock time
+needs: number of pomodoros | work and break minutes | long break after every fourth | total session time | finish clock time
+---
+app "Pomodoro Budget" hourglass orange
+state pomos num = 8
+state work num = 25
+state brk num = 5
+state long num = 15
+state start time = 9:00
+let nlong = floor(max(pomos - 1, 0) / 4)
+let nshort = max(pomos - 1, 0) - nlong
+let total = pomos * work + nshort * brk + nlong * long
+let end = (hour(start) * 60 + minute(start) + total) % 1440
+let hm(x num) = join(if(floor(x / 60) < 10, "0", ""), floor(x / 60), ":", if(x % 60 < 10, "0", ""), x % 60)
+"Pomodoros" pomos faint
+slider pomos 1..16
+row gap 2
+  field work "Work (min)"
+  field brk "Short break"
+  field long "Long break"
+field start "Start time"
+floor(total / 60) "h" total % 60 "min" big
+"whole session" faint
+hm(end) big
+"finish time" faint
+"Focus time:" pomos * work "min" faint
+===
+@rich domain=c6_marks_needed_final topic=final_paper_marks_needed style=detailed
+coursework gave me 24 out of 40 and the final paper is out of 60. to pass the course i need 50 overall and for an a i need 80. type what i got and the targets, and tell me how many marks i need in the final for each and if it is even possible
+needs: coursework marks and total | final paper total marks | pass and top grade targets | marks needed in the final for each | possible or not note
+---
+app "Marks Needed" pen yellow
+state got num = 24
+state cw num = 40
+state final num = 60
+state pass num = 50
+state top num = 80
+let need_p = max(pass - got, 0)
+let need_t = max(top - got, 0)
+section "Marks so far"
+  field got "Coursework marks got"
+  field cw "Coursework out of"
+  field final "Final paper out of"
+section "Targets (out of" cw + final ")"
+  field pass "To pass"
+  field top "For the top grade"
+row gap 2
+  statcard need_p, "needed in the final to pass", final
+  statcard need_t, "needed for the top grade", final
+if need_t > final
+  "The top grade is out of reach. Aim for a pass or a middle grade." color warn
+else
+  "Both targets are possible. Study the topics you lost marks on." color good
+===
+@rich domain=c6_paper_average_target topic=target_average_remaining_paper style=multi_feature
+i have done four papers and have one left. add each paper i finished with marks and total, set my target average percent, and show my percent so far and the marks i need in the last paper, which is out of 100
+needs: add a paper with marks and total | target average percent | percent so far | marks needed in the last paper | whether the target is reachable
+---
+app "Last Paper" school green
+table paper marks num 0..500, outof num 1..500 = 100
+setting target num = 70 "Target average (%)"
+state lastmax num = 100
+let done_m = sum(paper.marks)
+let done_t = sum(paper.outof)
+let need = (done_t + lastmax) * target / 100 - done_m
+topbar paper, "Add paper"
+row gap 2
+  statcard round(done_m * 100 / max(done_t, 1)), "% so far"
+  statcard count(paper), "papers done"
+field lastmax "Last paper is out of"
+statcard max(round(need), 0), "marks needed in the last paper", lastmax
+if need > lastmax
+  "Target out of reach now. Lower it a little." bold color bad
+else
+  "Reachable. Keep going." bold color good
+each paper top 8 as p empty "No papers yet. Add your first result."
+  row card tap edit p swipe remove p
+    p.marks "of" p.outof grow
+    round(p.marks * 100 / p.outof) "%" bold
+===
+@rich domain=c6_workout_burn_log topic=workout_calories_burned_log style=multi_feature
+at the gym i do walking, running, cycling or swimming. pick the activity, type my weight and minutes and show calories burned. then a button should save the session so i can see this week's total in a chart
+needs: activity choice | weight and minutes | calories burned | save the session | chart of this week's calories
+---
+app "Burn Log" dumbbell teal
+table session act text, kcal num
+state act pick Walk|Run|Cycle|Swim = Run
+state kg num = 72
+state mins num = 30
+let met = if(act = Walk, 3.5, if(act = Run, 9.8, if(act = Cycle, 7.5, 8)))
+let kcal = round(met * 3.5 * kg / 200 * mins)
+choice act
+row gap 2
+  field kg "Weight (kg)"
+  field mins "Minutes"
+statcard kcal, "calories this session"
+button "Save session" fill accent tap add session act = act, kcal = kcal
+section "This week", sum(session.kcal week) "calories"
+  daybars last 7 days, sum(session.kcal on it)
+each session week as s empty "No sessions saved this week."
+  row card tap remove s
+    s.act grow
+    s.kcal "kcal" bold
+===
+@rich domain=c6_steps_to_km_kcal topic=steps_to_distance_and_calories style=custom_ui
+my watch shows steps but i want kilometres. my stride is about 75 cm. type steps, stride and my weight and show distance in km, walking time at 5 km an hour and calories at half a calorie per kg per km
+needs: step count | stride length in cm | distance in km | walking time | calories burned
+---
+app "Steps to Km" walk blue
+state steps num = 8500
+state stride num = 75
+state kg num = 70
+let km = steps * stride / 100000
+field steps "Steps today"
+field stride "Stride length (cm)"
+field kg "Weight (kg)"
+statcard round(km * 100) / 100, "kilometres"
+row gap 2
+  statcard round(km * 12), "minutes walking"
+  statcard round(km * kg * 0.5), "calories"
+goal steps, 10000, "of the 10,000 step target"
+===
+@rich domain=c6_sleep_cycles_times topic=sleep_cycles_bedtime_wake style=short
+sleep cycles
+needs: bedtime and wake time | hours slept | full 90 minute cycles | cycle-end wake times for 4 5 and 6 cycles | note when under 6 hours
+---
+app "Sleep Cycles" bed purple
+state bed time = 23:00
+state wake time = 6:30
+let slept = wake - bed
+let hrs = slept / 1h
+let cycles = floor(hrs * 60 / 90)
+let hm(x num) = join(if(floor(x / 60) < 10, "0", ""), floor(x / 60), ":", if(x % 60 < 10, "0", ""), x % 60)
+field bed "Bedtime"
+field wake "Wake time"
+row gap 2
+  statcard round(hrs * 10) / 10, "hours in bed"
+  statcard cycles, "full cycles"
+if hrs < 6
+  "Under six hours. Try going to bed earlier." color warn bold
+section "Wake times that end a cycle"
+  each [4, 5, 6] as c
+    row
+      c "cycles" grow
+      hm((hour(bed) * 60 + minute(bed) + 15 + c * 90) % 1440) bold
+===
+@rich domain=c6_wake_backwards_plan topic=morning_plan_wake_time_backwards style=custom_ui
+i have a flight meeting at a set time and always oversleep. give me the time i leave the house to arrive on time, and the time to wake up if i need so many minutes to get ready, so many to travel and a buffer
+needs: arrival time needed | minutes to travel and buffer | minutes to get ready | time to leave | time to wake up
+---
+app "Wake Backwards" alarm pink
+state arrive time = 9:00
+state travel num = 45
+state buffer num = 15
+state ready num = 40
+let a = hour(arrive) * 60 + minute(arrive)
+let leave = (a - travel - buffer + 1440) % 1440
+let wake = (leave - ready + 1440) % 1440
+let hm(x num) = join(if(floor(x / 60) < 10, "0", ""), floor(x / 60), ":", if(x % 60 < 10, "0", ""), x % 60)
+field arrive "Be there by"
+field travel "Travel (minutes)"
+field buffer "Buffer (minutes)"
+field ready "Getting ready (minutes)"
+hm(leave) big
+"leave the house at" faint
+hm(wake) big
+"wake up at" faint
+"That is" travel + buffer + ready "minutes before you arrive." faint
+===
+@rich domain=c6_due_date_weeks topic=due_date_from_last_period style=detailed
+my sister wants dates only: from the first day of her last period work out the due date, how many weeks along she is today, how many days are left and the dates where each trimester starts. cycle might not be exactly 28 days so let her change it
+needs: first day of last period | cycle length | due date | weeks along and days left | trimester start dates
+---
+app "Due Date" baby grey
+state lmp date = today - 84
+state cycle num = 28
+let due = lmp + 280 + (cycle - 28)
+let along = max(today - lmp - (cycle - 28), 0)
+field lmp "First day of last period"
+field cycle "Usual cycle length (days)"
+due big
+"estimated due date" faint
+row gap 2
+  statcard floor(along / 7), "weeks along"
+  statcard max(due - today, 0), "days to go"
+goal min(along, 280), 280, "of 280 days"
+section "Trimesters begin"
+  row
+    "Second" grow
+    lmp + (cycle - 28) + 91 bold
+  row
+    "Third" grow
+    lmp + (cycle - 28) + 189 bold
+===
+@rich domain=c6_baby_feed_by_weight topic=baby_feed_amount_by_weight style=multi_feature
+the doctor gave us a number of ml per kg per day for the baby. i type the baby's weight, that number and how many feeds a day, and want ml per feed, ml per day and the gap in hours between feeds, nothing medical from the app
+needs: baby weight in kg | ml per kg per day from the doctor | feeds per day | ml per feed and per day | hours between feeds
+---
+app "Feed Planner" baby ocean
+state kg num = 5.2
+state per_kg num = 150
+state feeds num = 8
+let day = kg * per_kg
+let each_feed = day / max(feeds, 1)
+field kg "Baby weight (kg)"
+field per_kg "ml per kg per day (your doctor's number)"
+"Feeds a day" feeds faint
+slider feeds 1..12
+row gap 2
+  statcard round(each_feed), "ml each feed"
+  statcard round(day), "ml a day"
+"A feed about every" round(24 / max(feeds, 1) * 10) / 10 "hours" bold
+"Only a guide to share the doctor's number across the day." faint
+===
+@rich domain=c6_dose_times_schedule topic=medicine_dose_times_course style=custom_ui
+dad has a course of tablets. let me set the first dose time, how many doses a day and the gap in hours, then list the clock time of each dose in a day and tell me what date the course finishes for the number of days
+needs: first dose time | doses per day | gap in hours | list of dose clock times | course finish date
+---
+app "Dose Times" pill mint
+state first time = 8:00
+state doses num = 3
+state gap num = 6
+state days num = 7
+let hm(x num) = join(if(floor(x / 60) < 10, "0", ""), floor(x / 60), ":", if(x % 60 < 10, "0", ""), x % 60)
+field first "First dose at"
+"Doses a day" doses faint
+slider doses 1..6
+"Gap" gap "hours" faint
+slider gap 2..12
+section "Times each day"
+  each 0..doses - 1 as k
+    row
+      "Dose" k + 1 grow
+      hm((hour(first) * 60 + minute(first) + k * gap * 60) % 1440) bold
+field days "Days in the course"
+statcard doses * days, "doses in total"
+"Last day of the course" today + days - 1 big
+===
+@rich domain=c6_income_split_503020 topic=income_split_needs_wants_savings style=short
+pay split
+needs: monthly income | needs and wants sliders | savings as the remainder | amount for each part | bar chart of the three
+---
+app "Pay Split" wallet slate
+state income money = 85000
+state needs num = 50
+state wants num = 30
+let save = max(100 - needs - wants, 0)
+field income "Monthly income"
+"Needs" needs "%" faint
+slider needs 0..100
+"Wants" wants "%" faint
+slider wants 0..100
+row gap 2
+  statcard round(income * needs / 100), "needs"
+  statcard round(income * wants / 100), "wants"
+  statcard round(income * save / 100), "savings"
+bars [1, 2, 3], if(it = 1, needs, if(it = 2, wants, save)), if(it = 1, "Needs", if(it = 2, "Wants", "Savings"))
+if needs + wants > 100
+  "Needs and wants add up to more than 100%." color bad
+===
+@rich domain=c6_raise_calculator topic=salary_raise_new_pay style=short
+raise
+needs: current salary | raise as percent or fixed amount | new salary | extra per month and per year
+---
+app "Raise" chart ink
+state salary money = 70000
+state kind pick Percent|Amount = Percent
+state val num = 10
+let newpay = if(kind = Percent, salary * (100 + val) / 100, salary + val)
+field salary "Salary now"
+row gap 1
+  "Raise is a" faint
+  choice kind
+field val "Raise (% or amount)"
+statcard round(newpay), "new salary"
+row gap 2
+  statcard round(newpay - salary), "more a month"
+  statcard round((newpay - salary) * 12), "more a year"
+===
+@rich domain=c6_group_bus_fare topic=group_bus_fare_children_discount style=detailed
+taking the family to lahore by bus. fare per adult is one number, kids get a percentage off, and i want to know the return trip too. give how many adults and kids, the fare and discount and show total and what each person pays
+needs: adults and kids | adult fare | child discount percent | return trip switch | total fare and cost per person
+---
+app "Bus Fare" bus plum
+state adults num = 2
+state kids num = 3
+state fare money = 1800
+state disc num = 50
+state back bool = yes
+let one_way = adults * fare + kids * fare * (100 - disc) / 100
+let total = one_way * if(back, 2, 1)
+section "Travellers"
+  "Adults" adults faint
+  slider adults 0..10
+  "Children" kids faint
+  slider kids 0..10
+section "Fare"
+  field fare "Adult fare, one way"
+  field disc "Child discount %"
+  row gap 2
+    "Return trip too" grow
+    toggle back
+statcard round(total), "total fare for" plural(adults + kids, "person")
+"Each child pays" round(fare * (100 - disc) / 100 * if(back, 2, 1)) faint
+"Average per person:" round(total / max(adults + kids, 1)) bold
+===
+@rich domain=c6_hotel_stay_total topic=hotel_stay_total_with_tax style=multi_feature
+booking a hotel in murree for a weekend. room rate per night, number of rooms and nights, sales tax percent, a fixed tourism fee per night, and breakfast per person per day if we want it. show total, per night and per head
+needs: room rate rooms and nights | tax percent | tourism fee per night | breakfast per person switch | total per night and per head
+---
+app "Hotel Total" home red
+state rate money = 9000
+state rooms num = 2
+state nights num = 2
+state tax num = 16
+state fee money = 300
+state people num = 5
+state brk bool = yes
+state bprice money = 800
+let room_cost = rate * rooms * nights
+let bf = if(brk, people * bprice * nights, 0)
+let total = (room_cost + bf) * (100 + tax) / 100 + fee * nights
+section "Stay"
+  field rate "Room rate per night"
+  field rooms "Rooms"
+  field nights "Nights"
+  field people "People"
+section "Extras"
+  field tax "Sales tax %"
+  field fee "Tourism fee per night"
+  row gap 2
+    "Breakfast for everyone" grow
+    toggle brk
+  field bprice "Breakfast per person per day"
+statcard round(total), "total for" plural(nights, "night")
+row gap 2
+  statcard round(total / max(nights, 1)), "per night"
+  statcard round(total / max(people, 1)), "per head"
+===
+@rich domain=c6_baggage_excess_fee topic=baggage_weight_excess_charge style=multi_feature
+packing for abroad. airline lets me take a set number of kilos and charges per extra kilo. i add each bag with its weight and see total weight, kilos over the allowance and the fee for them, before i am at the counter
+needs: add a bag with weight | baggage allowance | total weight | kilos over the allowance | excess fee per kilo
+---
+app "Baggage Check" bag orange
+table bag name text, kg num 0.1..50
+setting allow num = 30 "Allowance (kg)"
+setting fee money = 2500 "Fee per extra kg"
+let total = sum(bag.kg)
+let over = max(total - allow, 0)
+topbar bag, "Add bag"
+goal total, allow, "kg packed against the allowance", "kg"
+if over > 0
+  statcard round(over * fee), "excess fee for" round(over * 10) / 10 "kg over"
+else
+  "Within the allowance. You can still add" round((allow - total) * 10) / 10 "kg." bold color good
+each bag as b empty "No bags yet. Add the first suitcase."
+  row card tap edit b swipe remove b
+    b.name grow
+    b.kg "kg" bold
+===
+@rich domain=c6_parking_daily_cap topic=parking_fee_with_daily_cap style=short
+parking fee
+needs: hours parked | first hour rate and later hour rate | daily cap | days per month | cost of one visit and month total
+---
+app "Parking Fee" car yellow dark
+state hrs num = 5
+state first money = 100
+state later money = 60
+state cap money = 400
+state days num = 22
+let one = min(first + max(hrs - 1, 0) * later, cap)
+section "Rates"
+  field first "First hour"
+  field later "Each extra hour"
+  field cap "Daily cap"
+section "My parking"
+  "Hours per visit" hrs faint
+  slider hrs 1..14
+  "Days a month" days faint
+  slider days 1..31
+statcard round(one), "per visit"
+statcard round(one * days), "per month"
+if first + max(hrs - 1, 0) * later > cap
+  "The cap saves you" round(first + max(hrs - 1, 0) * later - cap) "on each visit." color good
+===
+@rich domain=c6_laundry_bill_items topic=laundry_bill_by_item style=multi_feature
+the dhobi gives a bill with a list i never check. i add each type of item with how many pieces and the price per piece and want the grand total, number of pieces and a bar of which item cost the most
+needs: add an item with pieces and price per piece | cost per item | grand total | number of pieces | bar chart by item
+---
+app "Laundry Bill" tag green
+table piece what text, qty num 1..100, price money
+topbar piece, "Add item"
+row gap 2
+  statcard round(sum(piece, it.qty * it.price)), "grand total"
+  statcard sum(piece.qty), "pieces"
+section "Cost by item"
+  bars piece, it.qty * it.price, it.what
+each piece as p empty "Nothing listed yet. Add the first item."
+  row card tap edit p swipe remove p
+    stack grow gap 0
+      p.what
+      p.qty "x" p.price faint
+    round(p.qty * p.price) bold
+===
+@rich domain=c6_lunchbox_weekly_cost topic=school_lunch_weekly_cost style=detailed
+packing lunch for my kids against buying from the canteen. i enter what a packed lunch, snack and drink cost per child per day, the school days and number of kids, and the canteen price. show the week, the month and the yearly saving
+needs: lunch snack and drink cost | number of kids and school days | canteen price | weekly and monthly cost | yearly saving against canteen
+---
+app "Lunch Cost" food teal
+state lunch money = 120
+state snack money = 40
+state drink money = 30
+state kids num = 2
+state days num = 5
+state canteen money = 300
+let day = (lunch + snack + drink) * kids
+let week = day * days
+section "Packed lunch per child per day"
+  field lunch "Lunch"
+  field snack "Snack"
+  field drink "Drink"
+section "Family"
+  "Kids" kids faint
+  slider kids 1..6
+  "School days a week" days faint
+  slider days 1..6
+  field canteen "Canteen price per child per day"
+row gap 2
+  statcard round(week), "packed, per week"
+  statcard round(week * 4.3), "packed, per month"
+"Saving over the canteen, per year (40 weeks):" round((canteen * kids * days - week) * 40) big color good
+===
+@rich domain=c6_gym_cost_visit topic=gym_cost_per_visit style=multi_feature
+paying for the gym every month and i wonder if it is worth it. i tap a button each time i go, set my monthly fee and a target number of visits, and want to see visits this month and what each visit has cost me
+needs: monthly fee | button to log a visit | visits this month | cost per visit | target visits progress
+---
+app "Gym Value" dumbbell blue
+table visit
+setting fee money = 6000 "Monthly fee"
+setting target num = 12 "Visits wanted"
+let n = count(visit month)
+button "I went today" fill accent tap add visit
+goal n, target, "visits this month"
+row gap 2
+  statcard n, "visits so far"
+  statcard if(n > 0, round(fee / n), fee), "per visit so far"
+if n >= target
+  "Target reached. Every extra visit now makes it cheaper." bold color good
+else
+  "Still" target - n "visits to go." faint
+daygrid last 28 days, count(visit on it), 1

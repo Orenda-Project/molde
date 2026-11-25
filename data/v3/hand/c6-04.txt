@@ -1,0 +1,560 @@
+@rich domain=c6_bus_pass_vs_daily topic=monthly_bus_pass_vs_daily_fare style=short
+bus pass or daily
+needs: pass price | single fare and trips per day | travel days per month | cost of each way | break-even days
+---
+app "Bus Pass" bus pink
+state pass money = 3000
+state fare money = 60
+state trips num = 2
+state days num = 22
+let daily = fare * trips * days
+section "Prices"
+  field pass "Monthly pass"
+  field fare "Single fare"
+section "My travel"
+  "Trips a day" trips faint
+  slider trips 1..6
+  "Travel days a month" days faint
+  slider days 1..31
+row gap 2
+  statcard round(daily), "paying each trip"
+  statcard round(pass), "with the pass"
+"Pass wins after" floor(pass / max(fare * trips, 1)) + 1 "days of travel" big
+"Pass" if(pass < daily, "saves", "costs") round(abs(daily - pass)) "a month." faint color if(pass < daily, good, warn)
+===
+@rich domain=c6_ev_vs_petrol_km topic=electric_vs_petrol_cost_per_km style=detailed
+thinking about an electric car. battery is 40 kwh and goes about 250 km on a full charge. electricity price per unit, and my petrol car does 11 km per litre at the current price. show cost per km for both and what i would save in a month of driving
+needs: battery size and range | electricity price per unit | petrol car km per litre and petrol price | cost per km of each | monthly saving
+---
+app "EV or Petrol" bolt ocean
+state kwh num = 40
+state range num = 250
+state unit money = 55
+state kmpl num = 11
+state petrol money = 270
+state km num = 1200
+let ev_km = kwh * unit / max(range, 1)
+let pet_km = petrol / max(kmpl, 0.1)
+section "Electric car"
+  field kwh "Battery (kWh)"
+  field range "Range on a full charge (km)"
+  field unit "Electricity per unit"
+section "Petrol car"
+  field kmpl "Km per litre"
+  field petrol "Petrol per litre"
+field km "Km I drive a month"
+row gap 2
+  statcard round(ev_km * 10) / 10, "per km, electric"
+  statcard round(pet_km * 10) / 10, "per km, petrol"
+"Monthly saving with electric:" round((pet_km - ev_km) * km) big color good
+===
+@rich domain=c6_tyre_cost_km topic=tyre_cost_per_km style=short
+tyre cost per km
+needs: price of one tyre | number of tyres | km the tyres last | cost per km | cost for a month of driving
+---
+app "Tyre Cost" car green
+state price money = 22000
+state count num = 4
+state life num = 45000
+state km num = 1500
+field price "Price of one tyre"
+"Tyres changed" count faint
+slider count 1..6
+field life "Km they last"
+statcard round(price * count / max(life, 1) * 100) / 100, "per km"
+"A month of driving (" km "km) wears" round(price * count / max(life, 1) * km) big
+field km "Km a month"
+===
+@rich domain=c6_phone_instalment_vs_cash topic=phone_instalment_vs_cash style=detailed
+shop says the phone is cash price x but i can take it in instalments with a down payment. type the cash price, down payment, instalment amount and the number of months, then show total i pay, the extra over cash and that extra as a percent of the cash price
+needs: cash price | down payment | instalment amount and months | total paid | extra over cash and percent
+---
+app "Instalment or Cash" phone purple
+state cash money = 90000
+state down money = 20000
+state inst money = 7500
+state months num = 12
+let total = down + inst * months
+let extra = total - cash
+field cash "Cash price"
+field down "Down payment"
+field inst "Monthly instalment"
+"Months" months faint
+slider months 3..36
+statcard round(total), "total with instalments"
+row gap 2
+  statcard round(extra), "extra over cash"
+  statcard round(extra * 1000 / max(cash, 1)) / 10, "% more than cash"
+if extra <= 0
+  "No markup. Instalments cost nothing extra here." bold color good
+else
+  "Paying cash saves you" round(extra) bold color warn
+===
+@rich domain=c6_sofa_instalment_book topic=furniture_instalment_tracker style=multi_feature
+bought a sofa set on instalments, shop adds a flat markup percent every month on what is left after the down payment. i type price, down payment percent, months and markup, then record each instalment i pay and see how much is still due
+needs: price down payment percent months and markup | monthly instalment amount | record each instalment paid | total due | amount still left to pay
+---
+app "Sofa Instalments" home yellow
+table paid amount money, note text?
+state price money = 120000
+state down num = 25
+state months num = 10
+state mark num = 2
+let base = price * (100 - down) / 100
+let total_due = price * down / 100 + base * (100 + mark * months) / 100
+let each_inst = base * (100 + mark * months) / 100 / max(months, 1)
+let left = max(total_due - sum(paid.amount), 0)
+topbar paid, "Record payment"
+section "Deal"
+  field price "Cash price"
+  "Down payment" down "%" faint
+  slider down 0..60
+  "Months" months faint
+  slider months 3..24
+  field mark "Markup % per month"
+row gap 2
+  statcard round(each_inst), "each instalment"
+  statcard round(total_due), "total due"
+goal sum(paid.amount), total_due, "paid so far"
+statcard round(left), "still left to pay"
+each paid top 6 as p empty "No payment recorded yet."
+  row card tap edit p swipe remove p
+    p.note grow
+    p.amount bold
+===
+@rich domain=c6_loan_prepay_saving topic=loan_extra_payment_saving style=custom_ui
+i have a car loan and could pay extra every month. type the loan amount, interest, years and the extra i can add and it should show how many months to finish with and without the extra, and the interest i save
+needs: loan amount interest and years | extra monthly payment | months to finish with and without extra | interest saved
+---
+app "Prepay Loan" money slate dark
+state loan money = 2000000
+state rate num = 15
+state years num = 5
+state extra money = 20000
+let r = rate / 1200
+let n = years * 12
+let pay = if(r > 0, loan * r / (1 - pow(1 + r, 0 - n)), loan / max(n, 1))
+let bal(k num, pm money) = loan * pow(1 + r, k) - pm * (pow(1 + r, k) - 1) / max(r, 0.000001)
+let m2 = count(1..600, bal(it, pay + extra) > 1) + 1
+let int1 = pay * n - loan
+let int2 = (pay + extra) * m2 - loan
+field loan "Loan amount"
+field rate "Interest % a year"
+"Years" years faint
+slider years 1..10
+field extra "Extra each month"
+row gap 2
+  statcard round(pay), "normal payment"
+  statcard n, "months as planned"
+statcard m2, "months with the extra"
+"Interest saved:" round(max(int1 - int2, 0)) big color good
+===
+@rich domain=c6_insurance_premium_mode topic=insurance_premium_pay_mode style=detailed
+the insurer quotes a yearly premium but charges a loading if i pay monthly or quarterly. pick how i pay, add tax percent and show what each payment is, what i pay across the year and how much more that is than paying yearly
+needs: yearly premium | payment mode choice | tax percent | amount of each payment | extra paid over the yearly option
+---
+app "Premium Mode" shield teal
+state prem money = 48000
+state mode pick Monthly|Quarterly|Yearly = Monthly
+state tax num = 5
+let load = if(mode = Monthly, 8, if(mode = Quarterly, 4, 0))
+let n = if(mode = Monthly, 12, if(mode = Quarterly, 4, 1))
+let year_total = prem * (100 + load) / 100 * (100 + tax) / 100
+let base_total = prem * (100 + tax) / 100
+field prem "Yearly premium"
+field tax "Tax %"
+row gap 1
+  "Pay" faint
+  choice mode
+statcard round(year_total / n), "each" if(mode = Monthly, "month", if(mode = Quarterly, "quarter", "year"))
+statcard round(year_total), "paid over the year"
+if year_total > base_total
+  "That is" round(year_total - base_total) "more than paying yearly." color warn bold
+else
+  "Yearly payment has no loading." color good bold
+===
+@rich domain=c6_early_pay_discount topic=early_payment_discount_terms style=multi_feature
+supplier invoice says 2 percent off if paid in 10 days, otherwise net in 30. is it worth taking? i type the invoice and the terms, it gives the last day for the discount, the money saved and the true yearly rate of that discount
+needs: invoice amount and invoice date | discount percent and discount days | full payment days | last day for discount and amount saved | yearly rate of the discount
+---
+app "Early Pay" tag blue
+state amount money = 250000
+state inv date = today
+state pc num = 2
+state dd num = 10
+state net num = 30
+let pay_now = amount * (100 - pc) / 100
+let yearly = pc / max(100 - pc, 1) * 365 / max(net - dd, 1) * 100
+section "Invoice"
+  field amount "Invoice amount"
+  field inv "Invoice date"
+section "Terms"
+  field pc "Discount %"
+  field dd "If paid within (days)"
+  field net "Otherwise due in (days)"
+row gap 2
+  statcard round(pay_now), "pay this if early"
+  statcard round(amount - pay_now), "saved"
+"Take the discount by" inv + dd big
+"Worth about" round(yearly) "% a year on the money you pay early." faint
+===
+@rich domain=c6_advance_repay_plan topic=salary_advance_repayment_plan style=short
+salary advance
+needs: advance amount and monthly deduction | salary | months to clear | salary in hand | balance after each month
+---
+app "Advance Repay" wallet grey
+state adv money = 60000
+state ded money = 10000
+state salary money = 55000
+let months = floor((adv + ded - 1) / max(ded, 1))
+field adv "Advance taken"
+field ded "Deducted each month"
+field salary "Monthly salary"
+row gap 2
+  statcard months, "months to clear"
+  statcard max(salary - ded, 0), "in hand each month"
+section "Balance left"
+  each 1..months as k
+    row
+      "After month" k grow
+      max(adv - ded * k, 0) bold
+if ded > salary
+  "The deduction is more than the salary." color bad
+===
+@rich domain=c6_bonus_by_days topic=bonus_split_by_days_worked style=multi_feature
+shop owner here, i set a bonus pool for the staff and want it shared by how many days each person worked this year. add each worker with days, show every share in rupees, total days and a bar for who got most
+needs: bonus pool amount | add a worker with days worked | share for each worker | total days | bar chart of shares
+---
+app "Bonus Split" gift ink
+table staff name text, days num 1..366
+state pool money = 200000
+let total_days = sum(staff.days)
+let share(s staff) = pool * s.days / max(total_days, 1)
+topbar staff, "Add worker"
+field pool "Bonus pool"
+row gap 2
+  statcard round(pool), "to share"
+  statcard total_days, "days in total"
+section "Shares"
+  bars staff, share(it), it.name
+each staff sort days desc as s empty "No workers yet. Add the first one."
+  row card tap edit s swipe remove s
+    stack grow gap 0
+      s.name
+      s.days "days" faint
+    round(share(s)) bold
+===
+@rich domain=c6_mobile_load_tax topic=mobile_load_tax_credit style=short
+mobile load tax
+needs: amount paid for a load | tax percent on load | credit you actually get | tax amount
+---
+app "Load Tax" phone orange
+state paid money = 500
+state tax num = 15
+let credit = paid * 100 / (100 + tax)
+field paid "Amount paid at the shop"
+field tax "Tax %"
+statcard round(credit * 100) / 100, "credit you get"
+statcard round((paid - credit) * 100) / 100, "taken as tax"
+"To get 500 of credit, pay" round(500 * (100 + tax) / 100) faint
+===
+@rich domain=c6_decimal_hours_hm topic=decimal_hours_to_hours_minutes style=custom_ui
+my timesheet app gives 7.75 hours but the form wants hours and minutes, and sometimes the other way round. let me type decimal hours to see hours and minutes, and hours and minutes to see decimal hours
+needs: decimal hours | hours and minutes result | hours and minutes input | decimal hours result
+---
+app "Hours Converter" clock yellow
+state dec num = 7.75
+state h num = 6
+state m num = 20
+section "Decimal to hours and minutes"
+  field dec "Decimal hours"
+  floor(dec) "h" round((dec - floor(dec)) * 60) "min" big
+section "Hours and minutes to decimal"
+  field h "Hours"
+  field m "Minutes"
+  round((h + m / 60) * 100) / 100 "hours" big
+"Every 15 minutes is 0.25 hour." faint
+===
+@rich domain=c6_juice_per_100ml topic=drink_price_per_100ml style=short
+which juice is the better buy
+needs: price and size of two juice packs | price per 100 ml of each | better buy and how much cheaper
+---
+app "Juice Compare" cup green
+state p1 money = 220
+state ml1 num = 1000
+state p2 money = 130
+state ml2 num = 500
+let c1 = p1 * 100 / max(ml1, 1)
+let c2 = p2 * 100 / max(ml2, 1)
+section "Pack 1"
+  field p1 "Price"
+  field ml1 "Size (ml)"
+section "Pack 2"
+  field p2 "Price"
+  field ml2 "Size (ml)"
+row gap 2
+  statcard round(c1 * 100) / 100, "per 100 ml, pack 1"
+  statcard round(c2 * 100) / 100, "per 100 ml, pack 2"
+if c1 = c2
+  "Same price per ml." bold
+else
+  "Pack" if(c1 < c2, 1, 2) "is cheaper by" round(abs(c1 - c2) * 100) / 100 "per 100 ml" big color good
+===
+@rich domain=c6_egg_price_each topic=egg_price_per_egg_dozen style=short
+egg prices
+needs: price of a tray | eggs in the tray | price per egg | price per dozen
+---
+app "Egg Price" egg mint
+state price money = 420
+state eggs num = 30
+field price "Tray price"
+field eggs "Eggs in the tray"
+row gap 2
+  statcard round(price / max(eggs, 1) * 100) / 100, "per egg"
+  statcard round(price / max(eggs, 1) * 12), "per dozen"
+"Two eggs for breakfast cost" round(price / max(eggs, 1) * 2) faint
+===
+@rich domain=c6_data_left_per_day topic=mobile_data_left_per_day style=custom_ui
+my monthly data pack is nearly gone and the date is far from renewal. i type pack size, used so far and the day the pack renews. show gb left, days left and how much i can use each day, and tell me if i am burning it too fast
+needs: pack size and used so far | renewal date | gb left and days left | allowed gb per day | warning if burning too fast
+---
+app "Data Left" cloud blue
+state pack num = 30
+state used num = 21
+state renew date = today + 9
+let left = max(pack - used, 0)
+let days = max(renew - today, 1)
+let pace = used / max(30 - days, 1)
+field pack "Pack size (GB)"
+field used "Used so far (GB)"
+field renew "Pack renews on"
+row gap 2
+  statcard round(left * 10) / 10, "GB left"
+  statcard days, "days left"
+statcard round(left / days * 100) / 100, "GB a day you can use"
+if pace > left / days
+  "You used about" round(pace * 100) / 100 "GB a day so far. Slow down." color warn bold
+else
+  "You are on track." color good bold
+===
+@rich domain=c6_roommate_days_split topic=roommate_utility_bill_by_days style=multi_feature
+four of us share the electricity bill but people stay different numbers of days. i set the bill amount, add each roommate with the days they stayed and see what each person owes in proportion
+needs: bill amount | add a roommate with days stayed | share owed by each person | total days | cost per person day
+---
+app "Roommate Bill" users red dark
+table mate name text, days num 1..31
+state bill money = 18000
+let total = sum(mate.days)
+let per_day = bill / max(total, 1)
+topbar mate, "Add roommate"
+field bill "Electricity bill"
+row gap 2
+  statcard round(per_day * 10) / 10, "per person day"
+  statcard total, "person days"
+each mate as m empty "No roommates yet. Add everyone who stayed."
+  row card tap edit m swipe remove m
+    stack grow gap 0
+      m.name
+      m.days "days" faint
+    round(m.days * per_day) bold
+===
+@rich domain=c6_room_rent_weighted topic=rent_split_by_room_size style=detailed
+three flatmates, rooms are different sizes and one has an attached bathroom which should cost ten percent more. add each room with square feet and bathroom tick, type total rent and show what each person pays
+needs: total rent | add a room with size and bathroom tick | weighted share per room | rent for each person | bathroom premium note
+---
+app "Room Rent Split" home plum
+table room who text, sqft num 20..1000, bath bool
+state rent money = 75000
+let wt(r room) = r.sqft * if(r.bath, 1.1, 1)
+let total = sum(room, wt(it))
+topbar room, "Add room"
+field rent "Total rent"
+"Rooms with a bathroom count 10% extra." faint
+each room sort wt(it) desc as r empty "No rooms yet. Add the first room."
+  row card tap edit r swipe remove r
+    stack grow gap 0
+      r.who
+      r.sqft "sq ft" if(r.bath, "with bathroom", "") faint
+    round(rent * wt(r) / max(total, 1)) bold
+if count(room) > 0
+  "Total weight" round(total) faint
+===
+@rich domain=c6_clock_12_24 topic=twelve_to_twenty_four_hour_time style=short
+12 hour to 24 hour time
+needs: hour and minute | am or pm choice | 24 hour time | 24 hour to 12 hour input
+---
+app "12 24 Clock" clock slate
+state h num = 7
+state m num = 45
+state ap pick AM|PM = PM
+state t24 num = 21
+let h24 = if(ap = AM, if(h = 12, 0, h), if(h = 12, 12, h + 12))
+let pad(x num) = join(if(x < 10, "0", ""), x)
+section "12 hour to 24 hour"
+  row gap 2
+    field h "Hour"
+    field m "Minute"
+  choice ap
+  pad(h24) ":" pad(m) big
+section "24 hour to 12 hour"
+  field t24 "Hour (0-23)"
+  if(t24 % 12 = 0, 12, t24 % 12) if(t24 % 24 < 12, "AM", "PM") big
+===
+@rich domain=c6_road_trip_eta topic=road_trip_driving_time_breaks style=multi_feature
+driving from lahore to karachi. distance and my average speed, a break of some minutes after every two hours, and the time i leave. show driving time, number of breaks and the clock time i arrive
+needs: distance and average speed | break length after every two hours | departure time | driving time and number of breaks | arrival clock time
+---
+app "Trip ETA" car teal
+state dist num = 1200
+state speed num = 80
+state brk num = 20
+state dep time = 5:30
+let drive = dist / max(speed, 1) * 60
+let nb = max(floor(drive / 120 - 0.0001), 0)
+let total = drive + nb * brk
+let end = hour(dep) * 60 + minute(dep) + total
+let hm(x num) = join(if(floor(x / 60) % 24 < 10, "0", ""), floor(x / 60) % 24, ":", if(x % 60 < 10, "0", ""), round(x) % 60)
+section "Trip"
+  field dist "Distance (km)"
+  field speed "Average speed (km/h)"
+  field brk "Break after each 2 hours (min)"
+  field dep "Leave at"
+"Driving time" floor(drive / 60) "h" round(drive % 60) "min" big
+statcard nb, "breaks on the way"
+"Arrive at" hm(end) big
+if end >= 1440
+  "That is the next day." faint
+===
+@rich domain=c6_day_budget_hours topic=day_hours_budget_bar style=custom_ui
+my days feel too short so i want to see the 24 hours as a bar. sliders for sleep, work, commute, meals and family time and the rest is free. show hours free in the middle, and warn if my day adds up to more than 24
+needs: sliders for sleep work commute meals and family | hours free | a bar of the day | warning when over 24 hours
+---
+app "Day Budget" hourglass blue
+state sleep num = 7
+state work num = 8
+state commute num = 2
+state meals num = 2
+state family num = 3
+let used = sleep + work + commute + meals + family
+let free = 24 - used
+"Sleep" sleep "h" faint
+slider sleep 0..12
+"Work" work "h" faint
+slider work 0..14
+"Commute" commute "h" faint
+slider commute 0..5
+"Meals" meals "h" faint
+slider meals 0..5
+"Family" family "h" faint
+slider family 0..8
+draw 100, 8
+  rect 0, 0, 100, 8 fill soft radius 3
+  rect 0, 0, min(sleep * 100 / 24, 100), 8 fill muted radius 3
+  rect sleep * 100 / 24, 0, work * 100 / 24, 8 fill accent
+  rect (sleep + work) * 100 / 24, 0, commute * 100 / 24, 8 fill warn
+statcard max(free, 0), "free hours left"
+if free < 0
+  "Your day adds up to" used "hours. Something has to go." bold color bad
+===
+@rich domain=c6_dollar_cost_average topic=monthly_investing_average_cost style=detailed
+every month i put a fixed amount into a fund and the unit price keeps changing. i add each purchase with the amount and the price that day, type today's price, and see units owned, my average cost per unit, current value and profit or loss
+needs: add a purchase with amount and unit price | today's unit price | units owned | average cost per unit | current value and profit or loss
+---
+app "Averaging In" chart green
+table buy amount money, price money
+state now_price money = 110
+let units = sum(buy, it.amount / max(it.price, 0.01))
+let invested = sum(buy.amount)
+let value = units * now_price
+topbar buy, "Add purchase"
+field now_price "Today's unit price"
+row gap 2
+  statcard round(units * 100) / 100, "units owned"
+  statcard round(invested / max(units, 0.01) * 100) / 100, "average cost"
+statcard round(value), "current value of" round(invested) "invested"
+if value >= invested
+  "Profit" round(value - invested) bold color good
+else
+  "Loss" round(invested - value) bold color bad
+each buy top 6 as b empty "No purchases yet. Add this month's one."
+  row card tap edit b swipe remove b
+    b.amount grow
+    "at" b.price faint
+===
+@rich domain=c6_rent_collected_month topic=landlord_rent_collected_month style=multi_feature
+i have six flats rented out. each time a tenant pays i add the tenant and amount. i set the rent expected for the month and want to see collected so far, what is pending and a list of who paid this month
+needs: add a tenant payment with amount | expected rent for the month | collected this month | pending amount | list of this month's payments
+---
+app "Rent Collected" home orange
+table rent tenant text, amount money
+setting expected money = 180000 "Rent expected each month"
+let got = sum(rent.amount month)
+topbar rent, "Add payment"
+goal got, expected, "collected this month"
+row gap 2
+  statcard round(got), "collected"
+  statcard max(round(expected - got), 0), "pending"
+if got >= expected
+  "Everything collected for" monthname(today) bold color good
+each rent month as r empty "Nobody has paid yet this month."
+  row card tap edit r swipe remove r
+    r.tenant grow
+    r.amount bold
+===
+@rich domain=c6_geyser_cost topic=electric_geyser_monthly_cost style=short
+geyser cost
+needs: geyser power in kw | hours on per day | price per unit | cost per day and per month
+---
+app "Geyser Cost" bolt pink
+state kw num = 3
+state hrs num = 1.5
+state rate money = 48
+let units = kw * hrs
+field kw "Geyser power (kW)"
+field hrs "Hours on per day"
+field rate "Price per unit"
+row gap 2
+  statcard round(units * rate), "per day"
+  statcard round(units * rate * 30), "per month"
+"About" round(units * 30) "units a month." faint
+===
+@rich domain=c6_shagun_envelopes topic=wedding_gift_envelope_tally style=multi_feature
+at the wedding my mother keeps the envelopes and wants a record of who gave how much, so we can return the same at their functions. add a giver with the amount, show total received, number of envelopes, average and the biggest one
+needs: add a giver with amount | total received | number of envelopes | average amount | biggest envelope
+---
+app "Envelope Tally" gift grey dark
+table env giver text, amount money
+topbar env, "Add envelope"
+statcard sum(env.amount), "received in total"
+row gap 2
+  statcard count(env), "envelopes"
+  statcard round(avg(env.amount)), "average"
+statcard max(env.amount), "biggest envelope"
+section "Who gave", "largest first"
+  each env sort amount desc as e empty "No envelope noted yet. Add the first one."
+    row tap edit e swipe remove e
+      e.giver grow
+      e.amount bold
+===
+@rich domain=c6_school_supplies_list topic=school_supplies_budget_list style=custom_ui
+back to school shopping list: copies, pens, geometry box, bag. add each item with quantity and price per piece, set my budget, and show the total so far, what is left and the number of kids i divide the list by
+needs: add an item with quantity and price | budget setting | total so far | amount left | cost per child
+---
+app "School Supplies" pencil mint
+table supply item text, qty num 1..100, price money
+setting budget money = 15000 "Shopping budget"
+state kids num = 3
+let total = sum(supply, it.qty * it.price)
+topbar supply, "Add item"
+goal total, budget, "spent of the budget"
+row gap 2
+  statcard max(round(budget - total), 0), "left to spend"
+  statcard round(total / max(kids, 1)), "per child"
+"Kids" kids faint
+slider kids 1..6
+each supply as s empty "Your list is empty. Add the first item."
+  row card tap edit s swipe remove s
+    stack grow gap 0
+      s.item
+      s.qty "x" s.price faint
+    round(s.qty * s.price) bold
