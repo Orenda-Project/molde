@@ -2,21 +2,20 @@
 
 Plain words: r4 trains on the new data (v3.1, 20,866 pairs, language round 14) on the spark server. Gemma 270M and Qwen 0.8B train at the same time on the same data.
 
-## Gemma 270M, epoch 1 (best so far) against r3 Gemma (Q4_K_M, laptop, 4 threads; the app's loop for speed)
+## Gemma 270M against r3 Gemma (Q4_K_M, laptop, 4 threads; app core 0.6.0 for the app runs)
 
-| | r3 Gemma | r4 Gemma, epoch 1 |
-|---|---|---|
-| heldout2 (149): checker pass, arm E | 90.6% | **94.6%** |
-| heldout2: intent score / intent_auto | 0.726 / 55.0% | 0.686 / 52.3% |
-| heldout2 per kind (create / edit / ask / oos pass) | 88 / 100 / 90 / 90 | 94 / 100 / 100 / 80 |
-| short named requests (60), asks instead of building, no rule | 31.7% | **5.0%** |
-| same 60 through the app (no-ask rule): builds that pass | 59 of 60 | 58 of 60 |
-| 40 small changes through the app (fixed scorer): pass the checker / do what was asked | 31 / 14 | 30 / 14 |
-| seconds per create (median of the 60) / per small edit (median of the 40), app core 0.6.0 | 2.3 / 5.6 | 2.0 / 6.5 |
-| file size | 241 MB | 241 MB |
+| | r3 Gemma | r4 Gemma epoch 1 | r4 Gemma epoch 2 (best) |
+|---|---|---|---|
+| heldout2 (149) checker pass, arm E | 90.6% | **94.6%** | 89.3% |
+| heldout2 intent score / intent_auto | 0.726 / 55.0% | 0.686 / 52.3% | 0.724 / 50.3% |
+| heldout2 create / edit / ask / oos pass | 88 / 100 / 90 / 90 | 94 / 100 / 100 / 80 | 87 / 93 / 90 / 100 |
+| 60 short named requests: asks instead of building (no rule) | 31.7% | **5.0%** | 21.7% |
+| same 60 through the app (no-ask rule): builds that pass | 59 of 60 | 58 of 60 | 53 of 60 |
+| 40 small changes through the app: pass checker / do what was asked | 31 / 14 | 30 / 14 | 34 / **16** |
+| median seconds per create / per small edit (app core) | 2.3 / 5.6 | 2.0 / 6.5 | 3.2 / 5.0 |
+| validation checker pass during training (48 val requests) | n/a | 0.729 | 0.875 |
 
-Reading: epoch 1 of r4 builds more valid programs (+4 points) and almost never asks on one-word requests (5% instead of 32%), but its intent score is 0.04 lower and small changes did not improve (14 of 40 both). Epochs 2 to 4 are still training (validation checker pass at epoch 1: 0.729).
-Notes: laptop load average 6 to 10 during these runs, other jobs running; GGUF tokens verified identical in llama.cpp (180 of 180 programs), turn markers are control tokens. The epoch-1 weights were exported from the best-checkpoint file on spark.
+Choice of best (small changes and intent first, checker pass second): **epoch 2**: 16 of 40 changes (14 before) and intent 0.724 (0.686); its checker pass on heldout2 is lower (89.3%) and it asks more than epoch 1 (21.7% against 5.0%), so the trade is not clean. The epoch-1 files were dropped under the best+latest rule. Epochs 3 and 4 are still training. Laptop load average 6 to 10; other jobs running; all GGUF tokens verified identical in llama.cpp (180 of 180 programs).
 
 ## Qwen 0.8B on spark
 Training since 20:57 (restarted after a server reboot at 20:07 killed the first run at step 1,180 with no checkpoint). Sharing the GPU with the Gemma run slows it from about 8 to about 11 s per step. Epoch 1 expected about 03:00. Evaluation follows the same plan as above.
