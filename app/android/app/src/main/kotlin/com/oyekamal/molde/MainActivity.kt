@@ -93,8 +93,9 @@ class MainActivity : FlutterActivity() {
                 val temp = (call.argument<Number>("temp")?.toFloat() ?: 0f)
                 val seed = call.argument<Number>("seed")?.toInt() ?: 1
                 val stopNl = call.argument<Boolean>("stopNl") ?: true
+                val draft = (call.argument<String>("draft") ?: "").toByteArray(Charsets.UTF_8)
                 worker.execute {
-                    val out = try { String(engine().nativeComplete(prompt, grammar, nPredict, temp, seed, stopNl), Charsets.UTF_8) }
+                    val out = try { String(engine().nativeComplete(prompt, grammar, nPredict, temp, seed, stopNl, draft), Charsets.UTF_8) }
                     catch (e: Throwable) { "{\"stop\":\"error\",\"text\":\"\",\"error\":\"${e.message?.replace("\"", "'")}\"}" }
                     main.post { result.success(out) }
                 }

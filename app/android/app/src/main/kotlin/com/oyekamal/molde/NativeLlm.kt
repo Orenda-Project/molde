@@ -9,5 +9,5 @@ class NativeLlm {
     external fun nativeUnload()
     external fun nativeCancel()
     external fun nativeReset()
-    external fun nativeComplete(prompt: ByteArray, grammar: ByteArray, nPredict: Int, temp: Float, seed: Int, stopNl: Boolean): ByteArray
+    external fun nativeComplete(prompt: ByteArray, grammar: ByteArray, nPredict: Int, temp: Float, seed: Int, stopNl: Boolean, draft: ByteArray): ByteArray
 }

@@ -33,6 +33,16 @@ export function promptFor(system, user, accepted) {
   return `<|tok:2|><|tok:105|>user\n${clean(system)}\n\n${user}<|tok:106|>\n<|tok:105|>model\n${accepted}`;
 }
 
+// Where the old program goes on after an accepted line: past the line it copied, past a later old line it jumped to,
+// and unchanged when the line is new (an insertion) so the old line is offered again for the next position.
+export function nextOldPtr(old, p, line) {
+  if (p < old.length && old[p] === line) return p + 1;
+  for (let j = p + 1; j < Math.min(old.length, p + 12); j++) if (old[j] === line) return j + 1;
+  if (p < old.length && sameKind(old[p], line)) return p + 1;   // a rewritten line: the old one is used up
+  return p;
+}
+const sameKind = (a, b) => (a.trim().split(/\s+/)[0] || '') === (b.trim().split(/\s+/)[0] || '');
+
 const hashOf = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 /**
@@ -41,12 +51,15 @@ const hashOf = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7)
  * returns { ok, program, errors, ask, cancelled, timedOut, stats }
  */
 export async function generate(o) {
-  const { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = 6 * 60 * 1000, maxLines = 70, allowAsk = true, ask: askCtx = null, cancelNative = null } = o;
+  const { kind = 'create', request, current = '', system = DEFAULT_SYSTEM, arm = 'E', complete, onProgress = () => {}, cancelled = () => false, deadlineMs = 6 * 60 * 1000, maxLines = 70, useDraft = true, allowAsk = true, ask: askCtx = null, cancelNative = null } = o;
   const types = arm === 'E';
+  // edits mostly re-emit the old program: offer the old line we expect next as a draft the native side can verify in one batch
+  const oldLines = kind === 'edit' ? String(current || '').split('\n').filter((l, i, a) => i < a.length - 1 || l) : [];
+  let oldPtr = 0;
   const user = userText(kind, request, current, askCtx);
   const seedBase = hashOf(request);
   const t0 = Date.now();
-  const st = { calls: 0, genTok: 0, genMs: 0, promptTok: 0, promptMs: 0, cacheTok: 0, rejected: 0, fallbacks: 0, gramMs: 0, gramFail: 0, lines: 0 };
+  const st = { calls: 0, genTok: 0, genMs: 0, promptTok: 0, promptMs: 0, cacheTok: 0, rejected: 0, fallbacks: 0, gramMs: 0, gramFail: 0, lines: 0, draftTry: 0, draftOk: 0 };
   let prefix = '', stoppedBy = null, errorText = null;
   // the deadline also interrupts a line in progress: the native side checks its cancel flag after every token
   let timedOut = false;
@@ -66,10 +79,11 @@ export async function generate(o) {
       if (timedOut) { stoppedBy = 'timeout'; break; }
       if (cancelled()) { stoppedBy = 'cancel'; break; }
       const req = { prompt: promptFor(system, user, prefix), grammar: g, nPredict: 200, stopNl: true, temp: k === 0 ? 0 : 0.7, seed: k === 0 ? 1 : (seedBase + k * 7919 + n) | 0 };
+      if (k === 0 && useDraft && oldPtr < oldLines.length) req.draft = oldLines[oldPtr];
       const x = await complete(req);
       if (x.stop === 'error') { errorText = x.error || 'the model stopped with an error'; stoppedBy = 'error'; break; }
       if (x.stop === 'cancel') { stoppedBy = timedOut ? 'timeout' : 'cancel'; break; }
-      st.calls++; st.genTok += x.n_gen || 0; st.genMs += x.ms_gen || 0; st.promptTok += x.n_prompt || 0; st.promptMs += x.ms_prompt || 0; st.cacheTok += x.n_cache || 0;
+      st.calls++; st.genTok += x.n_gen || 0; st.genMs += x.ms_gen || 0; st.promptTok += x.n_prompt || 0; st.promptMs += x.ms_prompt || 0; st.cacheTok += x.n_cache || 0; st.draftTry += x.n_draft_try || 0; st.draftOk += x.n_draft_ok || 0;
       if (x.stop === 'eos' && !x.text) { ended = true; break; }
       if (x.stop === 'limit') { st.rejected++; continue; }
       const line = x.text.replace(/\n$/, '') + '\n';
@@ -84,6 +98,7 @@ export async function generate(o) {
     if (accepted == null) { if (first == null) break; accepted = first; st.fallbacks++; }
     prefix += accepted;
     st.lines++;
+    oldPtr = nextOldPtr(oldLines, oldPtr, accepted.replace(/\n$/, ''));
     onProgress({ lines: st.lines, program: prefix, rejected: st.rejected });
     if (/^ask /.test(prefix) && prefix.split('\n').filter(Boolean).length === 1) break;   // an ask program is one line
     const ls = prefix.split('\n').filter(Boolean);
@@ -91,7 +106,7 @@ export async function generate(o) {
   }
   clearTimeout(timer);
   const seconds = (Date.now() - t0) / 1000;
-  const stats = { seconds: +seconds.toFixed(2), tokens: st.genTok, tokPerSec: st.genMs ? +(st.genTok / (st.genMs / 1000)).toFixed(1) : 0, calls: st.calls, resamples: st.rejected, fallbacks: st.fallbacks, lines: st.lines, promptTokens: st.promptTok, cachedTokens: st.cacheTok, grammarMs: Math.round(st.gramMs), grammarFailures: st.gramFail, arm };
+  const stats = { seconds: +seconds.toFixed(2), tokens: st.genTok, tokPerSec: st.genMs ? +(st.genTok / (st.genMs / 1000)).toFixed(1) : 0, calls: st.calls, resamples: st.rejected, fallbacks: st.fallbacks, lines: st.lines, promptTokens: st.promptTok, cachedTokens: st.cacheTok, grammarMs: Math.round(st.gramMs), grammarFailures: st.gramFail, draftTried: st.draftTry, draftAccepted: st.draftOk, arm };
   if (stoppedBy === 'cancel') return { ok: false, cancelled: true, program: prefix, errors: [], stats, log };
   if (stoppedBy === 'timeout') return { ok: false, timedOut: true, program: prefix, errors: ['it took too long'], stats, log };
   if (stoppedBy === 'error') return { ok: false, program: prefix, errors: [errorText], modelError: true, stats, log };

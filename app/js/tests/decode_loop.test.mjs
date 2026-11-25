@@ -111,3 +111,23 @@ test('allowAsk=false: the first call gets a grammar without ask-stmt; allowAsk=t
   assert.ok(!grammars[0].includes('( ask-stmt | app-stmt ) nl'));
   assert.ok(grammars[1].includes('ask-stmt | app-stmt'));
 });
+
+import { nextOldPtr } from '../src/decode_loop.mjs';
+test('draft pointer: copy advances, a jump resyncs, an insertion keeps the old line for the next position', () => {
+  const old = ['app "A" x', 'table t a num', '"Today" head', 'form t', 'trend t, it.a'];
+  assert.equal(nextOldPtr(old, 0, 'app "A" x'), 1);
+  assert.equal(nextOldPtr(old, 1, '"Today" head'), 3);                 // the model dropped a line: jump past the one it matched
+  assert.equal(nextOldPtr(old, 2, '"Brand new" faint'), 2);           // an insertion: offer the old line again
+  assert.equal(nextOldPtr(old, 1, 'table t a num, note text'), 2);    // a rewritten line (same first word): old one used up
+  assert.equal(nextOldPtr(old, 5, 'x'), 5);
+});
+
+test('edit requests offer the old line as a draft on the greedy call only; create requests never do', async () => {
+  const seen = [];
+  const complete = async req => { seen.push({ draft: req.draft, temp: req.temp }); return { stop: 'eos', text: '', n_gen: 0 }; };
+  const cur = 'app "W" drop ocean\ntable d ml num\n';
+  await generate({ kind: 'edit', request: 'make it blue', current: cur, complete });
+  assert.equal(seen[0].draft, 'app "W" drop ocean');
+  await generate({ kind: 'create', request: 'water', complete });
+  assert.equal(seen[1].draft, undefined);
+});
