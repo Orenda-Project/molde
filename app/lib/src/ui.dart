@@ -454,7 +454,8 @@ class _DevMenuState extends State<_DevMenu> {
           'Seconds: ${s['seconds']}   Tokens: ${s['tokens']}   Tokens/s: ${s['tokPerSec']}\n'
           'Model calls: ${s['calls']}   Resamples: ${s['resamples']}   Fallback lines: ${s['fallbacks']}\n'
           'Lines: ${s['lines']}   Prompt tokens: ${s['promptTokens']} (cached ${s['cachedTokens']})\n'
-          'Grammar build: ${s['grammarMs']} ms   Decoder arm: ${s['arm']}',
+          'Grammar build: ${s['grammarMs']} ms   Decoder arm: ${s['arm']}\n'
+          'Draft check: ${s['draftAccepted'] ?? 0} tokens verified in batches (${s['draftTried'] ?? 0} lines tried)',
           key: const Key('dev-stats'), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
         const SizedBox(height: 12),
         Text('Recent generations (seconds)', style: Theme.of(context).textTheme.titleSmall),
