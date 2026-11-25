@@ -57,7 +57,7 @@ def mode():
         before = sum('That sounds like a new app' in t for t in texts())
         send(req); time.sleep(5)
         after = sum('That sounds like a new app' in t for t in texts())
-        asked = after > before or (has('Change ') and has('New app') and any('sounds like a new app' in t for t in texts()[-12:]))
+        asked = after > before
         stop_now()
         save(f'mode: "{req}" {"asks the two-button question" if expect_q else "is a change (no question)"}', asked == expect_q, f'asked={asked}')
         chat_view(); set_mode('change')
