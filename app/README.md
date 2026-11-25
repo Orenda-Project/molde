@@ -16,6 +16,12 @@ The only network use is in `lib/src/catalogue.dart` (fetch `models.json` from `h
 - **Deadline.** The 6-minute limit also interrupts a line in progress (the native cancel flag is checked per token).
 - **Gauntlet:** `tool/gauntlet_r3.py` (see its header) drives the emulator through the ask, flow, goal and green checks.
 
+## Round 5 (version 0.5.0): fewer asks, faster edits
+
+- **No asking when the request names something.** Any request with at least one non-filler word is built at once (`namesAThing`, `allowAsk=false`: the first-line grammar loses `ask-stmt`); a second ask after one answer is impossible. Measured on r3 Q4_K_M with the app's loop on the 60 short requests: ask rate 31.7% -> 0%, checker pass 65% -> 96.7%; the 19 asks that were answered all built (`js/tools/measure_asks.mjs`).
+- **Draft verification for edits** (`android/app/src/main/cpp/molde_core.h`, option `draft` of `complete`): an edit re-emits the old program, so the old line expected next is offered as a draft and checked in one batch against what the grammar-constrained sampler would write; the first mismatch rolls the cache back and normal decoding continues. Greedy text is unchanged; median edit time on a 68 to 89 line app went from 56 s to 35 s wall (2x by CPU seconds) on the laptop with 4 threads (`js/tools/measure_edits.mjs`). The JNI file is now a thin wrapper; the same header builds as a host server (`js/tools/host/build.sh`) so the phone's core can be measured on a laptop.
+- No line-range edit format: r3 was trained only on full re-emits.
+
 ## Round 4 (version 0.4.0): never claim what did not happen
 
 - **Honest replies.** A model program that equals the current one, or changes nothing that matters, is never reported as "already does that": the chat says "I couldn't make that change yet. Your app is unchanged." After an applied change `unmetClaims` (`lib/src/rules.dart`) checks what the request asked for where it can: a theme word, dark/light, a new title, a named field added or removed, a chart added or removed, a setting value. If the asked part is missing the chat does not say "Changed": it says what did change and that the asked part did not happen, with Undo.
