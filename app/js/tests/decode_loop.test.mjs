@@ -156,3 +156,11 @@ test('progress events carry the line count and seconds', async () => {
   assert.ok(seen.length > 3 && seen.every(p => typeof p.seconds === 'number'));
   assert.equal(seen[seen.length - 1].lines, seen.length);
 });
+
+import { readFileSync as rf } from 'node:fs';
+test('the page forwards the seconds of every progress event to the app (0.5.0 sent "null s")', () => {
+  const src = rf(new URL('../src/entry.mjs', import.meta.url), 'utf8');
+  assert.match(src, /post\(\{ t: 'progress', lines: p\.lines, program: p\.program, rejected: p\.rejected, seconds: p\.seconds \}\)/);
+  const bundle = rf(new URL('../../assets/web/molde.js', import.meta.url), 'utf8');
+  assert.ok(/t:"progress",lines:\w+\.lines,program:\w+\.program,rejected:\w+\.rejected,seconds:\w+\.seconds/.test(bundle), 'the built bundle carries it too');
+});

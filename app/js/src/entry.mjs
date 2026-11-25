@@ -115,7 +115,7 @@ const methods = {
       kind, request, current, system: system || DEFAULT_SYSTEM, arm: arm || 'E', deadlineMs, allowAsk: allowAsk !== false, ask, maxLines: maxLines || 70, cancelNative: () => native('cancel', {}),
       complete: req => native('complete', req),
       cancelled: () => S.cancel,
-      onProgress: p => post({ t: 'progress', lines: p.lines, program: p.program, rejected: p.rejected }),
+      onProgress: p => post({ t: 'progress', lines: p.lines, program: p.program, rejected: p.rejected, seconds: p.seconds }),
     });
     return r;
   },

@@ -98,7 +98,8 @@ class MoldeController extends ChangeNotifier {
       _progressSeen = true;
       final m = _liveMsg;
       if (m != null) {
-        m.text = '${_longNote}Writing line ${(p['lines'] as int) + 1}… (${p['seconds']} s)';
+        _lines = (p['lines'] is num) ? (p['lines'] as num).toInt() : _lines;
+        m.text = progressText(_longNote, _lines, DateTime.now().difference(_startedAt).inSeconds);
         m.code = '${p['program']}';
         notifyListeners();
       }
@@ -231,6 +232,8 @@ class MoldeController extends ChangeNotifier {
 
   ChatMsg? _liveMsg;
   bool _progressSeen = false;
+  int _lines = 0;
+  DateTime _startedAt = DateTime.now();
   Timer? _tick;
   String _longNote = '';
 
@@ -315,12 +318,13 @@ class MoldeController extends ChangeNotifier {
       _longNote = oldLines > 30 ? 'This app is long, changes can take a few minutes.\n' : '';
       live.text = '${_longNote}Reading your request…';
       notifyListeners();
-      _progressSeen = false;
-      final started = DateTime.now();
+      _progressSeen = false; _lines = 0;
+      _startedAt = DateTime.now();
       _tick?.cancel();
+      // the seconds keep counting between lines; the text never depends on a value the page might not send
       _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (_progressSeen || !live.live) return;
-        live.text = '${_longNote}Reading your request… (${DateTime.now().difference(started).inSeconds} s)';
+        if (!live.live) return;
+        live.text = progressText(_longNote, _progressSeen ? _lines : -1, DateTime.now().difference(_startedAt).inSeconds);
         notifyListeners();
       });
       final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
@@ -436,6 +440,15 @@ class MoldeController extends ChangeNotifier {
         _finishLive(live, '${sets.isEmpty ? 'Changed' : 'Done'} in ${_fmtSecs(secs)}:\n$headline${rest.isEmpty ? '' : _bullets(rest)}\nEverything you entered is kept.', kind: 'change');
       }
       await settleSaves();
+    }
+    // lines the request did not mention that the model dropped: not applied silently, the default is to keep the app
+    final extra = direct ? <String>[] : dropsUnasked(request, oldSrc, program);
+    if (extra.isNotEmpty) {
+      _finishLive(live, 'This would also remove:\n${_bullets(extra)}\nYou did not ask for that, so I have not applied the change.', buttons: [
+        ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }, primary: true),
+        ChatBtn('Apply anyway', () async { live.buttons = []; notifyListeners(); await apply(); notifyListeners(); }),
+      ]);
+      return;
     }
     if (verdict == 'warn' || warnings.isNotEmpty) {
       _finishLive(live, 'This change needs a decision:\n${_bullets(warnings)}\n\nIt would: \n${_bullets(changes)}', kind: 'text', buttons: [

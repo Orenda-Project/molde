@@ -37,6 +37,8 @@ void main() {
   roundFour();
   roundFourFlows();
   roundFive();
+  roundFiveOne();
+  roundFiveOneFlow();
   late Directory tmp;
   late WebBridge bridge;
   late ScriptedPage page;
@@ -387,7 +389,7 @@ void roundThreeFlows() {
     expect(c.chat.last.text, contains('trend drink'));
     expect(c.chat.last.buttons.map((b) => b.label), ['Try again']);
     await c.send('remove the chart and the form');
-    expect(page.calls, contains('applyEdit'));
+    expect(c.chat.last.text, isNot(contains('did not ask to remove anything')));
   });
 
   test('model echo (nothing changed): never "already does that", says it could not', () async {
@@ -626,6 +628,93 @@ void roundFive() {
     };
     await c.send('add something');
     expect(seen, contains('Writing line 12'));
-    expect(seen, contains('45 s'));
+    expect(RegExp(r'\(\d+ s\)').hasMatch(seen!), isTrue);
+    expect(seen, isNot(contains('null')));
+  });
+}
+
+void roundFiveOne() {
+  const vit = 'app "Vitamins" pill ocean\ntable dose name text, note text\nsetting goal num = 3 "Daily goal"\nrow\n  button "1" tap add dose name = "one"\n  button "2" tap add dose name = "two"\nform dose\n';
+  group('0.5.1', () {
+    test('progressText always has numbers: reading before the first line, then the next line and the seconds', () {
+      expect(progressText('', -1, 12), 'Reading your request… (12 s)');
+      expect(progressText('', 0, 3), 'Writing line 1… (3 s)');
+      expect(progressText('', 11, 45), 'Writing line 12… (45 s)');
+      expect(progressText('This app is long.\n', 4, 7), 'This app is long.\nWriting line 5… (7 s)');
+      for (final t in [progressText('', -1, 0), progressText('', 3, 0)]) { expect(t, isNot(contains('null'))); }
+    });
+    test('ageText: never a time in the future, hours and days in words', () {
+      const now = 10000000000;
+      expect(ageText(now + 5000, now), 'just now');
+      expect(ageText(now - 30 * 1000, now), 'just now');
+      expect(ageText(now - 5 * 60000, now), '5 min ago');
+      expect(ageText(now - 3 * 3600000, now), '3 h ago');
+      expect(ageText(now - 50 * 3600000, now), '2 d ago');
+    });
+    test('an app changed in this session reads "just now" even if the wall clock moved by hours', () async {
+      final tmp = Directory.systemTemp.createTempSync('molde_age_');
+      final store = AppStore(tmp);
+      final r = AppRecord(id: 'a', name: 'A', source: 'app "A" star\n');
+      await store.save(r);
+      r.updatedAt = DateTime.now().millisecondsSinceEpoch - 3 * 3600000; // the device clock jumped
+      expect(r.age(), 'just now');
+      final fromDisk = (await AppStore(tmp).load('a'))!;
+      expect(fromDisk.age(), 'just now'); // freshly written, wall clock fine
+      tmp.deleteSync(recursive: true);
+      final old = AppRecord(id: 'b', name: 'B', source: 'x', updatedAt: DateTime.now().millisecondsSinceEpoch - 3 * 3600000);
+      expect(old.age(), '3 h ago');
+      final future = AppRecord(id: 'c', name: 'C', source: 'x', updatedAt: DateTime.now().millisecondsSinceEpoch + 7200000);
+      expect(future.age(), 'just now');
+    });
+    test('dropsUnasked: dropped lines the request does not name; edited lines and named lines do not count', () {
+      final noNote = vit.replaceAll(', note text', '');
+      expect(dropsUnasked('remove the note field', vit, noNote), isEmpty);
+      final alsoButtons = noNote.split('\n').where((l) => !l.contains('button')).join('\n') + '\n';
+      final d = dropsUnasked('remove the note field', vit, alsoButtons);
+      expect(d.length, 2);
+      expect(d.first, startsWith('button "1"'));
+      expect(dropsUnasked('remove the buttons', vit, alsoButtons).isEmpty, isFalse); // "buttons" is not "button"
+      expect(dropsUnasked('remove button', vit, alsoButtons).isEmpty, isTrue);
+      expect(dropsUnasked('add a chart', vit, '$vit"x" faint\n'), isEmpty);
+    });
+  });
+}
+
+void roundFiveOneFlow() {
+  late Directory tmp; late WebBridge bridge; late ScriptedPage page; late MoldeController c;
+  const vit = 'app "Vitamins" pill ocean\ntable dose name text, note text\nsetting goal num = 3 "Daily goal"\nrow\n  button "1" tap add dose name = "one"\n  button "2" tap add dose name = "two"\nform dose\nform dose\nform dose\nform dose\n';
+  setUp(() async {
+    tmp = Directory.systemTemp.createTempSync('molde_r51_');
+    final holder = _Holder();
+    bridge = WebBridge(holder); page = ScriptedPage(bridge); holder.inner = page;
+    bridge.onRaw(jsonEncode({'t': 'ready'}));
+    final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1);
+    c = MoldeController(store: AppStore(Directory('${tmp.path}/molde')), bridge: bridge, llm: llm, modelDirs: [tmp], readAsset: (p) async => vit);
+    page.handlers['open'] = (a) => {'ok': true};
+    await c.store.save(AppRecord(id: 'v', name: 'Vitamins', source: vit));
+    await c.init();
+    c.changeCurrent();
+  });
+  tearDown(() => tmp.deleteSync(recursive: true));
+
+  test('an edit that also drops unasked lines is not applied: Keep my app is the default, Apply anyway applies', () async {
+    final program = vit.replaceAll(', note text', '').split('\n').where((l) => !l.contains('button')).join('\n');
+    page.handlers['generate'] = (a) => {'ok': true, 'program': program, 'errors': [], 'stats': {'seconds': 5}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['removes field dose.note', 'removes from the screen: button "1"'], 'warnings': [], 'refused': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('remove the note field');
+    final m = c.chat.last;
+    expect(m.text, contains('This would also remove'));
+    expect(m.text, contains('button "1"'));
+    expect(m.buttons.map((b) => b.label), ['Keep my app', 'Apply anyway']);
+    expect(m.buttons.first.primary, isTrue);
+    expect(page.calls, isNot(contains('applyEdit')));
+    await m.buttons.first.onTap();
+    expect(m.text, 'Kept your app as it is.');
+    expect(page.calls, isNot(contains('applyEdit')));
+    // ask again and apply anyway
+    await c.send('remove the note field');
+    await c.chat.last.buttons.last.onTap();
+    expect(page.calls, contains('applyEdit'));
   });
 }

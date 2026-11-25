@@ -378,7 +378,7 @@ class _Apps extends StatelessWidget {
               selected: c.current?.id == r.id,
               leading: const Icon(Icons.apps_outlined),
               title: Text(r.name),
-              subtitle: Text('Changed ${_ago(r.updatedAt)}'),
+              subtitle: Text('Changed ${r.age()}'),
               onTap: () async { await c.openApp(r); onPicked(); },
               trailing: IconButton(key: Key('delete-${r.id}'), tooltip: 'Delete ${r.name}', icon: const Icon(Icons.delete_outline), onPressed: () => _confirmDelete(context, r)),
             ),
@@ -396,13 +396,6 @@ class _Apps extends StatelessWidget {
     ]);
   }
 
-  static String _ago(int ms) {
-    final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms));
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inHours < 1) return '${d.inMinutes} min ago';
-    if (d.inDays < 1) return '${d.inHours} h ago';
-    return '${d.inDays} d ago';
-  }
 }
 
 // ---------------- developer menu (long-press the version) ----------------

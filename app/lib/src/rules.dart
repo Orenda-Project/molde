@@ -296,3 +296,47 @@ String plainSummary(String source) {
   if (shows.isNotEmpty) parts.add('see ${shows.length == 1 ? shows.first : '${shows.sublist(0, shows.length - 1).join(', ')} and ${shows.last}'}');
   return 'Made ${a?.title ?? 'your app'}${parts.isEmpty ? '.' : ': ${parts.join(', ')}.'}';
 }
+
+/// "Reading your request… (12 s)" before the first line, then "Writing line 5… (31 s)". `lines` is the number of lines
+/// already written (-1 before the first one).
+String progressText(String note, int lines, int seconds) =>
+    lines < 0 ? '${note}Reading your request… ($seconds s)' : '${note}Writing line ${lines + 1}… ($seconds s)';
+
+/// How long ago, in words. A time in the future (a device clock that moved back) reads "just now".
+String ageText(int thenMs, int nowMs) {
+  final d = Duration(milliseconds: nowMs - thenMs);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inHours < 1) return '${d.inMinutes} min ago';
+  if (d.inDays < 1) return '${d.inHours} h ago';
+  return '${d.inDays} d ago';
+}
+
+// ---------------- removals nobody asked for ----------------
+
+/// The first two tokens of a line: what the line is ("table drink", "button \"1\"", "each drink"), not its details.
+String lineSignature(String l) {
+  final line = l.trim();
+  if (line.startsWith('"')) { // a text line: what it is is the style words after the quoted text ("head", "faint")
+    final end = line.indexOf('"', 1);
+    final rest = end < 0 ? '' : line.substring(end + 1).trim();
+    return 'text ${rest.split(RegExp(r'\s+')).first}';
+  }
+  return line.split(RegExp(r'\s+')).take(2).join(' ');
+}
+
+/// Old lines that are gone from the new program (no line of the new program is "the same line, edited") and that the
+/// request does not mention. A line edited in place keeps its signature, so adding or removing a field is not a removal
+/// of its table line. Used to show "This would also remove: ...".
+List<String> dropsUnasked(String request, String oldSrc, String newSrc) {
+  final newSigs = programLines(newSrc).map(lineSignature).toSet();
+  final newLines = programLines(newSrc).toSet();
+  final asked = wordsOf(request).where((w) => !kFiller.contains(w) && w.length > 2).toSet();
+  final out = <String>[];
+  for (final l in programLines(oldSrc)) {
+    if (l.startsWith('app ') || newLines.contains(l) || newSigs.contains(lineSignature(l))) continue;
+    final lw = wordsOf(l);
+    if (lw.any(asked.contains)) continue; // the request names it
+    out.add(l.trim());
+  }
+  return out;
+}

@@ -37,6 +37,29 @@ class AppRecord {
 
   static const int format = 1;
 
+  // When this app was last changed in this session, on the monotonic clock: unlike the wall clock it never jumps
+  // (a phone that re-syncs its time, an emulator that boots in another zone), so "changed 3 h ago" cannot appear for an app
+  // that was made a few minutes ago. Not saved; after a restart the saved wall-clock time is used.
+  static final Stopwatch _mono = Stopwatch()..start();
+  Duration? _touchedMono;
+  void markTouched() => _touchedMono = _mono.elapsed;
+  String age() {
+    final t = _touchedMono;
+    if (t != null) {
+      final d = _mono.elapsed - t;
+      if (d.inMinutes < 1) return 'just now';
+      if (d.inHours < 1) return '${d.inMinutes} min ago';
+      if (d.inDays < 1) return '${d.inHours} h ago';
+      return '${d.inDays} d ago';
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final d = Duration(milliseconds: now - updatedAt);
+    if (d.isNegative || d.inMinutes < 1) return 'just now';
+    if (d.inHours < 1) return '${d.inMinutes} min ago';
+    if (d.inDays < 1) return '${d.inHours} h ago';
+    return '${d.inDays} d ago';
+  }
+
   Map<String, dynamic> toJson() => {
         'v': format,
         'id': id,
@@ -132,7 +155,7 @@ class AppStore {
   }
 
   Future<void> save(AppRecord r, {bool touch = true}) {
-    if (touch) r.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    if (touch) { r.updatedAt = DateTime.now().millisecondsSinceEpoch; r.markTouched(); }
     final text = jsonEncode(r.toJson());
     return _serial(r.id, () => writeAtomic(_file(r.id), text));
   }
