@@ -29,7 +29,8 @@ def brightness():
     from PIL import Image
     import io
     data = ui.adb('exec-out', 'screencap', '-p').stdout
-    im = Image.open(io.BytesIO(data)).convert('L').resize((90, 200))
+    try: im = Image.open(io.BytesIO(data)).convert('L').resize((90, 200))
+    except Exception: return 255.0
     px = list(im.getdata()); return sum(px) / len(px)
 
 def setup(): g.setup()
