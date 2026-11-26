@@ -34,17 +34,19 @@ Because the language is so small, a 270M-parameter model (about 240 MB on disk) 
 
 ## Where it stands (honest numbers)
 
-Current model: **r4**, trained on dataset v3.1 (20.9k pairs). Recommended file: **Qwen3.5-0.8B, epoch 1** (504 MB, ChatML prompt). For 3 to 4 GB phones the small Gemma 3 270M file (r3, 241 MB) stays available. Both use the line-stepped decoder. All r4 files are on Hugging Face (`oyekamal/molde-tiny`, see `models.json`); epochs other than the ones in the table are uploaded but not yet tested.
+Recommended default: **r3 Gemma 270M** (241 MB, fast, about 2 s per app on a laptop CPU). Optional: **r4 Qwen3.5-0.8B, epoch 1** (504 MB, ChatML prompt; higher quality, slower, for phones with 6 GB or more). This matches `models.json`. Both use the line-stepped decoder. r4 (dataset v3.1, 20.9k pairs) files are on Hugging Face (`oyekamal/molde-tiny`); epochs other than the ones in the table are uploaded but not yet tested.
 
 On the fixed test set (149 requests heldout2, 60 short named requests, 40 small changes through the app's own loop; laptop CPU, rough speeds):
 
-| | r3 Gemma 270M | r4 Gemma 270M (epoch 2) | **r4 Qwen 0.8B (epoch 1)** |
+| | **r3 Gemma 270M (default)** | r4 Gemma 270M (epoch 2) | r4 Qwen 0.8B (epoch 1, optional) |
 |---|---|---|---|
 | heldout2: program passes the checker | 90.6% | 89.3% | **94.6%** |
 | asks a question instead of building a short request | 31.7% | 21.7% | **11.7%** |
 | short requests built through the app (of 60) | **59** | 53 | 56 |
 | small changes that did what was asked (of 40) | 14 | 16 | **22** |
 | seconds per new app / per small change | 2.3 / 5.6 | 3.2 / 5.0 | 4.3 / 11 |
+
+**Read the 90.6% with care.** The heldout2 row measures program validity: the program passes the checker. It does not measure whether the app does what was asked. On a separate failure hunt with 407 brand-new requests, r3 Gemma built exactly what was asked 37% of the time (71% leniently), and 87.7% of the programs were valid. Use 37% / 71% as the honest new-request figure for r3 Gemma.
 
 The r2 numbers below are the older measurement on 140 new app ideas.
 
@@ -69,7 +71,7 @@ What does **not** work well yet:
 - **English only.** The language cannot make games or call the internet.
 - Speed on a real low-end phone is not measured yet; the emulator is slow (about 100 s per app), a laptop CPU takes about 4 s.
 
-Dataset v3 targets the first three problems; r3 and r4 were trained on it. A 2B model (Qwen3.5-2B) is training now.
+Dataset v3 targets the first three problems; r3 and r4 were trained on it. A 2B run (Qwen3.5-2B) was stopped early; its partial weights are on Hugging Face (`r4-qwen35-2b-partial`), untested.
 
 <img src="docs/images/model-vs-handwritten-budget.png" width="640" alt="A budget app: two hand-written versions next to the plainer version made by the r2 model">
 
