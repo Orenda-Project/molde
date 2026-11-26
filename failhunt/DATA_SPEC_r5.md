@@ -517,7 +517,7 @@ form meal, "Plan a meal"
 
 ## 4. Edit classes to add
 
-All edit pairs: program before is 4 to 25 lines unless the class says long; the change touches only what the request names; every other line is copied exactly. Add 30% identity-style negatives (see E10). The sizes sum to about 3,700.
+All edit pairs are written in the patch format of L1 (the examples below show the answer as patch operations; the whole program is derived by applying them). The program before is 4 to 25 lines unless the class says long; the change touches only what the request names; every other line is copied exactly. Add 30% identity-style negatives (see E10). The sizes sum to about 3,700.
 
 ### E1. Add a field (class `add_field`): add 500
 
@@ -527,65 +527,65 @@ What is wrong: r3 returned the program unchanged 26 of 68 times and did it right
 
 Edit request: `i want to note how hard each set felt` on a 5-line program (`app "Gym" dumbbell ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table lift exercise text, kg num 0..300, reps num 1..50
-+table lift exercise text, kg num 0..300, reps num 1..50, effort num 1..10
+replace 2
++ table lift exercise text, kg num 0..300, reps num 1..50, effort num 1..10
 ```
 
 **Example 2** (af2)
 
 Edit request: `every job needs the name of who does it` on a 8-line program (`app "Jobs" list slate` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table job title text, done bool
-+table job title text, who text?, done bool
+replace 2
++ table job title text, who text?, done bool
 ```
 
 **Example 3** (af3)
 
 Edit request: `keep the year each book came out` on a 9-line program (`app "Books" book plum` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table book title text, author text?, pages num 1..3000, done bool
-+table book title text, author text?, pages num 1..3000, year num 1000..2100, done bool
+replace 2
++ table book title text, author text?, pages num 1..3000, year num 1000..2100, done bool
 ```
 
 
 ### E2. Add an option to a choice (class `add_option`): add 400
 
-What is wrong: 0 of 13 right in r3 (11 unchanged); v3.1 has 4 such pairs on programs of 12 lines or fewer. Wording variants: "add X as an option", "add X to the choices", "also let me pick X", "I need X too in the list".
+What is wrong: forced suite (46 steps in v2, options that belong to the choice's family): see `controls/forced_v2_summary.txt`; in the first forced version 2 of 70 (r3) and 4 of 70 (r4 ep2) right, 56 and 59 unchanged; v3.1 has 4 such pairs on programs of 12 lines or fewer. Wording variants: "add X as an option", "add X to the choices", "also let me pick X", "I need X too in the list".
 
 **Example 1** (ao1)
 
 Edit request: `my gifts need their own heading` on a 6-line program (`app "Spending" wallet mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table spend what text, amount money, kind pick Food|Bills|Fun = Food
-+table spend what text, amount money, kind pick Food|Bills|Fun|Gifts = Food
+replace 2
++ table spend what text, amount money, kind pick Food|Bills|Fun|Gifts = Food
 ```
 
 **Example 2** (ao2)
 
 Edit request: `a fourth dish is coming: biryani is already there, so put in karahi` on a 4-line program (`app "Vote" users ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table vote choice pick Pizza|Burger|Biryani = Pizza
-+table vote choice pick Pizza|Burger|Biryani|Karahi = Pizza
+replace 2
++ table vote choice pick Pizza|Burger|Biryani|Karahi = Pizza
 ```
 
 **Example 3** (ao3)
 
 Edit request: `sometimes money comes back to a child as a refund` on a 9-line program (`app "Pocket money" coin mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table move kid ref kid, amount money, kind pick Got|Spent = Got
-+table move kid ref kid, amount money, kind pick Got|Spent|Refund = Got
+replace 3
++ table move kid ref kid, amount money, kind pick Got|Spent|Refund = Got
 ```
 
 
@@ -597,27 +597,27 @@ What is wrong: 0 of 23 final results (10 unchanged, 7 damaged other lines, 5 cor
 
 Edit request: `i can do without the line graph` on a 6-line program (`app "Weight" scale ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--trend weigh last 60 days sort at, it.kg
+delete 4
 ```
 
 **Example 2** (rm2)
 
 Edit request: `take away the little week dots` on a 5-line program (`app "Habit" check ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--weekdots count(tick on it) > 0
+delete 4
 ```
 
 **Example 3** (rm3)
 
 Edit request: `the long history underneath is too much` on a 6-line program (`app "Spending" wallet mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--list spend month by day
+delete 6
 ```
 
 
@@ -629,27 +629,30 @@ What is wrong: add chart 23 of 41 right in r3, add stat 16 of 43; failures: unch
 
 Edit request: `draw my weight lifted over time` on a 5-line program (`app "Gym" dumbbell ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+trend lift last 90 days sort at, it.kg
+insert after 3
++ trend lift last 90 days sort at, it.kg
 ```
 
 **Example 2** (ac2)
 
 Edit request: `how many of my pills did i take today` on a 10-line program (`app "Medicine" pill plum` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+stat count(taken today), "taken today"
+insert after 9
++ stat count(taken today), "taken today"
 ```
 
 **Example 3** (ac3)
 
 Edit request: `a bar per day for the focus rounds` on a 5-line program (`app "Focus" timer mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+daybars last 7 days, count(round on it)
+insert after 4
++ daybars last 7 days, count(round on it)
 ```
 
 
@@ -661,59 +664,49 @@ What is wrong: 4 of 29 right in r3. A correct section edit re-indents lines, so 
 
 Edit request: `give the screen proper headings` on a 9-line program (`app "Books" book plum` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--count(book where done = yes) "finished" big
--each book sort title as b
--  row card tap edit b swipe remove b
--    toggle b.done
--    b.title bold grow
--    b.pages faint
--form book, "Add book"
-+section "Progress"
-+  count(book where done = yes) "finished" big
-+section "My books"
-+  each book sort title as b
-+    row card tap edit b swipe remove b
-+      toggle b.done
-+      b.title bold grow
-... (3 more changed lines)
+replace 3-9
++ section "Progress"
++   count(book where done = yes) "finished" big
++ section "My books"
++   each book sort title as b
++     row card tap edit b swipe remove b
++       toggle b.done
++       b.title bold grow
++       b.pages faint
++ section "Add"
++   form book, "Add book"
 ```
 
 **Example 2** (se2)
 
 Edit request: `put the rent part and the tenants part under their own titles` on a 10-line program (`app "Rent" home slate` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--"Collected" sum(paid.amount month) big
--each tenant sort name as t
--  row card gap 2
--    t.name bold grow
--    if(sum(t.paid.amount month) >= rent, "Paid", "Due") color if(sum(t.paid.amount month) >= rent, good, bad)
--form tenant, "Add tenant"
-+section "This month"
-+  "Collected" sum(paid.amount month) big
-+section "Tenants"
-+  each tenant sort name as t
-+    row card gap 2
-+      t.name bold grow
-+      if(sum(t.paid.amount month) >= rent, "Paid", "Due") color if(sum(t.paid.amount month) >= rent, good, bad)
-+  form tenant, "Add tenant"
+replace 5-10
++ section "This month"
++   "Collected" sum(paid.amount month) big
++ section "Tenants"
++   each tenant sort name as t
++     row card gap 2
++       t.name bold grow
++       if(sum(t.paid.amount month) >= rent, "Paid", "Due") color if(sum(t.paid.amount month) >= rent, good, bad)
++   form tenant, "Add tenant"
 ```
 
 **Example 3** (se3)
 
 Edit request: `split this into cards, one for the sleep numbers and one for the chart` on a 6-line program (`app "Sleep" bed ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--avg7 big
--daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
-+section "Average"
-+  avg7 big
-+section "Last week"
-+  daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
+replace 4-5
++ section "Average"
++   avg7 big
++ section "Last week"
++   daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
 ```
 
 
@@ -725,30 +718,30 @@ What is wrong: "i want to aim for 3000 instead", "make my goal 3000", "set the t
 
 Edit request: `a full round is 108 for me` on a 9-line program (`app "Tasbeeh" beads mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--setting target num = 33 "Count to"
-+setting target num = 108 "Count to" set
+replace 3
++ setting target num = 108 "Count to" set
 ```
 
 **Example 2** (sv2)
 
 Edit request: `rent goes up to 18000 next month` on a 10-line program (`app "Rent" home slate` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--setting rent money = 15000 "Monthly rent"
-+setting rent money = 18000 "Monthly rent" set
+replace 4
++ setting rent money = 18000 "Monthly rent" set
 ```
 
 **Example 3** (sv3)
 
 Edit request: `i am aiming at a lakh and a half now` on a 9-line program (`app "Savings" coin mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--setting goal money = 100000 "Savings goal"
-+setting goal money = 150000 "Savings goal" set
+replace 3
++ setting goal money = 150000 "Savings goal" set
 ```
 
 
@@ -760,40 +753,39 @@ What is wrong: 3 of 28 right. The model writes the new name without `was` (the d
 
 Edit request: `the bed time field should just be called bedtime` on a 6-line program (`app "Sleep" bed ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table night slept time, woke time
--let avg7 = sum(night last 7 days, (it.woke - it.slept)) / count(night last 7 days)
-+table night bedtime time was slept, woke time
-+let avg7 = sum(night last 7 days, (it.woke - it.bedtime)) / count(night last 7 days)
--daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
-+daybars last 7 days, sum(night on it, (it.woke - it.bedtime) / 1h)
+replace 2-3
++ table night bedtime time was slept, woke time
++ let avg7 = sum(night last 7 days, (it.woke - it.bedtime)) / count(night last 7 days)
+replace 5
++ daybars last 7 days, sum(night on it, (it.woke - it.bedtime) / 1h)
 ```
 
 **Example 2** (rf2)
 
 Edit request: `the name of the person should be called "who"` on a 7-line program (`app "Birthdays" gift plum` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table person name text, birthday date
-+table person who text was name, birthday date
--    p.name bold grow
-+    p.who bold grow
+replace 2
++ table person who text was name, birthday date
+replace 5
++     p.who bold grow
 ```
 
 **Example 3** (rf3)
 
 Edit request: `rename the cost kind choices heading to "group"` on a 10-line program (`app "Shop costs" bag ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table cost what text, amount money, kind pick Milk|Gas|Wages = Milk
-+table cost what text, amount money, group pick Milk|Gas|Wages = Milk was kind
--each options cost.kind as k
-+each options cost.group as k
--    sum(cost.amount month where kind = k) faint
-+    sum(cost.amount month where group = k) faint
+replace 2
++ table cost what text, amount money, group pick Milk|Gas|Wages = Milk was kind
+replace 6
++ each options cost.group as k
+replace 9
++     sum(cost.amount month where group = k) faint
 ```
 
 
@@ -805,114 +797,110 @@ What is wrong: 6 of 34 right in r3 (20 unchanged); r4 ep2 is better on short pro
 
 Edit request: `the Add person button should say Remember` on a 7-line program (`app "Birthdays" gift plum` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--form person, "Add person"
-+form person, "Remember"
+replace 7
++ form person, "Remember"
 ```
 
 **Example 2** (rb2)
 
 Edit request: `rename the plus button to Add one more` on a 9-line program (`app "Stock" package slate` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--    button "+" tap set i.qty = i.qty + 1
-+    button "Add one more" tap set i.qty = i.qty + 1
+replace 8
++     button "Add one more" tap set i.qty = i.qty + 1
 ```
 
 **Example 3** (rb3)
 
 Edit request: `make the pill button read Took it` on a 10-line program (`app "Medicine" pill plum` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--form med, "Add medicine"
-+form med, "Took it"
+replace 10
++ form med, "Took it"
 ```
 
 
 ### E9. Reorder (class `reorder`): add 300
 
-What is wrong: v3.1 has 0 reorder pairs on programs of 12 lines or fewer; 600 on long programs. Only 6 reorder steps were testable in the hunt because short programs rarely have the two parts out of order, so this class needs its own base programs where the order is wrong on purpose.
+What is wrong: v3.1 has 0 reorder pairs on programs of 12 lines or fewer; 600 on long programs. The chain test had only 6 testable reorder steps, so the forced suite built 85 (a program with the form or chart in the wrong place, asked to put it back): r3 11 of 85 right, r4 ep2 26 of 85, the rest unchanged (73 and 43). This class needs base programs where the order is wrong on purpose.
 
 **Example 1** (ro1)
 
 Edit request: `chart first, then the list` on a 6-line program (`app "Weight" scale ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+trend weigh last 60 days sort at, it.kg
-+form weigh, "Add weight"
--form weigh, "Add weight"
--trend weigh last 60 days sort at, it.kg
+delete 4-5
+insert after 6
++ form weigh, "Add weight"
++ list weigh by day
 ```
 
 **Example 2** (ro2)
 
 Edit request: `the form should come before the totals` on a 9-line program (`app "Pocket money" coin mint` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+form kid, "Add child"
-+form move, "Add entry"
--form kid, "Add child"
--form move, "Add entry"
+move 8-9 after 3
 ```
 
 **Example 3** (ro3)
 
 Edit request: `show how many are open above the list of jobs` on a 8-line program (`app "Jobs" list slate` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+stat count(job where done = no), "open"
--stat count(job where done = no), "open"
+move 7 after 2
 ```
 
 
 ### E10. Vague requests and requests the app cannot do (classes `vague_ask`, `cannot_do_ask`): add 400
 
-What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged with no message, 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times and tried to add an invented `remind` or `when` line 13 times (4 got through). Silent no-ops are not acceptable teaching data: the user must be told, in plain English, what the app can do instead. So no identity pairs. For a request the app cannot do, and for a vague request, the answer is the existing `ask` line (needs the capability and vague word list of L6, because `allowAsk` is false today for any request with a real word): one plain sentence that says what cannot be done and what can, and answer choices that are real edits. The `Edit request / Question / Answer` form then makes the change. Never show the language's own syntax to the user (`was`, `pick ...`, `table`); the app's data-rule refusal text is a separate bug (APP_BUGS #11).
+What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged with no message, 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times and tried to add an invented `remind` or `when` line 13 times (4 got through). Silent no-ops are not acceptable teaching data: the user must be told, in plain English, what the app can do instead. So no identity pairs. For a request the app cannot do, and for a vague request, the answer is the existing `ask` line (needs the capability and vague word list of L6, because `allowAsk` is false today for any request with a real word): one plain sentence that says what cannot be done and what can, and answer choices that are real edits. The `Edit request / Question / Answer` form then makes the change; the follow-up rows are in `spec/edits.jsonl` (one per choice that is a real edit, see below). The app keeps the program the whole time; a choice that declines ("Leave it as it is") needs no model call (an app-side rule: an answer that starts with "No" or "Leave" or "Nothing" closes the question), so there is no follow-up row for it. Never show the language's own syntax to the user (`was`, `pick ...`, `table`); the app's data-rule refusal text is a separate bug (APP_BUGS #11).
 
 **Example 1** (id1)
 
 Edit request: `send my spending to my accountant by email each friday` on a 6-line program (`app "Daily spend" wallet ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's whole answer is this one ask line:
 ```
--app "Daily spend" wallet ink
--table spend amount money, note text?
--quick spend, amount, [100, 500, 1000]
--stat sum(spend.amount today), "today"
--stat sum(spend.amount month), "this month"
--list spend by day
-+ask "Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?" "Yes, add a weekly total" "No, leave it as it is"
+ask "Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?" "Yes, add a weekly total" "No, leave it as it is"
 ```
+What the app does: the app shows the question and its choices and keeps the current 6-line program unchanged. Nothing is replaced.
 
 **Example 2** (id2)
 
-Edit request: `send my spending to my accountant by email each friday
-Question: Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?
-Answer: Yes, add a weekly total` on a 6-line program (`app "Daily spend" wallet ink` ...)
+Edit request: `send my spending to my accountant by email each friday  /  Question: Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?  /  Answer: Yes, add a weekly total` on a 6-line program (`app "Daily spend" wallet ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+stat sum(spend.amount week), "this week"
+insert after 4
++ stat sum(spend.amount week), "this week"
 ```
 
 **Example 3** (id3)
 
-Edit request: `lock the app with my fingerprint` on a 5-line program (`app "Habit" check ink` ...)
+Edit request: `show my streak on the phone lock screen` on a 5-line program (`app "Habit" check ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's whole answer is this one ask line:
 ```
--app "Habit" check ink
--table tick
--streak(tick) "day streak" big
--weekdots count(tick on it) > 0
--button "Done today" tap add tick
-+ask "Molde apps cannot use the fingerprint reader. Your phone's own lock still protects them. Do you want anything else changed?" "No, that is fine" "Yes, something else"
+ask "Molde apps cannot put anything on the lock screen. Do you want a bigger streak number on the first screen?" "Yes, a bigger streak" "No, leave it"
+```
+What the app does: the app shows the question and its choices and keeps the current 5-line program unchanged. Nothing is replaced.
+
+**Example 4** (id4)
+
+Edit request: `show my streak on the phone lock screen  /  Question: Molde apps cannot put anything on the lock screen. Do you want a bigger streak number on the first screen?  /  Answer: Yes, a bigger streak` on a 5-line program (`app "Habit" check ink` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
+```
+replace 3
++ streak(tick) "day streak" big
 ```
 
 
@@ -920,49 +908,73 @@ Change (`-` old line, `+` new line):
 
 Edit request: `can you make this look prettier` on a 6-line program (`app "Water" drop ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's whole answer is this one ask line:
 ```
--app "Water" drop ocean
--table drink ml num 1..5000 unit "ml"
--setting goal num = 2000 "Daily goal (ml)"
--goal sum(drink.ml today), goal, "today", "ml"
--quick drink, ml, [250, 500]
--list drink
-+ask "What should look nicer?" "A different colour" "Bigger text" "A chart of the week" "Leave it as it is"
+ask "What should look nicer?" "A different colour" "Bigger text" "A chart of the week" "Leave it as it is"
+```
+What the app does: the app shows the question and its choices and keeps the current 6-line program unchanged. Nothing is replaced.
+
+**Example 2** (vg3)
+
+Edit request: `can you make this look prettier  /  Question: What should look nicer?  /  Answer: A chart of the week` on a 6-line program (`app "Water" drop ocean` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
+```
+insert after 5
++ daybars last 7 days, sum(drink.ml on it)
 ```
 
-**Example 2** (vg2)
+**Example 3** (vg4)
+
+Edit request: `can you make this look prettier  /  Question: What should look nicer?  /  Answer: A different colour` on a 6-line program (`app "Water" drop ocean` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
+```
+replace 1
++ app "Water" drop teal
+```
+
+**Example 4** (vg5)
+
+Edit request: `can you make this look prettier  /  Question: What should look nicer?  /  Answer: Bigger text` on a 6-line program (`app "Water" drop ocean` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
+```
+replace 1
++ app "Water" drop ocean large
+```
+
+**Example 5** (vg2)
 
 Edit request: `it feels crowded` on a 10-line program (`app "Shop costs" bag ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's whole answer is this one ask line:
 ```
--app "Shop costs" bag ocean
--table cost what text, amount money, kind pick Milk|Gas|Wages = Milk
--setting rent money = 15000 "Monthly rent"
--let total = sum(cost.amount month) + rent
--"This month" total big
--each options cost.kind as k
--  row card
--    k bold grow
--    sum(cost.amount month where kind = k) faint
--form cost, "Add cost"
-+ask "What can go?" "The list of costs by kind" "The rent line" "Nothing, keep it"
+ask "What can go?" "The costs listed by kind" "The rent line" "Nothing, keep it"
 ```
+What the app does: the app shows the question and its choices and keeps the current 10-line program unchanged. Nothing is replaced.
 
-**Example 3** (vg3)
+**Example 6** (vg6)
 
-Edit request: `can you make this look prettier
-Question: What should look nicer?
-Answer: A chart of the week` on a 6-line program (`app "Water" drop ocean` ...)
+Edit request: `it feels crowded  /  Question: What can go?  /  Answer: The costs listed by kind` on a 10-line program (`app "Shop costs" bag ocean` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-+daybars last 7 days, sum(drink.ml on it)
+delete 6-9
 ```
 
+**Example 7** (vg7)
 
-### E11. Long programs: exact copy (class `long_edit_copy`): add 600 if the format stays, or convert (section 5)
+Edit request: `it feels crowded  /  Question: What can go?  /  Answer: The rent line` on a 10-line program (`app "Shop costs" bag ocean` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
+```
+replace 3-4
++ let total = sum(cost.amount month)
+```
+
+
+### E11. Long programs (class `long_edit_copy`): add 600, in the patch format
 
 What is wrong: r3 got 1 of 70 long steps right: it rewrote lines it was not asked to touch (`button if(adding, "Close", "Add student") ...` became `button "Close" ...`, `draw 100, 4` became `draw 100, 2`) and the guards then blocked the result. v3.1 has 2,983 long edits already; see REPORT section 4 for how r4 ep2 did with them, which decides whether more of the same helps.
 
@@ -970,30 +982,30 @@ What is wrong: r3 got 1 of 70 long steps right: it rewrote lines it was not aske
 
 Edit request: `the Record game button should say Add result` on a 40-line program (`app "Chess Club" game ink` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--form game, "Record game"
-+form game, "Add result"
+replace 30
++ form game, "Add result"
 ```
 
 **Example 2** (le2)
 
 Edit request: `change the monthly profit goal to 150000` on a 43-line program (`app "Mandi Trades" paw grey` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--setting target money = 120000 "Monthly profit goal"
-+setting target money = 150000 "Monthly profit goal" set
+replace 4
++ setting target money = 150000 "Monthly profit goal" set
 ```
 
 **Example 3** (le3)
 
 Edit request: `add Tea as an option for the cost kind` on a 42-line program (`app "Chai Stall" coffee orange` ...)
 
-Change (`-` old line, `+` new line):
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
--table cost what text, amount money, kind pick Milk|Gas|Sugar|Wages|Other = Milk
-+table cost what text, amount money, kind pick Milk|Gas|Sugar|Wages|Tea|Other = Milk
+replace 3
++ table cost what text, amount money, kind pick Milk|Gas|Sugar|Wages|Tea|Other = Milk
 ```
 
 
@@ -1003,35 +1015,40 @@ Change (`-` old line, `+` new line):
 
 ### The levers
 
-**L1. Edit as patch operations.** The prompt shows the program with line numbers; the model writes only `replace 7: <line>`, `insert after 7: <line>`, `delete 9`, `move 4-6 after 12`. The app applies it deterministically (and checks the result). Format in `tools/to_patch.py`. **Measured:** all 7,024 v3.1 edit pairs convert and round-trip exactly (100%); median 1 operation (6,366 need one, 7,006 need three or fewer, none more than six); the patch is a median **16 tokens against 173** for the full program (p90 39 against 556), so about 11 times fewer output tokens: faster, and nothing to copy wrongly. The model still writes every new line itself. A reorder is `move`. A rename with `was` is one `replace` of the table line plus `replace` of each line that uses the old name (the model decides which). Add 400 pairs where the right answer is no operation at all (the request cannot be done), written `# none`, so that "unchanged" is a decision and not the cheapest output.
+**L1. Edits as patch operations: the format of ALL r5 edit data.** The prompt shows the current program with numbered lines (`1| app "Water" ...`); the model writes only the change: `insert after N`, `replace N` or `replace N-M`, `delete N` or `delete N-M`, `move N-M after K`, each written line on its own line starting with `+ `. The app applies the operations deterministically (`exp/patch_ops.mjs` in the training repo, on Spark at `~/kamal/molde/train/exp/`; a reference copy is `tools/patch_ops_ref.mjs`), then checks the result like any program, so every line the user did not touch is copied by the app, not by the model. **Whole-program pairs are derived, not stored separately:** `applyOps(before, answer) = program` is asserted for every edit row in `spec/` (the builders fail if it does not round-trip), and the training rows are produced from the same source rows in either format. **Measured by the trainer (E1, 1 epoch on v3.1, 40 changes through the app):** lost lines fell from 422 to 38, checker pass rose from 28 to 33, changes that did what was asked went from 14 to 17; the last is not yet conclusive. **Measured here:** all 7,024 v3.1 edit pairs convert and round-trip (`tools/to_patch.py stats`, 100%), median 1 operation, patch about 16 tokens against 173 for the whole program. The model still writes every new line itself.
 
-Edit request: `my gifts need their own heading` on a 6-line program
+What an answer can be, and what the app does with it:
+- **Operations:** applied to the program.
+- **One `ask` line instead of operations:** the app shows the question with its choices and **keeps the current program exactly as it is** (`controller.dart` `_afterGenerate`: an ask result sets `pendingAsk` and returns before anything is applied). Nothing is replaced. The tap comes back to the model as `Edit request: <same request>` plus `Question: ...` and `Answer: ...` over the same program, and the model then writes the real edit (the follow-up rows below). `tools/validate_asks.mjs` checks all of this for every ask pair: one valid ask line, the program untouched by construction, follow-up rows with the same request and the same program, the question equal to the ask's, the answer one of its choices.
+- **Nothing to do** (the request is already satisfied, for example "dark mode" on a dark app): an answer of `none`; the app treats it as no change and says "It already is that way". This needs one line in the applier (today an unknown op throws). Refusals and vague requests are never `none`: they are asks.
 
-Patch the model would write instead of 6 lines:
+Edit request: `my gifts need their own heading` on a 6-line program (`app "Spending" wallet mint` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-replace 2:
-table spend what text, amount money, kind pick Food|Bills|Fun|Gifts = Food
-```
-
-Edit request: `the Add person button should say Remember` on a 7-line program
-
-Patch the model would write instead of 7 lines:
-```
-replace 7:
-form person, "Remember"
+replace 2
++ table spend what text, amount money, kind pick Food|Bills|Fun|Gifts = Food
 ```
 
-Edit request: `the Record game button should say Add result` on a 40-line program
+Edit request: `the Add person button should say Remember` on a 7-line program (`app "Birthdays" gift plum` ...)
 
-Patch the model would write instead of 40 lines:
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
-replace 30:
-form game, "Add result"
+replace 7
++ form person, "Remember"
 ```
 
-Edit request: `i can do without the line graph` on a 6-line program
+Edit request: `the Record game button should say Add result` on a 40-line program (`app "Chess Club" game ink` ...)
 
-Patch the model would write instead of 5 lines:
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
+```
+replace 30
++ form game, "Add result"
+```
+
+Edit request: `i can do without the line graph` on a 6-line program (`app "Weight" scale ocean` ...)
+
+The model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):
 ```
 delete 4
 ```
@@ -1261,26 +1278,26 @@ list drive by day
 | Checker failure (50 of 407 = 12.3%) | L7 best-of-3 and repair pairs (C4); error-aware retry; the table-name grammar fix (APP_BUGS #6) | with 12 tries per line 9 of the first 26 failed creates pass (35%); samples control in `controls/summary.txt` when finished | H1: repair pairs plus best-of-3 turn about a third of the failures into builds (about +4 builds per 100 requests), a half of those right |
 | Meaningless formulas (62) | execution gate (C2), L7, L3 | nothing yet: no run has tried an executed-data round | H2: only calculators and formula apps (about 25 of the 62) can be executed; the structural nonsense is only reduced by the leak and plan gates |
 | Misses a specific (55 partial) | L2, L3, C3 | plan check flags 4 of the 5 wrong outputs of r3 and r4 ep2 on five test requests (`tools/plan_negative_check.mjs`); five cases are an illustration, not a rate | H3: a plan line makes a third to a half of these checkable |
-| Roman Urdu drift (81 requests, 25% strict, 53% zero) | L5, L2, C1 | **the same model on the English translation builds the right topic in 79 of 81 (97%)**; English-only strict is 42% | H4: data reaches 40 to 45% strict on Roman Urdu, at most the English-only level |
+| Roman Urdu drift (81 requests, 25% strict, 53% zero) | L5, L2, C1 | **the same model on the English translation builds the right topic in 79 of 81 (97%)**; English-only strict is 42% (the r3 baseline on English requests, not a ceiling: nothing shows that r5 cannot exceed it) | H4: data brings Roman Urdu strict toward the English-only baseline, 40 to 45%; it may go beyond it |
 | Wrong topic English (17), typo (4) | L4, L3, template drop, L5 | typo-corrected requests are right-topic 23 of 23, so typo drift is data | H5: English topic drift is partly capacity; unknown share |
 | Unsupported built as supported (15 requests, 0 right) | L6 | 0 of 15 refused today; 1 of 15 sensible | H6: with the capability list and ask, most of the 15 become honest refusals plus the closest offline app |
 | Leaks (13) and r4's unrelated settings | gates, drop of 131 leaking rows, template drop | the leak strings are in v3.1 (counts in section 2); r4 ep2 leaks more than r3 (9 against 4 on 147 paired requests) | H7: removing them stops the leaks; test on the same 147 |
 | Collapse onto a memorised skeleton (quiz, mosque `Khatam`, ring counter; r3: 2 quiz, 6 mosque, 6 ring counter for requests that did not ask) | L4, L3, template drop | r4 ep2 has fewer (0 quiz, 4 mosque, 0 ring) but more leaks | H8: caps and minimal pairs reduce it |
 | Absurd numbers (5), thin (4) | C7, C8, plan numbers | small classes | |
-| **Create total** | all | **the measured ceilings are: English-only strict 42% today; Roman Urdu at most the English level; checker failures partly recoverable. Together these support about 45% strict from data alone** | H9: levers L2 and L7 take it above 45%; the gate in section 6 asks for 45% first and treats anything higher as the next target, not a promise |
-| Edits unchanged (39 to 45% of model steps; forced suite in the report) | L1 with explicit `# none`, L3 for edits, E1 to E10, a sampled retry (APP_BUGS #10) | the unchanged output is shared across requests on one program and is a model behaviour, not a cache effect (fresh-core replay, `controls/identical_outputs_proof.txt`); the sampled-retry control is in `controls/summary.txt` when finished | H10: in a patch format "unchanged" has to be chosen; the right rate on short chains rises above its 32% |
+| **Create total** | all | measured baselines: r3 strict 36.9% overall, 42% on English-only requests; 9 of 26 checker failures recover with 12 tries per line | **H9 (hypothesis): data brings overall create strict to about 45%**, no run has tested it; L2 and L7 may take it higher. The gate in section 6 uses 45% as the first bar and any higher bar is set after the first experiment reports |
+| Edits unchanged (39 to 45% of model steps; forced suite in the report) | L1 (patch format, ask, `none`), L3 for edits, E1 to E10, a sampled retry (APP_BUGS #10) | the unchanged output is shared across requests on one program and is a model behaviour, not a cache effect (fresh-core replay, `controls/identical_outputs_proof.txt`); the sampled-retry control is in `controls/summary.txt` when finished | H10: in a patch format "unchanged" has to be chosen; the right rate on short chains rises above its 32% |
 | Edit checker failures (9 to 12%), long programs damaged (7 to 10%; 1 of 70 right) | L1 | all 7,024 v3.1 edits convert to patches and back exactly; median patch 16 tokens against 173 (tests the **format**, not whether the model can write patches); r4 ep2 shows more full-program long edits do not help (1 of 70 again) | H11: with patches the app copies every untouched line, so these failures cannot occur; the model's patch-writing skill is the open question |
 | Applied wrong (8 to 10%), silent change of an untouched line (8 of 119 applied steps in r3, 2 of 134 in r4 ep2) | L3, E1 to E4, L1 with line anchors, a guard that compares meaning (APP_BUGS #12) | counted in the report | H12: patches with line numbers remove the silent rewrite class |
 | Rename without `was` (3 of 28 right) | L1, E7, APP_BUGS #7 and #11 | counts | H13: the app-side `was` inference is the safer half |
 | Guard false positives, 20% guard, hang, undo wording | app only (APP_BUGS) | counts in APP_BUGS | |
-| **Edit total** | all | baseline 25% (82 of 321), of which 32% on short chains and 1 of 70 on long programs | **no target is claimed**: E1 (data only, full-program edits) and E2 (plus L1 patches) of section 6 measure it |
+| **Edit total** | all | baseline 25% (82 of 321), of which 32% on short chains and 1 of 70 on long programs | **no target is claimed**: R5-A and R5-B of section 6 measure it |
 
 ## 6. Mix, order and the gate for the next round
 
-- Start from v3.1 minus section 2 (about 17,700 rows). Add C1 to C9 (about 6,400 creates), E1 to E11 (about 3,700 edits, in patch form if L1 is adopted), and the L3, L5, L6 pairs inside those numbers. About 28,000 rows. The capacity limit is real, so if training time matters, drop the 988 appline edits and cap C3 at 1,000.
+- Start from v3.1 minus section 2 (about 17,700 rows). Add C1 to C9 (about 6,400 creates), E1 to E11 (about 3,700 edits, written in the patch format of L1 with the whole-program pair derived), and the L3, L5, L6 pairs inside those numbers. About 28,000 rows. The capacity limit is real, so if training time matters, drop the 988 appline edits and cap C3 at 1,000.
 - Order inside an epoch: shuffle; do not put the new classes at the end.
-- **Experiments, in this order, each against the same `cases.jsonl` and the forced edit suite (`controls/forced_cases.jsonl`):** E1 data only, full-program edits (isolates sections 2 to 4); E2 = E1 plus L1 patch edits; E3 = E2 plus L2 plan lines; E4 = E3 plus L7. If (a) does not beat r3, the data is not the problem and the levers are the plan.
-- **Gate before anything is called better than r3:** (1) the same `cases.jsonl` run through `tools/hunt.mjs`; (2) a blind A/B of r5 against r3 on the English creates where both pass (the 30-case protocol of `ab/`): r5 must win at least 20 of 30 with at most 2 ties; (3) strict "did what was asked" on the hand-labelled create sample at least **45%** overall (the measured data-only ceiling; r3 is 36.9%) and at least 40% on Roman Urdu; (4) definite model-path edits: strictly more right than r3's 25.5% overall and 32% on short chains, no-op results below r3's 39%, and long programs above 1 of 70; the real target for edits is whatever experiment E2 shows; (5) median seconds per create not above 2.5 on Spark CPU with 4 threads (r3 1.45, r4 ep2 1.83). Higher bars are set only after E1 and E2 report.
+- **Experiments, in this order, each against the same `cases.jsonl` and the forced edit suite (`controls/forced_cases.jsonl`):** the trainer's E1 (patch ops on v3.1, 1 epoch) has already run: lost lines 422 to 38, checker pass 28 to 33, good 14 to 17. Next: **R5-A** = the new data (sections 2 to 4) with edits in patch format (the r5 edit format), **R5-B** = R5-A with full-program edits (isolates the format on the new data), **R5-C** = R5-A plus L2 plan lines, **R5-D** = R5-C plus L7. If R5-A does not beat r3, the data is not the problem and the levers are the plan.
+- **Gate before anything is called better than r3:** (1) the same `cases.jsonl` run through `tools/hunt.mjs`; (2) a blind A/B of r5 against r3 on the English creates where both pass (the 30-case protocol of `ab/`): r5 must win at least 20 of 30 with at most 2 ties; (3) strict "did what was asked" on the hand-labelled create sample at least **45%** overall (hypothesis H9; r3 is 36.9%) and at least 40% on Roman Urdu; (4) definite model-path edits: strictly more right than r3's 25.5% overall and 32% on short chains, no-op results below r3's 39%, and long programs above 1 of 70; the real target for edits is whatever R5-A shows; (5) median seconds per create not above 2.5 on Spark CPU with 4 threads (r3 1.45, r4 ep2 1.83). Higher bars are set only after R5-A and R5-B report.
 
 ## 7. A fast automatic intent judge (calibrated against the 407 hand labels)
 

@@ -11,12 +11,13 @@ const T = {
   rf1: { k: 'renamefield', to: 'bedtime', old: 'slept' }, rf2: { k: 'renamefield', to: 'who', old: 'name' }, rf3: { k: 'renamefield', to: 'group', old: 'kind' },
   rb1: { k: 'btn', to: 'Remember', old: 'Add person' }, rb2: { k: 'btn', to: 'Add one more', old: '+' }, rb3: { k: 'btn', to: 'Took it', old: 'Add medicine' },
   ro1: { k: 'reorder', a: 'chart', b: 'list' }, ro2: { k: 'reorder', a: 'form', b: 'list' }, ro3: { k: 'reorder', a: 'stat', b: 'list' },
-  id2: { k: 'addstat' }, vg3: { k: 'addchart' },
+  id2: { k: 'addstat' }, vg3: { k: 'addchart' }, vg4: { k: 'theme', color: 'teal' }, vg5: { k: 'size' },
 };
+const CUSTOM = { id4: (b, a) => a.includes('"day streak" big') && !b.includes('"day streak" big'), vg6: (b, a) => !a.includes('each options cost.kind') && b.includes('each options cost.kind') && a.split('\n').length === b.split('\n').length - 4, vg7: (b, a) => !/^setting rent/m.test(a) && /^setting rent/m.test(b) && !a.includes('+ rent') };
 let bad = 0, n = 0;
 for (const l of readFileSync(process.argv[2], 'utf8').trim().split('\n')) {
-  const r = JSON.parse(l); const st = T[r.id]; if (!st) continue; n++;
-  const d = P.did(st, r.before, r.program);
+  const r = JSON.parse(l); if (r.kind === 'edit_ask') continue; const st = T[r.id]; if (!st && !CUSTOM[r.id]) continue; n++;
+  const d = CUSTOM[r.id] ? CUSTOM[r.id](r.before, r.program) : P.did(st, r.before, r.program);
   const ds = P.diffStats(r.before, r.program);
   const extra = (r.class === 'rename_field' || r.class === 'add_field' || r.class === 'add_option' || r.class === 'rename_button' || r.class === 'setting_value') ? 0 : ds.lost.length;
   console.log(r.id.padEnd(4), r.class.padEnd(16), d ? 'does it' : 'DOES NOT', 'kept', ds.kept_ratio, 'lost', ds.lost.length);

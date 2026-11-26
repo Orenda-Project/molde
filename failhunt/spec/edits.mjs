@@ -2,6 +2,8 @@
 // node edits.mjs > edits.jsonl
 const P = [];
 const add = (cls, id, request, before, program) => P.push({ class: cls, id, kind: 'edit', request, before: before.trim() + '\n', program: program.trim() + '\n' });
+import { makeOps, applyOps } from '../tools/patch_ops_ref.mjs';
+const addAsk = (cls, id, request, before, ask) => P.push({ class: cls, id, kind: 'edit_ask', request, before: before.trim() + '\n', program: ask.trim() + '\n', answer: ask.trim(), app_effect: 'the app shows the question and its choices and keeps the current ' + before.trim().split('\n').length + '-line program unchanged' });
 const rep = (s, a, b) => { if (!s.includes(a)) throw new Error('missing: ' + a); return s.replace(a, b); };
 const B = {
 gym: `
@@ -84,7 +86,7 @@ form med, "Add medicine"
 habit: `
 app "Habit" check ink
 table tick
-streak(tick) "day streak" big
+streak(tick) "day streak" head
 weekdots count(tick on it) > 0
 button "Done today" tap add tick
 `,
@@ -279,12 +281,23 @@ add('rename_button', 'rb3', 'make the pill button read Took it', B.medicine, rep
 add('reorder', 'ro1', 'chart first, then the list', rep(B.weight, 'trend weigh last 60 days sort at, it.kg\nform weigh, "Add weight"\nlist weigh by day', 'list weigh by day\nform weigh, "Add weight"\ntrend weigh last 60 days sort at, it.kg'), B.weight);
 add('reorder', 'ro2', 'the form should come before the totals', B.pocket, rep(B.pocket, 'each kid as k\n  row card tap edit k\n    k.name bold grow\n    sum(k.move.amount where kind = Got) - sum(k.move.amount where kind = Spent) big\nform kid, "Add child"\nform move, "Add entry"', 'form kid, "Add child"\nform move, "Add entry"\neach kid as k\n  row card tap edit k\n    k.name bold grow\n    sum(k.move.amount where kind = Got) - sum(k.move.amount where kind = Spent) big'));
 add('reorder', 'ro3', 'show how many are open above the list of jobs', rep(B.todo, 'stat count(job where done = no), "open"\neach job where done = no as j\n  row card gap 2 tap edit j swipe remove j\n    toggle j.done\n    j.title grow', 'each job where done = no as j\n  row card gap 2 tap edit j swipe remove j\n    toggle j.done\n    j.title grow\nstat count(job where done = no), "open"'), B.todo);
-// ---- ask instead of a silent no-op: plain English, says what the app can do; the answer builds the change
-add('cannot_do_ask', 'id1', 'send my spending to my accountant by email each friday', B.daily, `ask "Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?" "Yes, add a weekly total" "No, leave it as it is"`);
-add('cannot_do_ask', 'id2', 'send my spending to my accountant by email each friday\nQuestion: Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?\nAnswer: Yes, add a weekly total', B.daily, rep(B.daily, 'stat sum(spend.amount month), "this month"', 'stat sum(spend.amount week), "this week"\nstat sum(spend.amount month), "this month"'));
-add('cannot_do_ask', 'id3', 'lock the app with my fingerprint', B.habit, `ask "Molde apps cannot use the fingerprint reader. Your phone's own lock still protects them. Do you want anything else changed?" "No, that is fine" "Yes, something else"`);
-// ---- vague: ask what to change, with choices that are real edits
-add('vague_ask', 'vg1', 'can you make this look prettier', B.water, `ask "What should look nicer?" "A different colour" "Bigger text" "A chart of the week" "Leave it as it is"`);
-add('vague_ask', 'vg2', 'it feels crowded', B.shopcost, `ask "What can go?" "The list of costs by kind" "The rent line" "Nothing, keep it"`);
-add('vague_ask', 'vg3', 'can you make this look prettier\nQuestion: What should look nicer?\nAnswer: A chart of the week', B.water, rep(B.water, 'list drink', 'daybars last 7 days, sum(drink.ml on it)\nlist drink'));
+// ---- ask instead of a silent no-op or a rewrite. The model answers with ONE ask line; the app shows it and keeps the program as it is (controller.dart: an ask result sets pendingAsk and returns before anything is applied).
+// The user's tap comes back as "Question: ... Answer: ..." under the same request and the same program, and the model then writes the real edit (the follow-up rows).
+const Q1 = 'Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?';
+addAsk('cannot_do_ask', 'id1', 'send my spending to my accountant by email each friday', B.daily, `ask "${Q1}" "Yes, add a weekly total" "No, leave it as it is"`);
+add('cannot_do_ask', 'id2', `send my spending to my accountant by email each friday\nQuestion: ${Q1}\nAnswer: Yes, add a weekly total`, B.daily, rep(B.daily, 'stat sum(spend.amount month), "this month"', 'stat sum(spend.amount week), "this week"\nstat sum(spend.amount month), "this month"'));
+const Q3 = 'Molde apps cannot put anything on the lock screen. Do you want a bigger streak number on the first screen?';
+addAsk('cannot_do_ask', 'id3', 'show my streak on the phone lock screen', B.habit, `ask "${Q3}" "Yes, a bigger streak" "No, leave it"`);
+add('cannot_do_ask', 'id4', `show my streak on the phone lock screen\nQuestion: ${Q3}\nAnswer: Yes, a bigger streak`, B.habit, rep(B.habit, 'streak(tick) "day streak" head', 'streak(tick) "day streak" big'));
+const QV = 'What should look nicer?';
+addAsk('vague_ask', 'vg1', 'can you make this look prettier', B.water, `ask "${QV}" "A different colour" "Bigger text" "A chart of the week" "Leave it as it is"`);
+add('vague_ask', 'vg3', `can you make this look prettier\nQuestion: ${QV}\nAnswer: A chart of the week`, B.water, rep(B.water, 'list drink', 'daybars last 7 days, sum(drink.ml on it)\nlist drink'));
+add('vague_ask', 'vg4', `can you make this look prettier\nQuestion: ${QV}\nAnswer: A different colour`, B.water, rep(B.water, 'app "Water" drop ocean', 'app "Water" drop teal'));
+add('vague_ask', 'vg5', `can you make this look prettier\nQuestion: ${QV}\nAnswer: Bigger text`, B.water, rep(B.water, 'app "Water" drop ocean', 'app "Water" drop ocean large'));
+const QC = 'What can go?';
+addAsk('vague_ask', 'vg2', 'it feels crowded', B.shopcost, `ask "${QC}" "The costs listed by kind" "The rent line" "Nothing, keep it"`);
+add('vague_ask', 'vg6', `it feels crowded\nQuestion: ${QC}\nAnswer: The costs listed by kind`, B.shopcost, rep(B.shopcost, 'each options cost.kind as k\n  row card\n    k bold grow\n    sum(cost.amount month where kind = k) faint\n', ''));
+add('vague_ask', 'vg7', `it feels crowded\nQuestion: ${QC}\nAnswer: The rent line`, B.shopcost, rep(rep(B.shopcost, 'setting rent money = 15000 "Monthly rent"\n', ''), 'let total = sum(cost.amount month) + rent', 'let total = sum(cost.amount month)'));
+// patch-format answers (the training target; the whole program is derived by applying them)
+for (const r of P) if (r.kind === 'edit') { const ops = makeOps(r.before, r.program); if (applyOps(r.before, ops) !== r.program) throw new Error('patch does not round-trip: ' + r.id); r.answer = ops; }
 for (const p of P) console.log(JSON.stringify(p));

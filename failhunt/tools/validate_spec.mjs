@@ -11,6 +11,7 @@ let bad = 0, n = 0;
 for (const l of readFileSync(process.argv[2], 'utf8').trim().split('\n')) {
   const r = JSON.parse(l); n++;
   const why = [];
+  if (r.kind === 'edit_ask') { const c0 = check(r.program); if (!c0.ok || !c0.ast || c0.ast.header.kind !== 'ask') why.push('ask pair: the answer is not an ask line'); if (!check(r.before).ok) why.push('before: invalid'); if (why.length) { bad++; console.log(r.id, r.class, '-', why.join(' | ')); } continue; }
   const c = check(r.program); if (!c.ok) why.push('program: ' + String(c.errors[0]).slice(0, 140));
   if (c.ok) { try { const f = format(r.program); if (f.trim() !== r.program.trim()) why.push('not in formatter form'); } catch (e) { why.push('format threw'); } }
   if (r.before) {

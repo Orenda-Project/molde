@@ -13,11 +13,13 @@ def block(r):
         return f"Request: `{r['request']}`\n\n```\n{r['plan']}\n{r['program'].rstrip()}\n```\n"
     if r['kind']=='create':
         return f"Request: `{r['request']}`\n\n```\n{r['program'].rstrip()}\n```\n"
-    b=r['before'].splitlines(); a=r['program'].splitlines()
-    d=[l for l in difflib.unified_diff(b,a,lineterm='',n=0) if not l.startswith(('---','+++','@@'))]
-    if not d: d=['(no change: the program comes back exactly as it was)']
-    shown='\n'.join(d[:14])+('\n... (%d more changed lines)'%(len(d)-14) if len(d)>14 else '')
-    return f"Edit request: `{r['request']}` on a {len(b)}-line program (`{b[0]}` ...)\n\nChange (`-` old line, `+` new line):\n```\n{shown}\n```\n"
+    n=len(r['before'].rstrip().splitlines())
+    if r['kind']=='edit_ask':
+        return f"Edit request: `{r['request']}` on a {n}-line program (`{r['before'].splitlines()[0]}` ...)\n\nThe model's whole answer is this one ask line:\n```\n{r['answer']}\n```\nWhat the app does: {r['app_effect']}. Nothing is replaced.\n"
+    ans=r.get('answer') or ''
+    req=r['request'].replace('\n','  /  ')
+    return f"Edit request: `{req}` on a {n}-line program (`{r['before'].splitlines()[0]}` ...)\n\nThe model's answer (patch operations on the numbered lines; the app applies them, the whole program is derived):\n```\n{ans}\n```\n"
+
 t=open('DATA_SPEC_r5.template.md').read()
 def rep(m):
     c=m.group(1); xs=ex.get(c,[])
@@ -26,11 +28,9 @@ def rep(m):
 import subprocess
 def patchblock():
     out=[]
-    for r in ex.get('add_option',[])[:1]+ex.get('rename_button',[])[:1]+ex.get('long_edit_copy',[])[:1]+ex.get('remove_one',[])[:1]:
-        sys.path.insert(0,'tools'); import to_patch as T
-        ops=T.to_patch(r['before'],r['program']); assert T.apply(r['before'],ops).rstrip('\n').split('\n')==r['program'].rstrip('\n').split('\n')
-        n=len(r['before'].rstrip('\n').split('\n'))
-        out.append(f"Edit request: `{r['request']}` on a {n}-line program\n\nPatch the model would write instead of {len(r['program'].rstrip().splitlines())} lines:\n```\n{T.fmt(ops)}\n```\n")
+    for c in ('add_option','rename_button','long_edit_copy','remove_one'):
+        for x in ex.get(c,[])[:1]:
+            out.append(block(x))
     return '\n'.join(out)
 t=t.replace('{{EX_PATCH}}',patchblock())
 t=re.sub(r'\{\{EX:([a-z_]+)(?::(\d+))?\}\}',rep,t)
