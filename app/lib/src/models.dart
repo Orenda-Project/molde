@@ -82,6 +82,7 @@ class ModelManager extends ChangeNotifier {
     final r = catalogue?.recommended;
     final a = active;
     if (r == null || a == null || a.source != 'catalogue' || a.id == r.id) return null;
+    if (catalogue!.byId(a.id ?? '') != null) return null; // the user chose between models that are both listed: no nagging
     return r;
   }
 
@@ -111,9 +112,9 @@ class ModelManager extends ChangeNotifier {
 
   Future<void> refreshCatalogue() async {
     catalogue = await loadCatalogue();
-    if (active != null && active!.source == 'catalogue' && active!.id == null) {
+    if (active != null && active!.source == 'catalogue') { // the catalogue arrived after the model was chosen: use its name for the file
       final m = catalogue!.models.where((m) => m.localName == active!.path.split('/').last).firstOrNull;
-      if (m != null) active = ActiveModel(path: active!.path, name: m.name, bytes: active!.bytes, source: 'catalogue', id: m.id);
+      if (m != null) { active = ActiveModel(path: active!.path, name: m.name, bytes: active!.bytes, source: 'catalogue', id: m.id); llm.templateHint = m.template; }
     }
     notifyListeners();
   }

@@ -90,15 +90,27 @@ void main() {
     expect(llm.loads, 0);
   });
 
-  test('"newer model available" shows only when a catalogue model is in use and another is recommended', () async {
+  test('"newer model available" shows only for a downloaded model the catalogue dropped, not when the user picks between listed models', () async {
     final md = Directory('${tmp.path}/models')..createSync(recursive: true);
     File('${md.path}/b.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    File('${md.path}/old.gguf').writeAsBytesSync([1, 2, 3]);
     final mm = make(FakeLlm());
     await mm.init();
     await mm.refreshCatalogue();
     await mm.use(b);
+    expect(mm.newer, isNull);
+    await mm.useFile('old.gguf');
     expect(mm.newer?.id, 'a');
-    await mm.use(b);
+  });
+
+  test('after a restart the active model shows the catalogue name once the catalogue is loaded', () async {
+    final md = Directory('${tmp.path}/models')..createSync(recursive: true);
+    File('${md.path}/b.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    File('${tmp.path}/settings.json').writeAsStringSync('{"v":1,"active":{"id":"b","file":"b.gguf","source":"catalogue"}}');
+    final mm = make(FakeLlm());
+    await mm.init();
+    await mm.refreshCatalogue();
+    expect(mm.active!.name, 'B');
   });
 
   test('recommended model is listed first; a downloaded model the catalogue dropped stays usable under "Downloaded earlier"', () async {

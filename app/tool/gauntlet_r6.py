@@ -65,7 +65,7 @@ def run(case, request, mode, maxs=900):
     shot(case)
     rec = {'request': request, 'mode': mode, 'first_line_s': None if first is None else round(first, 1), 'total_s': round(total, 1),
            'last_progress': last, 'asked': asked, 'chat': chat, 'screen': screen[:60], 'lines_on_screen': len(screen), 'pss_mb': mem(),
-           'at': time.strftime('%H:%M:%S')}
+           'model': os.environ.get('MODEL_TAG', ''), 'at': time.strftime('%H:%M:%S')}
     save(case, rec)
     return rec
 
@@ -82,7 +82,9 @@ if __name__ == '__main__':
     if c == 'create': run(sys.argv[2], sys.argv[3], 'new')
     elif c == 'change': run(sys.argv[2], sys.argv[3], 'change')
     elif c == 'creates':
+        pre = os.environ.get('PREFIX', 'C')   # C = Qwen run, G = Gemma run
         for case, r in CREATES:
+            case = pre + case[1:]
             if case in RES and not os.environ.get('REDO'): continue
             run(case, r, 'new')
     elif c == 'shot': shot(sys.argv[2])
