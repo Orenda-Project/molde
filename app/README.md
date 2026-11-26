@@ -16,6 +16,10 @@ The only network use is in `lib/src/catalogue.dart` (fetch `models.json` from `h
 - **Deadline.** The 6-minute limit also interrupts a line in progress (the native cancel flag is checked per token).
 - **Gauntlet:** `tool/gauntlet_r3.py` (see its header) drives the emulator through the ask, flow, goal and green checks.
 
+## Version 0.6.1: two-model picker, recovery from a stuck model, failure-hunt rule fixes
+
+Gemma 270M is the recommended model, Qwen 0.8B the second (`assets/models.json` equals the live list). Settings > Model: recommended first with a label, in-use check mark, "Downloaded earlier" for models the list dropped, switching blocked while a build runs. A native call that does not return 20 s after cancel (8 min at most) is abandoned: fresh core and worker thread, honest message, app unchanged. Rules: "undo that" is Undo; dropsUnasked maps nouns (chart, totals, list...) to line kinds; the 20% guard ignores indent and in-place edits; wider direct edits (dark mode, theme, title, goal); plain-English data refusals; unasked rewrites need a decision. Evidence: `molde-design/app-r6/REPORT.md`, `tool/gauntlet_r6.py`.
+
 ## Version 0.6.0: Qwen3.5 in the app; 0.5.1 fixes
 
 - **Progress text** now always has numbers ("Writing line 5… (31 s)"): the page forwards the seconds and the app also counts them between lines. **Ages** ("Changed 3 h ago") use a monotonic clock for apps changed in this session, so a device clock that jumps cannot age a new app; a time in the future reads "just now". **Unasked removals:** if a model edit drops lines the request does not name (`dropsUnasked`), the chat shows "This would also remove: ..." with **Keep my app** (default) and **Apply anyway**. **Machine check:** `tool/machine_check.py` (overflow, text under 12 sp, touch targets under 44 dp, on five screens at 360x640 and 412x915; results in the PR).
