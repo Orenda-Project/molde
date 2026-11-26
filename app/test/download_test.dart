@@ -197,12 +197,13 @@ void main() {
       expect(() => Catalogue.parse('{"models": []}'), throwsFormatException);
       expect(() => Catalogue.parse('{"models": [{"id": 1}]}'), throwsFormatException);
     });
-    test('the bundled copy is a valid catalogue with the recommended r1 Q4_K_M', () {
+    test('the bundled copy is the two-model catalogue: Qwen r4 recommended (ChatML), Gemma r3 for small phones', () {
       final c = Catalogue.parse(File('assets/models.json').readAsStringSync());
-      expect(c.recommended!.id, 'r3-gemma270m-q4');
-      expect(c.recommended!.bytes, 253155008);
-      expect(c.recommended!.sha256, startsWith('62ebb1c7'));
-      expect(c.models.length, greaterThanOrEqualTo(2));
+      expect(c.models.length, 2);
+      expect(c.recommended!.id, 'r4-qwen35-0.8b-ep1-q4');
+      expect(c.recommended!.template, 'chatml');
+      expect(c.recommended!.bytes, 529296736);
+      expect(c.byId('r3-gemma270m-q4')!.sha256, startsWith('62ebb1c7'));
     });
     test('load: network copy when it works, bundled copy when the fetch fails, times out or is garbage', () async {
       final bundled = () async => good;
