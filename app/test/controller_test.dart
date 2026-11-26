@@ -39,6 +39,8 @@ void main() {
   roundFive();
   roundFiveOne();
   roundFiveOneFlow();
+  roundSixOne();
+  roundSixOneFlow();
   late Directory tmp;
   late WebBridge bridge;
   late ScriptedPage page;
@@ -252,7 +254,7 @@ void roundThree() {
       final r = settingEditProgram('change the goal to 3000', waterFull)!;
       expect(r, contains('setting goal num = 3000 "Daily goal (ml)"'));
       expect(settingEditProgram('set daily goal to 2,500', waterFull), contains('= 2500'));
-      expect(settingEditProgram('make the goal 3000', waterFull), isNull); // no "to": not this shape
+      expect(settingEditProgram('make the goal 3000', waterFull), contains('= 3000')); // 0.6.1: "to" is optional
       expect(settingEditProgram('change the colour to 3000', waterFull), isNull); // no such setting
       expect(settingEditProgram('make it green', waterFull), isNull);
       expect(settingEditProgram('change the goal to 2000', waterFull), waterFull);
@@ -380,13 +382,17 @@ void roundThreeFlows() {
   test('an edit that removes more than 20% of the lines is refused unless the request asked to remove', () async {
     c.changeCurrent();
     final cut = 'app "Water" drop ocean\ntable drink ml num, kind text\n';
+    final longer = 'app "Water" drop ocean\ntable drink ml num\nsetting goal num = 3\nrow\n  "a" head\n  "b" head\ntrend drink\nform drink\nform drink\nform drink\n';
+    await c.store.save(AppRecord(id: 'a1', name: 'Water', source: longer));
+    await c.init();
+    c.changeCurrent();
     page.handlers['generate'] = (a) => {'ok': true, 'program': cut, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['removes from the screen: trend'], 'warnings': [], 'refused': []};
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
     await c.send('tidy it up');
     expect(page.calls, isNot(contains('applyEdit')));
     expect(c.chat.last.text, contains('would have removed'));
-    expect(c.chat.last.text, contains('trend drink'));
+    expect(c.chat.last.text, contains('form drink'));
     expect(c.chat.last.buttons.map((b) => b.label), ['Try again']);
     await c.send('remove the chart and the form');
     expect(c.chat.last.text, isNot(contains('did not ask to remove anything')));
@@ -673,10 +679,113 @@ void roundFiveOne() {
       final d = dropsUnasked('remove the note field', vit, alsoButtons);
       expect(d.length, 2);
       expect(d.first, startsWith('button "1"'));
-      expect(dropsUnasked('remove the buttons', vit, alsoButtons).isEmpty, isFalse); // "buttons" is not "button"
+      expect(dropsUnasked('remove the buttons', vit, alsoButtons).isEmpty, isTrue); // 0.6.1: "buttons" means the button and quick lines
       expect(dropsUnasked('remove button', vit, alsoButtons).isEmpty, isTrue);
       expect(dropsUnasked('add a chart', vit, '$vit"x" faint\n'), isEmpty);
     });
+  });
+}
+
+void roundSixOne() {
+  group('0.6.1 rules from the failure hunt', () {
+    test('undo requests are recognised, other sentences with the same words are not', () {
+      for (final r in ['undo', 'undo that', 'Undo that!', 'undo the last change', 'go back', 'go back to how it was', 'revert', 'revert it', 'please undo it', 'put it back', 'can you undo that', 'take that back']) {
+        expect(isUndoRequest(r), isTrue, reason: r);
+      }
+      for (final r in ['add an undo button', 'revert to the blue theme', 'go back button', 'a habit tracker', 'undo tracker']) {
+        expect(isUndoRequest(r), isFalse, reason: r);
+      }
+    });
+    const chartApp = 'app "Spend" wallet ocean\ntable spend amount money\nstat total sum(spend.amount)\nplot 0..7, 0..100 axes\n  each days last 7 days\n    rect index, 0, 1, sum(spend.amount on it) fill accent\n    tick index, dayname(it)\nform spend\n';
+    test('dropsUnasked: "remove the chart" may remove the chart block, "remove the totals" the stat line', () {
+      final noChart = 'app "Spend" wallet ocean\ntable spend amount money\nstat total sum(spend.amount)\nform spend\n';
+      expect(dropsUnasked('remove the chart', chartApp, noChart), isEmpty);
+      expect(dropsUnasked('get rid of the graph', chartApp, noChart), isEmpty);
+      final noStat = chartApp.replaceAll('stat total sum(spend.amount)\n', '');
+      expect(dropsUnasked('remove the totals', chartApp, noStat), isEmpty);
+      // but a removal nobody asked for is still caught: asked for the chart, the stat line went too
+      final both = noChart.replaceAll('stat total sum(spend.amount)\n', '');
+      expect(dropsUnasked('remove the chart', chartApp, both), ['stat total sum(spend.amount)']);
+    });
+    test('removedLines: re-indenting is not a removal, an edited line is not a removal, a short app may lose a line', () {
+      const flat = 'app "A" x ocean\ntable t a num\nlist t\nform t\nstat s 1\n';
+      const sectioned = 'app "A" x ocean\ntable t a num\nsection "Log"\n  list t\n  form t\nsection "Totals"\n  stat s 1\n';
+      expect(removedLines(flat, sectioned), isEmpty);
+      expect(removedLines('app "A" x ocean\ntable t a num\nform t\nlist t\n', 'app "A" x ocean\ntable t a num, note text\nform t\nlist t\n'), isEmpty);
+      expect(removalLimit(4), 2);
+      expect(removalLimit(40), 8);
+    });
+    test('direct edits: wider wordings for dark mode, a colour theme, the title and the goal', () {
+      const app = 'app "A" home mint\nsetting goal num = 2000 "Daily goal"\ntable t a num\n';
+      String? prog(String r) => appLineEdit(r, app)?.program;
+      expect(prog('turn on dark mode'), contains('dark'));
+      expect(prog('can you make it dark'), contains('dark'));
+      expect(prog('i want a blue theme'), contains('blue'));
+      expect(prog('the colour should be teal'), contains('teal'));
+      expect(prog('make it more green'), contains('green'));
+      expect(prog('call this app Zakat'), contains('"Zakat"'));
+      expect(prog('name it Rozana'), contains('"Rozana"'));
+      expect(appLineEdit('turn off dark mode', 'app "A" home mint dark\n')?.program, isNot(contains('dark')));
+      expect(appLineEdit('i want to track my green tea', app), isNull);
+      expect(appLineEdit('make a green energy tracker', app), isNull);
+      expect(settingEditProgram('make my goal 3000', app), contains('= 3000'));
+      expect(settingEditProgram('set the target to 3000', app), contains('= 3000'));
+      expect(settingEditProgram('i want to aim for 3000 instead', app), contains('= 3000'));
+      expect(settingEditProgram('my goal should be 1500', app), contains('= 1500'));
+      expect(settingEditProgram('make my colour 3000', app), isNull);
+    });
+  });
+}
+
+void roundSixOneFlow() {
+  late Directory tmp; late WebBridge bridge; late ScriptedPage page; late MoldeController c;
+  setUp(() async {
+    tmp = Directory.systemTemp.createTempSync('molde_r61_');
+    final holder = _Holder();
+    bridge = WebBridge(holder); page = ScriptedPage(bridge); holder.inner = page;
+    bridge.onRaw(jsonEncode({'t': 'ready'}));
+    final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1);
+    c = MoldeController(store: AppStore(Directory('${tmp.path}/molde')), bridge: bridge, llm: llm, modelDirs: [tmp], readAsset: (p) async => water);
+    page.handlers['open'] = (a) => {'ok': true};
+    await c.store.save(AppRecord(id: 'a1', name: 'Water', source: water));
+    await c.init();
+    c.changeCurrent();
+  });
+  tearDown(() => tmp.deleteSync(recursive: true));
+
+  test('"undo that" goes back to the previous version without the model and never asks "new app"', () async {
+    page.handlers['generate'] = (a) => {'ok': true, 'program': '$water# more\n', 'errors': [], 'stats': {'seconds': 3.0}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['adds field note to drink'], 'warnings': [], 'refused': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    page.handlers['undoEdit'] = (a) => {'verdict': 'restore', 'changes': ['back'], 'warnings': []};
+    await c.send('tidy it up');
+    final change = c.chat.last;
+    expect(c.undoable, same(change));
+    page.calls.clear();
+    page.handlers['generate'] = (a) => throw StateError('the model must not run for undo');
+    await c.send('undo that');
+    expect(page.calls, ['undoEdit']);
+    expect(change.undone, isTrue);
+    expect(c.chat.last.text, contains('Undone'));
+    expect(c.chat.map((m) => m.text).join('\n'), isNot(contains('sounds like a new app')));
+    // nothing left to undo: said plainly, still no model
+    await c.send('undo that');
+    expect(c.chat.last.text, contains('nothing earlier'));
+    expect(page.calls, ['undoEdit']);
+  });
+
+  test('a one-line edit of a small app is applied (the 20% guard no longer blocks it)', () async {
+    const small = 'app "Todo" check mint\ntable task title text\nlist task\nform task\n';
+    await c.store.save(AppRecord(id: 'a2', name: 'Todo', source: small));
+    await c.init();
+    c.changeCurrent();
+    final edited = small.replaceAll('title text', 'title text, priority pick low|high');
+    page.handlers['generate'] = (a) => {'ok': true, 'program': edited, 'errors': [], 'stats': {'seconds': 4.0}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['adds field task.priority'], 'warnings': [], 'refused': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('can you add a priority');
+    expect(page.calls, contains('applyEdit'));
+    expect(c.chat.last.text, isNot(contains('did not apply')));
   });
 }
 

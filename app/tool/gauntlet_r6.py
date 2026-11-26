@@ -91,17 +91,30 @@ CHANGES = [
  ('X06', 'ex:exercise', 'add a field for notes'),
  ('X07', 'ex:exercise', 'rename Log exercise to Add workout'),
  ('X08', 'ex:exercise', 'add a goal of 4 workouts a week'),
- ('X09', 'last:Household budget', 'add a chart'),
- ('X10', 'last:Household budget', 'make it dark mode'),
+ ('X09', 'last:Phone fund', 'add a chart'),
+ ('X10', 'last:Phone fund', 'make it dark mode'),
 ]
 
 def nums(ts):
     return sorted(set(re.findall(r'\d[\d,\.]*', ' '.join(ts))))
 
+def load_ex(name):
+    g.apps_view()
+    ui.adb('shell', 'input', 'swipe', '540', '2346', '540', '2346', '1500'); time.sleep(3)
+    for _ in range(4):
+        hit = None
+        for n in ui.nodes():
+            if (n.get('text') or n.get('content-desc') or '').strip() == name:
+                x, y = ui.center(n)
+                if 150 < y < 2380: hit = (x, y)
+        if hit: ui.adb('shell', 'input', 'tap', str(hit[0]), str(hit[1])); break
+        ui.adb('shell', 'input', 'swipe', '540', '2000', '540', '1100', '600'); time.sleep(3)
+    time.sleep(8); g.close_chat()
+
 def open_app(how):
     kind, name = how.split(':', 1)
     if kind == 'ex':
-        g.ensure_running(); g.load_example(name); time.sleep(3)
+        g.ensure_running(); load_ex(name); time.sleep(3)
     else:
         g.apps_view(); time.sleep(1)
         g.tap(name, miny=1000); time.sleep(6); g.close_chat()

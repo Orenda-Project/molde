@@ -33,6 +33,13 @@ Set<String> appNames(String source) {
   return out.where((w) => w.length >= 3 && !skip.contains(w)).toSet();
 }
 
+/// "undo", "undo that", "undo the last change", "go back", "revert", "put it back", "go back to how it was": the user wants the
+/// previous version. Answered by Undo, never by the model, and never read as a new app.
+bool isUndoRequest(String request) {
+  final r = request.toLowerCase().replaceAll(RegExp(r"[.!?,']"), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  return RegExp(r'^(?:please |can you |could you |just )?(?:undo|revert|rollback|roll back|go back|put (?:it|that|this) back|take (?:it|that) back|change (?:it|that) back|bring (?:it|that) back)(?: (?:that|it|this|the last change|the last one|last change|my last change|the change|everything|please|now|again|to (?:how it was|before|the old version|the earlier version|the previous version)|how it was|before|one step|a step|the old version|the previous version|the earlier version|the old one))*$').hasMatch(r);
+}
+
 /// Requests that start with one of these verbs change the open app and never raise the new-app question.
 final RegExp kChangeVerbs = RegExp(r'^\s*(?:please\s+|can you\s+|could you\s+)?(?:change|rename|make(?!\s+(?:me|a|an|another|new)\b)|add|remove|delete|drop|hide|show|set|move|bigger|smaller|larger|turn|put|use|switch|update|increase|decrease|swap|replace|sort|reorder|let me|i want it|call it|tidy|clean|simplify|fix|improve|rearrange|group|split|merge|shorten|rewrite|translate|tweak|adjust|count|track more|stop|start|keep|allow|display|list the|give it|can it|also)\b', caseSensitive: false);
 
@@ -58,21 +65,43 @@ bool looksLikeNewApp(String request, String currentSource) {
 /// program text (the same text when the value is already that), or null when the request is not of that shape
 /// or names no setting of the app.
 String? settingEditProgram(String request, String source) {
-  final m = RegExp(r'^\s*(?:please\s+)?(?:change|set|make|update|put)\s+(?:the\s+|my\s+)?(.+?)\s+(?:to|=|as|at)\s+(-?[0-9][0-9,]*(?:\.[0-9]+)?)\s*$', caseSensitive: false).firstMatch(request);
-  if (m == null) return null;
-  final target = wordsOf(m.group(1)!).where((w) => !kFiller.contains(w)).toList();
+  const numRe = r'(-?[0-9][0-9,]*(?:\.[0-9]+)?)';
+  final lead = r'^\s*(?:please\s+|can you\s+|could you\s+|i want you to\s+|i would like to\s+)?';
+  // "change the goal to 3000", "set the target to 3000", "make my goal 3000", "make the goal 3000 please"
+  var m = RegExp('$lead(?:change|set|make|update|put|raise|lower|increase|decrease)\\s+(?:the\\s+|my\\s+)?(.+?)\\s+(?:to\\s+|=\\s*|as\\s+|at\\s+)?$numRe(?:\\s+(?:instead|please|now))?[.!]?\\s*\$', caseSensitive: false).firstMatch(request);
+  String? named = m?.group(1);
+  String? number = m?.group(2);
+  if (m == null) {
+    // "i want to aim for 3000 instead", "aim for 3000", "my goal should be 3000", "the target is 3000", "let's go for 3000"
+    m = RegExp('$lead(?:i want to\\s+|i wanna\\s+|let\'?s\\s+)?(?:aim for|go for|target|shoot for)\\s+$numRe(?:\\s+(?:instead|please|now))?[.!]?\\s*\$', caseSensitive: false).firstMatch(request);
+    if (m != null) { named = 'goal'; number = m.group(1); }
+  }
+  if (m == null) {
+    m = RegExp('$lead(?:the\\s+|my\\s+)(.+?)\\s+(?:should be|must be|needs to be|is now|will be)\\s+$numRe(?:\\s+(?:instead|please|now))?[.!]?\\s*\$', caseSensitive: false).firstMatch(request);
+    if (m != null) { named = m.group(1); number = m.group(2); }
+  }
+  if (named == null || number == null) return null;
+  final target = wordsOf(named).where((w) => !kFiller.contains(w)).toList();
   if (target.isEmpty) return null;
-  final value = m.group(2)!.replaceAll(',', '');
+  final value = number.replaceAll(',', '');
   final lines = source.split('\n');
+  final rx = RegExp(r'^(\s*setting\s+)(\w+)(\s+(?:num|money)\b[^=\n]*=\s*)(-?[0-9][0-9.]*)(.*)$');
+  String? edit(int i, RegExpMatch sm) {
+    if (sm.group(4) == value) return source;
+    lines[i] = '${sm.group(1)}${sm.group(2)}${sm.group(3)}$value${sm.group(5)}';
+    return lines.join('\n');
+  }
   for (var i = 0; i < lines.length; i++) {
-    final sm = RegExp(r'^(\s*setting\s+)(\w+)(\s+(?:num|money)\b[^=\n]*=\s*)(-?[0-9][0-9.]*)(.*)$').firstMatch(lines[i]);
+    final sm = rx.firstMatch(lines[i]);
     if (sm == null) continue;
     final ws = {...wordsOf(sm.group(2)!), ...wordsOf(lines[i].split('"').length > 1 ? lines[i].split('"')[1] : '')};
-    if (target.every(ws.contains)) {
-      if (sm.group(4) == value) return source;
-      lines[i] = '${sm.group(1)}${sm.group(2)}${sm.group(3)}$value${sm.group(5)}';
-      return lines.join('\n');
-    }
+    if (target.every(ws.contains)) return edit(i, sm);
+  }
+  // "goal", "target", "aim", "limit", "budget" all mean the one number the app aims for: use it when the app has exactly one
+  const aims = {'goal', 'target', 'aim', 'limit', 'budget', 'maximum', 'max'};
+  if (target.every(aims.contains)) {
+    final hits = <int>[for (var i = 0; i < lines.length; i++) if (rx.hasMatch(lines[i])) i];
+    if (hits.length == 1) return edit(hits.first, rx.firstMatch(lines[hits.first])!);
   }
   return null;
 }
@@ -81,17 +110,39 @@ final RegExp kRemovalWords = RegExp(r'\b(remove|delete|drop|hide|without|get rid
 
 List<String> programLines(String src) => src.split('\n').map((l) => l.trimRight()).where((l) => l.trim().isNotEmpty).toList();
 
-/// Lines of the old program that are missing from the new one (counted, so a repeated line counts each time).
+/// Lines of the old program that are gone from the new one. Indentation does not count (wrapping lines in a section only
+/// re-indents them), and a line edited in place (the same first two words, new details: a field added to a table line, a
+/// button renamed) is an edit, not a removal. A repeated line counts each time.
 List<String> removedLines(String oldSrc, String newSrc) {
   final have = <String, int>{};
-  for (final l in programLines(newSrc)) { have[l] = (have[l] ?? 0) + 1; }
-  final out = <String>[];
+  for (final l in programLines(newSrc)) { final k = l.trim(); have[k] = (have[k] ?? 0) + 1; }
+  final gone = <String>[];
   for (final l in programLines(oldSrc)) {
-    final n = have[l] ?? 0;
-    if (n > 0) { have[l] = n - 1; } else { out.add(l); }
+    final k = l.trim();
+    final n = have[k] ?? 0;
+    if (n > 0) { have[k] = n - 1; } else { gone.add(l); }
+  }
+  // new lines that no old line matched: what the edits wrote
+  final oldHave = <String, int>{};
+  for (final l in programLines(oldSrc)) { final k = l.trim(); oldHave[k] = (oldHave[k] ?? 0) + 1; }
+  final addedSigs = <String, int>{};
+  for (final l in programLines(newSrc)) {
+    final k = l.trim();
+    final n = oldHave[k] ?? 0;
+    if (n > 0) { oldHave[k] = n - 1; } else { final sg = lineSignature(k); addedSigs[sg] = (addedSigs[sg] ?? 0) + 1; }
+  }
+  final out = <String>[];
+  for (final l in gone) {
+    final sg = lineSignature(l);
+    final n = addedSigs[sg] ?? 0;
+    if (n > 0) { addedSigs[sg] = n - 1; } else { out.add(l); }
   }
   return out;
 }
+
+/// How many lines an edit may drop without the request saying "remove": a fifth of the program, but never fewer than two
+/// (a one-line edit of a four-line app is 25% and still fine).
+double removalLimit(int total) => total * 0.2 > 2 ? total * 0.2 : 2;
 
 /// The line of the program that fits the request best (for "This app already does that").
 String? relevantLine(String request, String source) {
@@ -157,7 +208,7 @@ DirectEdit? appLineEdit(String request, String source) {
   final low = r.toLowerCase();
   final w = wordsOf(low);
   // rename: "change the title to My Spending", "rename it to X", "call it X"
-  final rn = RegExp(r'^(?:please\s+)?(?:(?:change|set|make|update)\s+(?:the\s+)?(?:title|name)(?:\s+of\s+(?:the\s+|this\s+)?app)?\s+(?:to|as)|rename\s+(?:the\s+app\s+|this\s+app\s+|it\s+|the\s+title\s+)?(?:to|as)?|call\s+it)\s+(.+?)\s*$', caseSensitive: false).firstMatch(r);
+  final rn = RegExp(r'^(?:please\s+|can you\s+|could you\s+|i want to\s+|i want you to\s+|let\x27s\s+)?(?:(?:change|set|make|update)\s+(?:the\s+|my\s+)?(?:title|name)(?:\s+of\s+(?:the\s+|this\s+|my\s+)?app)?\s+(?:to|as)|rename\s+(?:the\s+app\s+|this\s+app\s+|my\s+app\s+|this\s+|it\s+|the\s+title\s+)?(?:to|as)?|(?:call|name)\s+(?:it|this(?:\s+app)?|the\s+app|my\s+app))\s+(.+?)\s*$', caseSensitive: false).firstMatch(r);
   if (rn != null) {
     var t = rn.group(1)!.replaceAll('"', '').replaceAll(RegExp(r'[.!]+$'), '').trim();
     if (t.isEmpty || t.length > 40) return null;
@@ -165,8 +216,8 @@ DirectEdit? appLineEdit(String request, String source) {
     a.name = '"$t"';
     return DirectEdit(_replaceAppLine(source, a), 'title is now $t', unchanged: same);
   }
-  if (w.length > 6) return null;
-  const verbs = {'make', 'change', 'set', 'turn', 'use', 'switch', 'paint', 'go', 'put', 'give', 'me', 'it', 'the', 'app', 'this', 'to', 'in', 'colour', 'color', 'theme', 'please', 'a', 'be', 'mode', 'text', 'font', 'screen', 'much', 'bit', 'little', 'size', 'bigger', 'larger', 'smaller', 'everything', 'my'};
+  if (w.length > 8) return null;
+  const verbs = {'i', 'want', 'need', 'like', 'would', 'can', 'could', 'you', 'should', 'be', 'is', 'more', 'on', 'off', 'looks', 'look', 'prefer', 'instead', 'now', 'lets', 'let', 's', 'with', 'switch', 'enable', 'activate', 'colours', 'colors', 'themes', 'rather', 'make', 'change', 'set', 'turn', 'use', 'paint', 'go', 'put', 'give', 'me', 'it', 'the', 'app', 'this', 'to', 'in', 'colour', 'color', 'theme', 'please', 'a', 'mode', 'text', 'font', 'screen', 'much', 'bit', 'little', 'size', 'bigger', 'larger', 'smaller', 'everything', 'my'};
   // colour
   final colour = [...kAccents, ...kOldThemes].where(w.contains).toList();
   if (colour.length == 1 && w.every((x) => verbs.contains(x) || colour.contains(x) || x == 'dark' || x == 'light')) {
@@ -176,9 +227,10 @@ DirectEdit? appLineEdit(String request, String source) {
     return DirectEdit(_replaceAppLine(source, a), c, unchanged: same);
   }
   // dark / light
-  final wantsDark = w.contains('dark') || w.contains('night');
-  final wantsLight = w.contains('light') && (w.contains('mode') || w.contains('theme')) || w.contains('bright');
-  if ((wantsDark ^ wantsLight) && w.every((x) => verbs.contains(x) || {'dark', 'night', 'light', 'bright', 'mode', 'theme'}.contains(x))) {
+  final off = w.contains('off') || w.contains('disable');
+  final wantsDark = (w.contains('dark') || w.contains('night')) && !off;
+  final wantsLight = w.contains('light') && (w.contains('mode') || w.contains('theme')) && !off || w.contains('bright') || ((w.contains('dark') || w.contains('night')) && off);
+  if ((wantsDark ^ wantsLight) && w.every((x) => verbs.contains(x) || {'dark', 'night', 'light', 'bright', 'mode', 'theme', 'off', 'disable'}.contains(x))) {
     final m = wantsDark ? 'dark' : 'light';
     final same = a.mode == m;
     a.mode = m;
@@ -324,19 +376,52 @@ String lineSignature(String l) {
   return line.split(RegExp(r'\s+')).take(2).join(' ');
 }
 
+/// What a noun in a request means in program lines: "chart" is a daybars, trend, heat or plot line, "totals" a stat line.
+/// Without this, "remove the chart" shares no word with the line `daybars ...` and the removal looks unasked.
+const Map<String, Set<String>> kNounKinds = {
+  'chart': {'daybars', 'bars', 'trend', 'heat', 'pie', 'share', 'goalbars', 'daygrid', 'weekdots', 'plot', 'tick', 'axes'},
+  'graph': {'daybars', 'bars', 'trend', 'heat', 'pie', 'share', 'goalbars', 'daygrid', 'weekdots', 'plot', 'tick', 'axes'},
+  'plot': {'plot', 'tick', 'axes'},
+  'trend': {'trend'},
+  'heatmap': {'heat'},
+  'total': {'stat', 'statcard', 'goal', 'sum'},
+  'totals': {'stat', 'statcard', 'goal', 'sum'},
+  'numbers': {'stat', 'statcard', 'goal', 'sum'},
+  'stats': {'stat', 'statcard', 'goal'},
+  'stat': {'stat', 'statcard', 'goal'},
+  'summary': {'stat', 'statcard', 'goal', 'sum'},
+  'list': {'list', 'each'},
+  'form': {'form', 'topbar', 'quick', 'button', 'field'},
+  'buttons': {'quick', 'button'},
+  'section': {'section'},
+  'sections': {'section'},
+};
+
+int _indent(String l) => l.length - l.trimLeft().length;
+
 /// Old lines that are gone from the new program (no line of the new program is "the same line, edited") and that the
 /// request does not mention. A line edited in place keeps its signature, so adding or removing a field is not a removal
-/// of its table line. Used to show "This would also remove: ...".
+/// of its table line. A removed block (a line and the more indented lines under it) counts as asked when any line of it is
+/// named, and the nouns of the request map to line kinds (kNounKinds). Used to show "This would also remove: ...".
 List<String> dropsUnasked(String request, String oldSrc, String newSrc) {
   final newSigs = programLines(newSrc).map(lineSignature).toSet();
-  final newLines = programLines(newSrc).toSet();
+  final newLines = programLines(newSrc).map((l) => l.trim()).toSet();
   final asked = wordsOf(request).where((w) => !kFiller.contains(w) && w.length > 2).toSet();
-  final out = <String>[];
-  for (final l in programLines(oldSrc)) {
-    if (l.startsWith('app ') || newLines.contains(l) || newSigs.contains(lineSignature(l))) continue;
-    final lw = wordsOf(l);
-    if (lw.any(asked.contains)) continue; // the request names it
-    out.add(l.trim());
+  for (final w in [...asked]) { asked.addAll(kNounKinds[w] ?? const <String>{}); }
+  final old = programLines(oldSrc);
+  final removed = <int>[];
+  for (var i = 0; i < old.length; i++) {
+    final l = old[i];
+    if (l.startsWith('app ') || newLines.contains(l.trim()) || newSigs.contains(lineSignature(l))) continue;
+    removed.add(i);
   }
-  return out;
+  final isRemoved = removed.toSet();
+  final covered = <int>{};
+  for (final i in removed) {
+    // the block: this line and the removed lines right after it that sit deeper
+    final block = <int>[i];
+    for (var j = i + 1; j < old.length && isRemoved.contains(j) && _indent(old[j]) > _indent(old[i]); j++) { block.add(j); }
+    if (block.any((j) => wordsOf(old[j]).any(asked.contains))) covered.addAll(block);
+  }
+  return [for (final i in removed) if (!covered.contains(i)) old[i].trim()];
 }

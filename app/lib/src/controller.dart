@@ -250,6 +250,10 @@ class MoldeController extends ChangeNotifier {
     final kind = (current == null || newAppMode) ? 'create' : 'edit';
     _disableButtons(); // moving on from an unanswered question makes it stale
     _say('you', request);
+    if (current != null && isUndoRequest(request)) { // "undo that": back to the previous version, no model, never a new app
+      if (undoable != null) { await undoLast(); } else { _say('bot', 'There is nothing earlier to go back to.'); }
+      return;
+    }
     if (kind == 'edit') {
       // exact edits of line 1 (colour, dark/light, text size, title) and of one setting value: no model, instant
       final src = current!.source;
@@ -409,7 +413,7 @@ class MoldeController extends ChangeNotifier {
     // a change that drops more than a fifth of the program is not applied unless the request asked to remove something
     final gone = removedLines(current!.source, program);
     final total = programLines(current!.source).length;
-    if (!direct && total > 0 && gone.length > total * 0.2 && !kRemovalWords.hasMatch(request)) {
+    if (!direct && total > 0 && gone.length > removalLimit(total) && !kRemovalWords.hasMatch(request)) {
       final pct = (gone.length * 100 / total).round();
       _finishLive(live, 'I did not apply this change: it would have removed ${gone.length} of $total lines of your app ($pct%), and you did not ask to remove anything. It would have removed:\n${_bullets(gone.map((l) => l.trim()).toList())}\nYour app is unchanged.', buttons: [
         ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
