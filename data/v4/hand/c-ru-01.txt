@@ -1,0 +1,323 @@
+@create class=roman_urdu style=short
+pani kitna piya aaj
+plan: # need: field ml, goal, quick buttons, chart, list
+---
+app "Paani" drop ocean
+table piya ml num 50..2000
+setting goal num = 2500 "Rozana goal (ml)"
+goal sum(piya.ml today), goal, "aaj", "ml"
+quick piya, ml, [250, 500]
+daybars last 7 days, sum(piya.ml on it)
+list piya by day
+===
+@create class=roman_urdu style=short
+ghar ke kharche ka plan
+plan: # need: field kharcha, option rashan/bijli/gas/bachon/dawai/other, setting budget, goal, chart, list
+---
+app "Ghar ka budget" home slate
+table kharcha what text, amount money, kind pick Rashan|Bijli|Gas|Bachon|Dawai|Other = Rashan
+setting budget money = 60000 "Mahine ka budget"
+goal sum(kharcha.amount month), budget, "is mahine kharch hua"
+share kharcha month by kind, sum(it.amount), it.key
+form kharcha, "Kharcha likho"
+list kharcha month by day
+===
+@create class=roman_urdu style=short
+dawai khane ka waqt yaad dilao
+plan: # need: field dawai, field time, reminder, tick, total today, list
+---
+app "Dawai" pill plum
+table dawai name text, time time
+table li dawai ref dawai
+remind "Dawai ka waqt ho gaya" at dawai.time
+count(li today) "of" count(dawai) "dawai li aaj" head
+each dawai sort time as d
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.name bold
+      d.time faint
+    toggle d.li
+form dawai, "Nayi dawai"
+===
+@create class=roman_urdu style=short
+doodh wale ka hisaab kitab
+plan: # need: field litres, setting rate, total month, quick buttons, calendar, list
+---
+app "Dudh" milk mint
+table dudh litres num 0.5..20 = 1
+setting rate money = 220 "Rate per litre"
+stat sum(dudh.litres month), "litre is mahine"
+stat sum(dudh.litres month) * rate, "is mahine ka bill"
+quick dudh, litres, [1, 2]
+calendar dudh
+list dudh by day
+===
+@create class=roman_urdu style=short
+meri dukan ka rozana hisab
+plan: # need: field bikri, field kharcha, total today, chart, form
+---
+app "Dukaan" bag orange
+table bikri item text, amount money
+table kharcha what text, amount money
+stat sum(bikri.amount today), "aaj ki bikri"
+stat sum(kharcha.amount today), "aaj ka kharcha"
+"Aaj ka munafa" sum(bikri.amount today) - sum(kharcha.amount today) big
+daybars last 7 days, sum(bikri.amount on it)
+form bikri, "Bikri likho"
+form kharcha, "Kharcha likho"
+===
+@create class=roman_urdu style=short
+udhaar ka khata
+plan: # need: field banda, field udhaar, option diya/wapis, total, list
+---
+app "Udhaar khata" wallet slate
+table banda name text
+table udhaar banda ref banda, amount money, kind pick Diya|Wapis = Diya
+"Mujhe milne hain" sum(udhaar.amount where kind = Diya) - sum(udhaar.amount where kind = Wapis) big
+each banda as b
+  row card gap 2 tap edit b
+    b.name bold grow
+    sum(b.udhaar.amount where kind = Diya) - sum(b.udhaar.amount where kind = Wapis) bold
+form banda, "Naya banda"
+form udhaar, "Entry likho"
+===
+@create class=roman_urdu style=short
+school mein bachon ki hazri
+plan: # need: field bacha, tick, total today, list
+---
+app "Haziri" school ocean
+table bacha name text
+table haazir bacha ref bacha
+"Aaj haazir" count(haazir today) "of" count(bacha) head
+each bacha sort name as b
+  row card gap 2 tap edit b swipe remove b
+    b.name grow
+    toggle b.haazir
+form bacha, "Naya bacha"
+===
+@create class=roman_urdu style=short
+quran padhna
+plan: # need: field pages, setting rozana, goal, quick buttons, chart, list
+---
+app "Quran" book green
+table padha pages num 1..604
+setting rozana num = 5 "Rozana safay"
+goal sum(padha.pages today), rozana, "aaj", "safay"
+quick padha, pages, [1, 2, 5]
+heat last 70 days, sum(padha.pages on it), 5
+list padha by day
+===
+@create class=roman_urdu style=short
+namaz ka record
+plan: # need: option fajr/zuhr/asr/maghrib/isha, tick, total today, chart
+---
+app "Namaz" mosque mint
+table namaz naam pick Fajr|Zuhr|Asr|Maghrib|Isha = Fajr
+count(namaz today) "of 5 parh li" big
+each options namaz.naam as n
+  row card gap 2
+    n bold grow
+    toggle namaz today where naam = n
+heat last 70 days, count(namaz on it), 5
+===
+@create class=roman_urdu style=short
+rickshaw ka petrol
+plan: # need: field litres, field amount, total month, chart, list
+---
+app "Rickshaw petrol" car orange
+table petrol litres num 1..30, amount money
+stat sum(petrol.amount month), "is mahine petrol ka kharcha"
+stat sum(petrol.litres month), "litre petrol"
+form petrol, "Petrol bhara"
+trend petrol last 90 days sort at, it.amount
+list petrol by day
+===
+@create class=roman_urdu style=short
+bijli ka meter
+plan: # need: field units, reminder, chart, list
+---
+app "Bijli meter" bolt yellow
+table meter units num 0..99999
+remind "Meter ki reading lo" monthly on 1 at 9:00
+stat last(meter.units), "units abhi tak"
+form meter, "Reading likho"
+trend meter sort at, it.units
+list meter by day
+===
+@create class=roman_urdu style=short
+gas cylinder kab badla
+plan: # need: field price, days since, list
+---
+app "Gas cylinder" fire red
+table cylinder price money
+stat since(cylinder), "din pehle badla"
+stat gap(cylinder), "average din ek cylinder"
+form cylinder, "Naya cylinder"
+list cylinder by day
+===
+@create class=roman_urdu style=short
+mahine ka ration likhna hai
+plan: # need: field cheez, field qty, tick, list
+---
+app "Ration" cart teal
+table cheez name text, qty text?, liya bool
+count(cheez where liya = no) "cheezein lene hain" head
+each cheez where liya = no as c
+  row card gap 2 tap edit c swipe remove c
+    toggle c.liya
+    c.name grow
+    c.qty faint
+form cheez, "Cheez likho"
+"Le li" faint
+list cheez where liya = yes
+===
+@create class=roman_urdu style=short
+shaadi ka budget
+plan: # need: field kharcha, option hall/khana/kapray/zewar/photo/other, setting budget, goal, chart
+---
+app "Shaadi budget" gift pink
+table kharcha what text, amount money, kind pick Hall|Khana|Kapray|Zewar|Photo|Other = Hall
+setting budget money = 1500000 "Shaadi ka budget"
+goal sum(kharcha.amount), budget, "kharch ho gaya"
+share kharcha by kind, sum(it.amount), it.key
+form kharcha, "Kharcha likho"
+===
+@create class=roman_urdu style=short
+warzish ka record
+plan: # need: option pushup/squat/plank/daud, field reps, total week, chart, list
+---
+app "Warzish" dumbbell ink
+table warzish kya pick Pushup|Squat|Plank|Daud = Pushup, reps num 1..500
+stat sum(warzish.reps week), "is hafte"
+daybars last 7 days, sum(warzish.reps on it)
+form warzish, "Warzish likho"
+list warzish by day
+===
+@create class=roman_urdu style=short
+neend ka hisaab
+plan: # need: field soya, field utha, list
+---
+app "Neend" bed ink
+table raat soya time = 23:00, utha time = 7:00
+let ghante = last(raat.utha) - last(raat.soya)
+ghante "ki neend kal raat" big
+form raat, "Raat likho"
+list raat by day
+===
+@create class=roman_urdu style=short
+zakat ka hisaab
+plan: # need: field nakad, field sona, field qarz, setting nisab
+---
+app "Zakat" coin green
+setting nisab money = 400000 "Nisab"
+state nakad money = 0
+state sona money = 0
+state qarz money = 0
+field nakad "Nakad"
+field sona "Sone ki qeemat"
+field qarz "Qarz"
+let total = nakad + sona - qarz
+if total >= nisab
+  "Zakat dena hai" head
+  round(total * 0.025) big
+else
+  "Abhi zakat farz nahi" faint
+===
+@create class=roman_urdu style=short
+imtihan ke marks likhne hain
+plan: # need: option maths/urdu/english/science/islamiat, field got, field of, list
+---
+app "Test number" school plum
+table test subject pick Maths|Urdu|English|Science|Islamiat = Maths, got num 0..100, of num 1..100 = 100
+each options test.subject as s
+  row card
+    s bold grow
+    round(sum(test.got where subject = s) * 100 / max(sum(test.of where subject = s), 1)) "%" bold
+form test, "Number likho"
+list test by day
+===
+@create class=roman_urdu style=short
+sabzi ka hisaab
+plan: # need: field naam, field kilo, field rate, total today, list
+---
+app "Sabzi" apple green
+table sabzi naam text, kilo num 0.1..50, rate money
+"Aaj ka kharcha" sum(sabzi today, it.kilo * it.rate) big
+form sabzi, "Sabzi likho"
+list sabzi by day
+===
+@create class=roman_urdu style=short
+bachat ka hisaab
+plan: # need: field amount, setting target, goal, quick buttons, list
+---
+app "Bachat" coin mint
+table bachat amount money
+setting target money = 100000 "Bachat ka target"
+goal sum(bachat.amount), target, "jama ho gaye"
+quick bachat, amount, [500, 1000, 5000]
+list bachat by day
+===
+@create class=roman_urdu style=short
+mazdoor ki dihari
+plan: # need: field mazdoor, field din, setting dihari, total month, list
+---
+app "Dihari" tool slate
+table mazdoor name text
+table kaam mazdoor ref mazdoor, din num 0.5..31 = 1
+setting dihari money = 1500 "Rozana dihari"
+each mazdoor as m
+  row card gap 2 tap edit m
+    m.name bold grow
+    sum(m.kaam.din month) "din" faint
+    sum(m.kaam.din month) * dihari bold
+form mazdoor, "Naya mazdoor"
+form kaam, "Din likho"
+===
+@create class=roman_urdu style=short
+shaadi ke mehman
+plan: # need: field mehman, field log, tick, total
+---
+app "Mehman" users pink
+table mehman name text, log num 1..20 = 1, aayega bool
+"Aane wale" sum(mehman.log where aayega = yes) "of" sum(mehman.log) big
+each mehman sort name as m
+  row card gap 2 tap edit m swipe remove m
+    toggle m.aayega
+    m.name grow
+    m.log "log" faint
+form mehman, "Mehman likho"
+===
+@create class=roman_urdu style=short
+pani ka tanker
+plan: # need: field price, days since, list
+---
+app "Tanker" drop teal
+table tanker price money
+stat since(tanker), "din pehle aaya"
+form tanker, "Tanker aaya"
+list tanker by day
+===
+@create class=roman_urdu style=short
+school ki fees
+plan: # need: field bacha, field fees, total month, list
+---
+app "School fees" school ocean
+table bacha name text
+table fees bacha ref bacha, amount money
+"Is mahine jama" sum(fees.amount month) big
+each bacha as b
+  row card gap 2 tap edit b
+    b.name bold grow
+    sum(b.fees.amount month) bold
+form bacha, "Naya bacha"
+form fees, "Fees jama ki"
+===
+@create class=roman_urdu style=short
+mobile load ka kharcha
+plan: # need: field amount, total month, quick buttons, list
+---
+app "Load" phone purple
+table load amount money
+stat sum(load.amount month), "is mahine load ka kharcha"
+quick load, amount, [100, 200, 500]
+list load by day

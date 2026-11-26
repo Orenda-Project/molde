@@ -1,0 +1,209 @@
+@askset class=cannot_do
+send a whatsapp to my customers when their order is ready
+ask: Molde apps cannot send messages to other people. Do you want an order list where you tick ready orders, so you can message them yourself? | Yes, an order list | No, never mind
+plan: # need: cannot message, field customer, field item, tick, list
+---
+app "Orders" bag orange
+table order customer text, item text, ready bool
+count(order where ready = yes) "ready to send" head
+each order where ready = no as o
+  row card gap 2 tap edit o swipe remove o
+    toggle o.ready
+    stack grow gap 0
+      o.customer bold
+      o.item faint
+"Ready" faint
+list order where ready = yes
+form order, "Add order"
+===
+@askset class=cannot_do
+show my route on a map
+ask: Molde apps cannot show a map or use GPS. Do you want a trip log where you type the places and the distance? | Yes, a trip log | No, never mind
+plan: # need: cannot map, field from, field to, field km, list
+---
+app "Trips" car slate
+table trip from_place text, to_place text, km num 1..2000
+stat sum(trip.km month), "km this month"
+form trip, "Add trip"
+list trip by day
+===
+@askset class=cannot_do
+scan the barcode of my products with the camera
+ask: Molde apps cannot use the camera or scan barcodes. Do you want a product list where you type the code and the quantity? | Yes, a product list | No, never mind
+plan: # need: cannot scan, field code, field qty, list
+---
+app "Products" package slate
+table product name text, code text?, qty num 0..99999
+stat count(product), "products"
+form product, "Add product"
+each product sort name as p
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    p.code faint
+    p.qty bold
+===
+@askset class=cannot_do
+log in with my google account so my friends can see my scores
+ask: Molde apps cannot sign in or share with other people. Do you want a score book on this phone that you can show to your friends? | Yes, a score book | No, never mind
+plan: # need: cannot login, field player, field score, list
+---
+app "Score book" trophy plum
+table score player text, points num 0..1000
+each score by player empty "No scores yet. Add the first one below."
+  row card
+    it.key bold grow
+    sum(it.points) bold
+form score, "Add score"
+===
+@askset class=cannot_do
+show the weather forecast for my city
+ask: Molde apps cannot get a forecast from the internet. Do you want a weather diary where you write what you see outside? | Yes, a weather diary | No, never mind
+plan: # need: cannot forecast, field temp, option sunny/cloudy/rain/windy, chart, list
+---
+app "Weather diary" cloud ocean
+table note temp num -10..50, sky pick Sunny|Cloudy|Rain|Windy = Sunny
+form note, "Add today"
+trend note last 30 days sort at, it.temp
+list note by day
+===
+@askset class=cannot_do
+tell me my bank balance
+ask: Molde apps cannot connect to a bank. Do you want a balance book where you type each deposit and spending? | Yes, a balance book | No, never mind
+plan: # need: cannot bank, field amount, option in/out, total, list
+---
+app "Balance book" wallet slate
+table entry what text, amount money, kind pick In|Out = Out
+"Balance" sum(entry.amount where kind = In) - sum(entry.amount where kind = Out) big
+form entry, "Add entry"
+list entry by day
+===
+@askset class=cannot_do
+email me a report of my sales every friday
+ask: Molde apps cannot send email. Do you want a weekly total on the screen that you can read out or screenshot? | Yes, a weekly total | No, never mind
+plan: # need: cannot email, field amount, total week, list
+---
+app "Sales" bag green
+table sale item text, amount money
+"This week" sum(sale.amount week) big
+daybars last 7 days, sum(sale.amount on it)
+form sale, "Add sale"
+list sale by day
+===
+@askset class=cannot_do
+get psl scores from the net automatically
+ask: Molde apps cannot fetch live scores. Do you want to keep the score of your own match by hand, ball by ball? | Yes, a match scorer | No, never mind
+plan: # need: cannot live scores, field runs, field wicket, total
+---
+app "Scorer" ball ocean
+table ball runs num 0..6, out bool
+let r = sum(ball.runs all)
+let w = count(ball where out = yes)
+join(r, "/", w) big
+row gap 1
+  each [0, 1, 2, 3, 4, 6]
+    button it tap add ball runs = it
+button "Wicket" fill bad tap add ball runs = 0, out = yes
+button "Undo" tap remove last(ball)
+===
+@askset class=cannot_do
+talk to the app and it writes my expenses
+ask: Molde apps cannot listen to your voice. Do you want an expense list with quick buttons, so adding one takes a single tap? | Yes, quick buttons | No, never mind
+plan: # need: cannot voice, field amount, quick buttons, list
+---
+app "Quick spend" wallet teal
+table spend what text?, amount money
+stat sum(spend.amount today), "today"
+quick spend, amount, [50, 100, 500, 1000]
+list spend by day
+===
+@askset class=cannot_do
+a chatbot that answers my customers
+ask: Molde apps cannot run a chatbot. Do you want a list of questions and answers that you can read out when customers ask? | Yes, questions and answers | No, never mind
+plan: # need: cannot chatbot, field question, field answer, list
+---
+app "Answers" users plum
+table faq question text, answer long
+each faq sort question as f empty "No answers yet. Add the questions customers ask most."
+  stack card gap 1 tap edit f swipe remove f
+    f.question bold
+    f.answer faint
+form faq, "Add answer"
+===
+@askset class=cannot_do
+translate what i type from english to urdu
+ask: Molde apps cannot translate. Do you want a word list where you save English words with their Urdu meaning? | Yes, a word list | No, never mind
+plan: # need: cannot translate, field english, field urdu, list
+---
+app "Word pairs" pen plum
+table pair english text, urdu text
+form pair, "Add a pair"
+list pair
+===
+@askset class=cannot_do
+sync my list with my wife's phone
+ask: Molde apps cannot share data between phones. Do you want a shopping list on this phone that you can read out to her? | Yes, a shopping list | No, never mind
+plan: # need: cannot sync, field item, tick, list
+---
+app "Shopping" cart mint
+table item name text, got bool
+count(item where got = no) "to buy" head
+each item where got = no as i
+  row card gap 2 tap edit i swipe remove i
+    toggle i.got
+    i.name grow
+form item, "Add item"
+===
+@askset class=cannot_do
+print my monthly report as a pdf
+ask: Molde apps cannot make a pdf or print. Do you want a month summary on one screen that you can screenshot? | Yes, a month summary | No, never mind
+plan: # need: cannot print, field amount, total month, chart
+---
+app "Month summary" chart slate
+table entry what text, amount money
+"This month" sum(entry.amount month) big
+daybars month, sum(entry.amount on it)
+form entry, "Add entry"
+===
+@askset class=cannot_do
+play my zikr audio when the counter reaches 100
+ask: Molde apps cannot play sounds. Do you want a counter that shows a message when it reaches 100? | Yes, a counter with a message | No, never mind
+plan: # need: cannot audio, setting target, field count
+---
+app "Zikr" beads mint
+table zikr
+setting target num = 100 "Count to"
+let n = count(zikr today)
+n big
+if n >= target
+  "Target reached" head color good
+button "+1" tap add zikr
+button "Undo" tap remove last(zikr today)
+===
+@askset class=cannot_do
+find the cheapest petrol pump near me
+ask: Molde apps cannot find places near you. Do you want a list of pumps where you type the price you saw? | Yes, a pump price list | No, never mind
+plan: # need: cannot near me, field pump, field price, list
+---
+app "Petrol prices" car orange
+table pump name text, price money, seen date = today
+stat min(pump.price), "cheapest price"
+each pump sort price as p
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    p.price bold
+    p.seen faint
+form pump, "Add pump"
+===
+@askset class=cannot_do
+remind my staff to open the shop at 9
+ask: Molde apps cannot remind other people. Do you want a reminder on your own phone at 9 with a staff duty list? | Yes, a reminder and a duty list | No, never mind
+plan: # need: cannot remind others, reminder, field staff, list
+---
+app "Opening duty" users orange
+table duty staff text, day date = today
+remind "Open the shop" at 9:00
+each duty where day >= today sort day as d empty "No duties yet. Add who opens the shop."
+  row card gap 2 tap edit d swipe remove d
+    d.staff bold grow
+    d.day faint
+form duty, "Add duty"

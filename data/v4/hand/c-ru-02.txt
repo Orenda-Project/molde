@@ -1,0 +1,261 @@
+@create class=roman_urdu style=detailed
+bachon ki fees: kis ne jama karwai aur kis ne nahi
+plan: # need: field bacha, field fees, month, list
+---
+app "Bachon ki fees" school plum
+table bacha name text
+table fees bacha ref bacha, amount money
+each bacha sort name as b
+  row card gap 2 tap edit b
+    b.name bold grow
+    if(sum(b.fees.amount month) > 0, "Di", "Baqi") color if(sum(b.fees.amount month) > 0, good, bad)
+form bacha, "Naya bacha"
+form fees, "Fees jama ki"
+===
+@create class=roman_urdu style=detailed
+aaj kitne ande bike aur kitne paise aaye
+plan: # need: field qty, field rate, total today, chart
+---
+app "Ande" egg yellow
+table anda qty num 1..1000, rate money = 25
+stat sum(anda.qty today), "ande aaj bike"
+"Aaj ke paise" sum(anda today, it.qty * it.rate) big
+daybars last 7 days, sum(anda.qty on it)
+form anda, "Bikri likho"
+===
+@create class=roman_urdu style=detailed
+meri gaaye ka dudh subah aur shaam alag alag likhna hai
+plan: # need: option subah/shaam, field litres, total today, chart, list
+---
+app "Gaaye ka dudh" milk mint
+table dudh waqt pick Subah|Shaam = Subah, litres num 0.5..30
+each options dudh.waqt as w
+  row card
+    w bold grow
+    sum(dudh.litres today where waqt = w) "litre" bold
+trend days last 14 days, sum(dudh.litres on it)
+form dudh, "Dudh likho"
+list dudh by day
+===
+@create class=roman_urdu style=detailed
+kon kon se rishtedaron ko shaadi ka card dena hai, jis ko de diya uska tick
+plan: # need: field rishta, tick, total, list
+---
+app "Shaadi cards" gift pink
+table rishta name text, diya bool
+count(rishta where diya = yes) "of" count(rishta) "card diye" head
+each rishta sort name as r
+  row card gap 2 tap edit r swipe remove r
+    toggle r.diya
+    r.name grow
+form rishta, "Naam likho"
+===
+@create class=roman_urdu style=detailed
+bike ka petrol har fill pe km aur litre likhun, mileage nikalni hai
+plan: # need: field litres, field km, list
+---
+app "Bike mileage" bike orange
+table fill litres num 1..60, km num 1..1500
+stat round(sum(fill.km month) / max(sum(fill.litres month), 1) * 10) / 10, "km per litre is mahine"
+form fill, "Petrol bhara"
+list fill by day
+===
+@create class=roman_urdu style=detailed
+tankhwah aur kharche likhne hain, mahine ke end pe kitna bacha
+plan: # need: setting tankhwah, field kharcha, goal, list
+---
+app "Tankhwah" wallet teal
+setting tankhwah money = 80000 "Mahine ki tankhwah"
+table kharcha what text, amount money
+"Bacha hua" tankhwah - sum(kharcha.amount month) big
+goal sum(kharcha.amount month), tankhwah, "kharch hua"
+form kharcha, "Kharcha likho"
+list kharcha month by day
+===
+@create class=roman_urdu style=detailed
+bakri ke bachon ka wazan har hafte likhna hai aur chart chahiye
+plan: # need: field bakri, field kg, chart, list
+---
+app "Bakri wazan" paw green
+table wazan bakri text, kg num 1..100
+trend wazan last 90 days sort at, it.kg
+form wazan, "Wazan likho"
+list wazan by day
+===
+@create class=roman_urdu style=detailed
+ramzan mein roza rakha ya nahi roz tick karna hai aur kitne rakhe
+plan: # need: tick, total, calendar
+---
+app "Roze" moon purple
+table roza
+toggle roza today
+count(roza) "of 30 roze rakhe" big
+calendar roza
+===
+@create class=roman_urdu style=detailed
+meri dukaan ka udhaar, kis ne kitne paise dene hain aur kab tak
+plan: # need: field name, field amount, field due, tick, total, reminder
+---
+app "Dukaan udhaar" bag red
+table udhaar name text, amount money, due date, paid bool
+remind "Udhaar wasool karna hai" at udhaar.due
+"Baqi" sum(udhaar.amount where paid = no) big
+each udhaar where paid = no sort due as u
+  row card gap 2 tap edit u swipe remove u
+    toggle u.paid
+    stack grow gap 0
+      u.name bold
+      u.due faint color if(u.due < today, bad, muted)
+    u.amount bold
+form udhaar, "Udhaar likho"
+===
+@create class=roman_urdu style=detailed
+bijli ka bill har mahine kitna aaya aur average kya hai
+plan: # need: field amount, average, chart, list
+---
+app "Bijli bill" bolt yellow
+table bill amount money
+stat last(bill.amount), "pichla bill"
+stat round(avg(bill.amount last 6 months)), "6 mahine ka average"
+trend bill last 12 months sort at, it.amount
+form bill, "Bill likho"
+list bill by day
+===
+@create class=roman_urdu style=detailed
+dawai khatam hone se pehle bata do, kitni goliyan bachi hain
+plan: # need: field dawai, field bachi, field rozana, list
+---
+app "Dawai stock" pill red
+table dawai name text, bachi num 0..500, rozana num 1..10 = 1
+each dawai sort bachi as d
+  row card gap 2 tap edit d swipe remove d
+    d.name bold grow
+    floor(d.bachi / d.rozana) "din ki dawai" color if(d.bachi / d.rozana < 5, bad, muted)
+    button "Li" tap set d.bachi = max(d.bachi - d.rozana, 0)
+form dawai, "Nayi dawai"
+===
+@create class=roman_urdu style=detailed
+tuition ke bachon ke naam aur fees, jis ki fees baqi ho woh laal dikhao
+plan: # need: field name, field fees, tick, list
+---
+app "Tuition" school ocean
+table talib name text, fees money, paid bool
+"Baqi fees" sum(talib.fees where paid = no) big
+each talib sort name as t
+  row card gap 2 tap edit t swipe remove t
+    toggle t.paid
+    t.name bold grow color if(t.paid, ink, bad)
+    t.fees faint
+form talib, "Naya bacha"
+===
+@create class=roman_urdu style=detailed
+eid ki shopping list sab ke kapray aur jootay, total kitna banega
+plan: # need: field for_who, field what, field price, tick, total, list
+---
+app "Eid shopping" gift pink
+table cheez for_who text, what text, price money, liya bool
+"Total" sum(cheez.price) big
+"Le liya" sum(cheez.price where liya = yes) faint
+each cheez sort for_who as c
+  row card gap 2 tap edit c swipe remove c
+    toggle c.liya
+    stack grow gap 0
+      c.what bold
+      c.for_who faint
+    c.price
+form cheez, "Cheez likho"
+===
+@create class=roman_urdu style=detailed
+ghar ke kamon ka chart, aaj kis ne kya kiya
+plan: # need: field kya, option ammi/abbu/ali/sara, total today, list
+---
+app "Ghar ke kaam" home mint
+table kaam kya text, kis pick Ammi|Abbu|Ali|Sara = Ammi
+each options kaam.kis as k
+  row card
+    k bold grow
+    count(kaam today where kis = k) "kaam aaj" bold
+form kaam, "Kaam likho"
+list kaam by day
+===
+@create class=roman_urdu style=frame
+dukan ki daily sale with total and weekly chart
+plan: # need: field item, field amount, total today, chart, list
+---
+app "Dukaan sales" bag orange
+table sale item text, amount money
+stat sum(sale.amount today), "aaj ki sales"
+daybars last 7 days, sum(sale.amount on it)
+form sale, "Sale likho"
+list sale by day
+===
+@create class=roman_urdu style=frame
+bachon ki homework tracker with ticks
+plan: # need: field bacha, field kaam, tick, list
+---
+app "Homework" pencil plum
+table homework bacha text, kaam text, hogaya bool
+count(homework where hogaya = no) "kaam baqi" head
+each homework where hogaya = no as h
+  row card gap 2 tap edit h swipe remove h
+    toggle h.hogaya
+    stack grow gap 0
+      h.kaam bold
+      h.bacha faint
+form homework, "Homework likho"
+===
+@create class=roman_urdu style=frame
+meri bhains ka milk record with weekly chart
+plan: # need: field litres, chart, total week, list
+---
+app "Bhains ka dudh" milk teal
+table dudh litres num 0.5..40
+stat sum(dudh.litres week), "litre is hafte"
+daybars last 7 days, sum(dudh.litres on it)
+form dudh, "Dudh likho"
+list dudh by day
+===
+@create class=roman_urdu style=frame
+ghar ka kharcha tracker with categories like rashan bijli gas
+plan: # need: field kharcha, option rashan/bijli/gas, chart, list
+---
+app "Ghar kharcha" home slate
+table kharcha what text, amount money, kind pick Rashan|Bijli|Gas|Other = Rashan
+stat sum(kharcha.amount month), "is mahine"
+share kharcha month by kind, sum(it.amount), it.key
+form kharcha, "Kharcha likho"
+list kharcha month by day
+===
+@create class=roman_urdu style=frame
+shaadi ke guests list with count
+plan: # need: field guest, total, list
+---
+app "Guests" users pink
+table guest name text, people num 1..20 = 1
+"Total log" sum(guest.people) big
+each guest sort name as g
+  row card gap 2 tap edit g swipe remove g
+    g.name grow
+    g.people "log" faint
+form guest, "Guest likho"
+===
+@create class=roman_urdu style=frame
+namaz tracker with streak
+plan: # need: tick, streak, calendar
+---
+app "Namaz streak" mosque green
+table namaz
+toggle namaz today
+streak(namaz) "din ka streak" big
+calendar namaz
+===
+@create class=roman_urdu style=frame
+petrol expense tracker for bike
+plan: # need: field amount, total month, chart, list
+---
+app "Bike petrol" bike orange
+table petrol amount money
+stat sum(petrol.amount month), "is mahine petrol"
+daybars last 7 days, sum(petrol.amount on it)
+form petrol, "Petrol likho"
+list petrol by day
