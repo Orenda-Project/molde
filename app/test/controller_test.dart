@@ -715,6 +715,12 @@ void roundSixOne() {
       expect(removalLimit(4), 2);
       expect(removalLimit(40), 8);
     });
+    test('unmetClaims: renaming a button is not a claim about the app title', () {
+      const old = 'app "Fund" home mint\ntable d amount money\nform d\n';
+      final nu = old.replaceAll('form d', 'form d, "Save"');
+      expect(unmetClaims('rename the Add button to Save', old, nu), isEmpty);
+      expect(unmetClaims('rename the app to Savings', old, old), contains('the new title'));
+    });
     test('direct edits: wider wordings for dark mode, a colour theme, the title and the goal', () {
       const app = 'app "A" home mint\nsetting goal num = 2000 "Daily goal"\ntable t a num\n';
       String? prog(String r) => appLineEdit(r, app)?.program;

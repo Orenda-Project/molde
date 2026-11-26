@@ -95,6 +95,17 @@ CHANGES = [
  ('X10', 'last:Phone fund', 'make it dark mode'),
 ]
 
+CHANGES2 = [   # short Gemma-built app with entered data (Rs 1,500 in two rows)
+ ('S01', 'last:Phone fund', 'add a note field'),
+ ('S02', 'last:Phone fund', 'rename the Add button to Save'),
+ ('S03', 'last:Phone fund', 'make it green'),
+ ('S04', 'last:Phone fund', 'turn on dark mode'),
+ ('S05', 'last:Phone fund', 'make my goal 150000'),
+ ('S06', 'last:Phone fund', 'add a chart'),
+ ('S07', 'last:Phone fund', 'remove the chart'),
+ ('S08', 'last:Phone fund', 'undo that'),
+]
+
 def nums(ts):
     return sorted(set(re.findall(r'\d[\d,\.]*', ' '.join(ts))))
 
@@ -142,7 +153,7 @@ if __name__ == '__main__':
             if case in RES and not os.environ.get('REDO'): continue
             run(case, r, 'new')
     elif c == 'changes':
-        for case, how, req in CHANGES:
+        for case, how, req in (CHANGES2 if os.environ.get('SET') == '2' else CHANGES):
             if case in RES and not os.environ.get('REDO'): continue
             do_change(case, how, req)
     elif c == 'shot': shot(sys.argv[2])

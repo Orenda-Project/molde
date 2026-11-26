@@ -268,7 +268,7 @@ List<String> unmetClaims(String request, String oldSrc, String newSrc) {
   if (RegExp(r'\blight (mode|theme)\b').hasMatch(low) && na != null && na.mode != 'light') out.add('light mode');
   // title
   final rn = RegExp(r'(?:title|name|rename|call it)\b.*?(?:to|as)?\s+"?([A-Za-z0-9][^"]*?)"?\s*$', caseSensitive: false).firstMatch(request);
-  if (rn != null && RegExp(r'\b(title|rename|call it)\b').hasMatch(low) && na != null && na.title.toLowerCase() != rn.group(1)!.trim().toLowerCase()) out.add('the new title');
+  if (rn != null && RegExp(r'\b(title|rename|call it)\b').hasMatch(low) && !RegExp(r'\b(button|field|column|tab|section|label|option|chart|header)\b').hasMatch(low) && na != null && na.title.toLowerCase() != rn.group(1)!.trim().toLowerCase()) out.add('the new title');
   // a named field added: "add a note field", "add notes", "add a due date"
   final add = RegExp(r'\badd(?:\s+(?:a|an|the|some))?\s+([a-z][a-z ]{1,24}?)(?:\s+(?:field|column|box|option))?(?:\s+(?:to|for|in)\b.*)?$').firstMatch(low);
   if (add != null && !RegExp(r'\b(chart|graph|button|screen|tab)\b').hasMatch(add.group(1)!)) {
