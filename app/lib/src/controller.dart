@@ -409,8 +409,8 @@ class MoldeController extends ChangeNotifier {
     final changes = ((ev['changes'] as List?) ?? []).map((e) => '$e').toList();
     final warnings = ((ev['warnings'] as List?) ?? []).map((e) => '$e').toList();
     if (verdict == 'refused') {
-      final why = ((ev['refused'] as List?) ?? []).map((e) => '$e').join(' ');
-      _finishLive(live, 'I did not make that change, because it would put your saved data at risk: $why\nYour app is unchanged.');
+      final why = plainRefusal(((ev['refused'] as List?) ?? []).map((e) => '$e').toList());
+      _finishLive(live, 'I did not make that change, because it would put your saved data at risk. $why\nYour app is unchanged.');
       return;
     }
     final sets = ((ev['settings'] as List?) ?? []).map((e) => '${(e as Map)['text']}').toList();
@@ -426,14 +426,14 @@ class MoldeController extends ChangeNotifier {
     }
     // the model handed the program back unchanged (or changed nothing that matters): never claim a change
     if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore'))) {
-      _finishLive(live, "I couldn't make that change yet. Your app is unchanged.");
+      _finishLive(live, "I couldn't make that change yet: nothing changed. Your app is unchanged. Try naming the part you mean (for example the button or the chart), or say it another way.");
       return;
     }
     final oldSrc = current!.source;
     Future<void> apply() async {
       final a = Map<String, dynamic>.from(await bridge.rpc<Map>('applyEdit', {'source': program}));
       if (a['verdict'] == 'refused') {
-        _finishLive(live, 'I could not apply the change: ${((a['refused'] as List?) ?? []).join(' ')} Your app is unchanged.');
+        _finishLive(live, 'I could not apply the change. ${plainRefusal(((a['refused'] as List?) ?? []).map((e) => '$e').toList())} Your app is unchanged.');
         return;
       }
       current!.log('edit', request: request, summary: changes.take(3).join('; '));
@@ -451,8 +451,10 @@ class MoldeController extends ChangeNotifier {
     }
     // lines the request did not mention that the model dropped: not applied silently, the default is to keep the app
     final extra = direct ? <String>[] : dropsUnasked(request, oldSrc, program);
-    if (extra.isNotEmpty) {
-      _finishLive(live, 'This would also remove:\n${_bullets(extra)}\nYou did not ask for that, so I have not applied the change.', buttons: [
+    final rewritten = direct ? <String>[] : rewrittenUnasked(request, oldSrc, program);
+    if (extra.isNotEmpty || rewritten.isNotEmpty) {
+      final what = [if (extra.isNotEmpty) 'This would also remove:\n${_bullets(extra)}', if (rewritten.isNotEmpty) 'This would also change a line you did not mention:\n${_bullets(rewritten)}'].join('\n');
+      _finishLive(live, '$what\nYou did not ask for that, so I have not applied the change.', buttons: [
         ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }, primary: true),
         ChatBtn('Apply anyway', () async { live.buttons = []; notifyListeners(); await apply(); notifyListeners(); }),
       ]);

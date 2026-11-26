@@ -391,6 +391,9 @@ const Map<String, Set<String>> kNounKinds = {
   'stat': {'stat', 'statcard', 'goal'},
   'summary': {'stat', 'statcard', 'goal', 'sum'},
   'list': {'list', 'each'},
+  'history': {'list', 'each'},
+  'entries': {'list', 'each'},
+  'records': {'list', 'each'},
   'form': {'form', 'topbar', 'quick', 'button', 'field'},
   'buttons': {'quick', 'button'},
   'section': {'section'},
@@ -403,11 +406,59 @@ int _indent(String l) => l.length - l.trimLeft().length;
 /// request does not mention. A line edited in place keeps its signature, so adding or removing a field is not a removal
 /// of its table line. A removed block (a line and the more indented lines under it) counts as asked when any line of it is
 /// named, and the nouns of the request map to line kinds (kNounKinds). Used to show "This would also remove: ...".
+Set<String> _askedWords(String request) {
+  final asked = wordsOf(request).where((w) => !kFiller.contains(w) && w.length > 2).toSet();
+  for (final w in [...asked]) { asked.addAll(kNounKinds[w] ?? const <String>{}); }
+  return asked;
+}
+
+/// Lines the model rewrote in place (same first two words, new text) that the request does not name: a filter dropped from a
+/// loop, a formula or a chart line changed. Table, setting, form and app lines are left out: adding a field or renaming a
+/// button rewrites those on purpose. The guard shows them ("This would also change") instead of calling the edit safe.
+List<String> rewrittenUnasked(String request, String oldSrc, String newSrc) {
+  const own = {'app', 'table', 'setting', 'state', 'form', 'quick', 'topbar', 'goal', 'text'}; // text = a label or heading: cosmetic
+  final asked = _askedWords(request);
+  final newLines = programLines(newSrc).map((l) => l.trim()).toList();
+  final haveNew = <String, int>{};
+  for (final l in newLines) { haveNew[l] = (haveNew[l] ?? 0) + 1; }
+  final oldLines = programLines(oldSrc).map((l) => l.trim()).toList();
+  final haveOld = <String, int>{};
+  for (final l in oldLines) { haveOld[l] = (haveOld[l] ?? 0) + 1; }
+  final addedBySig = <String, int>{};
+  for (final l in newLines) {
+    final n = haveOld[l] ?? 0;
+    if (n > 0) { haveOld[l] = n - 1; } else { final sg = lineSignature(l); addedBySig[sg] = (addedBySig[sg] ?? 0) + 1; }
+  }
+  final out = <String>[];
+  for (final l in oldLines) {
+    final n = haveNew[l] ?? 0;
+    if (n > 0) { haveNew[l] = n - 1; continue; }
+    final sg = lineSignature(l);
+    if (own.contains(sg.split(' ').first) || (addedBySig[sg] ?? 0) == 0) continue; // gone with no twin is a removal (dropsUnasked), not a rewrite
+    addedBySig[sg] = addedBySig[sg]! - 1;
+    if (wordsOf(l).any(asked.contains)) continue;
+    out.add(l);
+  }
+  return out;
+}
+
+/// The data rules' own sentences are the language's syntax ("Write ... was aisle"). The user gets plain English only.
+String plainRefusal(List<String> reasons) {
+  String nice(String x) { final t = x.replaceAll('_', ' ').trim(); return t.isEmpty ? t : t[0].toUpperCase() + t.substring(1); }
+  for (final r in reasons) {
+    final f = RegExp(r'(\w+)\.(\w+) disappears and \w+\.(\w+) of the same type appears').firstMatch(r);
+    if (f != null) return 'It looks like you renamed the field ${nice(f.group(2)!)} to ${nice(f.group(3)!)}, and the values already entered under ${nice(f.group(2)!)} would be lost. If you want a new field, ask me to add it and keep ${nice(f.group(2)!)}.';
+    final t = RegExp(r'table (\w+) disappears and table (\w+) with the same fields appears').firstMatch(r);
+    if (t != null) return 'It looks like you renamed ${nice(t.group(1)!)} to ${nice(t.group(2)!)}, and what you entered in ${nice(t.group(1)!)} would be lost.';
+    if (r.contains('does not check')) return 'the new version did not pass my checks.';
+  }
+  return 'something you entered would not fit the new version of the app.';
+}
+
 List<String> dropsUnasked(String request, String oldSrc, String newSrc) {
   final newSigs = programLines(newSrc).map(lineSignature).toSet();
   final newLines = programLines(newSrc).map((l) => l.trim()).toSet();
-  final asked = wordsOf(request).where((w) => !kFiller.contains(w) && w.length > 2).toSet();
-  for (final w in [...asked]) { asked.addAll(kNounKinds[w] ?? const <String>{}); }
+  final asked = _askedWords(request);
   final old = programLines(oldSrc);
   final removed = <int>[];
   for (var i = 0; i < old.length; i++) {

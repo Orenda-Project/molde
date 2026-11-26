@@ -129,11 +129,12 @@ void main() {
   test('refused change explains the data risk and applies nothing', () async {
     await seed();
     page.handlers['generate'] = (a) => {'ok': true, 'program': water, 'errors': [], 'stats': {}};
-    page.handlers['evaluate'] = (a) => {'verdict': 'refused', 'changes': [], 'warnings': [], 'refused': ['changing drink.ml from num to text would lose data.']};
+    page.handlers['evaluate'] = (a) => {'verdict': 'refused', 'changes': [], 'warnings': [], 'refused': ['drink.ml disappears and drink.amount of the same type appears: this looks like a rename. Write "amount num was ml" to move the values.']};
     await c.send('make ml text');
     expect(page.calls, isNot(contains('applyEdit')));
     expect(c.chat.last.text, contains('saved data at risk'));
-    expect(c.chat.last.text, contains('would lose data'));
+    expect(c.chat.last.text, contains('renamed the field Ml to Amount'));
+    expect(c.chat.last.text, isNot(contains('Write')));
     expect(c.chat.last.text, contains('Your app is unchanged'));
   });
 
@@ -529,7 +530,8 @@ void roundFourFlows() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': waterHdr, 'errors': [], 'stats': {'seconds': 3}};
     page.handlers['evaluate'] = (a) => okEval([]);
     await c.send('add a note field');
-    expect(c.chat.last.text, "I couldn't make that change yet. Your app is unchanged.");
+    expect(c.chat.last.text, startsWith("I couldn't make that change yet"));
+    expect(c.chat.last.text, contains('Your app is unchanged'));
     expect(page.calls, isNot(contains('applyEdit')));
   });
 
@@ -715,6 +717,22 @@ void roundSixOne() {
       expect(removalLimit(4), 2);
       expect(removalLimit(40), 8);
     });
+    test('plainRefusal: the user never sees the language syntax', () {
+      final a = plainRefusal(['dose.aisle disappears and dose.details of the same type appears: this looks like a rename. Write "details pick ... was aisle" to move the values, or remove the old field in a separate change.']);
+      expect(a, contains('renamed the field Aisle to Details'));
+      for (final bad in ['Write', 'was aisle', 'pick ...', 'table ']) { expect(a, isNot(contains(bad))); }
+      expect(plainRefusal(['table old disappears and table fresh with the same fields appears: this looks like a rename. Write "table fresh was old" to move the rows.']), contains('renamed Old to Fresh'));
+      expect(plainRefusal(['something odd']), isNot(contains('odd')));
+    });
+    test('rewrittenUnasked: an untouched filter, formula or chart line changed in place is reported; a named or table line is not', () {
+      const old = 'app "A" x ocean\ntable t a num, done bool\nlet open = count(t where done = no)\neach t where done = no as r\n  r.a bold\nform t\n';
+      final dropsFilter = old.replaceAll('each t where done = no as r', 'each t as r');
+      expect(rewrittenUnasked('add a priority', old, dropsFilter), ['each t where done = no as r']);
+      final addField = old.replaceAll('a num, done bool', 'a num, done bool, note text').replaceAll('form t', 'form t');
+      expect(rewrittenUnasked('add a note field', old, addField), isEmpty); // the table line is edited on purpose
+      expect(rewrittenUnasked('show all of them in the list', old, dropsFilter), isEmpty); // "list" maps to the each line
+      expect(rewrittenUnasked('remove the chart', old, old.replaceAll('form t\n', '')), isEmpty); // a removal is dropsUnasked's job
+    });
     test('unmetClaims: renaming a button is not a claim about the app title', () {
       const old = 'app "Fund" home mint\ntable d amount money\nform d\n';
       final nu = old.replaceAll('form d', 'form d, "Save"');
@@ -792,6 +810,34 @@ void roundSixOneFlow() {
     final m = <String, dynamic>{'stop': 'cancel', 'hung': true};
     expect(LlmService().noteHung(m), isTrue);
     expect(LlmService().noteHung({'stop': 'stop'}), isFalse);
+  });
+
+  test('a data-rule refusal shows plain English, no syntax', () async {
+    page.handlers['generate'] = (a) => {'ok': true, 'program': '$water# more\n', 'errors': [], 'stats': {'seconds': 3.0}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'refused', 'changes': [], 'warnings': [], 'refused': ['drink.ml disappears and drink.amount of the same type appears: this looks like a rename. Write "amount num was ml" to move the values, or remove the old field in a separate change.']};
+    await c.send('rename ml to amount');
+    final t = c.chat.last.text;
+    expect(t, contains('renamed the field Ml to Amount'));
+    expect(t, isNot(contains('Write')));
+    expect(t, isNot(contains('was ml')));
+    expect(t, contains('Your app is unchanged'));
+  });
+
+  test('an edit that rewrites an untouched line is held for a decision, Keep my app is the default', () async {
+    const app = 'app "T" x ocean\ntable t a num, done bool\neach t where done = no as r\n  r.a bold\nform t\n';
+    await c.store.save(AppRecord(id: 'a3', name: 'T', source: app));
+    await c.init();
+    c.changeCurrent();
+    final prog = app.replaceAll('each t where done = no as r', 'each t as r').replaceAll('a num, done bool', 'a num, done bool, priority text');
+    page.handlers['generate'] = (a) => {'ok': true, 'program': prog, 'errors': [], 'stats': {'seconds': 3.0}};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['adds field t.priority'], 'warnings': [], 'refused': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('add a priority');
+    final m = c.chat.last;
+    expect(m.text, contains('would also change a line you did not mention'));
+    expect(m.text, contains('each t where done = no as r'));
+    expect(m.buttons.map((b) => b.label), ['Keep my app', 'Apply anyway']);
+    expect(page.calls, isNot(contains('applyEdit')));
   });
 
   test('a one-line edit of a small app is applied (the 20% guard no longer blocks it)', () async {
