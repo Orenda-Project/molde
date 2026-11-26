@@ -34,7 +34,19 @@ Because the language is so small, a 270M-parameter model (about 240 MB on disk) 
 
 ## Where it stands (honest numbers)
 
-Current model: **r2**, Gemma 3 270M fine-tuned on dataset v2 (14k pairs), Q4_K_M, with the line-stepped decoder.
+Current model: **r4**, trained on dataset v3.1 (20.9k pairs). Recommended file: **Qwen3.5-0.8B, epoch 1** (504 MB, ChatML prompt). For 3 to 4 GB phones the small Gemma 3 270M file (r3, 241 MB) stays available. Both use the line-stepped decoder. All r4 files are on Hugging Face (`oyekamal/molde-tiny`, see `models.json`); epochs other than the ones in the table are uploaded but not yet tested.
+
+On the fixed test set (149 requests heldout2, 60 short named requests, 40 small changes through the app's own loop; laptop CPU, rough speeds):
+
+| | r3 Gemma 270M | r4 Gemma 270M (epoch 2) | **r4 Qwen 0.8B (epoch 1)** |
+|---|---|---|---|
+| heldout2: program passes the checker | 90.6% | 89.3% | **94.6%** |
+| asks a question instead of building a short request | 31.7% | 21.7% | **11.7%** |
+| short requests built through the app (of 60) | **59** | 53 | 56 |
+| small changes that did what was asked (of 40) | 14 | 16 | **22** |
+| seconds per new app / per small change | 2.3 / 5.6 | 3.2 / 5.0 | 4.3 / 11 |
+
+The r2 numbers below are the older measurement on 140 new app ideas.
 
 **140 new app ideas** that the model never saw, written to sound like real people (trackers, lists, counters, calculators, timers, changes to existing apps):
 
@@ -57,7 +69,7 @@ What does **not** work well yet:
 - **English only.** The language cannot make games or call the internet.
 - Speed on a real low-end phone is not measured yet; the emulator is slow (about 100 s per app), a laptop CPU takes about 4 s.
 
-Dataset v3 (18.5k pairs) targets the first three problems; r3 is training on it now.
+Dataset v3 targets the first three problems; r3 and r4 were trained on it. A 2B model (Qwen3.5-2B) is training now.
 
 <img src="docs/images/model-vs-handwritten-budget.png" width="640" alt="A budget app: two hand-written versions next to the plainer version made by the r2 model">
 

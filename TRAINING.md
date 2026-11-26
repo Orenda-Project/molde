@@ -176,3 +176,7 @@ adb push my-r3-Q4_K_M.gguf /sdcard/Android/data/com.oyekamal.molde/files/models/
 2. Data whose targets look like the hand-written demo apps (custom layouts, drawings, app bars), not only plain forms and lists.
 3. A real measurement on a low-end phone (seconds per app, memory).
 4. Other base models in the 100M to 500M range, scored with the same tables.
+
+## r4 (data v3.1, trained on a shared GB10 server)
+
+Data `v3/v3.1.jsonl` (21,668 pairs, language round 14; 20,866 train). Gemma 3 270M: 4 epochs, batch 4 x 4, lr 5e-5, bf16, no gradient checkpointing, about 17 GB, 245 minutes. Qwen3.5-0.8B: 3 epochs, batch 8 x 2, lr 3e-5, gradient checkpointing, about 22 GB, 11 hours while sharing the GPU. Notes learned the hard way: Qwen3.5 needs the ChatML template with an empty think block (`chat_kwargs: {enable_thinking: false}`) and its validation generation must be one request at a time (batched left-padded generation is wrong for its recurrent layers); the app core keeps a state snapshot for such models (without it an edit takes minutes). GGUFs: `export_gguf.sh` as above; for Gemma drop the duplicate `lm_head.weight` before converting when a checkpoint was saved from a state dict. Config files: `configs/r4-gemma270m.yaml`, `configs/r4-qwen35-0.8b.yaml`, `configs/r4-qwen35-2b.yaml`. Results: README.

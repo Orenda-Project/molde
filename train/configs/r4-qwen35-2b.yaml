@@ -1,0 +1,23 @@
+# r4 large: Qwen3.5-2B full fine-tune on data v3.1, 2 epochs, gradient checkpointing, bf16 autocast + fp32 master weights (about 45 GB with Adam); LoRA r=64 is the fallback if it does not fit.
+# Early stopping on val checker pass (40 requests generated one at a time). Runs on spark in ~/kamal/molde.
+model: Qwen/Qwen3.5-2B
+add_molde_tokens: true
+token_mode: safe
+epochs: 2
+lr: 2.0e-5
+warmup_steps: 20
+batch_size: 8
+grad_accum: 2
+grad_checkpointing: true
+precision: bf16
+ckpt_mode: full
+eval_every: 300
+save_every: 100000
+es_val_n: 40
+es_bs: 1
+es_patience: 2
+gpu_mem_gb: 55
+chat_kwargs: {enable_thinking: false}
+data_dir: data/out-r4
+lang: lang
+out_dir: runs/r4-qwen35-2b
