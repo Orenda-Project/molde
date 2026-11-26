@@ -460,6 +460,7 @@ class _DevMenuState extends State<_DevMenu> {
         Text(m == null ? c.modelStatus : '${m.path}\n${(m.sizeBytes / 1048576).toStringAsFixed(0)} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
         Wrap(spacing: 8, children: [
           OutlinedButton(onPressed: () async { await c.llm.unload(); await c.loadModel(); if (mounted) setState(() {}); }, child: const Text('Reload model')),
+          OutlinedButton(key: const Key('dev-hang'), onPressed: () async { await c.llm.debugHang(120000); if (mounted) Navigator.of(context).maybePop(); }, child: const Text('Simulate a stuck model call')),
           SegmentedButton<String>(
             segments: const [ButtonSegment(value: 'D', label: Text('Arm D')), ButtonSegment(value: 'E', label: Text('Arm E'))],
             selected: {c.arm},

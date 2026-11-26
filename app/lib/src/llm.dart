@@ -122,7 +122,9 @@ class LlmService {
   Future<Map<String, dynamic>> complete(Map<String, dynamic> req) async {
     if (model == null) return {'stop': 'error', 'text': '', 'error': 'the model is not loaded'};
     final s = await _ch.invokeMethod<String>('complete', req);
-    return Map<String, dynamic>.from(jsonDecode(s ?? '{}') as Map);
+    final m = Map<String, dynamic>.from(jsonDecode(s ?? '{}') as Map);
+    if (noteHung(m)) model = null; // the native side abandoned a stuck call and has a fresh core: load the model again on the next request
+    return m;
   }
 
   Future<String> meta(String key) async { try { return await _ch.invokeMethod<String>('meta', {'key': key}) ?? ''; } catch (_) { return ''; } }
@@ -135,6 +137,18 @@ class LlmService {
     for (final t in [sidecar, hint]) { if (t == 'qwen' || t == 'chatml') return 'qwen'; if (t == 'gemma') return 'gemma'; }
     return architecture.toLowerCase().startsWith('qwen') ? 'qwen' : 'gemma';
   }
+
+  /// Set when a native call stopped answering and was abandoned (see MainActivity.abandon); the controller reads and clears it.
+  bool hung = false;
+  /// Records an abandoned call from a result map; true when this result is one.
+  bool noteHung(Map<String, dynamic> m) {
+    if (m['hung'] == true) { hung = true; return true; }
+    return false;
+  }
+  bool takeHung() { final h = hung; hung = false; return h; }
+
+  /// Developer menu: the next model call blocks for `ms` and ignores cancel, to check the recovery.
+  Future<void> debugHang(int ms) => _ch.invokeMethod('debugHang', {'ms': ms});
 
   Future<void> cancel() => _ch.invokeMethod('cancel');
   Future<void> reset() => _ch.invokeMethod('reset');

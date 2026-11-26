@@ -774,6 +774,20 @@ void roundSixOneFlow() {
     expect(page.calls, ['undoEdit']);
   });
 
+  test('a native call that hung and was abandoned: honest message, the app is unchanged, the model reloads', () async {
+    c.llm.model = ModelInfo('/m.gguf', 1, 0.1);
+    page.handlers['generate'] = (a) { c.llm.noteHung({'stop': 'cancel', 'text': '', 'hung': true}); return {'ok': false, 'cancelled': true, 'program': '', 'errors': [], 'stats': {}}; };
+    await c.send('tidy it up');
+    expect(c.chat.last.text, contains('stopped responding'));
+    expect(c.chat.last.text, contains('Your app is unchanged'));
+    expect(page.calls, isNot(contains('applyEdit')));
+    expect(c.llm.hung, isFalse); // read once
+    expect(c.busy, isFalse);
+    final m = <String, dynamic>{'stop': 'cancel', 'hung': true};
+    expect(LlmService().noteHung(m), isTrue);
+    expect(LlmService().noteHung({'stop': 'stop'}), isFalse);
+  });
+
   test('a one-line edit of a small app is applied (the 20% guard no longer blocks it)', () async {
     const small = 'app "Todo" check mint\ntable task title text\nlist task\nform task\n';
     await c.store.save(AppRecord(id: 'a2', name: 'Todo', source: small));

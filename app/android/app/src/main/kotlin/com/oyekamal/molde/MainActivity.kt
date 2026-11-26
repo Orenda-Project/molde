@@ -19,7 +19,27 @@ import java.util.concurrent.Executors
  * Model work runs on one worker thread; cancel only sets a flag and may be called at any time.
  */
 class MainActivity : FlutterActivity() {
-    private val worker = Executors.newSingleThreadExecutor()
+    private var worker = Executors.newSingleThreadExecutor()
+    // the model call in flight, so a hung native call can be abandoned (see NativeLlm.nativeAbandon)
+    @Volatile private var inflightId = 0L
+    private var inflightReply: java.util.concurrent.atomic.AtomicBoolean? = null
+    private var inflightResult: MethodChannel.Result? = null
+    private var callCounter = 0L
+    private val hangJson = "{\"stop\":\"cancel\",\"text\":\"\",\"hung\":true}"
+
+    /** The call stopped answering: answer it now, give the engine a fresh core and a fresh worker thread; the old thread frees its core when (if) it returns. */
+    private fun abandon(id: Long) {
+        if (inflightId != id) return
+        val replied = inflightReply ?: return
+        val res = inflightResult ?: return
+        if (!replied.compareAndSet(false, true)) return
+        inflightId = 0L
+        try { engine().nativeAbandon() } catch (_: Throwable) {}
+        val old = worker
+        worker = Executors.newSingleThreadExecutor()
+        old.shutdown()
+        res.success(hangJson)
+    }
     private val main = Handler(Looper.getMainLooper())
     private var llm: NativeLlm? = null
 
@@ -79,7 +99,14 @@ class MainActivity : FlutterActivity() {
                 val key = call.argument<String>("key") ?: ""
                 result.success(try { engine().nativeMeta(key) } catch (e: Throwable) { "" })
             }
-            "cancel" -> { llm?.nativeCancel(); result.success(null) }
+            "cancel" -> {
+                llm?.nativeCancel()
+                val id = inflightId
+                // a native call that still has not returned 20 s after a cancel is stuck: abandon it
+                if (id != 0L) main.postDelayed({ abandon(id) }, 20000)
+                result.success(null)
+            }
+            "debugHang" -> { engine().nativeDebugHang(call.argument<Number>("ms")?.toInt() ?: 120000); result.success(null) }
             "load" -> {
                 val path = call.argument<String>("path")!!
                 val nCtx = call.argument<Number>("nCtx")?.toInt() ?: 2048
@@ -98,10 +125,15 @@ class MainActivity : FlutterActivity() {
                 val seed = call.argument<Number>("seed")?.toInt() ?: 1
                 val stopNl = call.argument<Boolean>("stopNl") ?: true
                 val draft = (call.argument<String>("draft") ?: "").toByteArray(Charsets.UTF_8)
+                val id = ++callCounter
+                val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+                inflightId = id; inflightReply = replied; inflightResult = result
+                // no call may run longer than 8 minutes: that is a hang, not a slow line
+                main.postDelayed({ abandon(id) }, 8 * 60 * 1000L)
                 worker.execute {
                     val out = try { String(engine().nativeComplete(prompt, grammar, nPredict, temp, seed, stopNl, draft), Charsets.UTF_8) }
                     catch (e: Throwable) { "{\"stop\":\"error\",\"text\":\"\",\"error\":\"${e.message?.replace("\"", "'")}\"}" }
-                    main.post { result.success(out) }
+                    main.post { if (replied.compareAndSet(false, true)) { if (inflightId == id) inflightId = 0L; result.success(out) } }
                 }
             }
             "reset" -> worker.execute { try { engine().nativeReset() } catch (_: Throwable) {}; main.post { result.success(null) } }

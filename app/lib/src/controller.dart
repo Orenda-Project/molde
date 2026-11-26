@@ -336,6 +336,10 @@ class MoldeController extends ChangeNotifier {
         'system': m.system, 'arm': m.arm ?? arm, 'template': m.template,
         'allowAsk': may, 'ask': ask, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
       }));
+      if (llm.takeHung()) {
+        _finishLive(live, 'The model stopped responding, so I stopped it and started it again. ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Please try again.');
+        return;
+      }
       final stats = res['stats'] is Map ? Map<String, dynamic>.from(res['stats'] as Map) : null;
       if (stats != null) {
         lastStats = stats; lastStatsRequest = request;
