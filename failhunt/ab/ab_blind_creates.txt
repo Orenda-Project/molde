@@ -1,0 +1,708 @@
+=== 1. REQ: timer
+--- A (8 lines)
+app " timer" timer ink dark
+table ran mins num 1..600
+setting length dur = 4m "Timer length"
+setting target num = 3 "Daily goal"
+timer length, "Timer", add ran mins = length / 1m then notify "Time is up"
+goal sum(ran.mins today), target, "minutes today", "min"
+daybars last 7 days, sum(ran.mins on it)
+list ran today
+--- B (2 lines)
+app "Timer" timer ink
+timer 15m, "Timer", notify "Time is up"
+
+=== 2. REQ: stock count for my shop with low stock warning
+--- A (12 lines)
+app "Stock" package ink
+table item name text, qty num 0.., low num 0.. = 5
+let short = count(item, it.qty <= it.low)
+short "items running low" head color if(short > 0, warn, good)
+each item sort qty as i
+  row card gap 1 tap edit i swipe remove i
+    stack grow
+      i.name bold color if(i.qty <= i.low, warn, ink)
+    button "-" tap set i.qty = i.qty - 1
+    i.qty bold
+    button "+" tap set i.qty = i.qty + 1
+form item
+--- B (12 lines)
+app "Stock" package ink
+table item name text, qty num 0.., low num 0.. = 5, price money?
+let short = count(item, it.qty <= it.low)
+short "items running low" head color if(short > 0, warn, good)
+each item sort qty as i
+  row card gap 1 tap edit i swipe remove i
+    i.name bold grow color if(i.qty <= i.low, warn, ink)
+    button "-" tap set i.qty = i.qty - 1
+    i.qty bold
+    button "+" tap set i.qty = i.qty + 1
+"Stock value" sum(item, it.qty * it.price) faint
+form item
+
+=== 3. REQ: orders
+--- A (21 lines)
+app "Orders" package slate
+table order customer text, item text, qty num 1..9999 = 1, price money, due date, status pick New|Packed|Shipped|Delivered = New
+state tab pick New|Packed|Shipped|Delivered = New
+topbar order, "New order"
+scroll gap 1
+  each options order.status as st
+    stack card gap 0 align center
+      count(order where status = st) big
+      st tiny color muted
+choice tab
+each order where status = tab sort due as o empty "No open orders here."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+--- B (13 lines)
+app "Orders" list ocean
+table order customer text, item text, amount money, status pick New|Packed|Shipped|Delivered = New
+count(order where status = New) "new orders" head
+row gap 1
+  each options order.status as s
+    stat count(order where status = s), s
+each order where status != Delivered sort at as o
+  row card gap 1 tap edit o
+    stack grow
+      o.customer bold
+      o.item o.amount faint
+    o.status bold
+form order, "New order"
+
+=== 4. REQ: inventry
+--- A (16 lines)
+app "Inventry" tool slate
+table idea name text, category pick Food|Cleaning|Design|Writing|Other = Food, stars num 1..5 = 1, started date = today, budget money?
+state tab pick Idea|Building|Writing|Other = Idea
+topbar idea, "New idea"
+statcard sum(idea.stars), "stars in total"
+choice tab
+each idea where (tab = Idea and started <= today) or (tab = Building and started >= today) or (tab = Writing and started >= today) or (tab = Other and started <= today) sort started desc as i empty "No ideas here. Add one with its budget."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.name bold
+      i.category "·" i.started faint
+    i.stars "of 5" bold color if(i.stars = 5, bad, ink)
+    if i.started <= today
+      "On" i.started faint
+--- B (9 lines)
+app "My Inventory" box slate
+table thing item text, room text, bought date, sold bool
+each thing where sold = no sort bought as t
+  row card tap edit t
+    toggle t.sold
+    t.item grow
+    t.room faint
+form thing, "Add item"
+"In total" count(thing) "things" faint
+
+=== 5. REQ: quit smoking counter showing days since my last cigarette
+--- A (13 lines)
+app "Quit Smoking" fire slate
+table smoke
+table craving
+setting start date "Quit date"
+setting before num = 15 "Cigarettes a day before"
+setting price money = 30 "Price of one cigarette"
+let days = today - start
+stat days, "days since I quit"
+stat (before * days - count(smoke)) * price, "money saved so far"
+stat count(craving), "cravings resisted"
+button "I resisted a craving" tap add craving
+button "I smoked one" tap add smoke
+"Smoked since quit date" count(smoke) faint
+--- B (13 lines)
+app "Quit Smoking" fire slate
+table smoke
+table craving
+setting start date "Quit date"
+setting before num = 15 "Cigarettes a day before"
+setting price money = 30 "Price of one cigarette"
+let days = today - start
+stat days, "days since I quit"
+stat before * days, "cigarettes before"
+stat streak(smoke), "day streak"
+stat count(craving), "cravings today"
+button "I resisted" tap add craving
+button "I smoked" tap add smoke
+
+=== 6. REQ: period tracker: start date, cycle length setting, predicts next period and days until it
+--- A (8 lines)
+app "Cycle" heart plum
+table period flow_days num 1..10 = 5, mood pick Good|Okay|Low|Irritable = Okay
+let cyc = round(gap(period))
+"Day" since(period) + 1 "of your cycle" big
+"Next period in about" cyc - since(period) "days. Average cycle" cyc "days." faint
+button "Period started today" tap add period
+calendar period
+list period by day
+--- B (8 lines)
+app "Cycle" heart plum
+table period flow pick Light|Medium|Heavy = Medium
+let cyc = round(gap(period))
+"Day" since(period) + 1 "of your cycle" big
+"Next period in about" cyc - since(period) "days. Average cycle" cyc "days." faint
+button "Period started today" tap add period
+calendar period
+list period by day
+
+=== 7. REQ: a mood diary where i pick how i feel
+--- A (15 lines)
+app "Journal" book plum
+table entry mood num 1..5, note long
+state d new entry
+row gap 1
+  each ["awful", "low", "okay", "good", "great"]
+    button it fill if(d.mood = index + 1, accent, soft) tap set d.mood = index + 1
+field d.note "What is on your mind?"
+button "Save entry" tap save d
+streak(entry) "day streak," count(entry last 7 days) "entries in 7 days" head
+heat last 7 days, count(entry on it)
+"Mood, last 30 days. Average" round(avg(entry.mood last 30 days)) faint
+trend entry last 30 days sort at, it.mood
+state q text = ""
+field q "Search entries"
+--- B (5 lines)
+app "Mood" smile ink
+table mood score num 1..5
+form mood
+trend mood last 30 days sort at, it.score
+list mood by day
+
+=== 8. REQ: pomodoro
+--- A (7 lines)
+app "Pomodoro" clock mint
+table round topic text?
+setting goal num = 4 "Rounds per day"
+timer 25m, "Round", add round then notify "Round finished"
+goal count(round today), goal, "rounds today"
+daybars last 7 days, count(round on it)
+list round today
+--- B (11 lines)
+app "Pomodoro" clock slate
+table pomo task text, mins num 5..600 = 60
+setting goal num = 240 "Daily goal (minutes)"
+topbar pomo, "Log a finished job"
+goal sum(pomo.mins today), goal, "minutes today", "min"
+row gap 2
+  statcard streak(pomo), "days in a row"
+  statcard streak(pomo), "days in total"
+section "Last 14 days", "minutes"
+  daybars last 14 days, sum(pomo.mins on it)
+list pomo by day, "No finished jobs logged yet."
+
+=== 9. REQ: how many hours i studied today
+--- A (9 lines)
+app "Study hours" school ink
+table study subject text?, mins num 5..600
+setting goal num = 12 "Daily goal (hours)"
+goal sum(study.mins today) / 60, goal, "hours today", "h"
+stat sum(study.mins week) / 60, "hours this week"
+daybars last 7 days, sum(study.mins on it) / 60
+quick study, mins, [30, 60, 90]
+form study
+list study by day
+--- B (9 lines)
+app "Study hours" school ocean
+table study subject text?, mins num 1..600
+setting goal num = 12 "Daily goal (hours)"
+goal sum(study.mins today) / 60, goal, "hours today", "h"
+stat sum(study.mins week) / 60, "hours this week"
+daybars last 7 days, sum(study.mins on it) / 60
+quick study, mins, [30, 60, 90]
+form study
+list study by day
+
+=== 10. REQ: a habbit app wiht streeks and a chrat
+--- A (32 lines)
+app "Habits" check mint
+table habit name text
+table check habit ref habit
+let n = count(habit)
+let done = count(check today)
+row gap 2
+  goal done, n, "done today"
+  stack grow
+    if(done = n and n > 0, "All done today", "Keep going") head
+    "Best streak" max(habit, streak(it.check)) "days" faint
+if n = 0
+  "Start with one small thing you can do on a busy day." faint
+each habit as h
+  stack card gap 1 tap edit h swipe remove h
+--- B (9 lines)
+app "Streeks" home mint
+table streeks name text, period num 1..12, fee money
+table streeks_done streeks ref streeks
+each streeks sort name as s
+  row card tap edit s
+    s.name bold grow
+    s.period faint
+    toggle s.streeks_done
+form streeks, "Add streeks"
+
+=== 11. REQ: grandma's medicine schedule
+--- A (15 lines)
+app "Grandma Medicine" pill plum
+table med name text, dose text?, per_day num 1..12 = 1, per_week num 1..12 = 1, per_month num 1..30 = 3
+table taken med ref med
+when count(med, due(it.taken, it.per_day)) > 0 notify "A medicine has 30 days or less left"
+each med as m
+  row card gap 1 tap edit m swipe remove m
+    stack grow
+      m.name bold
+      m.per_day "days" faint
+    if due(m.taken, m.per_day)
+      "Not taken" color warn
+    else
+      "Taken" color good
+    button "Took" tap add taken med = m
+--- B (11 lines)
+app "Medicine" pill plum
+table med name text, dose text?, next date?
+remind "Medicine time" at med.next
+each med sort next as m
+  row card tap edit m swipe remove m
+    stack grow
+      m.name bold
+      "Next" m.dose faint
+    if m.next <= today
+      "Needs a visit" color bad
+form med, "Add medicine"
+
+=== 12. REQ: track daily screen time and compare to a limit
+--- A (8 lines)
+app "Screen time" phone plum
+table screen mins num 1..600 unit "min"
+setting limit num = 120 "Daily limit (min)"
+goal sum(screen.mins today), limit, "today", "min"
+quick screen, mins, [15, 30, 60]
+form screen
+daybars last 7 days, sum(screen.mins on it)
+list screen
+--- B (7 lines)
+app "Screen time" phone plum
+table screen mins num 1..600 unit "min"
+setting limit num = 120 "Daily limit (min)"
+goal sum(screen.mins today), limit, "min on social apps today", "min"
+quick screen, mins, [10, 15, 18, 24]
+daybars last 7 days, sum(screen.mins on it)
+list screen today
+
+=== 13. REQ: a daily journal with a rating from 1 to 5 and a text box
+--- A (5 lines)
+app "Journal" book plum
+table entry summary text, rating num 1..5, note long?
+form entry, "Save entry"
+"Average rating" round(avg(entry.rating) * 10) / 10 faint
+list entry by day
+--- B (15 lines)
+app "Journal" book plum
+table entry mood num 1..5, note long
+state d new entry
+row gap 1
+  each ["awful", "low", "okay", "good", "great"]
+    button it fill if(d.mood = index + 1, accent, soft) tap set d.mood = index + 1
+field d.note "What is on your mind?"
+button "Save entry" tap save d
+streak(entry) "day streak," count(entry last 7 days) "entries in 7 days" head
+heat last 7 days, count(entry on it)
+"Mood, last 30 days. Average" round(avg(entry.mood last 30 days)) faint
+trend entry last 30 days sort at, it.mood
+state q text = ""
+field q "Search entries"
+
+=== 14. REQ: cricket score
+--- A (6 lines)
+app "Cricket Matches" ball ocean
+table match runs num 0..400, wickets num 0..10
+"Average runs" round(avg(match.runs)) big
+"Matches" count(match) "| Total runs" sum(match.runs) "| Wickets" sum(match.wickets) faint
+form match, "Add match"
+list match
+--- B (23 lines)
+app "Score Keeper" ball ocean
+table ball runs num 0..6 = 0, wide bool, out bool
+setting overs num = 20
+let legal = count(ball today where wide = no)
+let runs = sum(ball.runs today) + count(ball today where wide = yes)
+let wkts = count(ball today where out = yes)
+runs "/" wkts big
+"Overs" floor(legal / 6) + legal % 6 / 10 "of" overs ". Run rate" round(runs * 6 / legal) faint
+row gap 1
+  each [0, 1, 2, 3, 4, 6]
+    button it tap add ball runs = it
+row gap 1
+  button "Wide" tap add ball wide = yes
+  button "Out" fill bad tap add ball out = yes
+
+=== 15. REQ: a farm record with crop, area in acres, expenses, income and profit per crop
+--- A (13 lines)
+app "Farm" plant mint
+table crop name text, acres num 0.. = 1
+table income crop ref crop, amount money
+table expense crop ref crop, kind pick Rent|Fuel|Water|Labour|Tax = Fuel, amount money
+each crop as c
+  let profit = sum(c.income.amount) - sum(c.expense.amount)
+  row card gap 2
+    c.name bold grow
+    profit bold color if(profit >= 0, good, bad)
+    "crop profit" round(profit) faint
+form income, "Add income"
+form expense, "Add expense"
+form crop, "Add crop"
+--- B (14 lines)
+app "Farm Record" plant mint
+table plot name text, crop pick Tomato|Spinach|Carrot|Eggplant|Other
+table income plot ref plot, kg num 0..
+table expense plot ref plot, what text, amount money
+each plot sort name as p
+  row card tap edit p
+    stack grow
+      p.name bold
+      p.crop p.at faint
+    sum(p.income.kg) - sum(p.expense.amount) bold
+    sum(p.income.kg) - sum(p.expense.amount) "profit" sum(p.income.kg) - sum(p.expense.amount) faint
+form income, "Add income"
+form expense, "Add expense"
+form plot, "Add plot"
+
+=== 16. REQ: packing list for a trip
+--- A (14 lines)
+app "Packing list" bag plum
+table packed title text, done bool, tag pick Clothes|Papers|Tech|Toiletries = Clothes, due date?
+count(packed where done = no) "open" head
+each packed where done = no sort due as t
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    stack grow
+      t.title bold
+      t.tag t.due small color if(t.due < today, bad, muted)
+form packed
+"Done" faint
+list packed where done = yes
+button "Clear done" tap remove all packed where done = yes
+remind "Check your packing list" at 8:00
+--- B (8 lines)
+app "Packing" bag ocean
+table item name text, packed bool
+count(item where packed = yes) "of" count(item) "packed" head
+each item sort name as i
+  row card swipe remove i
+    toggle i.packed
+    i.name grow color if(i.packed, muted, ink)
+form item
+
+=== 17. REQ: savings goal with a progress bar
+--- A (18 lines)
+app "Savings" coin mint
+table deposit amount money, note text?
+setting monthly money = 5000 "Saved each month"
+setting goal money = 100000
+let total = sum(deposit.amount)
+let p = clamp(total / goal, 0, 1)
+row gap 3
+  draw 40, 120 width 60
+    rect 14, 4, 12, 92 fill soft radius 6
+    rect 14, 4, 12, 98 fill accent radius 6
+    circle 20, 106, 12 fill accent
+  stack grow
+    total big
+    round(p * 100) "% of" goal faint tap edit goal
+--- B (16 lines)
+app "Savings Thermometer" coin mint
+table saved amount money
+setting goal money = 50000
+let total = sum(saved.amount all)
+row gap 3 align center
+  draw 40, 120 width 80
+    rect 15, 5, 10, 90 stroke edge thick 1 radius 5
+    rect 16, 95 - 88 * clamp(total / goal, 0, 1), 8, 88 * clamp(total / goal, 0, 1) fill accent radius 4
+    circle 20, 105, 12 fill accent
+  stack grow gap 1
+    total big
+    "of" goal faint
+    round(100 * clamp(total / goal, 0, 1)) "% there" head
+quick saved, amount, [500, 1000, 5000]
+
+=== 18. REQ: calorie countr
+--- A (11 lines)
+app "Calories" food slate
+table bite kcal num 10..3000 unit "kcal"
+setting goal num = 2000 "Daily goal (kcal)"
+setting target num = 2000 "Daily target (kcal)"
+topbar bite, "Log a bite"
+goal sum(bite.kcal today), target, "kcal eaten today", "kcal"
+statcard sum(bite.kcal week), "kcal this week"
+weekdots count(bite on it) > 0
+section "Last 7 days", "dark days had more calories"
+  goalbars last 7 days, sum(bite.kcal on it), target
+list bite today, "No calories logged yet today."
+--- B (6 lines)
+app "Calories" food slate
+table bite kcal num 10..3000 unit "kcal"
+quick bite, kcal, [100, 250, 500]
+form bite
+daybars last 7 days, sum(bite.kcal on it)
+list bite
+
+=== 19. REQ: dayly sales recrod for my shopp
+--- A (6 lines)
+app "Daily Sales" bag slate
+table sale who text, amount money, note text?
+stat sum(sale.amount today), "today"
+form sale
+daybars last 7 days, sum(sale.amount on it)
+list sale by day
+--- B (9 lines)
+app "Sales Reps" chart slate
+table rep name text, phone text?
+table sale rep ref rep, amount money
+each rep sort name as r
+  row card tap edit r
+    r.name bold grow
+    sum(r.sale.amount today) "of" sum(r.sale.amount today) faint
+    button "+100" tap add sale rep = r, amount = 100
+form rep, "Add rep"
+
+=== 20. REQ: gift ideas for family members, with person, idea, price and bought tick and total spend per person
+--- A (10 lines)
+app "Gift ideas" gift mint
+table person name text, phone text?
+table likes person ref person, idea text, price money?, bought bool
+screen main "Add" plus
+  stat sum(likes.price), "total estimated spending"
+  stat count(likes), "people added"
+  form person, "Add person"
+screen charts "Charts" chart
+  list likes
+  "The app cannot track money, so no money added yet." faint
+--- B (4 lines)
+app "Gift ideas" gift mint
+table idea for_who text, idea text, price money?, bought bool, memo text?
+form idea
+list idea
+
+=== 21. REQ: log my daily walk and distance
+--- A (5 lines)
+app "Walking" walk slate
+table stroll km num 0.1..50 unit "km"
+quick stroll, km, [1, 2, 5]
+form stroll
+list stroll
+--- B (4 lines)
+app "Walking" walk slate
+table stroll km num 0.1..50 unit "km"
+form stroll
+list stroll
+
+=== 22. REQ: record blood pressure readings with date
+--- A (8 lines)
+app "Blood pressure" pill ocean
+table reading high num 50..250, pulse num? 30..220, memo text?
+screen main "Add" plus
+  stat since(reading), "days since the last entry"
+  form reading
+screen charts "Charts" chart
+  list reading by day
+remind "Time to add blood pressure" at 12:00, 18:00
+--- B (4 lines)
+app "Blood pressure" pill plum
+table reading high num 50..250, low num 30..150, pulse num? 30..220
+form reading
+list reading
+
+=== 23. REQ: daily petrol log with litres, price per litre, odometer and a calculated mileage per litre and monthly cost
+--- A (6 lines)
+app "Petrol" car slate
+table fill litres num 1..80, price money, km num 1..2000
+"This month" sum(fill.price month) big
+"This year" sum(fill.price year) faint
+form fill, "Add fill"
+list fill by day
+--- B (8 lines)
+app "Mileage" car slate
+table trip litres num 1..200, purpose pick Client|Supplier|Bank|Other = Client, cost money, km num 0..2000000 "Odometer"
+"This month" sum(trip.cost month) big
+"Km this month" sum(trip.km month) faint
+"Mileage" round(sum(trip.cost month) / sum(trip.litres month)) "km per litre" faint
+daybars last 7 days, sum(trip.cost on it)
+form trip, "Add trip"
+list trip by day
+
+=== 24. REQ: a tasbeeh counter with a tap button, target of 100, reset button and total count of all time
+--- A (13 lines)
+app "Tasbeeh" beads mint
+table zikr phrase pick SubhanAllah|Alhamdulillah|AllahuAkbar = SubhanAllah
+setting target num = 100 "Count to"
+state ph pick SubhanAllah|Alhamdulillah|AllahuAkbar = SubhanAllah
+choice ph
+let n = count(zikr today where phrase = ph)
+draw width 240 tap add zikr phrase = ph
+  circle 50, 50, 44 stroke soft thick 8
+  arc 50, 50, 44, 0, 360 * (n % target) / target stroke accent thick 8
+  label 50, 46, n % target big
+  label 50, 64, "Round" floor(n / target) + 1 faint
+"Today, all zikr:" count(zikr today) faint
+button "Reset today" tap remove all zikr today
+--- B (16 lines)
+app "Tasbeeh" beads mint
+table zikr phrase pick SubhanAllah|Alhamdulillah|AllahuAkbar = SubhanAllah
+setting target num = 100 "Count to"
+state ph text = SubhanAllah
+let n = count(zikr today where phrase = ph)
+row gap 1
+  each options zikr.phrase
+    button it fill if(ph = it, accent, soft) tap set ph = it
+draw width 240 tap add zikr phrase = ph
+  circle 44 stroke soft thick 8
+  arc 44, 0, 360 * (n % target) / target stroke accent thick 8
+  label 50, 46, n % target big
+  label 50, 64, "Round" floor(n / target) + 1 faint
+button "Reset today" tap remove all zikr today
+
+=== 25. REQ: a loan tracker showing who owes me
+--- A (14 lines)
+app "Loan" money slate
+table borrower name text, phone text?
+table loan_entry borrower ref borrower, amount money, kind pick Lent|Borrowed = Lent, note text?
+"Out in loans" sum(loan_entry.amount where kind = Lent) - sum(loan_entry.amount where kind = Borrowed) big
+each borrower as p
+  let bal = sum(p.loan_entry.amount where kind = Lent) - sum(p.loan_entry.amount where kind = Borrowed)
+  stack card tap edit p
+    row
+      p.name bold grow
+      if(bal >= 0, "owes you", "you owe") abs(bal) color if(bal >= 0, good, bad)
+    "Last entry" last(p.loan_entry.at) faint
+form borrower, "Add borrower"
+form loan_entry, "Add entry"
+list loan_entry by day
+--- B (20 lines)
+app "Loans lent" money slate
+table loan person text, amount money, given date = today, due date, returned money = 0
+let owed = sum(loan, it.amount - it.returned)
+"Still owed to you" owed big
+"Overdue people" head color bad
+each loan where due < today and returned < amount sort due as l
+  row card gap 1 tap edit l
+    stack grow
+      l.person bold
+      l.due faint
+    text today - l.due "days late" color bad
+    l.amount - l.returned bold
+"All loans" head
+each loan sort due as l
+
+=== 26. REQ: family birthday reminders
+--- A (9 lines)
+app "Birthdays" gift plum
+table person name text, born date, gift text?
+each person sort name
+  row card tap edit it
+    stack grow
+      it.name bold
+      "Gift idea:" it.gift faint
+    "Age" floor((today - it.born) / 365.25) bold
+form person, "Add person"
+--- B (7 lines)
+app "Birthdays" gift plum
+table person name text, birthday date
+each person sort monthday(birthday) as p
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    "turns" year(today) - year(p.birthday) "on the" monthday(p.birthday) faint
+form person, "Add person"
+
+=== 27. REQ: a workout timer with rest breaks
+--- A (8 lines)
+app "Workout timer" timer ink
+table done mins num 1..180 = 30
+timer 30m, "Rest"
+timer 30m, "Push-ups"
+timer 30m, "Deadlift"
+timer 60m, "Lunch break", notify "Lunch break over"
+"This week" sum(done.mins week) "minutes" big
+heat last 70 days, sum(done.mins on it), 30
+--- B (4 lines)
+app "Workout timer" timer ink
+table done mins num 1..180 = 30
+timer 30m, "Workout", notify "Workout finished"
+"This week" count(done week) "workouts" big
+
+=== 28. REQ: a workout timer with 30 second work and 10 second rest, rounds counter, and a beep when done
+--- A (6 lines)
+app "Intervals" bolt plum
+table round
+timer 30s, "Work", add round
+timer 10s, "Rest"
+"Rounds done" count(round) "of" count(round) big
+heat last 28 days, count(round on it), 1
+--- B (7 lines)
+app "Intervals" timer ink
+table round note text?
+setting length dur = 30s "Work length"
+timer length, "Work", add round then notify "Work done"
+count(round today) "today" head
+timer 5m, "Rest"
+list round today
+
+=== 29. REQ: reading log for a child with stars
+--- A (10 lines)
+app "Reading stars" star mint
+table child name text
+table star child ref child, why text?
+each child as c
+  row card
+    c.name bold grow
+    count(c.star) "stars" big
+    button "+1 star" tap add star child = c
+form child, "Add child"
+list star
+--- B (16 lines)
+app "Reading log" book mint
+table book title text, author text?, pages num 1..3000, started date?
+table rating book ref book, stars num 1..5
+table note book ref book, note long
+remind "Time to add reading" at 12:00, 18:00
+"Average rating" round(avg(rating.stars) * 10) / 10 head
+"Books read this month" count(book, count(it.rating) > 0) big
+each book sort title
+  row card
+    stack grow
+      it.title bold
+      it.author it.pages "pages" faint
+    if(count(it.rating) > 0, "Reading", "Not read") color if(count(it.rating) > 0, good, muted)
+    button "Rating" tap add rating book = it, stars = 3
+
+=== 30. REQ: bmi
+--- A (14 lines)
+app "BMI" scale mint
+state kg num = 70
+state cm num = 170
+field kg "Weight (kg)"
+field cm "Height (cm)"
+let bmi = round(kg * 10000 / (cm * cm) * 10) / 10
+"Your BMI" bmi big
+if bmi < 18.5
+  "Underweight" color warn
+else
+  if bmi < 25
+    "Healthy range" color good
+  else
+    "Above the healthy range" color warn
+--- B (18 lines)
+app "BMI" scale purple
+table weigh kg num 20..300 unit "kg"
+setting target num = 70 "Target (kg)"
+let bmi = last(weigh.kg)
+let kg = bmi * 1000
+let cm = (kg - target) / max(max(target, 40), 1)
+topbar weigh, "Add weight"
+statcard round(kg * 10) / 10, "kg at target (cm)", 0
+if bmi < 18.5
+  "Underweight" color warn
+else
+  if bmi < 25
+    "Healthy range" color good
+  else
