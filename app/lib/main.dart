@@ -43,6 +43,8 @@ Future<void> main() async {
     platform: platform,
     loadCatalogue: () => Catalogue.load(bundled: () => rootBundle.loadString('assets/models.json')),
   );
+  mm.isBusy = () => c.busy;
+  c.addListener(mm.poke);
   runApp(MoldeApp(c: c, web: web, mm: mm));
 }
 

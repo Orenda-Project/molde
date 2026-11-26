@@ -132,7 +132,7 @@ class LlmService {
 
   /// Which prompt format a model uses: the sidecar `template`, else the catalogue hint, else the GGUF architecture (qwen*) , else gemma.
   static String pickTemplate({String? sidecar, String? hint, String architecture = ''}) {
-    for (final t in [sidecar, hint]) { if (t == 'qwen' || t == 'gemma') return t!; }
+    for (final t in [sidecar, hint]) { if (t == 'qwen' || t == 'chatml') return 'qwen'; if (t == 'gemma') return 'gemma'; }
     return architecture.toLowerCase().startsWith('qwen') ? 'qwen' : 'gemma';
   }
 

@@ -48,7 +48,7 @@ class _Licence extends StatelessWidget {
     final c = mm.catalogue;
     final url = c?.licenceUrl ?? 'https://ai.google.dev/gemma/terms';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('This model is built on Gemma. Gemma is provided under and subject to the Gemma Terms of Use.', key: Key('licence-line')),
+      const Text('The Gemma model is built on Gemma. Gemma is provided under and subject to the Gemma Terms of Use.', key: Key('licence-line')),
       InkWell(
         key: const Key('licence-link'),
         onTap: () => mm.platform.openUrl(url),
@@ -118,6 +118,15 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() { mm.removeListener(_c); super.dispose(); }
   void _c() { if (mounted) setState(() {}); }
 
+  Future<void> _confirmDeleteFile(String file) async {
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Delete this model?'),
+      content: Text('$file will be removed from this phone. You cannot download it again from the list.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep it')), FilledButton(key: const Key('earlier-delete-confirm'), onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete'))],
+    ));
+    if (ok == true) await mm.deleteFile(file);
+  }
+
   Future<void> _confirmDelete(CatalogueModel m) async {
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: Text('Delete ${m.name}?'),
@@ -148,6 +157,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(a.path.split('/').last, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
               ]))),
         if (mm.net == 'mobile') Padding(padding: const EdgeInsets.only(top: 8), child: Text('You are on mobile data. Downloads are large; Wi-Fi is better.', style: TextStyle(color: cs.onSurfaceVariant))),
+        if (mm.isBusy()) Padding(padding: const EdgeInsets.only(top: 8), child: Text(ModelManager.busyMessage, key: const Key('switch-blocked'), style: TextStyle(color: cs.onSurfaceVariant))),
         if (newer != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('A newer model is available: ${newer.name}.', key: const Key('newer'), style: TextStyle(color: cs.primary))),
         if (mm.error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(mm.error!, key: const Key('dl-error'), style: TextStyle(color: cs.error))),
         if (mm.downloading != null) Padding(padding: const EdgeInsets.only(top: 12), child: DownloadBar(mm: mm)),
@@ -156,18 +166,35 @@ class _SettingsPageState extends State<SettingsPage> {
         if (cat == null) const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator())
         else ...[
           if (!cat.fromNetwork) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Showing the list stored in the app (could not reach Hugging Face).', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12))),
-          for (final m in cat.models)
-            Card(key: Key('model-${m.id}'), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${m.name}${m.recommended ? '  (recommended)' : ''}', style: Theme.of(context).textTheme.titleSmall),
+          for (final m in mm.ordered)
+            Card(key: Key('model-${m.id}'), shape: mm.isActive(m) ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: cs.primary, width: 2)) : null, child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (m.id == cat.recommended?.id) Padding(padding: const EdgeInsets.only(bottom: 6), child: Container(key: Key('rec-${m.id}'), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(8)), child: Text('Recommended', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimaryContainer)))),
+              Text(m.name, style: Theme.of(context).textTheme.titleSmall),
               Text('${mb(m.bytes)} · ${m.note}', style: TextStyle(color: cs.onSurfaceVariant)),
-              if (mm.isActive(m)) const Padding(padding: EdgeInsets.only(top: 4), child: Text('In use', style: TextStyle(fontWeight: FontWeight.w600))),
+              if (mm.isActive(m)) Padding(padding: const EdgeInsets.only(top: 6), child: Row(mainAxisSize: MainAxisSize.min, key: const Key('in-use'), children: [Icon(Icons.check_circle, size: 18, color: cs.primary), const SizedBox(width: 6), Text('In use', style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary))])),
               const SizedBox(height: 8),
               Wrap(spacing: 8, children: [
                 if (!mm.installed(m)) FilledButton(key: Key('download-${m.id}'), onPressed: mm.dl.running ? null : () => mm.download(m), child: const Text('Download')),
-                if (mm.installed(m) && !mm.isActive(m)) FilledButton(key: Key('use-${m.id}'), onPressed: mm.dl.running ? null : () async { final e = await mm.use(m); if (e != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e))); }, child: const Text('Use')),
+                if (mm.installed(m) && !mm.isActive(m)) FilledButton(key: Key('use-${m.id}'), onPressed: mm.switchBlocked ? null : () async { final e = await mm.use(m); if (e != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e))); }, child: const Text('Use')),
                 if (mm.installed(m)) OutlinedButton(key: Key('delete-${m.id}'), onPressed: () => _confirmDelete(m), child: const Text('Delete')),
               ]),
             ]))),
+          if (mm.downloadedEarlier.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text('Downloaded earlier', key: const Key('earlier-heading'), style: Theme.of(context).textTheme.titleSmall),
+            Text('Not in the list any more. Still on this phone and still works.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+            for (final e in mm.downloadedEarlier)
+              Card(key: Key('earlier-${e.file}'), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(e.file, style: Theme.of(context).textTheme.bodyMedium),
+                Text(mb(e.bytes), style: TextStyle(color: cs.onSurfaceVariant)),
+                if (mm.isActiveFile(e.file)) Padding(padding: const EdgeInsets.only(top: 6), child: Row(mainAxisSize: MainAxisSize.min, key: const Key('in-use'), children: [Icon(Icons.check_circle, size: 18, color: cs.primary), const SizedBox(width: 6), Text('In use', style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary))])),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, children: [
+                  if (!mm.isActiveFile(e.file)) FilledButton(key: Key('use-earlier-${e.file}'), onPressed: mm.switchBlocked ? null : () async { final r = await mm.useFile(e.file); if (r != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r))); }, child: const Text('Use')),
+                  OutlinedButton(key: Key('delete-earlier-${e.file}'), onPressed: () => _confirmDeleteFile(e.file), child: const Text('Delete')),
+                ]),
+              ]))),
+          ],
         ],
         const SizedBox(height: 16),
         _Licence(mm: mm),

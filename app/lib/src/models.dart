@@ -39,15 +39,43 @@ class ModelManager extends ChangeNotifier {
   String net = 'other';
   CatalogueModel? downloading;
   final Set<String> _installed = {};
+  final Map<String, int> _installedBytes = {};
   Stopwatch? _sw;
   /// Last finished download: for the developer menu (seconds, average speed).
   String? lastDownloadNote;
   StreamSubscription<DlStatus>? _sub;
   DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Set by the shell: true while the chat is building or changing an app. Switching models then is blocked
+  /// (unloading a model under a running generation would break it); Stop first, then switch.
+  bool Function() isBusy = () => false;
+  bool get switchBlocked => isBusy() || dl.running;
+  static const busyMessage = 'Molde is building right now. Tap Stop in the chat, or wait, then switch the model.';
+  void poke() => notifyListeners();
+
   bool get hasModel => active != null;
   bool installed(CatalogueModel m) => _installed.contains(m.localName);
   bool isActive(CatalogueModel m) => active != null && active!.source == 'catalogue' && active!.id == m.id;
+
+  /// The catalogue models with the recommended one first (the order of the file otherwise).
+  List<CatalogueModel> get ordered {
+    final ms = catalogue?.models ?? const <CatalogueModel>[];
+    final r = catalogue?.recommended;
+    return [if (r != null) r, for (final m in ms) if (m.id != r?.id) m];
+  }
+
+  /// Downloaded models that the catalogue no longer lists: file name and size. They stay usable and deletable
+  /// ("Downloaded earlier"); nothing disappears from under the user when the catalogue is cut.
+  List<({String file, int bytes})> get downloadedEarlier {
+    final c = catalogue;
+    if (c == null) return const [];
+    final listed = c.models.map((m) => m.localName).toSet();
+    final out = [for (final n in _installed) if (!listed.contains(n)) (file: n, bytes: _installedBytes[n] ?? 0)];
+    out.sort((a, b) => a.file.compareTo(b.file));
+    return out;
+  }
+
+  bool isActiveFile(String file) => active != null && active!.source == 'catalogue' && active!.path.split('/').last == file;
 
   /// A catalogue model that is recommended now but is not the one in use (only when a catalogue model is in use).
   CatalogueModel? get newer {
@@ -94,10 +122,11 @@ class ModelManager extends ChangeNotifier {
 
   Future<void> _scan() async {
     _installed.clear();
+    _installedBytes.clear();
     try {
       if (await modelsDir.exists()) {
         await for (final e in modelsDir.list()) {
-          if (e is File && e.path.endsWith('.gguf')) _installed.add(e.uri.pathSegments.last);
+          if (e is File && e.path.endsWith('.gguf')) { _installed.add(e.uri.pathSegments.last); _installedBytes[e.uri.pathSegments.last] = await e.length(); }
         }
       }
     } catch (_) {}
@@ -119,6 +148,7 @@ class ModelManager extends ChangeNotifier {
 
   /// Switches to an installed catalogue model (size checked; it was hash-verified when it arrived).
   Future<String?> use(CatalogueModel m) async {
+    if (isBusy()) return busyMessage;
     final f = File('${modelsDir.path}/${m.localName}');
     if (!await f.exists() || await f.length() != m.bytes) { _installed.remove(m.localName); notifyListeners(); return 'That model file is missing or damaged. Download it again.'; }
     await llm.unload();
@@ -130,8 +160,40 @@ class ModelManager extends ChangeNotifier {
     return null;
   }
 
+  /// Switches to a model that was downloaded earlier and is no longer in the catalogue.
+  Future<String?> useFile(String file) async {
+    if (isBusy()) return busyMessage;
+    final f = File('${modelsDir.path}/$file');
+    if (!await f.exists()) { _installed.remove(file); notifyListeners(); return 'That model file is missing. It may have been deleted.'; }
+    await llm.unload();
+    await _setActive(f, 'catalogue', null);
+    notifyListeners();
+    final err = await llm.ensureLoaded(handDirs);
+    if (err != null) { error = err; notifyListeners(); return err; }
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> deleteFile(String file) async {
+    final wasActive = isActiveFile(file);
+    if (wasActive && isBusy()) return;
+    if (wasActive) { await llm.unload(); active = null; llm.preferred = null; }
+    final f = File('${modelsDir.path}/$file');
+    if (await f.exists()) await f.delete();
+    final p = File('${f.path}.part');
+    if (await p.exists()) await p.delete();
+    _installed.remove(file); _installedBytes.remove(file);
+    if (wasActive) {
+      await AppStore.writeAtomic(settingsFile, jsonEncode({'v': 1, 'active': null}));
+      final hand = await LlmService.locate(handDirs);
+      if (hand != null) { await _setActive(hand, 'hand', null, save: false); await llm.ensureLoaded(handDirs); }
+    }
+    notifyListeners();
+  }
+
   /// Uses the model placed by hand (adb push).
   Future<void> useHand() async {
+    if (isBusy()) return;
     final f = await LlmService.locate(handDirs);
     if (f == null) return;
     await llm.unload();
@@ -143,6 +205,7 @@ class ModelManager extends ChangeNotifier {
   Future<void> delete(CatalogueModel m) async {
     final f = File('${modelsDir.path}/${m.localName}');
     final wasActive = isActive(m);
+    if (wasActive && isBusy()) return;
     if (wasActive) { await llm.unload(); active = null; llm.preferred = null; }
     if (await f.exists()) await f.delete();
     final p = File('${f.path}.part');

@@ -101,6 +101,48 @@ void main() {
     await mm.use(b);
   });
 
+  test('recommended model is listed first; a downloaded model the catalogue dropped stays usable under "Downloaded earlier"', () async {
+    final md = Directory('${tmp.path}/models')..createSync(recursive: true);
+    File('${md.path}/old.gguf').writeAsBytesSync([1, 2, 3]);
+    File('${md.path}/b.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    final mm = make(FakeLlm());
+    mm.catalogue = Catalogue(version: 1, licence: 'x', models: [b, a]); // file order puts B first
+    await mm.init();
+    await mm.refreshCatalogue();
+    expect(mm.ordered.map((m) => m.id).toList(), ['a', 'b']);
+    expect(mm.downloadedEarlier.map((e) => e.file).toList(), ['old.gguf']);
+    expect(mm.downloadedEarlier.first.bytes, 3);
+    expect(await mm.useFile('old.gguf'), isNull);
+    expect(mm.isActiveFile('old.gguf'), isTrue);
+    expect(mm.active!.source, 'catalogue');
+    await mm.deleteFile('old.gguf');
+    expect(File('${md.path}/old.gguf').existsSync(), isFalse);
+    expect(mm.downloadedEarlier, isEmpty);
+    expect(mm.hasModel, isFalse);
+  });
+
+  test('switching or deleting the active model is refused while the chat is building', () async {
+    final md = Directory('${tmp.path}/models')..createSync(recursive: true);
+    File('${md.path}/a.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    File('${md.path}/b.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    final llm = FakeLlm();
+    final mm = make(llm);
+    await mm.init();
+    await mm.refreshCatalogue();
+    expect(await mm.use(a), isNull);
+    var busy = true;
+    mm.isBusy = () => busy;
+    expect(mm.switchBlocked, isTrue);
+    expect(await mm.use(b), ModelManager.busyMessage);
+    expect(mm.isActive(a), isTrue);
+    await mm.delete(a);
+    expect(File('${md.path}/a.gguf').existsSync(), isTrue);
+    busy = false;
+    expect(await mm.use(b), isNull);
+    expect(mm.isActive(b), isTrue);
+    expect(mm.isActive(a), isFalse);
+  });
+
   group('WebView stays locked', () {
     test('only the bundled page may be navigated to', () {
       expect(allowNavigation('file:///android_asset/flutter_assets/assets/web/index.html'), isTrue);
@@ -124,6 +166,7 @@ void templateTests() {
       expect(LlmService.pickTemplate(sidecar: 'qwen', hint: 'gemma', architecture: 'gemma3'), 'qwen');
       expect(LlmService.pickTemplate(hint: 'qwen', architecture: 'gemma3'), 'qwen');
       expect(LlmService.pickTemplate(architecture: 'qwen35'), 'qwen');
+      expect(LlmService.pickTemplate(hint: 'chatml', architecture: 'gemma3'), 'qwen');
       expect(LlmService.pickTemplate(architecture: 'Qwen3'), 'qwen');
       expect(LlmService.pickTemplate(architecture: 'gemma3'), 'gemma');
       expect(LlmService.pickTemplate(), 'gemma');
