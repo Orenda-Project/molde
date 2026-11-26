@@ -39,8 +39,12 @@ def progress(ts):
         if m: return m.group(0)
     return None
 
+def leave_settings():
+    for _ in range(3):
+        if has('Available models') or has('Privacy'): adb('shell', 'input', 'keyevent', 'KEYCODE_BACK'); time.sleep(2)
+
 def run(case, request, mode, maxs=900):
-    g.ensure_running(); g.chat_view(); g.set_mode(mode)
+    leave_settings(); g.ensure_running(); g.chat_view(); g.set_mode(mode)
     before = set(texts())
     t0 = time.time(); g.send(request)
     first = None; last = None; saw_stop = False
@@ -77,6 +81,43 @@ CREATES = [
  ('C13', 'weight loss diary'), ('C14', 'school homework planner for my kids'), ('C15', 'savings goal for a new phone'),
 ]
 
+# (case, how to get the app, request). 'ex:NAME' = fresh copy of the example app (sample data), 'last:TITLE' = open the app with that title.
+CHANGES = [
+ ('X01', 'ex:water', 'make it purple'),
+ ('X02', 'ex:water', 'add a note field'),
+ ('X03', 'ex:water', 'rename the button + 250 ml to Big glass'),
+ ('X04', 'ex:water', 'move the last 7 days chart above today'),
+ ('X05', 'ex:water', 'remove the Not yet legend'),
+ ('X06', 'ex:exercise', 'add a field for notes'),
+ ('X07', 'ex:exercise', 'rename Log exercise to Add workout'),
+ ('X08', 'ex:exercise', 'add a goal of 4 workouts a week'),
+ ('X09', 'last:Household budget', 'add a chart'),
+ ('X10', 'last:Household budget', 'make it dark mode'),
+]
+
+def nums(ts):
+    return sorted(set(re.findall(r'\d[\d,\.]*', ' '.join(ts))))
+
+def open_app(how):
+    kind, name = how.split(':', 1)
+    if kind == 'ex':
+        g.ensure_running(); g.load_example(name); time.sleep(3)
+    else:
+        g.apps_view(); time.sleep(1)
+        g.tap(name, miny=1000); time.sleep(6); g.close_chat()
+
+def do_change(case, how, request):
+    leave_settings(); open_app(how)
+    g.close_chat(); time.sleep(2)
+    before = [t for t in texts() if t not in ('Chat', 'Chat: create or change apps')]
+    shot(case + '_before')
+    rec = run(case, request, 'change')
+    after = rec['screen']
+    lost = [n for n in nums(before) if n not in nums(after) and len(n) > 1]
+    rec['data_numbers_before'] = nums(before)[:40]; rec['numbers_lost'] = lost
+    rec['screen_before'] = before[:60]
+    save(case, rec)
+
 if __name__ == '__main__':
     c = sys.argv[1]
     if c == 'create': run(sys.argv[2], sys.argv[3], 'new')
@@ -87,5 +128,9 @@ if __name__ == '__main__':
             case = pre + case[1:]
             if case in RES and not os.environ.get('REDO'): continue
             run(case, r, 'new')
+    elif c == 'changes':
+        for case, how, req in CHANGES:
+            if case in RES and not os.environ.get('REDO'): continue
+            do_change(case, how, req)
     elif c == 'shot': shot(sys.argv[2])
     elif c == 'dump': ui.main.__call__ if False else print('\n'.join(texts()))
