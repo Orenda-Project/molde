@@ -861,7 +861,7 @@ move 7 after 2
 
 ### E10. Vague requests and requests the app cannot do (classes `vague_ask`, `cannot_do_ask`): add 400
 
-What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged with no message, 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times and tried to add an invented `remind` or `when` line 13 times (4 got through). Silent no-ops are not acceptable teaching data: the user must be told, in plain English, what the app can do instead. So no identity pairs. For a request the app cannot do, and for a vague request, the answer is the existing `ask` line (needs the capability and vague word list of L6, because `allowAsk` is false today for any request with a real word): one plain sentence that says what cannot be done and what can, and answer choices that are real edits. The `Edit request / Question / Answer` form then makes the change; the follow-up rows are in `spec/edits.jsonl` (one per choice that is a real edit, see below). The app keeps the program the whole time; a choice that declines ("Leave it as it is") needs no model call (an app-side rule: an answer that starts with "No" or "Leave" or "Nothing" closes the question), so there is no follow-up row for it. Never show the language's own syntax to the user (`was`, `pick ...`, `table`); the app's data-rule refusal text is a separate bug (APP_BUGS #11).
+What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged with no message, 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times and tried to add an invented `remind` or `when` line 13 times (4 got through). Silent no-ops are not acceptable teaching data: the user must be told, in plain English, what the app can do instead. So no identity pairs. For a request the app cannot do, and for a vague request, the answer is the existing `ask` line (needs the capability and vague word list of L6, because `allowAsk` is false today for any request with a real word): one plain sentence that says what cannot be done and what can, and answer choices that are real edits. The `Edit request / Question / Answer` form then makes the change; the follow-up rows are in `spec/edits.jsonl` (one per choice that is a real edit, see below). The app keeps the program the whole time; a choice that declines ("Leave it as it is") needs no model call **an app rule, not model training**: the app closes the question, keeps the program and makes no model call (required behaviour, APP_BUGS #14, with a test); so there is no follow-up row for it and no `none` pair is trained for it. `tools/validate_asks.mjs` names these choices as "handled by the app rule" and exits 1 if a choice has neither a follow-up row nor a decline wording. Never show the language's own syntax to the user (`was`, `pick ...`, `table`); the app's data-rule refusal text is a separate bug (APP_BUGS #11).
 
 **Example 1** (id1)
 
@@ -1266,6 +1266,24 @@ stat sum(drive.km week), "km this week"
 form drive, "Add trip"
 daybars last 7 days, sum(drive.km on it)
 list drive by day
+```
+
+**Example 4** (rq4)
+
+Request: `remind my staff on whatsapp every morning
+Question: Molde apps cannot send messages to other people. Do you want a staff list with a morning reminder on your own phone?
+Answer: Yes, staff list and reminder`
+
+```
+app "Staff" users ocean
+table staff name text, shift pick Morning|Evening = Morning
+remind "Check today's staff list" at 8:00
+count(staff) "people on the list" big
+each staff sort name as s
+  row card gap 2 tap edit s swipe remove s
+    s.name bold grow
+    s.shift faint
+form staff, "Add staff"
 ```
 
 

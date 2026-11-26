@@ -358,4 +358,15 @@ form drive, "Add trip"
 daybars last 7 days, sum(drive.km on it)
 list drive by day
 `);
+add('refusal_ask', 'rq4', 'remind my staff on whatsapp every morning\nQuestion: Molde apps cannot send messages to other people. Do you want a staff list with a morning reminder on your own phone?\nAnswer: Yes, staff list and reminder', `
+app "Staff" users ocean
+table staff name text, shift pick Morning|Evening = Morning
+remind "Check today's staff list" at 8:00
+count(staff) "people on the list" big
+each staff sort name as s
+  row card gap 2 tap edit s swipe remove s
+    s.name bold grow
+    s.shift faint
+form staff, "Add staff"
+`);
 for (const p of P) console.log(JSON.stringify(p));
