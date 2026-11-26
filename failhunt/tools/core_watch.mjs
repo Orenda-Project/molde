@@ -33,6 +33,7 @@ export function startCoreWatched({ model, threads = 4, nctx = 4096, server, libd
     }
     return JSON.parse(reply);
   }));
+  const restart = () => (chain = chain.then(async () => { try { p.stdin.write('Q\n'); } catch (e) {} try { p.kill('SIGKILL'); } catch (e) {} spawnIt(); await ready; }));
   const cpu = () => 0;
-  return { complete, cpu, restarts: () => restarts, close: () => { try { p.stdin.write('Q\n'); } catch (e) { /* gone */ } } };
+  return { complete, restart, cpu, restarts: () => restarts, close: () => { try { p.stdin.write('Q\n'); } catch (e) { /* gone */ } } };
 }

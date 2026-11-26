@@ -2,10 +2,11 @@
 """Fills {{EX:class}} markers of DATA_SPEC_r5.template.md with the validated example pairs from spec/*.jsonl."""
 import json,re,sys,difflib
 ex={}
-for f in ('spec/creates.jsonl','spec/edits.jsonl','spec/long_edits.jsonl','spec/plans.jsonl'):
+for f in ('spec/creates.jsonl','spec/edits.jsonl','spec/long_edits.jsonl'):
     try:
         for l in open(f):
             r=json.loads(l); ex.setdefault(r['class'],[]).append(r)
+            if r['kind']=='create_plan': ex.setdefault('plan_line',[]).append(r)
     except FileNotFoundError: pass
 def block(r):
     if r['kind']=='create_plan':

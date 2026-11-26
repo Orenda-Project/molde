@@ -20,6 +20,10 @@ const NOW = Date.UTC(2026, 10, 26, 9, 0, 0);
 const cases = readFileSync(process.env.CASES || H + 'cases.jsonl', 'utf8').trim().split('\n').map(l => JSON.parse(l));
 const done = new Set(existsSync(out) ? readFileSync(out, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l).id) : []);
 const core = startCoreWatched({ model, threads: THREADS, server: SERVER, libdir: LIBDIR, hangLog: out.replace(/\.jsonl$/, '') + '.hangs.jsonl', tag: label });
+let PROMPTS = null;
+const complete = req => { if (PROMPTS) PROMPTS.push(req.prompt); return core.complete(req); };
+import { createHash } from 'node:crypto';
+const require_md5 = s => createHash('md5').update(s).digest('hex');
 const errCode = e => (/E_[A-Z_]+/.exec(String(e || '')) || [''])[0];
 const lineNo = e => (/^line (\d+)/.exec(String(e || '')) || [])[1];
 const save = rec => appendFileSync(out, JSON.stringify(rec) + '\n');
@@ -28,13 +32,13 @@ const slim = r => ({ ok: !!r.ok, errors: (r.errors || []).slice(0, 3), first_err
 
 async function runCreate(c) {
   const allowAsk = process.env.ALLOWASK ? true : !R.namesAThing(c.request);   // controller.dart: may = ask == null && !namesAThing(request)
-  let r = await generate({ kind: 'create', request: c.request, complete: core.complete, template, allowAsk, maxLines: 70 });
+  let r = await generate({ kind: 'create', request: c.request, complete, template, allowAsk, maxLines: 70 });
   const rec = { id: c.id, type: 'create', label, request: c.request, style: c.style, cat: c.cat, allowAsk, first: slim(r) };
   rec.asked = !!r.ask;
   if (r.ask) {   // the app shows the question; the user taps the first option (or types yes)
     const ans = (r.ask.options && r.ask.options[0]) || 'yes';
     rec.answer = ans;
-    r = await generate({ kind: 'create', request: c.request, complete: core.complete, template, allowAsk: false, ask: { question: r.ask.question, answer: ans }, maxLines: 70 });
+    r = await generate({ kind: 'create', request: c.request, complete, template, allowAsk: false, ask: { question: r.ask.question, answer: ans }, maxLines: 70 });
     rec.after_answer = slim(r);
   }
   let program = r.program || '';
@@ -56,7 +60,7 @@ async function appEdit(app, request) {
   else { const se = R.settingEditProgram(request, src); if (se != null) { direct = true; o.route = 'direct-setting'; if (se === src) return finish(src, { outcome: 'already_that_way', raw: src }); proposed = se; } }
   if (!direct) {
     if (R.looksLikeNewApp(request, src)) o.intercepted_newapp = true;   // the app asks "new app or change?"; the user taps Change
-    const r = await generate({ kind: 'edit', request, current: src, complete: core.complete, template, allowAsk: !R.namesAThing(request), useDraft: true, maxLines: Math.max(70, R.programLines(src).length + 40) });
+    const r = await generate({ kind: 'edit', request, current: src, complete, template, allowAsk: !R.namesAThing(request), useDraft: true, maxLines: Math.max(70, R.programLines(src).length + 40) });
     o.gen = slim(r); o.tokens = r.stats && r.stats.tokens; o.seconds = r.stats && r.stats.seconds; o.tok_s = r.stats && r.stats.tokPerSec; o.draft = r.stats ? [r.stats.draftTried, r.stats.draftAccepted] : null; o.resamples = r.stats && r.stats.resamples;
     o.raw = r.program || '';
     if (r.timedOut) return finish(src, { outcome: 'timeout' });
@@ -109,11 +113,14 @@ async function runChain(c, createdByLabel) {
 
 // single edit steps replayed from a saved program (controls): { type:'edit1', id, before, step }
 async function runEdit1(c) {
+  if (process.env.FRESH) await core.restart();
+  PROMPTS = [];
   const app = load(c.before, { now: NOW, currency: 'Rs', tz: 'UTC' });
   const st = { ...c.step };
   const o = await appEdit(app, st.request);
   const after = app.source;
-  return { id: c.id, type: 'edit1', label, k: st.k, request: st.request, outcome: o.outcome, applied: after !== c.before, did_final: P.did(st, c.before, after), did_raw: o.raw ? P.did(st, c.before, o.raw) : null, noop: !!(o.raw && P.diffStats(c.before, o.raw).noop), seconds: o.seconds, raw: o.raw };
+  const first = PROMPTS[0] || ''; const prompt_ok = first.includes('Edit request: ' + st.request);
+  return { id: c.id, type: 'edit1', label, fresh: !!process.env.FRESH, prompt_has_request: prompt_ok, prompt_first_md5: require_md5(first), prompt_tail: first.slice(-120), n_prompts: PROMPTS.length, k: st.k, request: st.request, outcome: o.outcome, applied: after !== c.before, did_final: P.did(st, c.before, after), did_raw: o.raw ? P.did(st, c.before, o.raw) : null, noop: !!(o.raw && P.diffStats(c.before, o.raw).noop), seconds: o.seconds, raw: o.raw };
 }
 const createdByLabel = new Map();
 // creates first (chains reuse the create result of their seed), then chains

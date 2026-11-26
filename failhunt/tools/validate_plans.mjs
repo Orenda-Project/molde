@@ -4,7 +4,7 @@ const { check } = await import(`${APPJS}/vendor/lang/check.mjs`);
 const { parsePlan, coverage } = await import('./plan_check.mjs');
 let bad = 0, n = 0;
 for (const l of readFileSync(process.argv[2], 'utf8').trim().split('\n')) {
-  const r = JSON.parse(l); n++; const why = [];
+  const r = JSON.parse(l); if (!r.plan) continue; n++; const why = [];
   const plan = parsePlan(r.plan); if (!plan) why.push('plan line not parsed');
   const c = check(r.program); if (!c.ok) why.push('program: ' + String(c.errors[0]).slice(0, 120));
   if (plan && c.ok) { const m = coverage(plan, r.program); if (m.length) why.push('plan items not in program: ' + m.join(' | ')); }

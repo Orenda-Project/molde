@@ -1,6 +1,6 @@
 # DATA_SPEC_r5.md: what to change in the training data for the next Gemma 270M round
 
-Written 2026-11-26 from the failure hunt (`REPORT.md`). Evidence is in `results/gemma-r3.jsonl` and `results/gemma-r4ep2.jsonl` (raw), `labels/` (my hand labels), `cases.jsonl` (test set, sha256 in `cases.sha256`). Every example pair below is checked: programs pass `vendor/lang/check.mjs` (language 4698991) and are in formatter form; edit pairs also pass the data-safety diff (`evolve`) and a predicate that the edit does what the request says (`tools/check_targets.mjs`). Rebuild and re-check with `node spec/creates.mjs > spec/creates.jsonl` (same for `edits.mjs`, `long_edits.mjs`), then `node tools/validate_spec.mjs spec/<file>.jsonl`.
+Written 2026-11-26 from the failure hunt (`REPORT.md`); revised after the critic (leak check, skeleton cap, refusals in plain English, measured versus hypothesis). Evidence is in `results/gemma-r3.jsonl` and `results/gemma-r4ep2.jsonl` (raw), `labels/` (my hand labels), `cases.jsonl` (test set, sha256 in `cases.sha256`). Every example pair below is checked: programs pass `vendor/lang/check.mjs` (language 4698991) and are in formatter form; edit pairs also pass the data-safety diff (`evolve`) and a predicate that the edit does what the request says (`tools/check_targets.mjs`). Rebuild and re-check with `node spec/creates.mjs > spec/creates.jsonl` (same for `edits.mjs`, `long_edits.mjs`), then `node tools/validate_spec.mjs spec/<file>.jsonl`.
 
 ## 0. Rules for every new pair (the hygiene that the numbers below depend on)
 
@@ -8,7 +8,8 @@ Written 2026-11-26 from the failure hunt (`REPORT.md`). Evidence is in `results/
 2. **Gates, in this order:** checker passes; formatter form; for edits the data-safety verdict is not `refused`; the request's machine-checkable needs are present (named fields, numbers, units, named options, chart or total or streak words: the regexes in `tools/preds.mjs`); no string in the program that none of the request, the title or a field name explains (a leak scan: compare the words of every quoted label with the request and the other lines; flag and review).
 3. **No templates.** Every program is written for its own request (hand-written or model-written one by one, then gated). Do not generate programs by filling slots.
 4. **One level of richness per request.** A request of 1 to 3 words gets a small honest app (4 to 10 lines). A request that lists needs gets those needs and nothing else. See section 1, finding 1: adding unrequested settings, prices and budgets is what made r4 worse in the blind comparison.
-5. Keep the formatter's one-spelling rule and the `was` rule for renames. Settings edits carry `set`.
+5. **Two automatic build checks, both must pass for every file of new pairs** (exit code 1 on a hit): `node tools/leak_check.mjs <files>` (no request equal or near-duplicate, word-set Jaccard 0.75, 0.6 for requests of 5 words or fewer, to any test create request, chain seed request or chain step wording of `cases.jsonl`; no `before` program equal to a test base) and `node tools/skeleton_check.mjs <files>` (names, strings, numbers and the app line erased; no program shape may appear in more than 2 items; the cap for the full training set is in L4). The first spec version failed the first check on 62 of 81 items and the second on 3 shapes; this version passes both (`spec/` rebuilt: 71 examples checked, 69 programs in 56 shapes).
+6. Keep the formatter's one-spelling rule and the `was` rule for renames. Settings edits carry `set`.
 
 ## 1. What the hunt found that changes the plan
 
@@ -77,7 +78,7 @@ Shape: the closest honest offline app, with one line in the app that says what t
 
 What is wrong: 13 builds carried strings from another app: "Log study time" in an attendance sheet, "Add homework mark" in a class average, "A bank connection is not possible here" in a budget, "Zakat and tip", "Quiz night", "Puppet" as a bug status. The strings are in v3.1 (section 2).
 
-Shape: the same school, business, health and family topics as C3, with every label, button and title taken from the request's own words. Pair with the drop in section 2 and the leak scan of rule 2.
+Shape: the same school, business, health and family topics as C3, with every label, button and title taken from the request's own words. Each example is the program a leaking model should have written for a request whose r3 or r4 answer carried a leak; the pair itself contains none of the leak strings, which is what the leak scan of rule 2 verifies on the training side. Pair with the drop in section 2.
 
 {{EX:label_leak:3}}
 
@@ -159,13 +160,13 @@ What is wrong: v3.1 has 0 reorder pairs on programs of 12 lines or fewer; 600 on
 
 {{EX:reorder:3}}
 
-### E10. Vague requests and requests the app cannot do (classes `vague_small`, `cannot_do_identity`): add 400
+### E10. Vague requests and requests the app cannot do (classes `vague_ask`, `cannot_do_ask`): add 400
 
-What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged (harmless), 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times (right) and tried to add an invented `remind` or `when` line 13 times (4 got through). Vague: one small safe change (accent colour, drop one optional line), never a rewrite. Cannot do: the program comes back identical (the app already answers "I couldn't make that change yet").
+What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged with no message, 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times and tried to add an invented `remind` or `when` line 13 times (4 got through). Silent no-ops are not acceptable teaching data: the user must be told, in plain English, what the app can do instead. So no identity pairs. For a request the app cannot do, and for a vague request, the answer is the existing `ask` line (needs the capability and vague word list of L6, because `allowAsk` is false today for any request with a real word): one plain sentence that says what cannot be done and what can, and answer choices that are real edits. The `Edit request / Question / Answer` form then makes the change. Never show the language's own syntax to the user (`was`, `pick ...`, `table`); the app's data-rule refusal text is a separate bug (APP_BUGS #11).
 
-{{EX:vague_small:3}}
+{{EX:cannot_do_ask:3}}
 
-{{EX:cannot_do_identity:3}}
+{{EX:vague_ask:3}}
 
 ### E11. Long programs: exact copy (class `long_edit_copy`): add 600 if the format stays, or convert (section 5)
 
@@ -175,7 +176,7 @@ What is wrong: r3 got 1 of 70 long steps right: it rewrote lines it was not aske
 
 ## 5. Levers: what to do for every failure class, with expected gain
 
-"More pairs" is lever 0 and is already in sections 3 and 4. These seven levers change what the model is asked to do, so the same data goes further. Gains are my **estimates** (percentage points of the metric named in the first column, on the hunt's own set), each with its basis; the evidence I measured is marked **measured**. Do not add them: the same failures are fixed by more than one lever.
+"More pairs" is lever 0 and is already in sections 3 and 4. These seven levers change what the model is asked to do, so the same data goes further. Every claim below is marked **measured** (a number from this hunt) or **hypothesis** (something an experiment of section 6 must test). I give no percentage target that is not backed by a measurement: the earlier version's 55 to 62% and 55 to 65% were sums of hypotheses and are withdrawn.
 
 ### The levers
 
@@ -185,7 +186,7 @@ What is wrong: r3 got 1 of 70 long steps right: it rewrote lines it was not aske
 
 **L2. A plan line before the program.** `# need: field drink, field ml, goal, quick buttons, chart, list`. Written by the model from the request, **in English even when the request is Roman Urdu or has typos**. Vocabulary: `field NAME`, `setting NAME`, `option A/B/C`, concept words (goal, chart, total month, streak, list, form, reminder, timer, calendar, tick, quick buttons), and `cannot WHAT` for something the app cannot do (information only). The app removes the line before checking and showing the program. Training plans are derived from request plus target program (the plan lists what the request names and the program has) and verified with `tools/plan_check.mjs`. At inference, the plan is a checkable contract: every item must show in the program, and a program line that no plan item explains is a leak. Format change needed in the grammar: one optional `plan-stmt` as the first line. **Measured:** on the six example pairs the plan check passes the right program, and it flags the wrong outputs r3 and r4 ep2 gave for the same requests (r3 mood diary: missing `option happy/ok/sad/angry`, `field note`, `chart month`; r4 ep2 petrol: missing `field odometer`, `mileage`; r4 ep2 for `paani peene ka hisaab`: missing `field drink`, `list`); it passes the one case that was right (live scores by hand). Six cases are an illustration, not a rate: the rate needs the plans for the 407 requests (a day of work, `tools/plan_negative_check.mjs` is the harness).
 
-{{EX:plan_line:6}}
+{{EX:plan_line:7}}
 
 **L3. Minimal pairs.** Same topic, different specifics, different programs, shown to the model together (same batch, same epoch): a water tracker in ml with a goal of 2500 and quick buttons for a glass and a bottle against the same app in glasses with a goal of 8 and a weekly chart; an expense tracker with named categories and a per-category chart against one that records who paid and has no categories. The model can only get both right by reading the request. For edits: the same program with two different requests that touch different lines. 1,000 pairs of creates (2,000 rows) and 1,000 edit pairs inside the C3 and E1 to E4 budgets.
 
@@ -201,33 +202,33 @@ What is wrong: r3 got 1 of 70 long steps right: it rewrote lines it was not aske
 
 **L7. Verifier-driven self-training and best-of-3.** For each new request, sample N = 4 programs from the current model (temperature 0.7, different seeds); keep those that pass **all** gates: checker, formatter, plan coverage (L2), needs present, leak scan, and for calculators the execution test; train on the best one (rejection-sampling fine-tune); where a sample passes and another fails, add the pair for a DPO step (good against bad, same request). This is also the way to produce C4 (repair pairs) at scale. At inference, creates run best-of-3 (the first greedy, two sampled, take the first that passes the gates): costs up to 3 times the time of a create (median 1.45 s on Spark CPU for r3, so about 4.4 s worst case, only for the requests that fail the gates). **Measured so far:** see `controls/summary.txt` (12 tries per line on the failed creates; three sampled creates per request; 126 unchanged edits replayed with sampling).
 
-### Class by lever, with the expected gain
+### Class by lever: what is measured and what is a hypothesis
 
-| class (hunt metric, r3) | levers | expected gain | basis |
+| class (r3 hunt metric) | levers | measured | hypothesis to test |
 |---|---|---|---|
-| Checker failure (12.3% of creates; strict create rate) | L7 best-of-3 and repair pairs (C4); error-aware retry; table-name grammar fix (APP_BUGS #6) | +4 to +7 points strict (half to two thirds of the 50 failures become builds, and about half of those are right) | partial: see `controls/summary.txt` for how many failed creates pass with 12 tries or a sample; estimate for the right-app share |
-| Meaningless formulas (62) | execution gate (C2), L7, L3 | +3 to +5 | estimate: only calculators and formula apps (about 25 of the 62) can be executed; the structural nonsense is only reduced by the leak and plan gates |
-| Misses a specific (55 partial) | **L2**, L3, C3 | +6 to +10 | estimate: a third to a half of these are a missing named item that a plan line makes checkable; partial cases become strict |
-| Roman Urdu drift (81 requests: 25% strict, 53% zero) | **L5**, L2 (English plan), C1 | roman strict from 25% to 40 to 45% = **+3 to +4 points overall** and +20 on the roman set | measured: the same model on the English translation builds the right topic in 79 of 81 (97%) and checks 79 of 81; strict in English is 42%, so 40 to 45% is the ceiling for data alone |
-| Wrong topic, English (17) and typo (4) | L4, L3, template drop, L5 | +2 to +3 | measured: typo-corrected requests are right-topic 23 of 23, so typo drift (4) is fully a data effect; English topic drift is partly capacity |
-| Unsupported built as supported (15 requests, 0% strict) | **L6** | +2 to +3 points overall (15 requests at 0% become mostly right) | the 15 are 3.7% of the set; refusal plus offline build counts as right |
-| Leaks (13) and r4's unrelated settings | gates (leak scan, plan, L2), drop of 131 leaking rows, template drop | +2 to +3 (r3), larger for r4-like data | the leak strings are present in v3.1 (counts in section 2) |
-| Absurd numbers (5), thin (4) | C7, C8, plan numbers (L2) | +1 | small classes |
-| **Create total** | all | strict 37% to **55 to 62%** (cap: the English-only strict is 42% today) | sum of the rows above with overlap removed; the target is a bar to test against, not a promise |
-| Edits unchanged (39 to 45% of model steps) | **L1** with explicit `# none`, L3 (edit minimal pairs), E1 to E10 pairs, a sampled retry (APP_BUGS #10) | right rate on short chains from 32% to **50 to 60%** | basis: unchanged is the cheapest output of a full-program rewrite; in a patch format it must be chosen. Measured part: the sampled retry control in `controls/summary.txt` |
-| Edit checker failures (9 to 12%) | **L1** (the app copies every untouched line; only the new line must pass) | recovers 70% of them: +6 to +8 points | the 37 failures: 31 changed or broke a line other than the one asked (see REPORT section 4); a patch cannot do that |
-| Long programs damaged (7 to 10%; 1 of 70 right) | **L1** | from 1% to 40 to 60% on long programs | measured: the 7,024 existing edits convert exactly, the patch is 16 tokens, the program is never re-copied; the r4 ep2 result (2,983 long edits did not help) shows the full-program format cannot be fixed with more data |
-| Applied wrong: wrong field, options or place (8 to 10%) | L3, E1 to E4, L1 with named line anchors | +3 to +5 | estimate |
-| Rename without `was` (3 of 28 right) | L1 (`replace` of table line with `was` plus uses), E7 pairs, APP_BUGS #7 | from 11% to 40 to 50% on rename steps | estimate; the app-side `was` inference is the safer half |
-| Guard false positives, 20% guard, hang, undo wording | **app only** (APP_BUGS #1 to #5) | +1 to +3 points of edits, and the hang is a freeze | measured counts in APP_BUGS |
-| **Edit total** | all | model-path right rate from 25% to **55 to 65%**; long programs from 1% to 40%+ | |
+| Checker failure (50 of 407 = 12.3%) | L7 best-of-3 and repair pairs (C4); error-aware retry; the table-name grammar fix (APP_BUGS #6) | with 12 tries per line 9 of the first 26 failed creates pass (35%); samples control in `controls/summary.txt` when finished | H1: repair pairs plus best-of-3 turn about a third of the failures into builds (about +4 builds per 100 requests), a half of those right |
+| Meaningless formulas (62) | execution gate (C2), L7, L3 | nothing yet: no run has tried an executed-data round | H2: only calculators and formula apps (about 25 of the 62) can be executed; the structural nonsense is only reduced by the leak and plan gates |
+| Misses a specific (55 partial) | L2, L3, C3 | plan check flags 4 of the 5 wrong outputs of r3 and r4 ep2 on five test requests (`tools/plan_negative_check.mjs`); five cases are an illustration, not a rate | H3: a plan line makes a third to a half of these checkable |
+| Roman Urdu drift (81 requests, 25% strict, 53% zero) | L5, L2, C1 | **the same model on the English translation builds the right topic in 79 of 81 (97%)**; English-only strict is 42% | H4: data reaches 40 to 45% strict on Roman Urdu, at most the English-only level |
+| Wrong topic English (17), typo (4) | L4, L3, template drop, L5 | typo-corrected requests are right-topic 23 of 23, so typo drift is data | H5: English topic drift is partly capacity; unknown share |
+| Unsupported built as supported (15 requests, 0 right) | L6 | 0 of 15 refused today; 1 of 15 sensible | H6: with the capability list and ask, most of the 15 become honest refusals plus the closest offline app |
+| Leaks (13) and r4's unrelated settings | gates, drop of 131 leaking rows, template drop | the leak strings are in v3.1 (counts in section 2); r4 ep2 leaks more than r3 (9 against 4 on 147 paired requests) | H7: removing them stops the leaks; test on the same 147 |
+| Collapse onto a memorised skeleton (quiz, mosque `Khatam`, ring counter; r3: 2 quiz, 6 mosque, 6 ring counter for requests that did not ask) | L4, L3, template drop | r4 ep2 has fewer (0 quiz, 4 mosque, 0 ring) but more leaks | H8: caps and minimal pairs reduce it |
+| Absurd numbers (5), thin (4) | C7, C8, plan numbers | small classes | |
+| **Create total** | all | **the measured ceilings are: English-only strict 42% today; Roman Urdu at most the English level; checker failures partly recoverable. Together these support about 45% strict from data alone** | H9: levers L2 and L7 take it above 45%; the gate in section 6 asks for 45% first and treats anything higher as the next target, not a promise |
+| Edits unchanged (39 to 45% of model steps; forced suite in the report) | L1 with explicit `# none`, L3 for edits, E1 to E10, a sampled retry (APP_BUGS #10) | the unchanged output is shared across requests on one program and is a model behaviour, not a cache effect (fresh-core replay, `controls/identical_outputs_proof.txt`); the sampled-retry control is in `controls/summary.txt` when finished | H10: in a patch format "unchanged" has to be chosen; the right rate on short chains rises above its 32% |
+| Edit checker failures (9 to 12%), long programs damaged (7 to 10%; 1 of 70 right) | L1 | all 7,024 v3.1 edits convert to patches and back exactly; median patch 16 tokens against 173 (tests the **format**, not whether the model can write patches); r4 ep2 shows more full-program long edits do not help (1 of 70 again) | H11: with patches the app copies every untouched line, so these failures cannot occur; the model's patch-writing skill is the open question |
+| Applied wrong (8 to 10%), silent change of an untouched line (8 of 119 applied steps in r3, 2 of 134 in r4 ep2) | L3, E1 to E4, L1 with line anchors, a guard that compares meaning (APP_BUGS #12) | counted in the report | H12: patches with line numbers remove the silent rewrite class |
+| Rename without `was` (3 of 28 right) | L1, E7, APP_BUGS #7 and #11 | counts | H13: the app-side `was` inference is the safer half |
+| Guard false positives, 20% guard, hang, undo wording | app only (APP_BUGS) | counts in APP_BUGS | |
+| **Edit total** | all | baseline 25% (82 of 321), of which 32% on short chains and 1 of 70 on long programs | **no target is claimed**: E1 (data only, full-program edits) and E2 (plus L1 patches) of section 6 measure it |
 
 ## 6. Mix, order and the gate for the next round
 
 - Start from v3.1 minus section 2 (about 17,700 rows). Add C1 to C9 (about 6,400 creates), E1 to E11 (about 3,700 edits, in patch form if L1 is adopted), and the L3, L5, L6 pairs inside those numbers. About 28,000 rows. The capacity limit is real, so if training time matters, drop the 988 appline edits and cap C3 at 1,000.
 - Order inside an epoch: shuffle; do not put the new classes at the end.
-- **Experiments, in this order, each against the same `cases.jsonl`:** (a) data only, full-program edits (isolates sections 2 to 4); (b) a plus L1 patch edits; (c) b plus L2 plan lines; (d) c plus L7 on top. If (a) does not beat r3, the data is not the problem and the levers are the plan.
-- **Gate before anything is called better than r3:** (1) the same `cases.jsonl` run through `tools/hunt.mjs`; (2) a blind A/B of r5 against r3 on the English creates where both pass (the 30-case protocol of `ab/`): r5 must win at least 20 of 30 with at most 2 ties; (3) strict "did what was asked" on the hand-labelled create sample at least 45% overall and at least 40% on Roman Urdu; (4) definite model-path edits at least 50% right on short chains and at least 20% on long chains, with no-op results under 25%; (5) median seconds per create not above 2.5 on Spark CPU with 4 threads (r3 1.45, r4 ep2 1.83).
+- **Experiments, in this order, each against the same `cases.jsonl` and the forced edit suite (`controls/forced_cases.jsonl`):** E1 data only, full-program edits (isolates sections 2 to 4); E2 = E1 plus L1 patch edits; E3 = E2 plus L2 plan lines; E4 = E3 plus L7. If (a) does not beat r3, the data is not the problem and the levers are the plan.
+- **Gate before anything is called better than r3:** (1) the same `cases.jsonl` run through `tools/hunt.mjs`; (2) a blind A/B of r5 against r3 on the English creates where both pass (the 30-case protocol of `ab/`): r5 must win at least 20 of 30 with at most 2 ties; (3) strict "did what was asked" on the hand-labelled create sample at least **45%** overall (the measured data-only ceiling; r3 is 36.9%) and at least 40% on Roman Urdu; (4) definite model-path edits: strictly more right than r3's 25.5% overall and 32% on short chains, no-op results below r3's 39%, and long programs above 1 of 70; the real target for edits is whatever experiment E2 shows; (5) median seconds per create not above 2.5 on Spark CPU with 4 threads (r3 1.45, r4 ep2 1.83). Higher bars are set only after E1 and E2 report.
 
 ## 7. A fast automatic intent judge (calibrated against the 407 hand labels)
 

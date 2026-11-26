@@ -1,6 +1,6 @@
 # DATA_SPEC_r5.md: what to change in the training data for the next Gemma 270M round
 
-Written 2026-11-26 from the failure hunt (`REPORT.md`). Evidence is in `results/gemma-r3.jsonl` and `results/gemma-r4ep2.jsonl` (raw), `labels/` (my hand labels), `cases.jsonl` (test set, sha256 in `cases.sha256`). Every example pair below is checked: programs pass `vendor/lang/check.mjs` (language 4698991) and are in formatter form; edit pairs also pass the data-safety diff (`evolve`) and a predicate that the edit does what the request says (`tools/check_targets.mjs`). Rebuild and re-check with `node spec/creates.mjs > spec/creates.jsonl` (same for `edits.mjs`, `long_edits.mjs`), then `node tools/validate_spec.mjs spec/<file>.jsonl`.
+Written 2026-11-26 from the failure hunt (`REPORT.md`); revised after the critic (leak check, skeleton cap, refusals in plain English, measured versus hypothesis). Evidence is in `results/gemma-r3.jsonl` and `results/gemma-r4ep2.jsonl` (raw), `labels/` (my hand labels), `cases.jsonl` (test set, sha256 in `cases.sha256`). Every example pair below is checked: programs pass `vendor/lang/check.mjs` (language 4698991) and are in formatter form; edit pairs also pass the data-safety diff (`evolve`) and a predicate that the edit does what the request says (`tools/check_targets.mjs`). Rebuild and re-check with `node spec/creates.mjs > spec/creates.jsonl` (same for `edits.mjs`, `long_edits.mjs`), then `node tools/validate_spec.mjs spec/<file>.jsonl`.
 
 ## 0. Rules for every new pair (the hygiene that the numbers below depend on)
 
@@ -8,7 +8,8 @@ Written 2026-11-26 from the failure hunt (`REPORT.md`). Evidence is in `results/
 2. **Gates, in this order:** checker passes; formatter form; for edits the data-safety verdict is not `refused`; the request's machine-checkable needs are present (named fields, numbers, units, named options, chart or total or streak words: the regexes in `tools/preds.mjs`); no string in the program that none of the request, the title or a field name explains (a leak scan: compare the words of every quoted label with the request and the other lines; flag and review).
 3. **No templates.** Every program is written for its own request (hand-written or model-written one by one, then gated). Do not generate programs by filling slots.
 4. **One level of richness per request.** A request of 1 to 3 words gets a small honest app (4 to 10 lines). A request that lists needs gets those needs and nothing else. See section 1, finding 1: adding unrequested settings, prices and budgets is what made r4 worse in the blind comparison.
-5. Keep the formatter's one-spelling rule and the `was` rule for renames. Settings edits carry `set`.
+5. **Two automatic build checks, both must pass for every file of new pairs** (exit code 1 on a hit): `node tools/leak_check.mjs <files>` (no request equal or near-duplicate, word-set Jaccard 0.75, 0.6 for requests of 5 words or fewer, to any test create request, chain seed request or chain step wording of `cases.jsonl`; no `before` program equal to a test base) and `node tools/skeleton_check.mjs <files>` (names, strings, numbers and the app line erased; no program shape may appear in more than 2 items; the cap for the full training set is in L4). The first spec version failed the first check on 62 of 81 items and the second on 3 shapes; this version passes both (`spec/` rebuilt: 71 examples checked, 69 programs in 56 shapes).
+6. Keep the formatter's one-spelling rule and the `was` rule for renames. Settings edits carry `set`.
 
 ## 1. What the hunt found that changes the plan
 
@@ -41,77 +42,52 @@ Shape: 700 short names (1 to 5 words: `paani peene ka hisaab`, `ghar ka budget`,
 
 **Example 1** (ru1)
 
-Request: `paani peene ka hisaab`
+Request: `chai ki dukaan ka rozana hisaab, kitne cup bike aur kitna paisa aaya`
 
 ```
-app "Paani" drop ocean
-table drink ml num 1..5000 unit "ml"
-setting goal num = 2000 "Daily goal (ml)"
-goal sum(drink.ml today), goal, "today", "ml"
-quick drink, ml, [250, 500, 750]
-daybars last 7 days, sum(drink.ml on it)
-list drink
+# need: field cup, option doodh_patti/kadak/green_tea, field qty, field rate, total today, chart, list
+app "Chai hisaab" coffee orange
+table cup kind pick Doodh_patti|Kadak|Green_tea = Doodh_patti, qty num 1..200 = 1, rate money
+stat sum(cup today, it.qty * it.rate), "aaj ka paisa"
+stat sum(cup.qty today), "aaj ke cup"
+share cup week by kind, sum(it.qty), it.key
+form cup, "Naya hisaab"
+list cup by day
 ```
 
 **Example 2** (ru2)
 
-Request: `bachon ki haziri lagane ka app`
+Request: `gaon ki committee mein har banda mahine ka kitna deta hai aur kis ka baqi hai`
 
 ```
-app "Haziri" users plum
-table student name text
-table absent student ref student
-state d date = today
-row align center
-  button "<" tap set d = d - 1
-  dayname(d) monthday(d) monthname(d) head grow align center
-  button ">" tap set d = d + 1
-count(student) - count(absent on d) "of" count(student) "present" big
-grid 3 gap 1
-  each student sort name as s
-    stack radius 8 pad 1 fill if(count(s.absent on d) > 0, bad, good) tap toggle s.absent on d
-      s.name bold align center color bg
-      if(count(s.absent on d) > 0, "Absent", "Present") tiny align center color bg
-form student, "Add student"
+# need: field banda, field jama, setting hissa, total month, list
+app "Committee" users plum
+table banda name text
+table jama banda ref banda, amount money
+setting hissa money = 2000 "Mahine ka hissa"
+"Is mahine jama" sum(jama.amount month) big
+each banda sort name as b
+  row card gap 2
+    b.name bold grow
+    if(sum(b.jama.amount month) >= hissa, "Ada", "Baqi") color if(sum(b.jama.amount month) >= hissa, good, bad)
+    button "Jama" tap add jama banda = b, amount = hissa
+form banda, "Naya banda"
 ```
 
 **Example 3** (ru3)
 
-Request: `dukaan ka udhaar ka hisaab`
+Request: `mere bachon ke school ki chhuttiyan aur kitne din gaye`
 
 ```
-app "Udhaar" wallet slate
-table person name text, phone text?
-table entry person ref person, amount money, kind pick Gave|Got, note text?
-"People owe you" sum(entry.amount where kind = Gave) - sum(entry.amount where kind = Got) big
-each person as p
-  let bal = sum(p.entry.amount where kind = Gave) - sum(p.entry.amount where kind = Got)
-  stack card tap edit p
-    row
-      p.name bold grow
-      if(bal >= 0, "owes you", "you owe") abs(bal) color if(bal >= 0, good, bad)
-form person, "Add person"
-form entry, "Add entry"
-list entry by day
-```
-
-**Example 4** (ru4)
-
-Request: `dawai lene ka time yaad dilao`
-
-```
-app "Dawai" pill plum
-table med name text, dose text?, time time
-table taken med ref med
-remind "Dawai ka waqt" at med.time
-count(taken today) "of" count(med) "taken today" head
-each med sort time as m
-  row card gap 2 tap edit m swipe remove m
-    stack grow
-      m.name bold
-      m.time m.dose faint
-    toggle m.taken
-form med, "Add medicine"
+app "Chhuttiyan" school ocean
+table chhutti child pick Ali|Sara|Hamza = Ali, why text?, on date = today
+count(chhutti month) "is mahine chhuttiyan" big
+each options chhutti.child as c
+  row card
+    c bold grow
+    count(chhutti month where child = c) "din" faint
+form chhutti, "Chhutti likho"
+list chhutti by day
 ```
 
 
@@ -123,59 +99,49 @@ Shape: age, date difference, unit conversion (length, weight, money), percentage
 
 **Example 1** (cs1)
 
-Request: `age in days calculator`
+Request: `how many days until my exam`
 
 ```
-app "Age in days" calc ocean
-setting born date = 2000-01-01 "Date of birth"
-let days = today - born
-"Days old" days big
-"About" floor(days / 365) "years" faint
+app "Exam days" hourglass ocean
+setting exam date "Exam date"
+let left = exam - today
+if left > 0
+  left "days to go" big
+  floor(left / 7) "weeks and" left % 7 "days" faint
+else
+  "The exam day has come" head
 ```
 
 **Example 2** (cs2)
 
-Request: `unit converter for kilometres and miles`
+Request: `convert my weight between kilos and pounds`
 
 ```
-app "Km and miles" calc slate
-state km num = 0
-state mi num = 0
-field km "Kilometres"
-field mi "Miles"
-"Kilometres in miles" round(km * 0.621371 * 100) / 100 big
-"Miles in kilometres" round(mi * 1.609344 * 100) / 100 big
+app "Kilos and pounds" scale slate
+state kg num = 0
+state lb num = 0
+field kg "Kilograms"
+field lb "Pounds"
+"Kilograms in pounds" round(kg * 2.20462 * 10) / 10 big
+"Pounds in kilograms" round(lb / 2.20462 * 10) / 10 big
 ```
 
 **Example 3** (cs3)
 
-Request: `discount calculator`
+Request: `work out the price after a sale and sales tax`
 
 ```
-app "Discount" calc ocean
+app "Sale price" tag mint
 state price money = 0
-state off num = 20
-field price "Price tag"
-field off "Discount %"
-let saved = price * off / 100
-"You pay" round(price - saved) big
-"You save" round(saved) faint
-```
-
-**Example 4** (cs4)
-
-Request: `simple calculator`
-
-```
-app "Calculator" calc mint
-state a num = 0
-state b num = 0
-state op pick Add|Subtract|Multiply|Divide = Add
-field a "First number"
-choice op
-field b "Second number"
-let r = if(op = Add, a + b, if(op = Subtract, a - b, if(op = Multiply, a * b, a / b)))
-"Result" round(r * 100) / 100 big
+state off num = 25
+state tax num = 17
+field price "Shelf price"
+slider off 0..90
+slider tax 0..30
+let cut = price * (100 - off) / 100
+"After the sale" round(cut) head
+"With tax" round(cut * (100 + tax) / 100) big
+"You save" round(price - cut) faint
 ```
 
 
@@ -187,58 +153,50 @@ Shape: requests that list 2 to 6 specifics: named options, field names, units, a
 
 **Example 1** (ks1)
 
-Request: `track how many glasses of water i drink each day`
+Request: `a log of my cycling rides: distance in km, time in minutes, and which bike, road or mountain`
 
 ```
-app "Glasses" drop ocean
-table drink glasses num 1..20 unit "glasses"
-setting goal num = 8 "Daily goal (glasses)"
-goal sum(drink.glasses today), goal, "today", "glasses"
-quick drink, glasses, [1, 2]
-daybars last 7 days, sum(drink.glasses on it)
-list drink
+# need: field km, field mins, option road/mountain, total week, km per hour, list
+app "Rides" bike slate
+table ride km num 0.5..300, mins num 5..900, bike pick Road|Mountain = Road
+stat sum(ride.km week), "km this week"
+stat round(sum(ride.km month) / max(sum(ride.mins month) / 60, 1) * 10) / 10, "average km per hour"
+form ride, "Add ride"
+list ride by day
 ```
 
 **Example 2** (ks2)
 
-Request: `a mood diary where i pick how i feel`
+Request: `a reading log where i give each book a star rating from 1 to 5 and see my best rated book`
 
 ```
-app "Mood" smile ink
-table entry mood pick Happy|Ok|Sad|Angry = Ok, note text?
-share entry month by mood, count(it), it.key
-form entry, "Add mood"
-list entry by day
+# need: field book, field stars, best rating, list
+app "Books" book plum
+table book title text, author text?, stars num 1..5
+"Best rating" max(book.stars) "stars" big
+each book sort stars desc as b
+  row card tap edit b swipe remove b
+    b.title bold grow
+    b.stars "stars" faint
+form book, "Add book"
 ```
 
 **Example 3** (ks3)
 
-Request: `daily petrol log with litres, price per litre, odometer and a calculated mileage per litre and monthly cost`
+Request: `tuition fees for three students at 4000, 5000 and 6500 a month, with a tick when each has paid`
 
 ```
-app "Petrol" car slate
-table refuel litres num 1..200, price money, odo num 0..2000000 "Odometer"
-let km = max(refuel.odo) - min(refuel.odo)
-"Cost this month" sum(refuel month, it.litres * it.price) big
-"Mileage" round(km / max(sum(refuel.litres), 1) * 10) / 10 "km per litre" faint
-form refuel, "Add refuel"
-list refuel by day
-```
-
-**Example 4** (ks4)
-
-Request: `habit tracker for five habits: prayer, reading, exercise, water and sleep before 11, with a streak and a weekly view`
-
-```
-app "Five habits" check mint
-table tick what pick Prayer|Reading|Exercise|Water|Sleep_before_11
-each options tick.what as h
-  row card gap 2
-    h bold grow
-    streak(tick where what = h) "day streak" faint
-    count(tick week where what = h) "this week" faint
-    button "Done today" tap add tick what = h
-heat last 70 days, count(tick on it), 5
+# need: option hira/zain/maha, field paid, field fee, total, list
+app "Tuition" school ocean
+table student name pick Hira|Zain|Maha = Hira, paid bool, fee money
+let total = sum(student.fee)
+"Collected" sum(student.fee where paid = yes) "of" total big
+each student sort name as s
+  row card gap 2 tap edit s
+    toggle s.paid
+    s.name bold grow
+    s.fee faint
+form student, "Add month"
 ```
 
 
@@ -250,50 +208,56 @@ Shape: **on-policy repair pairs.** Run r3 and r4 ep2 on about 6,000 fresh prompt
 
 **Example 1** (ck1)
 
-Request: `a dice roller`
+Request: `a spinner that picks a random student from my class list`
 
 ```
-app "Dice" dice plum
-state roll num = 1
-draw 100, 100 width 160 tap set roll = random(6)
-  rect 4, 4, 92, 92 radius 16 fill soft stroke ink thick 2
-  label 50, 54, roll big
-button "Roll again" tap set roll = random(6)
+app "Pick a student" dice mint
+table kid name text
+state chosen text = ""
+state n num = 0
+let total = max(count(kid), 1)
+button "Pick" tap set n = random(total) + 1
+each kid sort name as k
+  if index = n
+    k.name big
+form kid, "Add student"
 ```
 
 **Example 2** (ck2)
 
-Request: `committee or bc tracker with 12 members, monthly amount 5000, tick who has paid this month and total collected`
+Request: `a quiz with three questions where i tap an answer and see my score`
 
 ```
-app "Committee" users plum
-table member name text
-table paid member ref member, amount money
-setting amount money = 5000 "Monthly amount"
-"Collected this month" sum(paid.amount month) big
-each member sort name as m
-  row card gap 2
-    m.name bold grow
-    if(count(m.paid month) > 0, "Paid", "Not paid") color if(count(m.paid month) > 0, good, bad)
-    button "Got it" tap add paid member = m, amount = amount
-form member, "Add member"
+app "Quiz" trophy plum
+table q text text, right pick A|B|C, a text, b text, c text
+state i num = 0
+state score num = 0
+each q sort at as x
+  if index = i
+    x.text head
+    button x.a tap set score = score + if(x.right = A, 1, 0) then set i = i + 1
+    button x.b tap set score = score + if(x.right = B, 1, 0) then set i = i + 1
+    button x.c tap set score = score + if(x.right = C, 1, 0) then set i = i + 1
+"Score" score "of" count(q) faint
+form q, "Add question"
 ```
 
 **Example 3** (ck3)
 
-Request: `a tip calculator for dining out`
+Request: `a stopwatch that counts a workout and keeps the finished ones in a list`
 
 ```
-app "Tip" calc mint
-state bill num = 0
-state pct num = 15
-state people num = 2
-field bill "Bill"
-slider pct 0..30
-field people "People"
-let tip = bill * pct / 100
-"Tip" round(tip) big
-"Each pays" round((bill + tip) / max(people, 1)) bold
+app "Workout clock" timer ink
+table done mins num 1..300
+state t dur = 0s
+state on bool = no
+every 1s if on set t = t + 1s
+t big
+row gap 2
+  button "Go" fill good tap set on = yes
+  button "Stop" fill bad tap set on = no
+  button "Save" tap add done mins = max(1, floor(t / 1m)) then set t = 0s
+list done by day
 ```
 
 
@@ -305,42 +269,45 @@ Shape: the closest honest offline app, with one line in the app that says what t
 
 **Example 1** (un1)
 
-Request: `live cricket scores from the internet`
+Request: `show the weather forecast for my city`
 
 ```
-app "Score sheet" ball ocean
-table score runs num 0..999, wickets num 0..10, overs num 0..50
-last(score.runs) "/" last(score.wickets) big
-"Type the score by hand: Molde apps work without the internet." faint
-form score, "Update score"
-list score by day
+# need: cannot forecast, field temp, option sunny/cloudy/rain/windy, trend, list
+app "Weather notes" cloud ocean
+table note day date = today, temp num -10..50, sky pick Sunny|Cloudy|Rain|Windy = Sunny
+"Molde apps cannot fetch a forecast: write what you see outside." faint
+form note, "Add today"
+trend note last 30 days sort day, it.temp
+list note by day
 ```
 
 **Example 2** (un2)
 
-Request: `scan receipts with the camera and read the amounts`
+Request: `translate what i type from english to urdu`
 
 ```
-app "Receipts" list slate
-table receipt amount money, shop text?, photo image?
-"This month" sum(receipt.amount month) big
-"Add the picture and type the amount." faint
-form receipt, "Add receipt"
-list receipt by day
+app "Word pairs" pen plum
+table pair english text, urdu text
+"Molde apps cannot translate: save the words you learn." faint
+form pair, "Add a pair"
+list pair
 ```
 
 **Example 3** (un3)
 
-Request: `gps tracker for my bike rides on a map`
+Request: `tell me when my parcel arrives using the courier website`
 
 ```
-app "Bike rides" bike ocean
-table ride km num 0.1..300, mins num 1..900, route text?
-stat sum(ride.km week), "km this week"
-"Molde cannot read GPS: type the distance after each ride." faint
-form ride, "Add ride"
-daybars last 7 days, sum(ride.km on it)
-list ride by day
+app "Parcels" bag slate
+table parcel what text, courier text, due date?, arrived bool
+"Molde apps cannot read courier sites: tick when it arrives." faint
+count(parcel where arrived = no) "on the way" big
+each parcel where arrived = no sort due as p
+  row card gap 2 tap edit p
+    toggle p.arrived
+    p.what bold grow
+    p.courier faint
+form parcel, "Add parcel"
 ```
 
 
@@ -348,60 +315,50 @@ list ride by day
 
 What is wrong: 13 builds carried strings from another app: "Log study time" in an attendance sheet, "Add homework mark" in a class average, "A bank connection is not possible here" in a budget, "Zakat and tip", "Quiz night", "Puppet" as a bug status. The strings are in v3.1 (section 2).
 
-Shape: the same school, business, health and family topics as C3, with every label, button and title taken from the request's own words. Pair with the drop in section 2 and the leak scan of rule 2.
+Shape: the same school, business, health and family topics as C3, with every label, button and title taken from the request's own words. Each example is the program a leaking model should have written for a request whose r3 or r4 answer carried a leak; the pair itself contains none of the leak strings, which is what the leak scan of rule 2 verifies on the training side. Pair with the drop in section 2.
 
 **Example 1** (ll1)
 
-Request: `attendance sheet for my class`
+Request: `who brought what to the family picnic`
 
 ```
-app "Attendance" users slate
-table kid name text
-table here kid ref kid
-state d date = today
-count(kid) "students," count(here on d) "present" big
-each kid sort name as k
-  row card gap 1
-    k.name bold grow
-    if count(k.here on d) = 0
-      button "Mark present" tap add here kid = k
-    else
-      "Present" color good
-form kid, "Add student"
+app "Picnic" food mint
+table dish who text, what text, serves num 1..30 = 4
+"People fed" sum(dish.serves) big
+form dish, "Add a dish"
+list dish
 ```
 
 **Example 2** (ll2)
 
-Request: `record student marks and show the class average`
+Request: `my cricket club members and their match fees`
 
 ```
-app "Class marks" school ocean
-table student name text
-table mark student ref student, subject text, score num 0..100
-"Class average" round(avg(mark.score)) big
-each student sort name as s
-  row card gap 2
-    s.name bold grow
-    round(avg(s.mark.score)) bold
-form student, "Add student"
-form mark, "Add mark"
+app "Club fees" ball ocean
+table member name text, fee money, paid bool
+"Still to collect" sum(member.fee where paid = no) big
+each member sort name as m
+  row card gap 2 tap edit m
+    toggle m.paid
+    m.name bold grow
+    m.fee faint
+form member, "Add member"
 ```
 
 **Example 3** (ll3)
 
-Request: `school lunch planner`
+Request: `keep track of the plants i water and when`
 
 ```
-app "Lunch box" school ocean
-table lunch day pick Mon|Tue|Wed|Thu|Fri, dish text, note text?
-each options lunch.day as d
-  stack card gap 1
-    d bold
-    each lunch where day = d as l
-      row gap 1 tap edit l swipe remove l
-        l.dish grow
-        l.note faint
-form lunch, "Plan a lunch"
+app "Plants" plant mint
+table plant name text, every num 1..30 = 3 "Days between waterings"
+table watered plant ref plant
+each plant sort name as p
+  row card gap 2
+    p.name bold grow
+    "last" last(p.watered.at) faint
+    button "Watered" tap add watered plant = p
+form plant, "Add plant"
 ```
 
 
@@ -411,50 +368,42 @@ Shape: medium requests ("pocket money tracker for my kids", "a simple khata for 
 
 **Example 1** (nt1)
 
-Request: `pocket money tracker for my kids`
+Request: `the money my sister owes me and what she has paid back`
 
 ```
-app "Pocket money" coin mint
-table kid name text
-table move kid ref kid, amount money, kind pick Got|Spent = Got, note text?
-each kid as k
-  row card tap edit k
-    k.name bold grow
-    sum(k.move.amount where kind = Got) - sum(k.move.amount where kind = Spent) big
-form kid, "Add child"
+app "Sister" wallet plum
+table move kind pick Lent|Paid_back = Lent, amount money, note text?
+"She still owes" sum(move.amount where kind = Lent) - sum(move.amount where kind = Paid_back) big
+quick move, amount, [500, 1000, 5000]
 form move, "Add entry"
 list move by day
 ```
 
 **Example 2** (nt2)
 
-Request: `savings`
+Request: `daily walk count`
 
 ```
-app "Savings" coin mint
-table deposit amount money 10..1000000
-setting goal money = 100000 "Savings goal"
-goal sum(deposit.amount), goal, "saved so far"
-quick deposit, amount, [1000, 5000, 10000]
-form deposit
-list deposit by day
+app "Steps" walk mint
+table walk steps num 100..60000 unit "steps"
+setting goal num = 8000 "Daily goal"
+goal sum(walk.steps today), goal, "today", "steps"
+quick walk, steps, [1000, 3000, 5000]
+daybars last 7 days, sum(walk.steps on it)
+list walk by day
 ```
 
 **Example 3** (nt3)
 
-Request: `a simple khata for my customers`
+Request: `monthly gas and electricity units`
 
 ```
-app "Khata" wallet mint
-table customer name text, phone text?
-table entry customer ref customer, amount money, kind pick Gave|Got
-"Customers owe you" sum(entry.amount where kind = Gave) - sum(entry.amount where kind = Got) big
-each customer sort name as c
-  row card tap edit c
-    c.name bold grow
-    sum(c.entry.amount where kind = Gave) - sum(c.entry.amount where kind = Got) bold
-form customer, "Add customer"
-form entry, "Add entry"
+app "Utility units" bolt ocean
+table reading kind pick Gas|Electricity = Electricity, units num 0..5000, cost money
+bars reading month by kind, sum(it.units), it.key
+stat sum(reading.cost month), "cost this month"
+form reading, "Add reading"
+list reading by day
 ```
 
 
@@ -464,47 +413,50 @@ What is wrong: 6 builds with absurd defaults (a daily study goal of 12 hours, a 
 
 **Example 1** (rn1)
 
-Request: `how many hours i studied today`
+Request: `daily goal for how long i read`
 
 ```
-app "Study hours" school ocean
-table study subject text?, mins num 1..600
-setting goal num = 3 "Daily goal (hours)"
-goal sum(study.mins today) / 60, goal, "hours today", "h"
-quick study, mins, [30, 60, 90]
-form study
-daybars last 7 days, sum(study.mins on it) / 60
-list study by day
+app "Reading time" book plum
+table sit mins num 5..300 unit "min"
+setting goal num = 30 "Daily goal (min)"
+goal sum(sit.mins today), goal, "today", "min"
+quick sit, mins, [10, 20, 30]
+list sit by day
 ```
 
 **Example 2** (rn2)
 
-Request: `baby feeding`
+Request: `track how much i sleep each night, aim for eight hours`
 
 ```
-app "Baby feeds" baby mint
-table feed ml num 10..300 unit "ml"
-stat sum(feed.ml today), "ml today"
-stat count(feed today), "feeds today"
-quick feed, ml, [60, 90, 120]
-form feed
-daybars last 7 days, sum(feed.ml on it)
-list feed by day
+app "Sleep" bed ink
+table night hours num 1..16
+setting need num = 8 "Hours I aim for"
+stat round(avg(night.hours last 7 days) * 10) / 10, "average this week"
+goal last(night.hours), need, "last night", "h"
+form night, "Add night"
+trend night last 30 days sort at, it.hours
 ```
 
 **Example 3** (rn3)
 
-Request: `a step counter log with a weekly goal`
+Request: `body height and weight check`
 
 ```
-app "Weekly steps" walk mint
-table walk steps num 100..100000 unit "steps"
-setting goal num = 70000 "Weekly goal (steps)"
-goal sum(walk.steps week), goal, "this week", "steps"
-quick walk, steps, [1000, 2000, 5000]
-form walk
-daybars last 7 days, sum(walk.steps on it)
-list walk
+app "Body check" scale mint
+state cm num = 165
+state kg num = 65
+field cm "Height (cm)"
+field kg "Weight (kg)"
+let bmi = round(kg * 10000 / (cm * cm) * 10) / 10
+"Body mass index" bmi big
+if bmi < 18.5
+  "Under the usual range" color warn
+else
+  if bmi < 25
+    "In the usual range" color good
+  else
+    "Above the usual range" color warn
 ```
 
 
@@ -516,48 +468,50 @@ Shape: each correct request with 1 to 3 character-level typos (dropped, doubled,
 
 **Example 1** (ty1)
 
-Request: `sals report`
+Request: `hoem budgat`
 
 ```
-app "Sales report" chart slate
-table sale item text, amount money
-stat sum(sale.amount today), "today"
-stat sum(sale.amount month), "this month"
-form sale, "Add sale"
-daybars last 7 days, sum(sale.amount on it)
-list sale by day
+# need: field spend, option food/bills/school/other, setting limit, chart, list
+app "Home budget" home slate
+table spend what text, amount money, kind pick Food|Bills|School|Other = Food
+setting limit money = 60000 "Monthly limit"
+goal sum(spend.amount month), limit, "spent this month"
+share spend month by kind, sum(it.amount), it.key
+form spend, "Add spending"
+list spend month by day
 ```
 
 **Example 2** (ty2)
 
-Request: `medecine reminder`
+Request: `vacine remindr for my baby`
 
 ```
-app "Medicine" pill plum
-table med name text, dose text?, time time
-table taken med ref med
-remind "Time for your medicine" at med.time
-count(taken today) "of" count(med) "taken today" head
-each med sort time as m
-  row card gap 2 tap edit m swipe remove m
-    stack grow
-      m.name bold
-      m.time m.dose faint
-    toggle m.taken
-form med, "Add medicine"
+app "Baby vaccines" baby mint
+table shot name text, due date, done bool
+count(shot where done = no) "still to give" big
+each shot where done = no sort due as s
+  row card gap 2 tap edit s
+    toggle s.done
+    s.name bold grow
+    s.due color if(s.due < today, bad, muted)
+remind "A vaccine is due tomorrow" at shot.due - 1d at 9:00
+form shot, "Add vaccine"
 ```
 
 **Example 3** (ty3)
 
-Request: `expence tracker`
+Request: `wekly meel plan`
 
 ```
-app "Expenses" wallet mint
-table spend what text, amount money, category pick Food|Bills|Travel|Fun|Other = Other
-stat sum(spend.amount month), "this month"
-form spend, "Add expense"
-share spend month by category, sum(it.amount), it.key
-list spend by day
+app "Meals" food ocean
+table meal day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun, dish text
+each options meal.day as d
+  stack card gap 1
+    d bold
+    each meal where day = d as m
+      row gap 1 tap edit m swipe remove m
+        m.dish grow
+form meal, "Plan a meal"
 ```
 
 
@@ -571,32 +525,32 @@ What is wrong: r3 returned the program unchanged 26 of 68 times and did it right
 
 **Example 1** (af1)
 
-Edit request: `add a note field` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `i want to note how hard each set felt` on a 5-line program (`app "Gym" dumbbell ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table drink ml num 1..5000 unit "ml"
-+table drink ml num 1..5000 unit "ml", note text?
+-table lift exercise text, kg num 0..300, reps num 1..50
++table lift exercise text, kg num 0..300, reps num 1..50, effort num 1..10
 ```
 
 **Example 2** (af2)
 
-Edit request: `add a field for payment method` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `every job needs the name of who does it` on a 8-line program (`app "Jobs" list slate` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table spend what text, amount money, category pick Food|Bills|Travel|Fun|Other = Other
-+table spend what text, amount money, category pick Food|Bills|Travel|Fun|Other = Other, method pick Cash|Card|Other = Cash
+-table job title text, done bool
++table job title text, who text?, done bool
 ```
 
 **Example 3** (af3)
 
-Edit request: `can you add a due date` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `keep the year each book came out` on a 9-line program (`app "Books" book plum` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table task title text, done bool, priority pick Low|Normal|High = Normal
-+table task title text, done bool, priority pick Low|Normal|High = Normal, due date?
+-table book title text, author text?, pages num 1..3000, done bool
++table book title text, author text?, pages num 1..3000, year num 1000..2100, done bool
 ```
 
 
@@ -606,32 +560,32 @@ What is wrong: 0 of 13 right in r3 (11 unchanged); v3.1 has 4 such pairs on prog
 
 **Example 1** (ao1)
 
-Edit request: `add Online as an option` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `my gifts need their own heading` on a 6-line program (`app "Spending" wallet mint` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table spend what text, amount money, category pick Food|Bills|Travel|Fun|Other = Other
-+table spend what text, amount money, category pick Food|Bills|Travel|Fun|Online|Other = Other
+-table spend what text, amount money, kind pick Food|Bills|Fun = Food
++table spend what text, amount money, kind pick Food|Bills|Fun|Gifts = Food
 ```
 
 **Example 2** (ao2)
 
-Edit request: `also let me pick Urgent` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `a fourth dish is coming: biryani is already there, so put in karahi` on a 4-line program (`app "Vote" users ocean` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table task title text, done bool, priority pick Low|Normal|High = Normal
-+table task title text, done bool, priority pick Low|Normal|High|Urgent = Normal
+-table vote choice pick Pizza|Burger|Biryani = Pizza
++table vote choice pick Pizza|Burger|Biryani|Karahi = Pizza
 ```
 
 **Example 3** (ao3)
 
-Edit request: `add Cash to the choices` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `sometimes money comes back to a child as a refund` on a 9-line program (`app "Pocket money" coin mint` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table spend what text, amount money, category pick Food|Bills|Travel|Fun|Card|Other = Card
-+table spend what text, amount money, category pick Food|Bills|Travel|Fun|Card|Cash|Other = Card
+-table move kid ref kid, amount money, kind pick Got|Spent = Got
++table move kid ref kid, amount money, kind pick Got|Spent|Refund = Got
 ```
 
 
@@ -641,29 +595,29 @@ What is wrong: 0 of 23 final results (10 unchanged, 7 damaged other lines, 5 cor
 
 **Example 1** (rm1)
 
-Edit request: `remove the chart` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `i can do without the line graph` on a 6-line program (`app "Weight" scale ocean` ...)
 
 Change (`-` old line, `+` new line):
 ```
--daybars last 7 days, sum(drink.ml on it)
+-trend weigh last 60 days sort at, it.kg
 ```
 
 **Example 2** (rm2)
 
-Edit request: `remove the list at the bottom` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `take away the little week dots` on a 5-line program (`app "Habit" check ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
--list spend month by day
+-weekdots count(tick on it) > 0
 ```
 
 **Example 3** (rm3)
 
-Edit request: `i do not need the goal` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `the long history underneath is too much` on a 6-line program (`app "Spending" wallet mint` ...)
 
 Change (`-` old line, `+` new line):
 ```
--goal sum(drink.ml today), goal, "today", "ml"
+-list spend month by day
 ```
 
 
@@ -673,29 +627,29 @@ What is wrong: add chart 23 of 41 right in r3, add stat 16 of 43; failures: unch
 
 **Example 1** (ac1)
 
-Edit request: `add a bar chart of this week` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `draw my weight lifted over time` on a 5-line program (`app "Gym" dumbbell ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
-+daybars last 7 days, count(task on it)
++trend lift last 90 days sort at, it.kg
 ```
 
 **Example 2** (ac2)
 
-Edit request: `show the average too` on a 5-line program (`app "Weight" scale mint` ...)
+Edit request: `how many of my pills did i take today` on a 10-line program (`app "Medicine" pill plum` ...)
 
 Change (`-` old line, `+` new line):
 ```
-+stat round(avg(weigh.kg last 30 days) * 10) / 10, "average, last 30 days"
++stat count(taken today), "taken today"
 ```
 
 **Example 3** (ac3)
 
-Edit request: `add a count of entries this week` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `a bar per day for the focus rounds` on a 5-line program (`app "Focus" timer mint` ...)
 
 Change (`-` old line, `+` new line):
 ```
-+stat count(spend week), "expenses this week"
++daybars last 7 days, count(round on it)
 ```
 
 
@@ -705,65 +659,61 @@ What is wrong: 4 of 29 right in r3. A correct section edit re-indents lines, so 
 
 **Example 1** (se1)
 
-Edit request: `split it into sections` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `give the screen proper headings` on a 9-line program (`app "Books" book plum` ...)
 
 Change (`-` old line, `+` new line):
 ```
--if(spent > budget, "Over budget by", "Left to spend") abs(budget - spent) big
--goal spent, budget, "spent"
--form spend, "Add expense"
--share spend month by category, sum(it.amount), it.key
--list spend month by day
-+section "This month", "budget and spending"
-+  if(spent > budget, "Over budget by", "Left to spend") abs(budget - spent) big
-+  goal spent, budget, "spent"
-+section "Add"
-+  form spend, "Add expense"
-+section "Where it went", "this month"
-+  share spend month by category, sum(it.amount), it.key
-+section "History"
-+  list spend month by day
+-count(book where done = yes) "finished" big
+-each book sort title as b
+-  row card tap edit b swipe remove b
+-    toggle b.done
+-    b.title bold grow
+-    b.pages faint
+-form book, "Add book"
++section "Progress"
++  count(book where done = yes) "finished" big
++section "My books"
++  each book sort title as b
++    row card tap edit b swipe remove b
++      toggle b.done
++      b.title bold grow
+... (3 more changed lines)
 ```
 
 **Example 2** (se2)
 
-Edit request: `group things into sections with titles` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `put the rent part and the tenants part under their own titles` on a 10-line program (`app "Rent" home slate` ...)
 
 Change (`-` old line, `+` new line):
 ```
--count(task where done = no) "open" head
--each task where done = no sort priority desc as t
--  row card gap 2 tap edit t swipe remove t
--    toggle t.done
--    t.title grow
--form task, "Add task"
-+section "Open", "what is left"
-+  count(task where done = no) "open" head
-+  each task where done = no sort priority desc as t
-+    row card gap 2 tap edit t swipe remove t
-+      toggle t.done
-+      t.title grow
-+section "Add"
-+  form task, "Add task"
+-"Collected" sum(paid.amount month) big
+-each tenant sort name as t
+-  row card gap 2
+-    t.name bold grow
+-    if(sum(t.paid.amount month) >= rent, "Paid", "Due") color if(sum(t.paid.amount month) >= rent, good, bad)
+-form tenant, "Add tenant"
++section "This month"
++  "Collected" sum(paid.amount month) big
++section "Tenants"
++  each tenant sort name as t
++    row card gap 2
++      t.name bold grow
++      if(sum(t.paid.amount month) >= rent, "Paid", "Due") color if(sum(t.paid.amount month) >= rent, good, bad)
++  form tenant, "Add tenant"
 ```
 
 **Example 3** (se3)
 
-Edit request: `organise this with section headings` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `split this into cards, one for the sleep numbers and one for the chart` on a 6-line program (`app "Sleep" bed ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
--goal sum(drink.ml today), goal, "today", "ml"
--quick drink, ml, [250, 500, 750]
--daybars last 7 days, sum(drink.ml on it)
--list drink
-+section "Today", "against the goal"
-+  goal sum(drink.ml today), goal, "today", "ml"
-+  quick drink, ml, [250, 500, 750]
-+section "This week"
-+  daybars last 7 days, sum(drink.ml on it)
-+section "Drinks"
-+  list drink
+-avg7 big
+-daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
++section "Average"
++  avg7 big
++section "Last week"
++  daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
 ```
 
 
@@ -773,32 +723,32 @@ What is wrong: "i want to aim for 3000 instead", "make my goal 3000", "set the t
 
 **Example 1** (sv1)
 
-Edit request: `i want to aim for 3000 instead` on a 7-line program (`app "Water" drop ocean` ...)
-
-Change (`-` old line, `+` new line):
-```
--setting goal num = 2000 "Daily goal (ml)"
-+setting goal num = 3000 "Daily goal (ml)" set
-```
-
-**Example 2** (sv2)
-
-Edit request: `make the monthly limit 60000` on a 9-line program (`app "Spending" wallet mint` ...)
-
-Change (`-` old line, `+` new line):
-```
--setting budget money = 80000 "Monthly budget"
-+setting budget money = 60000 "Monthly budget" set
-```
-
-**Example 3** (sv3)
-
-Edit request: `set the target to 100` on a 6-line program (`app "Tasbeeh" beads mint` ...)
+Edit request: `a full round is 108 for me` on a 9-line program (`app "Tasbeeh" beads mint` ...)
 
 Change (`-` old line, `+` new line):
 ```
 -setting target num = 33 "Count to"
-+setting target num = 100 "Count to" set
++setting target num = 108 "Count to" set
+```
+
+**Example 2** (sv2)
+
+Edit request: `rent goes up to 18000 next month` on a 10-line program (`app "Rent" home slate` ...)
+
+Change (`-` old line, `+` new line):
+```
+-setting rent money = 15000 "Monthly rent"
++setting rent money = 18000 "Monthly rent" set
+```
+
+**Example 3** (sv3)
+
+Edit request: `i am aiming at a lakh and a half now` on a 9-line program (`app "Savings" coin mint` ...)
+
+Change (`-` old line, `+` new line):
+```
+-setting goal money = 100000 "Savings goal"
++setting goal money = 150000 "Savings goal" set
 ```
 
 
@@ -808,40 +758,42 @@ What is wrong: 3 of 28 right. The model writes the new name without `was` (the d
 
 **Example 1** (rf1)
 
-Edit request: `rename ml to amount` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `the bed time field should just be called bedtime` on a 6-line program (`app "Sleep" bed ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table drink ml num 1..5000 unit "ml"
-+table drink amount num 1..5000 unit "ml" was ml
--goal sum(drink.ml today), goal, "today", "ml"
--quick drink, ml, [250, 500, 750]
--daybars last 7 days, sum(drink.ml on it)
-+goal sum(drink.amount today), goal, "today", "ml"
-+quick drink, amount, [250, 500, 750]
-+daybars last 7 days, sum(drink.amount on it)
+-table night slept time, woke time
+-let avg7 = sum(night last 7 days, (it.woke - it.slept)) / count(night last 7 days)
++table night bedtime time was slept, woke time
++let avg7 = sum(night last 7 days, (it.woke - it.bedtime)) / count(night last 7 days)
+-daybars last 7 days, sum(night on it, (it.woke - it.slept) / 1h)
++daybars last 7 days, sum(night on it, (it.woke - it.bedtime) / 1h)
 ```
 
 **Example 2** (rf2)
 
-Edit request: `call the what field item` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `the name of the person should be called "who"` on a 7-line program (`app "Birthdays" gift plum` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table spend what text, amount money, category pick Food|Bills|Travel|Fun|Other = Other
-+table spend item text was what, amount money, category pick Food|Bills|Travel|Fun|Other = Other
+-table person name text, birthday date
++table person who text was name, birthday date
+-    p.name bold grow
++    p.who bold grow
 ```
 
 **Example 3** (rf3)
 
-Edit request: `rename the title field to task` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `rename the cost kind choices heading to "group"` on a 10-line program (`app "Shop costs" bag ocean` ...)
 
 Change (`-` old line, `+` new line):
 ```
--table task title text, done bool, priority pick Low|Normal|High = Normal
-+table task task text was title, done bool, priority pick Low|Normal|High = Normal
--    t.title grow
-+    t.task grow
+-table cost what text, amount money, kind pick Milk|Gas|Wages = Milk
++table cost what text, amount money, group pick Milk|Gas|Wages = Milk was kind
+-each options cost.kind as k
++each options cost.group as k
+-    sum(cost.amount month where kind = k) faint
++    sum(cost.amount month where group = k) faint
 ```
 
 
@@ -851,32 +803,32 @@ What is wrong: 6 of 34 right in r3 (20 unchanged); r4 ep2 is better on short pro
 
 **Example 1** (rb1)
 
-Edit request: `rename the Add expense button to Spend` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `the Add person button should say Remember` on a 7-line program (`app "Birthdays" gift plum` ...)
 
 Change (`-` old line, `+` new line):
 ```
--form spend, "Add expense"
-+form spend, "Spend"
+-form person, "Add person"
++form person, "Remember"
 ```
 
 **Example 2** (rb2)
 
-Edit request: `the Add task button should say New task` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `rename the plus button to Add one more` on a 9-line program (`app "Stock" package slate` ...)
 
 Change (`-` old line, `+` new line):
 ```
--form task, "Add task"
-+form task, "New task"
+-    button "+" tap set i.qty = i.qty + 1
++    button "Add one more" tap set i.qty = i.qty + 1
 ```
 
 **Example 3** (rb3)
 
-Edit request: `change the Add weight button to say Weigh in` on a 5-line program (`app "Weight" scale mint` ...)
+Edit request: `make the pill button read Took it` on a 10-line program (`app "Medicine" pill plum` ...)
 
 Change (`-` old line, `+` new line):
 ```
--form weigh, "Add weight"
-+form weigh, "Weigh in"
+-form med, "Add medicine"
++form med, "Took it"
 ```
 
 
@@ -886,93 +838,127 @@ What is wrong: v3.1 has 0 reorder pairs on programs of 12 lines or fewer; 600 on
 
 **Example 1** (ro1)
 
-Edit request: `put the add form at the top` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `chart first, then the list` on a 6-line program (`app "Weight" scale ocean` ...)
 
 Change (`-` old line, `+` new line):
 ```
-+form spend, "Add expense"
--form spend, "Add expense"
++trend weigh last 60 days sort at, it.kg
++form weigh, "Add weight"
+-form weigh, "Add weight"
+-trend weigh last 60 days sort at, it.kg
 ```
 
 **Example 2** (ro2)
 
-Edit request: `put the chart above the list` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `the form should come before the totals` on a 9-line program (`app "Pocket money" coin mint` ...)
 
 Change (`-` old line, `+` new line):
 ```
-+daybars last 7 days, sum(drink.ml on it)
--daybars last 7 days, sum(drink.ml on it)
++form kid, "Add child"
++form move, "Add entry"
+-form kid, "Add child"
+-form move, "Add entry"
 ```
 
 **Example 3** (ro3)
 
-Edit request: `move the totals to the top` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `show how many are open above the list of jobs` on a 8-line program (`app "Jobs" list slate` ...)
 
 Change (`-` old line, `+` new line):
 ```
-+stat count(task where done = no), "open"
--stat count(task where done = no), "open"
++stat count(job where done = no), "open"
+-stat count(job where done = no), "open"
 ```
 
 
-### E10. Vague requests and requests the app cannot do (classes `vague_small`, `cannot_do_identity`): add 400
+### E10. Vague requests and requests the app cannot do (classes `vague_ask`, `cannot_do_ask`): add 400
 
-What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged (harmless), 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times (right) and tried to add an invented `remind` or `when` line 13 times (4 got through). Vague: one small safe change (accent colour, drop one optional line), never a rewrite. Cannot do: the program comes back identical (the app already answers "I couldn't make that change yet").
-
-**Example 1** (vg1)
-
-Edit request: `make it nicer` on a 7-line program (`app "Water" drop ocean` ...)
-
-Change (`-` old line, `+` new line):
-```
--app "Water" drop ocean
-+app "Water" drop teal
-```
-
-**Example 2** (vg2)
-
-Edit request: `make it simpler` on a 9-line program (`app "Spending" wallet mint` ...)
-
-Change (`-` old line, `+` new line):
-```
--share spend month by category, sum(it.amount), it.key
-```
-
-**Example 3** (vg3)
-
-Edit request: `this is too busy` on a 9-line program (`app "To do" list slate` ...)
-
-Change (`-` old line, `+` new line):
-```
--daybars last 7 days, count(task on it)
-```
-
+What is wrong: of 49 vague steps ("make it nicer", "make it simpler", "this is too busy"), 37 came back unchanged with no message, 6 tried a bigger change that the guards stopped, 3 failed the checker, 3 applied a small change; of 33 requests for email, sync, passwords and banks, the model left the program unchanged 20 times and tried to add an invented `remind` or `when` line 13 times (4 got through). Silent no-ops are not acceptable teaching data: the user must be told, in plain English, what the app can do instead. So no identity pairs. For a request the app cannot do, and for a vague request, the answer is the existing `ask` line (needs the capability and vague word list of L6, because `allowAsk` is false today for any request with a real word): one plain sentence that says what cannot be done and what can, and answer choices that are real edits. The `Edit request / Question / Answer` form then makes the change. Never show the language's own syntax to the user (`was`, `pick ...`, `table`); the app's data-rule refusal text is a separate bug (APP_BUGS #11).
 
 **Example 1** (id1)
 
-Edit request: `email me a report every week` on a 7-line program (`app "Water" drop ocean` ...)
+Edit request: `send my spending to my accountant by email each friday` on a 6-line program (`app "Daily spend" wallet ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
-(no change: the program comes back exactly as it was)
+-app "Daily spend" wallet ink
+-table spend amount money, note text?
+-quick spend, amount, [100, 500, 1000]
+-stat sum(spend.amount today), "today"
+-stat sum(spend.amount month), "this month"
+-list spend by day
++ask "Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?" "Yes, add a weekly total" "No, leave it as it is"
 ```
 
 **Example 2** (id2)
 
-Edit request: `sync this with google drive` on a 9-line program (`app "Spending" wallet mint` ...)
+Edit request: `send my spending to my accountant by email each friday
+Question: Molde apps cannot send email. Do you want a weekly total on this screen that you can read out or screenshot?
+Answer: Yes, add a weekly total` on a 6-line program (`app "Daily spend" wallet ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
-(no change: the program comes back exactly as it was)
++stat sum(spend.amount week), "this week"
 ```
 
 **Example 3** (id3)
 
-Edit request: `add a password lock` on a 8-line program (`app "To do" list slate` ...)
+Edit request: `lock the app with my fingerprint` on a 5-line program (`app "Habit" check ink` ...)
 
 Change (`-` old line, `+` new line):
 ```
-(no change: the program comes back exactly as it was)
+-app "Habit" check ink
+-table tick
+-streak(tick) "day streak" big
+-weekdots count(tick on it) > 0
+-button "Done today" tap add tick
++ask "Molde apps cannot use the fingerprint reader. Your phone's own lock still protects them. Do you want anything else changed?" "No, that is fine" "Yes, something else"
+```
+
+
+**Example 1** (vg1)
+
+Edit request: `can you make this look prettier` on a 6-line program (`app "Water" drop ocean` ...)
+
+Change (`-` old line, `+` new line):
+```
+-app "Water" drop ocean
+-table drink ml num 1..5000 unit "ml"
+-setting goal num = 2000 "Daily goal (ml)"
+-goal sum(drink.ml today), goal, "today", "ml"
+-quick drink, ml, [250, 500]
+-list drink
++ask "What should look nicer?" "A different colour" "Bigger text" "A chart of the week" "Leave it as it is"
+```
+
+**Example 2** (vg2)
+
+Edit request: `it feels crowded` on a 10-line program (`app "Shop costs" bag ocean` ...)
+
+Change (`-` old line, `+` new line):
+```
+-app "Shop costs" bag ocean
+-table cost what text, amount money, kind pick Milk|Gas|Wages = Milk
+-setting rent money = 15000 "Monthly rent"
+-let total = sum(cost.amount month) + rent
+-"This month" total big
+-each options cost.kind as k
+-  row card
+-    k bold grow
+-    sum(cost.amount month where kind = k) faint
+-form cost, "Add cost"
++ask "What can go?" "The list of costs by kind" "The rent line" "Nothing, keep it"
+```
+
+**Example 3** (vg3)
+
+Edit request: `can you make this look prettier
+Question: What should look nicer?
+Answer: A chart of the week` on a 6-line program (`app "Water" drop ocean` ...)
+
+Change (`-` old line, `+` new line):
+```
++daybars last 7 days, sum(drink.ml on it)
 ```
 
 
@@ -1013,26 +999,26 @@ Change (`-` old line, `+` new line):
 
 ## 5. Levers: what to do for every failure class, with expected gain
 
-"More pairs" is lever 0 and is already in sections 3 and 4. These seven levers change what the model is asked to do, so the same data goes further. Gains are my **estimates** (percentage points of the metric named in the first column, on the hunt's own set), each with its basis; the evidence I measured is marked **measured**. Do not add them: the same failures are fixed by more than one lever.
+"More pairs" is lever 0 and is already in sections 3 and 4. These seven levers change what the model is asked to do, so the same data goes further. Every claim below is marked **measured** (a number from this hunt) or **hypothesis** (something an experiment of section 6 must test). I give no percentage target that is not backed by a measurement: the earlier version's 55 to 62% and 55 to 65% were sums of hypotheses and are withdrawn.
 
 ### The levers
 
 **L1. Edit as patch operations.** The prompt shows the program with line numbers; the model writes only `replace 7: <line>`, `insert after 7: <line>`, `delete 9`, `move 4-6 after 12`. The app applies it deterministically (and checks the result). Format in `tools/to_patch.py`. **Measured:** all 7,024 v3.1 edit pairs convert and round-trip exactly (100%); median 1 operation (6,366 need one, 7,006 need three or fewer, none more than six); the patch is a median **16 tokens against 173** for the full program (p90 39 against 556), so about 11 times fewer output tokens: faster, and nothing to copy wrongly. The model still writes every new line itself. A reorder is `move`. A rename with `was` is one `replace` of the table line plus `replace` of each line that uses the old name (the model decides which). Add 400 pairs where the right answer is no operation at all (the request cannot be done), written `# none`, so that "unchanged" is a decision and not the cheapest output.
 
-Edit request: `add Online as an option` on a 9-line program
+Edit request: `my gifts need their own heading` on a 6-line program
 
-Patch the model would write instead of 9 lines:
+Patch the model would write instead of 6 lines:
 ```
 replace 2:
-table spend what text, amount money, category pick Food|Bills|Travel|Fun|Online|Other = Other
+table spend what text, amount money, kind pick Food|Bills|Fun|Gifts = Food
 ```
 
-Edit request: `rename the Add expense button to Spend` on a 9-line program
+Edit request: `the Add person button should say Remember` on a 7-line program
 
-Patch the model would write instead of 9 lines:
+Patch the model would write instead of 7 lines:
 ```
 replace 7:
-form spend, "Spend"
+form person, "Remember"
 ```
 
 Edit request: `the Record game button should say Add result` on a 40-line program
@@ -1043,108 +1029,125 @@ replace 30:
 form game, "Add result"
 ```
 
-Edit request: `remove the chart` on a 7-line program
+Edit request: `i can do without the line graph` on a 6-line program
 
-Patch the model would write instead of 6 lines:
+Patch the model would write instead of 5 lines:
 ```
-delete 6
+delete 4
 ```
 
 
 **L2. A plan line before the program.** `# need: field drink, field ml, goal, quick buttons, chart, list`. Written by the model from the request, **in English even when the request is Roman Urdu or has typos**. Vocabulary: `field NAME`, `setting NAME`, `option A/B/C`, concept words (goal, chart, total month, streak, list, form, reminder, timer, calendar, tick, quick buttons), and `cannot WHAT` for something the app cannot do (information only). The app removes the line before checking and showing the program. Training plans are derived from request plus target program (the plan lists what the request names and the program has) and verified with `tools/plan_check.mjs`. At inference, the plan is a checkable contract: every item must show in the program, and a program line that no plan item explains is a leak. Format change needed in the grammar: one optional `plan-stmt` as the first line. **Measured:** on the six example pairs the plan check passes the right program, and it flags the wrong outputs r3 and r4 ep2 gave for the same requests (r3 mood diary: missing `option happy/ok/sad/angry`, `field note`, `chart month`; r4 ep2 petrol: missing `field odometer`, `mileage`; r4 ep2 for `paani peene ka hisaab`: missing `field drink`, `list`); it passes the one case that was right (live scores by hand). Six cases are an illustration, not a rate: the rate needs the plans for the 407 requests (a day of work, `tools/plan_negative_check.mjs` is the harness).
 
-**Example 1** (pl1)
+**Example 1** (ru1)
 
-Request: `paani peene ka hisaab`
-
-```
-# need: field drink, field ml, goal, quick buttons, chart, list
-app "Paani" drop ocean
-table drink ml num 1..5000 unit "ml"
-setting goal num = 2000 "Daily goal (ml)"
-goal sum(drink.ml today), goal, "today", "ml"
-quick drink, ml, [250, 500, 750]
-daybars last 7 days, sum(drink.ml on it)
-list drink
-```
-
-**Example 2** (pl2)
-
-Request: `a mood diary where i pick how i feel`
+Request: `chai ki dukaan ka rozana hisaab, kitne cup bike aur kitna paisa aaya`
 
 ```
-# need: option happy/ok/sad/angry, field note, chart month, list
-app "Mood" smile ink
-table entry mood pick Happy|Ok|Sad|Angry = Ok, note text?
-share entry month by mood, count(it), it.key
-form entry, "Add mood"
-list entry by day
+# need: field cup, option doodh_patti/kadak/green_tea, field qty, field rate, total today, chart, list
+app "Chai hisaab" coffee orange
+table cup kind pick Doodh_patti|Kadak|Green_tea = Doodh_patti, qty num 1..200 = 1, rate money
+stat sum(cup today, it.qty * it.rate), "aaj ka paisa"
+stat sum(cup.qty today), "aaj ke cup"
+share cup week by kind, sum(it.qty), it.key
+form cup, "Naya hisaab"
+list cup by day
 ```
 
-**Example 3** (pl3)
+**Example 2** (ru2)
 
-Request: `daily petrol log with litres, price per litre, odometer and a calculated mileage per litre and monthly cost`
-
-```
-# need: field litres, field price, field odometer, mileage, total month, list
-app "Petrol" car slate
-table refuel litres num 1..200, price money, odo num 0..2000000 "Odometer"
-let km = max(refuel.odo) - min(refuel.odo)
-"Cost this month" sum(refuel month, it.litres * it.price) big
-"Mileage" round(km / max(sum(refuel.litres), 1) * 10) / 10 "km per litre" faint
-form refuel, "Add refuel"
-list refuel by day
-```
-
-**Example 4** (pl4)
-
-Request: `sals report`
+Request: `gaon ki committee mein har banda mahine ka kitna deta hai aur kis ka baqi hai`
 
 ```
-# need: field amount, total today, total month, chart, list
-app "Sales report" chart slate
-table sale item text, amount money
-stat sum(sale.amount today), "today"
-stat sum(sale.amount month), "this month"
-form sale, "Add sale"
-daybars last 7 days, sum(sale.amount on it)
-list sale by day
+# need: field banda, field jama, setting hissa, total month, list
+app "Committee" users plum
+table banda name text
+table jama banda ref banda, amount money
+setting hissa money = 2000 "Mahine ka hissa"
+"Is mahine jama" sum(jama.amount month) big
+each banda sort name as b
+  row card gap 2
+    b.name bold grow
+    if(sum(b.jama.amount month) >= hissa, "Ada", "Baqi") color if(sum(b.jama.amount month) >= hissa, good, bad)
+    button "Jama" tap add jama banda = b, amount = hissa
+form banda, "Naya banda"
 ```
 
-**Example 5** (pl5)
+**Example 3** (ks1)
 
-Request: `live cricket scores from the internet`
-
-```
-# need: cannot internet, field runs, field wickets, list
-app "Score sheet" ball ocean
-table score runs num 0..999, wickets num 0..10, overs num 0..50
-last(score.runs) "/" last(score.wickets) big
-"Type the score by hand: Molde apps work without the internet." faint
-form score, "Update score"
-list score by day
-```
-
-**Example 6** (pl6)
-
-Request: `bachon ki fees ka record, kis ne di kis ne nahi`
+Request: `a log of my cycling rides: distance in km, time in minutes, and which bike, road or mountain`
 
 ```
-# need: field child, field fee, field paid, total month, list
-app "Fees" school ocean
-table child name text, fee money
-table paid child ref child, amount money
-let due_total = sum(child, if(count(it.paid month) = 0, it.fee, 0))
-"Fees due this month" due_total big
-each child sort name as c
-  row card gap 1
-    c.name bold grow
-    if count(c.paid month) = 0
-      c.fee color warn bold
-      button "Paid" tap add paid child = c, amount = c.fee
-    else
-      "Paid" color good
-form child, "Add child"
+# need: field km, field mins, option road/mountain, total week, km per hour, list
+app "Rides" bike slate
+table ride km num 0.5..300, mins num 5..900, bike pick Road|Mountain = Road
+stat sum(ride.km week), "km this week"
+stat round(sum(ride.km month) / max(sum(ride.mins month) / 60, 1) * 10) / 10, "average km per hour"
+form ride, "Add ride"
+list ride by day
+```
+
+**Example 4** (ks2)
+
+Request: `a reading log where i give each book a star rating from 1 to 5 and see my best rated book`
+
+```
+# need: field book, field stars, best rating, list
+app "Books" book plum
+table book title text, author text?, stars num 1..5
+"Best rating" max(book.stars) "stars" big
+each book sort stars desc as b
+  row card tap edit b swipe remove b
+    b.title bold grow
+    b.stars "stars" faint
+form book, "Add book"
+```
+
+**Example 5** (ks3)
+
+Request: `tuition fees for three students at 4000, 5000 and 6500 a month, with a tick when each has paid`
+
+```
+# need: option hira/zain/maha, field paid, field fee, total, list
+app "Tuition" school ocean
+table student name pick Hira|Zain|Maha = Hira, paid bool, fee money
+let total = sum(student.fee)
+"Collected" sum(student.fee where paid = yes) "of" total big
+each student sort name as s
+  row card gap 2 tap edit s
+    toggle s.paid
+    s.name bold grow
+    s.fee faint
+form student, "Add month"
+```
+
+**Example 6** (un1)
+
+Request: `show the weather forecast for my city`
+
+```
+# need: cannot forecast, field temp, option sunny/cloudy/rain/windy, trend, list
+app "Weather notes" cloud ocean
+table note day date = today, temp num -10..50, sky pick Sunny|Cloudy|Rain|Windy = Sunny
+"Molde apps cannot fetch a forecast: write what you see outside." faint
+form note, "Add today"
+trend note last 30 days sort day, it.temp
+list note by day
+```
+
+**Example 7** (ty1)
+
+Request: `hoem budgat`
+
+```
+# need: field spend, option food/bills/school/other, setting limit, chart, list
+app "Home budget" home slate
+table spend what text, amount money, kind pick Food|Bills|School|Other = Food
+setting limit money = 60000 "Monthly limit"
+goal sum(spend.amount month), limit, "spent this month"
+share spend month by kind, sum(it.amount), it.key
+form spend, "Add spending"
+list spend month by day
 ```
 
 
@@ -1152,53 +1155,62 @@ form child, "Add child"
 
 **Example 1** (mp1a)
 
-Request: `a water tracker with a daily goal of 2500 ml and quick buttons for a glass and a bottle`
+Request: `a to do list where each job has a due date and the late ones are red`
 
 ```
-app "Water" drop ocean
-table drink ml num 1..5000 unit "ml"
-setting goal num = 2500 "Daily goal (ml)"
-goal sum(drink.ml today), goal, "today", "ml"
-quick drink, ml, [250, 500]
-list drink
+app "Jobs" list ink
+table job title text, due date, done bool
+count(job where done = no and due < today) "late" head color bad
+each job where done = no sort due as j
+  row card gap 2 tap edit j swipe remove j
+    toggle j.done
+    j.title grow
+    j.due color if(j.due < today, bad, muted)
+form job, "Add job"
 ```
 
 **Example 2** (mp1b)
 
-Request: `a water tracker that counts glasses with a goal of 8 a day and a chart of the week`
+Request: `a to do list where i give each job one of three levels and see the urgent ones first`
 
 ```
-app "Glasses" drop ocean
-table drink glasses num 1..20 unit "glasses"
-setting goal num = 8 "Daily goal (glasses)"
-goal sum(drink.glasses today), goal, "today", "glasses"
-quick drink, glasses, [1, 2]
-daybars last 7 days, sum(drink.glasses on it)
+app "Jobs" list slate
+table job title text, level pick Low|Medium|Urgent = Medium, done bool
+each job where done = no sort level desc as j
+  row card gap 2 tap edit j swipe remove j
+    toggle j.done
+    j.title grow
+    j.level color if(j.level = Urgent, bad, muted)
+form job, "Add job"
 ```
 
 **Example 3** (mp2a)
 
-Request: `expense tracker with categories food, rent and travel and a chart per category`
+Request: `split a holiday bill between four friends equally`
 
 ```
-app "Expenses" wallet mint
-table spend what text, amount money, category pick Food|Rent|Travel = Food
-stat sum(spend.amount month), "this month"
-share spend month by category, sum(it.amount), it.key
-form spend, "Add expense"
-list spend by day
+app "Holiday split" users mint
+state bill money = 0
+state people num = 4
+field bill "Total bill"
+slider people 2..12
+"Each pays" round(bill / max(people, 1)) big
 ```
 
 **Example 4** (mp2b)
 
-Request: `expense tracker where i write who paid, no categories`
+Request: `split a holiday bill where each friend pays for what they ate`
 
 ```
-app "Expenses" wallet mint
-table spend what text, amount money, who text
-stat sum(spend.amount month), "this month"
-form spend, "Add expense"
-list spend by day
+app "Who owes" users plum
+table item who text, what text, price money
+each item sort who as i
+  row card gap 2 tap edit i swipe remove i
+    i.who bold grow
+    i.what faint
+    i.price
+"Total" sum(item.price) big
+form item, "Add item"
 ```
 
 
@@ -1210,73 +1222,65 @@ list spend by day
 
 **Example 1** (rq1)
 
-Request: `gps tracker for my bike rides on a map`
+Request: `track my truck on a map while i drive`
 
 ```
-ask "Molde apps cannot use GPS or a map. Do you want a ride log where you type the distance?" "Yes, a ride log" "No, never mind"
+ask "Molde apps cannot use a map or GPS. Do you want a trip log where you type the distance after each drive?" "Yes, a trip log" "No, never mind"
 ```
 
 **Example 2** (rq2)
 
-Request: `an app that sends whatsapp reminders to my customers`
+Request: `remind my staff on whatsapp every morning`
 
 ```
-ask "Molde apps cannot send messages. Do you want a customer list with a reminder on your own phone?" "Yes, customer list and reminder" "No, never mind"
+ask "Molde apps cannot send messages to other people. Do you want a staff list with a morning reminder on your own phone?" "Yes, staff list and reminder" "No, never mind"
 ```
 
 **Example 3** (rq3)
 
-Request: `live cricket scores from the internet`
+Request: `track my truck on a map while i drive
+Question: Molde apps cannot use a map or GPS. Do you want a trip log where you type the distance after each drive?
+Answer: Yes, a trip log`
 
 ```
-ask "Molde apps work without the internet, so they cannot fetch scores. Do you want a score sheet you fill in?" "Yes, a score sheet" "No, never mind"
-```
-
-**Example 4** (rq4)
-
-Request: `gps tracker for my bike rides on a map
-Question: Molde apps cannot use GPS or a map. Do you want a ride log where you type the distance?
-Answer: Yes, a ride log`
-
-```
-app "Bike rides" bike ocean
-table ride km num 0.1..300, mins num 1..900, route text?
-stat sum(ride.km week), "km this week"
-form ride, "Add ride"
-daybars last 7 days, sum(ride.km on it)
-list ride by day
+app "Truck trips" car slate
+table drive km num 1..2000, from text?, to text?
+stat sum(drive.km week), "km this week"
+form drive, "Add trip"
+daybars last 7 days, sum(drive.km on it)
+list drive by day
 ```
 
 
 **L7. Verifier-driven self-training and best-of-3.** For each new request, sample N = 4 programs from the current model (temperature 0.7, different seeds); keep those that pass **all** gates: checker, formatter, plan coverage (L2), needs present, leak scan, and for calculators the execution test; train on the best one (rejection-sampling fine-tune); where a sample passes and another fails, add the pair for a DPO step (good against bad, same request). This is also the way to produce C4 (repair pairs) at scale. At inference, creates run best-of-3 (the first greedy, two sampled, take the first that passes the gates): costs up to 3 times the time of a create (median 1.45 s on Spark CPU for r3, so about 4.4 s worst case, only for the requests that fail the gates). **Measured so far:** see `controls/summary.txt` (12 tries per line on the failed creates; three sampled creates per request; 126 unchanged edits replayed with sampling).
 
-### Class by lever, with the expected gain
+### Class by lever: what is measured and what is a hypothesis
 
-| class (hunt metric, r3) | levers | expected gain | basis |
+| class (r3 hunt metric) | levers | measured | hypothesis to test |
 |---|---|---|---|
-| Checker failure (12.3% of creates; strict create rate) | L7 best-of-3 and repair pairs (C4); error-aware retry; table-name grammar fix (APP_BUGS #6) | +4 to +7 points strict (half to two thirds of the 50 failures become builds, and about half of those are right) | partial: see `controls/summary.txt` for how many failed creates pass with 12 tries or a sample; estimate for the right-app share |
-| Meaningless formulas (62) | execution gate (C2), L7, L3 | +3 to +5 | estimate: only calculators and formula apps (about 25 of the 62) can be executed; the structural nonsense is only reduced by the leak and plan gates |
-| Misses a specific (55 partial) | **L2**, L3, C3 | +6 to +10 | estimate: a third to a half of these are a missing named item that a plan line makes checkable; partial cases become strict |
-| Roman Urdu drift (81 requests: 25% strict, 53% zero) | **L5**, L2 (English plan), C1 | roman strict from 25% to 40 to 45% = **+3 to +4 points overall** and +20 on the roman set | measured: the same model on the English translation builds the right topic in 79 of 81 (97%) and checks 79 of 81; strict in English is 42%, so 40 to 45% is the ceiling for data alone |
-| Wrong topic, English (17) and typo (4) | L4, L3, template drop, L5 | +2 to +3 | measured: typo-corrected requests are right-topic 23 of 23, so typo drift (4) is fully a data effect; English topic drift is partly capacity |
-| Unsupported built as supported (15 requests, 0% strict) | **L6** | +2 to +3 points overall (15 requests at 0% become mostly right) | the 15 are 3.7% of the set; refusal plus offline build counts as right |
-| Leaks (13) and r4's unrelated settings | gates (leak scan, plan, L2), drop of 131 leaking rows, template drop | +2 to +3 (r3), larger for r4-like data | the leak strings are present in v3.1 (counts in section 2) |
-| Absurd numbers (5), thin (4) | C7, C8, plan numbers (L2) | +1 | small classes |
-| **Create total** | all | strict 37% to **55 to 62%** (cap: the English-only strict is 42% today) | sum of the rows above with overlap removed; the target is a bar to test against, not a promise |
-| Edits unchanged (39 to 45% of model steps) | **L1** with explicit `# none`, L3 (edit minimal pairs), E1 to E10 pairs, a sampled retry (APP_BUGS #10) | right rate on short chains from 32% to **50 to 60%** | basis: unchanged is the cheapest output of a full-program rewrite; in a patch format it must be chosen. Measured part: the sampled retry control in `controls/summary.txt` |
-| Edit checker failures (9 to 12%) | **L1** (the app copies every untouched line; only the new line must pass) | recovers 70% of them: +6 to +8 points | the 37 failures: 31 changed or broke a line other than the one asked (see REPORT section 4); a patch cannot do that |
-| Long programs damaged (7 to 10%; 1 of 70 right) | **L1** | from 1% to 40 to 60% on long programs | measured: the 7,024 existing edits convert exactly, the patch is 16 tokens, the program is never re-copied; the r4 ep2 result (2,983 long edits did not help) shows the full-program format cannot be fixed with more data |
-| Applied wrong: wrong field, options or place (8 to 10%) | L3, E1 to E4, L1 with named line anchors | +3 to +5 | estimate |
-| Rename without `was` (3 of 28 right) | L1 (`replace` of table line with `was` plus uses), E7 pairs, APP_BUGS #7 | from 11% to 40 to 50% on rename steps | estimate; the app-side `was` inference is the safer half |
-| Guard false positives, 20% guard, hang, undo wording | **app only** (APP_BUGS #1 to #5) | +1 to +3 points of edits, and the hang is a freeze | measured counts in APP_BUGS |
-| **Edit total** | all | model-path right rate from 25% to **55 to 65%**; long programs from 1% to 40%+ | |
+| Checker failure (50 of 407 = 12.3%) | L7 best-of-3 and repair pairs (C4); error-aware retry; the table-name grammar fix (APP_BUGS #6) | with 12 tries per line 9 of the first 26 failed creates pass (35%); samples control in `controls/summary.txt` when finished | H1: repair pairs plus best-of-3 turn about a third of the failures into builds (about +4 builds per 100 requests), a half of those right |
+| Meaningless formulas (62) | execution gate (C2), L7, L3 | nothing yet: no run has tried an executed-data round | H2: only calculators and formula apps (about 25 of the 62) can be executed; the structural nonsense is only reduced by the leak and plan gates |
+| Misses a specific (55 partial) | L2, L3, C3 | plan check flags 4 of the 5 wrong outputs of r3 and r4 ep2 on five test requests (`tools/plan_negative_check.mjs`); five cases are an illustration, not a rate | H3: a plan line makes a third to a half of these checkable |
+| Roman Urdu drift (81 requests, 25% strict, 53% zero) | L5, L2, C1 | **the same model on the English translation builds the right topic in 79 of 81 (97%)**; English-only strict is 42% | H4: data reaches 40 to 45% strict on Roman Urdu, at most the English-only level |
+| Wrong topic English (17), typo (4) | L4, L3, template drop, L5 | typo-corrected requests are right-topic 23 of 23, so typo drift is data | H5: English topic drift is partly capacity; unknown share |
+| Unsupported built as supported (15 requests, 0 right) | L6 | 0 of 15 refused today; 1 of 15 sensible | H6: with the capability list and ask, most of the 15 become honest refusals plus the closest offline app |
+| Leaks (13) and r4's unrelated settings | gates, drop of 131 leaking rows, template drop | the leak strings are in v3.1 (counts in section 2); r4 ep2 leaks more than r3 (9 against 4 on 147 paired requests) | H7: removing them stops the leaks; test on the same 147 |
+| Collapse onto a memorised skeleton (quiz, mosque `Khatam`, ring counter; r3: 2 quiz, 6 mosque, 6 ring counter for requests that did not ask) | L4, L3, template drop | r4 ep2 has fewer (0 quiz, 4 mosque, 0 ring) but more leaks | H8: caps and minimal pairs reduce it |
+| Absurd numbers (5), thin (4) | C7, C8, plan numbers | small classes | |
+| **Create total** | all | **the measured ceilings are: English-only strict 42% today; Roman Urdu at most the English level; checker failures partly recoverable. Together these support about 45% strict from data alone** | H9: levers L2 and L7 take it above 45%; the gate in section 6 asks for 45% first and treats anything higher as the next target, not a promise |
+| Edits unchanged (39 to 45% of model steps; forced suite in the report) | L1 with explicit `# none`, L3 for edits, E1 to E10, a sampled retry (APP_BUGS #10) | the unchanged output is shared across requests on one program and is a model behaviour, not a cache effect (fresh-core replay, `controls/identical_outputs_proof.txt`); the sampled-retry control is in `controls/summary.txt` when finished | H10: in a patch format "unchanged" has to be chosen; the right rate on short chains rises above its 32% |
+| Edit checker failures (9 to 12%), long programs damaged (7 to 10%; 1 of 70 right) | L1 | all 7,024 v3.1 edits convert to patches and back exactly; median patch 16 tokens against 173 (tests the **format**, not whether the model can write patches); r4 ep2 shows more full-program long edits do not help (1 of 70 again) | H11: with patches the app copies every untouched line, so these failures cannot occur; the model's patch-writing skill is the open question |
+| Applied wrong (8 to 10%), silent change of an untouched line (8 of 119 applied steps in r3, 2 of 134 in r4 ep2) | L3, E1 to E4, L1 with line anchors, a guard that compares meaning (APP_BUGS #12) | counted in the report | H12: patches with line numbers remove the silent rewrite class |
+| Rename without `was` (3 of 28 right) | L1, E7, APP_BUGS #7 and #11 | counts | H13: the app-side `was` inference is the safer half |
+| Guard false positives, 20% guard, hang, undo wording | app only (APP_BUGS) | counts in APP_BUGS | |
+| **Edit total** | all | baseline 25% (82 of 321), of which 32% on short chains and 1 of 70 on long programs | **no target is claimed**: E1 (data only, full-program edits) and E2 (plus L1 patches) of section 6 measure it |
 
 ## 6. Mix, order and the gate for the next round
 
 - Start from v3.1 minus section 2 (about 17,700 rows). Add C1 to C9 (about 6,400 creates), E1 to E11 (about 3,700 edits, in patch form if L1 is adopted), and the L3, L5, L6 pairs inside those numbers. About 28,000 rows. The capacity limit is real, so if training time matters, drop the 988 appline edits and cap C3 at 1,000.
 - Order inside an epoch: shuffle; do not put the new classes at the end.
-- **Experiments, in this order, each against the same `cases.jsonl`:** (a) data only, full-program edits (isolates sections 2 to 4); (b) a plus L1 patch edits; (c) b plus L2 plan lines; (d) c plus L7 on top. If (a) does not beat r3, the data is not the problem and the levers are the plan.
-- **Gate before anything is called better than r3:** (1) the same `cases.jsonl` run through `tools/hunt.mjs`; (2) a blind A/B of r5 against r3 on the English creates where both pass (the 30-case protocol of `ab/`): r5 must win at least 20 of 30 with at most 2 ties; (3) strict "did what was asked" on the hand-labelled create sample at least 45% overall and at least 40% on Roman Urdu; (4) definite model-path edits at least 50% right on short chains and at least 20% on long chains, with no-op results under 25%; (5) median seconds per create not above 2.5 on Spark CPU with 4 threads (r3 1.45, r4 ep2 1.83).
+- **Experiments, in this order, each against the same `cases.jsonl` and the forced edit suite (`controls/forced_cases.jsonl`):** E1 data only, full-program edits (isolates sections 2 to 4); E2 = E1 plus L1 patch edits; E3 = E2 plus L2 plan lines; E4 = E3 plus L7. If (a) does not beat r3, the data is not the problem and the levers are the plan.
+- **Gate before anything is called better than r3:** (1) the same `cases.jsonl` run through `tools/hunt.mjs`; (2) a blind A/B of r5 against r3 on the English creates where both pass (the 30-case protocol of `ab/`): r5 must win at least 20 of 30 with at most 2 ties; (3) strict "did what was asked" on the hand-labelled create sample at least **45%** overall (the measured data-only ceiling; r3 is 36.9%) and at least 40% on Roman Urdu; (4) definite model-path edits: strictly more right than r3's 25.5% overall and 32% on short chains, no-op results below r3's 39%, and long programs above 1 of 70; the real target for edits is whatever experiment E2 shows; (5) median seconds per create not above 2.5 on Spark CPU with 4 threads (r3 1.45, r4 ep2 1.83). Higher bars are set only after E1 and E2 report.
 
 ## 7. A fast automatic intent judge (calibrated against the 407 hand labels)
 
