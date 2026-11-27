@@ -87,6 +87,25 @@ void main() {
       expect(m.fields, contains('fee'));
       expect(missingChartField('add a chart of fees', lessons), isNull);
       expect(missingChartField('add a chart', lessons), isNull);
+      // only fields on a form: the amount of the paid table is not on any form
+      expect(m.fields, isNot(contains('amount')));
+    });
+    test('a chart the request did not name is a mismatch; a weekly total needs a total', () {
+      const tea = 'app "Daily Tea" x ocean\ntable cup kind text, price money\nform cup, "Add"\nlist cup by day\n';
+      final withChart = '${tea}daybars last 7 days, sum(cup.price on it)\n';
+      expect(namedPartMismatch('add a weekly total of all spending', tea, withChart), contains('did not ask for a chart'));
+      expect(namedPartMismatch('add a chart of price', tea, withChart), isNull);
+      expect(namedPartMismatch('add a weekly total of all spending', tea, '${tea}stat sum(cup.price) "Total"\n'), isNull);
+      expect(namedPartMismatch('add a weekly total of all spending', tea, tea), contains('no new total'));
+    });
+    test('shorter request for the create retry', () {
+      expect(shorterRequest('tutor fees tracker with a paid button and a list of students'), 'tutor fees tracker');
+      expect(shorterRequest('grocery list'), isNull);
+    });
+    test('the expense noun needs money on the form', () {
+      const cups = 'app "T" x ocean\ntable cup kind text\nform cup\n';
+      expect(keyNounGaps('tea stall expense tracker', cups).map((g) => g.phrase), contains('an amount of money'));
+      expect(keyNounGaps('tea stall expense tracker', lessons), isEmpty);
     });
   });
 
@@ -95,6 +114,8 @@ void main() {
       final d = describeApp(lessons);
       expect(d, startsWith('Made Tutor with '));
       expect(d, contains('a "Paid" button'));
+      expect(d, isNot(contains('a form to add a')));
+      expect(d, contains('a form with an "Add student" button with name and fee'));
       expect(d, contains('a total'));
       expect(d, contains('a chart'));
       expect(kLanguageLeak.hasMatch(d), isFalse, reason: d);
@@ -102,7 +123,7 @@ void main() {
     });
     test('key nouns the request names but the app lacks', () {
       const bare = 'app "T" x ocean\ntable student name text\nform student\n';
-      expect(keyNounGaps('tutor fees with a paid button and a list', bare).map((g) => g.phrase), ['a list of the entries', 'a way to mark things paid']);
+      expect(keyNounGaps('tutor fees with a paid button and a list', bare).map((g) => g.phrase), ['a list of the entries', 'a Paid button', 'an amount of money']);
       expect(keyNounGaps('tutor fees with a paid button and a list', lessons), isEmpty);
       expect(keyNounGaps('water tracker with a goal', bare).map((g) => g.phrase), ['a goal']);
     });
@@ -159,6 +180,47 @@ void main() {
       expect(kLanguageLeak.hasMatch(m.text), isFalse, reason: m.text);
     });
 
+    test('FALSE DONE: a model edit that adds an unasked chart is held, never Done in ...', () async {
+      const tea = 'app "Daily Tea" x ocean\ntable cup kind text, price money\nform cup, "Add"\nlist cup by day\n';
+      await c.store.save(AppRecord(id: 't1', name: 'Daily Tea', source: tea));
+      await c.openApp((await c.store.load('t1'))!);
+      c.changeCurrent();
+      page.handlers['generate'] = (a) => {'ok': true, 'program': '${tea}daybars last 7 days, sum(cup.price on it)\n', 'errors': [], 'stats': {'seconds': 118.8}};
+      await c.send('add a weekly total of all spending');
+      final m = c.chat.last;
+      expect(m.text, isNot(contains('Done')));
+      expect(m.text, contains('I did not apply this'));
+      expect(m.text, contains('did not ask for a chart'));
+      expect(m.buttons.first.label, 'Keep my app');
+      expect(page.calls, isNot(contains('applyEdit')));
+    });
+
+    test('FALSE DONE: a model edit that returns the same program says "I did not apply this"', () async {
+      page.handlers['generate'] = (a) => {'ok': true, 'program': lessons, 'errors': [], 'stats': {'seconds': 30}};
+      await c.send('add a weekly total of all spending');
+      final m = c.chat.last;
+      expect(m.text, startsWith('I did not apply this'));
+      expect(m.text, isNot(contains('Done')));
+      expect(page.calls, isNot(contains('applyEdit')));
+    });
+
+    test('a held edit that names a missing button lists the real buttons as taps', () async {
+      page.handlers['generate'] = (a) => {'ok': true, 'program': lessons.replaceFirst('daybars last 7 days, sum(student.fee on it)\n', ''), 'errors': [], 'stats': {'seconds': 5}};
+      await c.send('delete the Remove all button now');
+      final m = c.chat.last;
+      expect(m.text, contains('I did not apply'));
+      expect(m.buttons.map((b) => b.label), contains('Paid'));
+    });
+
+    test('a create that times out is retried once with a shorter request, then gives up with nothing built', () async {
+      c.startNewApp();
+      final asked = <String>[];
+      page.handlers['generate'] = (a) { asked.add(a['request'] as String); return {'ok': false, 'timedOut': true, 'program': '', 'errors': [], 'stats': {}}; };
+      await c.send('tutor fees tracker with a paid button and a list of students');
+      expect(asked, ['tutor fees tracker with a paid button and a list of students', 'tutor fees tracker']);
+      expect(c.chat.last.text, contains('Nothing was built'));
+    });
+
     test('"make it nicer" is answered at once with exact choices', () async {
       page.handlers['generate'] = (a) => throw StateError('the model must not run');
       await c.send('make it nicer');
@@ -184,8 +246,8 @@ void main() {
       await c.send('tutor fees with a paid button and a list of students');
       final m = c.chat.last;
       expect(m.text, startsWith('Made Tutor fees with '));
-      expect(m.text, contains('You asked for'));
-      expect(m.text, contains('a way to mark things paid'));
+      expect(m.text, contains('What you asked for that is missing'));
+      expect(m.text, contains('a Paid button'));
       expect(m.buttons.first.label, startsWith('Add '));
       expect(kLanguageLeak.hasMatch(m.text), isFalse, reason: m.text);
     });

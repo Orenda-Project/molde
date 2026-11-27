@@ -10,7 +10,8 @@ export 'rules.dart';
 import 'llm.dart';
 import 'store.dart';
 
-const String kVersion = '0.6.3';
+const String kVersion = '0.6.4';
+const int kCreateCapMs = 120 * 1000; // a create past this is stopped and retried once with a shorter request
 
 class ChatBtn {
   ChatBtn(this.label, this.onTap, {this.primary = false});
@@ -372,11 +373,30 @@ class MoldeController extends ChangeNotifier {
         live.text = progressText(_longNote, _progressSeen ? _lines : -1, DateTime.now().difference(_startedAt).inSeconds);
         notifyListeners();
       });
-      final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
-        'kind': kind, 'request': request, 'current': kind == 'edit' ? current!.source : '',
+      Future<Map<String, dynamic>> gen(String req) async => Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
+        'kind': kind, 'request': req, 'current': kind == 'edit' ? current!.source : '',
         'system': m.system, 'arm': m.arm ?? arm, 'template': m.template,
-        'allowAsk': may, 'ask': ask, 'hardCapMs': kind == 'edit' ? 7 * 60 * 1000 : 12 * 60 * 1000, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
+        'allowAsk': may, 'ask': ask, 'hardCapMs': kind == 'edit' ? 7 * 60 * 1000 : kCreateCapMs, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
       }));
+      var res = await gen(request);
+      var usedRequest = request;
+      // a create that runs past about 120 s is stopped and tried once more with a shorter request; then it gives up honestly
+      if (kind == 'create' && res['timedOut'] == true && !llm.hung) {
+        final shorter = shorterRequest(request);
+        if (shorter == null) {
+          _finishLive(live, 'I stopped after about ${kCreateCapMs ~/ 1000} seconds. This took too long and nothing was built. Try a shorter request, one idea at a time.');
+          return;
+        }
+        live.text = 'That was taking too long. Trying again with a shorter request: "$shorter"…';
+        notifyListeners();
+        _progressSeen = false; _lines = 0; _startedAt = DateTime.now();
+        res = await gen(shorter);
+        usedRequest = shorter;
+        if (res['timedOut'] == true) {
+          _finishLive(live, 'I stopped twice after about ${kCreateCapMs ~/ 1000} seconds each, the second time with the shorter request "$shorter". Nothing was built. Try a very short request, for example "grocery list".');
+          return;
+        }
+      }
       if (llm.takeHung()) {
         _finishLive(live, 'The model stopped responding, so I stopped it and started it again. ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Please try again.');
         return;
@@ -388,7 +408,7 @@ class MoldeController extends ChangeNotifier {
         if (genHistory.length > 8) genHistory.removeAt(0);
         unawaited(AppStore.writeAtomic(File('${store.root.path}/last_stats.json'), jsonEncode({'v': 1, 'request': request, 'stats': stats})).catchError((Object _) {}));
       }
-      await _afterGenerate(live, kind, request, res);
+      await _afterGenerate(live, kind, usedRequest == request ? request : usedRequest, res);
     } catch (e) {
       _finishLive(live, 'Something went wrong while building: $e. Your app is unchanged.');
     } finally {
@@ -442,7 +462,7 @@ class MoldeController extends ChangeNotifier {
       await openApp(r); // after a create the mode is "Change <new app>"
       chat.addAll(moved);
       final gaps = keyNounGaps(request, program);
-      _finishLive(live, '${describeApp(program)}${gaps.isEmpty ? '' : '\n\nYou asked for ${gaps.map((g) => g.phrase).join(' and ')}, and the app does not have ${gaps.length > 1 ? 'them' : 'it'} yet.'}', buttons: [
+      _finishLive(live, '${describeApp(program)}${gaps.isEmpty ? '' : '\n\nWhat you asked for that is missing: ${gaps.map((g) => g.phrase).join(' and ')}. The app does not have ${gaps.length > 1 ? 'them' : 'it'} yet.'}', buttons: [
         for (final g in gaps.take(2)) ChatBtn('Add ${g.phrase}', () async { changeCurrent(); await _run('edit', g.editRequest); }, primary: g == gaps.first),
       ]);
       return;
@@ -468,9 +488,12 @@ class MoldeController extends ChangeNotifier {
       ]);
       return;
     }
-    // the model handed the program back unchanged (or changed nothing that matters): never claim a change
-    if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore'))) {
-      _finishLive(live, "I couldn't make that change: after ${secs is num ? secs.round() : 0} s the model gave back the same app, so nothing changed. Your app is unchanged. Try one clear change at a time, for example \"add a Phone field\", \"remove the Paid button\" or \"add a chart of fee\".");
+    // the model handed the program back unchanged, or what changed shows nothing: never say Done
+    if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore') || (sets.isEmpty && summarizeChange(current!.source, program).isEmpty))) {
+      _finishLive(live, "I did not apply this. After ${secs is num ? secs.round() : 0} s the model's answer did not change your app in any way you could see, so I kept your app exactly as it is. Your app is unchanged. Try one clear change at a time, for example \"add a Phone field\", \"remove the Paid button\" or \"add a chart of fee\".", buttons: [
+        ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
+        ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }),
+      ]);
       return;
     }
     final oldSrc = current!.source;
@@ -497,7 +520,14 @@ class MoldeController extends ChangeNotifier {
     final wrongPart = direct ? null : namedPartMismatch(request, oldSrc, program);
     if (wrongPart != null) { // the model did something else: never "Done" for the wrong part
       final did = summarizeChange(oldSrc, program);
-      _finishLive(live, 'I did not apply this change, because it does not do what you asked: $wrongPart.${did.isEmpty ? '' : '\nWhat it would have done instead:\n${_bullets(did)}'}\nYour app is unchanged.', buttons: [
+      // the request named a button or field that is not there: list the real ones as one-tap choices
+      final real = <Choice>[];
+      final nm = RegExp(r'\b(?:remove|delete|drop|hide|get rid of|take away)\s+(?:the\s+|my\s+)?"?(.+?)"?\s+(button|field|column)\b', caseSensitive: false).firstMatch(request);
+      final asks = nm == null ? <String>[request] : ['remove the ${nm.group(1)} ${nm.group(2)}'];
+      for (final plan in [removeButtonPlan, removeFieldPlan]) { for (final q in asks) { final o = plan(q, oldSrc); if (o != null && o.choices.isNotEmpty) { real.addAll(o.choices); break; } } if (real.isNotEmpty) break; }
+      final realNote = real.isEmpty ? '' : '\nThe ones in your app are: ${real.map((c) => '"${c.label}"').join(', ')}. Tap one to remove it.';
+      _finishLive(live, 'I did not apply this change, because it does not do what you asked: $wrongPart.${did.isEmpty ? '' : '\nWhat it would have done instead:\n${_bullets(did)}'}$realNote\nYour app is unchanged.', buttons: [
+        for (final c in real.take(4)) ChatBtn(c.label, () async { live.buttons = []; notifyListeners(); await _direct(c.label, c.program, label: c.done); }),
         ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }, primary: true),
         ChatBtn('Apply it anyway', () async { live.buttons = []; notifyListeners(); await apply(); notifyListeners(); }),
       ]);

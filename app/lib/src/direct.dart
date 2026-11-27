@@ -276,8 +276,20 @@ String? namedPartMismatch(String request, String oldSrc, String newSrc) {
       if (!ok) return 'the chart does not plot ${key.join(' ')}${plotted.isEmpty ? '' : ' (it plots ${plotted.map(_human).join(', ')})'}';
     }
   }
+  // things the diff added that the request never named (the model's own idea): a chart when none was asked for
+  final addedChart = _chartLines(newSrc).where((l) => !_chartLines(oldSrc).contains(l)).isNotEmpty;
+  if (addedChart && !RegExp(r'\b(chart|graph|plot|bars?|trend|heat ?map|calendar|visual|picture|diagram|per day|by day|each day|over time)\b').hasMatch(low)) {
+    return 'it adds a chart, and you did not ask for a chart';
+  }
+  // a total / sum asked for: a new total has to be in the result
+  if (RegExp(r'\b(add|show|put|give|make|want|need)\b.*\b(total|totals|sum|subtotal)\b').hasMatch(low) && _totalCount(newSrc) <= _totalCount(oldSrc)) {
+    return 'no new total was added';
+  }
   return null;
 }
+
+List<String> _chartLines(String src) => [for (final l in src.split('\n')) if (!l.startsWith(' ') && kChartKinds.contains(l.trim().split(RegExp(r'\s+')).first)) l.trim()];
+int _totalCount(String src) => src.split('\n').where((l) => RegExp(r'^(stat|statcard)\b|^let\s+\w+\s*=\s*sum\(|\bsum\(').hasMatch(l.trim())).length;
 
 /// "add a chart of fees": the field the user named has to exist. Returns the plain answer when it does not (null = fine / not asked).
 ({String text, List<String> fields})? missingChartField(String request, String source) {
@@ -288,29 +300,37 @@ String? namedPartMismatch(String request, String oldSrc, String newSrc) {
   if (key.isEmpty) return null;
   final fields = <String>[for (final t in _tables(source.split('\n'))) for (var i = 0; i < t.parts.length; i++) if (!RegExp(r'\bref\b').hasMatch(t.parts[i])) t.fieldName(i)];
   if (fields.any((f) => key.any((k) => _norm(f).contains(_sing(k)) || _sing(k).contains(_norm(f))))) return null;
-  final nums = <String>[for (final t in _tables(source.split('\n'))) for (var i = 0; i < t.parts.length; i++) if (RegExp(r'\b(money|num|dur)\b').hasMatch(t.parts[i])) t.fieldName(i)];
+  final srcLines = source.split('\n');
+  bool hasForm(_Tbl t) => srcLines.any((l) => RegExp('^(form|topbar)\\s+${t.name}\\b').hasMatch(l.trim()));
+  final nums = <String>[for (final t in _tables(srcLines)) if (hasForm(t)) for (var i = 0; i < t.parts.length; i++) if (RegExp(r'\b(money|num|dur)\b').hasMatch(t.parts[i])) t.fieldName(i)];
   return (text: 'This app has no field called "${key.join(' ')}", so I can\'t chart it. ${nums.isEmpty ? '' : 'I can chart: ${nums.map(_human).join(', ')}. Which one?'}'.trim(), fields: nums);
 }
 
 // ---------------- a built app in plain words ----------------
 
 /// What the built app has, from its program, in words the user knows (the table's own names are the user's words).
+String _joinAnd(List<String> xs) => xs.length < 2 ? xs.join() : '${xs.sublist(0, xs.length - 1).join(', ')} and ${xs.last}';
+
 String describeApp(String source) {
   final a = AppLine.parse(source);
   final lines = source.split('\n');
   final tbls = _tables(lines);
   final forms = <String>[], lists = <String>[], items = <String>[];
+  // the app's own labels: the form's button text and the field names, never the table's name (that is the model's word)
   for (final t in tbls) {
     final isRef = t.parts.every((p) => RegExp(r'\bref\b').hasMatch(p) || RegExp(r'^(amount|at)\b').hasMatch(p));
     final fields = [for (var i = 0; i < t.parts.length; i++) if (!RegExp(r'\bref\b').hasMatch(t.parts[i]) && t.fieldName(i) != 'at') t.fieldName(i).replaceAll('_', ' ')];
-    final hasForm = lines.any((l) => RegExp('^(form|topbar)\\s+${t.name}\\b').hasMatch(l.trim()));
+    final fm = [for (final l in lines) RegExp('^(?:form|topbar)\\s+${t.name}\\b(?:\\s*,\\s*"([^"]*)")?').firstMatch(l.trim())].whereType<RegExpMatch>().toList();
     final listed = lines.any((l) => RegExp('^(list|log)\\s+${t.name}\\b').hasMatch(l.trim()) || RegExp('^each\\s+${t.name}\\b').hasMatch(l.trim()));
-    final what = t.name.replaceAll('_', ' ');
-    if (hasForm) forms.add(isRef || fields.isEmpty ? 'a form to add a $what' : 'a form to add a $what (${fields.take(4).join(', ')})');
-    if (listed) lists.add(what);
+    if (fm.isNotEmpty && !isRef) {
+      final label = fm.first.group(1);
+      final fl = fields.isEmpty ? '' : ' with ${_joinAnd(fields.take(4).toList())}';
+      forms.add(label != null && label.isNotEmpty ? 'a form with an "$label" button$fl' : 'a form$fl');
+    }
+    if (listed && !isRef) lists.add(fields.isEmpty ? 'what you add' : _joinAnd(fields.take(3).toList()));
   }
   items.addAll(forms);
-  if (lists.isNotEmpty) items.add(lists.length == 1 ? 'a list of ${lists.first} entries' : 'lists of ${lists.join(' and ')}');
+  if (lists.isNotEmpty) items.add(lists.length == 1 ? 'a list showing ${lists.first}' : '${lists.length} lists of what you add');
   final labels = <String>[for (final raw in lines) if (RegExp(r'^\s+button\s+"([^"]+)"').hasMatch(raw)) RegExp(r'^\s+button\s+"([^"]+)"').firstMatch(raw)!.group(1)!];
   final seen = <String>{};
   for (final l in labels) { if (seen.add(l.toLowerCase())) items.add('a "$l" button'); }
@@ -351,9 +371,22 @@ List<Gap> keyNounGaps(String request, String source) {
   final out = <Gap>[];
   bool anyStart(Set<String> kinds) => lines.any((l) => kinds.contains(l.split(RegExp(r'\s+')).first));
   if ((w.contains('list') || w.contains('history') || w.contains('log')) && !anyStart({'list', 'log', 'each'})) out.add(Gap('a list of the entries', 'add a list of the entries'));
-  if ((w.contains('paid') || w.contains('pay') || w.contains('payment') || w.contains('payments')) && !RegExp(r'paid|pay').hasMatch(low)) out.add(Gap('a way to mark things paid', 'add a Paid button'));
+  if ((w.contains('paid') || w.contains('pay') || w.contains('payment') || w.contains('payments')) && !RegExp(r'paid|pay').hasMatch(low)) out.add(Gap(w.contains('button') ? 'a Paid button' : 'a way to mark things paid', 'add a Paid button'));
   if ((w.contains('goal') || w.contains('target') || w.contains('limit')) && !(lines.any((l) => l.startsWith('setting ')) || anyStart({'goal'}))) out.add(Gap('a goal', 'add a goal'));
   if ((w.contains('chart') || w.contains('graph')) && !anyStart(kChartKinds)) out.add(Gap('a chart', 'add a chart'));
   if ((w.contains('total') || w.contains('totals') || w.contains('sum')) && !(lines.any((l) => RegExp(r'\bsum\(|\bstat\b|\bstatcard\b').hasMatch(l)))) out.add(Gap('a total', 'add a total'));
+  if ((w.contains('expense') || w.contains('expenses') || w.contains('spending') || w.contains('cost') || w.contains('costs') || w.contains('price') || w.contains('money') || w.contains('fee') || w.contains('fees') || w.contains('salary')) && !RegExp(r'\bmoney\b').hasMatch(low)) out.add(Gap('an amount of money', 'add a field for amount'));
   return out;
+}
+
+// ---------------- a shorter request for the one retry of a create ----------------
+
+/// The same ask in fewer words: the first clause, cut at "with", "and", a comma or a full stop, at most 7 words. Null when
+/// there is nothing shorter to try.
+String? shorterRequest(String request) {
+  final t = request.trim();
+  final first = t.split(RegExp(r'\s*(?:[.,;:]|\bwith\b|\band\b|\bthat\b|\bwhere\b|\bso\b)\s*', caseSensitive: false)).firstWhere((x) => x.trim().isNotEmpty, orElse: () => t);
+  final w = first.trim().split(RegExp(r'\s+')).take(7).join(' ');
+  if (w.isEmpty || w.length >= t.length) return null;
+  return w;
 }
