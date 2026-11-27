@@ -4,9 +4,11 @@ import 'dart:io';
 
 /// One downloadable model from models.json.
 class CatalogueModel {
-  CatalogueModel({required this.id, required this.name, required this.file, required this.url, required this.bytes, required this.sha256, this.recommended = false, this.note = '', this.template});
+  CatalogueModel({required this.id, required this.name, required this.file, required this.url, required this.bytes, required this.sha256, this.recommended = false, this.note = '', this.template, this.format});
   final String id, name, file, url, sha256, note;
   final String? template; // 'qwen' for ChatML models; absent for Gemma
+  /// 'ops' for a model trained on patch-operation edits and plan-first creates (r5c); absent or 'whole' for the full-program models.
+  final String? format;
   final int bytes;
   final bool recommended;
 
@@ -19,7 +21,7 @@ class CatalogueModel {
     if (id is! String || name is! String || file is! String || url is! String || bytes is! int || bytes <= 0 || sha is! String) return null;
     if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(sha)) return null;
     if (!url.startsWith('https://')) return null; // never plain http
-    return CatalogueModel(id: id, name: name, file: file, url: url, bytes: bytes, sha256: sha.toLowerCase(), recommended: j['recommended'] == true, note: j['note'] is String ? j['note'] as String : '', template: j['template'] is String ? j['template'] as String : null);
+    return CatalogueModel(id: id, name: name, file: file, url: url, bytes: bytes, sha256: sha.toLowerCase(), recommended: j['recommended'] == true, note: j['note'] is String ? j['note'] as String : '', template: j['template'] is String ? j['template'] as String : null, format: j['format'] == 'ops' || j['format'] == 'whole' ? j['format'] as String : null);
   }
 }
 

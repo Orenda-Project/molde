@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 
 /// Where the model is and how it was loaded.
 class ModelInfo {
-  ModelInfo(this.path, this.sizeBytes, this.loadSeconds, {this.system, this.arm, this.name, this.template = 'gemma', this.architecture = ''});
+  ModelInfo(this.path, this.sizeBytes, this.loadSeconds, {this.system, this.arm, this.name, this.template = 'gemma', this.architecture = '', this.format = 'whole'});
+  /// How the model writes an edit and starts a create: whole (the full program; r3, Qwen) or ops (patch operations on numbered lines, and a plan line before a new program; r5c).
+  final String format;
   /// The prompt format the model was trained with: gemma (turn markers) or qwen (ChatML with an empty think block).
   final String template;
   final String architecture; // general.architecture of the GGUF
@@ -111,7 +113,7 @@ class LlmService {
       return;
     }
     final arch = await meta('general.architecture');
-    model = ModelInfo(f.path, await f.length(), sw.elapsedMilliseconds / 1000, system: side['system'] as String?, arm: side['arm'] as String?, name: side['name'] as String?, architecture: arch, template: pickTemplate(sidecar: side['template'] as String?, hint: templateHint, architecture: arch));
+    model = ModelInfo(f.path, await f.length(), sw.elapsedMilliseconds / 1000, system: side['system'] as String?, arm: side['arm'] as String?, name: side['name'] as String?, architecture: arch, template: pickTemplate(sidecar: side['template'] as String?, hint: templateHint, architecture: arch), format: pickFormat(sidecar: side['format'] as String?, hint: formatHint));
   }
 
   Future<void> unload() async {
@@ -131,6 +133,13 @@ class LlmService {
 
   /// models.json can name the template of a model; it is used when no sidecar file says and the architecture does not.
   String? templateHint;
+  /// models.json can say `format: "ops"` for a model; a sidecar `format` (for a model pushed by hand) wins over it.
+  String? formatHint;
+  /// `ops` only when something says so; every other value, and no value, is the whole-program format the r3 model uses.
+  static String pickFormat({String? sidecar, String? hint}) {
+    for (final f in [sidecar, hint]) { if (f == 'ops') return 'ops'; if (f == 'whole') return 'whole'; }
+    return 'whole';
+  }
   /// The name the user sees for the loaded model (catalogue name); never a file name.
   String? displayName;
 

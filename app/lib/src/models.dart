@@ -117,7 +117,7 @@ class ModelManager extends ChangeNotifier {
     catalogue = await loadCatalogue();
     if (active != null && active!.source == 'catalogue') { // the catalogue arrived after the model was chosen: use its name for the file
       final m = catalogue!.models.where((m) => m.localName == active!.path.split('/').last).firstOrNull;
-      if (m != null) { active = ActiveModel(path: active!.path, name: m.name, bytes: active!.bytes, source: 'catalogue', id: m.id); llm.templateHint = m.template; llm.displayName = m.name; }
+      if (m != null) { active = ActiveModel(path: active!.path, name: m.name, bytes: active!.bytes, source: 'catalogue', id: m.id); llm.templateHint = m.template; llm.formatHint = m.format; llm.displayName = m.name; }
     }
     notifyListeners();
   }
@@ -149,6 +149,7 @@ class ModelManager extends ChangeNotifier {
     llm.preferred = f;
     llm.displayName = name;
     llm.templateHint = id != null ? catalogue?.byId(id)?.template : null;
+    llm.formatHint = id != null ? catalogue?.byId(id)?.format : null;
     if (save) await AppStore.writeAtomic(settingsFile, jsonEncode({'v': 1, 'active': {'id': active!.id, 'file': f.uri.pathSegments.last, 'source': source}}));
   }
 

@@ -8,9 +8,10 @@ import 'summary.dart';
 import 'direct.dart';
 export 'rules.dart';
 import 'llm.dart';
+import 'patch_ops.dart';
 import 'store.dart';
 
-const String kVersion = '0.6.4';
+const String kVersion = '0.7.0-dev';
 const int kCreateCapMs = 120 * 1000; // a create past this is stopped and retried once with a shorter request
 
 class ChatBtn {
@@ -375,7 +376,7 @@ class MoldeController extends ChangeNotifier {
       });
       Future<Map<String, dynamic>> gen(String req) async => Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': req, 'current': kind == 'edit' ? current!.source : '',
-        'system': m.system, 'arm': m.arm ?? arm, 'template': m.template,
+        'system': m.system, 'arm': m.arm ?? arm, 'template': m.template, 'format': m.format,
         'allowAsk': may, 'ask': ask, 'hardCapMs': kind == 'edit' ? 7 * 60 * 1000 : kCreateCapMs, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
       }));
       var res = await gen(request);
@@ -408,6 +409,7 @@ class MoldeController extends ChangeNotifier {
         if (genHistory.length > 8) genHistory.removeAt(0);
         unawaited(AppStore.writeAtomic(File('${store.root.path}/last_stats.json'), jsonEncode({'v': 1, 'request': request, 'stats': stats})).catchError((Object _) {}));
       }
+      if (kind == 'edit' && res['ok'] == true && res['ops'] is String) res = await _applyPatch(res); // r5c format: operations on numbered lines
       await _afterGenerate(live, kind, usedRequest == request ? request : usedRequest, res);
     } catch (e) {
       _finishLive(live, 'Something went wrong while building: $e. Your app is unchanged.');
@@ -417,6 +419,20 @@ class MoldeController extends ChangeNotifier {
       busy = false;
       notifyListeners();
     }
+  }
+
+  /// An ops-format answer: apply the operations to the open app's program and check the result. Anything that does not apply
+  /// cleanly comes back as `patchError` (nothing is changed); a program that applies but fails the checks is an ordinary failed check.
+  Future<Map<String, dynamic>> _applyPatch(Map<String, dynamic> res) async {
+    final stats = res['stats'];
+    final String program;
+    try {
+      program = applyOps(current!.source, '${res['ops']}');
+    } on PatchError catch (e) {
+      return {'ok': false, 'patchError': true, 'errors': [e.message], 'stats': stats};
+    }
+    final c = Map<String, dynamic>.from(await bridge.rpc<Map>('check', {'source': program}));
+    return {'ok': c['ok'] == true, 'program': program, 'errors': c['errors'] ?? [], 'stats': stats};
   }
 
   void _finishLive(ChatMsg live, String text, {List<ChatBtn> buttons = const [], String kind = 'text'}) {
@@ -443,6 +459,13 @@ class MoldeController extends ChangeNotifier {
       final q = '${ask['question']}';
       pendingAsk = PendingAsk(kind, request, q, opts);
       _finishLive(live, '$q\nTap an answer, or type your own.', buttons: [for (final o in opts) ChatBtn(o, () => answerAsk(o))]);
+      return;
+    }
+    if (res['patchError'] == true) { // the change instructions did not fit the app: said plainly, nothing touched
+      final why = firstProblem((res['errors'] as List?) ?? []);
+      _finishLive(live, 'I did not apply this. The changes the model wrote did not fit your app ($why), so I kept your app exactly as it is. Your app is unchanged. Try saying it another way.', buttons: [
+        ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
+      ]);
       return;
     }
     if (res['ok'] != true) {
