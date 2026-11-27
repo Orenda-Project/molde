@@ -54,20 +54,20 @@ Title cap 15 per app title; family cap 120; leak thresholds as in leak_check (Ja
 
 ## v4.1 snapshot (running)
 
-v4.1.jsonl = v4 (18122 rows) + 278 new verified rows = 18400. The new rows pass the uncached verifier (100%), leak check 0 and the patch round-trip.
+v4.1.jsonl = v4 (18122 rows) + 461 new verified rows = 18583. The new rows pass the uncached verifier (100%), leak check 0 and the patch round-trip.
 
-Roman Urdu / mixed / typo creates (hand, class roman_urdu or typo_short): 172 total (target 1,200).
+Roman Urdu / mixed / typo creates (hand, class roman_urdu or typo_short): 201 total (target 1,200).
 
 | New class | Rows |
 |---|---|
-| add_option | 47 |
-| remove_one | 37 |
-| rename_button | 39 |
+| add_option | 100 |
+| remove_one | 73 |
+| rename_button | 83 |
 | rename_field | 25 |
-| reorder | 20 |
-| roman_urdu | 81 |
+| reorder | 41 |
+| roman_urdu | 106 |
 | sections | 16 |
-| typo_short | 13 |
+| typo_short | 17 |
 
-Hand edits, cumulative (v4 + v4.1), long programs (more than 25 lines): {'reorder': 18, 'add_option': 43, 'sections': 12, 'rename_field': 20, 'remove_one': 33, 'rename_button': 32}
-Hand edits, cumulative, short programs: {'add_option': 72, 'rename_field': 35, 'rename_button': 39, 'cannot_do_ask': 12, 'add_field': 29, 'sections': 21, 'add_chart_stat': 20, 'remove_one': 40, 'reorder': 21, 'setting_value': 27, 'vague_ask': 6}
+Hand edits, cumulative (v4 + v4.1), long programs (more than 25 lines): {'remove_one': 33, 'rename_button': 32, 'add_option': 43, 'sections': 12, 'rename_field': 20, 'reorder': 18}
+Hand edits, cumulative, short programs: {'add_option': 125, 'rename_field': 35, 'rename_button': 83, 'cannot_do_ask': 12, 'add_field': 29, 'sections': 21, 'add_chart_stat': 20, 'remove_one': 76, 'reorder': 42, 'setting_value': 27, 'vague_ask': 6}
