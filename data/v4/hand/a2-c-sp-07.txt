@@ -1,0 +1,178 @@
+@create class=rich_app style=rich
+a savings tracker
+plan: # need: field amount, setting target, goal, chart, list
+---
+app "Savings" coin green
+table save amount money, note text?
+setting target money = 5000 "Savings target"
+topbar save, "Add savings"
+row gap 2
+  statcard sum(save.amount), "saved", target
+  statcard sum(save.amount month), "saved this month"
+goal sum(save.amount), target, "of target"
+"Still to go" max(target - sum(save.amount), 0) head
+section "Growth", "total saved over time"
+  trend save last 12 months sort at, it.amount
+list save by day, "Nothing saved yet. Tap Add savings."
+===
+@create class=rich_app style=rich
+a study planner
+plan: # need: field subject, field minutes, goal, chart, streak, list
+---
+app "Study planner" book blue
+table study subject text, minutes num 5..480 = 30
+setting target num 10..600 = 90 "Daily study minutes"
+topbar study, "Log study"
+goal sum(study.minutes today), target, "minutes today", "min"
+row gap 2
+  statcard streak(study), "day streak"
+  statcard sum(study.minutes week), "minutes this week"
+section "This week", "minutes per day"
+  goalbars last 7 days, sum(study.minutes on it), target
+section "By subject"
+  bars study week by subject, sum(it.minutes), it.key
+list study by day, "No sessions yet."
+===
+@create class=rich_app style=rich
+a pet care app
+plan: # need: field pet, tick, reminder, field kg, chart
+---
+app "Pet care" heart orange
+table pet name text, kg num 0.1..90 unit "kg"
+table fed pet ref pet
+table walk pet ref pet, mins num 5..240 = 20
+remind "Feed the pets" at 8:00, 18:00
+topbar pet, "Add pet"
+each pet sort name as p empty "Add your first pet."
+  stack card gap 1 tap edit p swipe remove p
+    row
+      p.name bold grow
+      p.kg "kg" faint
+    row gap 2
+      toggle p.fed
+      "Fed today" grow
+      button "Walk 20 min" tap add walk pet = p
+    "Walks this week:" sum(p.walk.mins week) "min" faint
+section "Walk minutes", "last 7 days"
+  daybars last 7 days, sum(walk.mins on it)
+===
+@create class=rich_app style=rich
+a daily planner
+plan: # need: field task, field time, tick, total today, list
+---
+app "Daily planner" calendar mint
+table task what text, at_time time = 9:00, done bool
+state d date = today
+topbar task, "Add task"
+row align center gap 1
+  button "<" tap set d = d - 1
+  d bold grow align center
+  button ">" tap set d = d + 1
+statcard count(task on d where done = yes), "done of" count(task on d), count(task on d)
+each task on d sort at_time as t empty "Nothing planned for this day."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    t.at_time faint
+    t.what bold grow
+===
+@create class=rich_app style=rich
+a restaurant tab
+plan: # need: field item, field price, field qty, total, tick, list
+---
+app "Restaurant tab" cup red
+table order item text, price money, qty num 1..50 = 1, served bool
+let total = sum(order, it.price * it.qty)
+topbar order, "Add order"
+row gap 2
+  statcard total, "bill so far"
+  statcard count(order where served = no), "still to serve"
+"With 10% service" round(total * 110) / 100 head
+each order sort served as o empty "No orders yet."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.served
+    stack grow gap 0
+      o.item bold
+      o.qty "x" o.price faint
+    o.price * o.qty bold
+===
+@create class=sensible_calc style=calc
+split rent by room size for 3 roommates
+plan: # need: field rent, field room
+---
+app "Rent by room" home slate
+state rent money = 1200
+state a num = 20
+state b num = 15
+state c num = 12
+field rent "Total rent"
+field a "Room A (m2)"
+field b "Room B (m2)"
+field c "Room C (m2)"
+let all = max(a + b + c, 1)
+"Room A pays" round(rent * a / all) big
+"Room B pays" round(rent * b / all) big
+"Room C pays" round(rent * c / all) big
+===
+@create class=sensible_calc style=calc
+average speed and time for a trip from distance and speed
+plan: # need: field distance, field speed
+---
+app "Trip time" car blue
+state km num = 120
+state kmh num = 60
+field km "Distance (km)"
+field kmh "Speed (km/h)"
+let hrs = km / max(kmh, 1)
+"Time" floor(hrs) "h" round((hrs - floor(hrs)) * 60) "min" big
+===
+@create class=sensible_calc style=calc
+how much paint do i need for a room
+plan: # need: field length, field width, field height
+---
+app "Paint needed" home orange
+state l num = 5
+state w num = 4
+state h num = 2.5
+state coats num = 2
+field l "Room length (m)"
+field w "Room width (m)"
+field h "Wall height (m)"
+field coats "Coats"
+let walls = 2 * (l + w) * h
+"Wall area" round(walls * 10) / 10 "m2" head
+"Paint needed" round(walls * coats / 10 * 10) / 10 "litres at 10 m2 per litre" big
+===
+@create class=sensible_calc style=calc
+monthly expenses split into needs, wants and savings with the 50 30 20 rule from my income
+plan: # need: field income
+---
+app "50 30 20" coin teal
+state income money = 3000
+field income "Monthly income"
+"Needs (50%)" round(income * 0.5) big
+"Wants (30%)" round(income * 0.3) big
+"Savings (20%)" round(income * 0.2) big
+===
+@create class=sensible_calc style=calc
+shop profit margin from cost and selling price
+plan: # need: field cost, field price
+---
+app "Margin" tag green
+state cost money = 80
+state price money = 100
+field cost "Cost price"
+field price "Selling price"
+"Profit per item" price - cost big color if(price >= cost, good, bad)
+"Margin" round((price - cost) * 100 / max(price, 1)) "%" head
+"Markup" round((price - cost) * 100 / max(cost, 1)) "%" head
+===
+@create class=sensible_calc style=calc
+how many calories i burn walking by minutes and weight
+plan: # need: field minutes, field weight
+---
+app "Walking burn" walk green
+state mins num = 30
+state kg num = 70
+field mins "Minutes walked"
+field kg "Your weight (kg)"
+"Calories burned" round(mins * kg * 0.0623) big
