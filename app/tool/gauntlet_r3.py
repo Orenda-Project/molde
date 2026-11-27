@@ -107,7 +107,10 @@ def send(text):
     chat_view()
     ui.adb('shell', 'input', 'tap', '480', '2310'); time.sleep(1)
     ui.adb('shell', 'input', 'text', text.replace(' ', '%s')); time.sleep(1)
-    tap('Send'); time.sleep(1)
+    for n in ui.nodes():   # the Send button itself (an exact match: a request that says "send" is also in the input field)
+        if (n.get('content-desc') or n.get('text') or '').strip() == 'Send':
+            x, y = ui.center(n); adb('shell', 'input', 'tap', str(x), str(y)); break
+    time.sleep(1)
 def busy(): return any(t == 'Stop' for t in texts())
 def wait_idle(secs=420):
     time.sleep(4)
