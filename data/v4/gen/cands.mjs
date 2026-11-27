@@ -2,12 +2,12 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { rng, sha } from '../../data-v1/gen/lib.mjs';
 const [kind, start = '0', count = '40'] = process.argv.slice(2);
-const rows = readFileSync('out/derived.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+const rows = readFileSync('out/derived.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)).concat(readFileSync('out/longbases.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)));
 const R = rng('v4cands'); const seen = new Set(); const used = JSON.parse(existsSync('out/used_bases.json') ? readFileSync('out/used_bases.json', 'utf8') : '{}');
 const tests = new Set(); // long test bases (program bodies) must never be used
 const title = p => ((p.match(/^app "([^"]*)"/) || [])[1] || '');
 let pool = []; const tcount = {};
-for (const r of R.shuffle(rows)) { if (r.task !== 'create' || r.program.startsWith('ask ')) continue; const n = r.program.trim().split('\n').length; if (n < 4 || n > 25) continue; const h = sha(r.program); if (seen.has(h)) continue; seen.add(h); const t = title(r.program).toLowerCase(); if ((tcount[t] || 0) >= 2) continue; tcount[t] = (tcount[t] || 0) + 1; pool.push({ id: 'b' + h.slice(0, 8), program: r.program, n }); }
+for (const r of R.shuffle(rows)) { if (r.task !== 'create' || r.program.startsWith('ask ')) continue; const n = r.program.trim().split('\n').length; if (n < +(process.env.MINL||4) || n > +(process.env.MAXL||25)) continue; const h = sha(r.program); if (seen.has(h)) continue; seen.add(h); const t = title(r.program).toLowerCase(); if ((tcount[t] || 0) >= 2) continue; tcount[t] = (tcount[t] || 0) + 1; pool.push({ id: 'b' + h.slice(0, 8), program: r.program, n }); }
 const L = p => p.trim().split('\n');
 function desc(b) {
   const lines = L(b.program), t = title(b.program);

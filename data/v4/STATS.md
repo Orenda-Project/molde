@@ -51,3 +51,23 @@ Assembly then dropped 89 rows whose program equals a test program, 9 duplicate r
 ## Defaults used (no questions asked)
 
 Title cap 15 per app title; family cap 120; leak thresholds as in leak_check (Jaccard 0.75, 0.6 for 5 words or fewer); ask edits carry the ask line as program, with the original program in `program_before`.
+
+## v4.1 snapshot (running)
+
+v4.1.jsonl = v4 (18122 rows) + 278 new verified rows = 18400. The new rows pass the uncached verifier (100%), leak check 0 and the patch round-trip.
+
+Roman Urdu / mixed / typo creates (hand, class roman_urdu or typo_short): 172 total (target 1,200).
+
+| New class | Rows |
+|---|---|
+| add_option | 47 |
+| remove_one | 37 |
+| rename_button | 39 |
+| rename_field | 25 |
+| reorder | 20 |
+| roman_urdu | 81 |
+| sections | 16 |
+| typo_short | 13 |
+
+Hand edits, cumulative (v4 + v4.1), long programs (more than 25 lines): {'reorder': 18, 'add_option': 43, 'sections': 12, 'rename_field': 20, 'remove_one': 33, 'rename_button': 32}
+Hand edits, cumulative, short programs: {'add_option': 72, 'rename_field': 35, 'rename_button': 39, 'cannot_do_ask': 12, 'add_field': 29, 'sections': 21, 'add_chart_stat': 20, 'remove_one': 40, 'reorder': 21, 'setting_value': 27, 'vague_ask': 6}

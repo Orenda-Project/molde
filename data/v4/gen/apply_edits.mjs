@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { canon, verify, diff, sha } from '../../data-v1/gen/lib.mjs';
 import { derivePatch } from './derive.mjs';
-const rows = readFileSync('out/derived.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+const rows = readFileSync('out/derived.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)).concat(readFileSync('out/longbases.jsonl', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)));
 const byId = new Map(); for (const r of rows) if (r.task === 'create' && !r.program.startsWith('ask ')) byId.set('b' + sha(r.program).slice(0, 8), r.program);
 const L = p => p.replace(/\n$/, '').split('\n');
 const ind = l => l.match(/^ */)[0].length;
@@ -32,7 +32,7 @@ for (const f of readdirSync('hand').filter(f => /^e-.*\.txt$/.test(f)).sort()) {
     const v = verify(a0.text, [b0.text]); if (!v.ok) { fail('verify ' + v.why); continue; }
     const d = diff([b0.text], a0.text); if (d.verdict === 'refused') { fail('diff refused ' + (d.refused || []).slice(0, 1)); continue; }
     const pt = derivePatch(b0.text, a0.text); if (!pt) { fail('patch'); continue; }
-    out.push({ id: 'v4-e-' + sha(request + a0.text).slice(0, 10), task: 'edit', request, program_before: b0.text, before: b0.text, program: a0.text, answer: pt.answer, source: 'v4:hand-edit:' + kind, class: { option: 'add_option', button: 'rename_button', remove: 'remove_one', reorder: 'reorder', field: 'add_field', rename: 'rename_field', chart: 'add_chart_stat', section: 'sections', setting: 'setting_value' }[kind], meta: { style: 'hand', domain: id, language_commit: '4698991' } });
+    out.push({ id: 'v4-e-' + sha(request + a0.text).slice(0, 10), task: 'edit', request, program_before: b0.text, before: b0.text, program: a0.text, answer: pt.answer, source: 'v4:hand-edit:' + kind, class: { option: 'add_option', button: 'rename_button', remove: 'remove_one', reorder: 'reorder', field: 'add_field', rename: 'rename_field', chart: 'add_chart_stat', section: 'sections', setting: 'setting_value' }[kind], meta: { style: 'hand', domain: id, language_commit: '4698991', ...(L(b0.text).length > 25 ? { long: true } : {}) } });
   }
 }
 writeFileSync('out/hand_edits.jsonl', out.map(r => JSON.stringify(r)).join('\n') + '\n');

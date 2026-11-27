@@ -1,0 +1,382 @@
+@create class=roman_urdu style=short
+darzi ke orders
+---
+app "Darzi" tag plum
+table order customer text, suit text, due date = today, ready bool
+each order where ready = no sort due as o empty "Koi order baqi nahi"
+  row card gap 2 tap edit o swipe remove o
+    toggle o.ready
+    stack grow gap 0
+      o.customer bold
+      o.suit faint
+    o.due faint color if(o.due < today, bad, muted)
+form order, "Naya order"
+===
+@create class=roman_urdu style=short
+dhobi ka hisab
+---
+app "Dhobi" bag ocean
+table dhobi items num 1..100, rate money = 30, paid bool
+"Dena hai" sum(dhobi.items where paid = no) * 30 big
+each dhobi sort at desc as d
+  row card gap 2 tap edit d swipe remove d
+    toggle d.paid
+    d.items "kapray" bold grow
+form dhobi, "Kapray diye"
+===
+@create class=roman_urdu style=short
+chai ke dhabay ki bikri
+---
+app "Chai dhaba" cup orange
+table bikri cups num 1..500, amount money
+stat sum(bikri.cups today), "aaj ke cup"
+stat sum(bikri.amount today), "aaj ki bikri"
+daybars last 7 days, sum(bikri.amount on it)
+form bikri, "Bikri likho"
+===
+@create class=roman_urdu style=short
+murghi farm ke ande
+---
+app "Ande" egg yellow
+table anda count num 0..2000, broken num 0..200 = 0
+stat sum(anda.count today), "aaj ke ande"
+daybars last 7 days, sum(anda.count on it)
+form anda, "Ande likho"
+===
+@create class=roman_urdu style=short
+bakri ka record
+---
+app "Bakriyan" paw green
+table bakri name text, weight num 1..120, kg_note text?
+each bakri sort name as b
+  row card gap 2 tap edit b swipe remove b
+    b.name bold grow
+    b.weight "kg" faint
+count(bakri) "bakriyan" head
+form bakri, "Nayi bakri"
+===
+@create class=roman_urdu style=short
+bachay ki vaccine
+---
+app "Vaccine" baby teal
+table vaccine name text, given date, next_due date?
+each vaccine sort given as v
+  row card gap 2 tap edit v swipe remove v
+    v.name bold grow
+    v.given faint
+    v.next_due faint
+remind "Vaccine ki tareekh" at vaccine.next_due
+form vaccine, "Vaccine lagi"
+===
+@create class=roman_urdu style=short
+school van ka kiraya
+---
+app "Van" car yellow
+table van month_name text, amount money, paid bool
+each van sort at desc as v
+  row card gap 2 tap edit v swipe remove v
+    toggle v.paid
+    v.month_name bold grow
+    v.amount bold
+form van, "Mahina likho"
+remind "Van ka kiraya" monthly on 1 at 9:00
+===
+@create class=roman_urdu style=short
+tasbeeh counter
+---
+app "Tasbeeh" moon green
+state count num = 0
+"Tasbeeh" count big
+button "Subhanallah" tap set count = count + 1
+button "Dobara shuru" tap set count = 0
+===
+@create class=roman_urdu style=short
+zakat calculator
+---
+app "Zakat" coin teal
+setting gold money = 0 "Sone ki qeemat"
+setting silver money = 0 "Chandi ki qeemat"
+setting cash money = 0 "Naqd raqam"
+"Kul maal" gold + silver + cash big
+"Zakat 2.5%" round((gold + silver + cash) * 0.025) big color good
+===
+@create class=roman_urdu style=short
+sadqa ka record
+---
+app "Sadqa" gift plum
+table sadqa amount money, kisko text?
+stat sum(sadqa.amount month), "is mahine"
+form sadqa, "Sadqa diya"
+list sadqa by day
+===
+@create class=roman_urdu style=short
+eid ki shopping list
+---
+app "Eid shopping" bag pink
+table item what text, amount money, bought bool
+"Kul kharch" sum(item.amount where bought = yes) "of" sum(item.amount) big
+each item sort what as i
+  row card gap 2 tap edit i swipe remove i
+    toggle i.bought
+    i.what bold grow
+    i.amount faint
+form item, "Cheez likho"
+===
+@create class=roman_urdu style=short
+jahez ki list
+---
+app "Jahez" gift plum
+table jahez item text, got bool
+count(jahez where got = yes) "ho gaya" head
+each jahez sort item as j
+  row card gap 2 tap edit j swipe remove j
+    toggle j.got
+    j.item bold grow
+form jahez, "Cheez likho"
+===
+@create class=roman_urdu style=short
+hajj ke liye paise
+---
+app "Hajj" moon yellow
+table jama amount money
+setting target money = 1200000 "Hajj ka kharch"
+goal sum(jama.amount), target, "jama hua"
+quick jama, amount, [5000, 10000, 50000]
+===
+@create class=roman_urdu style=short
+gari ki service
+---
+app "Gari service" car slate
+table service km num 0..500000, cost money, on date = today
+stat last(service.km), "akhri service par km"
+each service sort on desc as s
+  row card gap 2 tap edit s swipe remove s
+    s.on bold grow
+    s.km faint
+    s.cost
+form service, "Service hui"
+===
+@create class=roman_urdu style=short
+bike ka petrol
+---
+app "Petrol" bike orange
+table petrol litres num 0.5..30, amount money, km num 0..99999
+stat sum(petrol.amount month), "is mahine ka petrol"
+form petrol, "Petrol dalwaya"
+list petrol by day
+===
+@create class=roman_urdu style=short
+internet ka bill
+---
+app "Internet" phone ocean
+table bill amount money, paid bool
+remind "Internet ka bill" monthly on 10 at 9:00
+each bill sort at desc as b
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    b.amount bold grow
+form bill, "Bill likho"
+===
+@create class=roman_urdu style=short
+hostel mess ka hisab
+---
+app "Mess" food slate
+table mess meal pick Nashta|Lunch|Dinner = Lunch, amount money
+stat sum(mess.amount month), "is mahine"
+share mess month by meal, sum(it.amount), it.key
+form mess, "Khana khaya"
+===
+@create class=roman_urdu style=short
+kabootar ka record
+---
+app "Kabootar" paw ocean
+table kabootar name text, jora text?
+count(kabootar) "kabootar" head
+each kabootar sort name as k
+  row card gap 2 tap edit k swipe remove k
+    k.name bold grow
+    k.jora faint
+form kabootar, "Naya kabootar"
+===
+@create class=roman_urdu style=short
+pakoray stall ka hisab
+---
+app "Pakoray" food orange
+table sale plates num 1..300, amount money
+stat sum(sale.plates today), "aaj ki plates"
+stat sum(sale.amount today), "aaj ki kamai"
+daybars last 7 days, sum(sale.amount on it)
+form sale, "Bikri likho"
+===
+@create class=roman_urdu style=detailed
+mere mobile repair shop mein jo phone aate hain unka naam, masla aur kab dena hai
+---
+app "Repair shop" phone slate
+table repair customer text, phone_model text, fault text, due date = today, done bool
+each repair where done = no sort due as r empty "Koi phone baqi nahi"
+  row card gap 2 tap edit r swipe remove r
+    toggle r.done
+    stack grow gap 0
+      r.customer bold
+      r.phone_model faint
+      r.fault faint
+    r.due faint color if(r.due < today, bad, muted)
+form repair, "Naya phone"
+===
+@create class=roman_urdu style=detailed
+salon mein appointments ka register, kis waqt kaun aayega
+---
+app "Salon" smile pink
+table appt name text, service pick Hair|Facial|Mehndi|Bridal = Hair, at_time time, done bool
+each appt where done = no sort at_time as a empty "Aaj koi appointment nahi"
+  row card gap 2 tap edit a swipe remove a
+    toggle a.done
+    a.at_time bold
+    a.name grow
+    a.service faint
+form appt, "Naya appointment"
+===
+@create class=roman_urdu style=detailed
+car wash ki daily list kitni gaariyan dhoi aur kitne paise mile
+---
+app "Car wash" car ocean
+table wash plate text, amount money
+stat count(wash today), "gaariyan aaj"
+stat sum(wash.amount today), "aaj ke paise"
+daybars last 7 days, count(wash on it)
+form wash, "Gari dhoi"
+===
+@create class=roman_urdu style=detailed
+mujhe apne bachon ke school ke fees aur uniform ka kharcha alag alag dekhna hai
+---
+app "School kharcha" school teal
+table kharcha kind pick Fees|Uniform|Books|Van = Fees, amount money
+share kharcha year by kind, sum(it.amount), it.key
+stat sum(kharcha.amount year), "is saal"
+form kharcha, "Kharcha likho"
+list kharcha by day
+===
+@create class=roman_urdu style=detailed
+tandoor pe roti ki bikri, roz kitni roti bikin aur kitne paise
+---
+app "Roti" food yellow
+table roti count num 1..1000, rate money = 25
+stat sum(roti.count today), "aaj ki roti"
+stat sum(roti.count today) * 25, "aaj ke paise"
+daybars last 7 days, sum(roti.count on it)
+form roti, "Roti likho"
+===
+@create class=roman_urdu style=detailed
+dish cable aur internet ke bill alag alag, kab dena hai ye bhi yaad dilao
+---
+app "Bills" bolt orange
+table bill kind pick Dish|Internet|Bijli|Gas = Dish, amount money, due date
+each bill sort due as b
+  row card gap 2 tap edit b swipe remove b
+    b.kind bold grow
+    b.amount faint
+    b.due bold color if(b.due < today, bad, muted)
+remind "Bill ka din" at bill.due
+form bill, "Bill likho"
+===
+@create class=roman_urdu style=detailed
+walid ki dawai har din teen waqt, subah dopahar raat, kha li ya nahi
+---
+app "Walid ki dawai" pill red
+table dose waqt pick Subah|Dopahar|Raat = Subah, taken bool
+remind "Dawai ka waqt" at 8:00, 14:00, 21:00
+each options dose.waqt as w
+  row card gap 2
+    w bold grow
+    count(dose today where waqt = w and taken = yes) "li" faint
+quick dose, waqt, [Subah, Dopahar, Raat]
+===
+@create class=roman_urdu style=detailed
+student ke test marks har subject ke, average bhi chahiye
+---
+app "Marks" pencil plum
+table mark subject text, score num 0..100
+stat round(avg(mark.score)), "average"
+each mark by subject
+  row card
+    it.key bold grow
+    round(avg(it.score)) bold
+form mark, "Marks likho"
+===
+@create class=roman_urdu style=frame
+farm ka hisab: beej, khaad aur paani ka kharcha with total
+---
+app "Farm kharcha" leaf green
+table kharcha kind pick Beej|Khaad|Pani|Mazdoori = Beej, amount money
+"Kul kharcha" sum(kharcha.amount) big
+share kharcha year by kind, sum(it.amount), it.key
+form kharcha, "Kharcha likho"
+===
+@create class=roman_urdu style=frame
+meeting notes app jis mein kis ne kya kaha aur action items
+---
+app "Meeting" pen ink
+table note who text, said text, action bool
+each note sort at desc as n
+  row card gap 2 tap edit n swipe remove n
+    toggle n.action
+    stack grow gap 0
+      n.who bold
+      n.said
+form note, "Note likho"
+===
+@create class=roman_urdu style=frame
+ghar ke kaam: bartan, jharu, kapray, kis ne kiya
+---
+app "Ghar ke kaam" home mint
+table kaam which pick Bartan|Jharu|Kapray|Khana = Bartan, who text
+each options kaam.which as w
+  row card
+    w bold grow
+    count(kaam week where which = w) "baar" faint
+form kaam, "Kaam hua"
+list kaam by day
+===
+@create class=typo_short style=typos
+daily expence trakr with catgory
+---
+app "Expenses" wallet teal
+table expense cat pick Food|Travel|Bills|Other = Food, amount money
+stat sum(expense.amount month), "this month"
+share expense month by cat, sum(it.amount), it.key
+form expense, "Add expense"
+===
+@create class=typo_short style=typos
+mera hisab kitab ka app bnao
+---
+app "Hisab kitab" book teal
+table hisab what text, amount money
+stat sum(hisab.amount month), "is mahine"
+form hisab, "Likho"
+list hisab by day
+===
+@create class=typo_short style=typos
+pakistan ke sab sheher ka mosam
+---
+ask "Molde apps cannot get live weather. Do you want a weather diary where you type the city, the temperature and the sky?" "Yes, a weather diary" "No, never mind"
+===
+@create class=roman_urdu style=short
+ghar ki bijli ke units
+---
+app "Units" bolt yellow
+table units reading num 0..99999
+stat last(units.reading), "aaj ki reading"
+trend units last 60 days sort at, it.reading
+form units, "Reading likho"
+===
+@create class=roman_urdu style=short
+mehfil e milad ka chanda
+---
+app "Milad chanda" gift green
+table chanda name text, amount money
+"Kul chanda" sum(chanda.amount) big
+each chanda sort amount desc as c
+  row card gap 2 tap edit c swipe remove c
+    c.name bold grow
+    c.amount bold
+form chanda, "Chanda likho"
