@@ -5,11 +5,12 @@ import 'dart:convert';
 import 'bridge.dart';
 import 'rules.dart';
 import 'summary.dart';
+import 'direct.dart';
 export 'rules.dart';
 import 'llm.dart';
 import 'store.dart';
 
-const String kVersion = '0.6.2';
+const String kVersion = '0.6.3';
 
 class ChatBtn {
   ChatBtn(this.label, this.onTap, {this.primary = false});
@@ -266,6 +267,27 @@ class MoldeController extends ChangeNotifier {
     if (kind == 'edit') {
       // exact edits of line 1 (colour, dark/light, text size, title) and of one setting value: no model, instant
       final src = current!.source;
+      if (isVagueRequest(request)) { // too vague to act on: answer at once with real, exact choices instead of minutes of guessing
+        final opts = <Choice>[];
+        for (final (label, req) in [('Make the text bigger', 'make the text bigger'), ('Dark mode', 'turn on dark mode'), ('A blue theme', 'make it blue'), ('A green theme', 'make it green')]) {
+          final e = appLineEdit(req, src);
+          if (e != null && !e.unchanged) opts.add(Choice(label, e.program, e.label));
+        }
+        _offer('"${request.trim()}" is too vague for me to act on without guessing. Pick one of these, or tell me what to change (a colour, bigger text, a new field, a chart).', opts);
+        return;
+      }
+      final cm = missingChartField(request, src);
+      if (cm != null) {
+        _say('bot', cm.text, buttons: [for (final f in cm.fields.take(4)) ChatBtn('${f[0].toUpperCase()}${f.substring(1).replaceAll('_', ' ')}', () async { await _run('edit', 'add a chart of ${f.replaceAll('_', ' ')}'); })]);
+        return;
+      }
+      for (final plan in [removeButtonPlan, removeFieldPlan, addFieldPlan, renameButtonPlan]) {
+        final o = plan(request, src);
+        if (o == null) continue;
+        if (o.edit != null) { await _direct(request, o.edit!.program, label: o.edit!.label, unchanged: o.edit!.unchanged); return; }
+        _offer(o.ask!, o.choices);
+        return;
+      }
       final be = buttonRenameEdit(request, src);
       if (be != null) { await _direct(request, be.program, label: be.label, unchanged: be.unchanged); return; }
       final de = appLineEdit(request, src);
@@ -282,6 +304,14 @@ class MoldeController extends ChangeNotifier {
       }
     }
     await _run(kind, request);
+  }
+
+  /// A question with exact choices: each choice applies its own edit at once (no model); "No thanks" leaves the app alone.
+  void _offer(String text, List<Choice> choices) {
+    _say('bot', text, buttons: [
+      for (final c in choices) ChatBtn(c.label, () async { await _direct(c.label, c.program, label: c.done); }, primary: c == choices.first),
+      if (choices.isNotEmpty) ChatBtn('No thanks', () async {}),
+    ]);
   }
 
   /// A change worked out by the app itself (line 1 or a setting value): the same checks and messages as a model change.
@@ -411,7 +441,10 @@ class MoldeController extends ChangeNotifier {
       here.removeRange(here.length - moved.length, here.length);
       await openApp(r); // after a create the mode is "Change <new app>"
       chat.addAll(moved);
-      _finishLive(live, '${plainSummary(program)} It is open now and keeps what you enter.');
+      final gaps = keyNounGaps(request, program);
+      _finishLive(live, '${describeApp(program)}${gaps.isEmpty ? '' : '\n\nYou asked for ${gaps.map((g) => g.phrase).join(' and ')}, and the app does not have ${gaps.length > 1 ? 'them' : 'it'} yet.'}', buttons: [
+        for (final g in gaps.take(2)) ChatBtn('Add ${g.phrase}', () async { changeCurrent(); await _run('edit', g.editRequest); }, primary: g == gaps.first),
+      ]);
       return;
     }
     // change: ask the data rules first
@@ -437,7 +470,7 @@ class MoldeController extends ChangeNotifier {
     }
     // the model handed the program back unchanged (or changed nothing that matters): never claim a change
     if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore'))) {
-      _finishLive(live, "I couldn't make that change yet: nothing changed. Your app is unchanged. Try naming the part you mean (for example the button or the chart), or say it another way.");
+      _finishLive(live, "I couldn't make that change: after ${secs is num ? secs.round() : 0} s the model gave back the same app, so nothing changed. Your app is unchanged. Try one clear change at a time, for example \"add a Phone field\", \"remove the Paid button\" or \"add a chart of fee\".");
       return;
     }
     final oldSrc = current!.source;
@@ -461,6 +494,15 @@ class MoldeController extends ChangeNotifier {
       await settleSaves();
     }
     // lines the request did not mention that the model dropped: not applied silently, the default is to keep the app
+    final wrongPart = direct ? null : namedPartMismatch(request, oldSrc, program);
+    if (wrongPart != null) { // the model did something else: never "Done" for the wrong part
+      final did = summarizeChange(oldSrc, program);
+      _finishLive(live, 'I did not apply this change, because it does not do what you asked: $wrongPart.${did.isEmpty ? '' : '\nWhat it would have done instead:\n${_bullets(did)}'}\nYour app is unchanged.', buttons: [
+        ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }, primary: true),
+        ChatBtn('Apply it anyway', () async { live.buttons = []; notifyListeners(); await apply(); notifyListeners(); }),
+      ]);
+      return;
+    }
     final extra = direct ? <String>[] : dropsUnasked(request, oldSrc, program);
     final rewritten = direct ? <String>[] : rewrittenUnasked(request, oldSrc, program);
     if (extra.isNotEmpty || rewritten.isNotEmpty) {

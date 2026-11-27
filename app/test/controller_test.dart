@@ -164,7 +164,7 @@ void main() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': water, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
     await c.send('add same');
-    expect(c.chat.last.text, contains("couldn't make that change yet"));
+    expect(c.chat.last.text, contains("couldn't make that change"));
     expect(page.calls, isNot(contains('applyEdit')));
   });
 
@@ -407,7 +407,7 @@ void roundThreeFlows() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': waterFull, 'errors': [], 'stats': {}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': [], 'settings': []};
     await c.send('add a goal');
-    expect(c.chat.last.text, contains("I couldn't make that change yet"));
+    expect(c.chat.last.text, contains("I couldn't make that change"));
     expect(c.chat.last.text, contains('Your app is unchanged'));
     expect(c.chat.last.text, isNot(contains('already does that')));
   });
@@ -531,8 +531,8 @@ void roundFourFlows() {
   test('model returns the program unchanged: "I couldn\'t make that change yet", never "already does that"', () async {
     page.handlers['generate'] = (a) => {'ok': true, 'program': waterHdr, 'errors': [], 'stats': {'seconds': 3}};
     page.handlers['evaluate'] = (a) => okEval([]);
-    await c.send('add a note field');
-    expect(c.chat.last.text, startsWith("I couldn't make that change yet"));
+    await c.send('tidy it up');
+    expect(c.chat.last.text, startsWith("I couldn't make that change"));
     expect(c.chat.last.text, contains('Your app is unchanged'));
     expect(page.calls, isNot(contains('applyEdit')));
   });
@@ -541,10 +541,10 @@ void roundFourFlows() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': waterHdr.replaceFirst('"Today" head', '"Today now" head'), 'errors': [], 'stats': {'seconds': 3}};
     page.handlers['evaluate'] = (a) => okEval(['adds: "Today now" head']);
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
-    await c.send('add a note field');
+    await c.send('add a chart');
     final t = c.chat.last.text;
     expect(t, isNot(startsWith('Changed')));
-    expect(t, contains('Not done: the new field'));
+    expect(t, contains('Not done: a chart'));
     expect(t, isNot(contains('Today now')));
   });
 
@@ -586,7 +586,7 @@ void roundFourFlows() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': 'app "What do you want to track?" star ink\ntable s x num\n', 'errors': [], 'stats': {}};
     await c.send('sleep tracker');
     expect(c.current!.name, 'Sleep tracker');
-    expect(c.chat.last.text, startsWith('Made Sleep tracker: add s entries'));
+    expect(c.chat.last.text, startsWith('Made Sleep tracker'));
   });
 }
 
@@ -903,7 +903,7 @@ void roundFiveOneFlow() {
     page.handlers['generate'] = (a) => {'ok': true, 'program': program, 'errors': [], 'stats': {'seconds': 5}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['removes field dose.note', 'removes from the screen: button "1"'], 'warnings': [], 'refused': []};
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
-    await c.send('remove the note field');
+    await c.send('drop notes');
     final m = c.chat.last;
     expect(m.text, contains('This would also remove'));
     expect(m.text, contains('the "1" button'));
@@ -914,7 +914,7 @@ void roundFiveOneFlow() {
     expect(m.text, 'Kept your app as it is.');
     expect(page.calls, isNot(contains('applyEdit')));
     // ask again and apply anyway
-    await c.send('remove the note field');
+    await c.send('drop notes');
     await c.chat.last.buttons.last.onTap();
     expect(page.calls, contains('applyEdit'));
   });
