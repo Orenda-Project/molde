@@ -1,0 +1,158 @@
+@base id=plants class=long_base
+request: keep track of my houseplants: where each one lives, how much sun it likes, when I watered it, and tell me which ones are thirsty
+---
+app "Plant care" plant green
+table plant name text, room pick Kitchen|Bedroom|Balcony|Hall = Kitchen, sun pick Low|Medium|Bright = Medium, every num 1..30 = 7 unit "days"
+table watering plant ref plant, note text?
+let thirsty = count(plant, due(it.watering, it.every))
+topbar plant, "New plant"
+if thirsty > 0
+  row card gap 2 fill soft
+    icon drop
+    plural(thirsty, "plant") "need water today" bold
+else
+  "Everyone is watered." head color good
+section "Thirsty", "tap the drop after watering"
+  each plant where due(watering, every) sort name as p empty "Nothing to water."
+    row card gap 2 tap edit p
+      stack grow gap 0
+        p.name bold
+        p.room p.sun "sun" faint
+      button "Watered" tap add watering plant = p
+section "All plants"
+  each plant sort room as p
+    row gap 2 tap edit p swipe remove p
+      p.name grow
+      plural(since(p.watering), "day") "since watering" faint
+section "Waterings", "last 28 days"
+  heat last 28 days, count(watering on it), 4
+section "Rooms"
+  each options plant.room as r
+    row gap 1
+      r grow
+      count(plant where room = r) bold
+section "Sun needs"
+  each options plant.sun as s
+    row gap 1
+      s grow
+      count(plant where sun = s) bold
+"Watered this month" count(watering month) faint
+list watering by day, "No waterings yet."
+---
+opt|~table plant|room|Garden|i keep a few plants in the garden too, add it as a room
+opt|~table plant|sun|Shade|add a shade option for the sun
+opt|~table plant|room|Roof|rooftop plants need a room as well
+rm|~section "Sun needs">>~count(plant where sun = s)|get rid of the sun needs bit
+rm|~"Watered this month"|drop the watered this month count
+mv|~section "Waterings"|~section "Thirsty"|show the waterings heat map before the all plants list
+btn|~topbar plant|Add plant|call the top button add plant
+btn|~button "Watered"|Done|the watered button should just say done
+ren|plant|every|gap|rename every to gap
+ren|plant|sun|light|the sun field should be called light
+sec|~"Watered this month">>~list watering|Log|put the monthly count and the watering list in a section called log
+A|vague_ask|it is hard to read|What would you like to change? | Bigger text for the plant names | Remove the sun needs part | Leave it as it is
+A1|rep|~p.name grow|@6p.name bold grow
+A2|rm|~section "Sun needs">>~count(plant where sun = s)
+===
+@base id=fees class=long_base
+request: a school fee register for my tuition class, each student with monthly fee, payments by month, and who still owes this month
+---
+app "Fee register" school ocean
+setting fee money = 3000 "Monthly fee"
+table student name text, grade pick Six|Seven|Eight|Nine|Ten = Six, phone text?
+table payment student ref student, amount money
+let due_all = count(student) * fee
+let got = sum(payment.amount month)
+let owing(s student) = fee - sum(s.payment.amount month)
+state q text = ""
+row gap 2
+  field q "Search student"
+  button "Clear" tap set q = ""
+statcard got, "collected this month", due_all
+goal got, due_all, "of the month's fees", ""
+"Still to collect" max(due_all - got, 0) big
+section "Who owes", "this month"
+  each student where sum(payment.amount month) < fee and has(name, q) sort name as s empty "All paid up."
+    row card gap 2 tap edit s
+      stack grow gap 0
+        s.name bold
+        s.grade "grade" faint
+      owing(s) bold color bad
+      button "Paid" tap add payment student = s, amount = owing(s)
+section "Paid in full"
+  each student where sum(payment.amount month) >= fee sort name as s
+    row gap 2
+      s.name grow
+      icon check
+section "By grade"
+  each options student.grade as g
+    row gap 1
+      g grow
+      count(student where grade = g) "students" faint
+section "Money by month"
+  bars [1, 2, 3], sum(payment.amount month of addmonths(today, it - 3))
+form student, "Add student"
+list payment by day
+---
+opt|~table student|grade|Eleven|i have a grade eleven student now
+opt|~table student|grade|Five|add class five please
+rm|~section "By grade">>~"students" faint|remove the by grade numbers
+rm|~"Still to collect"|take away the still to collect line
+mv|~section "Paid in full"|~statcard got|put the paid in full list up top under the fee card
+btn|~button "Paid"|Mark paid|change the paid button to mark paid
+btn|~form student|Enrol|the add student button should say enrol
+ren|student|phone|mobile|call phone mobile instead
+ren|payment|amount|paid|rename the payment amount to paid
+sec|~statcard got>>~goal got|Summary|put the fee card and bar in a summary section
+A|cannot_do_ask|send fee reminders to parents on whatsapp|Molde apps cannot send messages to other people. Do you want a reminder on this phone each month on the 1st, so you can message the parents yourself?|Yes, add a monthly reminder|No, leave it as it is
+A1|ins|~let owing|remind "Collect this month's fees" monthly on 1 at 9:00
+===
+@base id=gymweek class=long_base
+request: workout planner with two screens, today's session where I log sets and a history screen with weekly volume and personal bests
+---
+app "Lifts" dumbbell ink
+table lift name pick Squat|Bench|Deadlift|Press|Row = Squat, kg num 0..400, reps num 1..30 = 5, rpe num? 1..10
+state shown pick Today|Week = Today
+let volume = sum(lift today, it.kg * it.reps)
+screen log "Today" dumbbell
+  statcard volume, "kg moved today"
+  "Sets today" count(lift today) bold
+  each options lift.name as n
+    row card gap 2
+      n bold grow
+      "Last" last(lift where name = n).kg "kg" faint
+      button "+5" tap add lift name = n, kg = last(lift where name = n).kg + 5, reps = 5
+  each lift today as l empty "Nothing logged yet."
+    row gap 2 tap edit l swipe remove l
+      l.name grow
+      l.kg "kg x" l.reps bold
+  form lift, "Log set"
+screen history "History" chart
+  choice shown
+  if shown = Week
+    daybars last 7 days, sum(lift on it, it.kg * it.reps)
+  else
+    daybars last 28 days, sum(lift on it, it.kg * it.reps)
+  section "Personal bests"
+    each options lift.name as n
+      row gap 2
+        n grow
+        max(lift.kg where name = n) "kg" bold
+  section "Sets per lift", "this month"
+    share lift month by name, count(it), it.key
+  "Days trained this month" count(days month, count(lift on it) > 0) faint
+  list lift by day
+---
+opt|~table lift|name|Curl|i do curls as well, add curl to the lifts
+opt|~table lift|name|Lunge|add lunges
+rm|~"Days trained this month"|remove the days trained line
+rm|~section "Sets per lift">>~share lift month by name|i never look at the sets per lift, delete it
+mv|~section "Personal bests"|~choice shown|put the personal bests right under the picker
+btn|~form lift|Add set|rename log set to add set
+btn|~button "+5"|Plus 5|make the +5 button say plus 5
+ren|lift|kg|weight|call kg weight in the lifts table
+ren|lift|reps|reps_done|rename the reps field to reps done
+sec|~each lift today as l>>~l.kg "kg x" l.reps bold|Done sets|put today's sets in a section called done sets
+A|vague_ask|the history is too busy|What should go? | The sets per lift | The days trained line | Nothing, keep it
+A1|rm|~section "Sets per lift">>~share lift month by name
+A2|rm|~"Days trained this month"

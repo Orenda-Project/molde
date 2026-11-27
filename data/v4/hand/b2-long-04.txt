@@ -1,0 +1,106 @@
+@base id=committee class=long_base
+request: village savings committee: members, monthly contribution of each, whose turn it is to receive the pot, and who is late
+---
+app "Committee" users orange
+setting share money = 5000 "Monthly share"
+table member name text, turn num 1..60, phone text?
+table deposit member ref member, amount money
+let pot = count(member) * share
+topbar deposit, "Record deposit"
+statcard sum(deposit.amount month), "collected this month", pot
+"This month's pot" pot big
+each member sort turn as m
+  if m.turn = (month(today) % count(member)) + 1
+    row card gap 2 fill soft
+      icon trophy
+      m.name bold grow
+      "gets the pot this month" faint
+section "Paid", "this month"
+  each member where sum(deposit.amount month) >= share sort name as m empty "Nobody has paid yet."
+    row gap 2
+      icon check
+      m.name grow
+      sum(m.deposit.amount month) faint
+section "Late"
+  each member where sum(deposit.amount month) < share sort name as m
+    row card gap 2 tap edit m
+      m.name bold grow
+      share - sum(m.deposit.amount month) bold color bad
+      button "Got it" tap add deposit member = m, amount = share - sum(m.deposit.amount month)
+section "Order of turns"
+  each member sort turn as m
+    row gap 2 swipe remove m
+      m.turn faint
+      m.name grow
+      m.phone faint
+section "Deposits by month"
+  bars [1, 2, 3, 4, 5, 6], sum(deposit.amount month of addmonths(today, it - 6))
+form member, "Add member"
+list deposit by day
+---
+
+mv|~section "Order of turns"|~statcard sum(deposit.amount month)|show the order of turns right under the collected card
+rm|~section "Deposits by month">>~bars [1, 2, 3, 4, 5, 6]|remove the monthly deposits chart
+rm|~"This month's pot" pot big|the pot number is shown twice, drop the big one
+btn|~button "Got it"|Received|change the got it button to received
+btn|~form member|New member|rename add member to new member
+btn|~topbar deposit|Add money|call the record deposit button add money
+ren|member|turn|slot|rename turn to slot
+ren|deposit|amount|money_in|call the deposit amount money in
+sec|~statcard sum(deposit.amount month)>>~"This month's pot" pot big|Pot|put the collected card and the pot number in a section called pot
+A|cannot_do_ask|collect the money from members through easypaisa|Molde apps cannot take payments. Do you want a box for how each member paid, like cash or bank, so you can keep the record?|Yes, add how paid|No, leave it as it is
+A1|fld|~table deposit|how text?
+===
+@base id=quran class=long_base
+request: a ramadan planner for the family: daily fasts kept, tarawih, pages of quran read per person, and sehri and iftar notes
+---
+app "Ramadan" moon plum
+table person name text
+table day_log person ref person, fasted bool, tarawih bool, pages num 0..60 = 0, note text?
+setting target_pages num 1..60 = 20 "Pages a day goal"
+state who ref person
+let done_pages = sum(day_log.pages today)
+topbar person, "Add person"
+choice who
+"Today" head
+row gap 2
+  statcard count(day_log today where fasted = yes), "fasting today"
+  statcard count(day_log today where tarawih = yes), "prayed tarawih"
+goal done_pages, target_pages * count(person), "pages read by the family today", "pages"
+section "Log for", "pick a person above"
+  toggle day_log today where person = who and fasted = yes
+  toggle day_log today where person = who and tarawih = yes
+  row gap 2
+    "Pages today" grow
+    button "+1" tap add day_log person = who, pages = 1
+    button "+5" tap add day_log person = who, pages = 5
+section "Pages per person", "this month"
+  each person sort name as p
+    row gap 2
+      p.name grow
+      sum(p.day_log.pages month) bold
+section "Fasts kept", "this month"
+  each person sort name as p
+    row gap 2
+      p.name grow
+      count(p.day_log month where fasted = yes) "of 30" faint
+section "Family pages per day"
+  daybars last 14 days, sum(day_log.pages on it)
+section "Notes"
+  each day_log where note != "" as d
+    row card gap 2 swipe remove d
+      d.person.name bold
+      d.note grow
+form day_log, "Add a note"
+---
+rm|~section "Notes">>~d.note grow|take the notes out
+rm|~section "Family pages per day">>~daybars last 14 days|remove the family pages chart
+mv|~section "Pages per person"|~section "Fasts kept"|put the pages per person below the fasts kept
+btn|~topbar person|New member|the add person button should say new member
+btn|~form day_log|Save note|rename add a note to save note
+btn|~button "+5"|Plus 5|call the +5 button plus 5
+ren|day_log|pages|read|rename pages in the day log to read
+ren|person|name|who_is|call the person name who_is
+sec|~"Today" head>>~goal done_pages|Family today|put the headline and the cards and the goal into a section called family today
+A|vague_ask|it needs something for the last ten nights|What would you like for the last ten nights? | A counter of nights prayed | Nothing, keep it
+A1|ins|~section "Fasts kept"|@0"Nights prayed this month" count(day_log month where tarawih = yes) bold

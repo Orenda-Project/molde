@@ -1,0 +1,54 @@
+@base id=bakery class=long_base
+request: a bakery sales app: my items with prices and kind, record sales, daily takings against a target, best sellers and a weekly chart
+---
+app "Bakery" bread pink
+table item name text, price money, kind pick Bread|Cake|Cookies = Bread
+table sale item ref item, qty num 1..100 = 1, paid bool
+setting target money = 20000 "Daily target"
+let takings = sum(sale today, it.qty * it.item.price)
+let unpaid = count(sale where paid = no)
+topbar sale, "New sale"
+statcard takings, "taken today", target
+if takings >= target
+  "Target reached. Good day at the oven." head color good
+section "Today", "sales"
+  each sale today as s empty "No sales yet today."
+    row card gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.item.name bold
+        s.qty "x" s.item.price faint
+      toggle s.paid
+  "Not paid yet:" unpaid faint
+section "Takings this week"
+  daybars last 7 days, sum(sale on it, it.qty * it.item.price)
+section "Best sellers", "this month"
+  each item sort sum(it.sale.qty month) desc top 5 as i
+    row gap 2
+      i.name grow
+      sum(i.sale.qty month) bold
+section "By kind"
+  each options item.kind as k
+    row gap 1
+      k grow
+      count(sale month where item.kind = k) faint
+section "Items"
+  each item sort name as i
+    row card gap 2 tap edit i swipe remove i
+      i.name bold grow
+      i.price faint
+      i.kind faint
+form item, "Add item"
+---
+opt|~table item|kind|Pastry|the bakery now sells pastries too
+opt|~table item|kind|Rolls|add rolls as a kind of item
+rm|~"Not paid yet:" ;; rm|~let unpaid|i do not need the not paid line
+rm|~section "By kind">>~count(sale month where item.kind = k)|take out the by kind part
+mv|~section "Best sellers"|~section "Today"|put best sellers right under today and before the weekly chart
+btn|~form item|Save item|change the add item button to say save item
+btn|~topbar sale|Ring up|rename the new sale button to ring up
+ren|item|price|rate|call the price of an item rate instead
+ren|sale|qty|pieces|rename the quantity of a sale to pieces
+sec|~form item|Add items|put the add item form in a section called Add items
+A|cannot_do_ask|text my regular customers when their cake is ready|Molde apps cannot send text messages. Do you want a ready box on each sale that you tick, so you can message them yourself?|Yes, add a ready box|No, leave it as it is
+A1|fld|~table sale|ready bool ;; ins|~toggle s.paid|@6toggle s.ready|
+===

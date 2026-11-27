@@ -1,0 +1,152 @@
+@base id=carservice class=long_base
+request: service log for my family's cars: each car, what was done at which km, what it cost, and remind me when the next oil change is due
+---
+app "Car service" car slate
+table car name text, plate text?, km num 0.., oil_gap num 1000..20000 = 5000 unit "km"
+table service car ref car, work pick Oil|Tyres|Brakes|Battery|Wash|Other = Oil, at_km num 0.., cost money, note text?
+let spent_year = sum(service.cost year)
+topbar service, "Log service"
+statcard spent_year, "spent on cars this year"
+"Last service" since(service) "days ago" faint
+section "Cars"
+  each car sort name as c empty "Add your first car."
+    stack card gap 1 tap edit c swipe remove c
+      row gap 2
+        c.name bold grow
+        c.plate faint
+      "Odometer" c.km "km" faint
+      if c.km - max(last(c.service where work = Oil).at_km, 0) >= c.oil_gap
+        "Oil change is due" bold color bad
+      else
+        "Oil is fine for" c.oil_gap - (c.km - max(last(c.service where work = Oil).at_km, 0)) "km" faint
+section "Spending by work", "this year"
+  share service year by work, sum(it.cost), it.key
+section "Each car", "this year"
+  each car as c
+    row gap 2
+      c.name grow
+      sum(c.service.cost year) bold
+section "Recent work"
+  each service top 6 as s
+    row card gap 2 tap edit s swipe remove s
+      stack grow gap 0
+        s.car.name bold
+        s.work s.at_km "km" faint
+      s.cost bold
+form car, "Add car"
+remind "Check the oil and tyres" monthly on 1 at 9:00
+---
+opt|~table service|work|Alignment|add wheel alignment as a type of work
+opt|~table service|work|Insurance|insurance renewals should be a work type too
+rm|~remind "Check|get rid of the monthly reminder
+rm|~section "Each car">>~sum(c.service.cost year) bold|delete the each car totals
+mv|~section "Recent work"|~statcard spent_year|bring the recent work list to the top
+btn|~topbar service|Add work|the top button should say add work
+btn|~form car|Save car|change add car to save car
+ren|car|km|odometer|call km odometer on the car
+ren|service|cost|price|rename the service cost to price
+sec|~"Last service"|Summary|give the last service line a section called summary
+A|cannot_do_ask|connect to my car and read the mileage by bluetooth|Molde apps cannot connect to a car. Do you want a quick button on each car to add 100 km to its odometer, so you can keep it up to date?|Yes, add a plus 100 km button|No, leave it as it is
+A1|rep|~"Odometer" c.km "km" faint|@6row gap 2\n@8"Odometer" c.km "km" faint grow\n@8button "+100" tap set c.km = c.km + 100
+===
+@base id=tailor class=long_base
+request: tailor shop orders with customer measurements, due dates, advance paid and balance, and a list of what is ready for pickup
+---
+app "Tailor" pen plum
+table customer name text, chest num? 20..60, waist num? 20..60, length num? 20..60
+table order customer ref customer, dress pick Shalwar|Kameez|Suit|Waistcoat|Coat = Suit, due date, price money, advance money = 0, ready bool, picked bool
+let owed = sum(order where picked = no, it.price - it.advance)
+topbar order, "New order"
+statcard owed, "to collect from customers"
+"Orders open" count(order where picked = no) bold
+row gap 2
+  stat count(order where picked = no and due < today), "late"
+  stat count(order where ready = yes and picked = no), "ready"
+  stat count(order where due = today), "due today"
+section "Ready for pickup"
+  each order where ready = yes and picked = no sort due as o empty "Nothing waiting."
+    row card gap 2
+      stack grow gap 0
+        o.customer.name bold
+        o.dress "balance" o.price - o.advance faint
+      button "Handed over" tap set o.picked = yes
+section "In progress"
+  each order where ready = no sort due as o
+    row card gap 2 tap edit o swipe remove o
+      toggle o.ready
+      stack grow gap 0
+        o.customer.name bold
+        o.dress "due" o.due faint
+      if(o.due < today, "Late", "") color bad
+section "Dresses made", "this month"
+  each options order.dress as d
+    row gap 1
+      d grow
+      count(order month where dress = d) bold
+section "Customers"
+  each customer sort name as c
+    row gap 2 tap edit c swipe remove c
+      c.name grow
+      c.chest c.waist c.length faint
+form customer, "Add customer"
+---
+opt|~table order|dress|Sherwani|add sherwani to the dresses we make
+opt|~table order|dress|Lehenga|we stitch lehengas too
+rm|~section "Dresses made">>~count(order month where dress = d) bold|remove the dresses made section
+rm|~row gap 2>>~stat count(order where due = today)|the three little numbers under the card can go
+mv|~section "Customers"|~statcard owed|show the customers before the order lists
+btn|~button "Handed over"|Picked up|rename the handed over button to picked up
+btn|~topbar order|Take order|call the new order button take order
+ren|order|advance|deposit|rename advance to deposit
+ren|customer|waist|belly|the waist measurement should be called belly
+sec|~row gap 2>>~stat count(order where due = today)|Counts|put the three counts in a section called counts
+A|vague_ask|make it easier to find a customer|How should I help you find customers? | A search box above the customer list | Sort the list by chest size | Leave it as it is
+A1|ins|~"Orders open"|state find text = ""\n@0field find "Search customers"
+===
+@base id=cricket class=long_base
+request: cricket practice tracker for my son, with batting, bowling and fielding drills, minutes spent, and how the practice felt
+---
+app "Cricket practice" ball green
+table drill kind pick Batting|Bowling|Fielding|Fitness = Batting, mins num 5..240 = 30, feel pick Poor|Okay|Good|Great = Okay, note text?
+setting weekly_goal num 60..1200 = 300 "Minutes per week"
+let week_mins = sum(drill.mins week)
+topbar drill, "Log practice"
+goal week_mins, weekly_goal, "minutes this week", "min"
+row gap 2
+  statcard streak(drill), "day streak"
+  statcard best(drill), "best streak"
+weekdots count(drill on it) > 0
+section "Time by skill", "this week"
+  each options drill.kind as k
+    row gap 2
+      k grow
+      sum(drill.mins week where kind = k) "min" bold
+  share drill week by kind, sum(it.mins), it.key
+section "How it felt", "this month"
+  each options drill.feel as f
+    row gap 1
+      f grow
+      count(drill month where feel = f) faint
+section "Practice minutes", "last 14 days"
+  daybars last 14 days, sum(drill.mins on it)
+section "Calendar"
+  calendar drill
+section "Last sessions"
+  each drill top 5 as d
+    row card gap 2 tap edit d swipe remove d
+      stack grow gap 0
+        d.kind bold
+        d.mins "min" d.feel faint
+      d.note faint
+---
+opt|~table drill|kind|Wicketkeeping|add wicketkeeping as a drill type
+opt|~table drill|feel|Tired|he is sometimes tired, add tired to how it felt
+rm|~section "Calendar">>~calendar drill|take the calendar out
+rm|~row gap 2>>~statcard best(drill)|the streak cards are not needed
+mv|~section "Last sessions"|~weekdots|put last sessions above the week dots
+btn|~topbar drill|Add drill|the log practice button should be called add drill
+ren|drill|mins|minutes|rename mins to minutes
+ren|drill|feel|mood|call how it felt mood instead
+sec|~weekdots|This week|put the week dots in a section called this week
+A|cannot_do_ask|upload his practice video for the coach|Molde apps cannot upload videos to other people. Do you want a link box on each session where you can paste the video address?|Yes, add a link box|No, leave it as it is
+A1|fld|~table drill|link text? ;; ins|~d.mins "min" d.feel faint|@8d.link faint

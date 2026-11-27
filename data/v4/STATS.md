@@ -54,20 +54,42 @@ Title cap 15 per app title; family cap 120; leak thresholds as in leak_check (Ja
 
 ## v4.1 snapshot (running)
 
-v4.1.jsonl = v4 (18122 rows) + 461 new verified rows = 18583. The new rows pass the uncached verifier (100%), leak check 0 and the patch round-trip.
+v4.1.jsonl = v4 (18122 rows) + 572 new verified rows = 18694. The new rows pass the uncached verifier (100%), leak check 0 and the patch round-trip.
 
 Roman Urdu / mixed / typo creates (hand, class roman_urdu or typo_short): 201 total (target 1,200).
 
 | New class | Rows |
 |---|---|
-| add_option | 100 |
-| remove_one | 73 |
-| rename_button | 83 |
-| rename_field | 25 |
-| reorder | 41 |
+| add_option | 115 |
+| cannot_do_ask | 10 |
+| long_base | 6 |
+| remove_one | 89 |
+| rename_button | 101 |
+| rename_field | 43 |
+| reorder | 50 |
 | roman_urdu | 106 |
-| sections | 16 |
+| sections | 25 |
 | typo_short | 17 |
+| vague_ask | 10 |
 
-Hand edits, cumulative (v4 + v4.1), long programs (more than 25 lines): {'remove_one': 33, 'rename_button': 32, 'add_option': 43, 'sections': 12, 'rename_field': 20, 'reorder': 18}
+Hand edits, cumulative (v4 + v4.1), long programs (more than 25 lines): {'remove_one': 49, 'rename_button': 50, 'add_option': 58, 'sections': 21, 'rename_field': 38, 'reorder': 27, 'vague_ask': 10, 'cannot_do_ask': 10}
 Hand edits, cumulative, short programs: {'add_option': 125, 'rename_field': 35, 'rename_button': 83, 'cannot_do_ask': 12, 'add_field': 29, 'sections': 21, 'add_chart_stat': 20, 'remove_one': 76, 'reorder': 42, 'setting_value': 27, 'vague_ask': 6}
+
+
+## b2 (edits on long programs, asks; prefix b2-)
+
+Added by gen/b2_build.mjs + gen/assemble_b2.mjs from hand/b2-*.txt (anchored decisions, base programs also become creates). English only. Verified uncached (111 of 111), leak 0.
+
+| Class | Size | Rows |
+|---|---|---|
+| add_option | long | 15 |
+| cannot_do_ask | long | 10 |
+| long_base | long | 6 |
+| remove_one | long | 16 |
+| rename_button | long | 18 |
+| rename_field | long | 18 |
+| reorder | long | 9 |
+| sections | long | 9 |
+| vague_ask | long | 10 |
+
+Not met so far: 9 of 120 long bases written (6 survived title cap and leak check as creates); short-program edits, 160 asks and 300 calculators not started.
