@@ -33,6 +33,17 @@ export function readFileSync(p) { if (String(p).endsWith('moldescript.gbnf')) re
   const newS = `rep('call-stmt', S.get('call-stmt').includes('later-arg') ? 'ident (sp arg ("," sp later-arg)*)?' : 'ident (sp arg ("," sp arg)*)?', 'callbody');`;
   if (t.includes(oldS)) { t = t.replace(oldS, newS); writeFileSync(f, t); }
 }
+// App rules for the standard library (vendor/ is never committed, so the patch lives here and is idempotent):
+//  - the standard `form` and `topbar` empty themselves after Add (they said `state d new t keep`, so the second entry was
+//    typed on top of the first one's text);
+//  - an empty list says "Nothing in this list yet.": the old line ("Nothing here yet. Add one to see it here.") sat under
+//    other tables' rows and read as a lie.
+for (const f of ['lang/std/data.mo', 'lang/sources.gen.mjs']) {
+  const fp = join(V, f);
+  let t = readFileSync(fp, 'utf8');
+  const u = t.split('state d new t keep').join('state d new t').split('Nothing here yet. Add one to see it here.').join('Nothing in this list yet.');
+  if (u !== t) writeFileSync(fp, u);
+}
 const r = await build({
   entryPoints: [join(HERE, 'src/entry.mjs')],
   bundle: true, format: 'iife', target: ['chrome80'], platform: 'browser',

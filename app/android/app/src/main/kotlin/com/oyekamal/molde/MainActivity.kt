@@ -25,6 +25,14 @@ class MainActivity : FlutterActivity() {
     private var inflightReply: java.util.concurrent.atomic.AtomicBoolean? = null
     private var inflightResult: MethodChannel.Result? = null
     private var callCounter = 0L
+    // measured milliseconds per generated token on this device (moving average); a call with no progress for 40 tokens' time is stuck
+    private var msPerToken = 1500.0
+    private fun idleAllowanceMs(): Long = (msPerToken * 40).toLong().coerceIn(90_000L, 180_000L)
+    private fun learnSpeed(json: String) {
+        val n = Regex("\"n_gen\":\\s*(\\d+)").find(json)?.groupValues?.get(1)?.toDoubleOrNull() ?: return
+        val ms = Regex("\"ms_gen\":\\s*([0-9.]+)").find(json)?.groupValues?.get(1)?.toDoubleOrNull() ?: return
+        if (n >= 3 && ms > 0) msPerToken = 0.7 * msPerToken + 0.3 * (ms / n)
+    }
     private val hangJson = "{\"stop\":\"cancel\",\"text\":\"\",\"hung\":true}"
 
     /** The call stopped answering: answer it now, give the engine a fresh core and a fresh worker thread; the old thread frees its core when (if) it returns. */
@@ -128,12 +136,21 @@ class MainActivity : FlutterActivity() {
                 val id = ++callCounter
                 val replied = java.util.concurrent.atomic.AtomicBoolean(false)
                 inflightId = id; inflightReply = replied; inflightResult = result
-                // no call may run longer than 8 minutes: that is a hang, not a slow line
-                main.postDelayed({ abandon(id) }, 8 * 60 * 1000L)
+                // no call may run longer than 6 minutes, and none may go without progress (a token or a prompt chunk) for longer than
+                // 40 tokens' worth of this device's measured speed (90 to 180 s): that is a hang, not a slow line
+                main.postDelayed({ abandon(id) }, 6 * 60 * 1000L)
+                val watch = object : Runnable {
+                    override fun run() {
+                        if (inflightId != id) return
+                        val idle = try { engine().nativeIdleMs() } catch (_: Throwable) { -1L }
+                        if (idle > idleAllowanceMs()) abandon(id) else main.postDelayed(this, 3000)
+                    }
+                }
+                main.postDelayed(watch, 3000)
                 worker.execute {
                     val out = try { String(engine().nativeComplete(prompt, grammar, nPredict, temp, seed, stopNl, draft), Charsets.UTF_8) }
                     catch (e: Throwable) { "{\"stop\":\"error\",\"text\":\"\",\"error\":\"${e.message?.replace("\"", "'")}\"}" }
-                    main.post { if (replied.compareAndSet(false, true)) { if (inflightId == id) inflightId = 0L; result.success(out) } }
+                    main.post { learnSpeed(out); if (replied.compareAndSet(false, true)) { if (inflightId == id) inflightId = 0L; result.success(out) } }
                 }
             }
             "reset" -> worker.execute { try { engine().nativeReset() } catch (_: Throwable) {}; main.post { result.success(null) } }

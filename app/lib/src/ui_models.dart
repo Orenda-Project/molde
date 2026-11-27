@@ -153,8 +153,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(a.name, key: const Key('active-name'), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Text('${mb(a.bytes)} · ${a.sourceLabel}', key: const Key('active-detail')),
-                const SizedBox(height: 4),
-                Text(a.path.split('/').last, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
               ]))),
         if (mm.net == 'mobile') Padding(padding: const EdgeInsets.only(top: 8), child: Text('You are on mobile data. Downloads are large; Wi-Fi is better.', style: TextStyle(color: cs.onSurfaceVariant))),
         if (mm.isBusy()) Padding(padding: const EdgeInsets.only(top: 8), child: Text(ModelManager.busyMessage, key: const Key('switch-blocked'), style: TextStyle(color: cs.onSurfaceVariant))),
@@ -183,9 +181,9 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 20),
             Text('Downloaded earlier', key: const Key('earlier-heading'), style: Theme.of(context).textTheme.titleSmall),
             Text('Not in the list any more. Still on this phone and still works.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-            for (final e in mm.downloadedEarlier)
+            for (final (i, e) in mm.downloadedEarlier.indexed)
               Card(key: Key('earlier-${e.file}'), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(e.file, style: Theme.of(context).textTheme.bodyMedium),
+                Text(mm.downloadedEarlier.length > 1 ? 'Older model ${i + 1}' : 'Older model', style: Theme.of(context).textTheme.bodyMedium),
                 Text(mb(e.bytes), style: TextStyle(color: cs.onSurfaceVariant)),
                 if (mm.isActiveFile(e.file)) Padding(padding: const EdgeInsets.only(top: 6), child: Row(mainAxisSize: MainAxisSize.min, key: const Key('in-use'), children: [Icon(Icons.check_circle, size: 18, color: cs.primary), const SizedBox(width: 6), Text('In use', style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary))])),
                 const SizedBox(height: 8),

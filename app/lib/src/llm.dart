@@ -131,6 +131,8 @@ class LlmService {
 
   /// models.json can name the template of a model; it is used when no sidecar file says and the architecture does not.
   String? templateHint;
+  /// The name the user sees for the loaded model (catalogue name); never a file name.
+  String? displayName;
 
   /// Which prompt format a model uses: the sidecar `template`, else the catalogue hint, else the GGUF architecture (qwen*) , else gemma.
   static String pickTemplate({String? sidecar, String? hint, String architecture = ''}) {

@@ -48,6 +48,7 @@ JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeMeta(JNIEnv * 
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeUnload(JNIEnv *, jobject) { g_core.unload(); }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeCancel(JNIEnv *, jobject) { g_core.cancel = true; }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeReset(JNIEnv *, jobject) { g_core.reset(); }
+JNIEXPORT jlong JNICALL Java_com_oyekamal_molde_NativeLlm_nativeIdleMs(JNIEnv *, jobject) { return (jlong) g_core.idle_ms(); }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeDebugHang(JNIEnv *, jobject, jint ms) { g_hang_ms = ms; }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeAbandon(JNIEnv *, jobject) {
   std::lock_guard<std::mutex> lk(g_mu);
@@ -64,7 +65,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_oyekamal_molde_NativeLlm_nativeComplete(JN
   molde::Core * c = g_core_p.load();
   std::string prompt = jstr(env, jprompt), grammar = jstr(env, jgrammar), draft = jstr(env, jdraft);
   long hang = g_hang_ms.exchange(0);
-  if (hang > 0) std::this_thread::sleep_for(std::chrono::milliseconds(hang));   // simulated stuck call: cancel is ignored
+  if (hang > 0) { c->in_call = true; c->tick(); std::this_thread::sleep_for(std::chrono::milliseconds(hang)); c->in_call = false; }   // simulated stuck call: cancel is ignored, no progress
   molde::Result r;
   bool abandoned;
   { std::lock_guard<std::mutex> lk(g_mu); abandoned = c != g_core_p.load(); }

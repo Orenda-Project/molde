@@ -67,6 +67,12 @@ struct Core {
   std::vector<llama_token> cached;     // tokens whose K/V are in the cache
   int n_ctx = 0, n_batch = 512;
   std::atomic<bool> cancel{false};
+  // progress mark for the watchdog on the Kotlin side: a call that makes no progress (no token, no prompt chunk) for too long is stuck
+  std::atomic<long long> progress_ms{0};
+  std::atomic<bool> in_call{false};
+  static long long now_ms() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+  void tick() { progress_ms = now_ms(); }
+  long long idle_ms() const { return in_call ? now_ms() - progress_ms.load() : -1; }
   bool backends_loaded = false;
 
   // Recurrent and hybrid models (Qwen3.5: DeltaNet layers) cannot drop the last few tokens of the cache: llama_memory_seq_rm
@@ -186,6 +192,7 @@ struct Core {
       if (llama_decode(ctx, b) != 0) return 1;
       cached.insert(cached.end(), toks.begin() + i, toks.begin() + i + n);
       i += n;
+      tick();
     }
     return 0;
   }
@@ -206,6 +213,7 @@ struct Core {
   Result complete(const std::string & prompt, const std::string & grammar, int n_predict, float temp, int seed, bool stop_nl, const std::string & draft = "") {
     Result R;
     cancel = false;
+    struct CallGuard { Core * c; explicit CallGuard(Core * x) : c(x) { c->in_call = true; c->tick(); } ~CallGuard() { c->in_call = false; } } call_guard(this);
     if (!ctx) { R.stop = "error"; R.error = "no model loaded"; return R; }
     std::vector<llama_token> toks;
     bool incremental = false;
@@ -297,6 +305,7 @@ struct Core {
     auto t1 = clk::now();
     for (int i = 0; i < n_predict; ) {
       if (cancel) { R.stop = "cancel"; break; }
+      tick();
       llama_token id;
       if (have_pending) { id = pending; have_pending = false; } else id = sample_tok(-1);
       accept(id);
@@ -321,6 +330,7 @@ struct Core {
           bool stopped = false, mismatch = false;
           for (size_t j = 1; j < dt.size(); j++) {
             if (cancel) { R.stop = "cancel"; stopped = true; kept = j; break; }
+            tick();
             llama_token t = sample_tok((int) j - 1);
             if (t == dt[j]) {
               accept(t);

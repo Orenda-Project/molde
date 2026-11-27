@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'bridge.dart';
 import 'rules.dart';
+import 'summary.dart';
 export 'rules.dart';
 import 'llm.dart';
 import 'store.dart';
@@ -58,7 +59,7 @@ class MoldeController extends ChangeNotifier {
   PendingAsk? pendingAsk;
   String get modelStatus {
     final m = llm.model;
-    if (m != null) return 'Model ready: ${m.path.split('/').last} (${(m.sizeBytes / 1048576).round()} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s)';
+    if (m != null) return 'Model ready: ${m.name ?? llm.displayName ?? 'your model'} (${(m.sizeBytes / 1048576).round()} MB, loaded in ${m.loadSeconds.toStringAsFixed(1)} s)';
     return llm.loadError ?? 'Loading the model…';
   }
   Map<String, dynamic>? lastStats;
@@ -254,9 +255,19 @@ class MoldeController extends ChangeNotifier {
       if (undoable != null) { await undoLast(); } else { _say('bot', 'There is nothing earlier to go back to.'); }
       return;
     }
+    final gap = capabilityGap(request);
+    if (gap != null) { // not possible in an offline app: say so plainly, with the reason and what can be built instead
+      _say('bot', gap.reply, buttons: [
+        ChatBtn(gap.offer, () async { startNewApp(); await _run('create', gap.suggestion); }, primary: true),
+        ChatBtn('No thanks', () async {}),
+      ]);
+      return;
+    }
     if (kind == 'edit') {
       // exact edits of line 1 (colour, dark/light, text size, title) and of one setting value: no model, instant
       final src = current!.source;
+      final be = buttonRenameEdit(request, src);
+      if (be != null) { await _direct(request, be.program, label: be.label, unchanged: be.unchanged); return; }
       final de = appLineEdit(request, src);
       if (de != null) { await _direct(request, de.program, label: de.label, unchanged: de.unchanged); return; }
       final se = settingEditProgram(request, src);
@@ -334,7 +345,7 @@ class MoldeController extends ChangeNotifier {
       final res = Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': request, 'current': kind == 'edit' ? current!.source : '',
         'system': m.system, 'arm': m.arm ?? arm, 'template': m.template,
-        'allowAsk': may, 'ask': ask, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
+        'allowAsk': may, 'ask': ask, 'hardCapMs': kind == 'edit' ? 7 * 60 * 1000 : 12 * 60 * 1000, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
       }));
       if (llm.takeHung()) {
         _finishLive(live, 'The model stopped responding, so I stopped it and started it again. ${kind == 'edit' ? 'Your app is unchanged.' : 'Nothing was made.'} Please try again.');
@@ -419,7 +430,7 @@ class MoldeController extends ChangeNotifier {
     final total = programLines(current!.source).length;
     if (!direct && total > 0 && gone.length > removalLimit(total) && !kRemovalWords.hasMatch(request)) {
       final pct = (gone.length * 100 / total).round();
-      _finishLive(live, 'I did not apply this change: it would have removed ${gone.length} of $total lines of your app ($pct%), and you did not ask to remove anything. It would have removed:\n${_bullets(gone.map((l) => l.trim()).toList())}\nYour app is unchanged.', buttons: [
+      _finishLive(live, 'I did not apply this change: it would have removed ${gone.length} of $total lines of your app ($pct%), and you did not ask to remove anything. It would have removed:\n${_bullets(describeLines(gone))}\nYour app is unchanged.', buttons: [
         ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
       ]);
       return;
@@ -437,15 +448,15 @@ class MoldeController extends ChangeNotifier {
         return;
       }
       current!.log('edit', request: request, summary: changes.take(3).join('; '));
-      final headline = sets.isEmpty ? '' : '${sets.join('\n')}\n';
-      final rest = changes.where((c) => !sets.contains(c)).toList();
-      final unmet = direct ? <String>[] : unmetClaims(request, oldSrc, program);
+      final said = summarizeChange(oldSrc, program); // from the checked before and after programs, never the model's or the engine's words
+      final unmet = direct ? <String>[] : [...unmetClaims(request, oldSrc, program), ...unmetFromDiff(request, oldSrc, program)];
+      final chartAdded = said.any((x) => x.startsWith('Added a chart') || x.startsWith('Added a bar chart') || x.startsWith('Added a calendar'));
       if (doneLabel != null && doneLabel.isNotEmpty) {
         _finishLive(live, 'Done: $doneLabel', kind: 'change');
       } else if (unmet.isNotEmpty) {
-        _finishLive(live, "I changed something, but not what you asked: ${unmet.join(' and ')} did not happen. What changed:\n${rest.isEmpty && sets.isEmpty ? '• (a small edit)' : '$headline${_bullets(rest)}'}\nYou can Undo it.", kind: 'change');
+        _finishLive(live, "I did not do everything you asked. Not done: ${unmet.join(' and ')}.\n${said.isEmpty ? 'Something small changed that does not show on the screen.' : 'What I did:\n${_bullets(said)}'}\nYou can Undo it.", kind: 'change');
       } else {
-        _finishLive(live, '${sets.isEmpty ? 'Changed' : 'Done'} in ${_fmtSecs(secs)}:\n$headline${rest.isEmpty ? '' : _bullets(rest)}\nEverything you entered is kept.', kind: 'change');
+        _finishLive(live, '${direct ? 'Done' : 'Done in ${_fmtSecs(secs)}'}:\n${changeReply(said, chartAdded: chartAdded)}', kind: 'change');
       }
       await settleSaves();
     }
@@ -453,7 +464,7 @@ class MoldeController extends ChangeNotifier {
     final extra = direct ? <String>[] : dropsUnasked(request, oldSrc, program);
     final rewritten = direct ? <String>[] : rewrittenUnasked(request, oldSrc, program);
     if (extra.isNotEmpty || rewritten.isNotEmpty) {
-      final what = [if (extra.isNotEmpty) 'This would also remove:\n${_bullets(extra)}', if (rewritten.isNotEmpty) 'This would also change a line you did not mention:\n${_bullets(rewritten)}'].join('\n');
+      final what = [if (extra.isNotEmpty) 'This would also remove:\n${_bullets(describeLines(extra))}', if (rewritten.isNotEmpty) 'This would also change something you did not mention:\n${_bullets(describeLines(rewritten))}'].join('\n');
       _finishLive(live, '$what\nYou did not ask for that, so I have not applied the change.', buttons: [
         ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }, primary: true),
         ChatBtn('Apply anyway', () async { live.buttons = []; notifyListeners(); await apply(); notifyListeners(); }),
@@ -461,7 +472,7 @@ class MoldeController extends ChangeNotifier {
       return;
     }
     if (verdict == 'warn' || warnings.isNotEmpty) {
-      _finishLive(live, 'This change needs a decision:\n${_bullets(warnings)}\n\nIt would: \n${_bullets(changes)}', kind: 'text', buttons: [
+      _finishLive(live, 'This change needs a decision:\n${_bullets(plainWarnings(warnings))}\n\nIt would:\n${_bullets(summarizeChange(oldSrc, program))}', kind: 'text', buttons: [
         ChatBtn('Apply it', () async { live.buttons = []; notifyListeners(); await apply(); notifyListeners(); }, primary: true),
         ChatBtn('Leave the app as it is', () async { live.buttons = []; live.text = 'Left the app as it is.'; notifyListeners(); }),
       ]);

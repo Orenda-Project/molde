@@ -6,6 +6,7 @@ import 'package:molde/src/bridge.dart';
 import 'package:molde/src/controller.dart';
 import 'package:molde/src/llm.dart';
 import 'package:molde/src/store.dart';
+import 'package:molde/src/summary.dart';
 
 /// A page that answers rpc calls from a table of handlers (the real page is the bundled JS; see js/tests for its loop).
 class ScriptedPage implements JsTransport {
@@ -109,14 +110,15 @@ void main() {
 
   test('safe change is applied, listed, and Undo goes back with revert', () async {
     await seed();
-    page.handlers['generate'] = (a) => {'ok': true, 'program': '$water# more\n', 'errors': [], 'stats': {'seconds': 3.0}};
+    page.handlers['generate'] = (a) => {'ok': true, 'program': water.replaceFirst('ml num', 'ml num, note text'), 'errors': [], 'stats': {'seconds': 3.0}};
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['adds field note to drink'], 'warnings': [], 'refused': []};
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': ['adds field note to drink'], 'warnings': [], 'refused': []};
     page.handlers['undoEdit'] = (a) => {'verdict': 'restore', 'changes': ['back'], 'warnings': []};
     await c.send('tidy it up');
     expect(page.calls, containsAllInOrder(['evaluate', 'applyEdit']));
     final m = c.chat.last;
-    expect(m.text, contains('adds field note to drink'));
+    expect(m.text, contains('Added a Note field.'));
+    expect(m.text, isNot(contains('drink.')));
     expect(m.text, contains('Everything you entered is kept'));
     expect(c.undoable, same(m));
     await c.undoLast();
@@ -364,7 +366,7 @@ void roundThreeFlows() {
     page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['Goal is now 3000'], 'warnings': [], 'refused': [], 'settings': [{'name': 'goal', 'text': 'Goal is now 3000'}]};
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
     await c.send('change the goal to 3000');
-    expect(c.chat.last.text, contains('Goal is now 3000'));
+    expect(c.chat.last.text, contains('to 3000'));
     expect(c.chat.last.text, isNot(contains('nothing changed')));
     expect(page.calls, contains('applyEdit'));
   });
@@ -376,7 +378,7 @@ void roundThreeFlows() {
     page.handlers['generate'] = (a) => throw StateError('the model must not run');
     await c.send('change the goal to 3000');
     expect(page.calls, isNot(contains('generate')));
-    expect(c.chat.last.text, contains('Goal is now 3000'));
+    expect(c.chat.last.text, contains('to 3000'));
     expect(page.calls, contains('applyEdit'));
   });
 
@@ -393,7 +395,8 @@ void roundThreeFlows() {
     await c.send('tidy it up');
     expect(page.calls, isNot(contains('applyEdit')));
     expect(c.chat.last.text, contains('would have removed'));
-    expect(c.chat.last.text, contains('form drink'));
+    expect(c.chat.last.text, contains('a chart'));
+    expect(c.chat.last.text, isNot(contains('trend drink')));
     expect(c.chat.last.buttons.map((b) => b.label), ['Try again']);
     await c.send('remove the chart and the form');
     expect(c.chat.last.text, isNot(contains('did not ask to remove anything')));
@@ -462,13 +465,12 @@ void roundFour() {
       expect(unmetClaims('make it green', o, o.replaceFirst('ocean', 'green')), isEmpty);
       expect(unmetClaims('dark mode', o, o), contains('dark mode'));
       expect(unmetClaims('change the title to Spend', o, o), contains('the new title'));
-      expect(unmetClaims('add a note field', o, o), contains('the note'));
-      expect(unmetClaims('add a note field', o, o.replaceFirst('ml num', 'ml num, note text')), isEmpty);
-      expect(unmetClaims('remove the streak', o, o), contains('removing the streak'));
-      expect(unmetClaims('remove the streak', o, o.replaceFirst('stat count(drink) "streak"\n', '')), isEmpty);
-      expect(unmetClaims('add a chart', o, o), contains('a chart'));
-      expect(unmetClaims('remove the chart', o, o), contains('removing the chart'));
-      expect(unmetClaims('remove the chart', o, o.replaceFirst('trend drink, it.ml\n', '')), isEmpty);
+      // fields, buttons and charts come from the diff (summary.dart)
+      expect(unmetFromDiff('add a note field', o, o), contains('the new field'));
+      expect(unmetFromDiff('add a field for phone number', o, o.replaceFirst('ml num', 'ml num, phone text')), isEmpty);
+      expect(unmetFromDiff('add a chart', o, o), contains('a chart'));
+      expect(unmetFromDiff('remove the chart', o, o), contains('removing the chart'));
+      expect(unmetFromDiff('remove the chart', o, o.replaceFirst('trend drink, it.ml\n', '')), isEmpty);
     });
     test('betterTitle replaces a question or a sentence by the request noun', () {
       expect(betterTitle('app "What do you want to track?" star ink\n', 'sleep tracker'), 'Sleep tracker');
@@ -542,9 +544,8 @@ void roundFourFlows() {
     await c.send('add a note field');
     final t = c.chat.last.text;
     expect(t, isNot(startsWith('Changed')));
-    expect(t, contains('not what you asked'));
-    expect(t, contains('the note'));
-    expect(t, contains('Today now'));
+    expect(t, contains('Not done: the new field'));
+    expect(t, isNot(contains('Today now')));
   });
 
   test('bare noun in Change mode asks the two-button question; "add ..." never does', () async {
@@ -834,10 +835,35 @@ void roundSixOneFlow() {
     page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
     await c.send('add a priority');
     final m = c.chat.last;
-    expect(m.text, contains('would also change a line you did not mention'));
-    expect(m.text, contains('each t where done = no as r'));
+    expect(m.text, contains('would also change something you did not mention'));
+    expect(m.text, contains('a list of entries'));
+    expect(m.text, isNot(contains('where done')));
     expect(m.buttons.map((b) => b.label), ['Keep my app', 'Apply anyway']);
     expect(page.calls, isNot(contains('applyEdit')));
+  });
+
+  test('an impossible request is answered plainly with the reason and an in-app offer, the model never runs', () async {
+    page.handlers['generate'] = (a) => throw StateError('the model must not run');
+    await c.send('send me a WhatsApp every morning');
+    final m = c.chat.last;
+    expect(m.text, contains("can't send messages"));
+    expect(m.text, contains('offline'));
+    expect(m.text, contains('reminder list inside the app'));
+    expect(m.text, isNot(contains('name the part')));
+    expect(m.buttons.map((b) => b.label), ['Make a reminder list', 'No thanks']);
+  });
+
+  test('"rename the Add button to Save" is applied without the model when the label is clear', () async {
+    const app = 'app "Todo" check mint\ntable task title text\nlist task\nform task\n';
+    await c.store.save(AppRecord(id: 'a4', name: 'Todo', source: app));
+    await c.init();
+    c.changeCurrent();
+    page.handlers['generate'] = (a) => throw StateError('the model must not run');
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['x'], 'warnings': [], 'refused': []};
+    page.handlers['applyEdit'] = (a) { expect(a['source'], contains('form task, "Save"')); return {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []}; };
+    await c.send('rename the Add button to Save');
+    expect(page.calls, contains('applyEdit'));
+    expect(c.chat.last.text, contains('Done: the button now says Save'));
   });
 
   test('a one-line edit of a small app is applied (the 20% guard no longer blocks it)', () async {
@@ -880,7 +906,7 @@ void roundFiveOneFlow() {
     await c.send('remove the note field');
     final m = c.chat.last;
     expect(m.text, contains('This would also remove'));
-    expect(m.text, contains('button "1"'));
+    expect(m.text, contains('the "1" button'));
     expect(m.buttons.map((b) => b.label), ['Keep my app', 'Apply anyway']);
     expect(m.buttons.first.primary, isTrue);
     expect(page.calls, isNot(contains('applyEdit')));

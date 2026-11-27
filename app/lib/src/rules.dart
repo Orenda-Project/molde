@@ -106,6 +106,66 @@ String? settingEditProgram(String request, String source) {
   return null;
 }
 
+/// "rename the Add button to Save", "change the Paid button to Received": a direct edit when the label occurs exactly once
+/// (in `button "..."` or `form t, "..."`), or when it names the default Add button of the one form that has no label.
+/// Anything ambiguous (two buttons with that label, no such button) goes to the model. Returns null when not of this shape.
+DirectEdit? buttonRenameEdit(String request, String source) {
+  final m = RegExp(r'^\s*(?:please\s+|can you\s+|could you\s+)?(?:rename|change|call|make|relabel|set)\s+(?:the\s+)?"?(.+?)"?\s+button\s+(?:to|as|say|read|into)\s+"?([^"]+?)"?\s*[.!]?\s*$', caseSensitive: false).firstMatch(request);
+  if (m == null) return null;
+  final target = m.group(1)!.trim().toLowerCase();
+  final next = m.group(2)!.trim();
+  if (target.isEmpty || next.isEmpty || next.length > 30 || next.contains('"')) return null;
+  final lines = source.split('\n');
+  final hits = <(int, RegExpMatch)>[];
+  for (var i = 0; i < lines.length; i++) {
+    final t = lines[i].trim();
+    final bm = RegExp(r'^(button\s+)"([^"]*)"').firstMatch(t) ?? RegExp(r'^((?:form|topbar)\s+\w+\s*,\s*)"([^"]*)"').firstMatch(t);
+    if (bm != null && bm.group(2)!.trim().toLowerCase() == target) hits.add((i, bm));
+  }
+  if (hits.length == 1) {
+    final (i, bm) = hits.first;
+    if (bm.group(2) == next) return DirectEdit(source, 'the button already says $next', unchanged: true);
+    lines[i] = lines[i].replaceFirst('${bm.group(1)}"${bm.group(2)}"', '${bm.group(1)}"$next"');
+    return DirectEdit(lines.join('\n'), 'the button now says $next');
+  }
+  if (hits.isNotEmpty) return null; // the label is on more than one button: which one?
+  // the default Add button of the only form that has no label of its own
+  final bare = <int>[for (var i = 0; i < lines.length; i++) if (RegExp(r'^(form|topbar)\s+\w+\s*$').hasMatch(lines[i].trim())) i];
+  if (bare.length == 1 && (target == 'add' || RegExp(r'^add\s+\w+$').hasMatch(target))) {
+    lines[bare.first] = '${lines[bare.first].trimRight()}, "$next"';
+    return DirectEdit(lines.join('\n'), 'the button now says $next');
+  }
+  return null;
+}
+
+/// Something Molde cannot do because its apps work offline, inside the app: said plainly, with why and what it can do instead.
+class CapabilityGap {
+  CapabilityGap(this.reply, this.suggestion, this.offer);
+  final String reply, suggestion, offer;
+}
+
+CapabilityGap? capabilityGap(String request) {
+  final low = request.toLowerCase();
+  const offline = 'Molde apps work offline and stay inside Molde on this phone, so';
+  if (RegExp(r'\b(whatsapp|whats app|sms|text message|email|e-mail|telegram|messenger|instagram dm)\b').hasMatch(low) && RegExp(r'\b(send|message|notify|alert|remind|mail)\b').hasMatch(low) ||
+      RegExp(r'\bsend (me|us|him|her|them) (a|an|the)\b').hasMatch(low) || RegExp(r'\b(push )?notifications?\b').hasMatch(low)) {
+    return CapabilityGap("Molde can't send messages or notifications (WhatsApp, SMS, email). $offline nothing can leave the phone.\n\nWhat I can do instead: a reminder list inside the app that you open each day.", 'daily reminders list', 'Make a reminder list');
+  }
+  if (RegExp(r'\b(weather|news|exchange rate|live price|stock price|real.?time|sync|cloud|upload|website|google|internet|online|api)\b').hasMatch(low) && RegExp(r'\b(show|get|fetch|pull|load|sync|upload|download|connect|real.?time|from the internet)\b').hasMatch(low)) {
+    return CapabilityGap("Molde can't get information from the internet (weather, news, live prices) or sync to the cloud. $offline there is no connection to use.\n\nWhat I can do instead: an app where you type those numbers in yourself, with totals and charts.", request.replaceAll(RegExp(r'\b(live|online|from the internet|real.?time|sync(ed)? to the cloud)\b', caseSensitive: false), '').trim(), 'Make the offline version');
+  }
+  if (RegExp(r'\b(gps|map|maps|location|navigate|directions|nearby)\b').hasMatch(low)) {
+    return CapabilityGap("Molde can't use your location or show maps. $offline it cannot see where you are.\n\nWhat I can do instead: a list of places you type in, with notes.", 'list of places with notes', 'Make a places list');
+  }
+  if (RegExp(r'\b(login|log in|sign in|sign up|password|bank account|online payment|pay online|jazzcash|easypaisa|credit card)\b').hasMatch(low)) {
+    return CapabilityGap("Molde can't log in to accounts or take payments. $offline it has no accounts to connect to.\n\nWhat I can do instead: a record of what you owe or have paid that you type in yourself.", 'record of money owed and paid', 'Make a payment record');
+  }
+  if (RegExp(r'\b(camera|scan|barcode|qr code|take a photo|microphone|voice note|speech|chatbot)\b').hasMatch(low)) {
+    return CapabilityGap("Molde can't use the camera or microphone, or scan codes. $offline it has no way to read them.\n\nWhat I can do instead: a list where you type the details in.", 'list of items with details', 'Make a typed list');
+  }
+  return null;
+}
+
 final RegExp kRemovalWords = RegExp(r'\b(remove|delete|drop|hide|without|get rid)\b', caseSensitive: false);
 
 List<String> programLines(String src) => src.split('\n').map((l) => l.trimRight()).where((l) => l.trim().isNotEmpty).toList();
@@ -269,31 +329,7 @@ List<String> unmetClaims(String request, String oldSrc, String newSrc) {
   // title
   final rn = RegExp(r'(?:title|name|rename|call it)\b.*?(?:to|as)?\s+"?([A-Za-z0-9][^"]*?)"?\s*$', caseSensitive: false).firstMatch(request);
   if (rn != null && RegExp(r'\b(title|rename|call it)\b').hasMatch(low) && !RegExp(r'\b(button|field|column|tab|section|label|option|chart|header)\b').hasMatch(low) && na != null && na.title.toLowerCase() != rn.group(1)!.trim().toLowerCase()) out.add('the new title');
-  // a named field added: "add a note field", "add notes", "add a due date"
-  final add = RegExp(r'\badd(?:\s+(?:a|an|the|some))?\s+([a-z][a-z ]{1,24}?)(?:\s+(?:field|column|box|option))?(?:\s+(?:to|for|in)\b.*)?$').firstMatch(low);
-  if (add != null && !RegExp(r'\b(chart|graph|button|screen|tab)\b').hasMatch(add.group(1)!)) {
-    final key = wordsOf(add.group(1)!).where((x) => !kFiller.contains(x) && x.length > 2).toList();
-    if (key.isNotEmpty) {
-      final before = wordsOf(oldSrc).toSet(), after = wordsOf(newSrc).toSet();
-      final k = key.last.endsWith('s') && key.last.length > 3 ? key.last.substring(0, key.last.length - 1) : key.last;
-      bool has(Set<String> s) => s.any((x) => x == key.last || x == k || x.startsWith(k));
-      if (!(has(after) && (!has(before) || wordsOf(newSrc).where((x) => x.startsWith(k)).length > wordsOf(oldSrc).where((x) => x.startsWith(k)).length))) out.add('the ${key.join(' ')}');
-    }
-  }
-  // remove / delete / hide <thing>
-  final rm = RegExp(r'\b(?:remove|delete|drop|hide|get rid of)\s+(?:the\s+|a\s+|my\s+)?([a-z][a-z ]{1,24}?)(?:\s+(?:from|and|section|part)\b.*)?$').firstMatch(low);
-  if (rm != null && !RegExp(r'\b(chart|graph)\b').hasMatch(rm.group(1)!)) {
-    final key = wordsOf(rm.group(1)!).where((x) => !kFiller.contains(x) && x.length > 2).toList();
-    if (key.isNotEmpty) {
-      final c = (String src) => RegExp(key.last, caseSensitive: false).allMatches(src).length;
-      if (c(oldSrc) > 0 && c(newSrc) >= c(oldSrc)) out.add('removing the ${key.join(' ')}');
-    }
-  }
-  // charts
-  const chartRe = r'^\s*(?:bars|trend|daybars|plot|heat|pie|chart)\b';
-  int charts(String s) => s.split('\n').where((l) => RegExp(chartRe).hasMatch(l.trim())).length;
-  if (RegExp(r'\b(add|show|put)\b.*\b(chart|graph)\b').hasMatch(low) && charts(newSrc) <= charts(oldSrc)) out.add('a chart');
-  if (RegExp(r'\b(remove|delete|hide)\b.*\b(chart|graph)\b').hasMatch(low) && charts(newSrc) >= charts(oldSrc) && charts(oldSrc) > 0) out.add('removing the chart');
+  // fields, buttons and charts are checked from the diff of the two programs (summary.dart: unmetFromDiff)
   return out;
 }
 

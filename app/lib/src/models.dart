@@ -110,11 +110,14 @@ class ModelManager extends ChangeNotifier {
     unawaited(platform.networkType().then((n) { net = n; notifyListeners(); }));
   }
 
+  /// A model that is in no catalogue entry is never shown by its file name (the user did not choose that name).
+  static String fallbackName(String source, int bytes) => '${source == 'hand' ? 'Model added by hand' : 'Older model'} (${(bytes / 1048576).round()} MB)';
+
   Future<void> refreshCatalogue() async {
     catalogue = await loadCatalogue();
     if (active != null && active!.source == 'catalogue') { // the catalogue arrived after the model was chosen: use its name for the file
       final m = catalogue!.models.where((m) => m.localName == active!.path.split('/').last).firstOrNull;
-      if (m != null) { active = ActiveModel(path: active!.path, name: m.name, bytes: active!.bytes, source: 'catalogue', id: m.id); llm.templateHint = m.template; }
+      if (m != null) { active = ActiveModel(path: active!.path, name: m.name, bytes: active!.bytes, source: 'catalogue', id: m.id); llm.templateHint = m.template; llm.displayName = m.name; }
     }
     notifyListeners();
   }
@@ -140,9 +143,11 @@ class ModelManager extends ChangeNotifier {
 
   Future<void> _setActive(File f, String source, String? id, {bool save = true}) async {
     final bytes = await f.length();
-    final name = id != null ? (catalogue?.byId(id)?.name ?? f.uri.pathSegments.last) : (source == 'hand' ? f.uri.pathSegments.last : (catalogue?.models.where((m) => m.localName == f.uri.pathSegments.last).firstOrNull?.name ?? f.uri.pathSegments.last));
+    final fallback = fallbackName(source, bytes);
+    final name = id != null ? (catalogue?.byId(id)?.name ?? fallback) : (source == 'hand' ? fallback : (catalogue?.models.where((m) => m.localName == f.uri.pathSegments.last).firstOrNull?.name ?? fallback));
     active = ActiveModel(path: f.path, name: name, bytes: bytes, source: source, id: id ?? catalogue?.models.where((m) => m.localName == f.uri.pathSegments.last).firstOrNull?.id);
     llm.preferred = f;
+    llm.displayName = name;
     llm.templateHint = id != null ? catalogue?.byId(id)?.template : null;
     if (save) await AppStore.writeAtomic(settingsFile, jsonEncode({'v': 1, 'active': {'id': active!.id, 'file': f.uri.pathSegments.last, 'source': source}}));
   }

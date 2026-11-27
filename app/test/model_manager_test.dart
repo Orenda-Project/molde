@@ -155,6 +155,17 @@ void main() {
     expect(mm.isActive(a), isFalse);
   });
 
+  test('a model that is in no catalogue entry is never shown by its file name', () async {
+    final d = Directory('${tmp.path}/ext/models')..createSync(recursive: true);
+    File('${d.path}/r3-secret-name-Q4_K_M.gguf').writeAsBytesSync(List.filled(2097152, 1));
+    final mm = make(FakeLlm());
+    await mm.init();
+    expect(mm.active!.name, 'Model added by hand (2 MB)');
+    expect(mm.active!.name, isNot(contains('.gguf')));
+    expect(mm.llm.displayName, 'Model added by hand (2 MB)');
+    expect(ModelManager.fallbackName('catalogue', 253155008), 'Older model (241 MB)');
+  });
+
   group('WebView stays locked', () {
     test('only the bundled page may be navigated to', () {
       expect(allowNavigation('file:///android_asset/flutter_assets/assets/web/index.html'), isTrue);
