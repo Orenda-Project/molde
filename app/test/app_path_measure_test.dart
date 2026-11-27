@@ -39,6 +39,7 @@ class _Holder implements JsTransport {
 void main() {
   final inPath = Platform.environment['MOLDE_APP_PATH_IN'];
   final outPath = Platform.environment['MOLDE_APP_PATH_OUT'] ?? '/tmp/app_path_out.json';
+  final whole = Platform.environment['MOLDE_APP_FORMAT'] == 'whole'; // r3 whole-program answers: `raw` is the full program
   final jsDir = Platform.environment['MOLDE_JS_DIR'] ?? '${Directory.current.path}/js';
   test('app path over raw ops answers', () async {
     final cases = (jsonDecode(File(inPath!).readAsStringSync()) as List).cast<Map<String, dynamic>>();
@@ -48,7 +49,7 @@ void main() {
       final holder = _Holder();
       final bridge = WebBridge(holder); final page = _Page(bridge); holder.inner = page;
       bridge.onRaw(jsonEncode({'t': 'ready'}));
-      final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1, format: 'ops');
+      final llm = LlmService()..model = ModelInfo('/m.gguf', 1, 0.1, format: whole ? 'whole' : 'ops');
       final before = '${cs['before']}';
       final c = MoldeController(store: AppStore(Directory('${tmp.path}/molde')), bridge: bridge, llm: llm, modelDirs: [tmp], readAsset: (p) async => before);
       String? applied;
@@ -57,6 +58,7 @@ void main() {
       page.handlers['generate'] = (a) {
         modelCalled = true;
         if (cs['raw'] == null) return {'ok': false, 'program': '', 'errors': [cs['err'] ?? 'the model wrote nothing'], 'stats': {'seconds': 1.0}};
+        if (whole) return {'ok': true, 'program': cs['raw'], 'errors': [], 'stats': {'seconds': 1.0}};
         return {'ok': true, 'format': 'ops', 'ops': cs['raw'], 'stats': {'seconds': 1.0}};
       };
       page.handlers['check'] = (a) => _node(jsDir, 'check', before, '${a['source']}');
