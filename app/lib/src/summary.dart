@@ -2,6 +2,7 @@
 // never from the engine's wording). No line of program text is ever shown: every line is turned into a phrase about what the
 // user sees ("a chart", "the Paid button", "a Phone field"). Pure Dart, unit tested.
 import 'rules.dart';
+import 'direct.dart' show aAn;
 
 const Set<String> kChartKinds = {'daybars', 'bars', 'trend', 'heat', 'pie', 'share', 'goalbars', 'daygrid', 'weekdots', 'plot'};
 
@@ -161,7 +162,7 @@ List<String> summarizeChange(String oldSrc, String newSrc) {
       if (before.contains(f)) continue;
       final was = n.renamedFrom['${e.key}.$f'];
       if (was != null && before.contains(was)) { out.add('Renamed the ${was.replaceAll('_', ' ')} field to ${f.replaceAll('_', ' ')}.'); continue; }
-      out.add('Added a ${_human(f)} field.');
+      out.add('Added ${aAn(_human(f))} field.');
     }
     for (final f in before) {
       if (e.value.contains(f)) continue;

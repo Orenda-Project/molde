@@ -490,7 +490,7 @@ class MoldeController extends ChangeNotifier {
     }
     // the model handed the program back unchanged, or what changed shows nothing: never say Done
     if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore') || (sets.isEmpty && summarizeChange(current!.source, program).isEmpty))) {
-      _finishLive(live, "I did not apply this. After ${secs is num ? secs.round() : 0} s the model's answer did not change your app in any way you could see, so I kept your app exactly as it is. Your app is unchanged. Try one clear change at a time, for example \"add a Phone field\", \"remove the Paid button\" or \"add a chart of fee\".", buttons: [
+      _finishLive(live, "I did not apply this. After ${secs is num ? secs.round() : 0} s the model's answer did not change your app in any way you could see, so I kept your app exactly as it is. Your app is unchanged. Try one clear change at a time, ${exampleRequests(current!.source)}.", buttons: [
         ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
         ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }),
       ]);

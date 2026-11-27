@@ -11,6 +11,9 @@ import 'package:molde/src/summary.dart';
 
 const lessons = 'app "Tutor" school ocean\ntable student name text, fee money\ntable lesson student ref student, topic text\ntable paid student ref student, amount money\nstat sum(paid.amount) "Received"\ndaybars last 7 days, sum(student.fee on it)\neach student sort name as s\n  row card gap 1\n    s.name bold grow\n    button "Paid" tap add paid student = s, amount = s.fee\nform lesson, "Add lesson"\nform student, "Add student"\nlist paid by day\n';
 
+const cricket = 'app "Cricket" ball ocean\ntable ball runs num 0..6 = 0, wide bool, out bool\nsetting overs num = 20\n"Runs off this ball" head\ngrid 4 gap 1\n  each [0, 1, 2, 3, 4, 6]\n    button it tap add ball runs = it\n  button "Wide" tap add ball wide = yes\nbutton "Undo last ball" tap remove last(ball today)\n';
+const phone = 'app "Phone fund" coin mint\ntable gift amount money\nform gift\nrow gap 1\n  each [500, 1000, 2000, 5000]\n    button it grow tap add gift amount = it\nlist gift\n';
+
 void main() {
   group('direct paths', () {
     test('remove a named button', () {
@@ -64,6 +67,68 @@ void main() {
       expect(isVagueRequest('can you make it look better'), isTrue);
       expect(isVagueRequest('make the buttons better at tracking fees'), isFalse);
       expect(isVagueRequest('add a chart'), isFalse);
+    });
+  });
+
+  group('0.6.5: visible changes, real button list, grammar, instant removals', () {
+    test('add a field needs a form to show it on', () {
+      final o = addFieldPlan('add a field for umpire name', cricket)!;
+      expect(o.edit, isNull);
+      expect(o.ask, contains('no form to put an Umpire name field on'));
+      expect(o.choices.length, 1);
+      expect(o.choices.first.program, contains('umpire_name text?'));
+      expect(o.choices.first.program, contains('form ball, "Add ball"'));
+      // with a form the change is applied and says where it shows
+      final ok = addFieldPlan('add a field for venue', o.choices.first.program)!;
+      expect(ok.edit!.label, 'added a Venue field, on the form');
+      // a draft shown with `field d` counts as a form (Savings style)
+      const sav = 'app "S" coin mint\ntable deposit amount money\nstate d new deposit\nstack card\n  field d\n';
+      expect(addFieldPlan('add a note field', sav)!.edit, isNotNull);
+    });
+    test('the model path: a new field with no form is a mismatch, with a form it is fine', () {
+      final hidden = cricket.replaceFirst('out bool', 'out bool, umpire_name text?');
+      expect(namedPartMismatch('add a field for umpire name', cricket, hidden), contains('no form to put the Umpire name field on'));
+      expect(namedPartMismatch('add a field for umpire name', cricket, '$hidden' 'form ball, "Add ball"\n'), isNull);
+    });
+    test('every button on screen is listed, presets included', () {
+      expect(buttonLabelsShown(phone), ['Add', '500', '1,000', '2,000', '5,000']);
+      expect(buttonLabelsShown(cricket), ['0', '1', '2', '3', '4', '6', 'Wide', 'Undo last ball']);
+      expect(buttonLabelsShown('app "W" x ocean\ntable drink ml num\nquick drink.ml 250 500\n'), ['250', '500']);
+      expect(buttonLabelsShown('app "A" x ocean\nbutton if(open, "Close", "Other") tap set open = not open\n'), ['Close', 'Other']);
+      final o = removeButtonPlan('remove the Delete button', phone)!;
+      expect(o.ask, contains('"Add", "500", "1,000", "2,000", "5,000"'));
+      expect(o.ask, isNot(contains('none')));
+      expect(removeButtonPlan('remove the 500 button', phone)!.ask, contains('quick buttons'));
+    });
+    test('hint examples come from this app', () {
+      expect(exampleRequests(phone), isNot(contains('Paid')));
+      expect(exampleRequests(phone), contains('add a chart of amount'));
+      expect(exampleRequests(lessons), contains('"remove the Paid button"'));
+      expect(exampleRequests(cricket), contains('"remove the Wide button"'));
+      expect(exampleRequests('app "A" x ocean\ntable t name text\nform t\n'), isNot(contains('remove the')));
+    });
+    test('a or an', () {
+      expect(aAn('Umpire name'), 'an Umpire name');
+      expect(aAn('Phone'), 'a Phone');
+      expect(aAn('Hour'), 'an Hour');
+      expect(aAn('User'), 'a User');
+      expect(aAn('Email'), 'an Email');
+      expect(summarizeChange('app "A" x ocean\ntable t name text\nform t\n', 'app "A" x ocean\ntable t name text, umpire text?\nform t\n'), contains('Added an Umpire field.'));
+      for (final r in ['add a field for umpire name', 'add an email field']) {
+        final o = addFieldPlan(r, 'app "A" x ocean\ntable t name text\nform t\n')!;
+        expect(o.edit!.label, isNot(contains('a Umpire')));
+        expect(o.edit!.label, isNot(contains('a Email')));
+      }
+    });
+    test('delete/remove/get rid of the X button, with now and please, never reaches the model', () {
+      for (final r in ['delete Remove all button now', 'delete the Remove all button now', 'remove the Remove all button', 'get rid of the Remove all button please', 'please remove the Remove all button now', 'can you delete the Remove all button right now', 'now delete the "Remove all" button', 'Remove the Remove all button, please.', 'take away the Remove all button now']) {
+        final o = removeButtonPlan(r, lessons);
+        expect(o, isNotNull, reason: r);
+        expect(o!.ask, contains('can\'t find a button called "Remove all"'), reason: r);
+        expect(o.ask, contains('"Paid"'), reason: r);
+      }
+      for (final r in ['delete the Remove all field now', 'please remove the Remove all field']) { expect(removeFieldPlan(r, lessons)!.ask, contains('can\'t find a field'), reason: r); }
+      expect(removeButtonPlan('remove the Paid button now', lessons)!.edit, isNotNull);
     });
   });
 
@@ -168,7 +233,7 @@ void main() {
     test('the model removed the chart instead of the button: held, never "Done"', () async {
       final noChart = lessons.replaceFirst('daybars last 7 days, sum(student.fee on it)\n', '');
       page.handlers['generate'] = (a) => {'ok': true, 'program': noChart, 'errors': [], 'stats': {'seconds': 5}};
-      await c.send('delete the Paid button please');
+      await c.send('please get rid of the Paid button for the tutors');
       final m = c.chat.last;
       expect(m.text, isNot(startsWith('Done')));
       expect(m.text, contains('does not do what you asked'));
@@ -204,12 +269,42 @@ void main() {
       expect(page.calls, isNot(contains('applyEdit')));
     });
 
-    test('a held edit that names a missing button lists the real buttons as taps', () async {
-      page.handlers['generate'] = (a) => {'ok': true, 'program': lessons.replaceFirst('daybars last 7 days, sum(student.fee on it)\n', ''), 'errors': [], 'stats': {'seconds': 5}};
+    test('"delete the Remove all button now" is answered at once from the real buttons, the model never runs', () async {
+      page.handlers['generate'] = (a) => throw StateError('the model must not run');
       await c.send('delete the Remove all button now');
       final m = c.chat.last;
-      expect(m.text, contains('I did not apply'));
+      expect(m.text, contains('can\'t find a button called "Remove all"'));
       expect(m.buttons.map((b) => b.label), contains('Paid'));
+      expect(page.calls, isNot(contains('generate')));
+    });
+
+    test('FALSE DONE (0.6.4 verdict): "add a field for umpire name" on an app with no form says so and offers a form', () async {
+      await c.store.save(AppRecord(id: 'k1', name: 'Cricket', source: cricket));
+      await c.openApp((await c.store.load('k1'))!);
+      c.changeCurrent();
+      page.handlers['generate'] = (a) => throw StateError('the model must not run');
+      await c.send('add a field for umpire name');
+      final m = c.chat.last;
+      expect(m.text, isNot(contains('Done')));
+      expect(m.text, contains('no form to put an Umpire name field on'));
+      expect(m.text, contains('I did not change your app'));
+      expect(m.buttons.map((b) => b.label), ['Add a form with an Umpire name field', 'No thanks']);
+      expect(page.calls, isNot(contains('applyEdit')));
+      page.handlers['applyEdit'] = (a) { expect(a['source'], contains('umpire_name text?')); expect(a['source'], contains('form ball, "Add ball"')); return {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []}; };
+      await m.buttons.first.onTap();
+      expect(page.calls, contains('applyEdit'));
+      expect(c.chat.last.text, startsWith('Done: added a form'));
+    });
+
+    test('a model edit that adds a field no form can show is held, never Done', () async {
+      await c.store.save(AppRecord(id: 'k2', name: 'Cricket', source: cricket));
+      await c.openApp((await c.store.load('k2'))!);
+      c.changeCurrent();
+      page.handlers['generate'] = (a) => {'ok': true, 'program': cricket.replaceFirst('out bool', 'out bool, umpire text?'), 'errors': [], 'stats': {'seconds': 20}};
+      await c.send('please put an umpire box on the scoring');
+      expect(c.chat.last.text, isNot(startsWith('Done')));
+      await c.send('add a field for the umpire name in the ball table');
+      expect(c.chat.last.text, isNot(startsWith('Done')));
     });
 
     test('a create that times out is retried once with a shorter request, then gives up with nothing built', () async {

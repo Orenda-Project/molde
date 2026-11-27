@@ -50,15 +50,94 @@ List<_Tbl> _tables(List<String> lines) {
   return out;
 }
 
-/// Labels of the buttons the user can tap: `button "X"` lines and the quoted label of a form. Lowercase key -> shown label.
-List<String> buttonLabels(String source) {
-  final out = <String>[];
-  for (final raw in source.split('\n')) {
-    final t = raw.trim();
-    final m = RegExp(r'^button\s+"([^"]*)"').firstMatch(t) ?? RegExp(r'^(?:form|topbar)\s+\w+\s*,\s*"([^"]*)"').firstMatch(t);
-    if (m != null && m.group(1)!.isNotEmpty) out.add(m.group(1)!);
+String _fmtNum(String v) {
+  final n = int.tryParse(v.trim());
+  if (n == null || n.abs() < 1000) return v.trim();
+  final d = n.abs().toString();
+  final out = StringBuffer();
+  for (var i = 0; i < d.length; i++) { if (i > 0 && (d.length - i) % 3 == 0) out.write(','); out.write(d[i]); }
+  return '${n < 0 ? '-' : ''}$out';
+}
+
+String _a(String word) { // "a" or "an" for the word that follows
+  final w = word.trim().toLowerCase();
+  if (w.isEmpty) return 'a';
+  if (RegExp(r'^(hour|honest|honou?r|heir)').hasMatch(w)) return 'an';
+  if (RegExp(r'^(uni|use|usu|uti|one|once|eu)').hasMatch(w)) return 'a';
+  return 'aeiou'.contains(w[0]) ? 'an' : 'a';
+}
+
+/// "a Phone field", "an Umpire name field": the right article for any name.
+String aAn(String word) => '${_a(word)} $word';
+
+/// Every button on screen, read from the program: `button "X"` lines (also `button if(c, "A", "B")`), the quoted label of a form
+/// (an unlabelled form has the default "Add"), `quick t.f 250 500` preset buttons, and `button it` inside `each [500, 1000]`.
+/// kind: button (own line), form (the form's save button), preset (made from a list of amounts).
+List<({String label, String kind})> screenButtons(String source) {
+  final out = <({String label, String kind})>[];
+  final lines = source.split('\n');
+  int ind(String l) => l.length - l.trimLeft().length;
+  for (var i = 0; i < lines.length; i++) {
+    final t = lines[i].trim();
+    final fm = RegExp(r'^(?:form|topbar)\s+\w+\s*(?:,\s*"([^"]*)")?').firstMatch(t);
+    if (fm != null) { out.add((label: fm.group(1) == null || fm.group(1)!.isEmpty ? 'Add' : fm.group(1)!, kind: 'form')); continue; }
+    final qm = RegExp(r'^quick\s+[\w.]+\s+(.+)$').firstMatch(t);
+    if (qm != null) {
+      for (final v in RegExp(r'"([^"]*)"|(-?\d+(?:\.\d+)?)').allMatches(qm.group(1)!)) { out.add((label: _fmtNum(v.group(1) ?? v.group(2)!), kind: 'preset')); }
+      continue;
+    }
+    if (!RegExp(r'^button\b').hasMatch(t)) continue;
+    final rest = t.substring(6).trimLeft();
+    final q = RegExp(r'^"([^"]*)"').firstMatch(rest);
+    if (q != null) { if (q.group(1)!.isNotEmpty) out.add((label: q.group(1)!, kind: 'button')); continue; }
+    if (rest.startsWith('if(') || rest.startsWith('if (')) { // a label that changes: every quoted word in the condition
+      var depth = 0, end = rest.length;
+      for (var k = 0; k < rest.length; k++) { if (rest[k] == '(') depth++; if (rest[k] == ')') { depth--; if (depth == 0) { end = k; break; } } }
+      for (final v in RegExp(r'"([^"]+)"').allMatches(rest.substring(0, end))) { out.add((label: v.group(1)!, kind: 'button')); }
+      continue;
+    }
+    if (RegExp(r'^it\b(?!\.)').hasMatch(rest)) { // `button it` under `each [0, 1, 2]`: the items are the labels
+      for (var j = i - 1; j >= 0; j--) {
+        if (lines[j].trim().isEmpty || ind(lines[j]) >= ind(lines[i])) continue;
+        final em = RegExp(r'^each\s+\[([^\]]*)\]').firstMatch(lines[j].trim());
+        if (em != null) { for (final v in em.group(1)!.split(',')) { final x = v.trim().replaceAll('"', ''); if (x.isNotEmpty) out.add((label: _fmtNum(x), kind: 'preset')); } }
+        break;
+      }
+    }
   }
   return out;
+}
+
+/// Labels of the buttons the user can tap, every kind (see [screenButtons]).
+List<String> buttonLabels(String source) => [for (final b in screenButtons(source)) b.label];
+
+/// The same, each label once, for "the buttons in this app are: ...".
+List<String> buttonLabelsShown(String source) {
+  final seen = <String>{};
+  return [for (final b in screenButtons(source)) if (seen.add(b.label.toLowerCase())) b.label];
+}
+
+/// Does the app have a place to type a value for this table: a `form`/`topbar` of it, or a draft (`state d new t`) shown with `field d`.
+bool _hasEntryForm(List<String> lines, String table) {
+  if (lines.any((l) => RegExp('^(form|topbar)\\s+$table\\b').hasMatch(l.trim()))) return true;
+  for (final l in lines) {
+    final m = RegExp('^state\\s+(\\w+)\\s+new\\s+$table\\b').firstMatch(l.trim());
+    if (m != null && lines.any((x) => RegExp('^field\\s+${m.group(1)}\\b').hasMatch(x.trim()))) return true;
+  }
+  return false;
+}
+
+/// Real examples for the hint text, from this app's own labels (never a button or field the app lacks).
+String exampleRequests(String source) {
+  final lines = source.split('\n');
+  final own = <String>[for (final l in lines) if (RegExp(r'^button\s+"[^"]+"').hasMatch(l.trim())) RegExp(r'^button\s+"([^"]+)"').firstMatch(l.trim())!.group(1)!];
+  final tbls = _tables(lines);
+  final money = <String>[for (final t in tbls) if (_hasEntryForm(lines, t.name)) for (var i = 0; i < t.parts.length; i++) if (RegExp(r'\b(money|num)\b').hasMatch(t.parts[i])) t.fieldName(i).replaceAll('_', ' ')];
+  return [
+    'for example "add a Phone field"',
+    if (own.isNotEmpty) '"remove the ${own.first} button"',
+    if (money.isNotEmpty) '"add a chart of ${money.first}"',
+  ].join(', ').replaceFirst(RegExp(r', (?=[^,]*$)'), ' or ');
 }
 
 String _list(List<String> xs) => xs.isEmpty ? 'none' : xs.map((x) => '"$x"').join(', ');
@@ -68,7 +147,7 @@ String _list(List<String> xs) => xs.isEmpty ? 'none' : xs.map((x) => '"$x"').joi
 /// "remove the Paid button", "get rid of the Add lesson button". Exact when the label occurs on one `button` line; asks with
 /// the real buttons when it does not exist; explains when it is the form's own save button.
 DirectOutcome? removeButtonPlan(String request, String source) {
-  final m = RegExp(r'^\s*(?:please\s+|can you\s+|could you\s+|i want to\s+)?(?:remove|delete|drop|hide|get rid of|take away|take off)\s+(?:the\s+|my\s+)?"?(.+?)"?\s+button\s*[.!]?\s*$', caseSensitive: false).firstMatch(request);
+  final m = RegExp(r'^\s*(?:(?:now|please|just)\s+)*(?:can you\s+|could you\s+|i want to\s+|i want you to\s+|you can\s+)?(?:(?:now|please|just)\s+)*(?:remove|delete|drop|hide|get rid of|take away|take off)\s+(?:the\s+|my\s+)?"?(.+?)"?\s+button(?:\s*,?\s*(?:right now|now|please|for me|thanks|thank you))*\s*[.!]?\s*$', caseSensitive: false).firstMatch(request);
   if (m == null) return null;
   final target = m.group(1)!.trim();
   final lines = source.split('\n');
@@ -84,12 +163,18 @@ DirectOutcome? removeButtonPlan(String request, String source) {
     return DirectOutcome.edit(DirectEdit(without(i).join('\n'), 'the "${target}" button is gone'));
   }
   if (hits.length > 1) return null; // two buttons with that label: which one?
-  final labels = buttonLabels(source);
-  final formLabeled = labels.any((l) => l.toLowerCase() == target.toLowerCase()) || target.toLowerCase() == 'add' || RegExp(r'^add\s+\w+$').hasMatch(target.toLowerCase());
+  final sb = screenButtons(source);
+  final formLabeled = sb.any((b) => b.kind == 'form' && b.label.toLowerCase() == target.toLowerCase()) || target.toLowerCase() == 'add' || RegExp(r'^add\s+\w+$').hasMatch(target.toLowerCase());
   if (formLabeled) {
     return DirectOutcome.say('"$target" is the button that saves a new entry, so removing it would leave the form with no way to add anything. I left your app as it is. If you want to change what it says, say "rename the $target button to ...".');
   }
-  final real = buttonLabels(source).where((l) => !RegExp(r'^button').hasMatch(l)).toList();
+  if (sb.any((b) => b.kind == 'preset' && b.label.toLowerCase() == target.toLowerCase())) {
+    return DirectOutcome.say('"$target" is one of the quick buttons made from a row of amounts, so I can\'t remove just that one. I left your app as it is.');
+  }
+  if (sb.any((b) => b.kind == 'button' && b.label.toLowerCase() == target.toLowerCase())) {
+    return DirectOutcome.say('The "$target" button is part of a line that changes what it says (or sits where I can\'t take it out cleanly), so I can\'t remove it on its own. I left your app as it is.');
+  }
+  final real = buttonLabelsShown(source);
   final removable = <Choice>[
     for (var i = 0; i < lines.length; i++)
       if (RegExp(r'^button\s+"([^"]+)"').hasMatch(lines[i].trim()))
@@ -97,13 +182,14 @@ DirectOutcome? removeButtonPlan(String request, String source) {
   ];
   final seen = <String>{};
   final uniq = [for (final c in removable) if (seen.add(c.label.toLowerCase())) c];
+  if (real.isEmpty) return DirectOutcome.say('I can\'t find a button called "$target", and this app has no buttons at all. Your app is unchanged.');
   return DirectOutcome.ask('I can\'t find a button called "$target". The buttons in this app are: ${_list(real)}. Which one do you want to remove?', uniq.take(4).toList());
 }
 
 // ---------------- remove / add a named field ----------------
 
 DirectOutcome? removeFieldPlan(String request, String source) {
-  final m = RegExp(r'^\s*(?:please\s+|can you\s+|could you\s+)?(?:remove|delete|drop|get rid of|take away)\s+(?:the\s+|my\s+)?"?(.+?)"?\s+(?:field|column|box|input)\s*[.!]?\s*$', caseSensitive: false).firstMatch(request);
+  final m = RegExp(r'^\s*(?:(?:now|please|just)\s+)*(?:can you\s+|could you\s+)?(?:(?:now|please|just)\s+)*(?:remove|delete|drop|get rid of|take away)\s+(?:the\s+|my\s+)?"?(.+?)"?\s+(?:field|column|box|input)(?:\s*,?\s*(?:right now|now|please|for me|thanks|thank you))*\s*[.!]?\s*$', caseSensitive: false).firstMatch(request);
   if (m == null) return null;
   final target = m.group(1)!.trim();
   final lines = source.split('\n');
@@ -156,29 +242,45 @@ DirectOutcome? addFieldPlan(String request, String source) {
   if (ident.length > 24 || RegExp(r'^[0-9]').hasMatch(ident)) return null;
   final lines = source.split('\n');
   final tbls = _tables(lines);
-  final withForm = tbls.where((t) => lines.any((l) => RegExp('^(form|topbar)\\s+${t.name}\\b').hasMatch(l.trim()))).toList();
+  final withForm = tbls.where((t) => _hasEntryForm(lines, t.name)).toList();
   final named = tbls.where((t) => RegExp('\\b${RegExp.escape(t.name)}s?\\b').hasMatch(low)).toList();
   final target = named.length == 1 ? named.first : withForm.length == 1 ? withForm.first : (tbls.length == 1 ? tbls.first : null);
   final type0 = words.any(_textWords.contains) ? 'text' : words.any(_moneyWords.contains) ? 'money' : words.any(_dateWords.contains) ? 'date' : words.any(_numWords.contains) ? 'num' : 'text';
+  final nice = _human(ident);
+  String withField(_Tbl t, {bool form = false}) {
+    final copy = [...lines];
+    copy[t.line] = 'table ${t.name} ${[...t.parts, '$ident $type0?'].join(', ')}';
+    if (form) {
+      while (copy.isNotEmpty && copy.last.trim().isEmpty) { copy.removeLast(); }
+      copy.add('form ${t.name}, "Add ${t.name.replaceAll('_', ' ')}"');
+    }
+    return copy.join('\n');
+  }
+  // an optional field is only a change the user can see when the table has a form to type it on: otherwise say so, never "Done"
+  DirectOutcome noForm(List<_Tbl> ts) {
+    final choices = <Choice>[
+      for (final t in ts.take(3))
+        if (!t.parts.any((p) => _sameName(p.split(RegExp(r'\s+')).first, ident)))
+          Choice(ts.length == 1 ? 'Add a form with ${aAn(nice)} field' : 'Add a form for ${_human(t.name)}', withField(t, form: true), 'added a form to add ${t.name.replaceAll('_', ' ')}, with ${aAn(nice)} field on it'),
+    ];
+    return DirectOutcome.ask('This app has no form to put ${aAn(nice)} field on, so adding it would change nothing you can see. I did not change your app. I can add a form with that field, or you can keep the app as it is.', choices);
+  }
   if (target == null) {
     final cands = withForm.isNotEmpty ? withForm : tbls;
     if (cands.length < 2) return null;
+    if (withForm.isEmpty) return noForm(cands);
     final choices = <Choice>[];
     for (final t in cands.take(4)) {
       if (t.parts.any((p) => _sameName(p.split(RegExp(r'\s+')).first, ident))) continue;
-      final copy = [...lines];
-      copy[t.line] = 'table ${t.name} ${[...t.parts, '$ident $type0?'].join(', ')}';
-      choices.add(Choice(_human(t.name), copy.join('\n'), 'added a ${_human(ident)} field to ${_human(t.name)}'));
+      choices.add(Choice(_human(t.name), withField(t), 'added ${aAn(nice)} field to ${_human(t.name)}'));
     }
-    return DirectOutcome.ask('Which one should get the ${_human(ident)} field? Pick the list it belongs to:', choices);
+    return DirectOutcome.ask('Which one should get the $nice field? Pick the list it belongs to:', choices);
   }
   if (target.parts.any((p) => _sameName(p.split(RegExp(r'\s+')).first, ident))) {
-    return DirectOutcome.say('This app already has a ${_human(ident)} field. Your app is unchanged.');
+    return DirectOutcome.say('This app already has ${aAn(nice)} field. Your app is unchanged.');
   }
-  final type = type0;
-  final copy = [...lines];
-  copy[target.line] = 'table ${target.name} ${[...target.parts, '$ident $type?'].join(', ')}';
-  return DirectOutcome.edit(DirectEdit(copy.join('\n'), 'added a ${_human(ident)} field'));
+  if (!_hasEntryForm(lines, target.name)) return noForm([target]);
+  return DirectOutcome.edit(DirectEdit(withField(target), 'added ${aAn(nice)} field, on the form'));
 }
 
 // ---------------- rename a button: "change X to say Y", "call X Y", "rename X to Y" ----------------
@@ -197,7 +299,7 @@ DirectOutcome? renameButtonPlan(String request, String source) {
   final target = m.group(1)!.trim();
   final next = m.group(2)!.trim();
   if (target.isEmpty || next.isEmpty || next.length > 30 || next.contains('"') || const {'it', 'this', 'app', 'this app', 'the app'}.contains(target.toLowerCase())) return null;
-  final labels = buttonLabels(source);
+  final labels = buttonLabelsShown(source);
   final exact = labels.where((l) => l.toLowerCase() == target.toLowerCase()).toList();
   if (!named && exact.isEmpty) return null; // not about a button we know: the title rename or the model decides
   final direct = buttonRenameEdit('rename the $target button to $next', source);
@@ -262,6 +364,13 @@ String? namedPartMismatch(String request, String oldSrc, String newSrc) {
       final added = [for (final tb in _tables(newSrc.split('\n'))) for (var i = 0; i < tb.parts.length; i++) if (!before.contains('${tb.name}.${tb.fieldName(i)}')) tb.fieldName(i)];
       if (added.isNotEmpty && !added.any((f) => key.any((k) => _norm(f).contains(_sing(k)) || _sing(k).contains(_norm(f))))) return 'the new field is not called ${key.join(' ')}';
     }
+  }
+  // a field the model added to a list that already existed: it has to be on a form, or the user can never see or fill it
+  {
+    final nl2 = newSrc.split('\n');
+    final oldT = {for (final tb in _tables(oldSrc.split('\n'))) tb.name: [for (var i = 0; i < tb.parts.length; i++) tb.fieldName(i)]};
+    final hidden = [for (final tb in _tables(nl2)) if (oldT.containsKey(tb.name) && !_hasEntryForm(nl2, tb.name)) for (var i = 0; i < tb.parts.length; i++) if (!oldT[tb.name]!.contains(tb.fieldName(i))) tb.fieldName(i)];
+    if (hidden.isNotEmpty) return 'this app has no form to put the ${_human(hidden.first)} field on, so you would not see it';
   }
   // a chart of <field>: plot the field named
   final cf = RegExp(r'\b(?:chart|graph|plot)\s+(?:of|for|by|showing|with)\s+(?:the\s+|my\s+)?(.+)$').firstMatch(low);
@@ -339,7 +448,7 @@ String describeApp(String source) {
   if (charts.isNotEmpty) items.add(_chartAdded0(charts.first));
   for (final l in lines) {
     final m = RegExp(r'^setting\s+\w+\s+[^"\n]*"([^"]+)"').firstMatch(l.trim());
-    if (m != null) items.add('a ${m.group(1)!.toLowerCase()} setting');
+    if (m != null) items.add('${aAn(m.group(1)!.toLowerCase())} setting');
   }
   final uniq = <String>[];
   for (final i in items) { if (!uniq.contains(i)) uniq.add(i); }
