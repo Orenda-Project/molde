@@ -71,6 +71,7 @@ List<String> describeLines(List<String> lines) {
 class _Facts {
   final Map<String, List<String>> tables = {}; // table -> field names in order
   final Map<String, String> renamedFrom = {}; // "table.new" -> old (a field written with was)
+  final Map<String, List<String>> picks = {}; // "table.field" -> the choices of a pick field, in order
   final List<String> chartLines = []; // top-level chart lines
   final Map<String, ({String label, String? dflt})> settings = {}; // name -> label, default
   final List<String> labels = []; // button labels (form and button lines), in order
@@ -103,6 +104,8 @@ class _Facts {
             names.add(name);
             final was = RegExp(r'\bwas\s+(\w+)').firstMatch(p);
             if (was != null) f.renamedFrom['${m.group(1)}.$name'] = was.group(1)!;
+            final pk = RegExp(r'^\w+\s+pick\s+([^=]+?)\s*(?:=.*)?$').firstMatch(p);
+            if (pk != null) f.picks['${m.group(1)}.$name'] = [for (final o in pk.group(1)!.split('|')) if (o.trim().isNotEmpty) o.trim().replaceAll('_', ' ')];
           }
           f.tables[m.group(1)!] = names;
         }
@@ -171,6 +174,14 @@ List<String> summarizeChange(String oldSrc, String newSrc) {
     }
   }
   for (final t in o.tables.keys) { if (!n.tables.containsKey(t)) out.add('Removed the list of entries ${_human(t)}.'); }
+  // the choices of a pick field
+  for (final e in n.picks.entries) {
+    final was = o.picks[e.key];
+    if (was == null) continue;
+    final field = _human(e.key.split('.').last).toLowerCase();
+    for (final c in e.value) { if (!was.contains(c)) out.add('Added the choice $c to the $field field.'); }
+    for (final c in was) { if (!e.value.contains(c)) out.add('Removed the choice $c from the $field field.'); }
+  }
 
   // settings
   for (final e in n.settings.entries) {
@@ -231,10 +242,48 @@ List<String> summarizeChange(String oldSrc, String newSrc) {
   for (final d in describeLines(added)) { out.add('Added $d.'); }
   for (final d in describeLines(removed)) { out.add('Removed $d.'); }
 
+  // the same parts in a different order: said as moves, from a line diff of the top-level lines
+  out.addAll(_moves(o.topLines, n.topLines));
+
   // a form line removed or added on its own
   if (n.formLines.isEmpty && o.formLines.isNotEmpty) out.add('Removed the entry form.');
   if (o.formLines.isEmpty && n.formLines.isNotEmpty) out.add('Added an entry form.');
   return out;
+}
+
+/// Top-level lines that kept their text but changed place ("Moved the chart higher up the screen."). Lines added or removed are
+/// not moves (the caller says those); a moved line is one the diff drops on one side and finds again, unchanged, on the other.
+List<String> _moves(List<String> oldTop, List<String> newTop) {
+  final lcs = List.generate(oldTop.length + 1, (_) => List<int>.filled(newTop.length + 1, 0));
+  for (var i = oldTop.length - 1; i >= 0; i--) {
+    for (var j = newTop.length - 1; j >= 0; j--) { lcs[i][j] = oldTop[i] == newTop[j] ? lcs[i + 1][j + 1] + 1 : (lcs[i + 1][j] >= lcs[i][j + 1] ? lcs[i + 1][j] : lcs[i][j + 1]); }
+  }
+  final oldOut = <int>[], newOut = <int>[];
+  var i = 0, j = 0;
+  while (i < oldTop.length || j < newTop.length) {
+    if (i < oldTop.length && j < newTop.length && oldTop[i] == newTop[j]) { i++; j++; }
+    else if (j < newTop.length && (i >= oldTop.length || lcs[i][j + 1] > lcs[i + 1][j])) { newOut.add(j); j++; }
+    else { oldOut.add(i); i++; }
+  }
+  final out = <String>[];
+  final freeNew = [...newOut];
+  for (final oi in oldOut) {
+    final nj = freeNew.indexWhere((k) => newTop[k] == oldTop[oi]);
+    if (nj < 0) continue;
+    final k = freeNew.removeAt(nj);
+    out.add('Moved ${describeLine(oldTop[oi])} ${k < oi ? 'higher up' : 'lower down'} on the screen.');
+  }
+  return out;
+}
+
+/// When the diff of the top-level lines names nothing (a change inside a block: a label, a row, a legend), the page's own
+/// list of screen changes ("adds: <line>", "removes from the screen: <line>") becomes plain phrases, one per kind of line.
+List<String> sayScreenChanges(List<String> changes) {
+  final added = <String>[], removed = <String>[];
+  for (final c in changes) {
+    if (c.startsWith('adds: ')) { added.add(c.substring(6)); } else if (c.startsWith('removes from the screen: ')) { removed.add(c.substring(25)); }
+  }
+  return [for (final d in describeLines(added)) 'Added $d.', for (final d in describeLines(removed)) 'Removed $d.'];
 }
 
 /// What to say when the change is done. Never empty, never program text.

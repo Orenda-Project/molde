@@ -3,13 +3,13 @@
 // `MoldeHost` JavaScript channel.
 import { load } from '../vendor/lang/eval.mjs';
 import { mount } from '../vendor/render/render.mjs';
-import { evolve } from '../vendor/lang/diff.mjs';
 import { describe } from '../vendor/lang/describe.mjs';
 import { check } from '../vendor/lang/check.mjs';
 import { format } from '../vendor/lang/format.mjs';
 import { generate, DEFAULT_SYSTEM } from './decode_loop.mjs';
 import { SEEDS } from '../vendor/render/demo/seed.mjs';
 import { prepareEdit } from './edit_prep.mjs';
+import { evaluateEdit } from './evaluate.mjs';
 
 const RUNTIME = { currency: 'Rs', locale: 'en-US', tz: 'local' };
 const INSET = 88;                       // strip at the bottom that the host's chat button uses
@@ -84,16 +84,7 @@ const methods = {
   resume({ nowMs }) { tickClock(); return { ok: true }; },
   flush() { snapshot(true); return { ok: true }; },
   // what a program would do as an edit of the running app, without applying it
-  evaluate({ source }) {
-    if (!S.app) return { verdict: 'refused', refused: ['no app is open'], changes: [], warnings: [] };
-    const c = check(source);
-    if (!c.ok) return { verdict: 'refused', refused: c.errors.map(String), changes: [], warnings: [] };
-    const prep = prepareEdit(S.app.source, source);
-    const r = evolve(S.app.ever, prep.source);
-    const ui = uiChanges(S.app.source, prep.source);
-    const sets = prep.settings.map(x => x.text);
-    return { verdict: r.verdict, warnings: r.warnings || [], changes: [...sets, ...(r.changes || []).filter(c => !sets.length || !/default|setting/i.test(c)), ...ui], refused: r.refused || [], notes: r.notes || [], settings: prep.settings };
-  },
+  evaluate({ source }) { return evaluateEdit(S.app, source); },
   applyEdit({ source }) {
     const prep = prepareEdit(S.app.source, source);
     const r = S.app.applyEdit(prep.source);
@@ -124,18 +115,6 @@ const methods = {
   // a debug hook for tests: the number of nodes the renderer drew
   state() { return { open: !!S.app, id: S.id, name: S.app ? nameOf(S.app) : null }; },
 };
-
-// edits to what is drawn (not tables or settings, which the data diff already names), as plain lines
-function uiChanges(oldSrc, newSrc) {
-  const lines = s => format(s).split('\n').filter(l => l.trim() && !/^(table|setting)\b/.test(l.trim()));
-  const count = xs => xs.reduce((m, x) => m.set(x, (m.get(x) || 0) + 1), new Map());
-  let a, b;
-  try { a = count(lines(oldSrc)); b = count(lines(newSrc)); } catch (e) { return []; }
-  const out = [];
-  for (const [l, n] of b) for (let i = a.get(l) || 0; i < n; i++) out.push(`adds: ${l.trim()}`);
-  for (const [l, n] of a) for (let i = b.get(l) || 0; i < n; i++) out.push(`removes from the screen: ${l.trim()}`);
-  return out.slice(0, 40);
-}
 
 window.Molde = {
   // Flutter -> page: one call, one reply event

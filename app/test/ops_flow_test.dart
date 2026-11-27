@@ -144,6 +144,18 @@ void main() {
     expect(c.chat.last.text, contains('Done'));
   });
 
+  test('0.7.1 ops: a move of lines (nothing added, nothing removed) is applied and said as a move, not refused as no change', () async {
+    await boot('ops');
+    page.handlers['generate'] = (a) => {'ok': true, 'format': 'ops', 'ops': 'move 5 after 3', 'stats': {'seconds': 3.0}};
+    page.handlers['check'] = (a) => {'ok': true, 'errors': []};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': [], 'settings': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('put the list above the form');
+    expect(page.calls, contains('applyEdit'));
+    expect(c.chat.last.text, contains('Moved'));
+    expect(c.chat.last.text, isNot(contains('I did not apply this')));
+  });
+
   test('ops: a create still goes through the ordinary create path (the page drops the plan line)', () async {
     await boot('ops');
     c.startNewApp();

@@ -700,6 +700,12 @@ void roundSixOne() {
       }
     });
     const chartApp = 'app "Spend" wallet ocean\ntable spend amount money\nstat total sum(spend.amount)\nplot 0..7, 0..100 axes\n  each days last 7 days\n    rect index, 0, 1, sum(spend.amount on it) fill accent\n    tick index, dayname(it)\nform spend\n';
+    test('0.7.1 dropsUnasked: a removed list block whose first line has an identical twin elsewhere is one removal, not its children', () {
+      const old = 'app "A" users ocean\ntable student name text\ngrid 2\n  each student sort name as s\n    s.name\neach student sort name as s\n  row\n    s.name grow\nform student, "Add"\n';
+      const gone = 'app "A" users ocean\ntable student name text\ngrid 2\n  each student sort name as s\n    s.name\nform student, "Add"\n';
+      expect(dropsUnasked('remove the list at the bottom', old, gone), isEmpty);
+      expect(dropsUnasked('make it blue', old, gone), isNotEmpty); // nobody asked for it: still shown
+    });
     test('dropsUnasked: "remove the chart" may remove the chart block, "remove the totals" the stat line', () {
       final noChart = 'app "Spend" wallet ocean\ntable spend amount money\nstat total sum(spend.amount)\nform spend\n';
       expect(dropsUnasked('remove the chart', chartApp, noChart), isEmpty);

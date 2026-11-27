@@ -512,7 +512,7 @@ class MoldeController extends ChangeNotifier {
       return;
     }
     // the model handed the program back unchanged, or what changed shows nothing: never say Done
-    if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (changes.isEmpty && sets.isEmpty && verdict != 'restore') || (sets.isEmpty && summarizeChange(current!.source, program).isEmpty))) {
+    if (!direct && (programLines(program).join('\n') == programLines(current!.source).join('\n') || (sets.isEmpty && verdict != 'restore' && summarizeChange(current!.source, program).isEmpty && (sayScreenChanges(changes).isEmpty || [...unmetClaims(request, current!.source, program), ...unmetFromDiff(request, current!.source, program)].isNotEmpty)))) {
       _finishLive(live, "I did not apply this. After ${secs is num ? secs.round() : 0} s the model's answer did not change your app in any way you could see, so I kept your app exactly as it is. Your app is unchanged. Try one clear change at a time, ${exampleRequests(current!.source)}.", buttons: [
         ChatBtn('Try again', () async { live.buttons = []; notifyListeners(); await _run(kind, request); }, primary: true),
         ChatBtn('Keep my app', () async { live.text = 'Kept your app as it is.'; notifyListeners(); }),
@@ -527,7 +527,7 @@ class MoldeController extends ChangeNotifier {
         return;
       }
       current!.log('edit', request: request, summary: changes.take(3).join('; '));
-      final said = summarizeChange(oldSrc, program); // from the checked before and after programs, never the model's or the engine's words
+      final said = _saidOf(oldSrc, program, changes); // from the checked before and after programs, never the model's words
       final unmet = direct ? <String>[] : [...unmetClaims(request, oldSrc, program), ...unmetFromDiff(request, oldSrc, program)];
       final chartAdded = said.any((x) => x.startsWith('Added a chart') || x.startsWith('Added a bar chart') || x.startsWith('Added a calendar'));
       if (doneLabel != null && doneLabel.isNotEmpty) {
@@ -574,6 +574,12 @@ class MoldeController extends ChangeNotifier {
       return;
     }
     await apply();
+  }
+
+  /// What changed, in plain sentences: the diff of the two programs, or (when that names nothing) the screen changes the page listed.
+  List<String> _saidOf(String oldSrc, String newSrc, List<String> changes) {
+    final said = summarizeChange(oldSrc, newSrc);
+    return said.isNotEmpty ? said : sayScreenChanges(changes);
   }
 
   String _fmtSecs(Object? s) => '${(s is num ? s : 0).toStringAsFixed(1)} s';

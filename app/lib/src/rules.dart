@@ -491,15 +491,35 @@ String plainRefusal(List<String> reasons) {
   return 'something you entered would not fit the new version of the app.';
 }
 
+/// Which old lines (by index) have no counterpart in the new program: a line diff on the trimmed text, so a line that appears
+/// twice (a second `each student` list) is gone when only one of the two is left, and the removed one is the one that moved or went.
+List<int> _unmatchedOld(List<String> old, List<String> neu) {
+  final a = [for (final l in old) l.trim()], b = [for (final l in neu) l.trim()];
+  final t = List.generate(a.length + 1, (_) => List<int>.filled(b.length + 1, 0));
+  for (var i = a.length - 1; i >= 0; i--) {
+    for (var j = b.length - 1; j >= 0; j--) { t[i][j] = a[i] == b[j] ? t[i + 1][j + 1] + 1 : (t[i + 1][j] >= t[i][j + 1] ? t[i + 1][j] : t[i][j + 1]); }
+  }
+  final gone = <int>[];
+  var i = 0, j = 0;
+  while (i < a.length) {
+    if (j < b.length && a[i] == b[j]) { i++; j++; } else if (j < b.length && t[i][j + 1] > t[i + 1][j]) { j++; } else { gone.add(i); i++; }
+  }
+  return gone;
+}
+
 List<String> dropsUnasked(String request, String oldSrc, String newSrc) {
-  final newSigs = programLines(newSrc).map(lineSignature).toSet();
-  final newLines = programLines(newSrc).map((l) => l.trim()).toSet();
+  final newList = programLines(newSrc);
   final asked = _askedWords(request);
   final old = programLines(oldSrc);
+  // a line edited in place keeps its signature: it is spent against one new line that no old line matched (not against any line that has it)
+  final gone = _unmatchedOld(old, newList).toSet();
+  final spent = <String, int>{};
+  for (final k in _unmatchedOld(newList, old)) { final sg = lineSignature(newList[k]); spent[sg] = (spent[sg] ?? 0) + 1; }
   final removed = <int>[];
   for (var i = 0; i < old.length; i++) {
-    final l = old[i];
-    if (l.startsWith('app ') || newLines.contains(l.trim()) || newSigs.contains(lineSignature(l))) continue;
+    if (!gone.contains(i) || old[i].startsWith('app ')) continue;
+    final sg = lineSignature(old[i]);
+    if ((spent[sg] ?? 0) > 0) { spent[sg] = spent[sg]! - 1; continue; }
     removed.add(i);
   }
   final isRemoved = removed.toSet();

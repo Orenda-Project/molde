@@ -5,6 +5,7 @@ import 'package:molde/src/summary.dart';
 // The 0.6.1 critic's app, as the model wrote it.
 const fees = 'app "School Fees" school ocean\ntable student name text, fee money\ntable paid student ref student, amount money\nlet due_total = sum(student, if(count(it.paid month) = 0, it.fee, 0))\n"Fees due this month" due_total big\neach student sort name as s\n  row card gap 1\n    s.name bold grow\n    if count(s.paid month) = 0\n      s.fee color warn bold\n      button "Paid" tap add paid student = s, amount = s.fee\n    else\n      "Paid" color good\nform student, "Add student"\nlist paid by day\n';
 
+const _board = 'app "Reading" book plum\ntable book title text, status pick Want|Reading|Done = Want\nstate tab text = Reading\n"Books" head\neach book as b\n  row\n    b.title bold\ndaybars last 7 days, count(book on it)\nform book\n';
 void main() {
   group('change replies are plain English from the diff', () {
     test('a Phone field', () {
@@ -95,6 +96,21 @@ void main() {
       for (final r in ['grocery shopping list', 'add an email field', 'rename the Add button to Save', 'a budget with a text note', 'water tracker', 'class timetable online class tracker']) {
         expect(capabilityGap(r), isNull, reason: r);
       }
+    });
+    test('0.7.1: a choice added to or removed from a pick field is said', () {
+      expect(summarizeChange(_board, _board.replaceFirst('Want|Reading|Done', 'Want|Reading|Done|Lent')), ['Added the choice Lent to the status field.']);
+      expect(summarizeChange(_board, _board.replaceFirst('Want|Reading|Done = Want', 'Want|Done = Want')), ['Removed the choice Reading from the status field.']);
+    });
+    test('0.7.1: parts that only changed place are said as a move, never as nothing', () {
+      final moved = _board.replaceFirst('daybars last 7 days, count(book on it)\n', '').replaceFirst('"Books" head\n', '"Books" head\ndaybars last 7 days, count(book on it)\n');
+      expect(summarizeChange(_board, moved), ['Moved a list of entries lower down on the screen.']);
+      final down = _board.replaceFirst('form book\n', '').replaceFirst('"Books" head\n', 'form book\n"Books" head\n');
+      expect(summarizeChange(_board, down), ['Moved the entry form higher up on the screen.']);
+      expect(summarizeChange(_board, _board), isEmpty);
+    });
+    test('0.7.1: screen changes inside a block become phrases when the top-level diff names nothing', () {
+      expect(sayScreenChanges(['adds: "Close" faint', 'removes from the screen: "Not yet" faint']), ['Added the text "Close".', 'Removed the text "Not yet".']);
+      expect(sayScreenChanges(['adds a table']), isEmpty);
     });
   });
 }
