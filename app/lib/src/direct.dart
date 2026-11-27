@@ -124,12 +124,13 @@ DirectOutcome? removeFieldPlan(String request, String source) {
     return DirectOutcome.edit(DirectEdit(build(t, i), 'the ${_human(nm)} field is gone'));
   }
   if (hits.length > 1) return null;
-  final names = [for (final t in tbls) for (var i = 0; i < t.parts.length; i++) _human(t.fieldName(i))];
+  final names = <String>{for (final t in tbls) for (var i = 0; i < t.parts.length; i++) if (!RegExp(r'\bref\b').hasMatch(t.parts[i])) _human(t.fieldName(i))}.toList();
   final choices = <Choice>[];
   for (final t in tbls) {
     if (t.parts.length < 2) continue;
     for (var i = 0; i < t.parts.length; i++) {
       final nm = t.fieldName(i);
+      if (RegExp(r'\bref\b').hasMatch(t.parts[i])) continue;
       if (lines.asMap().entries.any((e) => e.key != t.line && RegExp('\\b$nm\\b').hasMatch(e.value))) continue;
       choices.add(Choice(_human(nm), build(t, i), 'the ${_human(nm)} field is gone'));
     }
@@ -156,12 +157,25 @@ DirectOutcome? addFieldPlan(String request, String source) {
   final lines = source.split('\n');
   final tbls = _tables(lines);
   final withForm = tbls.where((t) => lines.any((l) => RegExp('^(form|topbar)\\s+${t.name}\\b').hasMatch(l.trim()))).toList();
-  final target = withForm.length == 1 ? withForm.first : (tbls.length == 1 ? tbls.first : null);
-  if (target == null) return null;
+  final named = tbls.where((t) => RegExp('\\b${RegExp.escape(t.name)}s?\\b').hasMatch(low)).toList();
+  final target = named.length == 1 ? named.first : withForm.length == 1 ? withForm.first : (tbls.length == 1 ? tbls.first : null);
+  final type0 = words.any(_textWords.contains) ? 'text' : words.any(_moneyWords.contains) ? 'money' : words.any(_dateWords.contains) ? 'date' : words.any(_numWords.contains) ? 'num' : 'text';
+  if (target == null) {
+    final cands = withForm.isNotEmpty ? withForm : tbls;
+    if (cands.length < 2) return null;
+    final choices = <Choice>[];
+    for (final t in cands.take(4)) {
+      if (t.parts.any((p) => _sameName(p.split(RegExp(r'\s+')).first, ident))) continue;
+      final copy = [...lines];
+      copy[t.line] = 'table ${t.name} ${[...t.parts, '$ident $type0?'].join(', ')}';
+      choices.add(Choice(_human(t.name), copy.join('\n'), 'added a ${_human(ident)} field to ${_human(t.name)}'));
+    }
+    return DirectOutcome.ask('Which one should get the ${_human(ident)} field? Pick the list it belongs to:', choices);
+  }
   if (target.parts.any((p) => _sameName(p.split(RegExp(r'\s+')).first, ident))) {
     return DirectOutcome.say('This app already has a ${_human(ident)} field. Your app is unchanged.');
   }
-  final type = words.any(_textWords.contains) ? 'text' : words.any(_moneyWords.contains) ? 'money' : words.any(_dateWords.contains) ? 'date' : words.any(_numWords.contains) ? 'num' : 'text';
+  final type = type0;
   final copy = [...lines];
   copy[target.line] = 'table ${target.name} ${[...target.parts, '$ident $type?'].join(', ')}';
   return DirectOutcome.edit(DirectEdit(copy.join('\n'), 'added a ${_human(ident)} field'));

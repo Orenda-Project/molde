@@ -38,7 +38,11 @@ void main() {
       expect(removeFieldPlan('remove the amount field', 'app "A" x ocean\ntable t amount money\nform t\n')!.ask, contains('only field'));
     });
     test('add a named field as an optional text field', () {
-      expect(addFieldPlan('add a field for phone number', lessons), isNull); // two tables have a form: the model decides
+      final which = addFieldPlan('add a field for phone number', lessons)!; // two tables have a form: which one?
+      expect(which.ask, contains('Which one'));
+      expect(which.choices.map((c) => c.label), ['Student', 'Lesson']);
+      expect(which.choices.first.program, contains('fee money, phone_number text?'));
+      expect(addFieldPlan('add a phone number field to the student', lessons)!.edit!.program, contains('phone_number text?'));
       const one = 'app "A" x ocean\ntable student name text, fee money\nform student\nlist student\n';
       expect(addFieldPlan('add a field for phone number', one)!.edit!.program, contains('table student name text, fee money, phone_number text?'));
       expect(addFieldPlan('add a notes field', one)!.edit!.program, contains('notes text?'));
