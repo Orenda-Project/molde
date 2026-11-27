@@ -9,7 +9,7 @@ export 'rules.dart';
 import 'llm.dart';
 import 'store.dart';
 
-const String kVersion = '0.6.1';
+const String kVersion = '0.6.2';
 
 class ChatBtn {
   ChatBtn(this.label, this.onTap, {this.primary = false});
