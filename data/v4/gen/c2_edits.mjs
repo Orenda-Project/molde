@@ -13,6 +13,8 @@ import { derivePatch } from './derive.mjs';
 import { applyOps, makeOps } from '../../failhunt/tools/patch_ops_ref.mjs';
 import { FAMILIES, familyFor, normOpt } from './c2_families.mjs';
 import { T as TPL, typo, SYN, SEC_SYN, WORD_SYN } from './c2_words.mjs';
+import { TPL2, OPEN, CLOSE_N, CLOSE_R } from './c2_words2.mjs';
+for (const [k, v] of Object.entries(TPL2)) TPL[k] = (TPL[k] || []).concat(v);
 const { parse } = await import(LANG + '/parse.mjs');
 const { KEYWORDS } = await import(LANG + '/engine.mjs');
 const { nearest, toks } = await import('../../data-v3/gen/simcheck.mjs');
@@ -81,6 +83,8 @@ function buildModel(src) {
 const strLit = s => { const m = /^"((?:[^"\\]|\\.)*)"/.exec(s || ''); return m && !m[1].includes('\\') ? m[1] : null; };
 const hum = s => s.replace(/_/g, ' ');
 const plural = s => /(s|x|ch|sh)$/.test(s) ? s + 'es' : /[^aeiou]y$/.test(s) ? s.slice(0, -1) + 'ies' : s + 's';
+const PL = t => t.length < 4 ? `${hum(t)} entries` : plural(hum(t));
+const art = w => (/^[aeiou]/i.test(w) ? 'an ' : 'a ') + w;
 const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const isVisibleSimple = n => ['call', 'text', 'each', 'button', 'box'].includes(n.kind);
 const DECL = new Set(['table', 'setting', 'state', 'let', 'def', 'lesson', 'remind', 'every', 'when']);
@@ -252,22 +256,29 @@ function genReorder(M, C) {
   for (const ct of containers) {
     const units = C.things.filter(t => t.movable && t.node.parent === ct.node).sort((a, b) => a.start - b.start);
     if (units.length < 2) continue;
+    // "first" and "last" mean first and last visible statement of the container (the app bar, declarations and reminders do not count)
+    const vis = ct.kids.filter(n => !DECL.has(n.kind) && !(n.kind === 'call' && n.name === 'topbar'));
+    if (!vis.length) continue;
+    const v0 = vis[0], vN = vis[vis.length - 1];
     const move = (X, p) => { const blk = M.lines.slice(X.start, X.end + 1); const rest = M.lines.filter((_, i) => i < X.start || i > X.end); const pp = p > X.start ? p - blk.length : p; return [...rest.slice(0, pp), ...blk, ...rest.slice(pp)]; };
     const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
     const touchedOf = X => { const s = new Set(); for (let i = X.start; i <= X.end; i++) s.add(i); return s; };
-    const mk = (X, Y, dir, p, noChange) => {
+    const mk = (X, Y, dir, p, noChange, extra) => {
       const after = noChange ? M.lines.slice() : move(X, p);
       if (!noChange && same(after, M.lines)) return;
       const slots = { X: X.nps }; if (Y) slots.Y = Y.nps;
-      out.push(mkCand('reorder', 'reorder', { sub: dir, after, touched: touchedOf(X), pools: [dir], slots, noChange }));
+      out.push(mkCand('reorder', 'reorder', { sub: dir, after, touched: touchedOf(X), pools: [dir], slots, noChange, ...extra }));
     };
+    const titleFirst = v0.kind === 'text'; // a title-like line on top: "first" would be ambiguous, so those cases are left out
     for (const X of units) {
-      const idx = units.indexOf(X);
-      if (idx === 0) mk(X, null, 'first', 0, true); else mk(X, null, 'first', units[0].start);
-      if (idx === units.length - 1) mk(X, null, 'last', 0, true); else mk(X, null, 'last', units[units.length - 1].end + 1);
+      if (!titleFirst) {
+        if (X.node === v0) mk(X, null, 'first', 0, true, { check: () => X.start === v0.i }); else mk(X, null, 'first', v0.i);
+      }
+      if (vN.kind !== 'else') { if (X.node === vN) mk(X, null, 'last', 0, true, { check: () => X.end === vN.e }); else mk(X, null, 'last', vN.e + 1); }
       for (const Y of units) {
         if (X === Y) continue;
-        if (X.start < Y.start) { mk(X, Y, 'above', 0, true); mk(X, Y, 'below', Y.end + 1); } else { mk(X, Y, 'above', Y.start); mk(X, Y, 'below', 0, true); }
+        if (X.start < Y.start) { if (X.end + 1 === Y.start) mk(X, Y, 'above', 0, true); mk(X, Y, 'below', Y.end + 1); }
+        else { mk(X, Y, 'above', Y.start); if (Y.end + 1 === X.start) mk(X, Y, 'below', 0, true); }
       }
     }
   }
@@ -297,7 +308,7 @@ function newTitle(old) {
 }
 function genRename(M, C) {
   const out = [];
-  const asc = s => /^[\x20-\x7e]+$/.test(s) && !/["\\]/.test(s) && s.length <= 24;
+  const asc = s => /^[A-Za-z0-9 +\-']+$/.test(s) && s.length <= 24;
   const swap = (i, re, nw) => M.lines.map((l, k) => k === i ? l.replace(re, (m, a) => a + '"' + nw + '"') : l);
   for (const lab of C.labels) {
     const n = lab.n; const isSec = lab.type === 'section'; const nps = C.things.find(t => t.node === n)?.nps;
@@ -370,8 +381,8 @@ function genOption(M, C) {
     const have = d.opts.map(normOpt);
     const fullsize = FAMILIES.find(f => f.id === fam.family.id);
     if (fullsize.members.size <= 14 && have.filter(o => fullsize.members.has(o)).length >= 0.85 * fullsize.members.size) continue;
-    const mkLine = (tg, nw) => {
-      const key = keyOf(d); const last = d.opts[d.opts.length - 1]; let list = d.opts.slice(); if (/^(Other|Others|Misc|Else|Anything)$/.test(last) && !/^(Other|Others|Misc)$/.test(nw)) list.splice(list.length - 1, 0, nw); else list.push(nw);
+    const mkLine = (tg, nw, at) => {
+      const key = keyOf(d); const last = d.opts[d.opts.length - 1]; let list = d.opts.slice(); if (at !== undefined) list.splice(at, 0, nw); else if (/^(Other|Others|Misc|Else|Anything)$/.test(last) && !/^(Other|Others|Misc)$/.test(nw)) list.splice(list.length - 1, 0, nw); else list.push(nw);
       const lin = M.lines[tg.n.i]; const needle = 'pick ' + key; const idx = lin.indexOf(needle); if (idx < 0 || lin.indexOf(needle, idx + 1) >= 0) return null;
       return lin.slice(0, idx) + 'pick ' + list.join('|') + lin.slice(idx + needle.length);
     };
@@ -385,6 +396,18 @@ function genOption(M, C) {
       for (const tg of targets) { const l = mkLine(tg, nw); if (!l) { okk = false; break; } after[tg.n.i] = l; touched.add(tg.n.i); }
       if (!okk) continue;
       out.push(mkCand('add_option', 'add_option', { sub: d.kind, after, touched, pools: ['add_option'], slots: { ...slots, O: [hum(nw)] }, family: fam.family.id, require: decls.length > 1 ? 'F' : null }));
+      // the same option put at a named place in the list
+      const n0 = d.opts.length; let ii = R.int(0, n0); const lastIsOther = /^(Other|Others|Misc|Else|Anything)$/.test(d.opts[n0 - 1]);
+      if (lastIsOther && ii === n0) ii = n0 - 1;
+      const after2 = M.lines.slice(); let ok2 = true; const touched2 = new Set();
+      for (const tg of targets) { const l = mkLine(tg, nw, ii); if (!l) { ok2 = false; break; } after2[tg.n.i] = l; touched2.add(tg.n.i); }
+      if (ok2) {
+        const hs = d.opts.map(hum); let pools, sl = { ...slots, O: [hum(nw)] }, req = decls.length > 1 ? 'F' : null;
+        if (ii === 0) { pools = ['opt_before']; sl.B = [hs[0]]; req = null; }
+        else if (ii === n0) { pools = ['opt_end']; req = 'F'; }
+        else { pools = ['opt_between', 'opt_after', 'opt_before']; sl.A = [hs[ii - 1]]; sl.B = [hs[ii]]; req = null; }
+        out.push(mkCand('add_option', 'add_option', { sub: d.kind + '+pos', after: after2, touched: touched2, pools, slots: sl, family: fam.family.id, require: req }));
+      }
     }
     // no change: the option is already there
     if (fam.exist.length) out.push(mkCand('add_option', 'no_change', { sub: 'option', after: M.lines.slice(), touched: new Set(), pools: ['add_option'], slots: { ...slots, O: [hum(R.pick(fam.exist))] }, noChange: true, family: fam.family.id, require: decls.length > 1 ? 'F' : null }));
@@ -530,21 +553,180 @@ function genSections(M, C) {
   return out;
 }
 
-const GENS = [genRemove, genReorder, genRename, genRenameField, genOption, genNumber, genSections];
+// ---------------------------------------------------------------- reversal kinds: add field / stat / chart / list+section / reminder
+// Take a real program P that has the thing, remove it cleanly to get P'. Row: before = P', request = "add <the thing, described>", after = P.
+const WINTXT = { today: 'today', yesterday: 'yesterday', week: 'this week', month: 'this month', year: 'this year', 'prev week': 'last week', 'prev month': 'last month', 'prev year': 'last year', all: 'of all time' };
+const winPhrase = w => { if (!w) return ''; if (WINTXT[w]) return WINTXT[w]; const k = /^last (\d+) (days|weeks|months)$/.exec(w); return k ? `over the last ${k[1]} ${k[2]}` : null; };
+const WIN_RE = '(?:today|yesterday|week|month|year|prev week|prev month|prev year|all|last \\d+ (?:days|weeks|months))';
+function parseAgg(s, perItem) {
+  let m = new RegExp('^(sum|avg|min|max|last|first)\\(([a-z][a-z0-9_]*)\\.([a-z][a-z0-9_]*)(?: (' + (perItem ? 'on it' : WIN_RE) + '))?(?: where ([a-z][a-z0-9_]*) = ([A-Za-z0-9_]+))?\\)$').exec(s);
+  if (m) return { fn: m[1], t: m[2], f: m[3], win: m[4] || null, wf: m[5] || null, wv: m[6] || null };
+  m = new RegExp('^count\\(([a-z][a-z0-9_]*)(?: (' + (perItem ? 'on it' : WIN_RE) + '))?(?: where ([a-z][a-z0-9_]*) = ([A-Za-z0-9_]+))?\\)$').exec(s);
+  if (m) return { fn: 'count', t: m[1], f: null, win: m[2] || null, wf: m[3] || null, wv: m[4] || null };
+  if (!perItem && (m = /^(streak|best|since)\(([a-z][a-z0-9_]*)\)$/.exec(s))) return { fn: m[1], t: m[2], f: null, win: null, wf: null, wv: null };
+  return null;
+}
+function aggWords(a, perDay) {
+  const t = hum(a.t), f = a.f && hum(a.f);
+  const base = { sum: `the total ${f} from ${t}`, avg: `the average ${f} from ${t}`, min: `the lowest ${f} in ${t}`, max: `the highest ${f} in ${t}`, last: `the latest ${f} in ${t}`, first: `the earliest ${f} in ${t}`, count: R.pick([`how many ${t} entries there are`, `the number of ${t} entries`]), streak: `the current streak of days with ${t}`, best: `the longest streak of days with ${t}`, since: `the days since the last ${t}` }[a.fn];
+  let w = perDay ? 'per day' : (a.win ? winPhrase(a.win) : '');
+  if (w === null) return null;
+  const wh = a.wf ? ` (only where ${hum(a.wf)} is ${hum(a.wv)})` : '';
+  return base + wh + (w ? ' ' + w : '');
+}
+const litStr = s => { const m = /^"([^"\\]*)"$/.exec(s || ''); return m ? m[1] : null; };
+const numOrName = s => /^[0-9.]+$/.test(s || '') ? { num: s } : /^[a-z][a-z0-9_]*$/.test(s || '') ? { name: s } : null;
+// returns {D: [phrases], role} for a leaf call node, or null when its content cannot be said in words that fix the line exactly
+function describeNode(n) {
+  if (n.kind !== 'call' || (n.children && n.children.length)) return null;
+  const A = n.args;
+  if (n.name === 'stat' || n.name === 'statcard') {
+    const cap = litStr(A[1]); if (cap === null || cap.length < 2) return null;
+    const agg = parseAgg(A[0], false); if (!agg) return null; const w = aggWords(agg, false); if (!w) return null;
+    if (n.name === 'stat' && A.length === 2) return { role: 'stat', D: [`a stat showing ${w}, captioned "${cap}"`, `a big number for ${w} with the caption "${cap}"`, `a stat with the caption "${cap}" that shows ${w}`] };
+    if (n.name === 'statcard' && A.length === 2) return { role: 'stat', D: [`a stat card showing ${w}, captioned "${cap}"`, `a card with a big number for ${w} and the caption "${cap}"`] };
+    if (n.name === 'statcard' && A.length === 3) { const tg = numOrName(A[2]); if (!tg) return null; const tt = tg.num ? `a target of ${tg.num}` : `the ${hum(tg.name)} as its target`; return { role: 'stat', D: [`a stat card showing ${w}, captioned "${cap}", with ${tt}`, `a card with ${w} and a progress ring toward ${tt.replace(/^a /, 'a ')}, caption "${cap}"`] }; }
+    return null;
+  }
+  if (n.name === 'goal') {
+    if (A.length < 3 || A.length > 4) return null; const agg = parseAgg(A[0], false); if (!agg) return null; const w = aggWords(agg, false); if (!w) return null;
+    const tg = numOrName(A[1]); if (!tg) return null; const cap = litStr(A[2]); if (cap === null) return null; const suf = A[3] === undefined ? null : litStr(A[3]); if (A[3] !== undefined && suf === null) return null;
+    const tt = tg.num ? `${tg.num}` : `the ${hum(tg.name)}`;
+    const sx = suf ? `, with the unit "${suf}"` : '';
+    return { role: 'stat', D: [`a progress bar of ${w} toward ${tt}, captioned "${cap}"${sx}`, `a goal bar for ${w} against ${tt} with the caption "${cap}"${sx}`] };
+  }
+  if (n.name === 'daybars' || n.name === 'heat' || n.name === 'goalbars' || n.name === 'daygrid') {
+    const wm = /^last (\d+) (days|weeks|months)$/.exec(A[0] || ''); let winT = wm ? `the last ${wm[1]} ${wm[2]}` : ({ week: 'this week', month: 'this month', year: 'this year', 'prev month': 'last month', 'prev week': 'last week' })[A[0]];
+    if (!winT) return null;
+    const agg = parseAgg(A[1], true); if (!agg) return null; const w = aggWords(agg, true); if (!w) return null;
+    if (n.name === 'daybars' && A.length === 2) return { role: 'chart', D: [`a bar chart of ${w} for ${winT}`, `daily bars for ${winT} showing ${w}`, `a graph with a bar per day for ${winT}: ${w}`] };
+    if ((n.name === 'heat' || n.name === 'daygrid') && (A.length === 2 || A.length === 3)) { let pk = ''; if (A.length === 3) { if (!/^[0-9.]+$/.test(A[2])) return null; pk = `, where ${A[2]} is the darkest`; }
+      if (n.name === 'heat') return { role: 'chart', D: [`a heat map of ${winT} showing ${w}${pk}`, `a calendar heat map for ${winT}: ${w}${pk}`] };
+      return { role: 'chart', D: [`a habit grid of ${winT}, one cell per day, showing ${w}${pk.replace('darkest', 'fullest')}`, `a day grid for ${winT} with ${w}${pk.replace('darkest', 'fullest')}`] }; }
+    if (n.name === 'goalbars' && A.length === 3) { const tg = numOrName(A[2]); if (!tg) return null; const tt = tg.num ? tg.num : `the ${hum(tg.name)}`; return { role: 'chart', D: [`bars of ${w} for ${winT} with a goal line at ${tt}`, `a bar chart for ${winT} showing ${w} against ${tt}`] }; }
+    return null;
+  }
+  if (n.name === 'weekdots' && A.length === 1) { const m = /^count\(([a-z][a-z0-9_]*) on it\) > 0$/.exec(A[0]); if (!m) return null; return { role: 'chart', D: [`a row of dots for the last 7 days, filled on days with ${art(hum(m[1]) + ' entry')}`, `week dots that are filled on every day that has ${art(hum(m[1]) + ' entry')}`] }; }
+  if (n.name === 'bars' && A.length === 3) {
+    const sm = new RegExp('^([a-z][a-z0-9_]*)(?: (' + WIN_RE + '))? by ([a-z][a-z0-9_]*)$').exec(A[0] || ''); if (!sm || A[2] !== 'it.key') return null;
+    let vw; if (A[1] === 'count(it)') vw = 'how many there are'; else { const m = /^(sum|avg)\(it\.([a-z][a-z0-9_]*)\)$/.exec(A[1]); if (!m) return null; vw = `the ${m[1] === 'sum' ? 'total' : 'average'} ${hum(m[2])}`; }
+    const wp = sm[2] ? ' ' + winPhrase(sm[2]) : ''; if (sm[2] && !winPhrase(sm[2])) return null;
+    return { role: 'chart', D: [`a bar chart comparing ${hum(sm[1])} by ${hum(sm[3])}, showing ${vw}${wp}`, `bars for each ${hum(sm[3])} of ${hum(sm[1])}: ${vw}${wp}`] };
+  }
+  if (n.name === 'trend' && A.length === 2) {
+    const sm = new RegExp('^([a-z][a-z0-9_]*)(?: (last \\d+ (?:days|weeks|months)))? sort at$').exec(A[0] || ''); const vm = /^it\.([a-z][a-z0-9_]*)$/.exec(A[1] || ''); if (!sm || !vm) return null;
+    const wp = sm[2] ? ' ' + winPhrase(sm[2]) : '';
+    return { role: 'chart', D: [`a line chart of ${hum(vm[1])} from ${hum(sm[1])}${wp}, oldest first`, `a trend line of ${hum(vm[1])} in ${hum(sm[1])}${wp}`] };
+  }
+  if (n.name === 'share' && A.length === 3) {
+    const sm = new RegExp('^([a-z][a-z0-9_]*)(?: (' + WIN_RE + '))? by ([a-z][a-z0-9_]*)$').exec(A[0] || ''); if (!sm || A[2] !== 'it.key') return null;
+    let vw; if (A[1] === 'count(it)') vw = 'how many there are'; else { const m = /^(sum|avg)\(it\.([a-z][a-z0-9_]*)\)$/.exec(A[1]); if (!m) return null; vw = `the ${m[1] === 'sum' ? 'total' : 'average'} ${hum(m[2])}`; }
+    const wp = sm[2] ? ' ' + winPhrase(sm[2]) : ''; if (sm[2] && !winPhrase(sm[2])) return null;
+    return { role: 'chart', D: [`a breakdown of ${hum(sm[1])} by ${hum(sm[3])} showing ${vw}${wp}`, `a comparison chart: ${hum(sm[1])} grouped by ${hum(sm[3])}, ${vw}${wp}`] };
+  }
+  if (n.name === 'list') {
+    const m = /^([a-z][a-z0-9_]*)( by day)?$/.exec(A[0] || ''); if (!m || A.length > 2) return null; let emp = ''; if (A.length === 2) { const e = litStr(A[1]); if (e === null) return null; emp = `, saying "${e}" when empty`; }
+    const g = m[2] ? ' grouped by day' : '';
+    return { role: 'list', D: [`a list of ${PL(m[1])}${g}${emp}`, `the ${hum(m[1])} history${g}${emp}`, `a log of all the ${PL(m[1])}${g}${emp}`] };
+  }
+  return null;
+}
+function positionClauses(M, C, n) {
+  const kids = n.parent ? n.parent.children : M.top; const i = kids.indexOf(n);
+  const vis = kids.filter(x => !DECL.has(x.kind) && !(x.kind === 'call' && x.name === 'topbar'));
+  const npOf = x => { const t = C.things.find(y => y.node === x); return t && t.nps.length ? R.pick(t.nps).t : null; };
+  const prev = kids[i - 1], next = kids[i + 1]; const cl = [];
+  const box = n.parent && n.parent.kind === 'box' ? n.parent.box : null; const nested = n.parent && n.parent.kind !== 'screen' && !(n.parent.kind === 'call' && n.parent.name === 'section');
+  if (vis[vis.length - 1] === n) { if (!nested) cl.push('', '', ' at the bottom', ' at the end'); else if (box) cl.push(` at the end of the ${box}`); if (prev && npOf(prev)) cl.push(` below ${npOf(prev)}`, ` after ${npOf(prev)}`); }
+  else if (vis[0] === n && vis.length > 1) { if (!nested) cl.push(' at the top', ' at the very top'); else if (box) cl.push(` at the start of the ${box}`); if (next && next.kind !== 'else' && npOf(next)) cl.push(` above ${npOf(next)}`); }
+  else { if (next && next.kind !== 'else' && npOf(next)) cl.push(` above ${npOf(next)}`, ` right before ${npOf(next)}`); if (prev && prev.kind !== 'if' && npOf(prev)) cl.push(` below ${npOf(prev)}`, ` right after ${npOf(prev)}`); }
+  return cl;
+}
+function genAdd(M, C) {
+  const out = [];
+  const lines = M.lines;
+  const mkRow = (cls, sub, n, desc, pos, noNC) => {
+    const start = n.i, end = n.e; const before = lines.filter((_, i) => i < start || i > end);
+    if (n.parent && n.parent.children.length === 1) return;
+    if (!n.parent && !M.top.some(x => x !== n && !DECL.has(x.kind) && x.kind !== 'app')) return;
+    const D = desc.D;
+    out.push(mkCand('add', cls, { sub, after: lines.slice(), beforeSrc: before.join('\n') + '\n', touched: new Set(), pools: [cls === 'add_list' && sub === 'section' ? 'add_section' : cls], slots: { D }, pos }));
+    if (!noNC) out.push(mkCand('add', 'no_change', { sub: 'add_present', after: lines.slice(), touched: new Set(), pools: [cls === 'add_list' && sub === 'section' ? 'add_section' : cls], slots: { D }, noChange: true, check: () => true }));
+  };
+  for (const n of M.nodes) {
+    if (n.kind === 'call' && !n.children.length && (STATC.has(n.name) || CHART.has(n.name) || n.name === 'list')) {
+      const d = describeNode(n); if (!d) continue; const pos = positionClauses(M, C, n); if (!pos.length) continue;
+      mkRow(d.role === 'stat' ? 'add_stat' : d.role === 'chart' ? 'add_chart' : 'add_list', d.role, n, d, pos);
+    } else if (n.kind === 'call' && n.name === 'section' && n.children.length === 1) {
+      const t = litStr(n.args[0]); if (!t || n.args.length > 2) continue; let note = ''; if (n.args.length === 2) { const x = litStr(n.args[1]); if (x === null) continue; note = ` and the small note "${x}"`; }
+      const ch = n.children[0]; const cd = describeNode(ch); if (!cd) continue; const pos = positionClauses(M, C, n); if (!pos.length) continue;
+      const D = cd.D.map(x => `a section called "${t}"${note} that contains ${x}`);
+      mkRow('add_list', 'section', n, { D }, pos);
+      if (cd.role === 'chart' || cd.role === 'stat') mkRow(cd.role === 'chart' ? 'add_chart' : 'add_stat', 'section+' + cd.role, n, { D }, pos, true);
+    }
+  }
+  // fields: unreferenced, last in their table (or placed by name)
+  const tables = M.nodes.filter(n => n.kind === 'table' && !n.was);
+  for (const tb of tables) {
+    if (tb.fields.length < 2) continue; const [head, rest] = tableHead(M.lines[tb.i]); if (!head) continue; const segs = splitTop(rest); if (segs.length !== tb.fields.length) continue;
+    segs.forEach((seg, fi) => {
+      const f = tb.fields[fi]; if (f.was || RISKY.has(f.name)) return;
+      if (M.lines.some((l, i) => i !== tb.i && hasWord(l, f.name))) return;
+      if (tables.some(o => o !== tb && o.fields.some(g => g.name === f.name))) return;
+      const m = /^([a-z][a-z0-9_]*) (text|long|num|money|bool|date|time|when|dur|image|pick [A-Za-z0-9_|]+|ref [a-z][a-z0-9_]*)(\?)?( [-0-9.]*\.\.[0-9.]*)?(?: = ("[^"]*"|[^ ]+))?(?: "([^"]*)")?(?: unit "([^"]*)")?$/.exec(seg); if (!m) return;
+      const rebuilt = `${m[1]} ${m[2]}${m[3] || ''}${m[4] || ''}${m[5] ? ' = ' + m[5] : ''}${m[6] ? ' "' + m[6] + '"' : ''}${m[7] ? ' unit "' + m[7] + '"' : ''}`; if (rebuilt !== seg) return;
+      const nm = hum(m[1]); const tt = m[2];
+      const typeW = tt.startsWith('pick ') ? (() => { const o = tt.slice(5).split('|').map(hum); const l = o.length === 2 ? `${o[0]} or ${o[1]}` : o.slice(0, -1).join(', ') + ' or ' + o[o.length - 1]; return R.pick([`a choice of ${l}`, `pick one of ${l}`]); })()
+        : tt.startsWith('ref ') ? `a link to a ${hum(tt.slice(4))}` : ({ text: 'text', long: 'long text', num: 'a number', money: 'an amount of money', bool: 'a yes or no tick', date: 'a date', time: 'a time of day', when: 'a date and time', dur: 'a length of time', image: 'a picture' })[tt];
+      const ex = []; if (m[3]) ex.push('optional');
+      if (m[4]) { const r = /^ ([-0-9.]+)\.\.([0-9.]*)$/.exec(m[4]); ex.push(r[2] ? `from ${r[1]} to ${r[2]}` : (r[1] === '0' ? 'zero or more' : `at least ${r[1]}`)); }
+      if (m[5]) ex.push(`starting at ${m[5]}`); if (m[7]) ex.push(`with the unit "${m[7]}"`); if (m[6]) ex.push(`labelled "${m[6]}"`);
+      const tail = ex.length ? ', ' + ex.join(', ') : '';
+      const D = [`${art(nm + ' field')}, ${typeW}${tail}`, `${nm} as ${typeW}${tail}`, `a field called ${nm}: ${typeW}${tail}`];
+      const tn = hum(tb.name); const multi = tables.length > 1;
+      const Q = multi ? [` to the ${tn} table`, ` for each ${tn}`, ` to the ${tn} table`] : ['', '', ` to the ${tn} table`];
+      let pos; if (fi === tb.fields.length - 1) pos = ['', '', '']; else { const nx = hum(tb.fields[fi + 1].name), pv = hum(tb.fields[fi - 1] ? tb.fields[fi - 1].name : ''); const q = x => /^(next|what|who|name|day|time|text|kind|item|part|work|done|paid|total|label|size|unit|start|end|note|to|from|at|by|last|first)$/.test(x) ? `"${x}"` : x; pos = [` before the ${q(nx)} field`]; if (fi > 0) pos.push(` after the ${q(pv)} field`, ` right after ${q(pv)}`); }
+      const beforeLines = M.lines.map((l, i) => i === tb.i ? head + segs.filter((_, k) => k !== fi).join(', ') : l);
+      out.push(mkCand('add', 'add_field', { sub: fi === tb.fields.length - 1 ? 'field-last' : 'field-mid', after: M.lines.slice(), beforeSrc: beforeLines.join('\n') + '\n', touched: new Set([tb.i]), pools: ['add_field'], slots: { D, Q: Q.map(x => x) }, pos }));
+      if (fi === tb.fields.length - 1) out.push(mkCand('add', 'no_change', { sub: 'add_present', after: M.lines.slice(), touched: new Set(), pools: ['add_field'], slots: { D, Q }, noChange: true, check: () => true }));
+    });
+  }
+  // reminders: a reminder draws nothing, so its place among the declarations carries no meaning. The rule for the answer is:
+  // a new reminder goes right after the last declaration at the top (table, setting, state, let, other reminders).
+  // P is normalised once (the reminder moved there) so that before + answer = that program; meta.normalized marks the rows that needed the move.
+  for (const n of M.top.filter(x => x.kind === 'remind' && !x.cond)) {
+    const lin = M.lines[n.i]; const tx = n.text; let d = null;
+    if (!/^[A-Za-z0-9 '?-]{3,40}$/.test(tx)) continue;
+    if (n.times && n.times.length && !n.monthly && !n.at) { const m = /^remind "[^"]*" at ([0-9:, ]+)(?: on ((?:mon|tue|wed|thu|fri|sat|sun)(?: (?:mon|tue|wed|thu|fri|sat|sun))*))?$/.exec(lin); if (m) { const ts = m[1].split(', '); const tw = ts.length > 1 ? ts.slice(0, -1).join(', ') + ' and ' + ts[ts.length - 1] : ts[0]; const dw = m[2] ? ' on ' + m[2].split(' ').map(x => cap1(x)).join(' and ') : ''; d = [`a reminder "${tx}" at ${tw}${dw}`, `a daily reminder saying "${tx}" at ${tw}${dw}`]; } }
+    else if (n.every) { const m = /^remind "[^"]*" every (\d+)([smhd])(?: from ([0-9:]+) to ([0-9:]+))?$/.exec(lin); if (m) { const u = { s: 'second', m: 'minute', h: 'hour', d: 'day' }[m[2]]; const per = `every ${m[1] === '1' ? '' : m[1] + ' '}${u}${m[1] === '1' ? '' : 's'}`; const win = m[3] ? ` from ${m[3]} to ${m[4]}` : ''; d = [`a reminder "${tx}" ${per}${win}`, `a repeating reminder saying "${tx}" ${per}${win}`]; } }
+    else if (n.monthly && n.times && n.times.length === 1) { const m = /^remind "[^"]*" monthly on ([0-9, ]+) at ([0-9:]+)$/.exec(lin); if (m) { const ds = m[1].split(', '); const dw = ds.length > 1 ? ds.slice(0, -1).join(', ') + ' and ' + ds[ds.length - 1] : ds[0]; d = [`a monthly reminder "${tx}" on day ${dw} at ${m[2]}`, `a reminder saying "${tx}" on day ${dw} of every month at ${m[2]}`]; } }
+    if (!d) continue;
+    const rest = lines.filter((_, i) => i !== n.i); // P without the reminder, indexes shift after n.i
+    const restTop = M.top.filter(x => x !== n);
+    let k = 0; while (k < restTop.length && DECL.has(restTop[k].kind)) k++;
+    if (k === 0) continue;
+    const lastDecl = restTop[k - 1]; const insAt = lastDecl.e + 1 - (lastDecl.i > n.i ? 1 : 0); // index in `rest` after the last leading declaration
+    const afterLines = [...rest.slice(0, insAt), lin, ...rest.slice(insAt)];
+    const moved = afterLines.join('\n') !== lines.join('\n');
+    out.push(mkCand('add', 'add_reminder', { sub: moved ? 'reminder-moved' : 'reminder', after: afterLines, beforeSrc: rest.join('\n') + '\n', touched: new Set(), pools: ['add_reminder'], slots: { D: d }, pos: ['', ''], normalized: moved }));
+    if (!moved) out.push(mkCand('add', 'no_change', { sub: 'add_present', after: lines.slice(), touched: new Set(), pools: ['add_reminder'], slots: { D: d }, noChange: true, check: () => true }));
+  }
+  return out;
+}
+
+const GENS = [genRemove, genReorder, genRename, genRenameField, genOption, genNumber, genSections, genAdd];
 function candidates(M) { const C = catalog(M); const out = []; for (const g of GENS) { try { out.push(...g(M, C)); } catch (e) { if (process.env.DEBUG) console.error(g.name, e.message); } } return out; }
 
 // ---------------------------------------------------------------- requests
 const usage = new Map(); // pool|index -> uses
-const rows_ = [];
 function fill(tpl, slots, r) {
   return tpl.replace(/\{([A-Za-z])\}/g, (_, k) => { const v = slots[k]; if (!v) throw new Error('slot ' + k); const x = r.pick(v); return typeof x === 'string' ? x : x.t; });
 }
-function lowerCasual(s, r) { return s; }
-const taken = new Set(); // requests already used with a given before
+const splitEnd = s => { const m = /^([\s\S]*?)([?!.]*)$/.exec(s); return [m[1], m[2]]; };
+const REASONED = new Set(['remove_one', 'reorder', 'rename_button', 'rename_field', 'add_option', 'sections']);
 function makeRequest(c, baseKey) {
-  // which templates need which slots
   const need = tpl => [...tpl.matchAll(/\{([A-Za-z])\}/g)].every(m => c.slots[m[1]]) && (!c.require || tpl.includes('{' + c.require + '}'));
-  const all = []; for (const p of c.pools) TPL[p].forEach((tpl, i) => { if (need(tpl)) all.push({ p, i, tpl }); });
+  const all = []; for (const p of c.pools) (TPL[p] || []).forEach((tpl, i) => { if (need(tpl)) all.push({ p, i, tpl }); });
   if (!all.length) return null;
   const used = baseKey.usedTpl;
   all.sort((a, b) => (usage.get(a.p + '|' + a.i) || 0) - (usage.get(b.p + '|' + b.i) || 0) || R() - 0.5);
@@ -554,17 +736,22 @@ function makeRequest(c, baseKey) {
     if (used.has(t.p + '|' + t.i)) continue;
     let text; let typod = false;
     try {
-      // mix of label-based and role-based naming: shuffle the np list so both appear
       const slots = { ...c.slots }; if (slots.X) slots.X = R.shuffle(slots.X); if (slots.Y) slots.Y = R.shuffle(slots.Y);
       let tp = t.tpl; if (R() < 0.05) { const t2 = typo(tp, R); if (t2 !== tp) { tp = t2; typod = true; } }
       text = fill(tp, slots, R);
     } catch { continue; }
-    let req = text;
+    let [core, end] = splitEnd(text);
+    if (c.pos && !c.noChange) core += R.pick(c.pos);
+    let oi = -1, ci = -1;
+    if (R() < 0.3) { oi = R.int(0, OPEN.length - 1); core = OPEN[oi] + ' ' + core; }
+    if (R() < 0.3 && end !== '?') { const list = REASONED.has(c.cls) && R() < 0.5 ? CLOSE_R : CLOSE_N; ci = R.int(0, list.length - 1) + (list === CLOSE_R ? 100 : 0); core += list[ci % 100]; }
+    let req = core + end;
     const st = R(); const endP = /[?!.]$/.test(req);
     if (st < 0.3) req = cap1(req); else if (st < 0.4 && !endP) req = cap1(req) + '.'; else if (st < 0.45 && !endP) req = req + '!';
-    if (/[^\x20-\x7e]/.test(req) || req.length < 3 || req.length > 300) continue;
+    req = req.replace(/\s+/g, ' ').replace(/ ([,.?!])/g, '$1').trim();
+    if (/[^\x20-\x7e]/.test(req) || req.length < 3 || req.length > 420) continue;
     if (leaky(req)) continue;
-    return { req, pool: t.p, idx: t.i, typo: typod };
+    return { req, pool: t.p, idx: t.i, typo: typod, skel: `${t.p}:${t.i}|${oi}|${ci}` };
   }
   return null;
 }
@@ -573,85 +760,104 @@ function makeRequest(c, baseKey) {
 const stats = { bases: 0, cand: 0, gate_fail: {}, kept: 0 };
 const fail = w => { stats.gate_fail[w] = (stats.gate_fail[w] || 0) + 1; return null; };
 function gate(M, c) {
-  if (c.noChange) return { after: M.src, answer: 'none' };
+  if (c.noChange) {
+    if (c.check && !c.check()) return fail('nochange-predicate');
+    return { before: M.src, after: M.src, answer: 'none' };
+  }
+  let B0 = M.src;
+  if (c.beforeSrc) { const kb = canon(c.beforeSrc); if (!kb.ok) return fail('before-check'); if (kb.text !== c.beforeSrc) return fail('before-noncanon'); B0 = kb.text; const vb = verify(B0); if (!vb.ok) return fail('before-verify'); }
   const a0 = c.after.join('\n') + '\n';
   const k = canon(a0); if (!k.ok) return fail('check:' + (k.errors[0].match(/E_[A-Z_]+/) || ['?'])[0]);
-  const after = k.text; if (after === M.src) return fail('no-op');
-  const v = verify(after, [M.src]); if (!v.ok) return fail('verify:' + v.why.slice(0, 30));
-  const d = diff([M.src], after); if (d.verdict === 'refused') return fail('diff-refused');
-  const pt = derivePatch(M.src, after); if (!pt) return fail('patch');
-  let ok = false; try { ok = applyOps(M.src, pt.answer) === after; } catch { }
+  const after = k.text; if (after === B0) return fail('no-op');
+  const v = verify(after, [B0]); if (!v.ok) return fail('verify:' + v.why.slice(0, 30));
+  const d = diff([B0], after); if (d.verdict === 'refused') return fail('diff-refused');
+  const pt = derivePatch(B0, after); if (!pt) return fail('patch');
+  let ok = false; try { ok = applyOps(B0, pt.answer) === after; } catch { }
   if (!ok) return fail('roundtrip');
-  // only the intended lines change
-  const B = M.src.replace(/\n$/, '').split('\n'), A = after.replace(/\n$/, '').split('\n');
+  const B = B0.replace(/\n$/, '').split('\n'), A = after.replace(/\n$/, '').split('\n');
   if (c.kind === 'reorder') { if ([...B].sort().join('\n') !== [...A].sort().join('\n')) return fail('not-a-permutation'); }
   else {
     const refd = new Set(); for (const op of pt.answer.split('\n')) { let m; if ((m = /^(?:replace|delete|move) (\d+)(?:-(\d+))?/.exec(op))) for (let x = +m[1]; x <= +(m[2] || m[1]); x++) refd.add(x - 1); }
     for (const x of refd) if (!c.touched.has(x)) return fail('touched-outside');
-    // untouched lines must survive in order
     const keep = B.filter((_, i) => !c.touched.has(i)); let j = 0; for (const l of A) if (j < keep.length && l === keep[j]) j++; if (j !== keep.length) return fail('untouched-changed');
+    if (c.kind === 'add' && A.length <= B.length - 0 && c.cls !== 'add_field') return fail('add-did-not-grow');
   }
-  return { after, answer: pt.answer };
+  return { before: B0, after, answer: pt.answer };
 }
 
-const isLong = p => nl(p) >= 25;
-function buildRow(M, c, g, rq, base) {
-  const before = M.src, program = g.after;
-  const meta = { style: 'c2', domain: base.id, sub: c.sub, tpl: rq.pool + ':' + rq.idx, tokens: 0, language_commit: '4698991', origin: 'v4.1' };
-  if (rq.typo) meta.typo = true; if (base.long) meta.long = true; if (c.family) meta.family = c.family; if (c.noChange) meta.no_change = true;
+function buildRow(c, g, rq, base) {
+  const before = g.before, program = g.after;
+  const meta = { style: 'c2', domain: base.id, sub: c.sub, tpl: rq.pool + ':' + rq.idx, skel: rq.skel, tokens: 0, language_commit: '4698991', origin: 'v4.1' };
+  if (rq.typo) meta.typo = true; if (base.long) meta.long = true; if (c.family) meta.family = c.family; if (c.normalized) meta.normalized = true; if (c.noChange) meta.no_change = true;
   const numbered = before.replace(/\n$/, '').split('\n').map((x, i) => `${i + 1}| ${x}`).join('\n');
   return { id: 'c2-e-' + sha(rq.req + before + program + g.answer).slice(0, 10), task: 'edit', request: rq.req, program_before: before, before, program, answer: g.answer, source: 'v4:c2:' + c.cls, class: c.cls, user_text: `Edit request: ${rq.req}\n\nCurrent program:\n${before}`, user_text_numbered: `Edit request: ${rq.req}\n\nCurrent program:\n${numbered}`, meta };
 }
 
+const OLD = ['remove_one', 'reorder', 'rename_button', 'rename_field', 'add_option', 'setting_value', 'sections'];
+const NEW = ['add_field', 'add_stat', 'add_chart', 'add_list', 'add_reminder'];
+const POSKINDS = new Set(['add_option', 'rename_field', 'add_field']);
 function main() {
   const bases = loadBases();
   const long = bases.filter(b => b.long), short = bases.filter(b => !b.long);
   console.error('bases', bases.length, 'long', long.length, 'short', short.length);
-  const KINDS = ['remove_one', 'reorder', 'rename_button', 'rename_field', 'add_option', 'setting_value', 'sections'];
-  const noKind = Math.round(TARGET * 0.03); const perKind = Math.round((TARGET - noKind) / KINDS.length);
-  const quota = Object.fromEntries(KINDS.map(k => [k, perKind])); quota.no_change = noKind;
-  const longQuota = Object.fromEntries(Object.entries(quota).map(([k, v]) => [k, Math.ceil(v * 0.4)]));
+  if (process.env.DIAG3) { let n1 = 0; for (const b of long) { const M = buildModel(b.program); if (!M) continue; const C = catalog(M); const cs = genAdd(M, C); const ch = M.nodes.filter(n => n.kind === 'call' && CHART.has(n.name) && describeNode(n)).length; const got = cs.filter(c => c.cls === 'add_chart').length; if (ch && !got && n1++ < 3) { console.log(ch, got, M.nodes.filter(n => n.kind === 'call' && CHART.has(n.name) && describeNode(n)).map(n => n.src + ' parent=' + (n.parent && n.parent.kind) + ' sib=' + (n.parent ? n.parent.children.length : 'top'))); } } process.exit(0); }
+  if (process.env.DIAG2) { let tot = 0, desc = 0, pos = 0, rem = 0; const why = {}; for (const b of long) { const M = buildModel(b.program); if (!M) continue; const C = catalog(M); for (const n of M.nodes) if (n.kind === 'call' && CHART.has(n.name)) { tot++; const d = describeNode(n); if (!d) { const k = n.name + ':' + n.args.length; why[k] = (why[k] || 0) + 1; if ((why[k]) <= 2) console.log('NODESC', n.src); continue; } desc++; if (positionClauses(M, C, n).length) pos++; } } console.log({ tot, desc, pos }, why); process.exit(0); }
+  if (process.env.DIAG) { const cc = {}, bb = {}; for (const b of long) { const M = buildModel(b.program); if (!M) continue; const seen = new Set(); for (const c of candidates(M)) { cc[c.cls] = (cc[c.cls] || 0) + 1; if (!seen.has(c.cls)) { seen.add(c.cls); bb[c.cls] = (bb[c.cls] || 0) + 1; } } } console.log('long cands', JSON.stringify(cc), 'bases with >=1', JSON.stringify(bb)); process.exit(0); }
+  const OLDQ = +arg('oldq', 450), NEWQ = +arg('newq', 520), NCQ = +arg('ncq', 170), NEWLONG = Math.ceil(NEWQ * 0.36);
+  const quota = {}; for (const k of OLD) quota[k] = OLDQ; for (const k of NEW) quota[k] = NEWQ; quota.no_change = NCQ;
   const count = Object.fromEntries(Object.keys(quota).map(k => [k, 0])), countLong = { ...count };
-  const out = [];
-  const seenReq = new Set();
-  const process_ = (b, maxPer) => {
+  const posTot = {}, posLate = {}; const ncSub = {};
+  const out = []; const seenReq = new Set(); const baseUsed = new Map();
+  const process_ = (b, maxPer, kinds) => {
     stats.bases++;
     const M = buildModel(b.program); if (!M) return;
-    let cs = candidates(M); stats.cand += cs.length;
-    const baseKey = { usedTpl: new Set() }; const perKindUsed = {}; let n = 0;
+    let cs = candidates(M).filter(c => kinds.includes(c.cls)); stats.cand += cs.length;
+    for (const c of cs) c.pos1 = c.touched && c.touched.size ? Math.min(...c.touched) + 1 : 99;
+    const bu = baseUsed.get(b.id) || { n: 0, per: {}, tpl: new Set(), bef: new Set() }; baseUsed.set(b.id, bu);
     cs = R.shuffle(cs);
-    while (n < maxPer) {
-      // the kind furthest below its quota (long bases count against the long quota too)
-      const room = Object.keys(quota).filter(k => (perKindUsed[k] || 0) < 2 && count[k] < quota[k] && cs.some(c => c.cls === k)).sort((a, z) => (count[a] / quota[a]) - (count[z] / quota[z]));
+    while (bu.n < maxPer) {
+      const room = kinds.filter(k => (bu.per[k] || 0) < 2 && count[k] < quota[k] && (!b.long || !NEW.includes(k) || countLong[k] < NEWLONG) && cs.some(c => c.cls === k)).sort((a, z) => (count[a] / quota[a]) - (count[z] / quota[z]));
       if (!room.length) break;
-      // no_change is rationed: only when its ratio is below the others
-      const k = room[0];
-      let done = false;
+      const k = room[0]; let done = false;
       for (let ci = 0; ci < cs.length; ci++) {
         const c = cs[ci]; if (c.cls !== k) continue;
-        const rq = makeRequest(c, baseKey); if (!rq) { cs.splice(ci, 1); ci--; continue; }
-        const key = norm(rq.req) + '|' + b.id; if (seenReq.has(key)) { continue; }
+        if (POSKINDS.has(k) && c.pos1 <= 2 && (posLate[k] || 0) < 0.65 * ((posTot[k] || 0) + 1)) { continue; }
+        if (k === 'no_change' && c.sub === 'title' && (ncSub.title || 0) >= 0.2 * NCQ) { continue; }
+        if (k === 'no_change' && (ncSub[c.sub] || 0) >= 0.3 * NCQ) { continue; }
+        const rq = makeRequest(c, { usedTpl: bu.tpl }); if (!rq) { cs.splice(ci, 1); ci--; continue; }
+        const key = norm(rq.req) + '|' + b.id; if (seenReq.has(key)) continue;
+        if (c.beforeSrc && bu.bef.has(c.beforeSrc)) continue;
         const g = gate(M, c); if (!g) { cs.splice(ci, 1); ci--; continue; }
-        const row = buildRow(M, c, g, rq, b); seenReq.add(key); baseKey.usedTpl.add(rq.pool + '|' + rq.idx);
+        const row = buildRow(c, g, rq, b); seenReq.add(key); if (c.beforeSrc) bu.bef.add(c.beforeSrc); bu.tpl.add(rq.pool + '|' + rq.idx);
         usage.set(rq.pool + '|' + rq.idx, (usage.get(rq.pool + '|' + rq.idx) || 0) + 1);
-        out.push(row); count[k]++; if (b.long) countLong[k]++; perKindUsed[k] = (perKindUsed[k] || 0) + 1; n++; cs.splice(ci, 1); done = true; break;
+        row.meta.pos1 = c.pos1;
+        out.push(row); count[k]++; if (b.long) countLong[k]++; bu.per[k] = (bu.per[k] || 0) + 1; bu.n++;
+        if (POSKINDS.has(k)) { posTot[k] = (posTot[k] || 0) + 1; if (c.pos1 >= 3) posLate[k] = (posLate[k] || 0) + 1; }
+        if (k === 'no_change') ncSub[c.sub] = (ncSub[c.sub] || 0) + 1;
+        cs.splice(ci, 1); done = true; break;
       }
-      if (!done) { perKindUsed[k] = 2; }
+      if (!done) bu.per[k] = 2;
     }
   };
-  for (const b of long) process_(b, 4);
-  for (const b of short) { if (Object.keys(quota).every(k => count[k] >= quota[k])) break; process_(b, 4); }
+  for (const b of long) process_(b, 4, NEW);
+  for (const b of long) process_(b, 4, [...OLD, 'no_change']);
+  const allK = Object.keys(quota);
+  for (const b of short) { if (allK.every(k => count[k] >= quota[k])) break; process_(b, 4, allK); }
   console.error('counts', JSON.stringify(count), 'long', JSON.stringify(countLong));
-  // token gate (batch)
   const progs = out.flatMap(r => [r.program, r.program_before]); const tk = tokenCounts(progs);
   const kept = []; let tokDrop = 0;
-  out.forEach((r, i) => { const a = tk[2 * i], b = tk[2 * i + 1]; const lim = r.meta.long ? 900 : 500; if (a > lim || b > lim) { tokDrop++; return; } r.meta.tokens = a; kept.push(r); });
+  out.forEach((r, i) => { const a = tk[2 * i], b = tk[2 * i + 1]; const lim = r.meta.long ? 900 : 500; if (a > lim || b > lim) { tokDrop++; return; } r.meta.tokens = Math.max(a, b); kept.push(r); });
   stats.token_drop = tokDrop; stats.kept = kept.length;
   writeFileSync('out/c2_rows.jsonl', kept.map(r => JSON.stringify(r)).join('\n') + '\n');
   const per = {}; for (const r of kept) { const k = r.class + (r.meta.long ? '/long' : '/short'); per[k] = (per[k] || 0) + 1; }
-  const tplUse = {}; for (const [k, v] of usage) { const p = k.split('|')[0]; (tplUse[p] ||= []).push(v); }
-  const tplSummary = Object.fromEntries(Object.entries(tplUse).map(([p, v]) => [p, { templates: TPL[p].length, used: v.length, min: Math.min(...v), max: Math.max(...v) }]));
-  writeFileSync('out/c2_report.json', JSON.stringify({ stats, per_class: per, quota, tplSummary }, null, 1));
-  console.log(JSON.stringify({ rows: kept.length, per_class: per, stats }));
+  // histogram of the first changed line per kind
+  const bucket = n => n <= 2 ? 'line2' : n === 3 ? 'line3' : n === 4 ? 'line4' : n <= 6 ? 'line5-6' : n <= 10 ? 'line7-10' : n <= 20 ? 'line11-20' : 'line21+';
+  const hist = {}; for (const r of kept) { if (r.answer === 'none') continue; const m = /^(?:replace|delete|move|insert after) (\d+)/.exec(r.answer.split('\n')[0]); if (!m) continue; let n = +m[1]; if (r.answer.startsWith('insert after')) n += 1; const h = (hist[r.class] ||= {}); const b = bucket(n); h[b] = (h[b] || 0) + 1; }
+  // wording: distinct composed skeletons and top-5 share per kind
+  const skel = {}; for (const r of kept) { const m = (skel[r.class] ||= new Map()); m.set(r.meta.skel, (m.get(r.meta.skel) || 0) + 1); }
+  const skelStat = {}; for (const [k, m] of Object.entries(skel)) { const n = [...m.values()].reduce((a, b) => a + b, 0); const top = [...m.values()].sort((a, b) => b - a).slice(0, 5).reduce((a, b) => a + b, 0); skelStat[k] = { rows: n, distinct: m.size, top5_share: +(top / n).toFixed(4) }; }
+  const coreStat = {}; for (const [p, v] of Object.entries(TPL)) coreStat[p] = v.length;
+  writeFileSync('out/c2_report.json', JSON.stringify({ stats, per_class: per, quota, hist, skelStat, coreStat }, null, 1));
+  console.log(JSON.stringify({ rows: kept.length, per_class: per, stats, hist, skelStat }));
 }
 main();

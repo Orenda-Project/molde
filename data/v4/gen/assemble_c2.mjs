@@ -10,10 +10,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LOCK = '.lock';
 for (let i = 0; ; i++) { try { mkdirSync(LOCK); break; } catch (e) { if (e.code !== 'EEXIST') throw e; if (i > 360) throw new Error('lock held too long'); await sleep(5000); } }
 try {
-  const baseRows = rd('v4.1.jsonl'); const have = new Set(baseRows.map(r => r.id));
+  const allRows = rd('v4.1.jsonl'); const baseRows = allRows.filter(r => !r.id.startsWith('c2-')); const dropped_old = allRows.length - baseRows.length; const have = new Set(baseRows.map(r => r.id));
   const key = r => norm(r.request.replace(/\n/g, ' ')) + (r.task === 'edit' ? '|e|' + sha(r.program_before || '') : '|c');
   const baseKeys = new Set(baseRows.map(key));
-  const log = {};
+  const log = { replaced_old_c2_rows: dropped_old };
   let cur = rd('out/c2_rows.jsonl').filter(r => !have.has(r.id));
   { const seen = new Set(); const keep = []; for (const r of cur) { const k = key(r); if (seen.has(k) || baseKeys.has(k)) continue; seen.add(k); keep.push(r); } log.dup_requests = cur.length - keep.length; cur = keep; }
   const tmpf = 'out/_leak_tmp_c2.jsonl';
@@ -24,7 +24,7 @@ try {
     if (!ids.size) { log.leak_final = (outp.match(/(\d+) leaks/) || [])[1]; break; } log['leak_round_' + round] = ids.size; cur = cur.filter(r => !ids.has(r.id));
   }
   { const keep = []; let n = 0; for (const r of cur) { const w = toks(r.request).length; const m = nearest(r.request); if (m.sim >= (w <= 5 ? 0.6 : 0.75)) { n++; continue; } keep.push(r); } log.other_test_sets_dropped = n; cur = keep; }
-  appendFileSync('v4.1.jsonl', cur.map(r => JSON.stringify(r)).join('\n') + '\n');
+  writeFileSync('v4.1.jsonl', [...baseRows, ...cur].map(r => JSON.stringify(r)).join('\n') + '\n');
   writeFileSync('out/newc2.jsonl', cur.map(r => JSON.stringify(r)).join('\n') + '\n');
   const c = {}; for (const r of cur) c[r.class + (r.meta.long ? '/long' : '/short')] = (c[r.class + (r.meta.long ? '/long' : '/short')] || 0) + 1;
   writeFileSync('out/assemble_c2.json', JSON.stringify({ rows: cur.length, per_class: c, log }, null, 1));

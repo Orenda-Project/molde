@@ -258,6 +258,8 @@ export const optWord = a => a.replace(/ +/g, '_');
 // best family for a list of option words, or null
 export function familyFor(options) {
   const have = options.map(normOpt);
+  const SCALE = new Set(['low', 'normal', 'high', 'medium', 'urgent', 'critical', 'none', 'lowest', 'highest', 'important']);
+  if (have.length >= 2 && have.every(o => SCALE.has(o))) { const f = FAMILIES.find(x => x.id === 'priority'); const adds = f.adds.filter(a => !have.includes(normOpt(a.replace(/ +/g, '_')))); if (adds.length) return { family: f, adds: adds.map(optWord), exist: f.adds.filter(a => have.includes(normOpt(a.replace(/ +/g, '_')))).map(optWord), score: 9 }; }
   let best = null;
   for (const f of FAMILIES) {
     const hit = have.filter(o => f.members.has(o)).length;
@@ -265,7 +267,7 @@ export function familyFor(options) {
     const adds = f.adds.filter(a => !have.includes(normOpt(a.replace(/ +/g, '_'))));
     const exist = f.adds.filter(a => have.includes(normOpt(a.replace(/ +/g, '_'))));
     if (!adds.length && !exist.length) continue;
-    const score = hit / have.length + hit / 100 - f.members.size / 100000;
+    const score = hit / have.length + hit / 100;
     if (!best || score > best.score) best = { family: f, adds: adds.map(optWord), exist: exist.map(optWord), score };
   }
   return best;

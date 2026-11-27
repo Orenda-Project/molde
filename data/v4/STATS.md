@@ -113,24 +113,70 @@ Direction change mid-run (Kamal): Roman Urdu stopped at 129 surviving rows (targ
 Not met: English specifics 76 of 1,200; sensible_calc 16 of 600; typo_en 6 of 200; rich_app 6 of 300. Do not run gen/snap41.py: it cuts STATS.md at the v4.1 snapshot heading and would delete the b2 and a2 sections.
 
 
-## c2 (computed edits on real programs; prefix c2-)
+## c2 (computed edits on real programs; prefix c2-), revision 2 after the critic
 
-Built by gen/c2_edits.mjs (parse the base with lang parse.mjs, propose edits, compute the after-program, gate) and gen/assemble_c2.mjs (lock, dedupe, leak rounds, append). Option families: gen/c2_families.mjs (241 families). Wording: gen/c2_words.mjs (more than 40 phrasings per kind; typos injected in template words only). English only. 3,998 rows from 1,044 base programs (the 396 long bases are long creates plus the "before" programs of existing long edits; the rest are short creates). Hand review: C2_REVIEW.md (7 rounds of 80 rows, final round 0 wrong).
+Built by gen/c2_edits.mjs (parse the base with lang parse.mjs, propose edits, compute the after-program, gate) and gen/assemble_c2.mjs (lock, dedupe, leak rounds, replaces all earlier c2- rows, appends). Option families gen/c2_families.mjs (241), wording gen/c2_words.mjs + gen/c2_words2.mjs, audit gen/c2_audit.mjs. English only. 5,920 rows from 2,281 real base programs (396 long bases: long creates plus the "before" programs of existing long edits). Revision 2 replaced the 3,998 rows of revision 1.
 
-Checks: verify4 uncached 3,998 / 3,998 (patch round-trip, data-safety diff, tokens max 726, CLI check and format sample clean); leak_check 0 leaks; at most 4 edits per base and 2 of one kind; only the intended lines change (patch ops checked against the touched set, reorder checked as a permutation); each template used 7 to 24 times within its pool (min and max within 1 of each other).
+Gates (all re-run on the 5,920 rows): verify4 uncached 5,920 / 5,920 (patch round-trip, data-safety diff, tokens max 725, CLI check and format sample clean); leak_check 0 leaks; at most 4 edits per base and 2 of one kind (max 4 and 2); only the intended lines change (patch ops checked against the touched set; reorder checked as a permutation); hand review in C2_REVIEW.md.
 
-| Class | Short | Long | Total |
+| Class | Short | Long | Total | Long share |
+|---|---|---|---|---|
+| remove_one | 297 | 153 | 450 | 34% |
+| reorder | 297 | 153 | 450 | 34% |
+| rename_button (buttons, form buttons, titles, section and tab labels) | 297 | 153 | 450 | 34% |
+| rename_field (with `was`) | 336 | 114 | 450 | 25% |
+| add_option (append 56%, at a named place 44%) | 410 | 40 | 450 | 9% |
+| setting_value (goal, range, quick, time, timer, target) | 299 | 151 | 450 | 34% |
+| sections (wrap one thing, split the screen) | 359 | 91 | 450 | 20% |
+| add_field (by reversal) | 437 | 83 | 520 | 16% |
+| add_stat (stat, stat card, goal bar; also a section holding one) | 332 | 188 | 520 | 36% |
+| add_chart (daybars, goalbars, trend, share, bars, heat, daygrid, weekdots; also a section holding one) | 332 | 188 | 520 | 36% |
+| add_list (list; section holding a described stat, chart or list) | 332 | 188 | 520 | 36% |
+| add_reminder (by reversal) | 507 | 13 | 520 | 2.5% |
+| no_change (answer `none`) | 112 | 58 | 170 | 34% |
+| Total | 4,347 | 1,573 | 5,920 | 26.6% |
+
+New kinds by reversal: a real program P that has the thing is cut cleanly to P' (nothing else references it, program still checks and evaluates), then before = P', request = "add <the thing described by name, type, range, unit, options, or by what the stat/chart shows>", after = P. The description is generated from the parsed line and must rebuild the line exactly (fields: name, type, optional, range, default, label, unit; stats and charts: aggregate, table, field, window, filter, caption, target, peak; reminders: text, times, days, interval). A position clause names the neighbour ("above the X card", "at the top", "after the Y field") unless the thing is last. Reminders draw nothing, so their place is defined: right after the last declaration at the top; P is normalised once (reminder moved there) in 434 rows, marked meta.normalized.
+
+Target line of the first operation (histogram, line numbers of the before-program):
+
+| Kind | line 2 | 3 | 4 | 5-6 | 7-10 | 11-20 | 21+ | share on line 3 or later |
+|---|---|---|---|---|---|---|---|---|
+| add_option | 157 | 231 | 31 | 28 | 3 | 0 | 0 | 65% |
+| rename_field | 157 | 231 | 46 | 16 | 0 | 0 | 0 | 65% |
+| add_field | 181 | 266 | 50 | 22 | 0 | 1 | 0 | 65% |
+| rename_button | 228 | 13 | 18 | 17 | 41 | 106 | 27 | 49% |
+| remove_one | 72 | 13 | 7 | 36 | 106 | 143 | 73 | 84% |
+| setting_value | 164 | 119 | 44 | 86 | 19 | 16 | 2 | 64% |
+| sections | 0 | 27 | 57 | 127 | 114 | 58 | 67 | 100% |
+| reorder (the move is written on the block that moves less) | 0 | 7 | 24 | 61 | 89 | 178 | 91 | 100% |
+| add_stat | 0 | 45 | 88 | 117 | 116 | 48 | 106 | 100% |
+| add_chart | 0 | 1 | 26 | 79 | 158 | 132 | 124 | 100% |
+| add_list | 0 | 1 | 19 | 73 | 158 | 128 | 141 | 100% |
+| add_reminder | 0 | 273 | 107 | 131 | 9 | 0 | 0 | 100% |
+
+(rename_button is mostly app-title edits on line 1 or 2 by nature.) add_option, rename_field and add_field are held at 65% or more on line 3 or later by the selection (an early-line candidate is skipped while the late share would drop under 65%).
+
+"first", "top", "last", "bottom": first = before the first visible statement of the container (the app bar, declarations and reminders do not count); last = after the last visible statement. Programs whose first visible statement is a text line (title-like) are left out of "first". "none" rows (170) pass an exact predicate: a reorder is `none` only when the thing already is first or last in that sense, or sits directly above or below the other (contiguous lines); a number only when the setting already has that value; an option only when it is in the pick; a title only when it is the current title; an "add" request only when the exact described thing is present. Title rows are capped at 20% of the none rows (34), add-present rows are 24 to 51. All 170 were read.
+
+Wording (the authored cores are the hand-written skeletons; each request is a core, optionally with an opener and a closer, around names from the program): authored cores per pool, remove 99 (+12 with dependents), above 52, below 50, first 36, last 36, rename 72, title 33, rename_field 70, add_option 77 (+34 for a named place), setting_value 55 (+12 up/down), range 34, quick 25, time 30, timer 8, target 10, wrap 39, split 40, add_field 41, add_stat 40, add_chart 40, add_list 40, add_section 40, add_reminder 40; 30 openers, 19 neutral and 7 reason closers. Masked-wording diversity (names, quoted text and numbers masked, gen/c2_audit.mjs):
+
+| Kind | rows | distinct masked | top-5 share |
 |---|---|---|---|
-| remove_one | 304 | 250 | 554 |
-| reorder | 304 | 250 | 554 |
-| rename_button (buttons 271, titles 333, section labels 164, tab labels 42, form/topbar included in buttons) | 304 | 250 | 554 |
-| rename_field (with `was`) | 305 | 249 | 554 |
-| add_option | 378 | 176 | 554 |
-| setting_value (goal 254, range 202, time 48, quick 44, target 3, timer 3) | 305 | 249 | 554 |
-| sections (wrap 438, split 116) | 459 | 95 | 554 |
-| no_change (answer `none`, program untouched) | 65 | 55 | 120 |
-| Total | 2,424 | 1,574 | 3,998 |
+| add_chart | 520 | 520 | 1.0% |
+| add_stat | 520 | 520 | 1.0% |
+| add_list | 520 | 517 | 1.5% |
+| add_field | 520 | 512 | 2.1% |
+| add_reminder | 520 | 457 | 3.3% |
+| remove_one | 450 | 437 | 2.7% |
+| reorder | 450 | 446 | 2.0% |
+| rename_button | 450 | 401 | 3.8% |
+| rename_field | 450 | 415 | 3.8% |
+| setting_value | 450 | 396 | 4.0% |
+| sections | 450 | 445 | 2.2% |
+| add_option | 450 | 359 | 5.3% |
+| no_change | 170 | 167 | 4.7% |
 
-Long share 39.4%. The `none` answer is the DATA_SPEC form for "already satisfied"; gen/verify4.mjs now accepts it (answer `none` and program equal to program_before).
+Counting the bare core (before any opener or closer) the top-5 share is 3% to 10% (add_chart, add_stat, add_field and add_reminder sit near 10%, because they have 40 cores each). No test wording was read or copied; the added phrasings are general indirect, messy and role-based ways to say the same edit.
 
-Not met or weak: long programs have few sections edits (95 of 554; most already have sections); setting_value targets, timers and monthly reminders are rare (3, 3, 1) because few programs have a literal target or those lines; remove_one of a field takes dependents only when each is a simple line (61 rows, sub `field+dep`); no_change is 120 (3%) as specified, so it is the one kind under 400; 144 rows carry an injected typo (3.6%). Only 396 long bases exist (25 to 90 lines, English, not test programs), so the long rows reuse each base up to 4 times.
+Not met or weak: long share is 26.6% overall, not 35%: the 396 long bases allow at most 4 edits each (1,584) and the cap is kept. The five new kinds are at 36% long except add_field (16%, only 71 long bases have an unreferenced, nameable field) and add_reminder (2.5%, long programs hold few reminders). add_option is 9% long, sections 20% long. no_change is 170 rows (2.9%), so it is under 400 by design. setting_value targets, timers and monthly reminders are few. Multi-edit requests (two changes in one sentence) are not produced; multi-clause means a reason or politeness clause around one edit.

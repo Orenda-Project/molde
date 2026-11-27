@@ -17,3 +17,19 @@ I read the rows myself: request, answer (patch ops) and the program context. Rul
 Round 7 detail: add_option 0 of 10, remove_one 0, rename_button 0, rename_field 0, reorder 0, sections 0, setting_value 0, no_change 0. Rows from rounds 1 to 6 were regenerated, not patched, so the final file has no row from an earlier version.
 
 Judgement notes (read as acceptable, not counted as wrong): app titles that get " log" or " tracker" added are plain but fine; "change the form to New sale" renames the form's button; some section titles (History for a schedule list) fit loosely; text of a no_change title request repeats the current title exactly.
+
+
+## Revision 2 (after the critic's verdict)
+
+Seven new kinds of change and a wider wording set meant a new read. I read all 170 `none` rows (twice: before and after the last generator change), plus 10 rows per kind in rounds rv8, rv9, rv10 and rv11 (13 kinds, 130 rows per round), and checked 15 two-label `none` reorder rows against the programs by script (all adjacent).
+
+| Round | Found | Fix |
+|---|---|---|
+| rv8 | "my new the fixed charge", "New my price per unit" (article doubled before a setting name); "hte the train", "the the risk" (template plus "the" in the slot); "a issued field", "a outof field"; "at the end" for a stat inside a row; "oldest first first"; add-field Q "to reading" unclear | templates without "my/the/new {S}"; typo template dropped; a/an helper; position clauses inside a row say "at the end of the row"; no "first" clause; table named in full ("to the reading table") |
+| rv9 | field called `next` ("before the next field"); "hrses"; Drained added to a priority pick (wrong family); Weekend added to a morning/afternoon/evening pick | generic field names quoted in position clauses; plural only for table names of 4 letters or more; low/normal/high picks always use the priority family; family tie goes to the first family in the file |
+| rv10 | Weekend before Morning (family tie) | tie rule above |
+| rv11 (final) | 0 wrong, 0 unnatural in 130 rows | none |
+
+Rows were regenerated after every fix. The final file has no row from an earlier round.
+
+Judgement notes: a reason closer such as "it keeps confusing me" after an add request is avoided (add kinds only take neutral closers); a few section titles fit loosely; "a what field" reads oddly for a field named what.
