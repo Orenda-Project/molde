@@ -13,8 +13,25 @@ const lessons = 'app "Tutor" school ocean\ntable student name text, fee money\nt
 
 const cricket = 'app "Cricket" ball ocean\ntable ball runs num 0..6 = 0, wide bool, out bool\nsetting overs num = 20\n"Runs off this ball" head\ngrid 4 gap 1\n  each [0, 1, 2, 3, 4, 6]\n    button it tap add ball runs = it\n  button "Wide" tap add ball wide = yes\nbutton "Undo last ball" tap remove last(ball today)\n';
 const phone = 'app "Phone fund" coin mint\ntable gift amount money\nform gift\nrow gap 1\n  each [500, 1000, 2000, 5000]\n    button it grow tap add gift amount = it\nlist gift\n';
+const phoneReal = 'app "Phone fund" coin mint\ntable saved amount money, note text?\nsetting goal money = 60000 "Phone price"\nlet have = sum(saved.amount all)\nlet p = clamp(have / goal, 0, 1)\nrow gap 3\n  draw 56, 108 width 56\n    rect 8, 104 - 100 * p, 40, 100 * p fill good\n    rect 8, 4, 40, 100 stroke ink thick 2\n  stack grow\n    have big\n    "of" goal faint tap edit goal\n    round(p * 100) "% there" bold\nquick saved, amount, [500, 1000, 2000, 5000]\nform saved\nlist saved by day\n';
 
 void main() {
+  group('real Phone fund source (quick table, field, [list])', () {
+    test('lists Add and every preset', () {
+      expect(buttonLabelsShown(phoneReal), ['500', '1,000', '2,000', '5,000', 'Add']);
+      expect(buttonLabelsShown('app "x" a b\ntable t amount money\nquick t.amount 250 500\nform t\n'), ['250', '500', 'Add']);
+      expect(buttonLabelsShown('app "x" a b\ntable t amount money\nquick t.amount [250, 500]\nform t\n'), ['250', '500', 'Add']);
+    });
+    test('remove the 500 button / the Delete button', () {
+      final a = removeButtonPlan('remove the 500 button', phoneReal)!;
+      expect(a.edit, isNull);
+      expect(a.ask, contains('quick buttons'));
+      final d = removeButtonPlan('remove the Delete button', phoneReal)!;
+      expect(d.ask, contains('500'));
+      expect(d.ask, contains('5,000'));
+      expect(d.ask, contains('Add'));
+    });
+  });
   group('direct paths', () {
     test('remove a named button', () {
       final o = removeButtonPlan('remove the Paid button', lessons)!;

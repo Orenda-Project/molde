@@ -71,7 +71,7 @@ String _a(String word) { // "a" or "an" for the word that follows
 String aAn(String word) => '${_a(word)} $word';
 
 /// Every button on screen, read from the program: `button "X"` lines (also `button if(c, "A", "B")`), the quoted label of a form
-/// (an unlabelled form has the default "Add"), `quick t.f 250 500` preset buttons, and `button it` inside `each [500, 1000]`.
+/// (an unlabelled form has the default "Add"), `quick t.f 250 500`, `quick t, f, [500, 1000]` or `quick t.f [500, 1000]` preset buttons, and `button it` inside `each [500, 1000]`.
 /// kind: button (own line), form (the form's save button), preset (made from a list of amounts).
 List<({String label, String kind})> screenButtons(String source) {
   final out = <({String label, String kind})>[];
@@ -81,7 +81,7 @@ List<({String label, String kind})> screenButtons(String source) {
     final t = lines[i].trim();
     final fm = RegExp(r'^(?:form|topbar)\s+\w+\s*(?:,\s*"([^"]*)")?').firstMatch(t);
     if (fm != null) { out.add((label: fm.group(1) == null || fm.group(1)!.isEmpty ? 'Add' : fm.group(1)!, kind: 'form')); continue; }
-    final qm = RegExp(r'^quick\s+[\w.]+\s+(.+)$').firstMatch(t);
+    final qm = RegExp(r'^quick\s+\w+(?:\.\w+|\s*,\s*\w+)?\s*,?\s*(.+)$').firstMatch(t);
     if (qm != null) {
       for (final v in RegExp(r'"([^"]*)"|(-?\d+(?:\.\d+)?)').allMatches(qm.group(1)!)) { out.add((label: _fmtNum(v.group(1) ?? v.group(2)!), kind: 'preset')); }
       continue;
