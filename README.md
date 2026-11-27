@@ -81,14 +81,23 @@ Dataset v3 targets the first three problems; r3 and r4 were trained on it. A 2B 
 
 ### 1. Android app (easiest)
 
-1. Download the APK from the [v0.3.0 release](https://github.com/Orenda-Project/molde/releases/tag/v0.3.0):
-   - `molde-0.3.0-arm64-v8a-debug.apk` for a real phone (most Android phones from the last 6 years),
-   - `molde-0.3.0-x86_64-debug.apk` for the Android emulator on a PC.
-2. Install it (allow "install unknown apps" for your browser or file manager), or `adb install molde-0.3.0-arm64-v8a-debug.apk`.
-3. Open it. It downloads the model (241 MB) once from Hugging Face, then works fully offline. Without the model you can still open the example apps.
+**Current: [v0.6.6 pre-release](https://github.com/Orenda-Project/molde/releases/tag/v0.6.6).** It is a **debug build** (not signed for the Play Store), early research software, and the model is the main limit on quality.
+
+1. Download `molde-0.6.6-arm64-v8a-debug.apk` from the release page (real phones, most Android phones from the last 6 years). The emulator build is not attached; build it from branch `phase-5-app` if you need it.
+2. Install it (allow "install unknown apps" for your browser or file manager), or `adb install molde-0.6.6-arm64-v8a-debug.apk`.
+3. Open it. It downloads the default model, r3 Gemma 270M (241 MB), once from Hugging Face, then works fully offline. Without the model you can still open the example apps.
 4. Tap the chat button and describe an app, or pick an example and ask for a change.
 
-These are debug builds, not signed for the Play Store. A phone with 3 GB of memory or more is recommended.
+What works: creating a small app from a chat, changing it with Undo, your saved data surviving changes and restarts, the app saying plainly when it did not change anything, and a set of instant answers (remove a named button or field, rename, colours) that do not need the model.
+
+What does not work well yet:
+- New apps built **exactly right only about 35 to 37% of the time** (r3 Gemma 270M, new requests). Many are valid but miss part of what you asked.
+- Small changes: **14 of 40** in the shipped model's fixed test were done as asked.
+- Long create or change requests can time out; the app then says nothing was built.
+- **Speed on real phones is not measured yet.** On an emulator under load it was minutes per request.
+- Model quality is the main limit, not the app.
+
+A phone with 3 GB of memory or more is recommended. The older [v0.3.0 release](https://github.com/Orenda-Project/molde/releases/tag/v0.3.0) is still available.
 
 <img src="docs/images/app-download.png" width="240" alt="The app downloading the Molde model on first run">
 
