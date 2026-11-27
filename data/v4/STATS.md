@@ -111,3 +111,26 @@ Hand-written one program at a time into hand/a2-c-*.txt, built by gen/build_crea
 Direction change mid-run (Kamal): Roman Urdu stopped at 129 surviving rows (target 1,000 not met). Priority became English creates with many specifics, sensible calculators, English typo requests, richer apps. About 15% of written rows were dropped by the leak, duplicate and title-cap steps (short typo requests most).
 
 Not met: English specifics 76 of 1,200; sensible_calc 16 of 600; typo_en 6 of 200; rich_app 6 of 300. Do not run gen/snap41.py: it cuts STATS.md at the v4.1 snapshot heading and would delete the b2 and a2 sections.
+
+
+## c2 (computed edits on real programs; prefix c2-)
+
+Built by gen/c2_edits.mjs (parse the base with lang parse.mjs, propose edits, compute the after-program, gate) and gen/assemble_c2.mjs (lock, dedupe, leak rounds, append). Option families: gen/c2_families.mjs (241 families). Wording: gen/c2_words.mjs (more than 40 phrasings per kind; typos injected in template words only). English only. 3,998 rows from 1,044 base programs (the 396 long bases are long creates plus the "before" programs of existing long edits; the rest are short creates). Hand review: C2_REVIEW.md (7 rounds of 80 rows, final round 0 wrong).
+
+Checks: verify4 uncached 3,998 / 3,998 (patch round-trip, data-safety diff, tokens max 726, CLI check and format sample clean); leak_check 0 leaks; at most 4 edits per base and 2 of one kind; only the intended lines change (patch ops checked against the touched set, reorder checked as a permutation); each template used 7 to 24 times within its pool (min and max within 1 of each other).
+
+| Class | Short | Long | Total |
+|---|---|---|---|
+| remove_one | 304 | 250 | 554 |
+| reorder | 304 | 250 | 554 |
+| rename_button (buttons 271, titles 333, section labels 164, tab labels 42, form/topbar included in buttons) | 304 | 250 | 554 |
+| rename_field (with `was`) | 305 | 249 | 554 |
+| add_option | 378 | 176 | 554 |
+| setting_value (goal 254, range 202, time 48, quick 44, target 3, timer 3) | 305 | 249 | 554 |
+| sections (wrap 438, split 116) | 459 | 95 | 554 |
+| no_change (answer `none`, program untouched) | 65 | 55 | 120 |
+| Total | 2,424 | 1,574 | 3,998 |
+
+Long share 39.4%. The `none` answer is the DATA_SPEC form for "already satisfied"; gen/verify4.mjs now accepts it (answer `none` and program equal to program_before).
+
+Not met or weak: long programs have few sections edits (95 of 554; most already have sections); setting_value targets, timers and monthly reminders are rare (3, 3, 1) because few programs have a literal target or those lines; remove_one of a field takes dependents only when each is a simple line (61 rows, sub `field+dep`); no_change is 120 (3%) as specified, so it is the one kind under 400; 144 rows carry an injected typo (3.6%). Only 396 long bases exist (25 to 90 lines, English, not test programs), so the long rows reuse each base up to 4 times.

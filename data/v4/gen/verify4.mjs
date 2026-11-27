@@ -18,14 +18,15 @@ for (const r of rows) {
     const v = verify(r.program, r.program_before && !(r.meta.ask_target) ? [r.program_before] : null); const vb = r.program_before ? verify(r.program_before) : { ok: true };
     if (!v.ok || !vb.ok) { res.check_eval_fail++; bad = (v.why || vb.why); }
     else if (tm.get(r.program) > (r.meta.long ? 900 : 500) || (r.program_before && tm.get(r.program_before) > (r.meta.long ? 900 : 500))) { res.tokens_over++; bad = 'tokens'; }
-    else if (r.task === 'edit' && !r.meta.ask_target) {
+    else if (r.task === 'edit' && !r.meta.ask_target && !(r.answer || '').startsWith('none')) {
       const d = diff([r.program_before], r.program);
       if (d.verdict === 'refused') { res.diff_refused++; bad = 'diff refused'; }
       else if (r.program_before === r.program) { res.edit_before_equals_after++; bad = 'no-op edit'; }
       const k = sha(r.program_before + '\0' + r.program + '\0' + norm(r.request)); if (seenEdit.has(k)) { res.dup_edit_pair++; bad = bad || 'dup edit pair'; } seenEdit.add(k);
     }
     if (r.task === 'edit') {
-      if (r.meta.ask_target || /^ask /.test(r.answer || '')) { if (r.answer.trim() !== r.program.trim()) { res.ask_changed_program++; bad = bad || 'ask answer differs from ask line'; } }
+      if ((r.answer || '').trim() === 'none') { if (r.program !== r.program_before) { res.patch_mismatch++; bad = bad || 'none answer but program changed'; } }
+      else if (r.meta.ask_target || /^ask /.test(r.answer || '')) { if (r.answer.trim() !== r.program.trim()) { res.ask_changed_program++; bad = bad || 'ask answer differs from ask line'; } }
       else { let ok = false; try { ok = applyOps(r.program_before, r.answer) === r.program; } catch (e) {} if (!ok) { res.patch_mismatch++; bad = bad || 'patch round-trip'; } }
     }
     if (r.plan) { const p = parsePlan(r.plan); const m = p ? coverage(p, r.program) : ['unparsable']; if (m.length) { res.plan_miss++; bad = bad || 'plan not covered: ' + m.join(','); } }
