@@ -180,3 +180,32 @@ Wording (the authored cores are the hand-written skeletons; each request is a co
 Counting the bare core (before any opener or closer) the top-5 share is 3% to 10% (add_chart, add_stat, add_field and add_reminder sit near 10%, because they have 40 cores each). No test wording was read or copied; the added phrasings are general indirect, messy and role-based ways to say the same edit.
 
 Not met or weak: long share is 26.6% overall, not 35%: the 396 long bases allow at most 4 edits each (1,584) and the cap is kept. The five new kinds are at 36% long except add_field (16%, only 71 long bases have an unreferenced, nameable field) and add_reminder (2.5%, long programs hold few reminders). add_option is 9% long, sections 20% long. no_change is 170 rows (2.9%), so it is under 400 by design. setting_value targets, timers and monthly reminders are few. Multi-edit requests (two changes in one sentence) are not produced; multi-clause means a reason or politeness clause around one edit.
+
+
+### c2 revision 3 (critic round 2)
+
+Regenerated only add_field, add_chart, add_list (new wording) and add_option, rename_field (position spread); every other row is kept as it was. The two ambiguous rows (c2-e-908ad5545f, c2-e-d3d4c6a94f) and the 15 `none` rows whose "add" wording belonged to the three rewritten kinds were dropped. v4.1.jsonl holds 5,815 c2 rows (revision 2 had 5,920). Gates on all 5,815: verify4 uncached 5,815 / 5,815, leak_check 0, at most 4 edits per base and 2 per kind. `out/newc2_ok.jsonl` has the 4,325 rows of every kind except add_field, add_chart, add_list (`out/newc2_ok_first.jsonl` is the 4,343-row file handed out first; it differs only in the old add_option and rename_field rows).
+
+| Kind | Short | Long | Total |
+|---|---|---|---|
+| add_field | 375 | 75 | 450 |
+| add_chart | 365 | 155 | 520 |
+| add_list (lists, and sections holding anything) | 360 | 160 | 520 |
+| add_option | 369 | 63 | 432 |
+| rename_field | 312 | 138 | 450 |
+| no_change | 97 | 56 | 153 |
+| other kinds unchanged | | | remove_one 450, reorder 450, rename_button 450, setting_value 450, sections 450, add_stat 520, add_reminder 520 |
+
+add_field now reads as a person would say it: the type is given by meaning ("a number of nights, at least one", "a yes or no for sent", "one of Catering, Decor or Other for the kind", "some text for the note, but it is optional"), ranges and units in spoken form, no type tokens, no colons. The line is still determined: the description is rebuilt from name, type, optional, range, default, label and unit, and the row is skipped if the rebuilt line differs. 450 of 520 fields could be described that way. add_chart and add_list have 63 and 64 authored cores (add_section, for a section holding a described thing, has 32 more) written around what the user wants to see (bars of how much was spent each day over the past week, the latest entries first, grouped by day); the section form has 10 different wrappers; filler tails that recurred across kinds were removed (closers are now a short neutral set plus a few per kind that fit it).
+
+Position spread (target of the first operation, by table order in the program and by field order in its table):
+
+| Kind | rows with a table | 1st table | 2nd | 3rd or later | 1st field | 2nd | 3rd | 4th or later |
+|---|---|---|---|---|---|---|---|---|
+| rename_field | 450 | 162 (36%) | 170 (38%) | 118 (26%) | 134 | 226 | 67 | 23 |
+| add_option (pick in a table; 84 more rows are state or setting picks) | 348 | 153 (44%) | 161 (46%) | 34 (10%) | 52 | 134 | 132 | 30 |
+| add_field | 450 | 174 (39%) | 202 (45%) | 74 (16%) | 101 | 213 | 102 | 34 |
+
+Among programs with 3 or more tables: rename_field 118 of 213 rows on the 3rd or later table (55%), add_option 34 of 48 (71%), add_field 74 of 154 (48%). Before: first two tables held 87% of add_option and rename_field rows; now rename_field 74% and add_option 90% (only 48 add_option rows come from programs with 3+ tables that hold a pick in a later table, so the data cannot give more).
+
+Masked-wording top-5 share: add_field 1.1%, add_chart 1.0%, add_list 1.2%, add_option 4.9%, rename_field 3.6%, no_change 5.2%. Long share: add_chart 30%, add_list 31%, add_field 17% (below 35%: the unchanged kinds keep their rows and the 4-edits-per-base cap leaves less room for long rows).

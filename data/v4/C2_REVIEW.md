@@ -33,3 +33,17 @@ Seven new kinds of change and a wider wording set meant a new read. I read all 1
 Rows were regenerated after every fix. The final file has no row from an earlier round.
 
 Judgement notes: a reason closer such as "it keeps confusing me" after an add request is avoided (add kinds only take neutral closers); a few section titles fit loosely; "a what field" reads oddly for a field named what.
+
+
+## Revision 3 (critic round 2): add_field, add_chart, add_list, position spread
+
+I read 15 rows each of add_field, add_chart and add_list in five rounds (seeds 31, 77, 101 and two more), plus 6 rows each of add_option and rename_field.
+
+| Round | Found | Fix |
+|---|---|---|
+| 1 | "how much money the amount is", "the note as a few words", "advance entry entries", "an amount of money for the paid"; "how how much", "chart a bar chart", "draw a block titled"; "when there is nothing yet available", "let me look at ... each time i open the app" (tail clashes with the position phrase) | money and text phrasings rewritten; table phrase for names ending in entry; "chart/plot/draw" cores dropped for section wording and sections get their own 32 cores; cores that end in a clause that collides with the position or empty-message phrase removed |
+| 2 | "enter pick one of ...", "a short what" | pick phrased as "a choice of / one of ... for the X"; generic names such as what, who, why quoted |
+| 3 | "i want my data as how how ...", "how about how ..." | those cores dropped; the "how ..." variant of the bar-chart description is not prefixed again |
+| 4 (final) | add_field 0 unnatural of 15; add_chart 1 stilted ("i want to track visually a trend line"); add_list 1 redundant ("add something that lists a list of ...") | kept (within one in 15) |
+
+Rows were regenerated after each fix. The kept kinds were not touched.
