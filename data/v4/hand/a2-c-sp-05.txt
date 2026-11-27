@@ -1,0 +1,319 @@
+@create class=sensible_calc style=calc
+how much tip should i leave
+plan: # need: field bill, setting tip
+---
+app "Tip" calc teal
+state bill money = 0
+state people num = 1
+setting tip num 0..50 = 15 "Tip (%)"
+field bill "Bill amount"
+field people "People"
+"Tip" round(bill * tip) / 100 big
+"Total" round(bill * (100 + tip)) / 100 head
+"Each pays" round(bill * (100 + tip) / people) / 100 head
+===
+@create class=sensible_calc style=calc
+loan monthly payment calculator
+plan: # need: field amount, field rate, field months
+---
+app "Loan payment" calc blue
+state amount money = 10000
+state rate num = 10
+state months num = 24
+field amount "Loan amount"
+field rate "Yearly interest (%)"
+field months "Months"
+let r = rate / 1200
+let pay = if(r = 0, amount / months, amount * r / (1 - pow(1 + r, 0 - months)))
+"Monthly payment" round(pay * 100) / 100 big
+"Total paid" round(pay * months * 100) / 100 head
+"Interest paid" round((pay * months - amount) * 100) / 100 head
+===
+@create class=sensible_calc style=calc
+bmi calculator
+plan: # need: field weight, field height
+---
+app "BMI" scale green
+state kg num = 70
+state cm num = 170
+field kg "Weight (kg)"
+field cm "Height (cm)"
+let bmi = kg / pow(cm / 100, 2)
+"BMI" round(bmi * 10) / 10 big
+if bmi < 18.5
+  "Underweight" head color warn
+else
+  if bmi < 25
+    "Healthy range" head color good
+  else
+    "Above healthy range" head color warn
+===
+@create class=sensible_calc style=calc
+average of my test scores
+plan: # need: field score, average, list
+---
+app "Score average" pen ocean
+table test name text, score num 0..100
+stat round(avg(test.score) * 10) / 10, "average score"
+"Highest" max(test.score) faint
+"Lowest" min(test.score) faint
+form test, "Add score"
+list test
+===
+@create class=sensible_calc style=calc
+discount calculator with original price and percent off
+plan: # need: field price, field discount
+---
+app "Discount" tag red
+state price money = 100
+state off num = 20
+field price "Original price"
+field off "Discount (%)"
+"You pay" round(price * (100 - off)) / 100 big
+"You save" round(price * off) / 100 head color good
+===
+@create class=sensible_calc style=calc
+fuel cost for a trip, distance, car mileage and petrol price
+plan: # need: field distance, field mileage, field price
+---
+app "Trip fuel" car orange
+state km num = 100
+state kmpl num = 12
+state price money = 270
+field km "Distance (km)"
+field kmpl "Car mileage (km per litre)"
+field price "Petrol price per litre"
+"Litres needed" round(km / kmpl * 10) / 10 big
+"Fuel cost" round(km / kmpl * price) head
+===
+@create class=sensible_calc style=calc
+split a restaurant bill evenly with tax
+plan: # need: field bill, field tax, field people
+---
+app "Bill split" cup yellow
+state bill money = 0
+state tax num = 8
+state people num = 2
+field bill "Bill before tax"
+field tax "Tax (%)"
+field people "People"
+"Total with tax" round(bill * (100 + tax)) / 100 head
+"Each person pays" round(bill * (100 + tax) / people) / 100 big
+===
+@create class=sensible_calc style=calc
+days between two dates
+plan: # need: field date
+---
+app "Days between" calendar blue
+state from_d date = today
+state to_d date = today
+field from_d "From"
+field to_d "To"
+"Days" abs(to_d - from_d) big
+"Weeks" floor(abs(to_d - from_d) / 7) "and" abs(to_d - from_d) % 7 "days" head
+===
+@create class=sensible_calc style=calc
+how many hours did i work this week and what is my pay at 12 an hour
+plan: # need: field hours, setting rate, total week
+---
+app "Work pay" clock green
+table shift hours num 0.25..16
+setting rate money = 12 "Hourly pay"
+stat sum(shift.hours week), "hours this week"
+stat sum(shift.hours week) * rate, "pay this week"
+form shift, "Add shift"
+list shift week by day
+===
+@create class=sensible_calc style=calc
+savings growth with monthly deposit and yearly interest over 5 years
+plan: # need: field deposit, field rate
+---
+app "Savings growth" coin teal
+state dep money = 200
+state rate num = 6
+field dep "Monthly deposit"
+field rate "Yearly interest (%)"
+let m = rate / 1200
+let n = 60
+let fv = if(m = 0, dep * n, dep * (pow(1 + m, n) - 1) / m)
+"After 5 years" round(fv) big
+"You put in" dep * n head
+"Interest earned" round(fv - dep * n) head color good
+===
+@create class=sensible_calc style=calc
+grade needed on the final exam to get 80 overall if the final counts 40 percent
+plan: # need: field grade, field weight, setting target
+---
+app "Final needed" pen purple
+state current num = 75
+setting target num 0..100 = 80 "Target overall"
+setting weight num 1..99 = 40 "Final counts (%)"
+field current "Current grade (%)"
+let need = (target - current * (100 - weight) / 100) * 100 / weight
+"You need" round(need * 10) / 10 "%" big
+if need > 100
+  "Not possible with this grade" color bad
+===
+@create class=sensible_calc style=calc
+temperature converter celsius to fahrenheit
+plan: # need: field celsius
+---
+app "Temperature" sun orange
+state c num = 20
+field c "Celsius"
+"Fahrenheit" round(c * 9 / 5 + 32) big
+slider c -20..50
+===
+@create class=typo_en style=typos
+expence tracker
+plan: # need: field amount, total month, list
+---
+app "Expenses" wallet teal
+table expense note text, amount money
+stat sum(expense.amount month), "this month"
+form expense, "Add expense"
+list expense by day
+===
+@create class=typo_en style=typos
+tod list
+plan: # need: field task, tick, list
+---
+app "To do" check mint
+table task name text, done bool
+form task, "Add task"
+each task sort done as t empty "Nothing to do."
+  row card gap 2 swipe remove t
+    toggle t.done
+    t.name grow
+===
+@create class=typo_en style=typos
+watter remindr
+plan: # need: reminder, total today
+---
+app "Water reminder" drop blue
+table glass
+remind "Drink some water" every 2h from 8:00 to 22:00
+count(glass today) "glasses today" big
+button "Drank" tap add glass
+===
+@create class=typo_en style=typos
+habbit streek
+plan: # need: tick, streak
+---
+app "Habit streak" flame orange
+table did
+toggle did today
+"Streak" streak(did) "days" big
+"Best" best(did) "days" faint
+===
+@create class=typo_en style=typos
+budjet
+plan: # need: field amount, setting budget, goal
+---
+app "Budget" wallet green
+table spend what text, amount money
+setting budget money = 1000 "Monthly budget"
+goal sum(spend.amount month), budget, "spent"
+form spend, "Add"
+list spend month by day
+===
+@create class=typo_en style=typos
+calender of events
+plan: # need: field event, field date, list
+---
+app "Events" calendar blue
+table event name text, on date = today
+each event where on >= today sort on as e empty "No events."
+  row card gap 2 tap edit e swipe remove e
+    e.name bold grow
+    e.on faint
+form event, "Add event"
+===
+@create class=typo_en style=typos
+shoping list
+plan: # need: field item, tick, list
+---
+app "Shopping" cart orange
+table item name text, got bool
+form item, "Add item"
+each item sort got as i
+  row gap 2 swipe remove i
+    toggle i.got
+    i.name grow
+===
+@create class=typo_en style=typos
+weigt log
+plan: # need: field weight, chart, list
+---
+app "Weight" scale purple
+table weigh kg num 20..250 unit "kg"
+trend weigh sort at, it.kg
+form weigh, "Add weight"
+list weigh by day
+===
+@create class=typo_en style=typos
+counter
+plan: # need: total
+---
+app "Counter" star blue
+table tap
+count(tap) huge align center
+button "+1" tap add tap
+button "Undo" tap remove last(tap)
+===
+@create class=typo_en style=typos
+timmer 10 min
+plan: # need: timer
+---
+app "10 minutes" timer red
+timer 10m, "Ten minutes"
+===
+@create class=typo_en style=typos
+notes
+plan: # need: field note, list
+---
+app "Notes" note yellow
+table note title text, body long
+topbar note, "New note"
+each note as n empty "No notes yet."
+  stack card gap 0 tap edit n swipe remove n
+    n.title bold
+    n.body faint
+===
+@create class=typo_en style=typos
+mood
+plan: # need: option happy/ok/sad, list
+---
+app "Mood" smile pink
+table mood how pick Happy|Ok|Sad = Ok
+form mood, "Save mood"
+list mood by day
+===
+@create class=typo_en style=typos
+sleap tracer
+plan: # need: field hours, chart
+---
+app "Sleep" bed plum
+table sleep hours num 0..16 unit "h"
+daybars last 7 days, sum(sleep.hours on it)
+form sleep, "Add sleep"
+===
+@create class=typo_en style=typos
+birthdays
+plan: # need: field name, field date, reminder
+---
+app "Birthdays" gift pink
+table person name text, birthday date
+remind "Birthday today" at person.birthday at 9:00
+topbar person, "Add birthday"
+list person
+===
+@create class=typo_en style=typos
+steps
+plan: # need: field steps, goal
+---
+app "Steps" walk green
+table walk steps num 0..60000
+setting goal num 1000..40000 = 8000 "Daily steps"
+goal sum(walk.steps today), goal, "steps today"
+form walk, "Add steps"

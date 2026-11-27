@@ -1,0 +1,306 @@
+@create class=keep_specifics style=specifics
+a small shop till: item name, price, quantity sold, daily total, number of sales today and a chart of the last 7 days
+plan: # need: field item, field price, field qty, total today, chart
+---
+app "Shop till" bag orange
+table sale item text, price money, qty num 1..100 = 1
+row gap 2
+  statcard sum(sale today, it.price * it.qty), "sold today"
+  statcard count(sale today), "sales today"
+daybars last 7 days, sum(sale on it, it.price * it.qty)
+form sale, "Add sale"
+list sale today
+===
+@create class=keep_specifics style=specifics
+class attendance: student names, present tick for today, total present, percentage this month
+plan: # need: field student, tick, total today, month
+---
+app "Class attendance" users blue
+table student name text
+table here student ref student
+statcard count(student, count(it.here today) > 0), "present today of" count(student), count(student)
+each student sort name as s empty "No students yet."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.here
+    s.name bold grow
+    round(count(s.here month) * 100 / max(count(days month, it <= today), 1)) "% this month" faint
+form student, "Add student"
+===
+@create class=keep_specifics style=specifics
+monthly bills checklist: bill name, amount, due day of month, paid tick, total due and a reminder 3 days before
+plan: # need: field bill, field amount, field due, tick, total, reminder
+---
+app "Monthly bills" home slate
+table bill name text, amount money, due date, paid bool
+remind "A bill is due in 3 days" at bill.due - 3d at 9:00
+statcard sum(bill.amount where paid = no), "still to pay of" sum(bill.amount)
+each bill sort due as b empty "No bills yet."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.paid
+    stack grow gap 0
+      b.name bold
+      "due" b.due faint
+    b.amount bold
+form bill, "Add bill"
+===
+@create class=keep_specifics style=specifics
+a habit tracker for meditation: minutes per session, a daily goal of 10 minutes, streak, and a heat map of the last 12 weeks
+plan: # need: field minutes, goal, streak, chart
+---
+app "Meditation" smile teal
+table sit mins num 1..180 = 10
+setting goal num 1..120 = 10 "Daily minutes"
+goal sum(sit.mins today), goal, "minutes today", "min"
+quick sit, mins, [5, 10, 20]
+row gap 2
+  statcard streak(sit), "day streak"
+  statcard best(sit), "best streak"
+heat last 84 days, sum(sit.mins on it), goal
+===
+@create class=keep_specifics style=specifics
+a loan tracker: who I lent to, amount, date lent, returned tick, total still out
+plan: # need: field who, field amount, field date, tick, total
+---
+app "Lent money" wallet plum
+table loan who text, amount money, lent date = today, back bool
+"Still out" sum(loan.amount where back = no) big
+each loan sort back as l empty "No loans."
+  row card gap 2 tap edit l swipe remove l
+    toggle l.back
+    stack grow gap 0
+      l.who bold
+      "lent" l.lent faint
+    l.amount bold
+form loan, "Add loan"
+===
+@create class=keep_specifics style=specifics
+daily steps log with steps, a goal of 10000, weekly average, a bar chart and best day
+plan: # need: field steps, goal, total, chart
+---
+app "Steps" walk green
+table walk steps num 0..80000
+setting goal num 1000..50000 = 10000 "Daily steps"
+goal sum(walk.steps today), goal, "steps today"
+stat round(sum(walk.steps last 7 days) / 7), "steps a day this week"
+goalbars last 7 days, sum(walk.steps on it), goal
+"Best day" max(days last 30 days, sum(walk.steps on it)) "steps" faint
+form walk, "Add steps"
+===
+@create class=keep_specifics style=specifics
+simple crm: contact name, phone, company, stage lead or client or lost, and notes
+plan: # need: field name, field phone, field company, option lead/client/lost, field notes
+---
+app "Contacts" users slate
+table contact name text, phone text, company text?, stage pick Lead|Client|Lost = Lead, notes long?
+state f pick All|Lead|Client|Lost = All
+choice f
+each contact where f = All or stage = f sort name as c empty "No contacts."
+  stack card gap 0 tap edit c swipe remove c
+    row
+      c.name bold grow
+      c.stage faint
+    c.company faint
+    c.phone faint
+form contact, "Add contact"
+===
+@create class=keep_specifics style=specifics
+daily calorie counter: food, calories, meal type breakfast lunch dinner snack, a limit of 2000 and calories left
+plan: # need: field food, field calories, option breakfast/lunch/dinner/snack, setting limit, total today
+---
+app "Calories" flame orange
+table food name text, kcal num 0..3000, meal pick Breakfast|Lunch|Dinner|Snack = Lunch
+setting limit num 800..5000 = 2000 "Daily limit"
+"Left today" limit - sum(food.kcal today) big color if(sum(food.kcal today) > limit, bad, good)
+each options food.meal as m
+  row gap 2
+    m grow
+    sum(food.kcal today where meal = m) "kcal" bold
+form food, "Add food"
+list food today
+===
+@create class=keep_specifics style=specifics
+babysitter hours: child, hours, hourly rate 8, total owed this week and a paid tick
+plan: # need: field child, field hours, setting rate, total week, tick
+---
+app "Babysitting" smile pink
+table sit child text, hours num 0.5..16, paid bool
+setting rate money = 8 "Hourly rate"
+"Owed this week" sum(sit.hours week where paid = no) * rate big
+each sit week as s empty "No sitting this week."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.paid
+    s.child bold grow
+    s.hours "h" faint
+    s.hours * rate bold
+form sit, "Add hours"
+===
+@create class=keep_specifics style=specifics
+trip packing list with item, category clothes or tech or toiletries, packed tick and how many items are still unpacked
+plan: # need: field item, option clothes/tech/toiletries, tick, total
+---
+app "Packing" bag blue
+table pack item text, kind pick Clothes|Tech|Toiletries = Clothes, packed bool
+statcard count(pack where packed = no), "still to pack of" count(pack), count(pack)
+each options pack.kind as k
+  section k, count(pack where kind = k and packed = no) "left"
+    each pack where kind = k as p empty "Nothing here."
+      row gap 2 swipe remove p
+        toggle p.packed
+        p.item grow
+form pack, "Add item"
+===
+@create class=keep_specifics style=specifics
+a time sheet with project, hours, date, hourly rate 40, total hours and earnings per project
+plan: # need: field project, field hours, field date, setting rate, total
+---
+app "Time sheet" clock blue
+table entry project text, hours num 0.25..24, on date = today
+setting rate money = 40 "Hourly rate"
+statcard sum(entry.hours), "hours,"  sum(entry.hours) * rate "earned"
+each entry by project as g
+  row card gap 2
+    g.key bold grow
+    sum(g.hours) "h" faint
+    sum(g.hours) * rate bold
+form entry, "Log time"
+list entry by day
+===
+@create class=keep_specifics style=specifics
+a quiz score keeper: player names, score per round, total per player and who is leading
+plan: # need: field player, field pts, total
+---
+app "Quiz scores" trophy yellow
+table player name text
+table round player ref player, pts num 0..100
+if count(player) > 0
+  "Leading:" nth(player sort sum(it.round.pts) desc, 1).name head
+each player sort sum(it.round.pts) desc as p empty "Add players."
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    sum(p.round.pts) bold
+    button "+10" tap add round player = p, pts = 10
+form player, "Add player"
+===
+@create class=keep_specifics style=specifics
+vehicle service log with date, odometer, what was done, cost, and a reminder every 6 months
+plan: # need: field date, field odometer, field done, field cost, reminder
+---
+app "Service log" car slate
+table service on date = today, odometer num 0.., done text, cost money
+remind "Service is due" monthly on 1 at 9:00 if since(service) > 180
+"Days since service" since(service) big
+"Total spent" sum(service.cost) head
+form service, "Add service"
+list service by day
+===
+@create class=keep_specifics style=specifics
+reading speed log: book, pages read, minutes, pages per hour calculated, and total this month
+plan: # need: field book, field pages, field mins, total month
+---
+app "Reading speed" book purple
+table session book text, pages num 1..500, mins num 1..600
+stat sum(session.pages month), "pages this month"
+each session top 10 as s empty "No sessions."
+  row card gap 2 tap edit s swipe remove s
+    s.book bold grow
+    round(s.pages * 60 / s.mins) "pages/hour" faint
+form session, "Log session"
+===
+@create class=keep_specifics style=specifics
+wedding guest list: name, side, rsvp yes no or maybe, plus ones, total headcount confirmed
+plan: # need: field name, option yes/no/maybe, field plus, total
+---
+app "Guests" users pink
+table guest name text, rsvp pick Yes|No|Maybe = Maybe, plus num 0..5 = 0
+statcard sum(guest.plus where rsvp = Yes) + count(guest where rsvp = Yes), "confirmed heads"
+each guest sort name as g empty "No guests yet."
+  row card gap 2 tap edit g swipe remove g
+    g.name bold grow
+    "+" g.plus faint
+    choice g.rsvp
+form guest, "Add guest"
+===
+@create class=keep_specifics style=specifics
+a coffee log with type espresso latte or filter, cups, cost, a limit of 3 cups a day and a weekly chart
+plan: # need: option espresso/latte/filter, field cost, goal, chart
+---
+app "Coffee" cup orange
+table coffee kind pick Espresso|Latte|Filter = Latte, cost money
+setting limit num 1..12 = 3 "Cups per day"
+goal count(coffee today), limit, "cups today"
+daybars last 7 days, count(coffee on it)
+"Spent this week" sum(coffee.cost week) head
+form coffee, "Add cup"
+===
+@create class=keep_specifics style=specifics
+kids chore chart: names mia and leo, chores, points per chore, total points per child and a weekly reset button
+plan: # need: option mia/leo, field chore, field points, total, quick buttons
+---
+app "Chore chart" star yellow
+table done child pick Mia|Leo = Mia, chore text, pts num 1..20 = 2
+each options done.child as c
+  row card gap 2
+    c bold grow
+    sum(done.pts week where child = c) "points" bold
+form done, "Chore done"
+list done week by day
+button "Reset the week" tap remove all done week
+===
+@create class=keep_specifics style=specifics
+a stock watchlist: ticker, buy price, current price, shares and profit or loss per holding with total
+plan: # need: field ticker, field buy, field price, field shares, total
+---
+app "Holdings" chart green
+table hold ticker text, buy money, price money, shares num 1..100000
+let pl(h hold) = (h.price - h.buy) * h.shares
+"Total profit or loss" sum(hold, pl(it)) big color if(sum(hold, pl(it)) >= 0, good, bad)
+each hold sort ticker as h empty "No holdings."
+  row card gap 2 tap edit h swipe remove h
+    h.ticker bold grow
+    h.shares "shares" faint
+    pl(h) bold color if(pl(h) >= 0, good, bad)
+form hold, "Add holding"
+===
+@create class=keep_specifics style=specifics
+a pomodoro counter: 25 minute timer, count of finished pomodoros today, a goal of 6 and a weekly chart
+plan: # need: timer, goal, chart
+---
+app "Pomodoro" timer red
+table pomo
+setting goal num 1..20 = 6 "Pomodoros per day"
+timer 25m, "Focus", add pomo then notify "Take a break"
+goal count(pomo today), goal, "pomodoros today"
+daybars last 7 days, count(pomo on it)
+===
+@create class=keep_specifics style=specifics
+inventory for a bakery: product, stock count, minimum level, restock reminder when below minimum and a button to sell one
+plan: # need: field product, field stock, field minimum, reminder, quick buttons
+---
+app "Bakery stock" cup orange
+table product name text, stock num 0.., minimum num 0.. = 5
+remind "Some products are below minimum" at 8:00 if count(product where stock < minimum) > 0
+statcard count(product where stock < minimum), "below minimum"
+each product sort name as p empty "No products."
+  row card gap 2 tap edit p swipe remove p fill if(p.stock < p.minimum, soft, surface)
+    stack grow gap 0
+      p.name bold
+      "min" p.minimum faint
+    p.stock bold
+    button "Sell 1" tap set p.stock = p.stock - 1
+form product, "Add product"
+===
+@create class=keep_specifics style=specifics
+a dev standup notes tool: date, yesterday, today, blockers and a count of days with blockers
+plan: # need: field yesterday, field today_plan, field blockers, total
+---
+app "Standup" note slate
+table note yesterday long, today_plan long, blockers long?
+"Days with blockers" count(note where len(blockers) > 0) big
+form note, "Add standup"
+each note as n empty "No notes."
+  stack card gap 1 tap edit n swipe remove n
+    n.at faint
+    n.yesterday
+    n.today_plan
+    if len(n.blockers) > 0
+      "Blocked:" n.blockers color bad

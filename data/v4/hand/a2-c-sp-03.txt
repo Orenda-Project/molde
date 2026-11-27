@@ -1,0 +1,286 @@
+@create class=keep_specifics style=specifics
+an api latency log: endpoint name, milliseconds, status code, a warning when the average is over 300 ms and a trend chart
+plan: # need: field endpoint, field ms, field status, average, chart
+---
+app "API latency" bolt slate
+table call endpoint text, ms num 1..60000 unit "ms", status num 100..599 = 200
+if count(call) > 0 and avg(call.ms) > 300
+  "Average latency is over 300 ms" bold color bad
+stat round(avg(call.ms)), "ms average"
+trend call sort at top 30, it.ms
+each call where status >= 400 top 5 as c empty "No failed calls."
+  row card gap 2 swipe remove c
+    c.endpoint bold grow
+    c.status color bad
+form call, "Add call"
+===
+@create class=keep_specifics style=specifics
+deploy log with service name, version, environment staging or production, success tick and number of failed deploys this month
+plan: # need: field service, field version, option staging/production, tick, total month
+---
+app "Deploys" package slate
+table deploy service text, version text, env pick Staging|Production = Staging, ok bool = yes
+statcard count(deploy month where ok = no), "failed this month of" count(deploy month)
+each deploy top 15 as d empty "No deploys yet."
+  row card gap 2 tap edit d swipe remove d
+    stack grow gap 0
+      d.service bold
+      d.version d.env faint
+    toggle d.ok
+form deploy, "Log deploy"
+===
+@create class=keep_specifics style=specifics
+a cash float for my market stall: opening cash, sales, expenses, closing cash worked out, and the profit for the day
+plan: # need: field opening, field sales, field expenses, list
+---
+app "Stall float" cart green
+table day_row opening money, sales money, expenses money
+let closing(d day_row) = d.opening + d.sales - d.expenses
+let profit(d day_row) = d.sales - d.expenses
+each day_row top 14 as d empty "No days yet."
+  stack card gap 1 tap edit d swipe remove d
+    d.at faint
+    row
+      "Closing cash" grow
+      closing(d) bold
+    row
+      "Profit" grow
+      profit(d) bold color if(profit(d) >= 0, good, bad)
+form day_row, "Add day"
+===
+@create class=keep_specifics style=specifics
+homework planner: subject, task, due date, done tick, show overdue tasks in red and count what is left this week
+plan: # need: field subject, field task, field due, tick, total
+---
+app "Homework" pen blue
+table hw subject text, task text, due date = today, done bool
+statcard count(hw where done = no and due >= today and due <= today + 7), "tasks left in the next 7 days"
+each hw where done = no sort due as h empty "No homework left."
+  row card gap 2 tap edit h swipe remove h
+    toggle h.done
+    stack grow gap 0
+      h.task bold
+      h.subject faint
+    h.due color if(h.due < today, bad, muted)
+form hw, "Add homework"
+===
+@create class=keep_specifics style=specifics
+weight and waist tracker: weight kg, waist cm, a goal weight of 72, how many kg to go and a chart of weight
+plan: # need: field weight, field waist, setting goal, chart, total
+---
+app "Body tracker" scale purple
+table check kg num 30..250 unit "kg", waist num 40..200 unit "cm"
+setting goal_kg num 30..250 = 72 "Goal weight (kg)"
+let now_kg = last(check.kg)
+if count(check) > 0
+  "To go" max(now_kg - goal_kg, 0) "kg" big
+  "Waist" last(check.waist) "cm" faint
+trend check sort at, it.kg
+form check, "Add check"
+===
+@create class=keep_specifics style=specifics
+household chores rota with chore, who does it ali or sara, day of week, and a done tick that resets each week
+plan: # need: field chore, option ali/sara, option mon/tue/wed/thu/fri/sat/sun, tick
+---
+app "Chores rota" home mint
+table chore name text, who pick Ali|Sara = Ali, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon
+table did chore ref chore
+each chore sort day as c empty "No chores yet."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.did week
+    stack grow gap 0
+      c.name bold
+      c.day c.who faint
+form chore, "Add chore"
+===
+@create class=keep_specifics style=specifics
+a barista tips jar: date, amount, shift morning or evening, weekly total and average tip
+plan: # need: field amount, option morning/evening, total week, average
+---
+app "Tips" coin yellow
+table tip amount money, shift pick Morning|Evening = Morning
+row gap 2
+  statcard sum(tip.amount week), "this week"
+  statcard round(avg(tip.amount) * 100) / 100, "average tip"
+each options tip.shift as s
+  row gap 2
+    s grow
+    sum(tip.amount week where shift = s) bold
+form tip, "Add tip"
+list tip by day
+===
+@create class=keep_specifics style=specifics
+my daily routine checklist: wake up, exercise, read, journal as ticks, a streak for completing all four and a reminder at 7am
+plan: # need: tick, streak, reminder, option wake/exercise/read/journal
+---
+app "Routine" check mint
+table step name pick Wake|Exercise|Read|Journal
+remind "Start your routine" at 7:00
+each options step.name as n
+  row card gap 2
+    toggle step today where name = n
+    n bold grow
+"Done today" count(step today) "of 4" big
+"Perfect days in a row" streak(step where count(step today) = 4) faint
+===
+@create class=keep_specifics style=specifics
+a small event budget: item, estimated cost, actual cost, difference calculated, total estimated and total actual
+plan: # need: field item, field estimate, field actual, total
+---
+app "Event budget" gift pink
+table cost item text, estimate money, actual money?
+row gap 2
+  statcard sum(cost.estimate), "estimated"
+  statcard sum(cost.actual), "actual so far"
+each cost as c empty "No items yet."
+  row card gap 2 tap edit c swipe remove c
+    c.item bold grow
+    c.estimate faint
+    c.actual - c.estimate bold color if(c.actual > c.estimate, bad, good)
+form cost, "Add item"
+===
+@create class=keep_specifics style=specifics
+a daily gratitude journal: text field, mood from 1 to 5 with a slider, streak of days written and a list of past entries
+plan: # need: field note, field mood, streak, list
+---
+app "Gratitude" heart pink
+table entry note long, mood num 1..5 = 3
+"Days in a row" streak(entry) big
+"Average mood" fixed(avg(entry.mood), 1) faint
+form entry, "Write entry"
+list entry by day
+===
+@create class=keep_specifics style=specifics
+school fees tracker for two kids zain and maha: term fee, amount paid, balance left, and a paid-in-full tick
+plan: # need: option zain/maha, field fee, field paid, total
+---
+app "School fees" school ocean
+table term child pick Zain|Maha = Zain, name text, fee money, paid money = 0
+each options term.child as c
+  row card gap 2
+    c bold grow
+    sum(term.fee where child = c) - sum(term.paid where child = c) "left" bold
+each term sort name as t empty "No terms yet."
+  row card gap 2 tap edit t swipe remove t
+    stack grow gap 0
+      t.name bold
+      t.child faint
+    t.paid "of" t.fee faint
+    if t.paid >= t.fee
+      "Paid in full" tiny color good
+form term, "Add term"
+===
+@create class=keep_specifics style=specifics
+a feature request board: title, votes with a plus one button, status planned or shipped, sorted by votes
+plan: # need: field title, field votes, option planned/shipped, quick buttons
+---
+app "Requests" bolt blue
+table req title text, votes num 0.. = 0, status pick Planned|Shipped = Planned
+each req sort votes desc as r empty "No requests yet."
+  row card gap 2 tap edit r swipe remove r
+    button "+1" tap set r.votes = r.votes + 1
+    stack grow gap 0
+      r.title bold
+      r.votes "votes" faint
+    choice r.status
+form req, "Add request"
+===
+@create class=keep_specifics style=specifics
+track hours I volunteer at three places food bank, shelter and school, total hours per place and a goal of 100 hours
+plan: # need: option food bank/shelter/school, field hours, total, goal
+---
+app "Volunteering" heart red
+table shift place pick Food_bank|Shelter|School = Food_bank, hours num 0.5..16
+setting target num 1..1000 = 100 "Hours goal"
+goal sum(shift.hours), target, "hours volunteered", "h"
+each options shift.place as p
+  row gap 2
+    p grow
+    sum(shift.hours where place = p) "h" bold
+form shift, "Log hours"
+===
+@create class=keep_specifics style=specifics
+a book club: book title, month, rating out of 5, who suggested it, average rating of all books
+plan: # need: field title, field month, field rating, field who, average
+---
+app "Book club" book plum
+table pick_row title text, month date = today, rating num 1..5, who text
+stat fixed(avg(pick_row.rating), 1), "average rating"
+each pick_row sort month desc as p empty "No books yet."
+  row card gap 2 tap edit p swipe remove p
+    stack grow gap 0
+      p.title bold
+      p.month "· picked by" p.who faint
+    p.rating "/ 5" bold
+form pick_row, "Add book"
+===
+@create class=keep_specifics style=specifics
+a metric converter for km to miles and kg to pounds with two inputs and the results shown big
+plan: # need: field km, field kg
+---
+app "Converter" calc teal
+state km num = 0
+state kg num = 0
+field km "Kilometres"
+"Miles" round(km * 0.621371 * 100) / 100 big
+field kg "Kilograms"
+"Pounds" round(kg * 2.20462 * 100) / 100 big
+===
+@create class=keep_specifics style=specifics
+a rental property tracker: tenant, monthly rent, paid this month tick, total expected and total collected
+plan: # need: field tenant, field rent, tick month, total
+---
+app "Rentals" home slate
+table tenant name text, rent money
+table paid tenant ref tenant
+row gap 2
+  statcard sum(tenant.rent), "expected"
+  statcard sum(tenant, it.rent * count(it.paid month)), "collected"
+each tenant sort name as t empty "No tenants."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.paid month
+    t.name bold grow
+    t.rent faint
+form tenant, "Add tenant"
+===
+@create class=keep_specifics style=specifics
+swim training log: laps, pool length 25 or 50 m, minutes, distance in metres calculated and weekly distance
+plan: # need: field laps, option 25/50, field mins, total week
+---
+app "Swim log" drop blue
+table swim laps num 1..200, pool pick M25|M50 = M25, mins num 1..300
+let metres(s swim) = s.laps * if(s.pool = M50, 50, 25)
+stat sum(swim week, metres(it)), "metres this week"
+each swim top 10 as s empty "No swims."
+  row card gap 2 tap edit s swipe remove s
+    metres(s) "m" bold grow
+    s.mins "min" faint
+form swim, "Add swim"
+===
+@create class=keep_specifics style=specifics
+a password-free secret santa list: names, who they got, a revealed tick and a count of names added
+plan: # need: field name, field got, tick, total
+---
+app "Secret Santa" gift red
+table person name text, got text, shown bool
+"People" count(person) big
+each person sort name as p empty "Add the names."
+  row card gap 2 tap edit p swipe remove p
+    p.name bold grow
+    if p.shown
+      p.got
+    toggle p.shown
+form person, "Add person"
+===
+@create class=keep_specifics style=specifics
+snack shop: product, cost price, selling price, profit per item calculated and a list sorted by best margin
+plan: # need: field name, field cost, field price, list
+---
+app "Snack margins" tag orange
+table snack name text, cost money, price money
+each snack sort price - cost desc as s empty "No snacks."
+  row card gap 2 tap edit s swipe remove s
+    s.name bold grow
+    s.cost "to" s.price faint
+    s.price - s.cost bold color if(s.price >= s.cost, good, bad)
+form snack, "Add snack"

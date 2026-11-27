@@ -1,0 +1,306 @@
+@create class=roman_urdu style=short
+mazdooron ki hazri aur dihari
+plan: # need: field worker, field wage, tick, total week, list
+---
+app "Mazdoor hazri" users orange
+table worker name text, wage money
+table came worker ref worker
+each worker sort name as w empty "No workers yet."
+  row card gap 2 tap edit w swipe remove w
+    toggle w.came
+    stack grow gap 0
+      w.name bold
+      count(w.came week) "days this week" faint
+    count(w.came week) * w.wage bold
+"Wages this week" sum(worker, count(it.came week) * it.wage) big
+form worker, "Add worker"
+===
+@create class=roman_urdu style=short
+Ramzan mein sehri aur iftar ka reminder
+plan: # need: reminder, tick, calendar
+---
+app "Ramzan" moon plum
+table roza
+remind "Sehri ka waqt" at 4:00
+remind "Iftar ka waqt" at 18:30
+toggle roza today
+"Roze rakhe" count(roza year) "of 30" big
+calendar roza
+===
+@create class=roman_urdu style=short
+eid ki shopping ka budget aur kharcha
+plan: # need: field item, field price, setting budget, goal, list
+---
+app "Eid shopping" gift pink
+table buy item text, price money
+setting budget money = 40000 "Eid budget"
+goal sum(buy.price), budget, "spent of budget"
+topbar buy, "Add"
+list buy, "Nothing bought yet."
+===
+@create class=roman_urdu style=short
+qurbani ke jaanwar ki list aur hissay
+plan: # need: field animal, field price, field shares, total, list
+---
+app "Qurbani" star green
+table animal kind pick Bakra|Gaye|Oont = Bakra, price money, shares num 1..7 = 1
+"Total cost" sum(animal.price) big
+"Total hissay" sum(animal.shares) head
+each animal as a empty "No animals added."
+  row card gap 2 tap edit a swipe remove a
+    a.kind bold grow
+    a.shares "hissay" faint
+    a.price bold
+form animal, "Add animal"
+===
+@create class=roman_urdu style=short
+bike ki service kab hui thi
+plan: # need: field km, field cost, reminder, list
+---
+app "Bike service" bike slate
+table service km num 0.., cost money, note text?
+remind "Bike service check karo" monthly on 1 at 10:00
+"Days since last service" since(service) big
+"Spent on service" sum(service.cost) head
+form service, "Add service"
+list service by day
+===
+@create class=roman_urdu style=short
+jogging ka record, kitne km aur kitne minute
+plan: # need: field km, field mins, total week, chart, list
+---
+app "Jogging" walk teal
+table run km num 0.1..50, mins num 1..300
+stat sum(run.km week), "km this week"
+stat sum(run.mins week), "minutes this week"
+daybars last 7 days, sum(run.km on it)
+form run, "Add run"
+list run by day
+===
+@create class=roman_urdu style=short
+darzi ke orders, kis ka suit kab dena hai
+plan: # need: field customer, field due, field price, tick, list
+---
+app "Darzi orders" tag plum
+table order customer text, item text, due date, price money, done bool
+count(order where done = no) "suits to deliver" head
+each order where done = no sort due as o empty "No pending orders."
+  row card gap 2 tap edit o swipe remove o
+    stack grow gap 0
+      o.customer bold
+      o.item "due" o.due faint color if(o.due < today, bad, muted)
+    o.price bold
+    toggle o.done
+form order, "New order"
+===
+@create class=roman_urdu style=short
+mobile repair shop ka kaam
+plan: # need: field customer, field model, field charge, option waiting/ready/delivered, list
+---
+app "Repair shop" phone slate
+table job customer text, model text, charge money, status pick Waiting|Ready|Delivered = Waiting
+screen jobs "Jobs" phone
+  topbar job, "New job"
+  each job where status != Delivered sort at as j empty "No jobs."
+    row card gap 2 tap edit j swipe remove j
+      stack grow gap 0
+        j.customer bold
+        j.model faint
+      choice j.status
+screen money "Money" coin
+  "Earned" sum(job.charge where status = Delivered) big
+  "Waiting to be collected" sum(job.charge where status = Ready) head
+===
+@create class=roman_urdu style=short
+meri kitaabon ki list, konsi padh li
+plan: # need: field title, field author, tick, list
+---
+app "Kitaabein" book purple
+table kitab title text, author text?, read bool
+count(kitab where read = yes) "of" count(kitab) "read" head
+each kitab sort read as k empty "No books yet."
+  row card gap 2 tap edit k swipe remove k
+    toggle k.read
+    stack grow gap 0
+      k.title bold
+      k.author faint
+form kitab, "Add book"
+===
+@create class=roman_urdu style=short
+exam kitne din baad hai
+plan: # need: field exam, field date, list
+---
+app "Exam countdown" hourglass red
+table exam subject text, on date
+each exam where on >= today sort on as e empty "No exams coming."
+  row card gap 2 tap edit e swipe remove e
+    e.subject bold grow
+    plural(e.on - today, "day") faint color if(e.on - today < 4, bad, muted)
+form exam, "Add exam"
+===
+@create class=roman_urdu style=short
+hajj ke liye paise jama karne hain 8 lakh
+plan: # need: field amount, goal, list
+---
+app "Hajj fund" star teal
+table jama amount money
+setting target money = 800000 "Hajj target"
+goal sum(jama.amount), target, "saved for hajj"
+"Still needed" max(target - sum(jama.amount), 0) head
+form jama, "Add amount"
+list jama by day
+===
+@create class=roman_urdu style=short
+nafl namaz aur tahajjud ka track
+plan: # need: option tahajjud/ishraq/chasht/awwabin, tick, streak
+---
+app "Nafl" moon ink dark
+table nafl kind pick Tahajjud|Ishraq|Chasht|Awwabin
+each options nafl.kind as k
+  row card gap 2
+    toggle nafl today where kind = k
+    k bold grow
+    streak(nafl where kind = k) "days" faint
+===
+@create class=roman_urdu style=short
+tailor
+plan: # need: field customer, list
+---
+app "Tailor" tag plum
+table customer name text, phone text?
+form customer, "Add customer"
+list customer
+===
+@create class=roman_urdu style=short
+car ka petrol kitna lagta hai per km
+plan: # need: field litres, field km, list
+---
+app "Car mileage" car blue
+table fill litres num 1..80, km num 1..2000 unit "km"
+"Km per litre" fixed(sum(fill.km) / max(sum(fill.litres), 0.1), 1) big
+"Petrol used" sum(fill.litres) "litres" faint
+form fill, "Add fill"
+list fill by day
+===
+@create class=roman_urdu style=short
+bachay ka qad aur wazan har mahine
+plan: # need: field height, field kg, chart, list
+---
+app "Bachay ki growth" smile mint
+table growth height num 40..200 unit "cm", kg num 2..100 unit "kg"
+trend growth sort at, it.kg
+trend growth sort at, it.height
+form growth, "Add measurement"
+list growth
+===
+@create class=roman_urdu style=short
+teeke kab lagne hain bachay ke
+plan: # need: field vaccine, field due, reminder, tick, list
+---
+app "Teeke" heart blue
+table teeka name text, due date, done bool
+remind "Teeka lagwane ka din" at teeka.due at 9:00 if count(teeka where done = no) > 0
+each teeka sort due as t empty "No vaccines added."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    t.name bold grow
+    t.due faint
+form teeka, "Add vaccine"
+===
+@create class=roman_urdu style=short
+mera pet billi ka khana
+plan: # need: tick, reminder, total today
+---
+app "Billi ka khana" heart orange
+table fed
+remind "Billi ko khana do" at 8:00, 20:00
+toggle fed today
+"Fed today" count(fed today) "times" big
+===
+@create class=roman_urdu style=short
+school ki fees ka register, kis class ne di
+plan: # need: field student, option class, field fee, field paid, total, list
+---
+app "Fees register" school ocean
+table student name text, grade pick One|Two|Three|Four|Five = One, fee money, paid bool
+each options student.grade as g
+  row card gap 2
+    "Class" g bold grow
+    sum(student.fee where grade = g and paid = yes) "of" sum(student.fee where grade = g) faint
+topbar student, "Add student"
+"Collected" sum(student.fee where paid = yes) big
+===
+@create class=roman_urdu style=short
+paise udhar liye hain kis se kitne
+plan: # need: field name, field amount, total, list
+---
+app "Udhar liya" wallet red
+table loan name text, amount money, repaid bool
+"Total to return" sum(loan.amount where repaid = no) big
+each loan where repaid = no sort at as l empty "You owe nothing."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.name bold
+      l.at faint
+    l.amount bold
+    button "Returned" tap set l.repaid = yes
+form loan, "New loan"
+===
+@create class=roman_urdu style=short
+mujhe apne bachon ka homework track karna hai
+plan: # need: field child, field subject, tick, list
+---
+app "Homework" pen blue
+table hw child pick Ali|Sara = Ali, subject text, done bool
+state who pick Ali|Sara = Ali
+choice who
+each hw where child = who and done = no as h empty "Homework done!"
+  row card gap 2 swipe remove h
+    toggle h.done
+    h.subject grow
+form hw, "Add homework"
+===
+@create class=roman_urdu style=short
+mahine ka rashan kitna laga
+plan: # need: field item, field amount, total month, chart
+---
+app "Rashan kharcha" cart green
+table rashan item text, amount money
+stat sum(rashan.amount month), "this month"
+stat sum(rashan.amount prev month), "last month"
+bars rashan month sort amount desc top 5, it.amount, it.item
+form rashan, "Add item"
+===
+@create class=roman_urdu style=short
+bijli ka bill, pichle 6 mahine ka
+plan: # need: field amount, chart, list
+---
+app "Bijli 6 months" bolt yellow
+table bill amount money
+trend bill last 6 months sort at, it.amount
+topbar bill, "Add bill"
+list bill
+===
+@create class=roman_urdu style=short
+roz subah kitne baje utha
+plan: # need: field time, chart
+---
+app "Utha kab" sun yellow
+table wake at_time time
+stat last(wake.at_time), "woke up at"
+trend wake last 14 days sort at, hour(it.at_time) + minute(it.at_time) / 60
+form wake, "Add time"
+===
+@create class=roman_urdu style=short
+plumber electrician ke kaam ka hisaab
+plan: # need: field kaam, field charge, option plumber/electrician, total month, list
+---
+app "Kaam hisaab" tag slate
+table kaam what text, trade pick Plumber|Electrician = Plumber, charge money
+each options kaam.trade as t
+  row card gap 2
+    t bold grow
+    sum(kaam.charge month where trade = t) bold
+"Earned this month" sum(kaam.charge month) big
+form kaam, "Add kaam"
+list kaam by day

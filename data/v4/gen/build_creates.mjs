@@ -9,7 +9,7 @@ const byId = new Map(); for (const r of rows) if (r.task === 'create' && !r.prog
 const byTitle = new Map(); for (const r of rows) if (r.task === 'create' && !r.program.startsWith('ask ')) { const t = (r.program.match(/^app "([^"]*)"/) || [])[1]; if (t && !byTitle.has(t)) byTitle.set(t, r.program); }
 const out = [], bad = [];
 const askLine = a => 'ask ' + a.map(x => '"' + x.replace(/"/g, '') + '"').join(' ') + '\n';
-for (const f of readdirSync('hand').filter(f => /^c-.*\.txt$/.test(f)).sort()) {
+for (const f of readdirSync('hand').filter(f => /^(a2-)?c-.*\.txt$/.test(f) && (!process.env.ONLY || f.startsWith(process.env.ONLY))).sort()) {
   const recs = readFileSync('hand/' + f, 'utf8').split(/^===\s*$/m).map(x => x.trim()).filter(Boolean);
   recs.forEach((rec, n) => {
     const L = rec.split('\n'); const hm = L[0].match(/^@(\w+)\s*(.*)$/); const meta = Object.fromEntries([...hm[2].matchAll(/(\w+)=(\S+)/g)].map(x => [x[1], x[2]]));
@@ -37,7 +37,7 @@ for (const r of out) {
   if (r.task === 'create' && !r.isAsk) { if (plan) { const p = parsePlan(plan); const m = p ? coverage(p, c.text) : ['unparsed']; if (m.length) { fail('plan items not in program: ' + m.join('|')); continue; } } else plan = derivePlan(r.request, c.text); }
   final.push({ id: 'v4-' + (r.task === 'edit' ? 'e' : 'c') + '-' + sha(r.request + c.text).slice(0, 10), task: r.task, request: r.request, ...(bc.text ? { program_before: bc.text, before: bc.text } : {}), program: c.text, ...(r.answer !== undefined ? { answer: r.answer } : {}), ...(plan ? { plan } : {}), source: 'v4:hand:' + r.cls, class: r.cls, meta: { style: r.style, domain: r.id0, tokens: t, language_commit: '4698991' } });
 }
-writeFileSync('out/hand_creates.jsonl', final.map(r => JSON.stringify(r)).join('\n') + '\n');
+writeFileSync(process.env.ONLY ? 'out/_a2_probe.jsonl' : 'out/hand_creates.jsonl', final.map(r => JSON.stringify(r)).join('\n') + '\n');
 const c = {}; for (const r of final) c[r.class] = (c[r.class] || 0) + 1;
 console.log(JSON.stringify({ rows: final.length, per_class: c, failed: bad.length }));
-for (const b of bad.slice(0, 25)) console.log('FAIL', b.id, b.request || '', b.why);
+for (const b of bad.slice(0, +(process.env.NFAIL||25))) console.log('FAIL', b.id, b.request || '', b.why);

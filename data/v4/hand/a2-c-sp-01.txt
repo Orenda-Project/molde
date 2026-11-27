@@ -1,0 +1,318 @@
+@create class=keep_specifics style=specifics
+a workout log with exercise, sets, reps and weight in kg, a weekly volume chart and a goal of 4 sessions a week
+plan: # need: field exercise, field sets, field reps, field weight, chart week, goal
+---
+app "Workout log" dumbbell red
+table lift exercise text, sets num 1..10 = 3, reps num 1..50 = 8, weight num 0..400 unit "kg"
+setting target num 1..14 = 4 "Sessions per week"
+goal count(days last 7 days, count(lift on it) > 0), target, "training days this week"
+section "Weekly volume", "kg lifted"
+  daybars last 7 days, sum(lift on it, it.sets * it.reps * it.weight)
+form lift, "Log exercise"
+list lift by day
+===
+@create class=keep_specifics style=specifics
+track my expenses with categories food, rent, transport and fun, a monthly budget of 2000 and a pie-style breakdown
+plan: # need: option food/rent/transport/fun, field amount, setting budget, goal, chart
+---
+app "Expenses" wallet teal
+table spend note text?, amount money, category pick Food|Rent|Transport|Fun = Food
+setting budget money = 2000 "Monthly budget"
+goal sum(spend.amount month), budget, "spent this month"
+share spend month by category, sum(it.amount), it.key
+form spend, "Add expense"
+list spend month by day
+===
+@create class=keep_specifics style=specifics
+reading tracker: book title, author, pages, a done tick, total pages read and a goal of 20 books this year
+plan: # need: field title, field author, field pages, tick, total, goal
+---
+app "Reading year" book purple
+table book title text, author text, pages num 1..3000, done bool
+setting target num 1..200 = 20 "Books this year"
+goal count(book where done = yes), target, "books finished"
+"Pages read" sum(book.pages where done = yes) big
+each book sort done as b empty "No books yet."
+  row card gap 2 tap edit b swipe remove b
+    toggle b.done
+    stack grow gap 0
+      b.title bold
+      b.author "·" b.pages "pages" faint
+form book, "Add book"
+===
+@create class=keep_specifics style=specifics
+medication tracker with drug name, dose in mg, time of day, a daily tick and a reminder at 8am and 8pm
+plan: # need: field drug, field dose, field time, tick, reminder
+---
+app "Meds" pill teal
+table med drug text, dose num 1..2000 unit "mg", at_time time = 8:00
+table taken med ref med
+remind "Time for your medicine" at 8:00, 20:00
+each med sort at_time as m empty "No medicines yet."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.taken
+    stack grow gap 0
+      m.drug bold
+      m.dose "mg at" m.at_time faint
+form med, "Add medicine"
+===
+@create class=keep_specifics style=specifics
+a freelance invoice tracker: client, amount, due date, paid tick, total unpaid and a list of overdue ones
+plan: # need: field client, field amount, field due, tick, total, list
+---
+app "Invoices" money blue
+table invoice client text, amount money, due date, paid bool
+row gap 2
+  statcard sum(invoice.amount where paid = no), "unpaid"
+  statcard sum(invoice.amount where paid = no and due < today), "overdue"
+section "Overdue"
+  each invoice where paid = no and due < today sort due as i empty "Nothing overdue."
+    row card gap 2 tap edit i swipe remove i
+      i.client bold grow
+      "due" i.due faint color bad
+      i.amount bold
+list invoice, "No invoices yet."
+form invoice, "Add invoice"
+===
+@create class=keep_specifics style=specifics
+sleep log with bedtime, wake time, hours slept calculated, a 7-day average and a goal of 8 hours
+plan: # need: field bed, field wake, total, goal, list
+---
+app "Sleep" bed plum
+table night bed time, wake time
+let hours(n night) = (n.wake - n.bed) / 1h
+stat fixed(sum(night last 7 days, hours(it)) / max(count(night last 7 days), 1), 1), "hours slept, 7-day average"
+setting target num 4..12 = 8 "Sleep goal (h)"
+each night top 7 as n empty "No nights logged."
+  row card gap 2 tap edit n swipe remove n
+    n.bed "to" n.wake grow
+    fixed(hours(n), 1) "h" bold color if(hours(n) >= target, good, warn)
+form night, "Log night"
+===
+@create class=keep_specifics style=specifics
+a plant watering app: plant name, how often to water in days, last watered date, a button to mark watered and a reminder
+plan: # need: field plant, field every, field last, quick buttons, reminder
+---
+app "Plant water" leaf green
+table plant name text, every num 1..60 = 7 unit "days", last date = today
+remind "Check which plants need water" at 9:00
+each plant sort last as p empty "No plants yet."
+  row card gap 2 tap edit p swipe remove p fill if(today - p.last >= p.every, soft, surface)
+    stack grow gap 0
+      p.name bold
+      "every" p.every "days, last" p.last faint
+    button "Watered" tap set p.last = today
+form plant, "Add plant"
+===
+@create class=keep_specifics style=specifics
+student grade tracker with subject, score out of 100, term 1 2 or 3, subject averages and a pass mark of 40
+plan: # need: field subject, field score, option 1/2/3, average, setting pass
+---
+app "Grades" pen ocean
+table grade subject text, score num 0..100, term pick T1|T2|T3 = T1
+setting pass num 0..100 = 40 "Pass mark"
+state t pick T1|T2|T3 = T1
+choice t
+"Term average" round(avg(grade.score where term = t)) big color if(avg(grade.score where term = t) >= pass, good, bad)
+each grade where term = t sort subject as g empty "No scores for this term."
+  row card gap 2 tap edit g swipe remove g
+    g.subject bold grow
+    g.score bold color if(g.score >= pass, good, bad)
+form grade, "Add score"
+===
+@create class=keep_specifics style=specifics
+pet weight log for my dog with date, weight in kg, a line chart, and a note field
+plan: # need: field weight, field note, chart, list
+---
+app "Dog weight" heart orange
+table weigh kg num 0.5..90 unit "kg", note text?
+stat last(weigh.kg), "kg now"
+trend weigh sort at, it.kg
+form weigh, "Add weigh-in"
+list weigh by day
+===
+@create class=keep_specifics style=specifics
+a savings jar for a bike: target 600, add amounts, show percent saved, and a chart of savings over the last 4 weeks
+plan: # need: field amount, setting target, goal, chart
+---
+app "Bike jar" bike yellow
+table jar amount money
+setting target money = 600 "Bike price"
+goal sum(jar.amount), target, "saved"
+"Saved" round(sum(jar.amount) * 100 / target) "%" big
+daybars last 28 days, sum(jar.amount on it)
+form jar, "Add savings"
+===
+@create class=keep_specifics style=specifics
+tool to log bugs with title, severity low medium high, status open or fixed, count of open high bugs
+plan: # need: field title, option low/medium/high, option open/fixed, total
+---
+app "Bug log" bolt red
+table bug title text, severity pick Low|Medium|High = Medium, status pick Open|Fixed = Open
+statcard count(bug where severity = High and status = Open), "open high bugs", count(bug where severity = High)
+each bug sort severity desc as b empty "No bugs. Nice."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.title bold
+      b.severity faint
+    choice b.status
+form bug, "Report bug"
+===
+@create class=keep_specifics style=specifics
+water intake in glasses with a goal of 8, a button for one glass, a streak and a reminder every 2 hours
+plan: # need: goal, quick buttons, streak, reminder
+---
+app "Glasses" drop blue
+table glass
+setting goal num 1..20 = 8 "Glasses per day"
+remind "Drink a glass of water" every 2h from 8:00 to 20:00
+goal count(glass today), goal, "glasses today"
+button "Drank a glass" tap add glass
+"Days in a row" streak(glass) faint
+===
+@create class=keep_specifics style=specifics
+car fuel log: litres, price per litre, odometer km, cost of each fill and km per litre
+plan: # need: field litres, field price, field odometer, total
+---
+app "Fuel log" car slate
+table fill litres num 1..120, price money, odometer num 0..
+let kmpl = (max(fill.odometer) - min(fill.odometer)) / max(sum(fill.litres) - nth(fill sort odometer, 1).litres, 1)
+"Km per litre" fixed(kmpl, 1) big
+each fill sort odometer desc top 10 as f empty "No fills yet."
+  row card gap 2 tap edit f swipe remove f
+    stack grow gap 0
+      f.litres "L at" f.price faint
+      f.odometer "km" faint
+    f.litres * f.price bold
+form fill, "Add fill"
+===
+@create class=keep_specifics style=specifics
+mood diary with mood happy ok sad angry, a note, a chart for the month and a daily reminder at 9pm
+plan: # need: option happy/ok/sad/angry, field note, chart month, reminder
+---
+app "Mood diary" smile plum
+table mood how pick Happy|Ok|Sad|Angry = Ok, note text?
+remind "How was your day?" at 21:00
+share mood month by how, count(it), it.key
+form mood, "Add mood"
+list mood by day
+===
+@create class=keep_specifics style=specifics
+a meal prep planner with meal name, calories, protein in grams, a daily calorie limit and total protein today
+plan: # need: field meal, field calories, field protein, setting limit, total today
+---
+app "Meal prep" cup orange
+table meal name text, kcal num 0..3000, protein num 0..200 unit "g"
+setting limit num 800..5000 = 2200 "Daily calories"
+goal sum(meal.kcal today), limit, "kcal today"
+"Protein today" sum(meal.protein today) "g" big
+form meal, "Add meal"
+list meal today
+===
+@create class=keep_specifics style=specifics
+log my runs with distance km, minutes, pace per km calculated, weekly total and best run
+plan: # need: field km, field mins, total week
+---
+app "Run log" walk teal
+table run km num 0.1..100, mins num 1..600
+let pace(r run) = r.mins / r.km
+statcard sum(run.km week), "km this week, longest" max(run.km) "km"
+each run top 10 as r empty "No runs yet."
+  row card gap 2 tap edit r swipe remove r
+    r.km "km in" r.mins "min" grow
+    fixed(pace(r), 1) "min/km" bold
+form run, "Add run"
+===
+@create class=keep_specifics style=specifics
+rent splitter for 3 flatmates: names ali sara omar, bill amount, who paid, and what each owes
+plan: # need: option ali/sara/omar, field amount, field paid, total
+---
+app "Flat split" home mint
+table bill what text, amount money, paid_by pick Ali|Sara|Omar = Ali
+let share = sum(bill.amount) / 3
+each options bill.paid_by as p
+  row card gap 2
+    p bold grow
+    "paid" sum(bill.amount where paid_by = p) faint
+    share - sum(bill.amount where paid_by = p) "to pay" bold color if(share > sum(bill.amount where paid_by = p), bad, good)
+"Total bills" sum(bill.amount) head
+form bill, "Add bill"
+===
+@create class=keep_specifics style=specifics
+a study timer of 25 minutes with a subject picker maths, physics, english and a total of minutes studied per subject this week
+plan: # need: timer, option maths/physics/english, total week
+---
+app "Study timer" timer blue
+table study subject pick Maths|Physics|English = Maths, mins num 1..600 = 25
+state subj pick Maths|Physics|English = Maths
+choice subj
+timer 25m, "Focus", add study subject = subj, mins = 25 then notify "Session done"
+each options study.subject as s
+  row card gap 2
+    s bold grow
+    sum(study.mins week where subject = s) "min" bold
+===
+@create class=keep_specifics style=specifics
+a gift list with person, gift idea, price, bought tick, a budget of 300 and money left
+plan: # need: field person, field gift, field price, tick, setting budget, total
+---
+app "Gift list" gift pink
+table gift person text, idea text, price money, bought bool
+setting budget money = 300 "Gift budget"
+goal sum(gift.price where bought = yes), budget, "spent"
+"Left to spend" budget - sum(gift.price where bought = yes) big
+each gift sort bought as g empty "No gifts yet."
+  row card gap 2 tap edit g swipe remove g
+    toggle g.bought
+    stack grow gap 0
+      g.person bold
+      g.idea faint
+    g.price bold
+form gift, "Add gift"
+===
+@create class=keep_specifics style=specifics
+blood pressure log with systolic, diastolic, pulse, a trend chart and a warning when systolic is over 140
+plan: # need: field systolic, field diastolic, field pulse, chart, list
+---
+app "Blood pressure" heart red
+table bp systolic num 60..260, diastolic num 40..160, pulse num 30..220
+if count(bp) > 0 and last(bp.systolic) > 140
+  "Last reading is high. Rest and measure again." color bad bold
+trend bp last 30 days sort at, it.systolic
+each bp top 10 as b empty "No readings."
+  row card gap 2 tap edit b swipe remove b
+    join(b.systolic, "/", b.diastolic) bold grow color if(b.systolic > 140, bad, ink)
+    b.pulse "bpm" faint
+form bp, "Add reading"
+===
+@create class=keep_specifics style=specifics
+a to-do list with priority high or low, due date, done tick and a count of tasks due today
+plan: # need: field task, option high/low, field due, tick, total today
+---
+app "Todo" check mint
+table todo task text, priority pick High|Low = Low, due date = today, done bool
+statcard count(todo where due = today and done = no), "due today", count(todo where due = today)
+each todo where done = no sort due as t empty "All done."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.done
+    stack grow gap 0
+      t.task bold
+      t.due faint color if(t.due < today, bad, muted)
+    t.priority tiny color if(t.priority = High, bad, muted)
+form todo, "Add task"
+===
+@create class=keep_specifics style=specifics
+tuition tracker: student name, lesson date, hours, hourly rate setting of 1500 and total earned this month
+plan: # need: field student, field date, field hours, setting rate, total month
+---
+app "Tuition" book ocean
+table lesson student text, on date = today, hours num 0.5..8 = 1
+setting rate money = 1500 "Hourly rate"
+statcard sum(lesson.hours month) * rate, "earned this month," sum(lesson.hours month) "hours"
+each lesson sort on desc top 15 as l empty "No lessons yet."
+  row card gap 2 tap edit l swipe remove l
+    stack grow gap 0
+      l.student bold
+      l.on faint
+    l.hours * rate bold
+form lesson, "Add lesson"

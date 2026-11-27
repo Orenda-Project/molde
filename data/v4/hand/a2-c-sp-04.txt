@@ -1,0 +1,323 @@
+@create class=keep_specifics style=specifics
+i want to track my gym visits: date, which muscle group chest back legs or arms, minutes, a weekly goal of 3 visits, a streak and a calendar view
+plan: # need: option chest/back/legs/arms, field minutes, goal, streak, calendar
+---
+app "Gym visits" dumbbell red
+table visit group pick Chest|Back|Legs|Arms = Chest, minutes num 5..300 = 45
+setting target num 1..7 = 3 "Visits per week"
+goal count(days last 7 days, count(visit on it) > 0), target, "visits this week"
+row gap 2
+  statcard streak(visit), "day streak"
+  statcard sum(visit.minutes week), "minutes this week"
+calendar visit
+form visit, "Log visit"
+===
+@create class=keep_specifics style=specifics
+an app for my small bakery orders with customer, item, quantity, pickup date, a paid tick, total owed and a reminder the morning of pickup
+plan: # need: field customer, field item, field qty, field pickup, tick, total, reminder
+---
+app "Bakery orders" cup orange
+table order customer text, item text, qty num 1..200 = 1, pickup date = today, price money, paid bool
+remind "Orders to pack today" at 7:30 if count(order where pickup = today) > 0
+row gap 2
+  statcard count(order where pickup = today), "pickups today"
+  statcard sum(order.price where paid = no), "owed to me"
+each order where pickup >= today sort pickup as o empty "No orders coming up."
+  row card gap 2 tap edit o swipe remove o
+    toggle o.paid
+    stack grow gap 0
+      o.customer bold
+      o.qty "x" o.item "on" o.pickup faint
+    o.price bold
+form order, "New order"
+===
+@create class=keep_specifics style=specifics
+daily budget app: monthly income 4000, bills, groceries, fun as categories, amount spent per category, remaining per category and a warning if any category is over its limit
+plan: # need: setting income, option bills/groceries/fun, field amount, total month, chart
+---
+app "Budget split" wallet green
+table spend kind pick Bills|Groceries|Fun = Groceries, amount money, note text?
+setting income money = 4000 "Monthly income"
+setting bills_limit money = 1800 "Bills limit"
+setting food_limit money = 900 "Groceries limit"
+setting fun_limit money = 400 "Fun limit"
+let over = sum(spend.amount month where kind = Bills) > bills_limit or sum(spend.amount month where kind = Groceries) > food_limit or sum(spend.amount month where kind = Fun) > fun_limit
+if over
+  "A category is over its limit" bold color bad
+"Left from income" income - sum(spend.amount month) big
+share spend month by kind, sum(it.amount), it.key
+form spend, "Add spend"
+===
+@create class=keep_specifics style=specifics
+a language learning log: language, minutes studied, new words learned, a daily goal of 20 minutes, a streak and a chart of minutes this week
+plan: # need: field language, field minutes, field words, goal, streak, chart week
+---
+app "Language log" book teal
+table study language text, minutes num 1..300, words num 0..200 = 0
+setting goal num 5..240 = 20 "Daily minutes"
+goal sum(study.minutes today), goal, "minutes today", "min"
+row gap 2
+  statcard streak(study), "day streak"
+  statcard sum(study.words week), "new words this week"
+daybars last 7 days, sum(study.minutes on it)
+form study, "Log study"
+===
+@create class=keep_specifics style=specifics
+vet visits for my pets: pet name, date, reason, cost, next visit date and a reminder a day before the next visit
+plan: # need: field pet, field date, field reason, field cost, field next, reminder
+---
+app "Vet visits" heart orange
+table vet pet text, on date = today, reason text, cost money, next date?
+remind "Vet visit tomorrow" at vet.next - 1d at 9:00
+"Spent on vets" sum(vet.cost) big
+each vet sort on desc as v empty "No visits yet."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.pet bold
+      v.reason "on" v.on faint
+      if v.next > today
+        "Next:" v.next faint color good
+    v.cost bold
+form vet, "Add visit"
+===
+@create class=keep_specifics style=specifics
+a project tracker for my team: task name, owner, status todo doing or done, due date, and the percent done
+plan: # need: field task, field owner, option todo/doing/done, field due, total
+---
+app "Project board" check blue
+table task name text, owner text, status pick Todo|Doing|Done = Todo, due date
+"Done" round(count(task where status = Done) * 100 / max(count(task), 1)) "%" big
+each options task.status as s
+  section s, count(task where status = s)
+    each task where status = s sort due as t empty "Nothing here."
+      row card gap 2 tap edit t swipe remove t
+        stack grow gap 0
+          t.name bold
+          t.owner "·" t.due faint color if(t.due < today and t.status != Done, bad, muted)
+        choice t.status
+form task, "Add task"
+===
+@create class=keep_specifics style=specifics
+a diabetes log: glucose reading in mmol/L, meal before or after, insulin units, a chart of readings and the average of the last 7 days
+plan: # need: field glucose, option before/after, field insulin, chart, average
+---
+app "Glucose log" heart red
+table reading glucose num 1..40 unit "mmol/L", meal pick Before|After = Before, insulin num 0..100 = 0 unit "units"
+stat fixed(avg(reading.glucose last 7 days), 1), "mmol/L average over 7 days"
+trend reading last 14 days sort at, it.glucose
+form reading, "Add reading"
+list reading by day
+===
+@create class=keep_specifics style=specifics
+a trip expense splitter for 4 friends: names, who paid, amount, description and how much each person owes or is owed
+plan: # need: option amir/bela/cyrus/dana, field amount, field what, total
+---
+app "Trip split" bus blue
+table pay who pick Amir|Bela|Cyrus|Dana = Amir, what text, amount money
+let fair = sum(pay.amount) / 4
+"Total trip cost" sum(pay.amount) head
+each options pay.who as w
+  row card gap 2
+    w bold grow
+    sum(pay.amount where who = w) - fair bold color if(sum(pay.amount where who = w) >= fair, good, bad)
+form pay, "Add expense"
+list pay by day
+===
+@create class=keep_specifics style=specifics
+a repair shop job card: customer, device, problem, price quoted, status received repairing or ready, and a count of jobs ready for pickup
+plan: # need: field customer, field device, field problem, field price, option received/repairing/ready, total
+---
+app "Repair jobs" tag slate
+table job customer text, device text, problem text, price money, status pick Received|Repairing|Ready = Received
+statcard count(job where status = Ready), "ready for pickup"
+each job sort status as j empty "No jobs."
+  stack card gap 1 tap edit j swipe remove j
+    row
+      j.customer bold grow
+      j.price bold
+    j.device ":" j.problem faint
+    choice j.status
+form job, "New job"
+===
+@create class=keep_specifics style=specifics
+a savings challenge: save 1 dollar on day 1, 2 on day 2 and so on for 30 days, tick off days done and show total saved and total target
+plan: # need: tick, total, goal, list
+---
+app "30 day saver" coin yellow
+table done day_no num 1..30
+goal sum(done, it.day_no), 465, "saved of 465"
+each 1..30 as d
+  row gap 2
+    toggle done where day_no = d
+    "Day" d grow
+    d bold
+===
+@create class=keep_specifics style=specifics
+a newborn log: feeds with time and ml, nappies wet or dirty, sleep minutes, and totals for today
+plan: # need: field ml, option wet/dirty, field minutes, total today
+---
+app "Baby log" smile pink
+table feed ml num 10..300
+table nappy kind pick Wet|Dirty = Wet
+table nap minutes num 5..600
+row gap 2
+  statcard sum(feed.ml today), "ml fed today"
+  statcard count(nappy today), "nappies"
+  statcard sum(nap.minutes today), "min slept"
+form feed, "Add feed"
+form nappy, "Add nappy"
+form nap, "Add sleep"
+===
+@create class=keep_specifics style=specifics
+an interview tracker: company, role, stage applied phone onsite or offer, date, salary offered and a count per stage
+plan: # need: field company, field role, option applied/phone/onsite/offer, field date, field salary, total
+---
+app "Interviews" users purple
+table job company text, role text, stage pick Applied|Phone|Onsite|Offer = Applied, on date = today, salary money?
+each options job.stage as s
+  row gap 2
+    s grow
+    count(job where stage = s) bold
+each job sort on desc as j empty "No applications yet."
+  row card gap 2 tap edit j swipe remove j
+    stack grow gap 0
+      j.company bold
+      j.role faint
+    j.stage faint
+form job, "Add application"
+===
+@create class=rich_app style=rich
+an expense tracker
+plan: # need: field amount, option food/transport/bills/shopping/other, setting budget, goal, chart, list
+---
+app "Expense tracker" wallet teal
+table spend note text?, amount money, kind pick Food|Transport|Bills|Shopping|Other = Food
+setting budget money = 1500 "Monthly budget"
+topbar spend, "Add expense"
+row gap 2
+  statcard sum(spend.amount month), "spent this month", budget
+  statcard sum(spend.amount today), "spent today"
+goal sum(spend.amount month), budget, "of budget"
+section "Where it goes", "this month"
+  share spend month by kind, sum(it.amount), it.key
+section "Last 7 days"
+  daybars last 7 days, sum(spend.amount on it)
+list spend month by day, "No expenses this month. Tap Add expense."
+===
+@create class=rich_app style=rich
+habit tracker
+plan: # need: field habit, tick, streak, chart, list
+---
+app "Habits" check mint
+table habit name text
+table check habit ref habit
+topbar habit, "Add habit"
+row gap 2
+  statcard count(habit, count(it.check today) > 0), "done today of" count(habit), count(habit)
+  statcard max(habit, streak(it.check)), "longest streak now"
+each habit sort name as h empty "No habits yet. Add your first one."
+  stack card gap 1 tap edit h swipe remove h
+    row
+      toggle h.check
+      h.name bold grow
+      streak(h.check) "day streak" faint
+    weekdots count(h.check on it) > 0
+section "This week", "all habits"
+  daybars last 7 days, count(check on it)
+===
+@create class=rich_app style=rich
+recipe book
+plan: # need: field title, field ingredients, field steps, option breakfast/lunch/dinner/dessert, tick, list
+---
+app "Recipes" cup orange
+table recipe title text, kind pick Breakfast|Lunch|Dinner|Dessert = Dinner, mins num 5..480 unit "min", ingredients long, steps long, fav bool
+state k pick All|Breakfast|Lunch|Dinner|Dessert = All
+state q text = ""
+topbar recipe, "Add recipe"
+field q "Search recipes"
+choice k
+statcard count(recipe where fav = yes), "favourites of" count(recipe)
+each recipe where (k = All or kind = k) and has(title, q) sort title as r empty "No recipes match."
+  stack card gap 1 tap edit r swipe remove r
+    row
+      r.title bold grow
+      toggle r.fav
+    r.kind "·" r.mins "min" faint
+===
+@create class=rich_app style=rich
+fitness log
+plan: # need: field exercise, field reps, field weight, goal, chart, streak, list
+---
+app "Fitness log" dumbbell red
+table set exercise text, reps num 1..100 = 10, weight num 0..400 unit "kg"
+setting target num 1..14 = 4 "Workout days per week"
+topbar set, "Log set"
+row gap 2
+  statcard streak(set), "day streak"
+  statcard count(set week), "sets this week"
+goal count(days last 7 days, count(set on it) > 0), target, "workout days this week"
+section "Volume", "kg lifted per day"
+  daybars last 7 days, sum(set on it, it.reps * it.weight)
+section "Latest sets"
+  list set top 10, "No sets yet. Log your first one."
+===
+@create class=rich_app style=rich
+small business dashboard
+plan: # need: field amount, option income/expense, total month, chart, list
+---
+app "Business" bag slate
+table money_row what text, amount money, kind pick Income|Expense = Income
+let inc = sum(money_row.amount month where kind = Income)
+let exp = sum(money_row.amount month where kind = Expense)
+topbar money_row, "Add entry"
+row gap 2
+  statcard inc, "income this month"
+  statcard exp, "expenses this month"
+"Profit" inc - exp big color if(inc >= exp, good, bad)
+section "Income and expenses", "last 6 months"
+  trend money_row last 6 months sort at, if(it.kind = Income, it.amount, 0 - it.amount)
+list money_row month by day, "Nothing this month yet."
+===
+@create class=rich_app style=rich
+a school app for a teacher
+plan: # need: field student, field subject, field marks, tick, average, list
+---
+app "Teacher desk" school blue
+table student name text
+table here student ref student
+table mark student ref student, subject text, marks num 0..100
+screen att "Attendance" check
+  topbar student, "Add student"
+  statcard count(student, count(it.here today) > 0), "present of" count(student), count(student)
+  each student sort name as s empty "Add your students."
+    row card gap 2 tap edit s swipe remove s
+      toggle s.here
+      s.name bold grow
+screen marks "Marks" pen
+  statcard round(avg(mark.marks)), "class average"
+  form mark, "Add marks"
+  each mark sort marks desc top 15 as m empty "No marks yet."
+    row card gap 2 tap edit m swipe remove m
+      stack grow gap 0
+        m.student.name bold
+        m.subject faint
+      m.marks bold
+===
+@create class=rich_app style=rich
+sleep tracker
+plan: # need: field bed, field wake, goal, chart, average, list
+---
+app "Sleep tracker" bed plum dark
+table night bed time, wake time, quality num 1..5 = 3
+setting target num 4..12 = 8 "Sleep goal (h)"
+let hrs(n night) = (n.wake - n.bed) / 1h
+topbar night, "Log night"
+row gap 2
+  statcard round(sum(night last 7 days, hrs(it)) * 10 / max(count(night last 7 days), 1)) / 10, "h average this week", target
+  statcard round(avg(night.quality last 7 days) * 10) / 10, "average quality"
+section "Hours per night"
+  bars night last 7 days sort at, hrs(it), it.at
+each night top 7 as n empty "No nights logged yet."
+  row card gap 2 tap edit n swipe remove n
+    n.bed "to" n.wake grow
+    fixed(hrs(n), 1) "h" bold color if(hrs(n) >= target, good, warn)

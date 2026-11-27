@@ -1,0 +1,317 @@
+@create class=roman_urdu style=long
+bachon ki fees ka record, kis ne di kis ne nahi, mahine ke hisaab se
+plan: # need: field child, field fee, tick, month, list
+---
+app "Fees month" school ocean
+table child name text, fee money
+table paid child ref child
+state m date = today
+row align center gap 1
+  button "<" tap set m = addmonths(m, -1)
+  monthname(m) bold grow align center
+  button ">" tap set m = addmonths(m, 1)
+each child sort name as c empty "No children yet."
+  row card gap 2 tap edit c swipe remove c
+    toggle c.paid month of m
+    c.name bold grow
+    c.fee faint
+form child, "Add child"
+===
+@create class=roman_urdu style=long
+meri dukaan mein roz jitna maal bikta hai uska hisaab aur munafa nikalna hai, kharid aur bikri alag
+plan: # need: field cost, field sale, total today, chart, list
+---
+app "Roz ka munafa" bag green
+table item name text, cost money, price money
+table sold item ref item, qty num 1..500 = 1
+let profit = sum(sold, it.qty * (it.item.price - it.item.cost))
+statcard sum(sold today, it.qty * it.item.price), "sales today, profit" sum(sold today, it.qty * (it.item.price - it.item.cost))
+each item sort name as i empty "No items yet. Add what you sell."
+  row card gap 2 tap edit i swipe remove i
+    i.name bold grow
+    i.price faint
+    button "Sold" tap add sold item = i
+daybars last 7 days, sum(sold on it, it.qty * it.item.price)
+form item, "Add item"
+===
+@create class=roman_urdu style=long
+ghar mein jo bhi kharche hote hain unko category mein likhna hai aur mahine ka budget 50000 hai
+plan: # need: field amount, option rashan/bijli/gas/school/dawai/other, setting budget, goal, chart, list
+---
+app "Ghar budget" home slate
+table kharcha what text, amount money, kind pick Rashan|Bijli|Gas|School|Dawai|Other = Rashan
+setting budget money = 50000 "Monthly budget"
+goal sum(kharcha.amount month), budget, "spent this month"
+share kharcha month by kind, sum(it.amount), it.key
+form kharcha, "Add kharcha"
+list kharcha month by day
+===
+@create class=roman_urdu style=long
+mujhe apne abu ki dawaiyon ka reminder chahiye subah dopahar raat teeno waqt
+plan: # need: field dawai, reminder, tick, list
+---
+app "Abu ki dawai" pill teal
+table dawai name text
+table li dawai ref dawai
+remind "Abu ki dawai ka waqt: subah" at 8:00
+remind "Abu ki dawai ka waqt: dopahar" at 14:00
+remind "Abu ki dawai ka waqt: raat" at 21:00
+each dawai sort name as d empty "Add Abu's medicines."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.li
+    d.name bold grow
+form dawai, "Add dawai"
+===
+@create class=roman_urdu style=long
+school ke teachers ki haziri lagani hai har din aur mahine mein kitni chhuttiyan hui
+plan: # need: field teacher, tick, total month, list
+---
+app "Teachers hazri" users blue
+table teacher name text
+table present teacher ref teacher
+each teacher sort name as t empty "No teachers yet."
+  row card gap 2 tap edit t swipe remove t
+    toggle t.present
+    stack grow gap 0
+      t.name bold
+      "present" count(t.present month) "days, absent" count(days month, count(t.present on it) = 0 and weekday(it) < 6 and it <= today) faint
+form teacher, "Add teacher"
+===
+@create class=roman_urdu style=long
+namaz ka track rakhna hai paanchon waqt ka, aur kitne din se lagataar parh raha hoon
+plan: # need: option fajr/zuhr/asr/maghrib/isha, tick, streak
+---
+app "Paanch waqt" moon teal
+table salah waqt pick Fajr|Zuhr|Asr|Maghrib|Isha
+row gap 1
+  each options salah.waqt as w
+    stack grow align center gap 1
+      toggle salah today where waqt = w
+      w tiny
+"Current streak" streak(salah) "days" big
+===
+@create class=roman_urdu style=long
+meri committee 10 logon ki hai, har banda 5000 deta hai, dekhna hai is mahine kis ne diye aur kis ne nahi
+plan: # need: field member, setting share, tick, total month, list
+---
+app "Committee 10" users orange
+table member name text
+table gave member ref member
+setting share money = 5000 "Share per member"
+statcard count(member, count(it.gave month) > 0), "paid of" count(member), count(member)
+"Collected" count(gave month) * share "of" count(member) * share faint
+each member sort name as m empty "Add the 10 members."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.gave month
+    m.name bold grow
+form member, "Add member"
+===
+@create class=roman_urdu style=long
+kisan ka hisab, beej khaad pani ka kharcha aur fasal bechne se kitna mila
+plan: # need: option beej/khaad/pani, field amount, total
+---
+app "Kisan hisab" leaf green
+table kharcha what pick Beej|Khaad|Pani|Mazdoori = Beej, amount money
+table bikri crop text, amount money
+let spent = sum(kharcha.amount)
+let got = sum(bikri.amount)
+"Kharcha" spent head
+"Bikri" got head
+"Net" got - spent big color if(got >= spent, good, bad)
+form kharcha, "Add kharcha"
+form bikri, "Add bikri"
+===
+@create class=roman_urdu style=long
+mehman nawazi ka hisab: kitne mehman aaye, khane ka kharcha, aur kaun kab aaya
+plan: # need: field name, field persons, field spent, list
+---
+app "Mehman nawazi" users plum
+table visit name text, persons num 1..30 = 1, spent money
+"Visits" count(visit) head
+"Spent on guests" sum(visit.spent) big
+topbar visit, "Add visit"
+each visit as v empty "No guests yet."
+  stack card gap 0 tap edit v swipe remove v
+    v.name bold
+    v.at faint
+    v.persons "people," v.spent "spent" faint
+===
+@create class=roman_urdu style=long
+mujhe ek aisi app chahiye jis mein main roz paanch kaam likhun aur jo ho jayen unpe tick lagaun
+plan: # need: field task, tick, total today, list
+---
+app "Paanch kaam" check mint
+table kaam what text, done bool
+"Done" count(kaam today where done = yes) "of" count(kaam today) head
+each kaam today as k empty "Add up to five tasks for today."
+  row card gap 2 swipe remove k
+    toggle k.done
+    k.what grow
+if count(kaam today) < 5
+  form kaam, "Add task"
+===
+@create class=roman_urdu style=long
+paani ka glass count karna hai, goal 8 glass ka, aur reminder har 2 ghante baad
+plan: # need: goal, reminder, quick buttons, total today
+---
+app "Paani glass" drop blue
+table glass
+setting goal num 1..20 = 8 "Glasses per day"
+remind "Ek glass paani peeyo" every 2h from 9:00 to 21:00 if count(glass today) < goal
+goal count(glass today), goal, "glasses today"
+button "Drank a glass" tap add glass
+button "Undo" tap remove last(glass today)
+===
+@create class=roman_urdu style=long
+bijli ka meter har mahine ki 1 tareekh ko note karta hoon, uske units aur bill nikalna hai rate 45 rupay unit
+plan: # need: field reading, setting rate, total, list
+---
+app "Meter 1st" bolt orange
+table meter value num 0.., on date = today
+setting rate money = 45 "Rate per unit"
+let units(m meter) = m.value - nth(meter where value < m.value sort value desc, 1).value
+each meter sort value desc top 12 as m empty "Add this month's reading."
+  row card gap 2 tap edit m swipe remove m
+    stack grow gap 0
+      m.value bold
+      m.on faint
+    if count(meter where value < m.value) > 0
+      units(m) "units" faint
+      units(m) * rate bold
+form meter, "Add reading"
+===
+@create class=roman_urdu style=long
+bachon ki kitabon aur copiyon ki list jo school ke liye leni hain, price ke saath
+plan: # need: field item, field price, tick, total, list
+---
+app "School saaman" book purple
+table item name text, price money, bought bool
+"Still to spend" sum(item.price where bought = no) big
+"Spent" sum(item.price where bought = yes) faint
+each item sort bought as i empty "Nothing on the list."
+  row card gap 2 tap edit i swipe remove i
+    toggle i.bought
+    i.name bold grow
+    i.price faint
+form item, "Add"
+===
+@create class=roman_urdu style=long
+gym jaane ka record, kon se din gaya, aur mahine mein kitne din gaya, target 20 din
+plan: # need: tick, goal, calendar
+---
+app "Gym" dumbbell red
+table gym
+setting target num 1..31 = 20 "Gym days per month"
+goal count(gym month), target, "days this month"
+toggle gym today
+calendar gym
+===
+@create class=roman_urdu style=long
+ghar ki safai ka schedule, haftay mein kaun sa kaam kis din karna hai
+plan: # need: field kaam, option mon/tue/wed/thu/fri/sat/sun, tick, list
+---
+app "Safai schedule" home mint
+table kaam what text, day pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon, done bool
+state d pick Mon|Tue|Wed|Thu|Fri|Sat|Sun = Mon
+choice d
+each kaam where day = d as k empty "Nothing planned for this day."
+  row card gap 2 tap edit k swipe remove k
+    toggle k.done
+    k.what grow
+form kaam, "Add kaam"
+===
+@create class=roman_urdu style=long
+meri gaadi ka kharcha petrol service aur tax sab ek jagah
+plan: # need: option petrol/service/tax, field amount, total month, chart, list
+---
+app "Gaadi kharcha" car blue
+table kharcha kind pick Petrol|Service|Tax = Petrol, amount money, note text?
+statcard sum(kharcha.amount year), "this year,"  sum(kharcha.amount month) "this month"
+each options kharcha.kind as k
+  row gap 2
+    k grow
+    sum(kharcha.amount year where kind = k) bold
+section "Last 6 months"
+  trend kharcha last 6 months sort at, it.amount
+form kharcha, "Add kharcha"
+list kharcha by day
+===
+@create class=roman_urdu style=long
+nikah ke mehman ki list, kitne log aaenge bride side aur groom side
+plan: # need: field name, option bride/groom, field persons, total, list
+---
+app "Nikah guests" users pink
+table guest name text, side pick Bride|Groom = Bride, persons num 1..20 = 1
+"Total guests" sum(guest.persons) big
+row gap 2
+  statcard sum(guest.persons where side = Bride), "bride side"
+  statcard sum(guest.persons where side = Groom), "groom side"
+topbar guest, "Add guest"
+list guest
+===
+@create class=roman_urdu style=long
+wheat ki kaasht ka calendar, kab beej dala kab pani diya kab kati
+plan: # need: field stage, field date, list
+---
+app "Wheat calendar" leaf yellow
+table step stage pick Beej|Pani|Khaad|Katai = Beej, on date = today, note text?
+each step sort on desc as s empty "No steps yet."
+  row card gap 2 tap edit s swipe remove s
+    s.stage bold grow
+    s.on faint
+"Last pani" since(step where stage = Pani) "days ago" head
+form step, "Add step"
+===
+@create class=roman_urdu style=long
+hospital ke appointments, doctor ka naam, kab jana hai, aur 1 din pehle reminder
+plan: # need: field doctor, field date, reminder, list
+---
+app "Doctor visits" heart red
+table visit doctor text, on date, done bool
+remind "Doctor appointment tomorrow" at visit.on - 1d at 9:00
+each visit where done = no sort on as v empty "No appointments."
+  row card gap 2 tap edit v swipe remove v
+    stack grow gap 0
+      v.doctor bold
+      v.on faint
+    button "Done" tap set v.done = yes
+form visit, "Add appointment"
+===
+@create class=roman_urdu style=long
+mazdoori ka hisab: har banda roz kitna kaam karta hai aur uski dihari, aur hafte ke end pe total
+plan: # need: field worker, field days, setting rate, total week, list
+---
+app "Dihari" tag orange
+table work worker text, days num 0.5..7 = 1
+setting rate money = 1200 "Dihari per day"
+statcard sum(work.days week) * rate, "payable this week"
+each work week as w empty "No work noted this week."
+  row card gap 2 tap edit w swipe remove w
+    w.worker bold grow
+    w.days "days" faint
+    w.days * rate bold
+form work, "Add work"
+===
+@create class=roman_urdu style=long
+bachon ko roz 20 minute quran parhane ka timer aur kitne din lagataar
+plan: # need: timer, streak
+---
+app "Quran time" book green
+table sabaq
+timer 20m, "Quran time", add sabaq then notify "20 minutes done"
+"Days in a row" streak(sabaq) big
+"Total days" count(sabaq) faint
+===
+@create class=roman_urdu style=long
+jab bhi kisi dost ko paise udhaar doon to likh lun, wapas aaye to mark kar lun
+plan: # need: field friend, field amount, tick, total, list
+---
+app "Dost udhaar" wallet plum
+table udhaar friend text, amount money, back bool
+"Still out" sum(udhaar.amount where back = no) big
+each udhaar sort back as u empty "Nobody owes you."
+  row card gap 2 tap edit u swipe remove u
+    toggle u.back
+    u.friend bold grow
+    u.amount faint
+form udhaar, "Lent money"

@@ -1,0 +1,288 @@
+@create class=keep_specifics style=specifics
+a piggy bank for each of my 2 kids, noah and lily, deposits and withdrawals, balance per child and a goal of 50 for noah
+plan: # need: option noah/lily, field amount, option deposit/withdraw, total, goal
+---
+app "Kids piggy banks" coin yellow
+table move child pick Noah|Lily = Noah, amount money, kind pick Deposit|Withdraw = Deposit
+setting noah_goal money = 50 "Noah's goal"
+each options move.child as c
+  row card gap 2
+    c bold grow
+    sum(move.amount where child = c and kind = Deposit) - sum(move.amount where child = c and kind = Withdraw) bold
+goal sum(move.amount where child = Noah and kind = Deposit) - sum(move.amount where child = Noah and kind = Withdraw), noah_goal, "Noah's savings"
+form move, "Add"
+list move by day
+===
+@create class=keep_specifics style=specifics
+a camping checklist with gear, food and clothes sections, packed ticks, weight in kg per item and total weight packed
+plan: # need: option gear/food/clothes, tick, field weight, total
+---
+app "Camping pack" map green
+table item name text, section pick Gear|Food|Clothes = Gear, kg num 0..30 = 0.5 unit "kg", packed bool
+"Packed weight" sum(item.kg where packed = yes) "kg" big
+each options item.section as s
+  section s, sum(item.kg where section = s and packed = yes) "kg"
+    each item where section = s sort name as i empty "Nothing yet."
+      row gap 2 swipe remove i
+        toggle i.packed
+        i.name grow
+        i.kg "kg" faint
+form item, "Add item"
+===
+@create class=keep_specifics style=specifics
+tracking customers who owe me: customer, invoice number, amount, due date, a paid tick and the oldest unpaid due date
+plan: # need: field customer, field invoice, field amount, field due, tick
+---
+app "Receivables" money slate
+table inv customer text, number text, amount money, due date, paid bool
+"Owed" sum(inv.amount where paid = no) big
+if count(inv where paid = no) > 0
+  "Oldest unpaid due" nth(inv where paid = no sort due, 1).due faint
+each inv where paid = no sort due as i empty "Nobody owes you."
+  row card gap 2 tap edit i swipe remove i
+    stack grow gap 0
+      i.customer bold
+      "#" i.number "due" i.due faint color if(i.due < today, bad, muted)
+    i.amount bold
+    button "Paid" tap set i.paid = yes
+form inv, "Add invoice"
+===
+@create class=keep_specifics style=specifics
+soccer league table: team, played, won, drawn, lost and points calculated with 3 for a win and 1 for a draw
+plan: # need: field team, field won, field drawn, field lost, list
+---
+app "League table" trophy green
+table team name text, won num 0.. = 0, drawn num 0.. = 0, lost num 0.. = 0
+let pts(t team) = t.won * 3 + t.drawn
+each team sort pts(it) desc as t empty "Add the teams."
+  row card gap 2 tap edit t swipe remove t
+    t.name bold grow
+    t.won + t.drawn + t.lost "P" faint
+    t.won "W" t.drawn "D" t.lost "L" faint
+    pts(t) bold
+form team, "Add team"
+===
+@create class=keep_specifics style=specifics
+a quick note taker with title, body, a pinned tick, tags work personal or ideas and a search box
+plan: # need: field title, field body, tick, option work/personal/ideas
+---
+app "Quick notes" note yellow
+table note title text, body long, pinned bool, tag pick Work|Personal|Ideas = Ideas
+state q text = ""
+topbar note, "New note"
+field q "Search notes"
+each note where has(title, q) or has(body, q) sort pinned desc as n empty "No notes match."
+  stack card gap 0 tap edit n swipe remove n
+    row
+      n.title bold grow
+      toggle n.pinned
+    n.tag tiny faint
+    n.body faint
+===
+@create class=keep_specifics style=specifics
+coffee shop loyalty card: customer name, stamps from 0 to 10, add stamp button and a free coffee flag when they reach 10
+plan: # need: field customer, field stamps, quick buttons
+---
+app "Loyalty cards" cup orange
+table card customer text, stamps num 0..10 = 0
+each card sort customer as c empty "No customers yet."
+  row card gap 2 tap edit c swipe remove c
+    stack grow gap 0
+      c.customer bold
+      c.stamps "of 10 stamps" faint
+    if c.stamps >= 10
+      "Free coffee" bold color good
+      button "Redeem" tap set c.stamps = 0
+    else
+      button "Add stamp" tap set c.stamps = c.stamps + 1
+form card, "New card"
+===
+@create class=keep_specifics style=specifics
+an app to log my coding hours per project, with language, hours, a weekly goal of 20 hours and a bar chart per day
+plan: # need: field project, field language, field hours, goal, chart
+---
+app "Coding hours" bolt blue
+table code project text, language text, hours num 0.25..16
+setting target num 1..80 = 20 "Weekly hours"
+goal sum(code.hours week), target, "hours this week", "h"
+daybars last 7 days, sum(code.hours on it)
+form code, "Log hours"
+list code week by day
+===
+@create class=keep_specifics style=specifics
+pill organiser with 3 times per day morning noon night, medicine names, and ticks for each time today
+plan: # need: field name, option morning/noon/night, tick
+---
+app "Pill organiser" pill teal
+table pill name text, slot pick Morning|Noon|Night = Morning
+table taken pill ref pill
+each options pill.slot as s
+  section s, count(pill where slot = s, count(it.taken today) > 0) "taken of" count(pill where slot = s)
+    each pill where slot = s sort name as p empty "No pills at this time."
+      row gap 2 tap edit p swipe remove p
+        toggle p.taken
+        p.name grow
+form pill, "Add pill"
+===
+@create class=keep_specifics style=specifics
+daily spending limit app: limit 40 a day, amount, what for, how much is left today and a red warning when over
+plan: # need: setting limit, field amount, field what, total today
+---
+app "Daily limit" wallet red
+table spend what text, amount money
+setting limit money = 40 "Daily limit"
+"Left today" limit - sum(spend.amount today) big color if(sum(spend.amount today) > limit, bad, good)
+if sum(spend.amount today) > limit
+  "Over the limit today" bold color bad
+form spend, "Add spend"
+list spend today
+===
+@create class=keep_specifics style=specifics
+a movie watchlist: title, genre, watched tick, my rating out of 10 and the average rating of watched movies
+plan: # need: field title, field genre, tick, field rating, average
+---
+app "Watchlist" star purple
+table movie title text, genre text, watched bool, rating num? 1..10
+stat fixed(avg(movie.rating where watched = yes), 1), "average rating"
+each movie sort watched as m empty "No movies yet."
+  row card gap 2 tap edit m swipe remove m
+    toggle m.watched
+    stack grow gap 0
+      m.title bold
+      m.genre faint
+    m.rating bold
+form movie, "Add movie"
+===
+@create class=keep_specifics style=specifics
+a milk delivery record: date, litres, price per litre 90, daily cost, monthly total and a calendar showing delivery days
+plan: # need: field litres, setting price, total month, calendar
+---
+app "Milk record" cup mint
+table milk litres num 0.5..10 = 1
+setting price money = 90 "Price per litre"
+row gap 2
+  statcard sum(milk.litres month), "litres this month"
+  statcard sum(milk.litres month) * price, "bill this month"
+calendar milk
+form milk, "Add delivery"
+===
+@create class=keep_specifics style=specifics
+an app for logging headaches: date, severity 1 to 10, duration in hours, trigger like stress or food, and a count this month
+plan: # need: field severity, field hours, option stress/food/sleep/other, total month
+---
+app "Headaches" heart red
+table ache severity num 1..10, hours num 0.5..48, trigger pick Stress|Food|Sleep|Other = Stress
+stat count(ache month), "headaches this month"
+each options ache.trigger as t
+  row gap 2
+    t grow
+    count(ache where trigger = t) bold
+form ache, "Log headache"
+list ache by day
+===
+@create class=keep_specifics style=specifics
+a lemonade stand: cups sold, price per cup 2, cost per cup 0.5, profit per day and a weekly chart of profit
+plan: # need: field cups, setting price, setting cost, chart, total
+---
+app "Lemonade" cup yellow
+table day_sales cups num 0..500
+setting price money = 2 "Price per cup"
+setting cost money = 0.5 "Cost per cup"
+let profit(d date) = sum(day_sales.cups on d) * (price - cost)
+stat sum(day_sales.cups today) * (price - cost), "profit today"
+daybars last 7 days, sum(day_sales.cups on it) * (price - cost)
+form day_sales, "Add cups sold"
+===
+@create class=keep_specifics style=specifics
+a vocabulary builder: word, meaning, example sentence, learned tick and a count of words learned this week
+plan: # need: field term, field meaning, field example, tick, total
+---
+app "Vocabulary" book purple
+table word term text, meaning text, example text?, learned bool
+statcard count(word where learned = yes), "learned of" count(word), count(word)
+each word sort learned as w empty "No words yet."
+  stack card gap 0 tap edit w swipe remove w
+    row
+      w.term bold grow
+      toggle w.learned
+    w.meaning
+    w.example faint
+form word, "Add word"
+===
+@create class=keep_specifics style=specifics
+grocery list with item, quantity, aisle produce dairy or bakery, a checked tick and a clear checked button
+plan: # need: field item, field qty, option produce/dairy/bakery, tick, quick buttons
+---
+app "Groceries" cart green
+table item name text, qty num 1..99 = 1, aisle pick Produce|Dairy|Bakery = Produce, got bool
+each options item.aisle as a
+  section a, count(item where aisle = a and got = no) "to get"
+    each item where aisle = a sort got as i empty "Nothing here."
+      row gap 2 swipe remove i
+        toggle i.got
+        i.name grow
+        i.qty "x" faint
+form item, "Add item"
+button "Clear checked" tap remove all item where got = yes
+===
+@create class=keep_specifics style=specifics
+a car park slot rental: slot number, tenant, monthly fee, paid this month tick, total collected and free slots
+plan: # need: field slot, field tenant, field fee, tick, total
+---
+app "Parking slots" car slate
+table slot number num 1..500, tenant text?, fee money
+table paid slot ref slot
+row gap 2
+  statcard sum(slot, it.fee * count(it.paid month)), "collected this month"
+  statcard count(slot where len(tenant) = 0), "free slots"
+each slot sort number as s empty "No slots yet."
+  row card gap 2 tap edit s swipe remove s
+    toggle s.paid month
+    stack grow gap 0
+      "Slot" s.number bold
+      s.tenant faint
+    s.fee bold
+form slot, "Add slot"
+===
+@create class=keep_specifics style=specifics
+a yoga session log: style hatha vinyasa or yin, minutes, how I felt 1 to 5, weekly minutes and a streak
+plan: # need: option hatha/vinyasa/yin, field minutes, field felt, total week, streak
+---
+app "Yoga" smile plum
+table session style pick Hatha|Vinyasa|Yin = Hatha, minutes num 5..180 = 30, felt num 1..5 = 4
+row gap 2
+  statcard sum(session.minutes week), "minutes this week"
+  statcard streak(session), "day streak"
+"Average feeling" fixed(avg(session.felt), 1) faint
+form session, "Log session"
+list session by day
+===
+@create class=keep_specifics style=specifics
+a reminder app for taking vitamins at 9am, with a tick each day, a streak and a calendar of days taken
+plan: # need: reminder, tick, streak, calendar
+---
+app "Vitamins" pill orange
+table took
+remind "Take your vitamins" at 9:00
+toggle took today
+"Streak" streak(took) "days" big
+calendar took
+===
+@create class=keep_specifics style=specifics
+a dev bug triage with ticket id, component frontend backend or infra, assignee, priority 1 to 3 and open count per component
+plan: # need: field ticket, option frontend/backend/infra, field assignee, field priority, total
+---
+app "Triage" bolt slate
+table bug ticket text, part pick Frontend|Backend|Infra = Backend, assignee text, priority num 1..3 = 2, open bool = yes
+each options bug.part as p
+  row gap 2
+    p grow
+    count(bug where part = p and open = yes) "open" bold
+each bug where open = yes sort priority as b empty "No open bugs."
+  row card gap 2 tap edit b swipe remove b
+    stack grow gap 0
+      b.ticket bold
+      b.part "·" b.assignee faint
+    "P" b.priority bold color if(b.priority = 1, bad, ink)
+    button "Close" tap set b.open = no
+form bug, "Add bug"

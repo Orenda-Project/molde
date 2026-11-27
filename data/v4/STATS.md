@@ -93,3 +93,20 @@ Added by gen/b2_build.mjs + gen/assemble_b2.mjs from hand/b2-*.txt (anchored dec
 | vague_ask | long | 10 |
 
 Not met so far: 9 of 120 long bases written (6 survived title cap and leak check as creates); short-program edits, 160 asks and 300 calculators not started.
+
+## a2 (creates; prefix a2-)
+
+Hand-written by one program at a time into hand/a2-c-*.txt, built by gen/build_creates.mjs (now also reads a2-c-*; env ONLY=prefix probes a prefix without writing hand_creates.jsonl), skeleton cap checked by gen/a2_skel.mjs (cap 2: 0 over). Verified uncached (686 of 686 in new41, of which 225 are a2 rows), leak 0. The delta is out/newa2.jsonl.
+
+| Class | Rows |
+|---|---|
+| keep_specifics | 76 |
+| rich_app | 4 |
+| roman_urdu | 120 |
+| sensible_calc | 10 |
+| typo_en | 6 |
+| typo_short | 9 |
+
+Direction change mid-run (Kamal): Roman Urdu stopped at 129 surviving rows (target 1,000 not met; 45 of 270 written rows were dropped by the leak, duplicate and title-cap steps). Priority became English creates with many specifics, sensible calculators, English typo requests, richer apps.
+
+Not met: English specifics 76 of 1,200; sensible_calc 10 of 600; typo_en 6 of 200; rich_app 4 of 300. Do not run gen/snap41.py: it cuts STATS.md at the v4.1 snapshot heading and would delete the b2 and a2 sections.

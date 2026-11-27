@@ -1,0 +1,206 @@
+@create class=roman_urdu style=short
+kharche ka hisaab, rozana
+plan: # need: field amount, total today, list
+---
+app "Kharche" wallet green
+table kharcha what text, amount money
+stat sum(kharcha.amount today), "today"
+stat sum(kharcha.amount week), "this week"
+form kharcha, "Add kharcha"
+list kharcha today
+===
+@create class=roman_urdu style=short
+hisab ka register, aamdani aur kharcha
+plan: # need: field amount, option aamdani/kharcha, total, list
+---
+app "Hisab register" book slate
+table entry what text, amount money, kind pick Aamdani|Kharcha = Kharcha
+let net = sum(entry.amount where kind = Aamdani) - sum(entry.amount where kind = Kharcha)
+"Bachat" net big color if(net >= 0, good, bad)
+form entry, "Add entry"
+list entry by day
+===
+@create class=roman_urdu style=short
+chai ke cup ginti
+plan: # need: total today, quick buttons, chart
+---
+app "Chai" cup orange
+table cup
+count(cup today) "cups today" big
+button "+1 cup" tap add cup
+daybars last 7 days, count(cup on it)
+===
+@create class=roman_urdu style=short
+sigrate chhodni hai, kitni pi aaj
+plan: # need: total today, goal, chart
+---
+app "Sigrate kam" flame red
+table smoke
+setting limit num 0..40 = 5 "Limit per day"
+goal count(smoke today), limit, "cigarettes today"
+button "I smoked one" tap add smoke
+daybars last 14 days, count(smoke on it)
+===
+@create class=roman_urdu style=short
+mere paas kitni bakriyan hain
+plan: # need: field tag, field age, list
+---
+app "Bakriyan" leaf green
+table bakri tag text, age num 0..15 unit "years", female bool
+count(bakri) "goats" big
+topbar bakri, "Add goat"
+each bakri sort tag as b empty "No goats yet."
+  row card gap 2 tap edit b swipe remove b
+    b.tag bold grow
+    b.age "years" faint
+===
+@create class=roman_urdu style=short
+shop ka rent bijli aur staff ki salary ka monthly kharcha
+plan: # need: option rent/bijli/salary, field amount, total month, list
+---
+app "Shop kharcha" bag slate
+table cost kind pick Rent|Bijli|Salary = Rent, amount money
+each options cost.kind as k
+  row card gap 2
+    k bold grow
+    sum(cost.amount month where kind = k) bold
+"Total this month" sum(cost.amount month) big
+form cost, "Add"
+===
+@create class=roman_urdu style=short
+dua yaad karni hai roz ek
+plan: # need: field dua, tick, list
+---
+app "Dua" star teal
+table dua name text, learnt bool
+each dua sort learnt as d empty "Add a dua to learn."
+  row card gap 2 tap edit d swipe remove d
+    toggle d.learnt
+    d.name grow
+form dua, "Add dua"
+===
+@create class=roman_urdu style=short
+bachon ke pocket money ka hisab
+plan: # need: field child, field amount, total, list
+---
+app "Pocket money" coin pink
+table pm child pick Ali|Sara = Ali, amount money, kind pick Diya|Kharch = Diya
+each options pm.child as c
+  row card gap 2
+    c bold grow
+    sum(pm.amount where child = c and kind = Diya) - sum(pm.amount where child = c and kind = Kharch) bold
+form pm, "Add"
+===
+@create class=roman_urdu style=short
+bhains ka chara kitna lagta hai
+plan: # need: field kg, field cost, total month, list
+---
+app "Chara" leaf green
+table chara kg num 1..1000, cost money
+stat sum(chara.kg month), "kg this month"
+stat sum(chara.cost month), "spent this month"
+form chara, "Add chara"
+list chara by day
+===
+@create class=roman_urdu style=short
+mera cricket practice ka timer
+plan: # need: timer, total week
+---
+app "Net practice" timer green
+table practice
+timer 45m, "Net practice", add practice then notify "Practice over"
+"Sessions this week" count(practice week) big
+===
+@create class=roman_urdu style=short
+shaadi mein salami ka hisab kis ne kitna diya
+plan: # need: field name, field amount, total, list
+---
+app "Salami" gift pink
+table salami name text, amount money
+"Total salami" sum(salami.amount) big
+"Biggest" max(salami.amount) faint
+topbar salami, "Add"
+list salami sort amount desc
+===
+@create class=roman_urdu style=short
+roz ki diary likhni hai
+plan: # need: field note, list
+---
+app "Diary" pen purple
+table page note long, mood pick Khush|Theek|Udaas = Theek
+form page, "Write today"
+list page by day
+===
+@create class=roman_urdu style=short
+meri tankhwah kab aati hai aur kitna kharch hota hai pehle hafte mein
+plan: # need: field amount, total week, list
+---
+app "Pehla hafta" money mint
+table spend what text, amount money
+"First week spending" sum(spend.amount week) big
+form spend, "Add"
+list spend week
+===
+@create class=roman_urdu style=short
+tableegh ke dino ka record
+plan: # need: field place, field days, list
+---
+app "Tableegh" star green
+table trip place text, days num 1..120
+"Total days" sum(trip.days) big
+topbar trip, "Add trip"
+list trip
+===
+@create class=roman_urdu style=short
+car wash ka hisaab roz
+plan: # need: field car, field amount, total today, list
+---
+app "Car wash" car blue
+table wash car text, amount money
+stat count(wash today), "cars washed today"
+stat sum(wash.amount today), "earned today"
+form wash, "Add car"
+list wash today
+===
+@create class=roman_urdu style=short
+paani ka tanker kab aaya
+plan: # need: field cost, list
+---
+app "Tanker" drop blue
+table tanker cost money?
+"Days since last tanker" since(tanker) big
+button "Tanker came" tap add tanker
+list tanker by day
+===
+@create class=roman_urdu style=short
+gas cylinder kab bhara
+plan: # need: field amount
+---
+app "Cylinder" flame orange
+table fill amount money
+"Days since last fill" since(fill) big
+"Average gap" fixed(gap(fill), 0) "days" faint
+form fill, "Cylinder filled"
+===
+@create class=roman_urdu style=short
+tarbooz aam ke season ka hisab, kitne kilo bike
+plan: # need: field fruit, field kg, total today, list
+---
+app "Fruit stall" cart orange
+table sale fruit pick Tarbooz|Aam|Kela = Aam, kg num 0.5..100, amount money
+each options sale.fruit as f
+  row card gap 2
+    f bold grow
+    sum(sale.kg today where fruit = f) "kg" faint
+"Cash today" sum(sale.amount today) big
+form sale, "Add sale"
+===
+@create class=roman_urdu style=short
+mujhe apni hifz ka sabaq record karna hai
+plan: # need: field surah, field lines, calendar
+---
+app "Hifz" book green
+table sabaq surah text, lines num 1..30
+calendar sabaq
+form sabaq, "Add sabaq"
+list sabaq by day
