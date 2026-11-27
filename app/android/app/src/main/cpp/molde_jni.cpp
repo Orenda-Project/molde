@@ -49,6 +49,7 @@ JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeUnload(JNIEnv *, 
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeCancel(JNIEnv *, jobject) { g_core.cancel = true; }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeReset(JNIEnv *, jobject) { g_core.reset(); }
 JNIEXPORT jlong JNICALL Java_com_oyekamal_molde_NativeLlm_nativeIdleMs(JNIEnv *, jobject) { return (jlong) g_core.idle_ms(); }
+JNIEXPORT jstring JNICALL Java_com_oyekamal_molde_NativeLlm_nativeProgress(JNIEnv * env, jobject) { return env->NewStringUTF(g_core.progress().c_str()); }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeDebugHang(JNIEnv *, jobject, jint ms) { g_hang_ms = ms; }
 JNIEXPORT void JNICALL Java_com_oyekamal_molde_NativeLlm_nativeAbandon(JNIEnv *, jobject) {
   std::lock_guard<std::mutex> lk(g_mu);

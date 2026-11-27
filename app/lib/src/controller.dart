@@ -12,6 +12,7 @@ import 'patch_ops.dart';
 import 'store.dart';
 
 const String kVersion = '0.7.0-dev';
+const int kOpsEditCapMs = 10 * 60 * 1000; // an edit the model writes as one answer (format ops): one call, no line-by-line progress, so a longer cap
 const int kCreateCapMs = 120 * 1000; // a create past this is stopped and retried once with a shorter request
 
 class ChatBtn {
@@ -347,6 +348,8 @@ class MoldeController extends ChangeNotifier {
     await _run(p.kind, p.request, ask: {'question': p.question, 'answer': answer}, allowAsk: false);
   }
 
+  String _lastEditRequest = '';
+
   Future<void> _run(String kind, String request, {Map<String, String>? ask, bool? allowAsk}) async {
     if (busy) return;
     // one ask per request at most; a short request that names a thing is built at once
@@ -366,18 +369,29 @@ class MoldeController extends ChangeNotifier {
       live.text = '${_longNote}Reading your request…';
       notifyListeners();
       _progressSeen = false; _lines = 0;
+      _lastEditRequest = request;
       _startedAt = DateTime.now();
       _tick?.cancel();
       // the seconds keep counting between lines; the text never depends on a value the page might not send
+      final opsEdit = kind == 'edit' && m.format == 'ops'; // one silent native call: the progress comes from the native side
+      NativeProgress? nat;
+      var polling = false;
       _tick = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!live.live) return;
-        live.text = progressText(_longNote, _progressSeen ? _lines : -1, DateTime.now().difference(_startedAt).inSeconds);
+        final secs = DateTime.now().difference(_startedAt).inSeconds;
+        if (opsEdit) {
+          if (!polling) { polling = true; unawaited(llm.progress().then((p) { nat = p; polling = false; })); }
+          final n = nat;
+          live.text = n == null ? progressText(_longNote, -1, secs) : opsProgressText(_longNote, n.phase, n.done, n.total, secs);
+        } else {
+          live.text = progressText(_longNote, _progressSeen ? _lines : -1, secs);
+        }
         notifyListeners();
       });
       Future<Map<String, dynamic>> gen(String req) async => Map<String, dynamic>.from(await bridge.rpc<Map>('generate', {
         'kind': kind, 'request': req, 'current': kind == 'edit' ? current!.source : '',
         'system': m.system, 'arm': m.arm ?? arm, 'template': m.template, 'format': m.format,
-        'allowAsk': may, 'ask': ask, 'hardCapMs': kind == 'edit' ? 7 * 60 * 1000 : kCreateCapMs, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
+        'allowAsk': may, 'ask': ask, 'hardCapMs': kind == 'edit' ? (opsEdit ? kOpsEditCapMs : 7 * 60 * 1000) : kCreateCapMs, 'maxLines': oldLines + 40 > 70 ? oldLines + 40 : 70,
       }));
       var res = await gen(request);
       var usedRequest = request;
@@ -425,6 +439,7 @@ class MoldeController extends ChangeNotifier {
   /// cleanly comes back as `patchError` (nothing is changed); a program that applies but fails the checks is an ordinary failed check.
   Future<Map<String, dynamic>> _applyPatch(Map<String, dynamic> res) async {
     final stats = res['stats'];
+    unawaited(_debugRaw(res));
     final String program;
     try {
       program = applyOps(current!.source, '${res['ops']}');
@@ -433,6 +448,18 @@ class MoldeController extends ChangeNotifier {
     }
     final c = Map<String, dynamic>.from(await bridge.rpc<Map>('check', {'source': program}));
     return {'ok': c['ok'] == true, 'program': program, 'errors': c['errors'] ?? [], 'stats': stats};
+  }
+
+  /// Debug aid, off unless the file `debug_raw_answers` exists in the app's data folder (adb shell run-as <package> touch files/molde/debug_raw_answers):
+  /// every raw operations answer is appended to `raw_answers.jsonl` there with the request and the line count of the open app, so a failed
+  /// edit can be replayed offline through the applier and the checker. Never throws; no effect for the user.
+  Future<void> _debugRaw(Map<String, dynamic> res) async {
+    try {
+      if (!File('${store.root.path}/debug_raw_answers').existsSync()) return;
+      final cur = current;
+      final row = jsonEncode({'t': DateTime.now().toIso8601String(), 'request': _lastEditRequest, 'lines': cur == null ? 0 : programLines(cur.source).length, 'app': cur?.name, 'ops': res['ops'], 'stats': res['stats']});
+      await File('${store.root.path}/raw_answers.jsonl').writeAsString('$row\n', mode: FileMode.append);
+    } catch (_) {}
   }
 
   void _finishLive(ChatMsg live, String text, {List<ChatBtn> buttons = const [], String kind = 'text'}) {

@@ -645,6 +645,22 @@ void roundFive() {
 void roundFiveOne() {
   const vit = 'app "Vitamins" pill ocean\ntable dose name text, note text\nsetting goal num = 3 "Daily goal"\nrow\n  button "1" tap add dose name = "one"\n  button "2" tap add dose name = "two"\nform dose\n';
   group('0.5.1', () {
+    test('0.7.1 opsProgressText: reading the app with a percentage, then writing the change; unknown falls back to the plain line', () {
+      expect(opsProgressText('', 'prompt', 320, 800, 40), 'Reading your app: 40% (40 s)');
+      expect(opsProgressText('', 'prompt', 900, 800, 41), 'Reading your app: 100% (41 s)');
+      expect(opsProgressText('', 'gen', 800, 800, 50), 'Writing the change… (50 s)');
+      expect(opsProgressText('', 'idle', 0, 0, 2), 'Reading your request… (2 s)');
+      expect(opsProgressText('A note\n', 'prompt', 0, 0, 1), 'A note\nReading your request… (1 s)');
+    });
+    test('0.7.1 NativeProgress.parse accepts the three phases and refuses anything else', () {
+      final p = NativeProgress.parse('prompt,96,800,0')!;
+      expect([p.phase, p.done, p.total, p.gen], ['prompt', 96, 800, 0]);
+      expect(NativeProgress.parse('gen,800,800,12')!.gen, 12);
+      expect(NativeProgress.parse('idle,0,0,0')!.phase, 'idle');
+      expect(NativeProgress.parse('boom,1,2,3'), isNull);
+      expect(NativeProgress.parse('prompt,1,x,3'), isNull);
+      expect(NativeProgress.parse(null), isNull);
+    });
     test('progressText always has numbers: reading before the first line, then the next line and the seconds', () {
       expect(progressText('', -1, 12), 'Reading your request… (12 s)');
       expect(progressText('', 0, 3), 'Writing line 1… (3 s)');

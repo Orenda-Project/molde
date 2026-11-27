@@ -107,6 +107,7 @@ class MainActivity : FlutterActivity() {
                 val key = call.argument<String>("key") ?: ""
                 result.success(try { engine().nativeMeta(key) } catch (e: Throwable) { "" })
             }
+            "progress" -> result.success(try { engine().nativeProgress() } catch (e: Throwable) { "idle,0,0,0" })
             "cancel" -> {
                 llm?.nativeCancel()
                 val id = inflightId
@@ -138,12 +139,16 @@ class MainActivity : FlutterActivity() {
                 inflightId = id; inflightReply = replied; inflightResult = result
                 // no call may run longer than 6 minutes, and none may go without progress (a token or a prompt chunk) for longer than
                 // 40 tokens' worth of this device's measured speed (90 to 180 s): that is a hang, not a slow line
-                main.postDelayed({ abandon(id) }, 6 * 60 * 1000L)
+                // an edit written as one operations answer (format ops) is a single call: the page passes a longer cap and a longer idle
+                // allowance for it (a slow phone reads the whole app before the first token)
+                val capMs = (call.argument<Number>("capMs")?.toLong() ?: (6 * 60 * 1000L)).coerceIn(60_000L, 20 * 60 * 1000L)
+                val idleMin = (call.argument<Number>("idleMs")?.toLong() ?: 0L).coerceIn(0L, 20 * 60 * 1000L)
+                main.postDelayed({ abandon(id) }, capMs)
                 val watch = object : Runnable {
                     override fun run() {
                         if (inflightId != id) return
                         val idle = try { engine().nativeIdleMs() } catch (_: Throwable) { -1L }
-                        if (idle > idleAllowanceMs()) abandon(id) else main.postDelayed(this, 3000)
+                        if (idle > maxOf(idleAllowanceMs(), idleMin)) abandon(id) else main.postDelayed(this, 3000)
                     }
                 }
                 main.postDelayed(watch, 3000)

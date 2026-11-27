@@ -156,6 +156,37 @@ void main() {
     expect(c.chat.last.text, isNot(contains('I did not apply this')));
   });
 
+  test('0.7.1 ops: an edit asks the page for the longer ops cap (the line-stepped edit keeps 7 minutes)', () async {
+    await boot('ops');
+    page.handlers['generate'] = (a) {
+      expect(a['hardCapMs'], kOpsEditCapMs);
+      return {'ok': true, 'format': 'ops', 'ops': 'delete 4', 'stats': {'seconds': 2.0}};
+    };
+    page.handlers['check'] = (a) => {'ok': true, 'errors': []};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['removes: form'], 'warnings': [], 'refused': [], 'settings': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': [], 'warnings': [], 'refused': []};
+    await c.send('remove the form');
+    expect(c.chat.last.kind, anyOf('change', 'text'));
+  });
+
+  test('0.7.1 ops: the raw answer is kept in a debug file only when the debug flag file exists', () async {
+    await boot('ops');
+    page.handlers['generate'] = (a) => {'ok': true, 'format': 'ops', 'ops': 'insert after 2\n+ table note text', 'stats': {'seconds': 4.0}};
+    page.handlers['check'] = (a) => {'ok': true, 'errors': []};
+    page.handlers['evaluate'] = (a) => {'verdict': 'safe', 'changes': ['adds table note'], 'warnings': [], 'refused': [], 'settings': []};
+    page.handlers['applyEdit'] = (a) => {'verdict': 'safe', 'changes': ['adds table note'], 'warnings': [], 'refused': []};
+    await c.send('keep a table of notes');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(File('${c.store.root.path}/raw_answers.jsonl').existsSync(), isFalse);
+    File('${c.store.root.path}/debug_raw_answers').createSync(recursive: true);
+    c.changeCurrent();
+    await c.send('keep a table of notes, again');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final row = jsonDecode(File('${c.store.root.path}/raw_answers.jsonl').readAsLinesSync().single) as Map;
+    expect(row['ops'], 'insert after 2\n+ table note text');
+    expect(row['request'], 'keep a table of notes, again');
+  });
+
   test('ops: a create still goes through the ordinary create path (the page drops the plan line)', () async {
     await boot('ops');
     c.startNewApp();

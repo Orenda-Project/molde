@@ -390,6 +390,14 @@ String plainSummary(String source) {
 String progressText(String note, int lines, int seconds) =>
     lines < 0 ? '${note}Reading your request… ($seconds s)' : '${note}Writing line ${lines + 1}… ($seconds s)';
 
+/// The progress line of an edit that the model writes in one go (format ops): what the model is doing now, from the native side.
+/// Before the first reading it says what the plain line says. "Reading your app: 40% (35 s)", then "Writing the change… (52 s)".
+String opsProgressText(String note, String phase, int done, int total, int seconds) {
+  if (phase == 'prompt' && total > 0) return '${note}Reading your app: ${(done * 100 ~/ total).clamp(0, 100)}% ($seconds s)';
+  if (phase == 'gen') return '${note}Writing the change… ($seconds s)';
+  return '${note}Reading your request… ($seconds s)';
+}
+
 /// How long ago, in words. A time in the future (a device clock that moved back) reads "just now".
 String ageText(int thenMs, int nowMs) {
   final d = Duration(milliseconds: nowMs - thenMs);

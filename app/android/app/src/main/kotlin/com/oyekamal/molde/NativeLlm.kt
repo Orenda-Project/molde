@@ -13,5 +13,6 @@ class NativeLlm {
     external fun nativeDebugHang(ms: Int)
     external fun nativeAbandon()
     external fun nativeIdleMs(): Long
+    external fun nativeProgress(): String
     external fun nativeComplete(prompt: ByteArray, grammar: ByteArray, nPredict: Int, temp: Float, seed: Int, stopNl: Boolean, draft: ByteArray): ByteArray
 }

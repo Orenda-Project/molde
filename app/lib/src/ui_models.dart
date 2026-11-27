@@ -194,6 +194,16 @@ class _SettingsPageState extends State<SettingsPage> {
               ]))),
           ],
         ],
+        if (mm.handAvailable) ...[
+          const SizedBox(height: 20),
+          Text('Added by hand', key: const Key('hand-heading'), style: Theme.of(context).textTheme.titleSmall),
+          Card(key: const Key('hand-model'), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Model added by hand', style: Theme.of(context).textTheme.bodyMedium),
+            Text(mb(mm.handBytes), style: TextStyle(color: cs.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            FilledButton(key: const Key('use-hand'), onPressed: mm.switchBlocked ? null : () async { await mm.useHand(); }, child: const Text('Use this model')),
+          ]))),
+        ],
         const SizedBox(height: 16),
         _Licence(mm: mm),
         const Divider(height: 32),

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { generate, promptFor, userText, numbered, SYSTEM_OPS, DEFAULT_SYSTEM } from '../src/decode_loop.mjs';
+import { generate, promptFor, userText, numbered, SYSTEM_OPS, DEFAULT_SYSTEM, OPS_IDLE_MS } from '../src/decode_loop.mjs';
 
 const WATER = readFileSync(new URL('../../assets/examples/water.mo', import.meta.url), 'utf8');
 const lines = WATER.split('\n'); if (lines[lines.length - 1] === '') lines.pop();
@@ -42,6 +42,19 @@ test('ops edit: one plain call, numbered program, the system text of the ops tra
   assert.ok(calls[0].prompt.endsWith(`${lines.length}| ${lines[lines.length - 1]}<|tok:106|>\n<|tok:105|>model\n`));
   assert.ok(calls[0].nPredict > 0 && calls[0].nPredict <= 800);
   assert.equal(r.stats.tokens, 14);
+});
+
+test('0.7.1 ops edit: the one call asks the native watchdog for a longer cap and idle allowance than a line-stepped call', async () => {
+  const calls = [];
+  const complete = async req => { calls.push(req); return { stop: 'eos', text: 'delete 3' }; };
+  await generate({ kind: 'edit', request: 'x', current: WATER, format: 'ops', complete, hardCapMs: 10 * 60 * 1000 });
+  assert.equal(calls[0].capMs, 10 * 60 * 1000 + 30000);
+  assert.equal(calls[0].idleMs, OPS_IDLE_MS);
+  assert.ok(OPS_IDLE_MS >= 300 * 1000);
+  // a create (line-stepped) carries neither: the native defaults stay for it
+  const c2 = [];
+  await generate({ kind: 'create', request: 'water log', format: 'whole', complete: async req => { c2.push(req); return { stop: 'eos', text: '' }; } });
+  assert.equal(c2[0].capMs, undefined);
 });
 
 test('ops edit: an answer cut off at the token limit is refused, never half-applied', async () => {

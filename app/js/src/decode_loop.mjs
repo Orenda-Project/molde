@@ -12,6 +12,8 @@ export const DEFAULT_SYSTEM = 'You write MoldeScript, a tiny language for small 
 // `format: "ops"`). The edit system prompt below is the exact text it was trained with (molde-model/failhunt/tools/patch_ops_ref.mjs).
 export const SYSTEM_OPS = 'You write MoldeScript, a tiny language for small phone apps. Reply with the complete program only, no explanation. For an edit request you get the current program with numbered lines: reply only with the changes, as operations on those line numbers (insert after N, replace N or N-M, delete N or N-M, move N or N-M after K); each line to write follows its operation and starts with "+ ".';
 const splitLines = s => (s.endsWith('\n') ? s.slice(0, -1) : s).split('\n');
+// the native side abandons a call with no progress (no token, no prompt chunk of 32 tokens) for this long; an ops edit is one call
+export const OPS_IDLE_MS = 300 * 1000;
 export const numbered = prog => splitLines(prog).map((x, i) => `${i + 1}| ${x}`).join('\n');
 
 const clean = s => String(s).replace(/<\|tok:/g, '<| tok:');   // the native side reads <|tok:ID|> as a special token
@@ -169,7 +171,9 @@ export async function generateOps(o) {
   let x;
   try {
     if (cancelled()) return { ok: false, cancelled: true, program: '', errors: [], stats: { seconds: 0, lines: 0, arm: 'ops' } };
-    x = await complete({ prompt, grammar: '', nPredict, stopNl: false, temp: 0, seed: 1 });
+    // one call for the whole answer: the native watchdog gets a longer cap (the page's own cap plus a margin) and a longer idle allowance,
+    // because a slow phone reads the whole app before the first token and nothing is written until then
+    x = await complete({ prompt, grammar: '', nPredict, stopNl: false, temp: 0, seed: 1, capMs: hardCapMs + 30000, idleMs: OPS_IDLE_MS });
   } finally { clearTimeout(timer); }
   const seconds = (Date.now() - t0) / 1000;
   const stats = { seconds: +seconds.toFixed(2), tokens: x.n_gen || 0, tokPerSec: x.ms_gen ? +((x.n_gen || 0) / (x.ms_gen / 1000)).toFixed(1) : 0, calls: 1, resamples: 0, fallbacks: 0, lines: 0, promptTokens: x.n_prompt || 0, cachedTokens: x.n_cache || 0, grammarMs: 0, grammarFailures: 0, draftTried: 0, draftAccepted: 0, arm: 'ops' };

@@ -124,9 +124,20 @@ class ModelManager extends ChangeNotifier {
 
   Future<void> refreshNet() async { net = await platform.networkType(); notifyListeners(); }
 
+  /// A model placed by hand (adb push) that is not in use now: the settings screen offers it next to the downloaded ones, so a
+  /// hand-added model does not have to wait for the downloaded one to be deleted. Null when there is none, or it is the one in use.
+  File? hand;
+  int handBytes = 0;
+  bool get handAvailable => hand != null && active?.source != 'hand';
+
   Future<void> _scan() async {
     _installed.clear();
     _installedBytes.clear();
+    hand = null; handBytes = 0;
+    try {
+      final h = await LlmService.locate(handDirs);
+      if (h != null && !h.path.startsWith('${modelsDir.path}/')) { hand = h; handBytes = await h.length(); }
+    } catch (_) {}
     try {
       if (await modelsDir.exists()) {
         await for (final e in modelsDir.list()) {

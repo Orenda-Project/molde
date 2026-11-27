@@ -113,6 +113,31 @@ void main() {
     expect(mm.active!.name, 'B');
   });
 
+  test('0.7.1 a model added by hand is offered next to the downloaded one and can be switched to without deleting anything', () async {
+    final md = Directory('${tmp.path}/models')..createSync(recursive: true);
+    File('${md.path}/b.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    final d = Directory('${tmp.path}/ext/models')..createSync(recursive: true);
+    File('${d.path}/model.gguf').writeAsBytesSync([1, 2, 3, 4, 5, 6]);
+    File('${tmp.path}/settings.json').writeAsStringSync('{"v":1,"active":{"id":"b","file":"b.gguf","source":"catalogue"}}');
+    final mm = make(FakeLlm());
+    await mm.init();
+    expect(mm.active!.source, 'catalogue');
+    expect(mm.handAvailable, isTrue);
+    expect(mm.handBytes, 6);
+    await mm.useHand();
+    expect(mm.active!.source, 'hand');
+    expect(mm.handAvailable, isFalse); // it is the one in use: no second row
+    expect(File('${md.path}/b.gguf').existsSync(), isTrue); // nothing was deleted to get there
+  });
+
+  test('0.7.1 no hand model, or one inside the downloads folder, shows no "added by hand" row', () async {
+    final md = Directory('${tmp.path}/models')..createSync(recursive: true);
+    File('${md.path}/b.gguf').writeAsBytesSync([1, 2, 3, 4]);
+    final mm = make(FakeLlm());
+    await mm.init();
+    expect(mm.handAvailable, isFalse);
+  });
+
   test('recommended model is listed first; a downloaded model the catalogue dropped stays usable under "Downloaded earlier"', () async {
     final md = Directory('${tmp.path}/models')..createSync(recursive: true);
     File('${md.path}/old.gguf').writeAsBytesSync([1, 2, 3]);

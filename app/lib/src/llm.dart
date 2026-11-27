@@ -129,6 +129,15 @@ class LlmService {
     return m;
   }
 
+  /// What the native call in flight is doing: reading the prompt (done of total tokens), writing (gen tokens so far) or nothing.
+  /// Null when the platform cannot say (older native side, tests). Never throws.
+  Future<NativeProgress?> progress() async {
+    try {
+      final s = await _ch.invokeMethod<String>('progress');
+      return NativeProgress.parse(s);
+    } catch (_) { return null; }
+  }
+
   Future<String> meta(String key) async { try { return await _ch.invokeMethod<String>('meta', {'key': key}) ?? ''; } catch (_) { return ''; } }
 
   /// models.json can name the template of a model; it is used when no sidecar file says and the architecture does not.
@@ -163,4 +172,19 @@ class LlmService {
 
   Future<void> cancel() => _ch.invokeMethod('cancel');
   Future<void> reset() => _ch.invokeMethod('reset');
+}
+
+/// One reading of the native progress ("prompt,done,total,gen" | "gen,done,total,gen" | "idle,0,0,0").
+class NativeProgress {
+  const NativeProgress(this.phase, this.done, this.total, this.gen);
+  final String phase;
+  final int done, total, gen;
+  static NativeProgress? parse(String? s) {
+    if (s == null) return null;
+    final p = s.split(',');
+    if (p.length != 4) return null;
+    final n = [for (final x in p.skip(1)) int.tryParse(x)];
+    if (n.contains(null) || !{'prompt', 'gen', 'idle'}.contains(p[0])) return null;
+    return NativeProgress(p[0], n[0]!, n[1]!, n[2]!);
+  }
 }

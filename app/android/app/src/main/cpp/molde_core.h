@@ -73,6 +73,10 @@ struct Core {
   static long long now_ms() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
   void tick() { progress_ms = now_ms(); }
   long long idle_ms() const { return in_call ? now_ms() - progress_ms.load() : -1; }
+  // what the call in flight is doing, for the progress line: reading the prompt (done of total tokens) or writing (n tokens so far)
+  std::atomic<bool> prog_prompt{false};
+  std::atomic<int> prog_done{0}, prog_total{0}, prog_gen{0};
+  std::string progress() const { return in_call ? (prog_prompt ? "prompt," : "gen,") + std::to_string(prog_done.load()) + "," + std::to_string(prog_total.load()) + "," + std::to_string(prog_gen.load()) : std::string("idle,0,0,0"); }
   bool backends_loaded = false;
 
   // Recurrent and hybrid models (Qwen3.5: DeltaNet layers) cannot drop the last few tokens of the cache: llama_memory_seq_rm
@@ -185,6 +189,7 @@ struct Core {
   // the cache always matches what was decoded. 0 = done, 1 = decode error, 2 = cancelled.
   int eval_tokens(const std::vector<llama_token> & toks, size_t from) {
     size_t i = from;
+    prog_total = (int) toks.size(); prog_done = (int) from; prog_prompt = true;
     while (i < toks.size()) {
       if (cancel) return 2;
       size_t n = std::min((size_t) 32, toks.size() - i);
@@ -192,8 +197,10 @@ struct Core {
       if (llama_decode(ctx, b) != 0) return 1;
       cached.insert(cached.end(), toks.begin() + i, toks.begin() + i + n);
       i += n;
+      prog_done = (int) i;
       tick();
     }
+    prog_prompt = false;
     return 0;
   }
 
@@ -213,6 +220,7 @@ struct Core {
   Result complete(const std::string & prompt, const std::string & grammar, int n_predict, float temp, int seed, bool stop_nl, const std::string & draft = "") {
     Result R;
     cancel = false;
+    prog_gen = 0; prog_done = 0; prog_total = 0; prog_prompt = false;
     struct CallGuard { Core * c; explicit CallGuard(Core * x) : c(x) { c->in_call = true; c->tick(); } ~CallGuard() { c->in_call = false; } } call_guard(this);
     if (!ctx) { R.stop = "error"; R.error = "no model loaded"; return R; }
     std::vector<llama_token> toks;
@@ -311,7 +319,7 @@ struct Core {
       accept(id);
       if (llama_vocab_is_eog(vocab, id)) { R.stop = "eos"; break; }
       text += piece_of(id);
-      R.n_gen++; i++;
+      R.n_gen++; prog_gen = R.n_gen; i++;
       if (stop_nl) {
         size_t nl = text.find('\n');
         if (nl != std::string::npos) { text.resize(nl); R.stop = "stop"; break; }   // the newline token is not evaluated; the next call starts from the common prefix
@@ -335,7 +343,7 @@ struct Core {
             if (t == dt[j]) {
               accept(t);
               if (llama_vocab_is_eog(vocab, t)) { R.stop = "eos"; stopped = true; kept = j; break; }
-              text += piece_of(t); R.n_gen++; i++; R.n_draft_ok++;
+              text += piece_of(t); R.n_gen++; prog_gen = R.n_gen; i++; R.n_draft_ok++;
               size_t nl = text.find('\n');
               if (nl != std::string::npos) { text.resize(nl); R.stop = "stop"; stopped = true; kept = dtc.size(); break; }
             } else {                               // the model wants something else here: keep the first j draft tokens, go on from `t`
