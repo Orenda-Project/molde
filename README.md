@@ -6,6 +6,15 @@ Status: plan v2 (2026-11-23). A generic UI kit exists in PR #33; the language, r
 
 **The current plan is [`docs/PLAN.md`](docs/PLAN.md).** This page is the short version.
 
+## Status, 2026-11-28 (read this first)
+
+- **Shipped model:** round 3 Gemma 270M (241 MB), recommended, whole-program rewrites. About 4 in 10 new requests built exactly; plain-test small changes 14 of 40.
+- **Experimental model (in the app's model list):** round 5c Gemma 270M, edit-instruction format ("ops"), `oyekamal/molde-tiny/r5c-ops-gemma270m/`, sha256 `ce1961d2...`. Plain-test small changes 25 of 40, long-program steps 30 of 82 (r3: 3). In the app (0.7.1-dev emulator critic) neither model applied a long-app edit right: ruling SPLIT. Not tested on a phone.
+- **App 0.7.1-dev (branch phase-5-app):** applies patch ops, progress line during edits, longer call cap, honest refusals, "Model added by hand" card. Not released.
+- **Round 6 data:** built in `train/r6/` but FAILED its independent sample check (49 of 60 good); rebuild unfinished. Do not train from it.
+- **Write-up:** https://orenda-project.github.io/tinkering-rnd/posts/molde-tiny-app-builder/
+- **Source map:** language `lang/`, app `app/`, training and reports `train/` (r5 scripts and scores, r6 builder and critic verdict), models and data on Hugging Face (`oyekamal/molde-tiny`, `oyekamal/molde-data`).
+
 ## The idea (Kamal's words, tidied)
 
 The user types or says what they want. One small model, fully offline, does all of the work:
